@@ -298,6 +298,48 @@ function sign_path() {
     "$path"
 }
 
+function sign_path_preserving_entitlements() {
+  local path="$1"
+  /usr/bin/codesign \
+    --force \
+    --sign "$DEVELOPER_ID_APPLICATION" \
+    --options runtime \
+    --timestamp \
+    --preserve-metadata=entitlements \
+    "$path"
+}
+
+function is_inside_sparkle_framework() {
+  local path="$1"
+  [[ "$path" == *"/Sparkle.framework" || "$path" == *"/Sparkle.framework/"* ]]
+}
+
+function sign_sparkle_framework() {
+  local app_path="$1"
+  local sparkle_framework="$app_path/Contents/Frameworks/Sparkle.framework"
+  local sparkle_current="$sparkle_framework/Versions/Current"
+
+  [[ -d "$sparkle_framework" ]] || return 0
+
+  if [[ -d "$sparkle_current/XPCServices/Installer.xpc" ]]; then
+    sign_path "$sparkle_current/XPCServices/Installer.xpc"
+  fi
+
+  if [[ -d "$sparkle_current/XPCServices/Downloader.xpc" ]]; then
+    sign_path_preserving_entitlements "$sparkle_current/XPCServices/Downloader.xpc"
+  fi
+
+  if [[ -f "$sparkle_current/Autoupdate" ]]; then
+    sign_path "$sparkle_current/Autoupdate"
+  fi
+
+  if [[ -d "$sparkle_current/Updater.app" ]]; then
+    sign_path "$sparkle_current/Updater.app"
+  fi
+
+  sign_path "$sparkle_framework"
+}
+
 function app_bundle_identifier() {
   local app_path="$1"
   /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_path/Contents/Info.plist" 2>/dev/null \
@@ -326,8 +368,13 @@ function sign_app_bundle() {
 
     while IFS= read -r bundle; do
       [[ -n "$bundle" ]] || continue
+      if is_inside_sparkle_framework "$bundle"; then
+        continue
+      fi
       sign_path "$bundle"
     done < <(find "$app_path/Contents" -depth -type d \( -name "*.framework" -o -name "*.app" -o -name "*.xpc" -o -name "*.appex" \) -print)
+
+    sign_sparkle_framework "$app_path"
   fi
 
   sign_path "$app_path"
