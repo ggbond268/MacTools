@@ -30,7 +30,7 @@ final class PluginHost: ObservableObject {
 
     convenience init() {
         self.init(
-            plugins: [KeepAwakePlugin(), PhysicalCleanModePlugin()],
+            plugins: [DisplayResolutionPlugin(), KeepAwakePlugin(), PhysicalCleanModePlugin()],
             shortcutStore: ShortcutStore(),
             pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(),
             globalShortcutManager: GlobalShortcutManager()
