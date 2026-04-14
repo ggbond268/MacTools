@@ -137,7 +137,7 @@ struct FeatureRowView: View {
     let onDateChange: (String, Date) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: item.detail == nil ? 0 : 12) {
+        VStack(alignment: .leading, spacing: detailToDisplay == nil ? 0 : 12) {
             switch item.controlStyle {
             case .switch:
                 rowHeader
@@ -281,10 +281,89 @@ private struct PluginPanelDetailView: View {
                             isEnabled: control.isEnabled
                         )
                     }
+                case .selectList:
+                    SelectListControl(
+                        control: control,
+                        onSelect: { optionID in
+                            onSelectionChange(control.id, optionID)
+                        }
+                    )
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SelectListControl: View {
+    let control: PluginPanelControl
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let title = control.sectionTitle {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 6)
+                    .padding(.bottom, 2)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(control.options) { option in
+                    SelectListRow(
+                        title: option.title,
+                        isSelected: option.id == control.selectedOptionID,
+                        isEnabled: control.isEnabled,
+                        action: { onSelect(option.id) }
+                    )
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+}
+
+private struct SelectListRow: View {
+    let title: String
+    let isSelected: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            guard isInteractive else {
+                return
+            }
+
+            action()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .opacity(isSelected ? 1 : 0)
+                    .frame(width: 14)
+
+                Text(title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary)
+
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .background(isInteractive && isHovered ? Color.primary.opacity(0.06) : Color.clear)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .onHover { isHovered = $0 }
+    }
+
+    private var isInteractive: Bool {
+        isEnabled && !isSelected
     }
 }
 

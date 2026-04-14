@@ -63,6 +63,7 @@ struct PluginPanelState {
 enum PluginPanelControlKind {
     case segmented
     case datePicker
+    case selectList
 }
 
 enum PluginPanelDatePickerStyle {
@@ -84,6 +85,7 @@ struct PluginPanelControl: Identifiable {
     let minimumDate: Date?
     let displayedComponents: DatePickerComponents?
     let datePickerStyle: PluginPanelDatePickerStyle?
+    let sectionTitle: String?
     let isEnabled: Bool
 }
 

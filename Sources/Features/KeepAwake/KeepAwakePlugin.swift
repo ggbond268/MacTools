@@ -133,6 +133,7 @@ final class KeepAwakePlugin: FeaturePlugin {
                 minimumDate: nil,
                 displayedComponents: nil,
                 datePickerStyle: nil,
+                sectionTitle: nil,
                 isEnabled: true
             )
         ]
@@ -148,6 +149,7 @@ final class KeepAwakePlugin: FeaturePlugin {
                     minimumDate: minimumCustomEndDate(referenceDate: now),
                     displayedComponents: [.date, .hourAndMinute],
                     datePickerStyle: .dateTimeCard,
+                    sectionTitle: nil,
                     isEnabled: true
                 )
             )
