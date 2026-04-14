@@ -28,6 +28,13 @@ final class DisplayResolutionPluginTests: XCTestCase {
         )
     }
 
+    func testOptionTitleLeavesScaledModeUndecorated() {
+        XCTAssertEqual(
+            DisplayResolutionPlugin.optionTitle(for: makeMode(modeId: 3, width: 3008, height: 1692)),
+            "3008×1692"
+        )
+    }
+
     func testVisibleModesDropsOffRatioWhenNotCurrent() {
         let modes = [
             makeMode(modeId: 10, width: 1728, height: 1117, isNative: true),
