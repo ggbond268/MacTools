@@ -1,4 +1,6 @@
 import Combine
+import Foundation
+import SwiftUI
 
 @MainActor
 final class PluginHost: ObservableObject {
@@ -12,11 +14,13 @@ final class PluginHost: ObservableObject {
 
     private let plugins: [any FeaturePlugin]
     private let shortcutStore: ShortcutStore
+    private let pluginDisplayPreferencesStore: PluginDisplayPreferencesStore
     private let globalShortcutManager: GlobalShortcutManager
 
     private var shortcutErrors: [String: String] = [:]
 
     @Published private(set) var panelItems: [PluginPanelItem] = []
+    @Published private(set) var featureManagementItems: [PluginFeatureManagementItem] = []
     @Published private(set) var permissionCards: [PluginPermissionCard] = []
     @Published private(set) var settingsCards: [PluginSettingsCard] = []
     @Published private(set) var shortcutItems: [ShortcutSettingsItem] = []
@@ -26,8 +30,9 @@ final class PluginHost: ObservableObject {
 
     convenience init() {
         self.init(
-            plugins: [PhysicalCleanModePlugin()],
+            plugins: [KeepAwakePlugin(), PhysicalCleanModePlugin()],
             shortcutStore: ShortcutStore(),
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(),
             globalShortcutManager: GlobalShortcutManager()
         )
     }
@@ -35,6 +40,7 @@ final class PluginHost: ObservableObject {
     init(
         plugins: [any FeaturePlugin],
         shortcutStore: ShortcutStore,
+        pluginDisplayPreferencesStore: PluginDisplayPreferencesStore,
         globalShortcutManager: GlobalShortcutManager
     ) {
         self.plugins = plugins.sorted {
@@ -45,6 +51,7 @@ final class PluginHost: ObservableObject {
             return $0.manifest.order < $1.manifest.order
         }
         self.shortcutStore = shortcutStore
+        self.pluginDisplayPreferencesStore = pluginDisplayPreferencesStore
         self.globalShortcutManager = globalShortcutManager
 
         for plugin in self.plugins {
@@ -88,6 +95,32 @@ final class PluginHost: ObservableObject {
         }
 
         plugin.handlePanelAction(.setSwitch(isOn))
+        rebuildDerivedState()
+    }
+
+    func setPanelSelectionValue(
+        _ optionID: String,
+        controlID: String,
+        for pluginID: String
+    ) {
+        guard let plugin = plugin(for: pluginID) else {
+            return
+        }
+
+        plugin.handlePanelAction(.setSelection(controlID: controlID, optionID: optionID))
+        rebuildDerivedState()
+    }
+
+    func setPanelDateValue(
+        _ date: Date,
+        controlID: String,
+        for pluginID: String
+    ) {
+        guard let plugin = plugin(for: pluginID) else {
+            return
+        }
+
+        plugin.handlePanelAction(.setDate(controlID: controlID, value: date))
         rebuildDerivedState()
     }
 
@@ -141,16 +174,103 @@ final class PluginHost: ObservableObject {
         rebuildDerivedState()
     }
 
+    func setFeatureVisibility(_ isVisible: Bool, for pluginID: String) {
+        pluginDisplayPreferencesStore.setVisibility(
+            isVisible,
+            for: pluginID,
+            defaultPluginIDs: defaultPluginIDs
+        )
+        rebuildDerivedState()
+    }
+
+    func canMoveFeatureManagementItem(id pluginID: String, by offset: Int) -> Bool {
+        let orderedPluginIDs = orderedPluginIDs()
+
+        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
+            return false
+        }
+
+        let targetIndex = currentIndex + offset
+        return orderedPluginIDs.indices.contains(targetIndex)
+    }
+
+    func moveFeatureManagementItem(id pluginID: String, by offset: Int) {
+        var orderedPluginIDs = orderedPluginIDs()
+
+        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
+            return
+        }
+
+        let targetIndex = currentIndex + offset
+
+        guard orderedPluginIDs.indices.contains(targetIndex) else {
+            return
+        }
+
+        let movedPluginID = orderedPluginIDs.remove(at: currentIndex)
+        orderedPluginIDs.insert(movedPluginID, at: targetIndex)
+
+        pluginDisplayPreferencesStore.setOrderedPluginIDs(
+            orderedPluginIDs,
+            defaultPluginIDs: defaultPluginIDs
+        )
+        rebuildDerivedState()
+    }
+
+    func moveFeatureManagementItem(id pluginID: String, toOffset targetOffset: Int) {
+        var orderedPluginIDs = orderedPluginIDs()
+
+        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
+            return
+        }
+
+        let clampedOffset = min(max(targetOffset, 0), orderedPluginIDs.count)
+
+        guard currentIndex != clampedOffset, currentIndex + 1 != clampedOffset else {
+            return
+        }
+
+        orderedPluginIDs.move(
+            fromOffsets: IndexSet(integer: currentIndex),
+            toOffset: clampedOffset
+        )
+
+        pluginDisplayPreferencesStore.setOrderedPluginIDs(
+            orderedPluginIDs,
+            defaultPluginIDs: defaultPluginIDs
+        )
+        rebuildDerivedState()
+    }
+
+    func moveFeatureManagementItems(fromOffsets: IndexSet, toOffset: Int) {
+        var orderedPluginIDs = orderedPluginIDs()
+        orderedPluginIDs.move(fromOffsets: fromOffsets, toOffset: toOffset)
+
+        pluginDisplayPreferencesStore.setOrderedPluginIDs(
+            orderedPluginIDs,
+            defaultPluginIDs: defaultPluginIDs
+        )
+        rebuildDerivedState()
+    }
+
     private func plugin(for pluginID: String) -> (any FeaturePlugin)? {
         plugins.first(where: { $0.manifest.id == pluginID })
     }
 
     private func rebuildDerivedState() {
-        panelItems = plugins.compactMap { plugin in
+        let orderedPlugins = orderedPlugins()
+
+        panelItems = orderedPlugins.compactMap { plugin in
             let manifest = plugin.manifest
             let state = plugin.panelState
 
-            guard state.isVisible else {
+            guard
+                state.isVisible,
+                pluginDisplayPreferencesStore.isVisible(
+                    manifest.id,
+                    defaultPluginIDs: defaultPluginIDs
+                )
+            else {
                 return nil
             }
 
@@ -167,11 +287,29 @@ final class PluginHost: ObservableObject {
                 description: description.isEmpty ? manifest.defaultDescription : description,
                 helpText: helpText,
                 isOn: state.isOn,
-                isEnabled: state.isEnabled
+                isEnabled: state.isEnabled,
+                detail: state.detail
             )
         }
 
-        settingsCards = plugins.flatMap { plugin in
+        featureManagementItems = orderedPlugins.map { plugin in
+            let manifest = plugin.manifest
+
+            return PluginFeatureManagementItem(
+                id: manifest.id,
+                title: manifest.title,
+                description: manifest.defaultDescription,
+                iconName: manifest.iconName,
+                iconTint: manifest.iconTint,
+                isVisible: pluginDisplayPreferencesStore.isVisible(
+                    manifest.id,
+                    defaultPluginIDs: defaultPluginIDs
+                ),
+                isActive: plugin.panelState.isOn
+            )
+        }
+
+        settingsCards = orderedPlugins.flatMap { plugin in
             plugin.settingsSections.map { section in
                 PluginSettingsCard(
                     id: "\(plugin.manifest.id).\(section.id)",
@@ -188,7 +326,7 @@ final class PluginHost: ObservableObject {
             }
         }
 
-        permissionCards = plugins.flatMap { plugin in
+        permissionCards = orderedPlugins.flatMap { plugin in
             plugin.permissionRequirements.map { requirement in
                 let state = plugin.permissionState(for: requirement.id)
 
@@ -232,7 +370,7 @@ final class PluginHost: ObservableObject {
     }
 
     private func shortcutDescriptors() -> [ShortcutDescriptor] {
-        plugins.flatMap { plugin in
+        orderedPlugins().flatMap { plugin in
             plugin.shortcutDefinitions.map { definition in
                 ShortcutDescriptor(
                     itemID: shortcutItemID(
@@ -246,6 +384,20 @@ final class PluginHost: ObservableObject {
                 )
             }
         }
+    }
+
+    private var defaultPluginIDs: [String] {
+        plugins.map(\.manifest.id)
+    }
+
+    private func orderedPluginIDs() -> [String] {
+        pluginDisplayPreferencesStore.orderedPluginIDs(defaultPluginIDs: defaultPluginIDs)
+    }
+
+    private func orderedPlugins() -> [any FeaturePlugin] {
+        let pluginsByID = Dictionary(uniqueKeysWithValues: plugins.map { ($0.manifest.id, $0) })
+
+        return orderedPluginIDs().compactMap { pluginsByID[$0] }
     }
 
     private func shortcutDescriptor(for shortcutID: String) -> ShortcutDescriptor? {

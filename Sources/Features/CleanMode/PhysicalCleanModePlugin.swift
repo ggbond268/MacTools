@@ -58,6 +58,7 @@ final class PhysicalCleanModePlugin: FeaturePlugin {
             isOn: session != nil,
             isEnabled: true,
             isVisible: true,
+            detail: nil,
             errorMessage: lastErrorMessage
         )
     }
@@ -116,6 +117,8 @@ final class PhysicalCleanModePlugin: FeaturePlugin {
                 logger.debug("panel action setSwitch isEnabled=\(isEnabled, privacy: .public)")
             }
             setPhysicalCleanModeEnabled(isEnabled)
+        case .setSelection, .setDate:
+            break
         }
     }
 

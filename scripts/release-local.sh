@@ -346,7 +346,7 @@ function require_existing_dmg() {
   [[ -f "$dmg_path" ]] || fail "未找到现有 DMG：$dmg_path
 
 如果你想先构建并公证新包，请直接运行：
-  ./scripts/release-local.sh --version ${VERSION:-0.1.0}
+  ./scripts/release-local.sh --version ${VERSION:-0.2.0}
 
 如果你已经做过一次完整发布，请确认要上传的 DMG 仍在上面的路径。"
 }

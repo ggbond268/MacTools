@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 enum PluginControlStyle {
@@ -6,6 +7,8 @@ enum PluginControlStyle {
 
 enum PluginPanelAction {
     case setSwitch(Bool)
+    case setSelection(controlID: String, optionID: String)
+    case setDate(controlID: String, value: Date)
 }
 
 enum PluginMenuActionBehavior {
@@ -45,7 +48,39 @@ struct PluginPanelState {
     let isOn: Bool
     let isEnabled: Bool
     let isVisible: Bool
+    let detail: PluginPanelDetail?
     let errorMessage: String?
+}
+
+enum PluginPanelControlKind {
+    case segmented
+    case datePicker
+}
+
+enum PluginPanelDatePickerStyle {
+    case compact
+    case dateTimeCard
+}
+
+struct PluginPanelControlOption: Identifiable {
+    let id: String
+    let title: String
+}
+
+struct PluginPanelControl: Identifiable {
+    let id: String
+    let kind: PluginPanelControlKind
+    let options: [PluginPanelControlOption]
+    let selectedOptionID: String?
+    let dateValue: Date?
+    let minimumDate: Date?
+    let displayedComponents: DatePickerComponents?
+    let datePickerStyle: PluginPanelDatePickerStyle?
+    let isEnabled: Bool
+}
+
+struct PluginPanelDetail {
+    let controls: [PluginPanelControl]
 }
 
 struct PluginPermissionRequirement: Identifiable {
@@ -87,6 +122,17 @@ struct PluginPanelItem: Identifiable {
     let helpText: String
     let isOn: Bool
     let isEnabled: Bool
+    let detail: PluginPanelDetail?
+}
+
+struct PluginFeatureManagementItem: Identifiable {
+    let id: String
+    let title: String
+    let description: String
+    let iconName: String
+    let iconTint: Color
+    let isVisible: Bool
+    let isActive: Bool
 }
 
 struct PluginPermissionCard: Identifiable {

@@ -24,7 +24,8 @@ struct SettingsView: View {
                     Label("关于", systemImage: "info.circle")
                 }
         }
-        .frame(minWidth: 680, minHeight: 420)
+        .frame(width: 580)
+        .frame(minHeight: 420)
     }
 }
 
@@ -107,6 +108,21 @@ struct GeneralSettingsView: View {
                     Text(card.title)
                 }
             }
+
+            Section {
+                FeatureManagementTableView(
+                    items: pluginHost.featureManagementItems,
+                    onVisibilityChange: { pluginID, isVisible in
+                        pluginHost.setFeatureVisibility(isVisible, for: pluginID)
+                    },
+                    onMove: { pluginID, targetOffset in
+                        pluginHost.moveFeatureManagementItem(id: pluginID, toOffset: targetOffset)
+                    }
+                )
+                .frame(height: featureManagementListHeight)
+            } header: {
+                Text("功能")
+            }
         }
         .formStyle(.grouped)
         .onAppear {
@@ -123,6 +139,10 @@ struct GeneralSettingsView: View {
         case .caution:
             return .orange
         }
+    }
+
+    private var featureManagementListHeight: CGFloat {
+        FeatureManagementTableView.preferredHeight(for: pluginHost.featureManagementItems.count)
     }
 }
 

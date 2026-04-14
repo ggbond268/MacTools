@@ -11,8 +11,8 @@ enum AppMetadata {
     }
 
     static var versionDescription: String {
-        let shortVersion = bundleString("CFBundleShortVersionString") ?? "0.1.0"
-        let buildNumber = bundleString(kCFBundleVersionKey as String) ?? "1"
+        let shortVersion = bundleString("CFBundleShortVersionString") ?? "0.2.0"
+        let buildNumber = bundleString(kCFBundleVersionKey as String) ?? "2"
         return "\(shortVersion) (\(buildNumber))"
     }
 

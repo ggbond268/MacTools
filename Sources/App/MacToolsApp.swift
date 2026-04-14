@@ -8,7 +8,7 @@ struct MacToolsApp: App {
     var body: some Scene {
         MenuBarExtra("MacTools", systemImage: menuBarSymbolName) {
             MenuBarContent(pluginHost: pluginHost)
-                .frame(width: 304)
+                .frame(width: 312)
                 .onAppear {
                     pluginHost.refreshAll()
                 }
@@ -18,7 +18,7 @@ struct MacToolsApp: App {
         Window("设置", id: "settings") {
             SettingsView(pluginHost: pluginHost)
         }
-        .defaultSize(width: 480, height: 320)
+        .defaultSize(width: 580, height: 420)
         .windowResizability(.contentSize)
     }
 
