@@ -655,8 +655,13 @@ private final class SecondaryPanelController: ObservableObject {
             defer: false
         )
         panel.isFloatingPanel = true
-        // app 被切到后台时自动隐藏侧栏，作为正常 dismiss 路径之外的防御性兜底。
-        panel.hidesOnDeactivate = true
+        // 必须保持为 false：在 `.nonactivatingPanel` + 菜单栏 app 的组合下，
+        // `hidesOnDeactivate = true` 会让这个 panel 在 orderFront 之后陷入
+        // 「NSWindow.isVisible 仍为 true 但实际像素不上屏」的半死状态，侧栏完全
+        // 看不见（被 popover 右侧的其他 app 窗口内容透出来）。
+        // 侧栏生命周期已经由 MenuBarContent.onDisappear → SecondaryPanelController.hide()
+        // 负责级联清理，不需要 hidesOnDeactivate 作为兜底。
+        panel.hidesOnDeactivate = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
