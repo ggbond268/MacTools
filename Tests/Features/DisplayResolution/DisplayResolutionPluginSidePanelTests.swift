@@ -133,6 +133,35 @@ final class DisplayResolutionPluginSidePanelTests: XCTestCase {
         XCTAssertNil(state.detail)
     }
 
+    func testSelectingDifferentDisplayClearsLastErrorMessage() throws {
+        let controller = MockDisplayResolutionController()
+        controller.displays = [
+            DisplayInfo(id: 2, name: "Studio Display", isBuiltin: false, isMain: true),
+            DisplayInfo(id: 3, name: "LG UltraFine", isBuiltin: false, isMain: false)
+        ]
+        controller.modesByDisplayID = [
+            2: [
+                makeMode(modeId: 8, width: 1920, height: 1080, isCurrent: true),
+                makeMode(modeId: 12, width: 2560, height: 1440)
+            ],
+            3: [
+                makeMode(modeId: 30, width: 3008, height: 1692, isCurrent: true)
+            ]
+        ]
+        controller.applyResult = .failure(.modeNotFound(modeId: 12))
+
+        let plugin = DisplayResolutionPlugin(controller: controller)
+        plugin.handlePanelAction(.setDisclosureExpanded(true))
+        plugin.handlePanelAction(.setNavigationSelection(controlID: "display-navigation", optionID: "2"))
+
+        let controlID = try XCTUnwrap(plugin.panelState.detail?.secondaryPanel?.controls.first?.id)
+        plugin.handlePanelAction(.setSelection(controlID: controlID, optionID: "12"))
+        XCTAssertNotNil(plugin.panelState.errorMessage)
+
+        plugin.handlePanelAction(.setNavigationSelection(controlID: "display-navigation", optionID: "3"))
+        XCTAssertNil(plugin.panelState.errorMessage)
+    }
+
     private func makePlugin() -> DisplayResolutionPlugin {
         let controller = MockDisplayResolutionController()
         controller.displays = [
@@ -182,6 +211,7 @@ private final class MockDisplayResolutionController: DisplayResolutionControllin
     var displays: [DisplayInfo] = []
     var modesByDisplayID: [CGDirectDisplayID: [DisplayResolutionInfo]] = [:]
     var applyCalls: [ApplyCall] = []
+    var applyResult: Result<Void, DisplayResolutionError> = .success(())
 
     func listConnectedDisplays() -> [DisplayInfo] { displays }
 
@@ -194,6 +224,6 @@ private final class MockDisplayResolutionController: DisplayResolutionControllin
         for displayID: CGDirectDisplayID
     ) -> Result<Void, DisplayResolutionError> {
         applyCalls.append(ApplyCall(displayID: displayID, modeId: info.modeId))
-        return .success(())
+        return applyResult
     }
 }

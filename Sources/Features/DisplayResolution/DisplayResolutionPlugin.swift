@@ -110,6 +110,7 @@ final class DisplayResolutionPlugin: FeaturePlugin {
 
             let displayID = CGDirectDisplayID(rawDisplayID)
             selectedDisplayID = selectedDisplayID == displayID ? nil : displayID
+            lastErrorMessage = nil
             onStateChange?()
         case let .setSelection(controlID, optionID):
             guard let displayID = Self.parseDisplayID(from: controlID), let modeId = Int32(optionID) else {

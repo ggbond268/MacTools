@@ -4,6 +4,13 @@ import XCTest
 @testable import MacTools
 
 final class MenuBarPanelLayoutTests: XCTestCase {
+    func testFeatureSectionWidthUsesOnlyAttachedPanelSpaceWhenVisible() {
+        XCTAssertEqual(
+            MenuBarPanelLayout.featureSectionWidth(hasAttachedSecondaryPanel: true),
+            MenuBarPanelLayout.surfaceWidth + MenuBarPanelLayout.panelSpacing + MenuBarPanelLayout.secondaryPanelWidth
+        )
+    }
+
     func testSurfaceWidthStaysAtBaseCardWidthWhenSecondaryPanelIsVisible() {
         XCTAssertEqual(
             MenuBarPanelLayout.surfaceWidth,

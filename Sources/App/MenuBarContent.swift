@@ -11,12 +11,14 @@ enum MenuBarPanelLayout {
         baseWidth - (outerPadding * 2)
     }
 
-    static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
-        let extraWidth = panelItems.contains(where: itemHasVisibleSecondaryPanel)
-            ? secondaryPanelWidth + panelSpacing
-            : 0
+    static func featureSectionWidth(hasAttachedSecondaryPanel: Bool) -> CGFloat {
+        surfaceWidth + (hasAttachedSecondaryPanel ? panelSpacing + secondaryPanelWidth : 0)
+    }
 
-        return baseWidth + extraWidth
+    static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
+        featureSectionWidth(
+            hasAttachedSecondaryPanel: panelItems.contains(where: itemHasVisibleSecondaryPanel)
+        ) + (outerPadding * 2)
     }
 
     private static func itemHasVisibleSecondaryPanel(_ item: PluginPanelItem) -> Bool {
@@ -39,6 +41,11 @@ private enum FeatureRowLayout {
 }
 
 struct MenuBarContent: View {
+    private struct AttachedSecondaryPanel {
+        let pluginID: String
+        let panel: PluginPanelSecondaryPanel
+    }
+
     private struct DeferredPanelSwitchAction {
         let pluginID: String
         let isOn: Bool
@@ -52,84 +59,51 @@ struct MenuBarContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VStack(spacing: 8) {
-                ForEach(pluginHost.panelItems) { item in
-                    FeatureRowView(
-                        item: item,
-                        isOn: Binding(
-                            get: { pluginHost.isSwitchOn(for: item.id) },
-                            set: { newValue in
-                                handlePanelSwitchChange(newValue, for: item)
-                            }
-                        ),
-                        onDisclosureToggle: { isExpanded in
-                            pluginHost.setDisclosureExpanded(isExpanded, for: item.id)
-                        },
+            HStack(alignment: .top, spacing: MenuBarPanelLayout.panelSpacing) {
+                featureCards
+
+                if let attachedSecondaryPanel {
+                    SecondarySlidingPanel(
+                        title: attachedSecondaryPanel.panel.title,
+                        controls: attachedSecondaryPanel.panel.controls,
                         onSelectionChange: { controlID, optionID in
                             pluginHost.setPanelSelectionValue(
                                 optionID,
                                 controlID: controlID,
-                                for: item.id
+                                for: attachedSecondaryPanel.pluginID
                             )
                         },
                         onNavigationSelectionChange: { controlID, optionID in
                             pluginHost.setPanelNavigationSelectionValue(
                                 optionID,
                                 controlID: controlID,
-                                for: item.id
+                                for: attachedSecondaryPanel.pluginID
                             )
                         },
                         onDateChange: { controlID, date in
                             pluginHost.setPanelDateValue(
                                 date,
                                 controlID: controlID,
-                                for: item.id
+                                for: attachedSecondaryPanel.pluginID
                             )
                         }
                     )
+                    .frame(width: MenuBarPanelLayout.secondaryPanelWidth)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .padding(6)
-            .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+            .frame(
+                width: MenuBarPanelLayout.featureSectionWidth(
+                    hasAttachedSecondaryPanel: attachedSecondaryPanel != nil
+                ),
+                alignment: .leading
             )
 
-            VStack(spacing: 0) {
-                Button {
-                    presentSettings()
-                } label: {
-                    MenuActionRowLabel(title: "设置", systemImage: "gearshape")
-                }
-                .buttonStyle(.plain)
-
-                Divider()
-
-                Button {
-                    NSApplication.shared.terminate(nil)
-                } label: {
-                    MenuActionRowLabel(title: "退出", systemImage: "power")
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-            )
+            settingsCard
         }
         .padding(MenuBarPanelLayout.outerPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(width: MenuBarPanelLayout.width(for: pluginHost.panelItems), alignment: .leading)
+        .animation(.easeOut(duration: 0.18), value: attachedSecondaryPanel?.panel.title)
         .onReceive(pluginHost.$settingsPresentationRequestCount.dropFirst()) { _ in
             presentSettings()
         }
@@ -168,10 +142,110 @@ struct MenuBarContent: View {
             for: deferredPanelSwitchAction.pluginID
         )
     }
+
+    private var attachedSecondaryPanel: AttachedSecondaryPanel? {
+        pluginHost.panelItems.first { item in
+            guard item.detail?.secondaryPanel != nil else {
+                return false
+            }
+
+            if item.controlStyle == .disclosure {
+                return item.isExpanded
+            }
+
+            return true
+        }
+        .flatMap { item in
+            item.detail?.secondaryPanel.map { panel in
+                AttachedSecondaryPanel(pluginID: item.id, panel: panel)
+            }
+        }
+    }
+
+    private var featureCards: some View {
+        VStack(spacing: 8) {
+            ForEach(pluginHost.panelItems) { item in
+                FeatureRowView(
+                    item: item,
+                    displaysSecondaryPanelExternally: attachedSecondaryPanel?.pluginID == item.id,
+                    isOn: Binding(
+                        get: { pluginHost.isSwitchOn(for: item.id) },
+                        set: { newValue in
+                            handlePanelSwitchChange(newValue, for: item)
+                        }
+                    ),
+                    onDisclosureToggle: { isExpanded in
+                        pluginHost.setDisclosureExpanded(isExpanded, for: item.id)
+                    },
+                    onSelectionChange: { controlID, optionID in
+                        pluginHost.setPanelSelectionValue(
+                            optionID,
+                            controlID: controlID,
+                            for: item.id
+                        )
+                    },
+                    onNavigationSelectionChange: { controlID, optionID in
+                        pluginHost.setPanelNavigationSelectionValue(
+                            optionID,
+                            controlID: controlID,
+                            for: item.id
+                        )
+                    },
+                    onDateChange: { controlID, date in
+                        pluginHost.setPanelDateValue(
+                            date,
+                            controlID: controlID,
+                            for: item.id
+                        )
+                    }
+                )
+            }
+        }
+        .padding(6)
+        .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private var settingsCard: some View {
+        VStack(spacing: 0) {
+            Button {
+                presentSettings()
+            } label: {
+                MenuActionRowLabel(title: "设置", systemImage: "gearshape")
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                MenuActionRowLabel(title: "退出", systemImage: "power")
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
 }
 
 struct FeatureRowView: View {
     let item: PluginPanelItem
+    let displaysSecondaryPanelExternally: Bool
     @Binding var isOn: Bool
     let onDisclosureToggle: (Bool) -> Void
     let onSelectionChange: (String, String) -> Void
@@ -196,6 +270,7 @@ struct FeatureRowView: View {
             if let detail = detailToDisplay {
                 PluginPanelDetailView(
                     detail: detail,
+                    showsSecondaryPanel: !displaysSecondaryPanelExternally,
                     onSelectionChange: onSelectionChange,
                     onNavigationSelectionChange: onNavigationSelectionChange,
                     onDateChange: onDateChange
@@ -271,6 +346,7 @@ struct FeatureRowView: View {
 
 private struct PluginPanelDetailView: View {
     let detail: PluginPanelDetail
+    let showsSecondaryPanel: Bool
     let onSelectionChange: (String, String) -> Void
     let onNavigationSelectionChange: (String, String) -> Void
     let onDateChange: (String, Date) -> Void
@@ -283,7 +359,7 @@ private struct PluginPanelDetailView: View {
                 }
             }
 
-            if let secondaryPanel = detail.secondaryPanel {
+            if showsSecondaryPanel, let secondaryPanel = detail.secondaryPanel {
                 SecondarySlidingPanel(
                     title: secondaryPanel.title,
                     controls: secondaryPanel.controls,
@@ -500,6 +576,7 @@ private struct SecondarySlidingPanel: View {
 
             PluginPanelDetailView(
                 detail: PluginPanelDetail(primaryControls: controls, secondaryPanel: nil),
+                showsSecondaryPanel: true,
                 onSelectionChange: onSelectionChange,
                 onNavigationSelectionChange: onNavigationSelectionChange,
                 onDateChange: onDateChange
