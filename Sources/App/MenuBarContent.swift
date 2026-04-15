@@ -6,31 +6,14 @@ enum MenuBarPanelLayout {
     static let secondaryPanelWidth: CGFloat = 220
     static let panelSpacing: CGFloat = 12
     static let outerPadding: CGFloat = 8
+    static let navigationRowHeight: CGFloat = 58
 
     static var surfaceWidth: CGFloat {
         baseWidth - (outerPadding * 2)
     }
 
-    static func featureSectionWidth(hasAttachedSecondaryPanel: Bool) -> CGFloat {
-        surfaceWidth + (hasAttachedSecondaryPanel ? panelSpacing + secondaryPanelWidth : 0)
-    }
-
     static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
-        featureSectionWidth(
-            hasAttachedSecondaryPanel: panelItems.contains(where: itemHasVisibleSecondaryPanel)
-        ) + (outerPadding * 2)
-    }
-
-    private static func itemHasVisibleSecondaryPanel(_ item: PluginPanelItem) -> Bool {
-        guard item.detail?.secondaryPanel != nil else {
-            return false
-        }
-
-        if item.controlStyle == .disclosure {
-            return item.isExpanded
-        }
-
-        return true
+        baseWidth
     }
 }
 
@@ -41,74 +24,45 @@ private enum FeatureRowLayout {
 }
 
 struct MenuBarContent: View {
-    private struct AttachedSecondaryPanel {
-        let pluginID: String
-        let panel: PluginPanelSecondaryPanel
-    }
-
     private struct DeferredPanelSwitchAction {
         let pluginID: String
         let isOn: Bool
     }
 
+    @StateObject private var secondaryPanelController = SecondaryPanelController()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
 
     @ObservedObject var pluginHost: PluginHost
     @State private var deferredPanelSwitchAction: DeferredPanelSwitchAction?
+    @State private var selectedNavigationRowFrame: CGRect?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: MenuBarPanelLayout.panelSpacing) {
-                featureCards
-
-                if let attachedSecondaryPanel {
-                    SecondarySlidingPanel(
-                        title: attachedSecondaryPanel.panel.title,
-                        controls: attachedSecondaryPanel.panel.controls,
-                        onSelectionChange: { controlID, optionID in
-                            pluginHost.setPanelSelectionValue(
-                                optionID,
-                                controlID: controlID,
-                                for: attachedSecondaryPanel.pluginID
-                            )
-                        },
-                        onNavigationSelectionChange: { controlID, optionID in
-                            pluginHost.setPanelNavigationSelectionValue(
-                                optionID,
-                                controlID: controlID,
-                                for: attachedSecondaryPanel.pluginID
-                            )
-                        },
-                        onDateChange: { controlID, date in
-                            pluginHost.setPanelDateValue(
-                                date,
-                                controlID: controlID,
-                                for: attachedSecondaryPanel.pluginID
-                            )
-                        }
-                    )
-                    .frame(width: MenuBarPanelLayout.secondaryPanelWidth)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
-            }
-            .frame(
-                width: MenuBarPanelLayout.featureSectionWidth(
-                    hasAttachedSecondaryPanel: attachedSecondaryPanel != nil
-                ),
-                alignment: .leading
-            )
-
+            featureCards
             settingsCard
         }
         .padding(MenuBarPanelLayout.outerPadding)
         .frame(width: MenuBarPanelLayout.width(for: pluginHost.panelItems), alignment: .leading)
-        .animation(.easeOut(duration: 0.18), value: attachedSecondaryPanel?.panel.title)
+        .background(
+            MenuWindowAccessor { window in
+                secondaryPanelController.hostWindow = window
+                syncSecondaryPanelWindow()
+            }
+        )
+        .animation(.easeOut(duration: 0.18), value: attachedSecondaryPanelItemID)
+        .onChange(of: attachedSecondaryPanelItemID) { _ in
+            syncSecondaryPanelWindow()
+        }
+        .onChange(of: selectedNavigationRowFrame) { _ in
+            syncSecondaryPanelWindow()
+        }
         .onReceive(pluginHost.$settingsPresentationRequestCount.dropFirst()) { _ in
             presentSettings()
         }
         .onDisappear {
             flushDeferredPanelSwitchActionIfNeeded()
+            secondaryPanelController.hide()
         }
     }
 
@@ -143,7 +97,37 @@ struct MenuBarContent: View {
         )
     }
 
-    private var attachedSecondaryPanel: AttachedSecondaryPanel? {
+    private func syncSecondaryPanelWindow() {
+        guard
+            let panelItem = attachedSecondaryPanelItem,
+            let panel = panelItem.detail?.secondaryPanel,
+            let anchorRect = selectedNavigationRowFrame
+        else {
+            secondaryPanelController.hide()
+            return
+        }
+
+        secondaryPanelController.show(
+            panel: panel,
+            pluginID: panelItem.id,
+            anchorRect: anchorRect,
+            onSelectionChange: { controlID, optionID in
+                pluginHost.setPanelSelectionValue(optionID, controlID: controlID, for: panelItem.id)
+            },
+            onNavigationSelectionChange: { controlID, optionID in
+                pluginHost.setPanelNavigationSelectionValue(optionID, controlID: controlID, for: panelItem.id)
+            },
+            onDateChange: { controlID, date in
+                pluginHost.setPanelDateValue(date, controlID: controlID, for: panelItem.id)
+            }
+        )
+    }
+
+    private var attachedSecondaryPanelItemID: String? {
+        attachedSecondaryPanelItem?.id
+    }
+
+    private var attachedSecondaryPanelItem: PluginPanelItem? {
         pluginHost.panelItems.first { item in
             guard item.detail?.secondaryPanel != nil else {
                 return false
@@ -155,11 +139,6 @@ struct MenuBarContent: View {
 
             return true
         }
-        .flatMap { item in
-            item.detail?.secondaryPanel.map { panel in
-                AttachedSecondaryPanel(pluginID: item.id, panel: panel)
-            }
-        }
     }
 
     private var featureCards: some View {
@@ -167,7 +146,7 @@ struct MenuBarContent: View {
             ForEach(pluginHost.panelItems) { item in
                 FeatureRowView(
                     item: item,
-                    displaysSecondaryPanelExternally: attachedSecondaryPanel?.pluginID == item.id,
+                    tracksSelectedNavigationRow: attachedSecondaryPanelItemID == item.id,
                     isOn: Binding(
                         get: { pluginHost.isSwitchOn(for: item.id) },
                         set: { newValue in
@@ -178,25 +157,18 @@ struct MenuBarContent: View {
                         pluginHost.setDisclosureExpanded(isExpanded, for: item.id)
                     },
                     onSelectionChange: { controlID, optionID in
-                        pluginHost.setPanelSelectionValue(
-                            optionID,
-                            controlID: controlID,
-                            for: item.id
-                        )
+                        pluginHost.setPanelSelectionValue(optionID, controlID: controlID, for: item.id)
                     },
                     onNavigationSelectionChange: { controlID, optionID in
-                        pluginHost.setPanelNavigationSelectionValue(
-                            optionID,
-                            controlID: controlID,
-                            for: item.id
-                        )
+                        pluginHost.setPanelNavigationSelectionValue(optionID, controlID: controlID, for: item.id)
+                    },
+                    onSelectedNavigationRowFrameChange: { frame in
+                        if attachedSecondaryPanelItemID == item.id {
+                            selectedNavigationRowFrame = frame
+                        }
                     },
                     onDateChange: { controlID, date in
-                        pluginHost.setPanelDateValue(
-                            date,
-                            controlID: controlID,
-                            for: item.id
-                        )
+                        pluginHost.setPanelDateValue(date, controlID: controlID, for: item.id)
                     }
                 )
             }
@@ -245,11 +217,12 @@ struct MenuBarContent: View {
 
 struct FeatureRowView: View {
     let item: PluginPanelItem
-    let displaysSecondaryPanelExternally: Bool
+    let tracksSelectedNavigationRow: Bool
     @Binding var isOn: Bool
     let onDisclosureToggle: (Bool) -> Void
     let onSelectionChange: (String, String) -> Void
     let onNavigationSelectionChange: (String, String) -> Void
+    let onSelectedNavigationRowFrameChange: (CGRect?) -> Void
     let onDateChange: (String, Date) -> Void
 
     var body: some View {
@@ -265,14 +238,17 @@ struct FeatureRowView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!item.isEnabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
 
             if let detail = detailToDisplay {
                 PluginPanelDetailView(
                     detail: detail,
-                    showsSecondaryPanel: !displaysSecondaryPanelExternally,
+                    showsSecondaryPanel: false,
                     onSelectionChange: onSelectionChange,
                     onNavigationSelectionChange: onNavigationSelectionChange,
+                    onSelectedNavigationRowFrameChange: tracksSelectedNavigationRow ? onSelectedNavigationRowFrameChange : { _ in },
                     onDateChange: onDateChange
                 )
                 .padding(.leading, FeatureRowLayout.detailLeadingInset)
@@ -323,12 +299,14 @@ struct FeatureRowView: View {
                     .toggleStyle(.switch)
                     .disabled(!item.isEnabled)
             case .disclosure:
-                Image(systemName: item.isExpanded ? "chevron.up" : "chevron.down")
+                Image(systemName: item.isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 16, height: 16)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var detailToDisplay: PluginPanelDetail? {
@@ -349,29 +327,15 @@ private struct PluginPanelDetailView: View {
     let showsSecondaryPanel: Bool
     let onSelectionChange: (String, String) -> Void
     let onNavigationSelectionChange: (String, String) -> Void
+    let onSelectedNavigationRowFrameChange: (CGRect?) -> Void
     let onDateChange: (String, Date) -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: MenuBarPanelLayout.panelSpacing) {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(detail.primaryControls) { control in
-                    panelControl(control)
-                }
-            }
-
-            if showsSecondaryPanel, let secondaryPanel = detail.secondaryPanel {
-                SecondarySlidingPanel(
-                    title: secondaryPanel.title,
-                    controls: secondaryPanel.controls,
-                    onSelectionChange: onSelectionChange,
-                    onNavigationSelectionChange: onNavigationSelectionChange,
-                    onDateChange: onDateChange
-                )
-                .frame(width: MenuBarPanelLayout.secondaryPanelWidth)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(detail.primaryControls) { control in
+                panelControl(control)
             }
         }
-        .animation(.easeOut(duration: 0.18), value: detail.secondaryPanel?.title)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -437,7 +401,8 @@ private struct PluginPanelDetailView: View {
                 control: control,
                 onSelect: { optionID in
                     onNavigationSelectionChange(control.id, optionID)
-                }
+                },
+                onSelectedRowFrameChange: onSelectedNavigationRowFrameChange
             )
         }
     }
@@ -518,6 +483,7 @@ private struct SelectListRow: View {
 private struct NavigationListControl: View {
     let control: PluginPanelControl
     let onSelect: (String) -> Void
+    let onSelectedRowFrameChange: (CGRect?) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -547,15 +513,24 @@ private struct NavigationListControl: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 9)
+                    .frame(minHeight: MenuBarPanelLayout.navigationRowHeight)
                     .background(
                         option.id == control.selectedOptionID
                             ? Color.accentColor.opacity(0.10)
                             : Color.clear
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!control.isEnabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    if option.id == control.selectedOptionID {
+                        SelectedRowFrameReader(onFrameChange: onSelectedRowFrameChange)
+                    }
+                }
             }
         }
     }
@@ -576,9 +551,10 @@ private struct SecondarySlidingPanel: View {
 
             PluginPanelDetailView(
                 detail: PluginPanelDetail(primaryControls: controls, secondaryPanel: nil),
-                showsSecondaryPanel: true,
+                showsSecondaryPanel: false,
                 onSelectionChange: onSelectionChange,
                 onNavigationSelectionChange: onNavigationSelectionChange,
+                onSelectedNavigationRowFrameChange: { _ in },
                 onDateChange: onDateChange
             )
         }
@@ -591,6 +567,149 @@ private struct SecondarySlidingPanel: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
         )
+    }
+}
+
+private final class SecondaryPanelWindow: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+@MainActor
+private final class SecondaryPanelController: ObservableObject {
+    // 侧栏窗口必须保持与 MenuBarExtra popover 的 *兄弟* 关系，而不是 child window。
+    //
+    // 背景：`NSWindow.addChildWindow(_:, ordered:)` 会把父子窗口的 key-status 绑成
+    // 同一个 focus group，导致父窗口在用户点击外部时收不到 `didResignKeyNotification`。
+    // 而 `MenuBarExtra(.window)` 的 dismiss 流程（由 SwiftUI 私有的
+    // `WindowMenuBarExtraBehavior` 实现）正是监听 popover 的 `didResignKey` 才触发
+    // 收起。所以一旦把本侧栏以 child window 形式挂上去，popover 永远不会自己关。
+    //
+    // 解决：改为独立（sibling）NSPanel，不调用 `addChildWindow`。位置由
+    // `anchorRect` 直接算出；level 调到 `.popUpMenu` 以保证 Z 序高于 popover；
+    // 生命周期由 SwiftUI 视图的 `.onDisappear` → `hide()` 级联清理。
+    //
+    // 参考：
+    // - MenuBarExtraAccess 源码（对 MenuBarExtraWindow 做 didResignKey 观察）
+    //   https://github.com/orchetect/MenuBarExtraAccess
+    // - Apple Feedback FB11984872（无法程序化关闭 window-style MenuBarExtra）
+    // - CocoaDev 「HowCanChildWindowBeKey」https://cocoadev.github.io/HowCanChildWindowBeKey/
+
+    weak var hostWindow: NSWindow?
+    private var panelWindow: SecondaryPanelWindow?
+
+    func show(
+        panel: PluginPanelSecondaryPanel,
+        pluginID: String,
+        anchorRect: CGRect,
+        onSelectionChange: @escaping (String, String) -> Void,
+        onNavigationSelectionChange: @escaping (String, String) -> Void,
+        onDateChange: @escaping (String, Date) -> Void
+    ) {
+        guard let hostWindow else { return }
+        // MenuWindowAccessor.updateNSView 会在 .onDisappear 之后仍派发 async 回调，
+        // 可能在 hide() 之后再次触发 show()。popover 被 dismiss 时 hostWindow 的
+        // isVisible 已经变为 false，以此拦截竞态导致的侧栏重新展示。
+        guard hostWindow.isVisible else { return }
+
+        let rootView = SecondarySlidingPanel(
+            title: panel.title,
+            controls: panel.controls,
+            onSelectionChange: onSelectionChange,
+            onNavigationSelectionChange: onNavigationSelectionChange,
+            onDateChange: onDateChange
+        )
+        .frame(width: MenuBarPanelLayout.secondaryPanelWidth)
+
+        let hostingView = NSHostingView(rootView: rootView)
+        let fittingSize = hostingView.fittingSize
+        let width = MenuBarPanelLayout.secondaryPanelWidth
+        let height = max(fittingSize.height, 160)
+        let origin = CGPoint(
+            x: anchorRect.maxX + MenuBarPanelLayout.panelSpacing,
+            y: anchorRect.maxY - height
+        )
+        let frame = CGRect(origin: origin, size: CGSize(width: width, height: height))
+
+        let panelWindow = panelWindow ?? makePanel()
+        panelWindow.contentView = hostingView
+        panelWindow.setFrame(frame, display: true)
+        // 运行时把 panel level 动态对齐到 hostWindow.level + 1，保证 Z 序高于 popover。
+        // MenuBarExtra popover 的 level 是 SwiftUI 私有实现细节，不能硬编码。
+        panelWindow.level = NSWindow.Level(rawValue: hostWindow.level.rawValue + 1)
+        panelWindow.orderFrontRegardless()
+        self.panelWindow = panelWindow
+    }
+
+    func hide() {
+        guard let panelWindow else { return }
+        panelWindow.orderOut(nil)
+        self.panelWindow = nil
+    }
+
+    private func makePanel() -> SecondaryPanelWindow {
+        let panel = SecondaryPanelWindow(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        // app 被切到后台时自动隐藏侧栏，作为正常 dismiss 路径之外的防御性兜底。
+        panel.hidesOnDeactivate = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.isMovable = false
+        panel.isReleasedWhenClosed = false
+        return panel
+    }
+}
+
+private struct MenuWindowAccessor: NSViewRepresentable {
+    let onWindowChange: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            onWindowChange(view.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            onWindowChange(nsView.window)
+        }
+    }
+}
+
+private struct SelectedRowFrameReader: NSViewRepresentable {
+    let onFrameChange: (CGRect?) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            updateFrame(for: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            updateFrame(for: nsView)
+        }
+    }
+
+    private func updateFrame(for view: NSView) {
+        guard let window = view.window else {
+            onFrameChange(nil)
+            return
+        }
+
+        let rectInWindow = view.convert(view.bounds, to: nil)
+        let rectOnScreen = window.convertToScreen(rectInWindow)
+        onFrameChange(rectOnScreen)
     }
 }
 

@@ -4,13 +4,6 @@ import XCTest
 @testable import MacTools
 
 final class MenuBarPanelLayoutTests: XCTestCase {
-    func testFeatureSectionWidthUsesOnlyAttachedPanelSpaceWhenVisible() {
-        XCTAssertEqual(
-            MenuBarPanelLayout.featureSectionWidth(hasAttachedSecondaryPanel: true),
-            MenuBarPanelLayout.surfaceWidth + MenuBarPanelLayout.panelSpacing + MenuBarPanelLayout.secondaryPanelWidth
-        )
-    }
-
     func testSurfaceWidthStaysAtBaseCardWidthWhenSecondaryPanelIsVisible() {
         XCTAssertEqual(
             MenuBarPanelLayout.surfaceWidth,
@@ -31,10 +24,7 @@ final class MenuBarPanelLayoutTests: XCTestCase {
             secondaryPanel: PluginPanelSecondaryPanel(title: "Studio Display", controls: [])
         )
 
-        XCTAssertEqual(
-            MenuBarPanelLayout.width(for: [item]),
-            MenuBarPanelLayout.baseWidth + MenuBarPanelLayout.panelSpacing + MenuBarPanelLayout.secondaryPanelWidth
-        )
+        XCTAssertEqual(MenuBarPanelLayout.width(for: [item]), MenuBarPanelLayout.baseWidth)
     }
 
     func testWidthIgnoresSecondaryPanelForCollapsedDisclosurePanel() {
