@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+enum MenuBarPanelLayout {
+    static let baseWidth: CGFloat = 312
+    static let secondaryPanelWidth: CGFloat = 220
+    static let panelSpacing: CGFloat = 12
+}
+
 private enum FeatureRowLayout {
     static let iconSize: CGFloat = 28
     static let rowSpacing: CGFloat = 10
@@ -241,7 +247,7 @@ private struct PluginPanelDetailView: View {
     let onDateChange: (String, Date) -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: MenuBarPanelLayout.panelSpacing) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(detail.primaryControls) { control in
                     panelControl(control)
@@ -253,9 +259,10 @@ private struct PluginPanelDetailView: View {
                     title: secondaryPanel.title,
                     controls: secondaryPanel.controls,
                     onSelectionChange: onSelectionChange,
+                    onNavigationSelectionChange: onNavigationSelectionChange,
                     onDateChange: onDateChange
                 )
-                .frame(width: 220)
+                .frame(width: MenuBarPanelLayout.secondaryPanelWidth)
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
@@ -452,6 +459,7 @@ private struct SecondarySlidingPanel: View {
     let title: String
     let controls: [PluginPanelControl]
     let onSelectionChange: (String, String) -> Void
+    let onNavigationSelectionChange: (String, String) -> Void
     let onDateChange: (String, Date) -> Void
 
     var body: some View {
@@ -463,7 +471,7 @@ private struct SecondarySlidingPanel: View {
             PluginPanelDetailView(
                 detail: PluginPanelDetail(primaryControls: controls, secondaryPanel: nil),
                 onSelectionChange: onSelectionChange,
-                onNavigationSelectionChange: { _, _ in },
+                onNavigationSelectionChange: onNavigationSelectionChange,
                 onDateChange: onDateChange
             )
         }
