@@ -288,6 +288,8 @@ private struct PluginPanelDetailView: View {
                             onSelectionChange(control.id, optionID)
                         }
                     )
+                case .navigationList:
+                    EmptyView()
                 }
             }
         }

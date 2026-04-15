@@ -26,6 +26,18 @@ final class PluginHostNavigationSelectionTests: XCTestCase {
             plugin.receivedActions,
             [.setNavigationSelection(controlID: "display-navigation", optionID: "display-2")]
         )
+        XCTAssertNotEqual(
+            plugin.receivedActions,
+            [.setSelection(controlID: "display-navigation", optionID: "display-2")]
+        )
+    }
+
+    func testNavigationListControlKindIsDistinctFromSelectList() {
+        let kind = PluginPanelControlKind.navigationList
+
+        if case .selectList = kind {
+            XCTFail("Expected navigationList to be distinct from selectList")
+        }
     }
 
     private func makeHost(plugin: MockNavigationPlugin) -> PluginHost {

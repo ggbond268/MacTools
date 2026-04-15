@@ -10,11 +10,8 @@ enum PluginPanelAction: Equatable {
     case setSwitch(Bool)
     case setDisclosureExpanded(Bool)
     case setSelection(controlID: String, optionID: String)
+    case setNavigationSelection(controlID: String, optionID: String)
     case setDate(controlID: String, value: Date)
-
-    static func setNavigationSelection(controlID: String, optionID: String) -> Self {
-        .setSelection(controlID: controlID, optionID: optionID)
-    }
 }
 
 enum PluginPanelDescriptionTone {
@@ -68,8 +65,7 @@ enum PluginPanelControlKind {
     case segmented
     case datePicker
     case selectList
-
-    static let navigationList = Self.selectList
+    case navigationList
 }
 
 enum PluginPanelDatePickerStyle {
