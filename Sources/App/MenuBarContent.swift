@@ -5,6 +5,26 @@ enum MenuBarPanelLayout {
     static let baseWidth: CGFloat = 312
     static let secondaryPanelWidth: CGFloat = 220
     static let panelSpacing: CGFloat = 12
+
+    static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
+        let extraWidth = panelItems.contains(where: itemHasVisibleSecondaryPanel)
+            ? secondaryPanelWidth + panelSpacing
+            : 0
+
+        return baseWidth + extraWidth
+    }
+
+    private static func itemHasVisibleSecondaryPanel(_ item: PluginPanelItem) -> Bool {
+        guard item.detail?.secondaryPanel != nil else {
+            return false
+        }
+
+        if item.controlStyle == .disclosure {
+            return item.isExpanded
+        }
+
+        return true
+    }
 }
 
 private enum FeatureRowLayout {
@@ -102,6 +122,7 @@ struct MenuBarContent: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: MenuBarPanelLayout.width(for: pluginHost.panelItems), alignment: .leading)
         .onReceive(pluginHost.$settingsPresentationRequestCount.dropFirst()) { _ in
             presentSettings()
         }
