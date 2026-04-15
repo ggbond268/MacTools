@@ -115,6 +115,24 @@ final class DisplayResolutionPluginSidePanelTests: XCTestCase {
         XCTAssertEqual(plugin.panelState.detail?.primaryControls.first?.options.map(\.id), ["3"])
     }
 
+    func testAllFilteredDisplaysDisablePluginAndSuppressDetail() {
+        let controller = MockDisplayResolutionController()
+        controller.displays = [
+            DisplayInfo(id: 2, name: "Studio Display", isBuiltin: false, isMain: true)
+        ]
+        controller.modesByDisplayID = [2: []]
+
+        let plugin = DisplayResolutionPlugin(controller: controller)
+        plugin.handlePanelAction(.setDisclosureExpanded(true))
+
+        let state = plugin.panelState
+
+        XCTAssertEqual(state.subtitle, "未检测到可用分辨率")
+        XCTAssertFalse(state.isEnabled)
+        XCTAssertFalse(state.isExpanded)
+        XCTAssertNil(state.detail)
+    }
+
     private func makePlugin() -> DisplayResolutionPlugin {
         let controller = MockDisplayResolutionController()
         controller.displays = [

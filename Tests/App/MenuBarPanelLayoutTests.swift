@@ -4,6 +4,13 @@ import XCTest
 @testable import MacTools
 
 final class MenuBarPanelLayoutTests: XCTestCase {
+    func testSurfaceWidthStaysAtBaseCardWidthWhenSecondaryPanelIsVisible() {
+        XCTAssertEqual(
+            MenuBarPanelLayout.surfaceWidth,
+            MenuBarPanelLayout.baseWidth - (MenuBarPanelLayout.outerPadding * 2)
+        )
+    }
+
     func testWidthUsesBaseWidthWhenNoSecondaryPanelIsVisible() {
         let item = makeItem(controlStyle: .disclosure, isExpanded: true, secondaryPanel: nil)
 

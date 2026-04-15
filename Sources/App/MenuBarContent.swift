@@ -5,6 +5,11 @@ enum MenuBarPanelLayout {
     static let baseWidth: CGFloat = 312
     static let secondaryPanelWidth: CGFloat = 220
     static let panelSpacing: CGFloat = 12
+    static let outerPadding: CGFloat = 8
+
+    static var surfaceWidth: CGFloat {
+        baseWidth - (outerPadding * 2)
+    }
 
     static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
         let extraWidth = panelItems.contains(where: itemHasVisibleSecondaryPanel)
@@ -85,6 +90,7 @@ struct MenuBarContent: View {
                 }
             }
             .padding(6)
+            .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor))
@@ -111,6 +117,7 @@ struct MenuBarContent: View {
                 }
                 .buttonStyle(.plain)
             }
+            .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor))
@@ -120,7 +127,7 @@ struct MenuBarContent: View {
                     .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
             )
         }
-        .padding(8)
+        .padding(MenuBarPanelLayout.outerPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(width: MenuBarPanelLayout.width(for: pluginHost.panelItems), alignment: .leading)
         .onReceive(pluginHost.$settingsPresentationRequestCount.dropFirst()) { _ in
@@ -198,6 +205,7 @@ struct FeatureRowView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
+        .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .fill(Color.white.opacity(0.001))
@@ -310,6 +318,7 @@ private struct PluginPanelDetailView: View {
             }
             .labelsHidden()
             .pickerStyle(.segmented)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .disabled(!control.isEnabled)
         case .datePicker:
             switch control.datePickerStyle ?? .compact {

@@ -8,6 +8,8 @@ private enum ControlID {
 
 @MainActor
 final class DisplayResolutionPlugin: FeaturePlugin {
+    private static let unavailableModesSubtitle = "未检测到可用分辨率"
+
     let manifest = PluginManifest(
         id: "display-resolution",
         title: "显示器分辨率",
@@ -59,8 +61,21 @@ final class DisplayResolutionPlugin: FeaturePlugin {
             )
         }
 
+        guard !panelDisplays.isEmpty else {
+            selectedDisplayID = nil
+            return PluginPanelState(
+                subtitle: Self.unavailableModesSubtitle,
+                isOn: false,
+                isExpanded: false,
+                isEnabled: false,
+                isVisible: true,
+                detail: nil,
+                errorMessage: nil
+            )
+        }
+
         return PluginPanelState(
-            subtitle: subtitleForRowState(displays),
+            subtitle: subtitleForRowState(panelDisplays),
             isOn: false,
             isExpanded: isExpanded,
             isEnabled: true,
@@ -163,10 +178,12 @@ final class DisplayResolutionPlugin: FeaturePlugin {
         return CGDirectDisplayID(controlID.dropFirst(prefix.count))
     }
 
-    private func subtitleForRowState(_ displays: [DisplayInfo]) -> String {
+    private func subtitleForRowState(_ displays: [PanelDisplay]) -> String {
         if displays.count == 1, let display = displays.first {
-            let current = controller.listAvailableResolutions(for: display.id).first(where: { $0.isCurrent })
-            return current.map { "\(display.isMain ? "主屏" : display.name) \($0.displayTitle)" } ?? manifest.defaultDescription
+            let current = display.modes.first(where: { $0.isCurrent })
+            return current.map {
+                "\(display.display.isMain ? "主屏" : display.display.name) \($0.displayTitle)"
+            } ?? manifest.defaultDescription
         }
         return "\(displays.count) 个显示器"
     }
