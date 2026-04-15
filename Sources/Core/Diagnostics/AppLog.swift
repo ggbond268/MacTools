@@ -8,6 +8,8 @@ enum AppLog {
     static let keepAwakeSession = Logger(subsystem: subsystem, category: "KeepAwakeSession")
     static let physicalCleanModePlugin = Logger(subsystem: subsystem, category: "PhysicalCleanModePlugin")
     static let physicalCleanModeSession = Logger(subsystem: subsystem, category: "PhysicalCleanModeSession")
+    static let displayResolutionPlugin = Logger(subsystem: subsystem, category: "DisplayResolutionPlugin")
+    static let displayResolutionController = Logger(subsystem: subsystem, category: "DisplayResolutionController")
 
     static var isVerboseLoggingEnabled: Bool {
         #if DEBUG

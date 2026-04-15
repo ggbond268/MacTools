@@ -42,7 +42,7 @@ targets:
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: Tests/MacToolsTests
+      - path: Tests
     dependencies:
       - target: MacTools
     settings:

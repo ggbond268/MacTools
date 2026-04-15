@@ -3,12 +3,20 @@ import SwiftUI
 
 enum PluginControlStyle {
     case `switch`
+    case disclosure
 }
 
-enum PluginPanelAction {
+enum PluginPanelAction: Equatable {
     case setSwitch(Bool)
+    case setDisclosureExpanded(Bool)
     case setSelection(controlID: String, optionID: String)
+    case setNavigationSelection(controlID: String, optionID: String)
     case setDate(controlID: String, value: Date)
+}
+
+enum PluginPanelDescriptionTone {
+    case secondary
+    case error
 }
 
 enum PluginMenuActionBehavior {
@@ -46,6 +54,7 @@ struct PluginManifest: Identifiable {
 struct PluginPanelState {
     let subtitle: String
     let isOn: Bool
+    let isExpanded: Bool
     let isEnabled: Bool
     let isVisible: Bool
     let detail: PluginPanelDetail?
@@ -55,6 +64,8 @@ struct PluginPanelState {
 enum PluginPanelControlKind {
     case segmented
     case datePicker
+    case selectList
+    case navigationList
 }
 
 enum PluginPanelDatePickerStyle {
@@ -62,9 +73,16 @@ enum PluginPanelDatePickerStyle {
     case dateTimeCard
 }
 
-struct PluginPanelControlOption: Identifiable {
+struct PluginPanelControlOption: Identifiable, Equatable {
     let id: String
     let title: String
+    let subtitle: String?
+
+    init(id: String, title: String, subtitle: String? = nil) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+    }
 }
 
 struct PluginPanelControl: Identifiable {
@@ -76,11 +94,31 @@ struct PluginPanelControl: Identifiable {
     let minimumDate: Date?
     let displayedComponents: DatePickerComponents?
     let datePickerStyle: PluginPanelDatePickerStyle?
+    let sectionTitle: String?
     let isEnabled: Bool
 }
 
-struct PluginPanelDetail {
+struct PluginPanelSecondaryPanel {
+    let title: String
     let controls: [PluginPanelControl]
+}
+
+struct PluginPanelDetail {
+    let primaryControls: [PluginPanelControl]
+    let secondaryPanel: PluginPanelSecondaryPanel?
+
+    var controls: [PluginPanelControl] {
+        primaryControls
+    }
+
+    init(primaryControls: [PluginPanelControl], secondaryPanel: PluginPanelSecondaryPanel?) {
+        self.primaryControls = primaryControls
+        self.secondaryPanel = secondaryPanel
+    }
+
+    init(controls: [PluginPanelControl]) {
+        self.init(primaryControls: controls, secondaryPanel: nil)
+    }
 }
 
 struct PluginPermissionRequirement: Identifiable {
@@ -120,7 +158,9 @@ struct PluginPanelItem: Identifiable {
     let menuActionBehavior: PluginMenuActionBehavior
     let description: String
     let helpText: String
+    let descriptionTone: PluginPanelDescriptionTone
     let isOn: Bool
+    let isExpanded: Bool
     let isEnabled: Bool
     let detail: PluginPanelDetail?
 }

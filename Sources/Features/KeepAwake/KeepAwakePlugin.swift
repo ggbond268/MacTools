@@ -69,6 +69,7 @@ final class KeepAwakePlugin: FeaturePlugin {
         PluginPanelState(
             subtitle: panelSubtitle,
             isOn: session != nil,
+            isExpanded: false,
             isEnabled: true,
             isVisible: true,
             detail: panelDetail,
@@ -90,6 +91,8 @@ final class KeepAwakePlugin: FeaturePlugin {
         switch action {
         case let .setSwitch(isEnabled):
             setKeepAwakeEnabled(isEnabled)
+        case .setDisclosureExpanded, .setNavigationSelection:
+            return
         case let .setSelection(controlID, optionID):
             guard controlID == ControlID.duration else {
                 return
@@ -129,7 +132,7 @@ final class KeepAwakePlugin: FeaturePlugin {
         }
 
         return PluginPanelDetail(
-            controls: [
+            primaryControls: [
                 PluginPanelControl(
                     id: ControlID.duration,
                     kind: .segmented,
@@ -145,9 +148,11 @@ final class KeepAwakePlugin: FeaturePlugin {
                     minimumDate: nil,
                     displayedComponents: nil,
                     datePickerStyle: nil,
+                    sectionTitle: nil,
                     isEnabled: true
                 )
-            ]
+            ],
+            secondaryPanel: nil
         )
     }
 

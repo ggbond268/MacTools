@@ -56,6 +56,7 @@ final class PhysicalCleanModePlugin: FeaturePlugin {
         PluginPanelState(
             subtitle: panelSubtitle,
             isOn: session != nil,
+            isExpanded: false,
             isEnabled: true,
             isVisible: true,
             detail: nil,
@@ -117,7 +118,7 @@ final class PhysicalCleanModePlugin: FeaturePlugin {
                 logger.debug("panel action setSwitch isEnabled=\(isEnabled, privacy: .public)")
             }
             setPhysicalCleanModeEnabled(isEnabled)
-        case .setSelection, .setDate:
+        case .setDisclosureExpanded, .setSelection, .setNavigationSelection, .setDate:
             break
         }
     }

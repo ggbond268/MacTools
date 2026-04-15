@@ -9,7 +9,6 @@ struct MacToolsApp: App {
     var body: some Scene {
         MenuBarExtra("MacTools", systemImage: menuBarSymbolName) {
             MenuBarContent(pluginHost: pluginHost)
-                .frame(width: 312)
                 .onAppear {
                     pluginHost.refreshAll()
                 }
