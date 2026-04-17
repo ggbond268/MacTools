@@ -1018,6 +1018,7 @@ private final class SecondaryPanelController: ObservableObject {
 
     private weak var hostWindow: NSWindow?
     private var panelWindow: SecondaryPanelWindow?
+    private var panelHostingView: NSHostingView<AnyView>?
     private var hostWindowObservers: [NSObjectProtocol] = []
     var onHostWindowDismissRequest: (() -> Void)?
 
@@ -1052,18 +1053,35 @@ private final class SecondaryPanelController: ObservableObject {
         // isVisible 已经变为 false，以此拦截竞态导致的侧栏重新展示。
         guard hostWindow.isVisible else { return }
 
-        let rootView = SecondarySlidingPanel(
-            title: panel.title,
-            controls: panel.controls,
-            onSelectionChange: onSelectionChange,
-            onNavigationSelectionChange: onNavigationSelectionChange,
-            onDateChange: onDateChange,
-            onHoverChange: onHoverChange,
-            onSliderChange: onSliderChange
+        let rootView = AnyView(
+            SecondarySlidingPanel(
+                title: panel.title,
+                controls: panel.controls,
+                onSelectionChange: onSelectionChange,
+                onNavigationSelectionChange: onNavigationSelectionChange,
+                onDateChange: onDateChange,
+                onHoverChange: onHoverChange,
+                onSliderChange: onSliderChange
+            )
+            .frame(width: MenuBarPanelLayout.secondaryPanelWidth)
         )
-        .frame(width: MenuBarPanelLayout.secondaryPanelWidth)
 
-        let hostingView = NSHostingView(rootView: rootView)
+        let panelWindow = panelWindow ?? makePanel()
+        // 复用同一个 NSHostingView —— 如果每次 show() 都重建 contentView，
+        // 鼠标按下到释放之间命中的 SwiftUI Button 会被整棵销毁，导致点击丢失
+        // （现象：侧栏里点分辨率毫无反应）。保留原视图并就地更新 rootView，
+        // 既保住按钮的 pressed 状态，也保留 hover 追踪。
+        let hostingView: NSHostingView<AnyView>
+        if let existing = panelHostingView, panelWindow.contentView === existing {
+            existing.rootView = rootView
+            hostingView = existing
+        } else {
+            let newHosting = NSHostingView(rootView: rootView)
+            panelWindow.contentView = newHosting
+            panelHostingView = newHosting
+            hostingView = newHosting
+        }
+
         let fittingSize = hostingView.fittingSize
         let width = MenuBarPanelLayout.secondaryPanelWidth
         let height = max(fittingSize.height, 160)
@@ -1073,8 +1091,6 @@ private final class SecondaryPanelController: ObservableObject {
         )
         let frame = CGRect(origin: origin, size: CGSize(width: width, height: height))
 
-        let panelWindow = panelWindow ?? makePanel()
-        panelWindow.contentView = hostingView
         panelWindow.setFrame(frame, display: true)
         // 运行时把 panel level 动态对齐到 hostWindow.level + 1，保证 Z 序高于 popover。
         // MenuBarExtra popover 的 level 是 SwiftUI 私有实现细节，不能硬编码。
@@ -1087,6 +1103,7 @@ private final class SecondaryPanelController: ObservableObject {
         guard let panelWindow else { return }
         panelWindow.orderOut(nil)
         self.panelWindow = nil
+        self.panelHostingView = nil
     }
 
     private func makePanel() -> SecondaryPanelWindow {
