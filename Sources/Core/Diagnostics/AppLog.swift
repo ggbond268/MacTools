@@ -13,6 +13,9 @@ enum AppLog {
     static let displayBrightnessPlugin = Logger(subsystem: subsystem, category: "DisplayBrightnessPlugin")
     static let displayBrightnessController = Logger(subsystem: subsystem, category: "DisplayBrightnessController")
     static let displayBrightnessBackend = Logger(subsystem: subsystem, category: "DisplayBrightnessBackend")
+    static let hideNotchController = Logger(subsystem: subsystem, category: "HideNotchController")
+    static let hideNotchWallpaperManager = Logger(subsystem: subsystem, category: "HideNotchWallpaperManager")
+    static let hideNotchOverlayManager = Logger(subsystem: subsystem, category: "HideNotchOverlayManager")
 
     static var isVerboseLoggingEnabled: Bool {
         #if DEBUG

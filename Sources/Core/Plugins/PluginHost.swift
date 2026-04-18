@@ -33,6 +33,7 @@ final class PluginHost: ObservableObject {
             plugins: [
                 DisplayBrightnessPlugin(),
                 DisplayResolutionPlugin(),
+                HideNotchPlugin(),
                 KeepAwakePlugin(),
                 PhysicalCleanModePlugin()
             ],
