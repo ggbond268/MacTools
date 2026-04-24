@@ -177,7 +177,30 @@ enum ShortcutFormatter {
             return "None"
         }
 
-        return binding.modifiers.symbolString + keyDisplayName(for: binding.keyCode)
+        return displayTokens(for: binding).joined(separator: " + ")
+    }
+
+    static func displayTokens(for binding: ShortcutBinding) -> [String] {
+        var tokens: [String] = []
+
+        if binding.modifiers.contains(.control) {
+            tokens.append("CTRL")
+        }
+
+        if binding.modifiers.contains(.option) {
+            tokens.append("⌥")
+        }
+
+        if binding.modifiers.contains(.shift) {
+            tokens.append("⇧")
+        }
+
+        if binding.modifiers.contains(.command) {
+            tokens.append("⌘")
+        }
+
+        tokens.append(keyDisplayName(for: binding.keyCode))
+        return tokens
     }
 
     static func keyDisplayName(for keyCode: UInt16) -> String {
@@ -234,7 +257,7 @@ enum ShortcutFormatter {
         case UInt16(kVK_Space): return "Space"
         case UInt16(kVK_Delete): return "⌫"
         case UInt16(kVK_ForwardDelete): return "⌦"
-        case UInt16(kVK_Escape): return "⎋"
+        case UInt16(kVK_Escape): return "ESC"
         case UInt16(kVK_LeftArrow): return "←"
         case UInt16(kVK_RightArrow): return "→"
         case UInt16(kVK_UpArrow): return "↑"

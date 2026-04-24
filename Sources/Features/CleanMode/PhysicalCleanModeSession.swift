@@ -8,6 +8,7 @@ import SwiftUI
 @MainActor
 final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
     private static let nullAssertionID = IOPMAssertionID(0)
+    private static let rightMouseHoldDurationSeconds = 3
 
     private struct NotificationObservation {
         let center: NotificationCenter
@@ -44,8 +45,14 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
 
     private enum EventTapExitReason {
         case shortcut
+        case rightMouseHold
         case disabledByTimeout
         case disabledByUserInput
+    }
+
+    private enum RightMouseButtonEvent {
+        case down
+        case up
     }
 
     private enum EventTapInterruptionReason: CustomStringConvertible {
@@ -76,18 +83,31 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
         override var canBecomeMain: Bool { true }
     }
 
+    @MainActor
+    private final class OverlayHintModel: ObservableObject {
+        @Published var keyboardExitHintText = ""
+        @Published var rightMouseExitHintText = ""
+    }
+
     private struct OverlayWatermarkView: View {
-        let exitHintText: String
+        @ObservedObject var model: OverlayHintModel
 
         var body: some View {
             ZStack(alignment: .bottomTrailing) {
                 Color.clear
 
-                Text(exitHintText)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(model.keyboardExitHintText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text(model.rightMouseExitHintText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
                     .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundStyle(Color.white.opacity(0.78))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(
@@ -113,17 +133,20 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
         private let lock = NSLock()
         private let onExit: (EventTapExitReason) -> Void
         private let onInterruption: (EventTapInterruptionReason, Bool) -> Void
+        private let onRightMouseButtonEvent: (RightMouseButtonEvent) -> Void
         private var hasTriggeredExit = false
         private var eventTap: CFMachPort?
 
         init(
             exitBinding: ShortcutBinding,
             onExit: @escaping (EventTapExitReason) -> Void,
-            onInterruption: @escaping (EventTapInterruptionReason, Bool) -> Void
+            onInterruption: @escaping (EventTapInterruptionReason, Bool) -> Void,
+            onRightMouseButtonEvent: @escaping (RightMouseButtonEvent) -> Void
         ) {
             self.exitBinding = exitBinding
             self.onExit = onExit
             self.onInterruption = onInterruption
+            self.onRightMouseButtonEvent = onRightMouseButtonEvent
         }
 
         func requestExit(_ reason: EventTapExitReason) {
@@ -147,6 +170,20 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
             lock.lock()
             self.eventTap = eventTap
             lock.unlock()
+        }
+
+        func notifyRightMouseButtonEvent(_ event: RightMouseButtonEvent) {
+            let shouldNotify: Bool
+
+            lock.lock()
+            shouldNotify = !hasTriggeredExit
+            lock.unlock()
+
+            guard shouldNotify else {
+                return
+            }
+
+            onRightMouseButtonEvent(event)
         }
 
         func recoverTap(_ reason: EventTapInterruptionReason) {
@@ -188,6 +225,7 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
     private let onEnd: (EndReason) -> Void
     private let logger = AppLog.physicalCleanModeSession
     private let sessionIdentifier = String(UUID().uuidString.prefix(8))
+    private let overlayHintModel = OverlayHintModel()
 
     private var overlayWindows: [OverlayWindow] = []
     private var eventTap: CFMachPort?
@@ -198,10 +236,17 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
     private var cursorHidden = false
     private var idleSleepAssertionID = IOPMAssertionID(0)
     private var isStopping = false
+    private var rightMouseHoldTimer: Timer?
+    private var rightMouseHoldRemainingSeconds: Int?
     private var tapDisableTimestamps: [Date] = []
 
-    private var exitHintText: String {
+    private var keyboardExitHintText: String {
         "按 \(Self.displayTokens(for: exitBinding).joined(separator: " + ")) 退出"
+    }
+
+    private var rightMouseExitHintText: String {
+        let remainingSeconds = rightMouseHoldRemainingSeconds ?? Self.rightMouseHoldDurationSeconds
+        return "或长按鼠标右键 \(remainingSeconds)s 退出"
     }
 
     init(
@@ -210,6 +255,9 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
     ) {
         self.exitBinding = exitBinding
         self.onEnd = onEnd
+        super.init()
+        overlayHintModel.keyboardExitHintText = keyboardExitHintText
+        overlayHintModel.rightMouseExitHintText = rightMouseExitHintText
     }
 
     func start() throws {
@@ -231,6 +279,11 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
             onInterruption: { [weak self] reason, didRecover in
                 Task { @MainActor in
                     self?.handleEventTapInterruption(reason, didRecover: didRecover)
+                }
+            },
+            onRightMouseButtonEvent: { [weak self] event in
+                Task { @MainActor in
+                    self?.handleRightMouseButtonEvent(event)
                 }
             }
         )
@@ -428,6 +481,19 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
         requestEmergencyExit(message: message)
     }
 
+    private func handleRightMouseButtonEvent(_ event: RightMouseButtonEvent) {
+        guard !isStopping else {
+            return
+        }
+
+        switch event {
+        case .down:
+            startRightMouseHoldCountdown()
+        case .up:
+            cancelRightMouseHoldCountdown(resetHintText: true)
+        }
+    }
+
     private func rebuildOverlayWindows() throws {
         guard !NSScreen.screens.isEmpty else {
             throw SessionError.missingScreens
@@ -475,7 +541,7 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
             window.isReleasedWhenClosed = false
             window.setFrame(screen.frame, display: true)
             window.contentView = NSHostingView(
-                rootView: OverlayWatermarkView(exitHintText: exitHintText)
+                rootView: OverlayWatermarkView(model: overlayHintModel)
             )
             window.orderFrontRegardless()
             windows.append(window)
@@ -558,6 +624,54 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
         cursorHidden = false
     }
 
+    private func startRightMouseHoldCountdown() {
+        guard rightMouseHoldTimer == nil else {
+            return
+        }
+
+        rightMouseHoldRemainingSeconds = Self.rightMouseHoldDurationSeconds
+        updateOverlayHintText()
+
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleRightMouseHoldTimerTick()
+            }
+        }
+        rightMouseHoldTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func cancelRightMouseHoldCountdown(resetHintText: Bool) {
+        rightMouseHoldTimer?.invalidate()
+        rightMouseHoldTimer = nil
+        rightMouseHoldRemainingSeconds = nil
+
+        if resetHintText {
+            updateOverlayHintText()
+        }
+    }
+
+    private func handleRightMouseHoldTimerTick() {
+        guard let remainingSeconds = rightMouseHoldRemainingSeconds else {
+            cancelRightMouseHoldCountdown(resetHintText: false)
+            return
+        }
+
+        if remainingSeconds > 1 {
+            rightMouseHoldRemainingSeconds = remainingSeconds - 1
+            updateOverlayHintText()
+            return
+        }
+
+        cancelRightMouseHoldCountdown(resetHintText: false)
+        handleEventTapExit(.rightMouseHold)
+    }
+
+    private func updateOverlayHintText() {
+        overlayHintModel.keyboardExitHintText = keyboardExitHintText
+        overlayHintModel.rightMouseExitHintText = rightMouseExitHintText
+    }
+
     private func tearDown(shouldNotify: Bool, endReason: EndReason) {
         guard !isStopping else {
             return
@@ -571,6 +685,7 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
 
         isStopping = true
 
+        cancelRightMouseHoldCountdown(resetHintText: false)
         removeObservers()
         closeOverlayWindows()
 
@@ -614,6 +729,11 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
         case .shortcut:
             if AppLog.isVerboseLoggingEnabled {
                 logger.debug("[\(self.sessionIdentifier, privacy: .public)] event tap requested exit reason=shortcut")
+            }
+            requestStop(reason: .userRequested)
+        case .rightMouseHold:
+            if AppLog.isVerboseLoggingEnabled {
+                logger.debug("[\(self.sessionIdentifier, privacy: .public)] event tap requested exit reason=rightMouseHold")
             }
             requestStop(reason: .userRequested)
         case .disabledByTimeout:
@@ -670,26 +790,7 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
     }()
 
     private static func displayTokens(for binding: ShortcutBinding) -> [String] {
-        var tokens: [String] = []
-
-        if binding.modifiers.contains(.control) {
-            tokens.append("⌃")
-        }
-
-        if binding.modifiers.contains(.option) {
-            tokens.append("⌥")
-        }
-
-        if binding.modifiers.contains(.shift) {
-            tokens.append("⇧")
-        }
-
-        if binding.modifiers.contains(.command) {
-            tokens.append("⌘")
-        }
-
-        tokens.append(ShortcutFormatter.keyDisplayName(for: binding.keyCode))
-        return tokens
+        ShortcutFormatter.displayTokens(for: binding)
     }
 
     private nonisolated static let eventTapCallback: CGEventTapCallBack = { _, type, event, userInfo in
@@ -706,6 +807,12 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
         case .tapDisabledByUserInput:
             context.recoverTap(.disabledByUserInput)
             return Unmanaged.passUnretained(event)
+        case .rightMouseDown:
+            context.notifyRightMouseButtonEvent(.down)
+            return nil
+        case .rightMouseUp:
+            context.notifyRightMouseButtonEvent(.up)
+            return nil
         case .keyDown:
             let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
             let modifiers = ShortcutModifiers.from(event.flags)
@@ -721,8 +828,6 @@ final class PhysicalCleanModeSession: NSObject, NSWindowDelegate {
              .leftMouseDown,
              .leftMouseUp,
              .leftMouseDragged,
-             .rightMouseDown,
-             .rightMouseUp,
              .rightMouseDragged,
              .otherMouseDown,
              .otherMouseUp,

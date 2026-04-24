@@ -127,7 +127,7 @@ struct ShortcutSettingsView: View {
                         .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                 )
 
-                Label("点击编辑图标后，按下包含至少一个修饰键（⌘、⌥、⌃、⇧）的组合键来设置快捷键。按 `Esc` 可取消本次录制。", systemImage: "info.circle")
+                Label("点击编辑图标后，按下包含至少一个修饰键（⌘、⌥、CTRL、⇧）的组合键来设置快捷键。按 ESC 可取消本次录制。", systemImage: "info.circle")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -342,21 +342,7 @@ private struct ShortcutBindingBadge: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            if isRecording {
-                Label("请按下快捷键", systemImage: "record.circle.fill")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-            } else if displayText == "未设置" {
-                Text(displayText)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(tokens.enumerated()), id: \.offset) { _, token in
-                    ShortcutKeycap(text: token)
-                }
-            }
-        }
+        badgeContent
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, minHeight: ShortcutSettingsLayout.controlHeight, alignment: .leading)
         .background(
@@ -372,7 +358,36 @@ private struct ShortcutBindingBadge: View {
         )
     }
 
+    @ViewBuilder
+    private var badgeContent: some View {
+        if isRecording {
+            Label("请按下快捷键", systemImage: "record.circle.fill")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+        } else if displayText == "未设置" {
+            Text(displayText)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(.secondary)
+        } else {
+            ViewThatFits(in: .horizontal) {
+                ShortcutKeycapRow(tokens: tokens, metrics: .regular)
+                ShortcutKeycapRow(tokens: tokens, metrics: .compact)
+                ShortcutKeycapRow(tokens: tokens, metrics: .compressed)
+            }
+        }
+    }
+
     private static func keycapTokens(from text: String) -> [String] {
+        let separator = " + "
+        if text.contains(separator) {
+            let components = text
+                .components(separatedBy: separator)
+                .filter { !$0.isEmpty }
+            if !components.isEmpty {
+                return components
+            }
+        }
+
         let modifierSymbols: Set<Character> = ["⌘", "⌥", "⌃", "⇧"]
         var tokens: [String] = []
         var keyToken = ""
@@ -393,21 +408,82 @@ private struct ShortcutBindingBadge: View {
     }
 }
 
+private struct ShortcutKeycapRow: View {
+    let tokens: [String]
+    let metrics: ShortcutKeycapMetrics
+
+    var body: some View {
+        HStack(spacing: metrics.spacing) {
+            ForEach(Array(tokens.enumerated()), id: \.offset) { _, token in
+                ShortcutKeycap(text: token, metrics: metrics)
+            }
+        }
+    }
+}
+
+private struct ShortcutKeycapMetrics {
+    let singleCharacterFontSize: CGFloat
+    let multiCharacterFontSize: CGFloat
+    let horizontalPadding: CGFloat
+    let multiCharacterHorizontalPadding: CGFloat
+    let verticalPadding: CGFloat
+    let cornerRadius: CGFloat
+    let spacing: CGFloat
+
+    static let regular = ShortcutKeycapMetrics(
+        singleCharacterFontSize: 13,
+        multiCharacterFontSize: 12,
+        horizontalPadding: 8,
+        multiCharacterHorizontalPadding: 9,
+        verticalPadding: 5,
+        cornerRadius: 8,
+        spacing: 6
+    )
+
+    static let compact = ShortcutKeycapMetrics(
+        singleCharacterFontSize: 12,
+        multiCharacterFontSize: 11,
+        horizontalPadding: 7,
+        multiCharacterHorizontalPadding: 7,
+        verticalPadding: 4,
+        cornerRadius: 7,
+        spacing: 5
+    )
+
+    static let compressed = ShortcutKeycapMetrics(
+        singleCharacterFontSize: 11,
+        multiCharacterFontSize: 10,
+        horizontalPadding: 6,
+        multiCharacterHorizontalPadding: 6,
+        verticalPadding: 4,
+        cornerRadius: 7,
+        spacing: 4
+    )
+}
+
 private struct ShortcutKeycap: View {
     let text: String
+    let metrics: ShortcutKeycapMetrics
 
     var body: some View {
         Text(text)
-            .font(.system(size: text.count > 1 ? 12 : 13, weight: .semibold))
+            .font(
+                .system(
+                    size: text.count > 1 ? metrics.multiCharacterFontSize : metrics.singleCharacterFontSize,
+                    weight: .semibold
+                )
+            )
             .foregroundStyle(Color.primary)
-            .padding(.horizontal, text.count > 1 ? 9 : 8)
-            .padding(.vertical, 5)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .padding(.horizontal, text.count > 1 ? metrics.multiCharacterHorizontalPadding : metrics.horizontalPadding)
+            .padding(.vertical, metrics.verticalPadding)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
                     .fill(Color(nsColor: .windowBackgroundColor))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
             )
     }
