@@ -146,7 +146,7 @@ final class DiskCleanControllerTests: XCTestCase {
                 DiskCleanScanLogMessage(text: "展开规则：Cache", tone: .info),
                 DiskCleanScanLogMessage(text: "可清理：/Users/tester/Library/Caches/App", tone: .success)
             ],
-            delayNanoseconds: 40_000_000
+            delayNanoseconds: 250_000_000
         )
         let controller = makeController(scanner: scanner)
 
@@ -169,6 +169,31 @@ final class DiskCleanControllerTests: XCTestCase {
 
         await waitUntil { controller.snapshot.phase == .scanned }
         XCTAssertEqual(controller.snapshot.scanLogEntries.last?.text, "可清理：/Users/tester/Library/Caches/App")
+    }
+
+    func testScanProgressLogBatchesSnapshotUpdatesForLargeScans() async {
+        let result = scanResult(choices: Set(DiskCleanChoice.allCases))
+        let progressMessages = (0..<200).map {
+            DiskCleanScanLogMessage(
+                text: "可清理：/Users/tester/Library/Caches/App/\($0)",
+                tone: .success
+            )
+        }
+        let scanner = FakeDiskCleanControllerScanner(
+            result: result,
+            progressMessages: progressMessages
+        )
+        let controller = makeController(scanner: scanner)
+        var stateChangeCount = 0
+        controller.onStateChange = {
+            stateChangeCount += 1
+        }
+
+        controller.scan()
+        await waitUntil { controller.snapshot.phase == .scanned }
+
+        XCTAssertLessThanOrEqual(stateChangeCount, 12)
+        XCTAssertEqual(controller.snapshot.scanLogEntries.last?.text, "可清理：/Users/tester/Library/Caches/App/199")
     }
 
     private func makeController(

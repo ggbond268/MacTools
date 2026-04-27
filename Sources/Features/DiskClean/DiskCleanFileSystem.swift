@@ -35,23 +35,7 @@ struct LocalDiskCleanFileSystem: DiskCleanFileSystemProviding, @unchecked Sendab
             return [item]
         }
 
-        let root = Self.enumerationRoot(for: expandedPattern)
-        guard fileManager.fileExists(atPath: root) else { return [] }
-
-        var matchedPaths: [String] = []
-        if Self.pathMatches(path: root, pattern: expandedPattern) {
-            matchedPaths.append(root)
-        }
-
-        if let enumerator = fileManager.enumerator(atPath: root) {
-            for case let relativePath as String in enumerator {
-                let path = Self.normalizeSlashes(root + "/" + relativePath)
-                if Self.pathMatches(path: path, pattern: expandedPattern) {
-                    matchedPaths.append(path)
-                }
-            }
-        }
-
+        let matchedPaths = try Self.globPaths(matching: expandedPattern)
         return try deduplicatedParentChildPaths(matchedPaths)
             .compactMap { try itemInfo(at: $0) }
     }
@@ -111,22 +95,19 @@ struct LocalDiskCleanFileSystem: DiskCleanFileSystemProviding, @unchecked Sendab
     }
 
     func deduplicatedParentChildPaths(_ paths: [String]) -> [String] {
-        let uniqueSortedPaths = Array(Set(paths.map(Self.normalizeSlashes))).sorted { lhs, rhs in
-            if lhs.count == rhs.count {
-                return lhs < rhs
-            }
-            return lhs.count < rhs.count
-        }
+        let uniqueSortedPaths = Array(Set(paths.map(Self.normalizeSlashes))).sorted()
 
         var kept: [String] = []
+        var keptPathSet: Set<String> = []
         for path in uniqueSortedPaths {
-            if kept.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) {
+            if Self.hasKeptParent(for: path, in: keptPathSet) {
                 continue
             }
             kept.append(path)
+            keptPathSet.insert(path)
         }
 
-        return kept.sorted()
+        return kept
     }
 
     private func expandHome(in pattern: String) -> String {
@@ -152,28 +133,55 @@ struct LocalDiskCleanFileSystem: DiskCleanFileSystemProviding, @unchecked Sendab
         return (attributes[.type] as? FileAttributeType) == .typeSymbolicLink
     }
 
-    private static func enumerationRoot(for pattern: String) -> String {
-        guard let globIndex = pattern.firstIndex(where: { "*?[".contains($0) }) else {
-            return pattern
-        }
-
-        let prefix = String(pattern[..<globIndex])
-        guard let slashIndex = prefix.lastIndex(of: "/") else {
-            return "."
-        }
-
-        let root = String(prefix[..<slashIndex])
-        return root.isEmpty ? "/" : root
-    }
-
     private static func containsGlob(_ pattern: String) -> Bool {
         pattern.contains { "*?[".contains($0) }
     }
 
-    private static func pathMatches(path: String, pattern: String) -> Bool {
-        pattern.withCString { patternPointer in
-            path.withCString { pathPointer in
-                Darwin.fnmatch(patternPointer, pathPointer, FNM_PATHNAME) == 0
+    private static func globPaths(matching pattern: String) throws -> [String] {
+        var globResult = glob_t()
+        defer { globfree(&globResult) }
+
+        let status = pattern.withCString { glob($0, 0, nil, &globResult) }
+        if status == GLOB_NOMATCH {
+            return []
+        }
+        guard status == 0 else {
+            throw DiskCleanFileSystemError.globFailed(pattern: pattern, status: status)
+        }
+        guard let pathVector = globResult.gl_pathv else {
+            return []
+        }
+
+        return (0..<Int(globResult.gl_pathc)).compactMap { index in
+            guard let pathPointer = pathVector[index] else { return nil }
+            return normalizeSlashes(String(cString: pathPointer))
+        }
+    }
+
+    private static func hasKeptParent(for path: String, in keptPathSet: Set<String>) -> Bool {
+        var currentPath = path
+        while let slashIndex = currentPath.lastIndex(of: "/") {
+            currentPath = String(currentPath[..<slashIndex])
+            if currentPath.isEmpty {
+                currentPath = "/"
+            }
+            if keptPathSet.contains(currentPath) {
+                return true
+            }
+            if currentPath == "/" {
+                break
+            }
+        }
+        return false
+    }
+
+    private enum DiskCleanFileSystemError: LocalizedError {
+        case globFailed(pattern: String, status: Int32)
+
+        var errorDescription: String? {
+            switch self {
+            case let .globFailed(pattern, status):
+                return "Failed to expand path pattern \(pattern) (glob status \(status))"
             }
         }
     }

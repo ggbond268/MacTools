@@ -49,6 +49,20 @@ final class DiskCleanFileSystemTests: XCTestCase {
         )
     }
 
+    func testDirectChildGlobDoesNotRecursivelyScanMatchedDirectories() throws {
+        try createFile("Library/Caches/Foo/Nested/.keep")
+        for index in 0..<10_000 {
+            try createFile("Library/Caches/Foo/Nested/file-\(index).bin")
+        }
+
+        let startedAt = Date()
+        let matches = try fileSystem.expandPathPattern("~/Library/Caches/*").map(\.path)
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertEqual(matches, [tempDirectory.appendingPathComponent("Library/Caches/Foo").path])
+        XCTAssertLessThan(elapsed, 0.05)
+    }
+
     func testDeduplicatesParentChildPathsKeepingParents() {
         let parent = tempDirectory.appendingPathComponent("Library/Caches/Foo").path
         let child = tempDirectory.appendingPathComponent("Library/Caches/Foo/Nested").path
@@ -57,6 +71,17 @@ final class DiskCleanFileSystemTests: XCTestCase {
         XCTAssertEqual(
             fileSystem.deduplicatedParentChildPaths([child, sibling, parent]),
             [parent, sibling]
+        )
+    }
+
+    func testDeduplicatesParentChildPathsWhenPrefixSiblingSortsBetweenParentAndChild() {
+        let parent = tempDirectory.appendingPathComponent("a").path
+        let child = tempDirectory.appendingPathComponent("a/b").path
+        let prefixSibling = tempDirectory.appendingPathComponent("a-b").path
+
+        XCTAssertEqual(
+            fileSystem.deduplicatedParentChildPaths([child, prefixSibling, parent]),
+            [parent, prefixSibling]
         )
     }
 

@@ -97,6 +97,8 @@ protocol DiskCleanControlling: AnyObject {
 
 @MainActor
 final class DiskCleanController: ObservableObject, DiskCleanControlling {
+    private static let scanLogFlushIntervalNanoseconds: UInt64 = 100_000_000
+
     var onStateChange: (() -> Void)?
 
     @Published private(set) var snapshot: DiskCleanControllerSnapshot {
@@ -110,6 +112,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
 
     private var currentTask: Task<Void, Never>?
     private var currentOperationID: UUID?
+    private var scanLogFlushTask: Task<Void, Never>?
     private var nextLogEntryID = 1
 
     init(
@@ -171,6 +174,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
         let operationID = UUID()
         currentOperationID = operationID
         nextLogEntryID = 1
+        let scanLogBuffer = DiskCleanScanLogBuffer()
         let initialLogEntries = [
             makeLogEntry(
                 DiskCleanScanLogMessage(
@@ -189,16 +193,16 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
             errorMessage: nil,
             scanLogEntries: initialLogEntries
         )
+        startScanLogFlushLoop(operationID: operationID, buffer: scanLogBuffer)
 
         currentTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let result = try await scanner.scan(choices: selectedChoices) { [weak self] message in
-                    await MainActor.run {
-                        self?.appendScanLog(message)
-                    }
+                let result = try await scanner.scan(choices: selectedChoices) { message in
+                    await scanLogBuffer.append(message)
                 }
                 guard isCurrentOperation(operationID) else { return }
+                await flushScanLogEntriesIfCurrent(operationID, buffer: scanLogBuffer)
                 snapshot = DiskCleanControllerSnapshot(
                     phase: .scanned,
                     selectedChoices: selectedChoices,
@@ -212,6 +216,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                 finishOperation(operationID)
             } catch is CancellationError {
                 guard isCurrentOperation(operationID) else { return }
+                await flushScanLogEntriesIfCurrent(operationID, buffer: scanLogBuffer)
                 snapshot = DiskCleanControllerSnapshot(
                     phase: .idle,
                     selectedChoices: selectedChoices,
@@ -225,6 +230,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                 finishOperation(operationID)
             } catch {
                 guard isCurrentOperation(operationID) else { return }
+                await flushScanLogEntriesIfCurrent(operationID, buffer: scanLogBuffer)
                 snapshot = DiskCleanControllerSnapshot(
                     phase: .idle,
                     selectedChoices: selectedChoices,
@@ -233,14 +239,15 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                     isTestModeEnabled: snapshot.isTestModeEnabled,
                     isResultStale: false,
                     errorMessage: Self.userFacingMessage(for: error),
-                    scanLogEntries: snapshot.scanLogEntries + [
-                        makeLogEntry(
+                    scanLogEntries: scanLogEntries(
+                        adding: [
                             DiskCleanScanLogMessage(
                                 text: "扫描失败：\(Self.userFacingMessage(for: error))",
                                 tone: .error
                             )
-                        )
-                    ]
+                        ],
+                        to: snapshot.scanLogEntries
+                    )
                 )
                 finishOperation(operationID)
             }
@@ -359,20 +366,43 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
         currentTask?.cancel()
         currentTask = nil
         currentOperationID = nil
+        scanLogFlushTask?.cancel()
+        scanLogFlushTask = nil
     }
 
     private func finishOperation(_ operationID: UUID) {
         guard isCurrentOperation(operationID) else { return }
         currentTask = nil
         currentOperationID = nil
+        scanLogFlushTask?.cancel()
+        scanLogFlushTask = nil
     }
 
-    private func appendScanLog(_ message: DiskCleanScanLogMessage) {
-        var entries = snapshot.scanLogEntries
-        entries.append(makeLogEntry(message))
-        if entries.count > 500 {
-            entries.removeFirst(entries.count - 500)
+    private func startScanLogFlushLoop(operationID: UUID, buffer: DiskCleanScanLogBuffer) {
+        scanLogFlushTask?.cancel()
+        scanLogFlushTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: Self.scanLogFlushIntervalNanoseconds)
+                } catch {
+                    break
+                }
+                await self?.flushScanLogEntriesIfCurrent(operationID, buffer: buffer)
+            }
         }
+    }
+
+    private func flushScanLogEntriesIfCurrent(
+        _ operationID: UUID,
+        buffer: DiskCleanScanLogBuffer
+    ) async {
+        let messages = await buffer.drain()
+        guard isCurrentOperation(operationID) else { return }
+        appendScanLogs(messages)
+    }
+
+    private func appendScanLogs(_ messages: [DiskCleanScanLogMessage]) {
+        guard !messages.isEmpty else { return }
 
         snapshot = DiskCleanControllerSnapshot(
             phase: snapshot.phase,
@@ -382,8 +412,23 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
             isTestModeEnabled: snapshot.isTestModeEnabled,
             isResultStale: snapshot.isResultStale,
             errorMessage: snapshot.errorMessage,
-            scanLogEntries: entries
+            scanLogEntries: scanLogEntries(adding: messages, to: snapshot.scanLogEntries)
         )
+    }
+
+    private func scanLogEntries(
+        adding messages: [DiskCleanScanLogMessage],
+        to existingEntries: [DiskCleanScanLogEntry]
+    ) -> [DiskCleanScanLogEntry] {
+        var entries = existingEntries
+        entries.reserveCapacity(min(existingEntries.count + messages.count, 500))
+        for message in messages {
+            entries.append(makeLogEntry(message))
+        }
+        if entries.count > 500 {
+            entries.removeFirst(entries.count - 500)
+        }
+        return entries
     }
 
     private func makeLogEntry(_ message: DiskCleanScanLogMessage) -> DiskCleanScanLogEntry {
@@ -420,5 +465,18 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
             return description
         }
         return error.localizedDescription
+    }
+}
+
+private actor DiskCleanScanLogBuffer {
+    private var messages: [DiskCleanScanLogMessage] = []
+
+    func append(_ message: DiskCleanScanLogMessage) {
+        messages.append(message)
+    }
+
+    func drain() -> [DiskCleanScanLogMessage] {
+        defer { messages.removeAll(keepingCapacity: true) }
+        return messages
     }
 }
