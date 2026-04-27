@@ -60,8 +60,25 @@ struct DiskCleanControllerSnapshot: Equatable, Sendable {
 }
 
 @MainActor
-final class DiskCleanController: ObservableObject {
-    @Published private(set) var snapshot: DiskCleanControllerSnapshot
+protocol DiskCleanControlling: AnyObject {
+    var onStateChange: (() -> Void)? { get set }
+    var snapshot: DiskCleanControllerSnapshot { get }
+
+    func setChoice(_ choice: DiskCleanChoice, isSelected: Bool)
+    func scan()
+    func cleanSelected(candidateIDs: Set<DiskCleanCandidate.ID>)
+    func cancelCurrentOperation()
+}
+
+@MainActor
+final class DiskCleanController: ObservableObject, DiskCleanControlling {
+    var onStateChange: (() -> Void)?
+
+    @Published private(set) var snapshot: DiskCleanControllerSnapshot {
+        didSet {
+            onStateChange?()
+        }
+    }
 
     private let scanner: DiskCleanScanning
     private let executor: DiskCleanExecuting
