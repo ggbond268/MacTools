@@ -19,15 +19,9 @@ final class DiskCleanFeature {
 @MainActor
 final class DiskCleanPlugin: FeaturePlugin {
     enum ControlID {
-        static let choicePrefix = "disk-clean-choice."
-        static let testMode = "disk-clean-test-mode"
         static let scan = "disk-clean-scan"
-        static let cancel = "disk-clean-cancel"
+        static let clean = "disk-clean-clean"
         static let openDetails = "disk-clean-open-details"
-
-        static func choice(_ choice: DiskCleanChoice) -> String {
-            "\(choicePrefix)\(choice.rawValue)"
-        }
     }
 
     let manifest = PluginManifest(
@@ -101,19 +95,11 @@ final class DiskCleanPlugin: FeaturePlugin {
     func handleShortcutAction(id: String) {}
 
     private func handleInvoke(controlID: String) {
-        if let choice = choice(from: controlID) {
-            let isSelected = controller.snapshot.selectedChoices.contains(choice)
-            controller.setChoice(choice, isSelected: !isSelected)
-            return
-        }
-
         switch controlID {
-        case ControlID.testMode:
-            controller.setTestModeEnabled(!controller.snapshot.isTestModeEnabled)
         case ControlID.scan:
             controller.scan()
-        case ControlID.cancel:
-            controller.cancelCurrentOperation()
+        case ControlID.clean:
+            controller.cleanSelected(candidateIDs: cleanableCandidateIDs)
         case ControlID.openDetails:
             break
         default:
@@ -121,70 +107,37 @@ final class DiskCleanPlugin: FeaturePlugin {
         }
     }
 
-    private func choice(from controlID: String) -> DiskCleanChoice? {
-        guard controlID.hasPrefix(ControlID.choicePrefix) else {
-            return nil
-        }
-
-        let rawValue = String(controlID.dropFirst(ControlID.choicePrefix.count))
-        return DiskCleanChoice(rawValue: rawValue)
-    }
-
     private func buildDetail(for snapshot: DiskCleanControllerSnapshot) -> PluginPanelDetail {
-        let choiceControls = DiskCleanChoice.allCases.map { choice in
-            choiceControl(for: choice, snapshot: snapshot)
-        }
-
-        let testModeControl = PluginPanelControl(
-            id: ControlID.testMode,
+        let scanControl = PluginPanelControl(
+            id: ControlID.scan,
             kind: .actionRow,
             options: [],
-            selectedOptionID: snapshot.isTestModeEnabled ? "enabled" : nil,
+            selectedOptionID: nil,
             dateValue: nil,
             minimumDate: nil,
             displayedComponents: nil,
             datePickerStyle: nil,
             sectionTitle: nil,
-            actionTitle: "测试模式：只列出文件",
-            actionIconSystemName: snapshot.isTestModeEnabled ? "checkmark.circle.fill" : "circle",
-            showsLeadingDivider: true,
-            isEnabled: !snapshot.isBusy
+            actionTitle: "扫描",
+            actionIconSystemName: "magnifyingglass",
+            isEnabled: snapshot.canScan
         )
 
-        let operationControl: PluginPanelControl
-        if snapshot.isBusy {
-            operationControl = PluginPanelControl(
-                id: ControlID.cancel,
-                kind: .actionRow,
-                options: [],
-                selectedOptionID: nil,
-                dateValue: nil,
-                minimumDate: nil,
-                displayedComponents: nil,
-                datePickerStyle: nil,
-                sectionTitle: nil,
-                actionTitle: "停止",
-                actionIconSystemName: "xmark.circle",
-                showsLeadingDivider: true,
-                isEnabled: true
-            )
-        } else {
-            operationControl = PluginPanelControl(
-                id: ControlID.scan,
-                kind: .actionRow,
-                options: [],
-                selectedOptionID: nil,
-                dateValue: nil,
-                minimumDate: nil,
-                displayedComponents: nil,
-                datePickerStyle: nil,
-                sectionTitle: nil,
-                actionTitle: "扫描可清理项目",
-                actionIconSystemName: "magnifyingglass",
-                showsLeadingDivider: true,
-                isEnabled: snapshot.canScan
-            )
-        }
+        let cleanControl = PluginPanelControl(
+            id: ControlID.clean,
+            kind: .actionRow,
+            options: [],
+            selectedOptionID: nil,
+            dateValue: nil,
+            minimumDate: nil,
+            displayedComponents: nil,
+            datePickerStyle: nil,
+            sectionTitle: nil,
+            actionTitle: "清理",
+            actionIconSystemName: "trash",
+            showsLeadingDivider: true,
+            isEnabled: snapshot.canClean
+        )
 
         let openDetailsControl = PluginPanelControl(
             id: ControlID.openDetails,
@@ -203,30 +156,8 @@ final class DiskCleanPlugin: FeaturePlugin {
         )
 
         return PluginPanelDetail(
-            primaryControls: choiceControls + [testModeControl, operationControl, openDetailsControl],
+            primaryControls: [scanControl, cleanControl, openDetailsControl],
             secondaryPanel: nil
-        )
-    }
-
-    private func choiceControl(
-        for choice: DiskCleanChoice,
-        snapshot: DiskCleanControllerSnapshot
-    ) -> PluginPanelControl {
-        let isSelected = snapshot.selectedChoices.contains(choice)
-
-        return PluginPanelControl(
-            id: ControlID.choice(choice),
-            kind: .actionRow,
-            options: [],
-            selectedOptionID: isSelected ? choice.rawValue : nil,
-            dateValue: nil,
-            minimumDate: nil,
-            displayedComponents: nil,
-            datePickerStyle: nil,
-            sectionTitle: nil,
-            actionTitle: choice.title,
-            actionIconSystemName: isSelected ? "checkmark.circle.fill" : "circle",
-            isEnabled: !snapshot.isBusy
         )
     }
 
@@ -234,8 +165,7 @@ final class DiskCleanPlugin: FeaturePlugin {
         if snapshot.phase == .scanned,
            !snapshot.isResultStale,
            let result = snapshot.scanResult {
-            let prefix = snapshot.isTestModeEnabled ? "测试模式 " : ""
-            return "\(prefix)\(result.cleanableCandidates.count) 项，\(byteText(result.cleanableSizeBytes))"
+            return "\(result.cleanableCandidates.count) 项，\(byteText(result.cleanableSizeBytes))"
         }
 
         if snapshot.phase == .completed,
@@ -244,6 +174,10 @@ final class DiskCleanPlugin: FeaturePlugin {
         }
 
         return snapshot.subtitle
+    }
+
+    private var cleanableCandidateIDs: Set<DiskCleanCandidate.ID> {
+        Set(controller.snapshot.scanResult?.cleanableCandidates.map(\.id) ?? [])
     }
 
     private func byteText(_ bytes: Int64) -> String {

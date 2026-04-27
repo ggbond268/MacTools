@@ -21,8 +21,7 @@ final class DiskCleanControllerTests: XCTestCase {
         await waitUntil { controller.snapshot.phase == .scanned }
         XCTAssertEqual(controller.snapshot.scanResult, result)
         XCTAssertFalse(controller.snapshot.isResultStale)
-        XCTAssertFalse(controller.snapshot.canClean)
-        XCTAssertTrue(controller.snapshot.isTestModeEnabled)
+        XCTAssertTrue(controller.snapshot.canClean)
     }
 
     func testChangingSelectedChoicesAfterScanMarksResultStaleAndDisablesCleaning() async {
@@ -31,7 +30,6 @@ final class DiskCleanControllerTests: XCTestCase {
         let executor = FakeDiskCleanControllerExecutor()
         let controller = makeController(scanner: scanner, executor: executor)
 
-        controller.setTestModeEnabled(false)
         controller.scan()
         await waitUntil { controller.snapshot.phase == .scanned }
         controller.setChoice(.browser, isSelected: false)
@@ -58,7 +56,6 @@ final class DiskCleanControllerTests: XCTestCase {
         )
         let controller = makeController(scanner: scanner, executor: executor)
 
-        controller.setTestModeEnabled(false)
         controller.scan()
         await waitUntil { controller.snapshot.phase == .scanned }
         controller.cleanSelected(candidateIDs: ["candidate"])
@@ -84,7 +81,6 @@ final class DiskCleanControllerTests: XCTestCase {
         let executor = FakeDiskCleanControllerExecutor(error: executeError)
         let cleanController = makeController(scanner: scanner, executor: executor)
 
-        cleanController.setTestModeEnabled(false)
         cleanController.scan()
         await waitUntil { cleanController.snapshot.phase == .scanned }
         cleanController.cleanSelected(candidateIDs: ["candidate"])
@@ -109,7 +105,6 @@ final class DiskCleanControllerTests: XCTestCase {
         let slowExecutor = FakeDiskCleanControllerExecutor(delayNanoseconds: 1_000_000_000)
         let cleanController = makeController(scanner: scanner, executor: slowExecutor)
 
-        cleanController.setTestModeEnabled(false)
         cleanController.scan()
         await waitUntil { cleanController.snapshot.phase == .scanned }
         cleanController.cleanSelected(candidateIDs: ["candidate"])
@@ -119,23 +114,19 @@ final class DiskCleanControllerTests: XCTestCase {
         XCTAssertNil(cleanController.snapshot.executionResult)
     }
 
-    func testDefaultTestModeListsCandidatesAndNeverInvokesExecutor() async {
+    func testCleanIsEnabledAfterScanAndInvokesExecutor() async {
         let result = scanResult(choices: Set(DiskCleanChoice.allCases))
         let scanner = FakeDiskCleanControllerScanner(result: result)
         let executor = FakeDiskCleanControllerExecutor()
         let controller = makeController(scanner: scanner, executor: executor)
 
-        XCTAssertTrue(controller.snapshot.isTestModeEnabled)
-
         controller.scan()
         await waitUntil { controller.snapshot.phase == .scanned }
         controller.cleanSelected(candidateIDs: ["candidate"])
 
-        XCTAssertEqual(controller.snapshot.phase, .scanned)
+        await waitUntil { controller.snapshot.phase == .completed }
         XCTAssertEqual(controller.snapshot.scanResult, result)
-        XCTAssertFalse(controller.snapshot.canClean)
-        XCTAssertNil(controller.snapshot.executionResult)
-        XCTAssertEqual(executor.cleanCalls.count, 0)
+        XCTAssertEqual(executor.cleanCalls.map(\.selectedCandidateIDs), [["candidate"]])
     }
 
     func testScanProgressLogUpdatesSnapshotWhileScanIsRunning() async {

@@ -7,7 +7,6 @@ struct DiskCleanDetailView: View {
         VStack(alignment: .leading, spacing: 18) {
             header
             choiceControls
-            testModeControl
             actionBar
             scanLog
             statusSummary
@@ -50,18 +49,6 @@ struct DiskCleanDetailView: View {
         }
     }
 
-    private var testModeControl: some View {
-        Toggle(
-            "测试模式：只列出文件，不执行清理",
-            isOn: Binding(
-                get: { snapshot.isTestModeEnabled },
-                set: { controller.setTestModeEnabled($0) }
-            )
-        )
-        .toggleStyle(.checkbox)
-        .disabled(snapshot.isBusy)
-    }
-
     private var actionBar: some View {
         HStack(spacing: 10) {
             Button {
@@ -71,18 +58,12 @@ struct DiskCleanDetailView: View {
             }
             .disabled(!snapshot.canScan)
 
-            if snapshot.isTestModeEnabled {
-                Label("测试模式不会删除任何文件", systemImage: "list.bullet.rectangle")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-            } else {
-                Button {
-                    controller.cleanSelected(candidateIDs: cleanableCandidateIDs)
-                } label: {
-                    Label("清理", systemImage: "trash")
-                }
-                .disabled(!snapshot.canClean)
+            Button {
+                controller.cleanSelected(candidateIDs: cleanableCandidateIDs)
+            } label: {
+                Label("清理", systemImage: "trash")
             }
+            .disabled(!snapshot.canClean)
 
             if snapshot.isBusy {
                 Button {
