@@ -20,6 +20,7 @@ final class DiskCleanFeature {
 final class DiskCleanPlugin: FeaturePlugin {
     enum ControlID {
         static let choicePrefix = "disk-clean-choice."
+        static let testMode = "disk-clean-test-mode"
         static let scan = "disk-clean-scan"
         static let cancel = "disk-clean-cancel"
         static let openDetails = "disk-clean-open-details"
@@ -107,6 +108,8 @@ final class DiskCleanPlugin: FeaturePlugin {
         }
 
         switch controlID {
+        case ControlID.testMode:
+            controller.setTestModeEnabled(!controller.snapshot.isTestModeEnabled)
         case ControlID.scan:
             controller.scan()
         case ControlID.cancel:
@@ -131,6 +134,22 @@ final class DiskCleanPlugin: FeaturePlugin {
         let choiceControls = DiskCleanChoice.allCases.map { choice in
             choiceControl(for: choice, snapshot: snapshot)
         }
+
+        let testModeControl = PluginPanelControl(
+            id: ControlID.testMode,
+            kind: .actionRow,
+            options: [],
+            selectedOptionID: snapshot.isTestModeEnabled ? "enabled" : nil,
+            dateValue: nil,
+            minimumDate: nil,
+            displayedComponents: nil,
+            datePickerStyle: nil,
+            sectionTitle: nil,
+            actionTitle: "测试模式：只列出文件",
+            actionIconSystemName: snapshot.isTestModeEnabled ? "checkmark.circle.fill" : "circle",
+            showsLeadingDivider: true,
+            isEnabled: !snapshot.isBusy
+        )
 
         let operationControl: PluginPanelControl
         if snapshot.isBusy {
@@ -184,7 +203,7 @@ final class DiskCleanPlugin: FeaturePlugin {
         )
 
         return PluginPanelDetail(
-            primaryControls: choiceControls + [operationControl, openDetailsControl],
+            primaryControls: choiceControls + [testModeControl, operationControl, openDetailsControl],
             secondaryPanel: nil
         )
     }
@@ -215,7 +234,8 @@ final class DiskCleanPlugin: FeaturePlugin {
         if snapshot.phase == .scanned,
            !snapshot.isResultStale,
            let result = snapshot.scanResult {
-            return "\(result.cleanableCandidates.count) 项，\(byteText(result.cleanableSizeBytes))"
+            let prefix = snapshot.isTestModeEnabled ? "测试模式 " : ""
+            return "\(prefix)\(result.cleanableCandidates.count) 项，\(byteText(result.cleanableSizeBytes))"
         }
 
         if snapshot.phase == .completed,

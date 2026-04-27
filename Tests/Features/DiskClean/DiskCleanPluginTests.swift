@@ -38,6 +38,25 @@ final class DiskCleanPluginTests: XCTestCase {
         XCTAssertEqual(controller.scanCallCount, 1)
     }
 
+    func testExpandedPanelExposesAndTogglesTestMode() throws {
+        let controller = FakeDiskCleanPluginController()
+        let plugin = DiskCleanPlugin(controller: controller)
+
+        plugin.handlePanelAction(.setDisclosureExpanded(true))
+
+        let controls = try XCTUnwrap(plugin.panelState.detail?.primaryControls)
+        let testMode = try XCTUnwrap(
+            controls.first { $0.id == DiskCleanPlugin.ControlID.testMode }
+        )
+
+        XCTAssertEqual(testMode.actionTitle, "测试模式：只列出文件")
+        XCTAssertEqual(testMode.actionIconSystemName, "checkmark.circle.fill")
+
+        plugin.handlePanelAction(.invokeAction(controlID: DiskCleanPlugin.ControlID.testMode))
+
+        XCTAssertEqual(controller.testModeChanges, [false])
+    }
+
     func testOpenDetailsActionUsesMenuBarStableActionID() throws {
         let plugin = DiskCleanPlugin(controller: FakeDiskCleanPluginController())
 
@@ -71,6 +90,7 @@ private final class FakeDiskCleanPluginController: DiskCleanControlling {
     var snapshot = DiskCleanControllerSnapshot.initial
     private(set) var scanCallCount = 0
     private(set) var canceledOperationCount = 0
+    private(set) var testModeChanges: [Bool] = []
     private(set) var selectedChoiceChanges: [(choice: DiskCleanChoice, isSelected: Bool)] = []
     private(set) var cleanSelectedCalls: [Set<DiskCleanCandidate.ID>] = []
 
@@ -87,6 +107,21 @@ private final class FakeDiskCleanPluginController: DiskCleanControlling {
             selectedChoices: nextChoices,
             scanResult: snapshot.scanResult,
             executionResult: snapshot.executionResult,
+            isTestModeEnabled: snapshot.isTestModeEnabled,
+            isResultStale: snapshot.isResultStale,
+            errorMessage: snapshot.errorMessage
+        )
+        onStateChange?()
+    }
+
+    func setTestModeEnabled(_ isEnabled: Bool) {
+        testModeChanges.append(isEnabled)
+        snapshot = DiskCleanControllerSnapshot(
+            phase: snapshot.phase,
+            selectedChoices: snapshot.selectedChoices,
+            scanResult: snapshot.scanResult,
+            executionResult: snapshot.executionResult,
+            isTestModeEnabled: isEnabled,
             isResultStale: snapshot.isResultStale,
             errorMessage: snapshot.errorMessage
         )

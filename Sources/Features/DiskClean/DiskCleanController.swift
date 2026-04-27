@@ -14,6 +14,7 @@ struct DiskCleanControllerSnapshot: Equatable, Sendable {
     let selectedChoices: Set<DiskCleanChoice>
     let scanResult: DiskCleanScanResult?
     let executionResult: DiskCleanExecutionResult?
+    let isTestModeEnabled: Bool
     let isResultStale: Bool
     let errorMessage: String?
 
@@ -46,6 +47,7 @@ struct DiskCleanControllerSnapshot: Equatable, Sendable {
     var canClean: Bool {
         phase == .scanned
             && !isResultStale
+            && !isTestModeEnabled
             && scanResult?.cleanableCandidates.isEmpty == false
     }
 
@@ -54,6 +56,7 @@ struct DiskCleanControllerSnapshot: Equatable, Sendable {
         selectedChoices: Set(DiskCleanChoice.allCases),
         scanResult: nil,
         executionResult: nil,
+        isTestModeEnabled: true,
         isResultStale: false,
         errorMessage: nil
     )
@@ -65,6 +68,7 @@ protocol DiskCleanControlling: AnyObject {
     var snapshot: DiskCleanControllerSnapshot { get }
 
     func setChoice(_ choice: DiskCleanChoice, isSelected: Bool)
+    func setTestModeEnabled(_ isEnabled: Bool)
     func scan()
     func cleanSelected(candidateIDs: Set<DiskCleanCandidate.ID>)
     func cancelCurrentOperation()
@@ -113,7 +117,22 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
             selectedChoices: nextChoices,
             scanResult: snapshot.scanResult,
             executionResult: snapshot.executionResult,
+            isTestModeEnabled: snapshot.isTestModeEnabled,
             isResultStale: isStale(scanResult: snapshot.scanResult, selectedChoices: nextChoices),
+            errorMessage: snapshot.errorMessage
+        )
+    }
+
+    func setTestModeEnabled(_ isEnabled: Bool) {
+        guard !snapshot.isBusy else { return }
+
+        snapshot = DiskCleanControllerSnapshot(
+            phase: snapshot.phase,
+            selectedChoices: snapshot.selectedChoices,
+            scanResult: snapshot.scanResult,
+            executionResult: snapshot.executionResult,
+            isTestModeEnabled: isEnabled,
+            isResultStale: snapshot.isResultStale,
             errorMessage: snapshot.errorMessage
         )
     }
@@ -131,6 +150,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
             selectedChoices: selectedChoices,
             scanResult: nil,
             executionResult: nil,
+            isTestModeEnabled: snapshot.isTestModeEnabled,
             isResultStale: false,
             errorMessage: nil
         )
@@ -145,6 +165,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                     selectedChoices: selectedChoices,
                     scanResult: result,
                     executionResult: nil,
+                    isTestModeEnabled: snapshot.isTestModeEnabled,
                     isResultStale: false,
                     errorMessage: nil
                 )
@@ -156,6 +177,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                     selectedChoices: selectedChoices,
                     scanResult: nil,
                     executionResult: nil,
+                    isTestModeEnabled: snapshot.isTestModeEnabled,
                     isResultStale: false,
                     errorMessage: nil
                 )
@@ -167,6 +189,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                     selectedChoices: selectedChoices,
                     scanResult: nil,
                     executionResult: nil,
+                    isTestModeEnabled: snapshot.isTestModeEnabled,
                     isResultStale: false,
                     errorMessage: Self.userFacingMessage(for: error)
                 )
@@ -188,6 +211,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
             selectedChoices: selectedChoices,
             scanResult: scanResult,
             executionResult: nil,
+            isTestModeEnabled: snapshot.isTestModeEnabled,
             isResultStale: false,
             errorMessage: nil
         )
@@ -205,6 +229,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                     selectedChoices: selectedChoices,
                     scanResult: scanResult,
                     executionResult: executionResult,
+                    isTestModeEnabled: snapshot.isTestModeEnabled,
                     isResultStale: false,
                     errorMessage: nil
                 )
@@ -216,6 +241,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                     selectedChoices: selectedChoices,
                     scanResult: scanResult,
                     executionResult: nil,
+                    isTestModeEnabled: snapshot.isTestModeEnabled,
                     isResultStale: false,
                     errorMessage: nil
                 )
@@ -227,6 +253,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                     selectedChoices: selectedChoices,
                     scanResult: scanResult,
                     executionResult: nil,
+                    isTestModeEnabled: snapshot.isTestModeEnabled,
                     isResultStale: false,
                     errorMessage: Self.userFacingMessage(for: error)
                 )
@@ -239,6 +266,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
         let phase = snapshot.phase
         let selectedChoices = snapshot.selectedChoices
         let scanResult = snapshot.scanResult
+        let isTestModeEnabled = snapshot.isTestModeEnabled
         let isResultStale = snapshot.isResultStale
 
         cancelTaskOnly()
@@ -250,6 +278,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                 selectedChoices: selectedChoices,
                 scanResult: nil,
                 executionResult: nil,
+                isTestModeEnabled: isTestModeEnabled,
                 isResultStale: false,
                 errorMessage: nil
             )
@@ -259,6 +288,7 @@ final class DiskCleanController: ObservableObject, DiskCleanControlling {
                 selectedChoices: selectedChoices,
                 scanResult: scanResult,
                 executionResult: nil,
+                isTestModeEnabled: isTestModeEnabled,
                 isResultStale: isResultStale,
                 errorMessage: nil
             )
