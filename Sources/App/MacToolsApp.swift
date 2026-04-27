@@ -20,6 +20,11 @@ struct MacToolsApp: App {
         }
         .defaultSize(width: 580, height: 420)
         .windowResizability(.contentSize)
+
+        Window("磁盘清理", id: MenuBarContent.diskCleanWindowID) {
+            DiskCleanDetailView(controller: DiskCleanFeature.shared.controller)
+        }
+        .defaultSize(width: 720, height: 520)
     }
 
     private var menuBarSymbolName: String {

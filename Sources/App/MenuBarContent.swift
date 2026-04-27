@@ -171,6 +171,9 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
 }
 
 struct MenuBarContent: View {
+    static let diskCleanWindowID = "disk-clean"
+    static let diskCleanOpenDetailsActionID = DiskCleanPlugin.ControlID.openDetails
+
     private struct DeferredPanelSwitchAction {
         let pluginID: String
         let isOn: Bool
@@ -275,6 +278,15 @@ struct MenuBarContent: View {
         for item: PluginPanelItem,
         behavior: PluginMenuActionBehavior
     ) {
+        if isDiskCleanOpenDetailsAction(pluginID: item.id, controlID: controlID) {
+            deferredActionInvocation = DeferredActionInvocation(
+                pluginID: item.id,
+                controlID: controlID
+            )
+            dismiss()
+            return
+        }
+
         switch behavior {
         case .keepPresented:
             pluginHost.invokePanelAction(controlID: controlID, for: item.id)
@@ -294,10 +306,25 @@ struct MenuBarContent: View {
         }
 
         self.deferredActionInvocation = nil
+
+        if isDiskCleanOpenDetailsAction(pluginID: deferred.pluginID, controlID: deferred.controlID) {
+            presentDiskCleanDetails()
+            return
+        }
+
         pluginHost.invokePanelAction(
             controlID: deferred.controlID,
             for: deferred.pluginID
         )
+    }
+
+    private func isDiskCleanOpenDetailsAction(pluginID: String, controlID: String) -> Bool {
+        pluginID == Self.diskCleanWindowID && controlID == Self.diskCleanOpenDetailsActionID
+    }
+
+    private func presentDiskCleanDetails() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        openWindow(id: Self.diskCleanWindowID)
     }
 
     private func syncSecondaryPanelWindow() {

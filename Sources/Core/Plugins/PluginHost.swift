@@ -35,6 +35,7 @@ final class PluginHost: ObservableObject {
                 DisplayResolutionPlugin(),
                 HideNotchPlugin(),
                 KeepAwakePlugin(),
+                DiskCleanFeature.shared.makePlugin(),
                 PhysicalCleanModePlugin()
             ],
             shortcutStore: ShortcutStore(),
