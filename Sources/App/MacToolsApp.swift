@@ -3,33 +3,32 @@ import SwiftUI
 
 @main
 struct MacToolsApp: App {
-    @StateObject private var pluginHost = PluginHost()
-    @StateObject private var appUpdater = AppUpdater()
+    @NSApplicationDelegateAdaptor(MacToolsAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("MacTools", systemImage: menuBarSymbolName) {
-            MenuBarContent(pluginHost: pluginHost)
-                .onAppear {
-                    pluginHost.refreshAll()
-                }
+        Settings {
+            EmptyView()
         }
-        .menuBarExtraStyle(.window)
+    }
+}
 
-        Window("设置", id: "settings") {
-            SettingsView(pluginHost: pluginHost, appUpdater: appUpdater)
-        }
-        .defaultSize(width: 580, height: 420)
-        .windowResizability(.contentSize)
+@MainActor
+final class MacToolsAppDelegate: NSObject, NSApplicationDelegate {
+    private let pluginHost = PluginHost()
+    private let appUpdater = AppUpdater()
+    private var windowRouter: AppWindowRouter?
+    private var statusItemController: MenuBarStatusItemController?
 
-        Window("磁盘清理", id: MenuBarContent.diskCleanWindowID) {
-            DiskCleanDetailView(controller: DiskCleanFeature.shared.controller)
-        }
-        .defaultSize(width: 720, height: 520)
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let windowRouter = AppWindowRouter(pluginHost: pluginHost, appUpdater: appUpdater)
+        self.windowRouter = windowRouter
+        statusItemController = MenuBarStatusItemController(
+            pluginHost: pluginHost,
+            windowRouter: windowRouter
+        )
     }
 
-    private var menuBarSymbolName: String {
-        pluginHost.hasActivePlugin
-            ? "sparkles.rectangle.stack.fill"
-            : "sparkles.rectangle.stack"
+    func applicationWillTerminate(_ notification: Notification) {
+        statusItemController?.dismissPanels()
     }
 }

@@ -1,6 +1,15 @@
 import Foundation
 import SwiftUI
 
+struct PluginMetadata: Identifiable {
+    let id: String
+    let title: String
+    let iconName: String
+    let iconTint: Color
+    let order: Int
+    let defaultDescription: String
+}
+
 enum PluginControlStyle {
     case `switch`
     case disclosure
@@ -57,6 +66,82 @@ struct PluginManifest: Identifiable {
     let menuActionBehavior: PluginMenuActionBehavior
     let order: Int
     let defaultDescription: String
+
+    var metadata: PluginMetadata {
+        PluginMetadata(
+            id: id,
+            title: title,
+            iconName: iconName,
+            iconTint: iconTint,
+            order: order,
+            defaultDescription: defaultDescription
+        )
+    }
+}
+
+struct PluginComponentSpan: Equatable, Hashable {
+    static let maximumWidth = 4
+
+    let width: Int
+    let height: Int
+
+    init?(width: Int, height: Int) {
+        guard Self.isValid(width: width, height: height) else {
+            return nil
+        }
+
+        self.width = width
+        self.height = height
+    }
+
+    private init(uncheckedWidth width: Int, height: Int) {
+        self.width = width
+        self.height = height
+    }
+
+    static let oneByOne = PluginComponentSpan(uncheckedWidth: 1, height: 1)
+    static let oneByTwo = PluginComponentSpan(uncheckedWidth: 1, height: 2)
+    static let twoByOne = PluginComponentSpan(uncheckedWidth: 2, height: 1)
+    static let twoByTwo = PluginComponentSpan(uncheckedWidth: 2, height: 2)
+    static let fourByTwo = PluginComponentSpan(uncheckedWidth: 4, height: 2)
+
+    static func isValid(width: Int, height: Int) -> Bool {
+        (1...maximumWidth).contains(width) && height >= 1
+    }
+}
+
+struct PluginComponentDescriptor {
+    let span: PluginComponentSpan
+
+    init(span: PluginComponentSpan) {
+        self.span = span
+    }
+}
+
+struct PluginComponentState {
+    let subtitle: String
+    let isActive: Bool
+    let isEnabled: Bool
+    let isVisible: Bool
+    let errorMessage: String?
+}
+
+struct PluginComponentContext {
+    let pluginID: String
+    let dismiss: () -> Void
+}
+
+struct PluginComponentItem: Identifiable {
+    let id: String
+    let title: String
+    let iconName: String
+    let iconTint: Color
+    let description: String
+    let helpText: String
+    let descriptionTone: PluginPanelDescriptionTone
+    let span: PluginComponentSpan
+    let isActive: Bool
+    let isEnabled: Bool
 }
 
 struct PluginPanelState {
@@ -223,6 +308,12 @@ struct PluginPanelItem: Identifiable {
     let detail: PluginPanelDetail?
 }
 
+enum PluginFeaturePresentation: Equatable {
+    case featurePanel
+    case componentPanel
+    case featureAndComponentPanel
+}
+
 struct PluginFeatureManagementItem: Identifiable {
     let id: String
     let title: String
@@ -231,6 +322,7 @@ struct PluginFeatureManagementItem: Identifiable {
     let iconTint: Color
     let isVisible: Bool
     let isActive: Bool
+    let presentation: PluginFeaturePresentation
 }
 
 struct PluginPermissionCard: Identifiable {

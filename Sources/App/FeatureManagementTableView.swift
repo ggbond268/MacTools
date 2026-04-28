@@ -294,7 +294,7 @@ private final class FeatureManagementTableCellView: NSTableCellView {
         visibilityHandler = onVisibilityChange
 
         titleLabel.stringValue = item.title
-        descriptionLabel.stringValue = item.description
+        descriptionLabel.stringValue = "\(item.description) · \(presentationText(for: item.presentation))"
         iconImageView.image = NSImage(
             systemSymbolName: item.iconName,
             accessibilityDescription: item.title
@@ -409,6 +409,17 @@ private final class FeatureManagementTableCellView: NSTableCellView {
     @objc
     private func handleVisibilityToggle(_ sender: NSButton) {
         visibilityHandler?(sender.state == .on)
+    }
+
+    private func presentationText(for presentation: PluginFeaturePresentation) -> String {
+        switch presentation {
+        case .featurePanel:
+            return "操作面板"
+        case .componentPanel:
+            return "组件"
+        case .featureAndComponentPanel:
+            return "操作面板与组件"
+        }
     }
 }
 

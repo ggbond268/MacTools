@@ -186,10 +186,11 @@ struct MenuBarContent: View {
 
     @StateObject private var secondaryPanelController = SecondaryPanelController()
     @StateObject private var hoverCoordinator = HoverSecondaryPanelCoordinator()
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.openWindow) private var openWindow
 
     @ObservedObject var pluginHost: PluginHost
+    let onDismiss: () -> Void
+    let onOpenSettings: () -> Void
+    let onOpenDiskCleanDetails: () -> Void
     @State private var deferredPanelSwitchAction: DeferredPanelSwitchAction?
     @State private var deferredActionInvocation: DeferredActionInvocation?
 
@@ -243,9 +244,8 @@ struct MenuBarContent: View {
     }
 
     private func presentSettings() {
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        openWindow(id: "settings")
-        dismiss()
+        onOpenSettings()
+        onDismiss()
     }
 
     private func handlePanelSwitchChange(_ newValue: Bool, for item: PluginPanelItem) {
@@ -257,7 +257,7 @@ struct MenuBarContent: View {
                 pluginID: item.id,
                 isOn: newValue
             )
-            dismiss()
+            onDismiss()
         }
     }
 
@@ -283,7 +283,7 @@ struct MenuBarContent: View {
                 pluginID: item.id,
                 controlID: controlID
             )
-            dismiss()
+            onDismiss()
             return
         }
 
@@ -296,7 +296,7 @@ struct MenuBarContent: View {
                 pluginID: item.id,
                 controlID: controlID
             )
-            dismiss()
+            onDismiss()
         }
     }
 
@@ -323,8 +323,7 @@ struct MenuBarContent: View {
     }
 
     private func presentDiskCleanDetails() {
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        openWindow(id: Self.diskCleanWindowID)
+        onOpenDiskCleanDetails()
     }
 
     private func syncSecondaryPanelWindow() {

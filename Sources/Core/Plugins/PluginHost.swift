@@ -4,15 +4,35 @@ import SwiftUI
 
 @MainActor
 final class PluginHost: ObservableObject {
+    private struct PluginDescriptor {
+        let metadata: PluginMetadata
+        var featurePlugin: (any FeaturePlugin)?
+        var componentPlugin: (any ComponentPlugin)?
+
+        var presentation: PluginFeaturePresentation {
+            switch (featurePlugin, componentPlugin) {
+            case (.some, .some):
+                return .featureAndComponentPanel
+            case (.some, .none):
+                return .featurePanel
+            case (.none, .some):
+                return .componentPanel
+            case (.none, .none):
+                return .featurePanel
+            }
+        }
+    }
+
     private struct ShortcutDescriptor {
         let itemID: String
         let pluginID: String
         let pluginTitle: String
         let definition: PluginShortcutDefinition
-        let plugin: any FeaturePlugin
+        let plugin: any PluginCore
     }
 
     private let plugins: [any FeaturePlugin]
+    private let componentPlugins: [any ComponentPlugin]
     private let shortcutStore: ShortcutStore
     private let pluginDisplayPreferencesStore: PluginDisplayPreferencesStore
     private let globalShortcutManager: GlobalShortcutManager
@@ -20,6 +40,7 @@ final class PluginHost: ObservableObject {
     private var shortcutErrors: [String: String] = [:]
 
     @Published private(set) var panelItems: [PluginPanelItem] = []
+    @Published private(set) var componentItems: [PluginComponentItem] = []
     @Published private(set) var featureManagementItems: [PluginFeatureManagementItem] = []
     @Published private(set) var permissionCards: [PluginPermissionCard] = []
     @Published private(set) var settingsCards: [PluginSettingsCard] = []
@@ -38,6 +59,9 @@ final class PluginHost: ObservableObject {
                 DiskCleanFeature.shared.makePlugin(),
                 PhysicalCleanModePlugin()
             ],
+            componentPlugins: [
+                SystemStatusPlugin()
+            ],
             shortcutStore: ShortcutStore(),
             pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(),
             globalShortcutManager: GlobalShortcutManager()
@@ -46,6 +70,7 @@ final class PluginHost: ObservableObject {
 
     init(
         plugins: [any FeaturePlugin],
+        componentPlugins: [any ComponentPlugin] = [],
         shortcutStore: ShortcutStore,
         pluginDisplayPreferencesStore: PluginDisplayPreferencesStore,
         globalShortcutManager: GlobalShortcutManager
@@ -57,12 +82,19 @@ final class PluginHost: ObservableObject {
 
             return $0.manifest.order < $1.manifest.order
         }
+        self.componentPlugins = componentPlugins.sorted {
+            if $0.metadata.order == $1.metadata.order {
+                return $0.metadata.title.localizedCompare($1.metadata.title) == .orderedAscending
+            }
+
+            return $0.metadata.order < $1.metadata.order
+        }
         self.shortcutStore = shortcutStore
         self.pluginDisplayPreferencesStore = pluginDisplayPreferencesStore
         self.globalShortcutManager = globalShortcutManager
 
-        for plugin in self.plugins {
-            let pluginID = plugin.manifest.id
+        for plugin in corePluginsForCallbacks() {
+            let pluginID = plugin.metadata.id
 
             plugin.onStateChange = { [weak self] in
                 self?.rebuildDerivedState()
@@ -84,7 +116,7 @@ final class PluginHost: ObservableObject {
     }
 
     func refreshAll() {
-        for plugin in plugins {
+        for plugin in corePluginsForCallbacks() {
             plugin.refresh()
         }
 
@@ -191,7 +223,7 @@ final class PluginHost: ObservableObject {
     }
 
     func performSettingsAction(pluginID: String, actionID: String) {
-        guard let plugin = plugin(for: pluginID) else {
+        guard let plugin = corePlugin(for: pluginID) else {
             return
         }
 
@@ -200,7 +232,7 @@ final class PluginHost: ObservableObject {
     }
 
     func performPermissionAction(pluginID: String, permissionID: String) {
-        guard let plugin = plugin(for: pluginID) else {
+        guard let plugin = corePlugin(for: pluginID) else {
             return
         }
 
@@ -319,12 +351,32 @@ final class PluginHost: ObservableObject {
         rebuildDerivedState()
     }
 
+    func makeComponentView(for itemID: String, dismiss: @escaping () -> Void) -> AnyView {
+        guard let plugin = componentPlugin(for: itemID) else {
+            return AnyView(EmptyView())
+        }
+
+        return plugin.makeComponentView(
+            context: PluginComponentContext(pluginID: itemID, dismiss: dismiss)
+        )
+    }
+
     private func plugin(for pluginID: String) -> (any FeaturePlugin)? {
         plugins.first(where: { $0.manifest.id == pluginID })
     }
 
+    private func componentPlugin(for pluginID: String) -> (any ComponentPlugin)? {
+        componentPlugins.first(where: { $0.metadata.id == pluginID })
+    }
+
+    private func corePlugin(for pluginID: String) -> (any PluginCore)? {
+        plugin(for: pluginID) ?? componentPlugin(for: pluginID)
+    }
+
     private func rebuildDerivedState() {
         let orderedPlugins = orderedPlugins()
+        let orderedComponentPlugins = orderedComponentPlugins()
+        let orderedDescriptors = orderedPluginDescriptors()
 
         panelItems = orderedPlugins.compactMap { plugin in
             let manifest = plugin.manifest
@@ -359,28 +411,60 @@ final class PluginHost: ObservableObject {
             )
         }
 
-        featureManagementItems = orderedPlugins.map { plugin in
-            let manifest = plugin.manifest
+        componentItems = orderedComponentPlugins.compactMap { plugin in
+            let metadata = plugin.metadata
+            let state = plugin.componentState
 
-            return PluginFeatureManagementItem(
-                id: manifest.id,
-                title: manifest.title,
-                description: manifest.defaultDescription,
-                iconName: manifest.iconName,
-                iconTint: manifest.iconTint,
-                isVisible: pluginDisplayPreferencesStore.isVisible(
-                    manifest.id,
+            guard
+                state.isVisible,
+                pluginDisplayPreferencesStore.isVisible(
+                    metadata.id,
                     defaultPluginIDs: defaultPluginIDs
-                ),
-                isActive: plugin.panelState.isOn
+                )
+            else {
+                return nil
+            }
+
+            let description = state.errorMessage ?? state.subtitle
+
+            return PluginComponentItem(
+                id: metadata.id,
+                title: metadata.title,
+                iconName: metadata.iconName,
+                iconTint: metadata.iconTint,
+                description: description.isEmpty ? metadata.defaultDescription : description,
+                helpText: description.isEmpty ? metadata.defaultDescription : description,
+                descriptionTone: state.errorMessage == nil ? .secondary : .error,
+                span: plugin.componentDescriptor.span,
+                isActive: state.isActive,
+                isEnabled: state.isEnabled
             )
         }
 
-        settingsCards = orderedPlugins.flatMap { plugin in
+        featureManagementItems = orderedDescriptors.map { descriptor in
+            let metadata = descriptor.metadata
+
+            return PluginFeatureManagementItem(
+                id: metadata.id,
+                title: metadata.title,
+                description: metadata.defaultDescription,
+                iconName: metadata.iconName,
+                iconTint: metadata.iconTint,
+                isVisible: pluginDisplayPreferencesStore.isVisible(
+                    metadata.id,
+                    defaultPluginIDs: defaultPluginIDs
+                ),
+                isActive: descriptor.featurePlugin?.panelState.isOn == true
+                    || descriptor.componentPlugin?.componentState.isActive == true,
+                presentation: descriptor.presentation
+            )
+        }
+
+        settingsCards = orderedCorePlugins().flatMap { plugin in
             plugin.settingsSections.map { section in
                 PluginSettingsCard(
-                    id: "\(plugin.manifest.id).\(section.id)",
-                    pluginID: plugin.manifest.id,
+                    id: "\(plugin.metadata.id).\(section.id)",
+                    pluginID: plugin.metadata.id,
                     title: section.title,
                     description: section.description,
                     statusText: section.status.text,
@@ -393,15 +477,15 @@ final class PluginHost: ObservableObject {
             }
         }
 
-        permissionCards = orderedPlugins.flatMap { plugin in
+        permissionCards = orderedCorePlugins().flatMap { plugin in
             plugin.permissionRequirements.map { requirement in
                 let state = plugin.permissionState(for: requirement.id)
 
                 return PluginPermissionCard(
-                    id: "\(plugin.manifest.id).permission.\(requirement.id)",
-                    pluginID: plugin.manifest.id,
+                    id: "\(plugin.metadata.id).permission.\(requirement.id)",
+                    pluginID: plugin.metadata.id,
                     permissionID: requirement.id,
-                    title: "\(plugin.manifest.title) · \(requirement.title)",
+                    title: "\(plugin.metadata.title) · \(requirement.title)",
                     description: requirement.description,
                     statusText: state.isGranted ? "已授权" : "未授权",
                     statusSystemImage: state.isGranted ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
@@ -434,18 +518,19 @@ final class PluginHost: ObservableObject {
         }
 
         hasActivePlugin = plugins.contains(where: { $0.panelState.isOn })
+            || componentPlugins.contains(where: { $0.componentState.isActive })
     }
 
     private func shortcutDescriptors() -> [ShortcutDescriptor] {
-        orderedPlugins().flatMap { plugin in
+        orderedCorePlugins().flatMap { plugin in
             plugin.shortcutDefinitions.map { definition in
                 ShortcutDescriptor(
                     itemID: shortcutItemID(
-                        pluginID: plugin.manifest.id,
+                        pluginID: plugin.metadata.id,
                         shortcutDefinitionID: definition.id
                     ),
-                    pluginID: plugin.manifest.id,
-                    pluginTitle: plugin.manifest.title,
+                    pluginID: plugin.metadata.id,
+                    pluginTitle: plugin.metadata.title,
                     definition: definition,
                     plugin: plugin
                 )
@@ -454,7 +539,7 @@ final class PluginHost: ObservableObject {
     }
 
     private var defaultPluginIDs: [String] {
-        plugins.map(\.manifest.id)
+        defaultPluginDescriptors().map(\.metadata.id)
     }
 
     private func orderedPluginIDs() -> [String] {
@@ -465,6 +550,71 @@ final class PluginHost: ObservableObject {
         let pluginsByID = Dictionary(uniqueKeysWithValues: plugins.map { ($0.manifest.id, $0) })
 
         return orderedPluginIDs().compactMap { pluginsByID[$0] }
+    }
+
+    private func orderedComponentPlugins() -> [any ComponentPlugin] {
+        let pluginsByID = Dictionary(uniqueKeysWithValues: componentPlugins.map { ($0.metadata.id, $0) })
+
+        return orderedPluginIDs().compactMap { pluginsByID[$0] }
+    }
+
+    private func orderedCorePlugins() -> [any PluginCore] {
+        orderedPluginDescriptors().flatMap { descriptor -> [any PluginCore] in
+            var plugins: [any PluginCore] = []
+
+            if let featurePlugin = descriptor.featurePlugin {
+                plugins.append(featurePlugin)
+            }
+
+            if let componentPlugin = descriptor.componentPlugin {
+                plugins.append(componentPlugin)
+            }
+
+            return plugins
+        }
+    }
+
+    private func corePluginsForCallbacks() -> [any PluginCore] {
+        var plugins: [any PluginCore] = []
+        plugins.append(contentsOf: self.plugins)
+        plugins.append(contentsOf: componentPlugins)
+        return plugins
+    }
+
+    private func orderedPluginDescriptors() -> [PluginDescriptor] {
+        let descriptorsByID = Dictionary(
+            uniqueKeysWithValues: defaultPluginDescriptors().map { ($0.metadata.id, $0) }
+        )
+
+        return orderedPluginIDs().compactMap { descriptorsByID[$0] }
+    }
+
+    private func defaultPluginDescriptors() -> [PluginDescriptor] {
+        var descriptorsByID: [String: PluginDescriptor] = [:]
+
+        for plugin in plugins {
+            let metadata = plugin.metadata
+            var descriptor = descriptorsByID[metadata.id]
+                ?? PluginDescriptor(metadata: metadata, featurePlugin: nil, componentPlugin: nil)
+            descriptor.featurePlugin = plugin
+            descriptorsByID[metadata.id] = descriptor
+        }
+
+        for plugin in componentPlugins {
+            let metadata = plugin.metadata
+            var descriptor = descriptorsByID[metadata.id]
+                ?? PluginDescriptor(metadata: metadata, featurePlugin: nil, componentPlugin: nil)
+            descriptor.componentPlugin = plugin
+            descriptorsByID[metadata.id] = descriptor
+        }
+
+        return descriptorsByID.values.sorted { lhs, rhs in
+            if lhs.metadata.order == rhs.metadata.order {
+                return lhs.metadata.title.localizedCompare(rhs.metadata.title) == .orderedAscending
+            }
+
+            return lhs.metadata.order < rhs.metadata.order
+        }
     }
 
     private func shortcutDescriptor(for shortcutID: String) -> ShortcutDescriptor? {
@@ -572,11 +722,10 @@ final class PluginHost: ObservableObject {
     }
 
     private func requestPermissionGuidance(forPluginID pluginID: String, permissionID: String) {
-        guard let plugin = plugin(for: pluginID) else {
-            return
-        }
-
-        guard plugin.permissionRequirements.contains(where: { $0.id == permissionID }) else {
+        guard corePluginsForCallbacks().contains(where: { plugin in
+            plugin.metadata.id == pluginID
+                && plugin.permissionRequirements.contains(where: { $0.id == permissionID })
+        }) else {
             return
         }
 

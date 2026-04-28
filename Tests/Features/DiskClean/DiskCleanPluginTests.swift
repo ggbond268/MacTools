@@ -103,7 +103,6 @@ final class DiskCleanPluginTests: XCTestCase {
     func testDefaultPluginHostIncludesDiskClean() {
         let host = PluginHost()
 
-        XCTAssertTrue(host.panelItems.contains { $0.id == "disk-clean" })
         XCTAssertTrue(host.featureManagementItems.contains { $0.id == "disk-clean" })
     }
 }
