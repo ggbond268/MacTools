@@ -1,16 +1,20 @@
 import Darwin
 import Foundation
+import IOKit
 import IOKit.ps
 import SystemConfiguration
 
 actor SystemStatusSampler {
     private var previousCPUTicks: SystemStatusCPUTicks?
+    private var cachedCPUTemperature: Double?
+    private var lastCPUTemperatureDate: Date?
+    private lazy var smcReader = SystemStatusSMCReader()
     private var previousNetworkCounter: SystemStatusNetworkCounter?
     private var previousNetworkDate: Date?
 
     func collectFast(referenceDate: Date) -> SystemStatusFastSample {
         SystemStatusFastSample(
-            cpu: collectCPU(),
+            cpu: collectCPU(referenceDate: referenceDate),
             memory: Self.collectMemory(),
             network: collectNetwork(referenceDate: referenceDate)
         )
@@ -18,7 +22,7 @@ actor SystemStatusSampler {
 
     func collectSlow() -> SystemStatusSlowSample {
         SystemStatusSlowSample(
-            disk: Self.collectDisk(),
+            disk: Self.collectDiskCapacity(),
             battery: Self.collectBattery()
         )
     }
@@ -31,11 +35,13 @@ actor SystemStatusSampler {
         await Self.collectPublicIPAddress()
     }
 
-    private func collectCPU() -> SystemStatusCPUSnapshot {
+    private func collectCPU(referenceDate: Date) -> SystemStatusCPUSnapshot {
+        let temperature = collectCPUTemperature(referenceDate: referenceDate)
         guard let currentTicks = Self.readCPUTicks() else {
             return SystemStatusCPUSnapshot(
                 usage: nil,
                 loadAverage1Minute: Self.readLoadAverage1Minute(),
+                temperatureCelsius: temperature,
                 isCollecting: false
             )
         }
@@ -48,8 +54,20 @@ actor SystemStatusSampler {
         return SystemStatusCPUSnapshot(
             usage: usage,
             loadAverage1Minute: Self.readLoadAverage1Minute(),
+            temperatureCelsius: temperature,
             isCollecting: usage == nil
         )
+    }
+
+    private func collectCPUTemperature(referenceDate: Date) -> Double? {
+        if let lastCPUTemperatureDate, referenceDate.timeIntervalSince(lastCPUTemperatureDate) < 5 {
+            return cachedCPUTemperature
+        }
+
+        let temperature = Self.collectCPUTemperature(smcReader: smcReader)
+        cachedCPUTemperature = temperature
+        lastCPUTemperatureDate = referenceDate
+        return temperature
     }
 
     private func collectNetwork(referenceDate: Date) -> SystemStatusNetworkSnapshot {
@@ -134,6 +152,62 @@ actor SystemStatusSampler {
         }
     }
 
+    private static func collectCPUTemperature(smcReader: SystemStatusSMCReader?) -> Double? {
+        if let smcTemperature = collectSMCCPUTemperature(smcReader: smcReader) {
+            return smcTemperature
+        }
+
+        guard let output = runCommand(path: "/usr/sbin/ioreg", arguments: ["-r", "-c", "IOHIDEventService", "-w0"]) else {
+            return nil
+        }
+        let pattern = #"temperature[^=]*=\s*([0-9]+(?:\.[0-9]+)?)"#
+        let values = regexCaptures(pattern, in: output).compactMap(Double.init)
+        let celsiusValues = values
+            .map(normalizedTemperatureCelsius)
+            .filter { $0 >= 10 && $0 <= 130 }
+
+        guard !celsiusValues.isEmpty else {
+            return nil
+        }
+
+        return celsiusValues.max()
+    }
+
+    private static func collectSMCCPUTemperature(smcReader: SystemStatusSMCReader?) -> Double? {
+        guard let smcReader else {
+            return nil
+        }
+
+        let directKeys = ["TC0D", "TC0E", "TC0F", "TC0P", "TC0H", "TCAD"]
+        for key in directKeys {
+            if let value = smcReader.value(for: key), isValidTemperature(value) {
+                return value
+            }
+        }
+
+        let appleSiliconKeys = [
+            "Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b",
+            "Tp1h", "Tp1t", "Tp1p", "Tp1l", "Tp0f", "Tp0j",
+            "Te05", "Te09", "Te0H", "Te0L", "Te0P", "Te0S",
+            "Tf04", "Tf09", "Tf0A", "Tf0B", "Tf0D", "Tf0E", "Tf44", "Tf49", "Tf4A", "Tf4B", "Tf4D", "Tf4E",
+            "Tp0V", "Tp0Y", "Tp0e",
+            "Tp00", "Tp04", "Tp08", "Tp0C", "Tp0G", "Tp0K", "Tp0O", "Tp0R", "Tp0U", "Tp0a", "Tp0d", "Tp0g", "Tp0m", "Tp0p", "Tp0u", "Tp0y"
+        ]
+        let values = appleSiliconKeys.compactMap { key in
+            smcReader.value(for: key)
+        }.filter(isValidTemperature)
+
+        guard !values.isEmpty else {
+            return nil
+        }
+
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    private static func isValidTemperature(_ value: Double) -> Bool {
+        value > 0 && value < 110
+    }
+
     private static func collectMemory() -> SystemStatusMemorySnapshot {
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(
@@ -164,34 +238,8 @@ actor SystemStatusSampler {
 
         return SystemStatusMemorySnapshot(
             usedBytes: used,
-            totalBytes: total,
-            pressure: memoryPressure()
+            totalBytes: total
         )
-    }
-
-    private static func memoryPressure() -> SystemStatusMemoryPressure {
-        var pressureLevel: Int32 = 0
-        var size = MemoryLayout<Int32>.stride
-        let result = sysctlbyname(
-            "kern.memorystatus_vm_pressure_level",
-            &pressureLevel,
-            &size,
-            nil,
-            0
-        )
-
-        guard result == 0 else {
-            return .unknown
-        }
-
-        switch pressureLevel {
-        case 2:
-            return .warning
-        case 4:
-            return .critical
-        default:
-            return .normal
-        }
     }
 
     private static func memoryPageSize() -> vm_size_t {
@@ -204,28 +252,22 @@ actor SystemStatusSampler {
         return pageSize
     }
 
-    private static func collectDisk() -> SystemStatusDiskSnapshot {
+    private static func collectDiskCapacity() -> SystemStatusDiskSnapshot {
         let homeURL = FileManager.default.homeDirectoryForCurrentUser
-        var volumeName: String?
         var totalBytes: UInt64?
         var availableBytes: UInt64?
 
         do {
             let values = try homeURL.resourceValues(forKeys: [
-                .volumeNameKey,
                 .volumeTotalCapacityKey,
-                .volumeAvailableCapacityKey,
                 .volumeAvailableCapacityForImportantUsageKey
             ])
-            volumeName = values.volumeName
 
             if let totalCapacity = values.volumeTotalCapacity, totalCapacity > 0 {
                 totalBytes = UInt64(totalCapacity)
             }
             if let importantCapacity = values.volumeAvailableCapacityForImportantUsage, importantCapacity >= 0 {
                 availableBytes = UInt64(importantCapacity)
-            } else if let availableCapacity = values.volumeAvailableCapacity, availableCapacity >= 0 {
-                availableBytes = UInt64(availableCapacity)
             }
         } catch {
             totalBytes = nil
@@ -249,10 +291,8 @@ actor SystemStatusSampler {
 
         let clampedAvailable = min(availableBytes, totalBytes)
         return SystemStatusDiskSnapshot(
-            volumeName: volumeName,
             usedBytes: totalBytes - clampedAvailable,
-            totalBytes: totalBytes,
-            availableBytes: clampedAvailable
+            totalBytes: totalBytes
         )
     }
 
@@ -264,11 +304,13 @@ actor SystemStatusSampler {
         else {
             return SystemStatusBatterySnapshot(
                 isAvailable: false,
-                level: nil,
-                state: .unavailable,
-                timeRemainingMinutes: nil,
-                adapterWatts: adapterWatts()
-            )
+            level: nil,
+            state: .unavailable,
+            timeRemainingMinutes: nil,
+            adapterWatts: adapterWatts(),
+            temperatureCelsius: nil,
+            healthPercent: nil
+        )
         }
 
         var fallbackDescription: [String: Any]?
@@ -292,7 +334,9 @@ actor SystemStatusSampler {
                 level: nil,
                 state: .unavailable,
                 timeRemainingMinutes: nil,
-                adapterWatts: adapterWatts()
+                adapterWatts: adapterWatts(),
+                temperatureCelsius: nil,
+                healthPercent: nil
             )
         }
 
@@ -309,13 +353,16 @@ actor SystemStatusSampler {
             powerSource: powerSource
         )
         let timeKey = isCharging ? kIOPSTimeToFullChargeKey : kIOPSTimeToEmptyKey
+        let registryInfo = collectBatteryRegistryInfo()
 
         return SystemStatusBatterySnapshot(
             isAvailable: true,
             level: level,
             state: state,
             timeRemainingMinutes: validBatteryMinutes(description[timeKey]),
-            adapterWatts: adapterWatts()
+            adapterWatts: adapterWatts(),
+            temperatureCelsius: registryInfo.temperatureCelsius,
+            healthPercent: registryInfo.healthPercent
         )
     }
 
@@ -358,6 +405,58 @@ actor SystemStatusSampler {
         }
 
         return watts
+    }
+
+    private static func collectBatteryRegistryInfo() -> (temperatureCelsius: Double?, healthPercent: Int?) {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        guard service != 0 else {
+            return (nil, nil)
+        }
+        defer { IOObjectRelease(service) }
+
+        let temperature = registryIntValue(service: service, key: "Temperature")
+            .map { Double($0) / 100 }
+
+        let maxCapacity = registryIntValue(service: service, key: isAppleSilicon ? "AppleRawMaxCapacity" : "MaxCapacity")
+            ?? registryIntValue(service: service, key: "MaxCapacity")
+        let designCapacity = registryIntValue(service: service, key: "DesignCapacity")
+        let healthPercent: Int?
+        if let maxCapacity, let designCapacity, designCapacity > 0 {
+            healthPercent = Int((Double(maxCapacity) * 100 / Double(designCapacity)).rounded())
+        } else {
+            healthPercent = nil
+        }
+
+        return (temperature, healthPercent)
+    }
+
+    private static var isAppleSilicon: Bool {
+        var size = 0
+        guard sysctlbyname("hw.optional.arm64", nil, &size, nil, 0) == 0 else {
+            return false
+        }
+
+        var value: Int32 = 0
+        size = MemoryLayout<Int32>.stride
+        guard sysctlbyname("hw.optional.arm64", &value, &size, nil, 0) == 0 else {
+            return false
+        }
+
+        return value == 1
+    }
+
+    private static func registryIntValue(service: io_registry_entry_t, key: String) -> Int? {
+        guard let rawValue = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() else {
+            return nil
+        }
+
+        if let intValue = rawValue as? Int {
+            return intValue
+        }
+        if let numberValue = rawValue as? NSNumber {
+            return numberValue.intValue
+        }
+        return nil
     }
 
     private static func currentNetworkCounter() -> SystemStatusNetworkCounter? {
@@ -500,9 +599,17 @@ actor SystemStatusSampler {
     }
 
     private static func collectTopProcesses(limit: Int) -> [SystemStatusTopProcess] {
+        guard let output = runCommand(path: "/bin/ps", arguments: ["-Aceo", "pid=,pcpu=,pmem=,comm=", "-r"]) else {
+            return []
+        }
+
+        return SystemStatusProcessParser.parsePSOutput(output, limit: limit)
+    }
+
+    private static func runCommand(path: String, arguments: [String], timeout: TimeInterval = 1) -> String? {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-Aceo", "pid=,pcpu=,pmem=,comm=", "-r"]
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
 
         let outputPipe = Pipe()
         let errorPipe = Pipe()
@@ -514,10 +621,10 @@ actor SystemStatusSampler {
         } catch {
             outputPipe.fileHandleForReading.closeFile()
             errorPipe.fileHandleForReading.closeFile()
-            return []
+            return nil
         }
 
-        let deadline = Date().addingTimeInterval(1)
+        let deadline = Date().addingTimeInterval(timeout)
         while process.isRunning, Date() < deadline {
             Thread.sleep(forTimeInterval: 0.02)
         }
@@ -526,7 +633,7 @@ actor SystemStatusSampler {
             process.terminate()
             outputPipe.fileHandleForReading.closeFile()
             errorPipe.fileHandleForReading.closeFile()
-            return []
+            return nil
         }
 
         process.waitUntilExit()
@@ -535,10 +642,32 @@ actor SystemStatusSampler {
         errorPipe.fileHandleForReading.closeFile()
 
         guard let output = String(data: outputData, encoding: .utf8), !output.isEmpty else {
+            return nil
+        }
+
+        return output
+    }
+
+    private static func regexCaptures(_ pattern: String, in value: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return []
         }
 
-        return SystemStatusProcessParser.parsePSOutput(output, limit: limit)
+        let range = NSRange(value.startIndex..<value.endIndex, in: value)
+        return regex.matches(in: value, range: range).compactMap { match in
+            guard match.numberOfRanges > 1, let captureRange = Range(match.range(at: 1), in: value) else {
+                return nil
+            }
+
+            return String(value[captureRange])
+        }
+    }
+
+    private static func normalizedTemperatureCelsius(_ value: Double) -> Double {
+        if value > 1_000 {
+            return value / 100
+        }
+        return value
     }
 
     private static func collectPublicIPAddress() async -> String? {

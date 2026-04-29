@@ -87,39 +87,20 @@ struct SystemStatusSlowSample: Equatable, Sendable {
 struct SystemStatusCPUSnapshot: Equatable, Sendable {
     let usage: Double?
     let loadAverage1Minute: Double?
+    let temperatureCelsius: Double?
     let isCollecting: Bool
 
     static let empty = SystemStatusCPUSnapshot(
         usage: nil,
         loadAverage1Minute: nil,
+        temperatureCelsius: nil,
         isCollecting: true
     )
-}
-
-enum SystemStatusMemoryPressure: Equatable, Sendable {
-    case normal
-    case warning
-    case critical
-    case unknown
-
-    var title: String {
-        switch self {
-        case .normal:
-            return "正常"
-        case .warning:
-            return "偏高"
-        case .critical:
-            return "严重"
-        case .unknown:
-            return "未知"
-        }
-    }
 }
 
 struct SystemStatusMemorySnapshot: Equatable, Sendable {
     let usedBytes: UInt64?
     let totalBytes: UInt64?
-    let pressure: SystemStatusMemoryPressure
 
     var usage: Double? {
         guard let usedBytes, let totalBytes, totalBytes > 0 else {
@@ -131,16 +112,13 @@ struct SystemStatusMemorySnapshot: Equatable, Sendable {
 
     static let empty = SystemStatusMemorySnapshot(
         usedBytes: nil,
-        totalBytes: nil,
-        pressure: .unknown
+        totalBytes: nil
     )
 }
 
 struct SystemStatusDiskSnapshot: Equatable, Sendable {
-    let volumeName: String?
     let usedBytes: UInt64?
     let totalBytes: UInt64?
-    let availableBytes: UInt64?
 
     var usage: Double? {
         guard let usedBytes, let totalBytes, totalBytes > 0 else {
@@ -151,10 +129,8 @@ struct SystemStatusDiskSnapshot: Equatable, Sendable {
     }
 
     static let empty = SystemStatusDiskSnapshot(
-        volumeName: nil,
         usedBytes: nil,
-        totalBytes: nil,
-        availableBytes: nil
+        totalBytes: nil
     )
 }
 
@@ -190,13 +166,17 @@ struct SystemStatusBatterySnapshot: Equatable, Sendable {
     let state: SystemStatusBatteryState
     let timeRemainingMinutes: Int?
     let adapterWatts: Int?
+    let temperatureCelsius: Double?
+    let healthPercent: Int?
 
     static let empty = SystemStatusBatterySnapshot(
         isAvailable: false,
         level: nil,
         state: .unknown,
         timeRemainingMinutes: nil,
-        adapterWatts: nil
+        adapterWatts: nil,
+        temperatureCelsius: nil,
+        healthPercent: nil
     )
 }
 
@@ -351,8 +331,12 @@ enum SystemStatusFormatter {
         return "\(scaledBytes(bytesPerSecond))/s"
     }
 
-    static func memoryRatio(usedBytes: UInt64?, totalBytes: UInt64?) -> String {
-        "\(bytes(usedBytes)) / \(bytes(totalBytes))"
+    static func temperature(_ celsius: Double?) -> String {
+        guard let celsius else {
+            return "—℃"
+        }
+
+        return "\(format(celsius, fractionDigits: 0))℃"
     }
 
     static func timeRemaining(minutes: Int?) -> String {

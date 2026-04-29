@@ -198,7 +198,10 @@ struct SystemStatusComponentView: View {
         return SystemStatusCompactMetricCard(
             title: SystemStatusMetricKind.cpu.title,
             percentText: cpu.isCollecting ? "--" : SystemStatusFormatter.percent(cpu.usage),
-            detailText: cpu.loadAverage1Minute.map { "Load \(String(format: "%.2f", $0))" } ?? "Load --",
+            detailLines: [
+                "温度 \(SystemStatusFormatter.temperature(cpu.temperatureCelsius))",
+                cpu.loadAverage1Minute.map { "Load \(String(format: "%.2f", $0))" } ?? "Load —"
+            ],
             progress: cpu.usage,
             tone: .purple
         )
@@ -209,9 +212,12 @@ struct SystemStatusComponentView: View {
         return SystemStatusCompactMetricCard(
             title: SystemStatusMetricKind.memory.title,
             percentText: SystemStatusFormatter.percent(memory.usage),
-            detailText: memory.pressure.title,
+            detailLines: [
+                "已用 \(SystemStatusFormatter.bytes(memory.usedBytes))",
+                "总量 \(SystemStatusFormatter.bytes(memory.totalBytes))"
+            ],
             progress: memory.usage,
-            tone: tone(for: memory.pressure)
+            tone: tone(forUsage: memory.usage, normal: .blue)
         )
     }
 
@@ -220,9 +226,12 @@ struct SystemStatusComponentView: View {
         return SystemStatusCompactMetricCard(
             title: SystemStatusMetricKind.disk.title,
             percentText: SystemStatusFormatter.percent(disk.usage),
-            detailText: "余 \(SystemStatusFormatter.bytes(disk.availableBytes))",
+            detailLines: [
+                "已用 \(SystemStatusFormatter.bytes(disk.usedBytes))",
+                "总量 \(SystemStatusFormatter.bytes(disk.totalBytes))"
+            ],
             progress: disk.usage,
-            tone: .teal
+            tone: tone(forUsage: disk.usage, normal: .teal)
         )
     }
 
@@ -231,9 +240,14 @@ struct SystemStatusComponentView: View {
         return SystemStatusCompactMetricCard(
             title: SystemStatusMetricKind.battery.title,
             percentText: battery.isAvailable ? SystemStatusFormatter.percent(battery.level) : "--",
-            detailText: batteryShortText(for: battery),
+            detailLines: [
+                "温度 \(SystemStatusFormatter.temperature(battery.temperatureCelsius))",
+                batteryHealthText(for: battery)
+            ],
             progress: battery.level,
-            tone: tone(for: battery)
+            tone: tone(for: battery),
+            centerSubtext: batteryCircleStatusText(for: battery),
+            centerHelpText: batteryShortText(for: battery)
         )
     }
 
@@ -281,15 +295,19 @@ struct SystemStatusComponentView: View {
         )
     }
 
-    private func tone(for pressure: SystemStatusMemoryPressure) -> SystemStatusMetricTone {
-        switch pressure {
-        case .normal, .unknown:
-            return .blue
-        case .warning:
-            return .orange
-        case .critical:
+    private func tone(forUsage usage: Double?, normal: SystemStatusMetricTone) -> SystemStatusMetricTone {
+        guard let usage else {
+            return normal
+        }
+
+        if usage >= 0.9 {
             return .red
         }
+        if usage >= 0.75 {
+            return .orange
+        }
+
+        return normal
     }
 
     private func tone(for battery: SystemStatusBatterySnapshot) -> SystemStatusMetricTone {
@@ -323,6 +341,27 @@ struct SystemStatusComponentView: View {
         }
 
         return SystemStatusFormatter.timeRemaining(minutes: battery.timeRemainingMinutes)
+    }
+
+    private func batteryHealthText(for battery: SystemStatusBatterySnapshot) -> String {
+        guard let healthPercent = battery.healthPercent else {
+            return "健康度 —"
+        }
+
+        return "健康度 \(healthPercent)%"
+    }
+
+    private func batteryCircleStatusText(for battery: SystemStatusBatterySnapshot) -> String? {
+        guard battery.isAvailable else {
+            return nil
+        }
+
+        switch battery.state {
+        case .charging, .charged, .acPower, .unplugged:
+            return battery.state.title
+        case .unavailable, .unknown:
+            return nil
+        }
     }
 }
 
@@ -358,9 +397,11 @@ private enum SystemStatusMetricTone {
 private struct SystemStatusCompactMetricCard: View {
     let title: String
     let percentText: String
-    let detailText: String
+    let detailLines: [String]
     let progress: Double?
     let tone: SystemStatusMetricTone
+    var centerSubtext: String? = nil
+    var centerHelpText: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -368,31 +409,46 @@ private struct SystemStatusCompactMetricCard: View {
                 SystemStatusCircularProgress(value: progress, tint: tone.color)
                     .frame(width: 58, height: 58)
 
-                VStack(spacing: 1) {
+                VStack(spacing: centerSubtext == nil ? 1 : 0) {
                     Text(title)
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: centerSubtext == nil ? 9 : 8, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
 
                     Text(percentText)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(.system(size: centerSubtext == nil ? 12 : 11, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
+
+                    if let centerSubtext {
+                        Text(centerSubtext)
+                            .font(.system(size: 6.8, weight: .semibold, design: .rounded))
+                            .foregroundStyle(tone.color)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.55)
+                    }
                 }
                 .padding(.horizontal, 5)
+                .help(centerHelpText ?? "")
             }
 
-            Spacer(minLength: 2)
+            Spacer(minLength: 5)
 
-            Text(detailText)
-                .font(.system(size: 8, weight: .medium))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-                .frame(maxWidth: .infinity, alignment: .center)
+            VStack(spacing: 1) {
+                ForEach(Array(detailLines.prefix(2).enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 7.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
+                        .monospacedDigit()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+            .help(detailLines.joined(separator: "\n"))
         }
         .padding(.horizontal, 5)
         .padding(.vertical, 7)

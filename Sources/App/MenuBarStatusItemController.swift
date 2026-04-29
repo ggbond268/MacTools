@@ -21,6 +21,9 @@ enum MenuBarStatusItemInvocation: Equatable {
 
 @MainActor
 final class MenuBarStatusItemController: NSObject {
+    private static let statusIconName = NSImage.Name("MenuBarIcon")
+    private static let statusIconSize = NSSize(width: 18, height: 18)
+
     private let pluginHost: PluginHost
     private let windowRouter: AppWindowRouter
     private let statusItem: NSStatusItem
@@ -85,12 +88,11 @@ final class MenuBarStatusItemController: NSObject {
     }
 
     private func updateStatusIcon() {
-        statusItem.button?.image = NSImage(
-            systemSymbolName: pluginHost.hasActivePlugin
-                ? "sparkles.rectangle.stack.fill"
-                : "sparkles.rectangle.stack",
-            accessibilityDescription: "MacTools"
-        )
+        let image = NSImage(named: Self.statusIconName)
+        image?.size = Self.statusIconSize
+        image?.isTemplate = true
+
+        statusItem.button?.image = image
         statusItem.button?.imagePosition = .imageOnly
     }
 

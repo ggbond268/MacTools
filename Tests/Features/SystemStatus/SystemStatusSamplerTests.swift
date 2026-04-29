@@ -86,6 +86,8 @@ final class SystemStatusSamplerTests: XCTestCase {
         XCTAssertEqual(SystemStatusFormatter.wholePercent(12.34, fractionDigits: 1), "12.3%")
         XCTAssertEqual(SystemStatusFormatter.bytes(1_073_741_824), "1.0 GB")
         XCTAssertEqual(SystemStatusFormatter.speed(1_048_576), "1.0 MB/s")
+        XCTAssertEqual(SystemStatusFormatter.temperature(30.6), "31℃")
+        XCTAssertEqual(SystemStatusFormatter.temperature(nil), "—℃")
         XCTAssertEqual(SystemStatusFormatter.timeRemaining(minutes: 65), "1h 5m")
         XCTAssertEqual(SystemStatusFormatter.timeRemaining(minutes: nil), "估算中")
     }
