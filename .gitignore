@@ -5,6 +5,7 @@ scripts/release.local.env
 build/
 .build/
 .DS_Store
+CLAUDE.local.md
 
 xcuserdata/
 *.xcuserdatad
