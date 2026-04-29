@@ -60,7 +60,8 @@ final class PluginHost: ObservableObject {
                 PhysicalCleanModePlugin()
             ],
             componentPlugins: [
-                SystemStatusPlugin()
+                SystemStatusPlugin(),
+                CalendarPlugin()
             ],
             shortcutStore: ShortcutStore(),
             pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(),
@@ -487,9 +488,9 @@ final class PluginHost: ObservableObject {
                     permissionID: requirement.id,
                     title: "\(plugin.metadata.title) · \(requirement.title)",
                     description: requirement.description,
-                    statusText: state.isGranted ? "已授权" : "未授权",
-                    statusSystemImage: state.isGranted ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
-                    statusTone: state.isGranted ? .positive : .caution,
+                    statusText: state.statusText ?? (state.isGranted ? "已授权" : "未授权"),
+                    statusSystemImage: state.statusSystemImage ?? (state.isGranted ? "checkmark.shield.fill" : "exclamationmark.triangle.fill"),
+                    statusTone: state.statusTone ?? (state.isGranted ? .positive : .caution),
                     footnote: state.footnote,
                     buttonTitle: permissionActionTitle(
                         for: requirement.kind,
@@ -740,6 +741,10 @@ final class PluginHost: ObservableObject {
         switch kind {
         case .accessibility:
             return isGranted ? "检查授权状态" : "前往授权"
+        case .calendarFullAccess:
+            return isGranted ? "检查授权状态" : "请求授权"
+        case .automation:
+            return "打开设置"
         }
     }
 }

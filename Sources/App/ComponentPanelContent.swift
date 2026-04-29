@@ -10,17 +10,19 @@ struct ComponentGridPlacement: Identifiable, Equatable {
 
 enum ComponentPanelLayout {
     static let columns = 4
-    static let cellWidth: CGFloat = 75
-    static let cellHeight: CGFloat = 104
-    static let spacing: CGFloat = 10
-    static let horizontalPadding: CGFloat = 0
+    static let cellWidth: CGFloat = 70
+    static let cellHeight: CGFloat = 94
+    static let horizontalSpacing: CGFloat = 8
+    static let verticalSpacing: CGFloat = 8
+    static let spacing = horizontalSpacing
+    static let horizontalPadding: CGFloat = 10
     static let verticalPadding: CGFloat = 10
     static let emptyContentHeight: CGFloat = 164
     static let maximumPanelHeight: CGFloat = 720
     static let minimumPanelHeight: CGFloat = 220
 
     static var gridWidth: CGFloat {
-        CGFloat(columns) * cellWidth + CGFloat(columns - 1) * spacing
+        CGFloat(columns) * cellWidth + CGFloat(columns - 1) * horizontalSpacing
     }
 
     static var panelWidth: CGFloat {
@@ -32,19 +34,19 @@ enum ComponentPanelLayout {
     }
 
     static func itemWidth(for span: PluginComponentSpan) -> CGFloat {
-        CGFloat(span.width) * cellWidth + CGFloat(span.width - 1) * spacing
+        CGFloat(span.width) * cellWidth + CGFloat(span.width - 1) * horizontalSpacing
     }
 
     static func itemHeight(for span: PluginComponentSpan) -> CGFloat {
-        CGFloat(span.height) * cellHeight + CGFloat(span.height - 1) * spacing
+        CGFloat(span.height) * cellHeight + CGFloat(span.height - 1) * verticalSpacing
     }
 
     static func xOffset(for placement: ComponentGridPlacement) -> CGFloat {
-        CGFloat(placement.column) * (cellWidth + spacing)
+        CGFloat(placement.column) * (cellWidth + horizontalSpacing)
     }
 
     static func yOffset(for placement: ComponentGridPlacement) -> CGFloat {
-        CGFloat(placement.row) * (cellHeight + spacing)
+        CGFloat(placement.row) * (cellHeight + verticalSpacing)
     }
 
     static func gridContentHeight(for placements: [ComponentGridPlacement]) -> CGFloat {
@@ -52,7 +54,7 @@ enum ComponentPanelLayout {
             return emptyContentHeight
         }
 
-        return CGFloat(maximumRow) * cellHeight + CGFloat(max(maximumRow - 1, 0)) * spacing
+        return CGFloat(maximumRow) * cellHeight + CGFloat(max(maximumRow - 1, 0)) * verticalSpacing
     }
 
     static func preferredPanelHeight(for items: [PluginComponentItem], screen: NSScreen?) -> CGFloat {
@@ -261,6 +263,5 @@ private struct ComponentCardContainer: View {
             .clipped()
             .disabled(!item.isEnabled)
             .opacity(item.isEnabled ? 1 : 0.55)
-            .help(item.helpText)
     }
 }

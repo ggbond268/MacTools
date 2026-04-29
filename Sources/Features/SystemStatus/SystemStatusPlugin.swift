@@ -169,7 +169,6 @@ final class SystemStatusViewModel: ObservableObject {
 struct SystemStatusComponentView: View {
     private enum Layout {
         static let spacing: CGFloat = 8
-        static let padding: CGFloat = 10
     }
 
     @StateObject private var viewModel = SystemStatusViewModel()
@@ -188,7 +187,6 @@ struct SystemStatusComponentView: View {
                 topProcessesCard
             }
         }
-        .padding(Layout.padding)
         .onAppear { viewModel.start() }
         .onDisappear { viewModel.stop() }
     }

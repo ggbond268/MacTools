@@ -49,6 +49,8 @@ enum PluginStatusTone {
 
 enum PluginPermissionKind {
     case accessibility
+    case calendarFullAccess
+    case automation
 }
 
 enum SettingsDestination: Hashable {
@@ -296,6 +298,23 @@ struct PluginPermissionRequirement: Identifiable {
 struct PluginPermissionState {
     let isGranted: Bool
     let footnote: String?
+    let statusText: String?
+    let statusSystemImage: String?
+    let statusTone: PluginStatusTone?
+
+    init(
+        isGranted: Bool,
+        footnote: String?,
+        statusText: String? = nil,
+        statusSystemImage: String? = nil,
+        statusTone: PluginStatusTone? = nil
+    ) {
+        self.isGranted = isGranted
+        self.footnote = footnote
+        self.statusText = statusText
+        self.statusSystemImage = statusSystemImage
+        self.statusTone = statusTone
+    }
 }
 
 struct PluginSettingsSection: Identifiable {

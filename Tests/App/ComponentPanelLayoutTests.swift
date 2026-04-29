@@ -6,18 +6,19 @@ import XCTest
 final class ComponentPanelLayoutTests: XCTestCase {
     func testPanelWidthUsesFourFixedColumnsWithinExistingPanelWidth() {
         XCTAssertEqual(ComponentPanelLayout.columns, 4)
-        XCTAssertEqual(ComponentPanelLayout.cellWidth, 75)
-        XCTAssertEqual(ComponentPanelLayout.cellHeight, 104)
-        XCTAssertEqual(ComponentPanelLayout.spacing, 10)
-        XCTAssertEqual(ComponentPanelLayout.horizontalPadding, 0)
+        XCTAssertEqual(ComponentPanelLayout.cellWidth, 70)
+        XCTAssertEqual(ComponentPanelLayout.cellHeight, 94)
+        XCTAssertEqual(ComponentPanelLayout.horizontalSpacing, 8)
+        XCTAssertEqual(ComponentPanelLayout.verticalSpacing, 8)
+        XCTAssertEqual(ComponentPanelLayout.horizontalPadding, 10)
         XCTAssertEqual(ComponentPanelLayout.verticalPadding, 10)
         XCTAssertEqual(
             ComponentPanelLayout.panelWidth,
             ComponentPanelLayout.horizontalPadding * 2
                 + ComponentPanelLayout.cellWidth * 4
-                + ComponentPanelLayout.spacing * 3
+                + ComponentPanelLayout.horizontalSpacing * 3
         )
-        XCTAssertEqual(ComponentPanelLayout.panelWidth, 330)
+        XCTAssertEqual(ComponentPanelLayout.panelWidth, 324)
     }
 
     func testGridUsesDedicatedRowHeightForDenseComponents() {
@@ -25,7 +26,7 @@ final class ComponentPanelLayoutTests: XCTestCase {
         XCTAssertEqual(ComponentPanelLayout.itemHeight(for: .oneByOne), ComponentPanelLayout.cellHeight)
         XCTAssertEqual(
             ComponentPanelLayout.yOffset(for: ComponentGridPlacement(id: "a", row: 1, column: 0, span: .oneByOne)),
-            ComponentPanelLayout.cellHeight + ComponentPanelLayout.spacing
+            ComponentPanelLayout.cellHeight + ComponentPanelLayout.verticalSpacing
         )
     }
 

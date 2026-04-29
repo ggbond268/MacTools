@@ -30,46 +30,70 @@ struct SettingsView: View {
     }
 }
 
+private struct PermissionSettingsRow: View {
+    let card: PluginPermissionCard
+    let statusColor: Color
+    let onAction: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: card.statusSystemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(statusColor)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(card.title)
+                        .font(.system(size: 12, weight: .semibold))
+
+                    Text(card.statusText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(statusColor)
+                }
+
+                Text(card.description)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let footnote = card.footnote {
+                    Text(footnote)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(card.buttonTitle, action: onAction)
+                .buttonStyle(.bordered)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 struct GeneralSettingsView: View {
     @ObservedObject var pluginHost: PluginHost
 
     var body: some View {
         Form {
-            ForEach(pluginHost.permissionCards) { card in
+            if !pluginHost.permissionCards.isEmpty {
                 Section {
-                    LabeledContent("当前状态") {
-                        Label {
-                            Text(card.statusText)
-                        } icon: {
-                            Image(systemName: card.statusSystemImage)
-                                .foregroundStyle(statusColor(for: card.statusTone))
-                        }
-                    }
-
-                    Text(card.description)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if let footnote = card.footnote {
-                        Text(footnote)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    HStack {
-                        Spacer()
-
-                        Button(card.buttonTitle) {
-                            pluginHost.performPermissionAction(
-                                pluginID: card.pluginID,
-                                permissionID: card.permissionID
-                            )
-                        }
-                        .buttonStyle(.borderedProminent)
+                    ForEach(pluginHost.permissionCards) { card in
+                        PermissionSettingsRow(
+                            card: card,
+                            statusColor: statusColor(for: card.statusTone),
+                            onAction: {
+                                pluginHost.performPermissionAction(
+                                    pluginID: card.pluginID,
+                                    permissionID: card.permissionID
+                                )
+                            }
+                        )
                     }
                 } header: {
-                    Text(card.title)
+                    Text("授权")
                 }
             }
 
