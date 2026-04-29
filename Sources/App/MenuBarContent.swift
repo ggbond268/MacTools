@@ -47,12 +47,19 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     var onDismissRequest: ((Activation) -> Void)?
 
     private let dismissDelay: Duration
+    private let activationDelay: Duration?
+    private var activationTask: Task<Void, Never>?
+    private var pendingActivation: Activation?
     private var dismissTask: Task<Void, Never>?
     private var isPanelHovered = false
     private var rowFrames: [Activation: CGRect] = [:]
 
-    init(dismissDelay: Duration = .milliseconds(160)) {
+    init(
+        dismissDelay: Duration = .milliseconds(160),
+        activationDelay: Duration? = .milliseconds(120)
+    ) {
         self.dismissDelay = dismissDelay
+        self.activationDelay = activationDelay
     }
 
     func hoverBegan(
@@ -69,6 +76,31 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
         cancelDismissal()
         isPanelHovered = false
 
+        guard activeActivation != activation else {
+            selectedRowFrame = rowFrames[activation]
+            return
+        }
+
+        cancelPendingActivation()
+
+        guard let activationDelay else {
+            activate(activation)
+            return
+        }
+
+        pendingActivation = activation
+        activationTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: activationDelay)
+            guard !Task.isCancelled else {
+                return
+            }
+
+            self?.activate(activation)
+        }
+    }
+
+    private func activate(_ activation: Activation) {
+        cancelPendingActivation()
         activeActivation = activation
         selectedRowFrame = rowFrames[activation]
     }
@@ -78,13 +110,19 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
         controlID: String,
         optionID: String
     ) {
-        scheduleDismissIfNeeded(
-            expectedActivation: Activation(
-                pluginID: pluginID,
-                controlID: controlID,
-                optionID: optionID
-            )
+        let activation = Activation(
+            pluginID: pluginID,
+            controlID: controlID,
+            optionID: optionID
         )
+
+        if pendingActivation == activation {
+            cancelPendingActivation()
+            scheduleDismissIfNeeded(expectedActivation: activeActivation)
+            return
+        }
+
+        scheduleDismissIfNeeded(expectedActivation: activation)
     }
 
     func setPanelHovered(_ isHovered: Bool) {
@@ -112,6 +150,7 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     }
 
     func dismissImmediately() {
+        cancelPendingActivation()
         dismissInternal(notify: true)
     }
 
@@ -167,6 +206,12 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     private func cancelDismissal() {
         dismissTask?.cancel()
         dismissTask = nil
+    }
+
+    private func cancelPendingActivation() {
+        activationTask?.cancel()
+        activationTask = nil
+        pendingActivation = nil
     }
 }
 
@@ -330,7 +375,10 @@ struct MenuBarContent: View {
         guard
             let activation = hoverCoordinator.activeActivation,
             let panelItem = pluginHost.panelItems.first(where: { $0.id == activation.pluginID }),
-            let panel = panelItem.detail?.secondaryPanel,
+            let panel = panelItem.detail?.secondaryPanel(
+                controlID: activation.controlID,
+                optionID: activation.optionID
+            ),
             let anchorRect = hoverCoordinator.selectedRowFrame
         else {
             secondaryPanelController.hide()
@@ -391,7 +439,10 @@ struct MenuBarContent: View {
         guard
             let activation = hoverCoordinator.activeActivation,
             let panelItem = pluginHost.panelItems.first(where: { $0.id == activation.pluginID }),
-            let panel = panelItem.detail?.secondaryPanel
+            let panel = panelItem.detail?.secondaryPanel(
+                controlID: activation.controlID,
+                optionID: activation.optionID
+            )
         else {
             return nil
         }
@@ -912,17 +963,12 @@ private struct NavigationListRow: View {
             )
         }
         .onDisappear {
+            onHoverChange(false)
             onRowFrameChange(nil)
         }
         .onHover { hovering in
             isHovered = hovering
             onHoverChange(hovering)
-
-            guard hovering, isInteractive else {
-                return
-            }
-
-            action()
         }
     }
 

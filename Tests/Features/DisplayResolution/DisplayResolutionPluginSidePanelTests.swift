@@ -31,7 +31,29 @@ final class DisplayResolutionPluginSidePanelTests: XCTestCase {
         XCTAssertEqual(detail.primaryControls.count, 2)
         XCTAssertEqual(detail.primaryControls[0].kind, .navigationList)
         XCTAssertEqual(detail.primaryControls[1].kind, .actionRow)
+        XCTAssertNil(detail.primaryControls[0].selectedOptionID)
         XCTAssertNil(detail.secondaryPanel)
+    }
+
+    func testExpandedStateCanResolveHoveredDisplayPanelWithoutSelectingDisplay() throws {
+        let plugin = makePlugin()
+        plugin.handlePanelAction(.setDisclosureExpanded(true))
+
+        let detail = try XCTUnwrap(plugin.panelState.detail)
+        let studioPanel = try XCTUnwrap(
+            detail.secondaryPanel(controlID: "display-navigation", optionID: "2")
+        )
+        let lgPanel = try XCTUnwrap(
+            detail.secondaryPanel(controlID: "display-navigation", optionID: "3")
+        )
+
+        XCTAssertNil(detail.primaryControls[0].selectedOptionID)
+        XCTAssertNil(detail.secondaryPanel)
+        XCTAssertEqual(studioPanel.title, "Studio Display")
+        XCTAssertEqual(studioPanel.controls.first?.id, "display.2")
+        XCTAssertEqual(lgPanel.title, "LG UltraFine")
+        XCTAssertEqual(lgPanel.controls.first?.id, "display.3")
+        XCTAssertNil(detail.secondaryPanel(controlID: "display-navigation", optionID: "missing"))
     }
 
     func testSelectingDisplayShowsSecondaryPanel() throws {

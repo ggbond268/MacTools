@@ -272,37 +272,45 @@ final class DisplayResolutionPlugin: FeaturePlugin {
             isEnabled: true
         )
 
-        let secondaryPanel = selectedDisplayID.flatMap { selectedID -> PluginPanelSecondaryPanel? in
-            guard let display = displays.first(where: { $0.display.id == selectedID }) else {
-                return nil
-            }
-
-            let resolutionControl = PluginPanelControl(
-                id: "display.\(selectedID)",
-                kind: .selectList,
-                options: display.modes.map {
-                    PluginPanelControlOption(
-                        id: String($0.modeId),
-                        title: Self.optionTitle(for: $0),
-                        subtitle: nil
-                    )
-                },
-                selectedOptionID: display.modes.first(where: { $0.isCurrent }).map { String($0.modeId) },
-                dateValue: nil,
-                minimumDate: nil,
-                displayedComponents: nil,
-                datePickerStyle: nil,
-                sectionTitle: nil,
-                isEnabled: true
+        let navigationSecondaryPanels = displays.map { display in
+            PluginPanelNavigationSecondaryPanel(
+                controlID: ControlID.displayNavigation,
+                optionID: String(display.display.id),
+                panel: Self.secondaryPanel(for: display)
             )
-
-            return PluginPanelSecondaryPanel(title: display.display.name, controls: [resolutionControl])
+        }
+        let secondaryPanel = selectedDisplayID.flatMap { selectedID in
+            displays.first(where: { $0.display.id == selectedID }).map(Self.secondaryPanel(for:))
         }
 
         return PluginPanelDetail(
             primaryControls: [displayNavigation, openSystemSettings],
-            secondaryPanel: secondaryPanel
+            secondaryPanel: secondaryPanel,
+            navigationSecondaryPanels: navigationSecondaryPanels
         )
+    }
+
+    private static func secondaryPanel(for display: PanelDisplay) -> PluginPanelSecondaryPanel {
+        let resolutionControl = PluginPanelControl(
+            id: "display.\(display.display.id)",
+            kind: .selectList,
+            options: display.modes.map {
+                PluginPanelControlOption(
+                    id: String($0.modeId),
+                    title: Self.optionTitle(for: $0),
+                    subtitle: nil
+                )
+            },
+            selectedOptionID: display.modes.first(where: { $0.isCurrent }).map { String($0.modeId) },
+            dateValue: nil,
+            minimumDate: nil,
+            displayedComponents: nil,
+            datePickerStyle: nil,
+            sectionTitle: nil,
+            isEnabled: true
+        )
+
+        return PluginPanelSecondaryPanel(title: display.display.name, controls: [resolutionControl])
     }
 
     private func handleApplyFailure(

@@ -246,21 +246,43 @@ struct PluginPanelSecondaryPanel {
     let controls: [PluginPanelControl]
 }
 
+struct PluginPanelNavigationSecondaryPanel {
+    let controlID: String
+    let optionID: String
+    let panel: PluginPanelSecondaryPanel
+}
+
 struct PluginPanelDetail {
     let primaryControls: [PluginPanelControl]
     let secondaryPanel: PluginPanelSecondaryPanel?
+    let navigationSecondaryPanels: [PluginPanelNavigationSecondaryPanel]
 
     var controls: [PluginPanelControl] {
         primaryControls
     }
 
-    init(primaryControls: [PluginPanelControl], secondaryPanel: PluginPanelSecondaryPanel?) {
+    init(
+        primaryControls: [PluginPanelControl],
+        secondaryPanel: PluginPanelSecondaryPanel?,
+        navigationSecondaryPanels: [PluginPanelNavigationSecondaryPanel] = []
+    ) {
         self.primaryControls = primaryControls
         self.secondaryPanel = secondaryPanel
+        self.navigationSecondaryPanels = navigationSecondaryPanels
     }
 
     init(controls: [PluginPanelControl]) {
         self.init(primaryControls: controls, secondaryPanel: nil)
+    }
+
+    func secondaryPanel(controlID: String, optionID: String) -> PluginPanelSecondaryPanel? {
+        if navigationSecondaryPanels.isEmpty {
+            return secondaryPanel
+        }
+
+        return navigationSecondaryPanels.first {
+            $0.controlID == controlID && $0.optionID == optionID
+        }?.panel
     }
 }
 

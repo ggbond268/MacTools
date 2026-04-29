@@ -103,7 +103,10 @@ final class MenuBarPanelLayoutTests: XCTestCase {
 @MainActor
 final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
     func testSwitchingActivationClearsPreviousAnchor() {
-        let coordinator = HoverSecondaryPanelCoordinator(dismissDelay: .milliseconds(5))
+        let coordinator = HoverSecondaryPanelCoordinator(
+            dismissDelay: .milliseconds(5),
+            activationDelay: nil
+        )
         let firstActivation = makeActivation(optionID: "2")
         let secondActivation = makeActivation(optionID: "3")
 
@@ -128,7 +131,10 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
     }
 
     func testHoverEndDismissesAfterDelayAndNotifies() async throws {
-        let coordinator = HoverSecondaryPanelCoordinator(dismissDelay: .milliseconds(10))
+        let coordinator = HoverSecondaryPanelCoordinator(
+            dismissDelay: .milliseconds(10),
+            activationDelay: nil
+        )
         var dismissedActivation: HoverSecondaryPanelCoordinator.Activation?
         let activation = makeActivation(optionID: "2")
 
@@ -156,7 +162,10 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
     }
 
     func testPanelHoverCancelsPendingDismissal() async throws {
-        let coordinator = HoverSecondaryPanelCoordinator(dismissDelay: .milliseconds(20))
+        let coordinator = HoverSecondaryPanelCoordinator(
+            dismissDelay: .milliseconds(20),
+            activationDelay: nil
+        )
         var dismissCount = 0
         let activation = makeActivation(optionID: "2")
 
@@ -189,7 +198,10 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
     }
 
     func testHoverBeganUsesCachedFrameForNewActivation() {
-        let coordinator = HoverSecondaryPanelCoordinator(dismissDelay: .milliseconds(5))
+        let coordinator = HoverSecondaryPanelCoordinator(
+            dismissDelay: .milliseconds(5),
+            activationDelay: nil
+        )
         let activation = makeActivation(optionID: "3")
         let frame = CGRect(x: 30, y: 40, width: 120, height: 48)
 
@@ -205,7 +217,10 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
     }
 
     func testInactiveRowFrameClearDoesNotOverrideCurrentAnchor() {
-        let coordinator = HoverSecondaryPanelCoordinator(dismissDelay: .milliseconds(5))
+        let coordinator = HoverSecondaryPanelCoordinator(
+            dismissDelay: .milliseconds(5),
+            activationDelay: nil
+        )
         let firstActivation = makeActivation(optionID: "2")
         let secondActivation = makeActivation(optionID: "3")
         let secondFrame = CGRect(x: 80, y: 60, width: 160, height: 48)
@@ -230,6 +245,54 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.activeActivation, secondActivation)
         XCTAssertEqual(coordinator.selectedRowFrame, secondFrame)
+    }
+
+    func testTransientHoverEndsBeforeActivationDelayDoesNotOpenOrNotify() async throws {
+        let coordinator = HoverSecondaryPanelCoordinator(
+            dismissDelay: .milliseconds(5),
+            activationDelay: .milliseconds(40)
+        )
+        let activation = makeActivation(optionID: "2")
+        var dismissCount = 0
+        coordinator.onDismissRequest = { _ in dismissCount += 1 }
+
+        coordinator.hoverBegan(
+            pluginID: activation.pluginID,
+            controlID: activation.controlID,
+            optionID: activation.optionID
+        )
+        coordinator.hoverEnded(
+            pluginID: activation.pluginID,
+            controlID: activation.controlID,
+            optionID: activation.optionID
+        )
+
+        try await Task.sleep(for: .milliseconds(80))
+
+        XCTAssertNil(coordinator.activeActivation)
+        XCTAssertNil(coordinator.selectedRowFrame)
+        XCTAssertEqual(dismissCount, 0)
+    }
+
+    func testSustainedHoverActivatesAfterDelay() async throws {
+        let coordinator = HoverSecondaryPanelCoordinator(
+            dismissDelay: .milliseconds(5),
+            activationDelay: .milliseconds(10)
+        )
+        let activation = makeActivation(optionID: "2")
+        let frame = CGRect(x: 10, y: 20, width: 30, height: 40)
+
+        coordinator.updateRowFrame(frame, for: activation)
+        coordinator.hoverBegan(
+            pluginID: activation.pluginID,
+            controlID: activation.controlID,
+            optionID: activation.optionID
+        )
+
+        try await Task.sleep(for: .milliseconds(40))
+
+        XCTAssertEqual(coordinator.activeActivation, activation)
+        XCTAssertEqual(coordinator.selectedRowFrame, frame)
     }
 
     private func makeActivation(optionID: String) -> HoverSecondaryPanelCoordinator.Activation {
