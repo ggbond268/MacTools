@@ -69,6 +69,17 @@ final class CalendarEventService: CalendarEventServicing {
     }
 
     func openSystemCalendar(at date: Date) {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            _ = await requestAccess()
+            openSystemCalendarAfterAccessCheck(at: date)
+        }
+    }
+
+    private func openSystemCalendarAfterAccessCheck(at date: Date) {
         let script = Self.openingScript(for: date)
         var error: NSDictionary?
         NSAppleScript(source: script)?.executeAndReturnError(&error)

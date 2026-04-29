@@ -21,7 +21,11 @@ final class CalendarPlugin: ComponentPlugin {
         span: PluginComponentSpan(width: 4, height: 3)!
     )
 
-    private let eventService = CalendarEventService()
+    private let eventService: CalendarEventServicing
+
+    init(eventService: CalendarEventServicing = CalendarEventService()) {
+        self.eventService = eventService
+    }
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -110,20 +114,17 @@ final class CalendarPlugin: ComponentPlugin {
     }
 
     private func handleCalendarEventsPermissionAction() {
-        switch eventService.authorization {
-        case .fullAccess:
-            onStateChange?()
-        case .notDetermined:
-            Task { @MainActor [weak self] in
-                guard let self else {
-                    return
-                }
-
-                _ = await eventService.requestAccess()
-                onStateChange?()
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
             }
-        case .denied:
-            openPrivacyPane(anchor: "Privacy_Calendars")
+
+            let authorization = await eventService.requestAccess()
+            if case .denied = authorization {
+                openPrivacyPane(anchor: "Privacy_Calendars")
+            }
+
+            onStateChange?()
         }
     }
 

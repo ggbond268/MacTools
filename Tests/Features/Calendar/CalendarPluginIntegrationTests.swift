@@ -28,4 +28,45 @@ final class CalendarPluginIntegrationTests: XCTestCase {
         XCTAssertEqual(host.componentItems.first?.span.height, 3)
         XCTAssertEqual(host.permissionCards.map(\.permissionID), ["calendar-events", "calendar-automation"])
     }
+
+    func testCalendarPermissionActionRequestsEventAccess() async {
+        let service = MockCalendarPermissionService(
+            authorization: .notDetermined,
+            requestResult: .fullAccess
+        )
+        let plugin = CalendarPlugin(eventService: service)
+        let stateChanged = expectation(description: "calendar permission state changed")
+        plugin.onStateChange = {
+            stateChanged.fulfill()
+        }
+
+        plugin.handlePermissionAction(id: "calendar-events")
+
+        await fulfillment(of: [stateChanged], timeout: 1)
+        XCTAssertEqual(service.requestAccessCallCount, 1)
+    }
+}
+
+@MainActor
+private final class MockCalendarPermissionService: CalendarEventServicing {
+    var authorization: CalendarEventAuthorization
+    private let requestResult: CalendarEventAuthorization
+    private(set) var requestAccessCallCount = 0
+
+    init(authorization: CalendarEventAuthorization, requestResult: CalendarEventAuthorization) {
+        self.authorization = authorization
+        self.requestResult = requestResult
+    }
+
+    func requestAccess() async -> CalendarEventAuthorization {
+        requestAccessCallCount += 1
+        authorization = requestResult
+        return requestResult
+    }
+
+    func events(from startDate: Date, to endDate: Date) async throws -> [CalendarEventInput] {
+        []
+    }
+
+    func openSystemCalendar(at date: Date) {}
 }

@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>点击日历日期时需要控制系统日历应用并定位到对应日期。</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>读取系统日历事件，用于在右键日历组件中显示当天日程。</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>读取系统日历事件，用于在右键日历组件中显示当天日程。</string>
 	<key>SUAllowsAutomaticUpdates</key>
