@@ -40,12 +40,27 @@ final class CalendarEventService: CalendarEventServicing {
         }
 
         do {
-            _ = try await eventStore.requestFullAccessToEvents()
+            _ = try await requestFullAccessToEvents()
             eventStore = EKEventStore()
             return authorization
         } catch {
             eventStore = EKEventStore()
             return .denied(error.localizedDescription)
+        }
+    }
+
+    private func requestFullAccessToEvents() async throws -> Bool {
+        let eventStore = eventStore
+
+        return try await withCheckedThrowingContinuation { continuation in
+            eventStore.requestFullAccessToEvents { granted, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                continuation.resume(returning: granted)
+            }
         }
     }
 
