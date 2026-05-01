@@ -17,6 +17,17 @@ final class SystemStatusSamplerTests: XCTestCase {
         XCTAssertNil(SystemStatusCPUUsageCalculator.usage(current: ticks, previous: ticks))
     }
 
+    func testPowerNormalizerConvertsSystemPowerInMilliwatts() throws {
+        let watts = try XCTUnwrap(SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: 29_813))
+
+        XCTAssertEqual(watts, 29.813, accuracy: 0.0001)
+    }
+
+    func testPowerNormalizerRejectsUnreasonableSystemPower() {
+        XCTAssertNil(SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: -1))
+        XCTAssertNil(SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: 1_000_000))
+    }
+
     func testNetworkRateCalculatorClampsNegativeDeltas() {
         let previous = SystemStatusNetworkCounter(
             key: "en0",
@@ -88,6 +99,9 @@ final class SystemStatusSamplerTests: XCTestCase {
         XCTAssertEqual(SystemStatusFormatter.speed(1_048_576), "1.0 MB/s")
         XCTAssertEqual(SystemStatusFormatter.temperature(30.6), "31℃")
         XCTAssertEqual(SystemStatusFormatter.temperature(nil), "—℃")
+        XCTAssertEqual(SystemStatusFormatter.power(7.26), "7.3W")
+        XCTAssertEqual(SystemStatusFormatter.power(29.813), "30W")
+        XCTAssertEqual(SystemStatusFormatter.power(nil), "—W")
         XCTAssertEqual(SystemStatusFormatter.timeRemaining(minutes: 65), "1h 5m")
         XCTAssertEqual(SystemStatusFormatter.timeRemaining(minutes: nil), "估算中")
     }

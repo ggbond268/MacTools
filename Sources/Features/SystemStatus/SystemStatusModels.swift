@@ -86,14 +86,14 @@ struct SystemStatusSlowSample: Equatable, Sendable {
 
 struct SystemStatusCPUSnapshot: Equatable, Sendable {
     let usage: Double?
-    let loadAverage1Minute: Double?
     let temperatureCelsius: Double?
+    let systemPowerWatts: Double?
     let isCollecting: Bool
 
     static let empty = SystemStatusCPUSnapshot(
         usage: nil,
-        loadAverage1Minute: nil,
         temperatureCelsius: nil,
+        systemPowerWatts: nil,
         isCollecting: true
     )
 }
@@ -260,6 +260,16 @@ enum SystemStatusCPUUsageCalculator {
     }
 }
 
+enum SystemStatusPowerNormalizer {
+    static func systemPowerWatts(fromMilliwatts milliwatts: Double) -> Double? {
+        guard milliwatts >= 0, milliwatts < 1_000_000 else {
+            return nil
+        }
+
+        return milliwatts / 1_000
+    }
+}
+
 struct SystemStatusNetworkCounter: Equatable, Sendable {
     let key: String
     let displayName: String
@@ -337,6 +347,15 @@ enum SystemStatusFormatter {
         }
 
         return "\(format(celsius, fractionDigits: 0))℃"
+    }
+
+    static func power(_ watts: Double?) -> String {
+        guard let watts else {
+            return "—W"
+        }
+
+        let fractionDigits = watts < 10 ? 1 : 0
+        return "\(format(watts, fractionDigits: fractionDigits))W"
     }
 
     static func timeRemaining(minutes: Int?) -> String {

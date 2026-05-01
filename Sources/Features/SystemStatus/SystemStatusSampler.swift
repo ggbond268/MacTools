@@ -37,11 +37,12 @@ actor SystemStatusSampler {
 
     private func collectCPU(referenceDate: Date) -> SystemStatusCPUSnapshot {
         let temperature = collectCPUTemperature(referenceDate: referenceDate)
+        let systemPowerWatts = Self.collectSystemPowerWatts()
         guard let currentTicks = Self.readCPUTicks() else {
             return SystemStatusCPUSnapshot(
                 usage: nil,
-                loadAverage1Minute: Self.readLoadAverage1Minute(),
                 temperatureCelsius: temperature,
+                systemPowerWatts: systemPowerWatts,
                 isCollecting: false
             )
         }
@@ -53,8 +54,8 @@ actor SystemStatusSampler {
 
         return SystemStatusCPUSnapshot(
             usage: usage,
-            loadAverage1Minute: Self.readLoadAverage1Minute(),
             temperatureCelsius: temperature,
+            systemPowerWatts: systemPowerWatts,
             isCollecting: usage == nil
         )
     }
@@ -141,15 +142,29 @@ actor SystemStatusSampler {
         UInt64(value)
     }
 
-    private static func readLoadAverage1Minute() -> Double? {
-        var loads = [Double](repeating: 0, count: 3)
-        return loads.withUnsafeMutableBufferPointer { buffer in
-            guard getloadavg(buffer.baseAddress, Int32(buffer.count)) > 0 else {
-                return nil
-            }
-
-            return buffer[0]
+    private static func collectSystemPowerWatts() -> Double? {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        guard service != 0 else {
+            return nil
         }
+        defer { IOObjectRelease(service) }
+
+        if
+            let telemetry = registryDictionaryValue(service: service, key: "PowerTelemetryData"),
+            let milliwatts = dictionaryNumberValue(telemetry, key: "SystemPowerIn"),
+            let watts = SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: milliwatts)
+        {
+            return watts
+        }
+
+        if
+            let milliwatts = registryNumberValue(service: service, key: "SystemPowerIn"),
+            let watts = SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: milliwatts)
+        {
+            return watts
+        }
+
+        return nil
     }
 
     private static func collectCPUTemperature(smcReader: SystemStatusSMCReader?) -> Double? {
@@ -455,6 +470,39 @@ actor SystemStatusSampler {
         }
         if let numberValue = rawValue as? NSNumber {
             return numberValue.intValue
+        }
+        return nil
+    }
+
+    private static func registryNumberValue(service: io_registry_entry_t, key: String) -> Double? {
+        guard let rawValue = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() else {
+            return nil
+        }
+
+        return numberValue(rawValue)
+    }
+
+    private static func registryDictionaryValue(service: io_registry_entry_t, key: String) -> NSDictionary? {
+        guard let rawValue = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() else {
+            return nil
+        }
+
+        return rawValue as? NSDictionary
+    }
+
+    private static func dictionaryNumberValue(_ dictionary: NSDictionary, key: String) -> Double? {
+        numberValue(dictionary[key])
+    }
+
+    private static func numberValue(_ rawValue: Any?) -> Double? {
+        if let intValue = rawValue as? Int {
+            return Double(intValue)
+        }
+        if let doubleValue = rawValue as? Double {
+            return doubleValue
+        }
+        if let numberValue = rawValue as? NSNumber {
+            return numberValue.doubleValue
         }
         return nil
     }

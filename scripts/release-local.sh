@@ -7,6 +7,7 @@ SCRIPT_DIR="$ROOT_DIR/scripts"
 PROJECT_SPEC="$ROOT_DIR/project.yml"
 PROJECT_FILE="$ROOT_DIR/MacTools.xcodeproj"
 APP_NAME="MacTools"
+APP_ENTITLEMENTS="$ROOT_DIR/Configs/MacTools.entitlements"
 SCHEME="MacTools"
 CONFIG_FILE="${RELEASE_CONFIG_FILE:-$SCRIPT_DIR/release.local.env}"
 DEFAULT_GITHUB_REPOSITORY="ggbond268/MacTools"
@@ -309,6 +310,20 @@ function sign_path_preserving_entitlements() {
     "$path"
 }
 
+function sign_app_path() {
+  local path="$1"
+
+  [[ -f "$APP_ENTITLEMENTS" ]] || fail "未找到 app entitlements：$APP_ENTITLEMENTS"
+
+  /usr/bin/codesign \
+    --force \
+    --sign "$DEVELOPER_ID_APPLICATION" \
+    --options runtime \
+    --timestamp \
+    --entitlements "$APP_ENTITLEMENTS" \
+    "$path"
+}
+
 function is_inside_sparkle_framework() {
   local path="$1"
   [[ "$path" == *"/Sparkle.framework" || "$path" == *"/Sparkle.framework/"* ]]
@@ -377,7 +392,7 @@ function sign_app_bundle() {
     sign_sparkle_framework "$app_path"
   fi
 
-  sign_path "$app_path"
+  sign_app_path "$app_path"
   /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
 }
 

@@ -198,7 +198,7 @@ struct SystemStatusComponentView: View {
             percentText: cpu.isCollecting ? "--" : SystemStatusFormatter.percent(cpu.usage),
             detailLines: [
                 "温度 \(SystemStatusFormatter.temperature(cpu.temperatureCelsius))",
-                cpu.loadAverage1Minute.map { "Load \(String(format: "%.2f", $0))" } ?? "Load —"
+                "功率 \(SystemStatusFormatter.power(cpu.systemPowerWatts))"
             ],
             progress: cpu.usage,
             tone: .purple
