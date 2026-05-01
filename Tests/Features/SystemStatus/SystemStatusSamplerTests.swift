@@ -17,15 +17,44 @@ final class SystemStatusSamplerTests: XCTestCase {
         XCTAssertNil(SystemStatusCPUUsageCalculator.usage(current: ticks, previous: ticks))
     }
 
-    func testPowerNormalizerConvertsSystemPowerInMilliwatts() throws {
-        let watts = try XCTUnwrap(SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: 29_813))
+    func testPowerNormalizerConvertsTelemetryMilliwatts() throws {
+        let watts = try XCTUnwrap(SystemStatusPowerNormalizer.telemetryWatts(fromMilliwatts: 29_813))
+        let chargingWatts = try XCTUnwrap(SystemStatusPowerNormalizer.telemetryWatts(fromMilliwatts: -20_629))
 
         XCTAssertEqual(watts, 29.813, accuracy: 0.0001)
+        XCTAssertEqual(chargingWatts, 20.629, accuracy: 0.0001)
     }
 
-    func testPowerNormalizerRejectsUnreasonableSystemPower() {
-        XCTAssertNil(SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: -1))
-        XCTAssertNil(SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: 1_000_000))
+    func testPowerNormalizerRejectsUnreasonableTelemetryPower() {
+        XCTAssertNil(SystemStatusPowerNormalizer.telemetryWatts(fromMilliwatts: 0))
+        XCTAssertNil(SystemStatusPowerNormalizer.telemetryWatts(fromMilliwatts: 1_000_000))
+    }
+
+    func testPowerNormalizerConvertsIOReportEnergyUnits() throws {
+        XCTAssertEqual(try XCTUnwrap(SystemStatusPowerNormalizer.energyJoules(from: 12_345, unit: "mJ")), 12.345, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(SystemStatusPowerNormalizer.energyJoules(from: 12_345_000, unit: "uJ")), 12.345, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(SystemStatusPowerNormalizer.energyJoules(from: 12_345_000_000, unit: "nJ")), 12.345, accuracy: 0.0001)
+        XCTAssertNil(SystemStatusPowerNormalizer.energyJoules(from: 12_345, unit: "J"))
+    }
+
+    func testPowerCalculatorUsesEnergyDeltaOverElapsedTime() throws {
+        let previous = SystemStatusPowerEnergySample(joules: 100, date: Date(timeIntervalSince1970: 1_000))
+        let current = SystemStatusPowerEnergySample(joules: 105, date: Date(timeIntervalSince1970: 1_002))
+
+        let watts = try XCTUnwrap(SystemStatusPowerCalculator.watts(current: current, previous: previous))
+
+        XCTAssertEqual(watts, 2.5, accuracy: 0.0001)
+    }
+
+    func testPowerCalculatorRejectsInvalidSamples() {
+        let previous = SystemStatusPowerEnergySample(joules: 100, date: Date(timeIntervalSince1970: 1_000))
+        let sameTime = SystemStatusPowerEnergySample(joules: 105, date: Date(timeIntervalSince1970: 1_000))
+        let lowerEnergy = SystemStatusPowerEnergySample(joules: 99, date: Date(timeIntervalSince1970: 1_002))
+        let unreasonable = SystemStatusPowerEnergySample(joules: 2_500, date: Date(timeIntervalSince1970: 1_001))
+
+        XCTAssertNil(SystemStatusPowerCalculator.watts(current: sameTime, previous: previous))
+        XCTAssertNil(SystemStatusPowerCalculator.watts(current: lowerEnergy, previous: previous))
+        XCTAssertNil(SystemStatusPowerCalculator.watts(current: unreasonable, previous: previous))
     }
 
     func testNetworkRateCalculatorClampsNegativeDeltas() {

@@ -261,12 +261,45 @@ enum SystemStatusCPUUsageCalculator {
 }
 
 enum SystemStatusPowerNormalizer {
-    static func systemPowerWatts(fromMilliwatts milliwatts: Double) -> Double? {
-        guard milliwatts >= 0, milliwatts < 1_000_000 else {
+    static func telemetryWatts(fromMilliwatts milliwatts: Double) -> Double? {
+        let absoluteMilliwatts = abs(milliwatts)
+        guard absoluteMilliwatts > 0, absoluteMilliwatts < 1_000_000 else {
             return nil
         }
 
-        return milliwatts / 1_000
+        return absoluteMilliwatts / 1_000
+    }
+
+    static func energyJoules(from value: Double, unit: String) -> Double? {
+        switch unit {
+        case "mJ":
+            return value / 1_000
+        case "uJ":
+            return value / 1_000_000
+        case "nJ":
+            return value / 1_000_000_000
+        default:
+            return nil
+        }
+    }
+}
+
+struct SystemStatusPowerCalculator {
+    static func watts(
+        current: SystemStatusPowerEnergySample,
+        previous: SystemStatusPowerEnergySample
+    ) -> Double? {
+        let elapsedSeconds = current.date.timeIntervalSince(previous.date)
+        guard elapsedSeconds > 0, current.joules >= previous.joules else {
+            return nil
+        }
+
+        let watts = (current.joules - previous.joules) / elapsedSeconds
+        guard watts >= 0, watts < 1_000 else {
+            return nil
+        }
+
+        return watts
     }
 }
 

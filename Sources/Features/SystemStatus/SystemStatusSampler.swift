@@ -6,17 +6,20 @@ import SystemConfiguration
 
 actor SystemStatusSampler {
     private var previousCPUTicks: SystemStatusCPUTicks?
+    private var previousCPUPowerEnergy: SystemStatusPowerEnergySample?
     private var cachedCPUTemperature: Double?
     private var lastCPUTemperatureDate: Date?
     private lazy var smcReader = SystemStatusSMCReader()
+    private lazy var cpuPowerReader = SystemStatusCPUPowerReader()
     private var previousNetworkCounter: SystemStatusNetworkCounter?
     private var previousNetworkDate: Date?
 
-    func collectFast(referenceDate: Date) -> SystemStatusFastSample {
-        SystemStatusFastSample(
-            cpu: collectCPU(referenceDate: referenceDate),
+    func collectFast(referenceDate: Date) async -> SystemStatusFastSample {
+        let cpu = await collectCPU(referenceDate: referenceDate)
+        return SystemStatusFastSample(
+            cpu: cpu,
             memory: Self.collectMemory(),
-            network: collectNetwork(referenceDate: referenceDate)
+            network: collectNetwork(referenceDate: Date())
         )
     }
 
@@ -35,14 +38,27 @@ actor SystemStatusSampler {
         await Self.collectPublicIPAddress()
     }
 
-    private func collectCPU(referenceDate: Date) -> SystemStatusCPUSnapshot {
+    private func collectCPU(referenceDate: Date) async -> SystemStatusCPUSnapshot {
         let temperature = collectCPUTemperature(referenceDate: referenceDate)
-        let systemPowerWatts = Self.collectSystemPowerWatts()
-        guard let currentTicks = Self.readCPUTicks() else {
+        var currentDate = referenceDate
+        var currentTicks = Self.readCPUTicks()
+        var currentPowerEnergy = cpuPowerReader.readCPUEnergySample(referenceDate: currentDate)
+
+        if previousCPUTicks == nil, let initialTicks = currentTicks {
+            let initialPowerEnergy = currentPowerEnergy
+            try? await Task.sleep(for: .milliseconds(200))
+            currentDate = Date()
+            currentTicks = Self.readCPUTicks()
+            currentPowerEnergy = cpuPowerReader.readCPUEnergySample(referenceDate: currentDate)
+            previousCPUTicks = initialTicks
+            previousCPUPowerEnergy = initialPowerEnergy
+        }
+
+        guard let currentTicks else {
             return SystemStatusCPUSnapshot(
                 usage: nil,
                 temperatureCelsius: temperature,
-                systemPowerWatts: systemPowerWatts,
+                systemPowerWatts: collectPowerWatts(currentPowerEnergy: currentPowerEnergy),
                 isCollecting: false
             )
         }
@@ -55,9 +71,20 @@ actor SystemStatusSampler {
         return SystemStatusCPUSnapshot(
             usage: usage,
             temperatureCelsius: temperature,
-            systemPowerWatts: systemPowerWatts,
+            systemPowerWatts: collectPowerWatts(currentPowerEnergy: currentPowerEnergy),
             isCollecting: usage == nil
         )
+    }
+
+    private func collectPowerWatts(currentPowerEnergy: SystemStatusPowerEnergySample?) -> Double? {
+        let cpuPowerWatts = currentPowerEnergy.flatMap { currentPowerEnergy in
+            defer { previousCPUPowerEnergy = currentPowerEnergy }
+            return previousCPUPowerEnergy.flatMap { previousPowerEnergy in
+                SystemStatusPowerCalculator.watts(current: currentPowerEnergy, previous: previousPowerEnergy)
+            }
+        }
+
+        return cpuPowerWatts ?? Self.collectBatteryTelemetryPowerWatts()
     }
 
     private func collectCPUTemperature(referenceDate: Date) -> Double? {
@@ -75,13 +102,13 @@ actor SystemStatusSampler {
         guard let currentCounter = Self.currentNetworkCounter() else {
             previousNetworkCounter = nil
             previousNetworkDate = referenceDate
-        return SystemStatusNetworkSnapshot(
-            interfaceName: nil,
-            ipAddress: nil,
-            publicIPAddress: nil,
-            downloadBytesPerSecond: nil,
-            uploadBytesPerSecond: nil,
-            isConnected: false,
+            return SystemStatusNetworkSnapshot(
+                interfaceName: nil,
+                ipAddress: nil,
+                publicIPAddress: nil,
+                downloadBytesPerSecond: nil,
+                uploadBytesPerSecond: nil,
+                isConnected: false,
                 isCollecting: false
             )
         }
@@ -142,26 +169,31 @@ actor SystemStatusSampler {
         UInt64(value)
     }
 
-    private static func collectSystemPowerWatts() -> Double? {
+    private static func collectBatteryTelemetryPowerWatts() -> Double? {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard service != 0 else {
             return nil
         }
         defer { IOObjectRelease(service) }
 
-        if
-            let telemetry = registryDictionaryValue(service: service, key: "PowerTelemetryData"),
-            let milliwatts = dictionaryNumberValue(telemetry, key: "SystemPowerIn"),
-            let watts = SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: milliwatts)
-        {
-            return watts
+        if let telemetry = registryDictionaryValue(service: service, key: "PowerTelemetryData") {
+            for key in ["SystemPowerIn", "SystemLoad", "BatteryPower"] {
+                if
+                    let milliwatts = dictionaryNumberValue(telemetry, key: key),
+                    let watts = SystemStatusPowerNormalizer.telemetryWatts(fromMilliwatts: milliwatts)
+                {
+                    return watts
+                }
+            }
         }
 
-        if
-            let milliwatts = registryNumberValue(service: service, key: "SystemPowerIn"),
-            let watts = SystemStatusPowerNormalizer.systemPowerWatts(fromMilliwatts: milliwatts)
-        {
-            return watts
+        for key in ["SystemPowerIn", "SystemLoad", "BatteryPower"] {
+            if
+                let milliwatts = registryNumberValue(service: service, key: key),
+                let watts = SystemStatusPowerNormalizer.telemetryWatts(fromMilliwatts: milliwatts)
+            {
+                return watts
+            }
         }
 
         return nil
@@ -503,6 +535,9 @@ actor SystemStatusSampler {
         }
         if let numberValue = rawValue as? NSNumber {
             return numberValue.doubleValue
+        }
+        if let stringValue = rawValue as? String {
+            return Double(stringValue)
         }
         return nil
     }
