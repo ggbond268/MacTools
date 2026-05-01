@@ -52,3 +52,4 @@ xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -de
 ```
 
 贡献、测试和发布流程请参考 [CONTRIBUTING.md](CONTRIBUTING.md)。
+GitHub Actions 自动构建与发布配置请参考 [docs/github-actions.md](docs/github-actions.md)。

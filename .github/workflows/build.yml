@@ -1,0 +1,100 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_NAME: MacTools
+  SCHEME: MacTools
+  DERIVED_DATA: build/DerivedData
+  CI_BUNDLE_IDENTIFIER_PREFIX: dev.mactools.ci
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+
+      - name: Write CI local config
+        run: |
+          cat > LocalConfig.xcconfig <<EOF
+          DEVELOPMENT_TEAM =
+          BUNDLE_IDENTIFIER_PREFIX = ${CI_BUNDLE_IDENTIFIER_PREFIX}
+          EOF
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build and run tests
+        run: |
+          xcodebuild \
+            -project "${PROJECT_NAME}.xcodeproj" \
+            -scheme "${SCHEME}" \
+            -configuration Debug \
+            -destination "platform=macOS" \
+            -derivedDataPath "${DERIVED_DATA}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            test \
+            -quiet
+
+      - name: Build unsigned Release app
+        if: github.event_name != 'pull_request'
+        run: |
+          xcodebuild \
+            -project "${PROJECT_NAME}.xcodeproj" \
+            -scheme "${SCHEME}" \
+            -configuration Release \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath "${DERIVED_DATA}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            build \
+            -quiet
+
+      - name: Package unsigned app artifact
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p build/artifacts
+          ditto \
+            -c \
+            -k \
+            --sequesterRsrc \
+            --keepParent \
+            "${DERIVED_DATA}/Build/Products/Release/${PROJECT_NAME}.app" \
+            "build/artifacts/${PROJECT_NAME}-unsigned-${GITHUB_SHA}.zip"
+
+      - name: Upload unsigned app artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacTools-unsigned-${{ github.sha }}
+          path: build/artifacts/*.zip
+          if-no-files-found: error
+          retention-days: 7

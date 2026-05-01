@@ -1,0 +1,414 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, for example v0.9.2 or v0.9.2-beta.1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  PROJECT_NAME: MacTools
+  SCHEME: MacTools
+  DERIVED_DATA: build/DerivedData
+  ARTIFACT_DIR: build/release
+
+jobs:
+  release:
+    name: Build, sign, notarize, and release
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set release metadata
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must look like v1.2.3 or v1.2.3-beta.1" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          PRERELEASE="false"
+          if [[ "$VERSION" == *"-"* || "$VERSION" == *"beta"* || "$VERSION" == *"alpha"* || "$VERSION" == *"rc"* ]]; then
+            PRERELEASE="true"
+          fi
+
+          {
+            echo "TAG=$TAG"
+            echo "VERSION=$VERSION"
+            echo "BUILD_NUMBER=$BUILD_NUMBER"
+            echo "PRERELEASE=$PRERELEASE"
+            echo "DMG_PATH=${ARTIFACT_DIR}/${TAG}/${PROJECT_NAME}.dmg"
+            echo "SHA256_PATH=${ARTIFACT_DIR}/${TAG}/${PROJECT_NAME}.sha256"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate required secrets
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+          BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
+          DEVELOPER_ID_CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          missing=0
+          for name in \
+            APPLE_DEVELOPMENT_TEAM \
+            BUNDLE_IDENTIFIER_PREFIX \
+            DEVELOPER_ID_CERT_P12 \
+            DEVELOPER_ID_CERT_PASSWORD \
+            ASC_API_KEY_P8_BASE64 \
+            ASC_API_KEY_ID \
+            ASC_API_ISSUER_ID \
+            SPARKLE_PRIVATE_KEY; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing required secret: $name" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+
+      - name: Write release local config
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+          BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
+        run: |
+          umask 077
+          cat > LocalConfig.xcconfig <<EOF
+          DEVELOPMENT_TEAM = ${APPLE_DEVELOPMENT_TEAM}
+          BUNDLE_IDENTIFIER_PREFIX = ${BUNDLE_IDENTIFIER_PREFIX}
+          EOF
+
+      - name: Import Developer ID certificate
+        env:
+          DEVELOPER_ID_CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/developer-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+
+          echo "$DEVELOPER_ID_CERT_P12" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$DEVELOPER_ID_CERT_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F'"' '/Developer ID Application/ { print $2; exit }')"
+          if [[ -z "$SIGNING_IDENTITY" ]]; then
+            echo "Developer ID Application identity was not found in imported certificate." >&2
+            exit 1
+          fi
+
+          rm -f "$CERT_PATH"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned Release app
+        run: |
+          xcodebuild \
+            -project "${PROJECT_NAME}.xcodeproj" \
+            -scheme "${SCHEME}" \
+            -configuration Release \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath "${DERIVED_DATA}" \
+            MARKETING_VERSION="${VERSION}" \
+            CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            build \
+            -quiet
+
+      - name: Sign app bundle
+        run: |
+          APP_PATH="${DERIVED_DATA}/Build/Products/Release/${PROJECT_NAME}.app"
+          ENTITLEMENTS="Configs/MacTools.entitlements"
+          SPARKLE_FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+          SPARKLE_CURRENT="$SPARKLE_FRAMEWORK/Versions/Current"
+
+          sign_path() {
+            /usr/bin/codesign \
+              --force \
+              --sign "$SIGNING_IDENTITY" \
+              --keychain "$KEYCHAIN_PATH" \
+              --options runtime \
+              --timestamp \
+              "$1"
+          }
+
+          sign_path_preserving_entitlements() {
+            /usr/bin/codesign \
+              --force \
+              --sign "$SIGNING_IDENTITY" \
+              --keychain "$KEYCHAIN_PATH" \
+              --options runtime \
+              --timestamp \
+              --preserve-metadata=entitlements \
+              "$1"
+          }
+
+          if [[ -d "$SPARKLE_FRAMEWORK" ]]; then
+            if [[ -d "$SPARKLE_CURRENT/XPCServices/Installer.xpc" ]]; then
+              sign_path "$SPARKLE_CURRENT/XPCServices/Installer.xpc"
+            fi
+            if [[ -d "$SPARKLE_CURRENT/XPCServices/Downloader.xpc" ]]; then
+              sign_path_preserving_entitlements "$SPARKLE_CURRENT/XPCServices/Downloader.xpc"
+            fi
+            if [[ -f "$SPARKLE_CURRENT/Autoupdate" ]]; then
+              sign_path "$SPARKLE_CURRENT/Autoupdate"
+            fi
+            if [[ -d "$SPARKLE_CURRENT/Updater.app" ]]; then
+              sign_path "$SPARKLE_CURRENT/Updater.app"
+            fi
+          fi
+
+          while IFS= read -r binary; do
+            [[ -n "$binary" ]] || continue
+            sign_path "$binary"
+          done < <(find "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -print)
+
+          while IFS= read -r bundle; do
+            [[ -n "$bundle" ]] || continue
+            if [[ "$bundle" == *"/Sparkle.framework" || "$bundle" == *"/Sparkle.framework/"* ]]; then
+              continue
+            fi
+            sign_path "$bundle"
+          done < <(find "$APP_PATH/Contents" -depth -type d \( -name "*.framework" -o -name "*.app" -o -name "*.xpc" -o -name "*.appex" \) -print)
+
+          if [[ -d "$SPARKLE_FRAMEWORK" ]]; then
+            sign_path "$SPARKLE_FRAMEWORK"
+          fi
+
+          /usr/bin/codesign \
+            --force \
+            --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --options runtime \
+            --timestamp \
+            --entitlements "$ENTITLEMENTS" \
+            "$APP_PATH"
+
+          /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      - name: Create and sign DMG
+        env:
+          BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
+        run: |
+          APP_PATH="${DERIVED_DATA}/Build/Products/Release/${PROJECT_NAME}.app"
+          STAGE_DIR="$(mktemp -d "${RUNNER_TEMP}/mactools-dmg.XXXXXX")"
+          mkdir -p "$(dirname "$DMG_PATH")"
+
+          ditto "$APP_PATH" "$STAGE_DIR/${PROJECT_NAME}.app"
+          ln -s /Applications "$STAGE_DIR/Applications"
+
+          hdiutil create \
+            -volname "$PROJECT_NAME" \
+            -srcfolder "$STAGE_DIR" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH" >/dev/null
+
+          /bin/rm -rf "$STAGE_DIR"
+
+          /usr/bin/codesign \
+            --force \
+            --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --timestamp \
+            --identifier "${BUNDLE_IDENTIFIER_PREFIX}.mactools.disk-image" \
+            "$DMG_PATH"
+
+          /usr/bin/codesign --verify --verbose=2 "$DMG_PATH"
+
+      - name: Notarize and staple DMG
+        env:
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_API_KEY_ID}.p8"
+          echo "$ASC_API_KEY_P8_BASE64" | base64 --decode > "$API_KEY_PATH"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$API_KEY_PATH" \
+            --key-id "$ASC_API_KEY_ID" \
+            --issuer "$ASC_API_ISSUER_ID" \
+            --wait \
+            --timeout 30m
+
+          xcrun stapler staple "$DMG_PATH"
+          spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
+          rm -f "$API_KEY_PATH"
+
+      - name: Compute SHA256
+        run: |
+          shasum -a 256 "$DMG_PATH" | tee "$SHA256_PATH"
+
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          SIGN_UPDATE="${DERIVED_DATA}/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update"
+          if [[ ! -x "$SIGN_UPDATE" ]]; then
+            SIGN_UPDATE="$(find "${DERIVED_DATA}/SourcePackages" -path "*/Sparkle/bin/sign_update" -type f -perm -111 | head -n 1)"
+          fi
+          if [[ -z "$SIGN_UPDATE" || ! -x "$SIGN_UPDATE" ]]; then
+            echo "Sparkle sign_update tool was not found." >&2
+            exit 1
+          fi
+
+          SPARKLE_KEY_PATH="$RUNNER_TEMP/sparkle_ed25519_key"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$SPARKLE_KEY_PATH"
+          SIGN_OUTPUT="$("$SIGN_UPDATE" "$DMG_PATH" --ed-key-file "$SPARKLE_KEY_PATH")"
+          rm -f "$SPARKLE_KEY_PATH"
+
+          ED_SIGNATURE="$(printf '%s' "$SIGN_OUTPUT" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')"
+          if [[ -z "$ED_SIGNATURE" ]]; then
+            echo "Failed to extract Sparkle EdDSA signature." >&2
+            exit 1
+          fi
+
+          FILE_SIZE="$(stat -f '%z' "$DMG_PATH")"
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${PROJECT_NAME}.dmg"
+          RELEASE_NOTES_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          PUB_DATE="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
+          MINIMUM_SYSTEM_VERSION="14.0"
+          export ED_SIGNATURE FILE_SIZE DOWNLOAD_URL RELEASE_NOTES_URL PUB_DATE MINIMUM_SYSTEM_VERSION
+
+          python3 <<'PY_APPCAST'
+          import os
+          import xml.sax.saxutils as xml
+          from pathlib import Path
+
+          values = {
+              key: os.environ[key]
+              for key in [
+                  "PROJECT_NAME",
+                  "VERSION",
+                  "BUILD_NUMBER",
+                  "DOWNLOAD_URL",
+                  "RELEASE_NOTES_URL",
+                  "PUB_DATE",
+                  "FILE_SIZE",
+                  "ED_SIGNATURE",
+                  "MINIMUM_SYSTEM_VERSION",
+              ]
+          }
+
+          content = f'''<?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+              <channel>
+                  <title>{xml.escape(values["PROJECT_NAME"])} Releases</title>
+                  <description>Latest release metadata for {xml.escape(values["PROJECT_NAME"])}.</description>
+                  <language>zh-CN</language>
+                  <item>
+                      <title>Version {xml.escape(values["VERSION"])}</title>
+                      <link>{xml.escape(values["RELEASE_NOTES_URL"])}</link>
+                      <sparkle:version>{xml.escape(values["BUILD_NUMBER"])}</sparkle:version>
+                      <sparkle:shortVersionString>{xml.escape(values["VERSION"])}</sparkle:shortVersionString>
+                      <sparkle:releaseNotesLink>{xml.escape(values["RELEASE_NOTES_URL"])}</sparkle:releaseNotesLink>
+                      <pubDate>{xml.escape(values["PUB_DATE"])}</pubDate>
+                      <enclosure url="{xml.escape(values["DOWNLOAD_URL"])}" length="{xml.escape(values["FILE_SIZE"])}" type="application/octet-stream" sparkle:edSignature="{xml.escape(values["ED_SIGNATURE"])}" />
+                      <sparkle:minimumSystemVersion>{xml.escape(values["MINIMUM_SYSTEM_VERSION"])}</sparkle:minimumSystemVersion>
+                  </item>
+              </channel>
+          </rss>
+          '''
+          Path("docs/appcast.xml").write_text(content, encoding="utf-8")
+          PY_APPCAST
+
+          python3 -c 'import xml.etree.ElementTree as ET; ET.parse("docs/appcast.xml")'
+
+      - name: Upload notarized DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacTools-${{ env.TAG }}
+          path: |
+            ${{ env.DMG_PATH }}
+            ${{ env.SHA256_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_ARGS=(--title "${PROJECT_NAME} ${VERSION}" --notes "Signed and notarized ${PROJECT_NAME} ${VERSION}.")
+          if [[ "$PRERELEASE" == "true" ]]; then
+            RELEASE_ARGS+=(--prerelease)
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG_PATH#${PROJECT_NAME}.dmg" "$SHA256_PATH#${PROJECT_NAME}.sha256" --clobber
+          else
+            gh release create "$TAG" "$DMG_PATH#${PROJECT_NAME}.dmg" "$SHA256_PATH#${PROJECT_NAME}.sha256" "${RELEASE_ARGS[@]}"
+          fi
+
+      - name: Commit appcast to main
+        run: |
+          cp docs/appcast.xml "$RUNNER_TEMP/appcast.xml"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          cp "$RUNNER_TEMP/appcast.xml" docs/appcast.xml
+          git add docs/appcast.xml
+          if git diff --cached --quiet; then
+            echo "No appcast changes to commit."
+          else
+            git commit -m "ci: update appcast for ${TAG}"
+            git push origin main
+          fi
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          fi
