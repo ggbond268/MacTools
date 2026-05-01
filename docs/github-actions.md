@@ -55,14 +55,31 @@ base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n' | pbcopy
 
 ## 发布方式
 
-推送 tag 会自动构建正式包：
+`project.yml` 是发布版本源。发布前先更新：
+
+```yaml
+CURRENT_PROJECT_VERSION: 15
+MARKETING_VERSION: 0.9.3
+```
+
+提交并推送版本号变更：
+
+```bash
+git add project.yml
+git commit -m "Bump version to 0.9.3"
+git push origin main
+```
+
+然后在同一个提交上打 tag 并推送：
 
 ```bash
 git tag v0.9.3
 git push origin v0.9.3
 ```
 
-也可以在 GitHub Actions 页面手动运行 `Release`，输入已存在的 tag，例如 `v0.9.3`。
+Release 工作流会校验 `v0.9.3` 与 `project.yml` 的 `MARKETING_VERSION: 0.9.3` 一致，并使用 `CURRENT_PROJECT_VERSION` 作为 Sparkle appcast 和 App 包里的 build 号。版本不一致时会直接失败，避免产物、tag 和 appcast 不一致。
+
+也可以在 GitHub Actions 页面手动运行 `Release`，输入已存在的 tag，例如 `v0.9.3`；该 tag 指向的提交里仍必须已经更新 `project.yml`。
 
 仓库设置中需要允许 workflow 写入：`Settings` → `Actions` → `General` → `Workflow permissions` 选择 `Read and write permissions`。
 

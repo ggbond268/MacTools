@@ -46,8 +46,23 @@ jobs:
             exit 1
           fi
 
-          VERSION="${TAG#v}"
-          BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          VERSION="$(awk '$1 == "MARKETING_VERSION:" { print $2; exit }' project.yml)"
+          BUILD_NUMBER="$(awk '$1 == "CURRENT_PROJECT_VERSION:" { print $2; exit }' project.yml)"
+          TAG_VERSION="${TAG#v}"
+
+          if [[ -z "$VERSION" || -z "$BUILD_NUMBER" ]]; then
+            echo "MARKETING_VERSION and CURRENT_PROJECT_VERSION must be set in project.yml" >&2
+            exit 1
+          fi
+          if [[ "$TAG_VERSION" != "$VERSION" ]]; then
+            echo "Release tag $TAG does not match project.yml MARKETING_VERSION $VERSION" >&2
+            exit 1
+          fi
+          if [[ ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "project.yml CURRENT_PROJECT_VERSION must be numeric" >&2
+            exit 1
+          fi
+
           PRERELEASE="false"
           if [[ "$VERSION" == *"-"* || "$VERSION" == *"beta"* || "$VERSION" == *"alpha"* || "$VERSION" == *"rc"* ]]; then
             PRERELEASE="true"
