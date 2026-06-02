@@ -4,6 +4,7 @@ import CoreGraphics
 import Foundation
 import IOKit
 import MultitouchSupport
+import os
 import OSLog
 
 /// 管理触控板多点触控设备回调，检测到指定手指数后通过 CGEvent tap 把系统左键事件原地改为中键。
@@ -25,10 +26,21 @@ final class MiddleClickSession: @unchecked Sendable {
 
     // MARK: - CGEvent Tap State（CGEvent tap 与 C 回调线程均可读写）
 
-    /// 当前是否有所需手指数正在触碰（供 CGEvent tap 使用）
-    nonisolated(unsafe) var threeDown = false
-    /// CGEvent tap 已把一次 leftMouseDown 转换为 otherMouseDown，等待配对的 Up
-    nonisolated(unsafe) var wasThreeDown = false
+    /// CGEvent tap 与多点触控 C 回调线程共享的手指状态，用不公平锁保护避免数据竞争。
+    /// - threeDown: 当前是否有所需手指数正在触碰
+    /// - wasThreeDown: CGEvent tap 已把一次 leftMouseDown 转换为 otherMouseDown，等待配对的 Up
+    private struct TapFlags {
+        var threeDown = false
+        var wasThreeDown = false
+    }
+    private let tapFlags = OSAllocatedUnfairLock(initialState: TapFlags())
+
+    /// tap 回调在锁内决策，锁外再对 event 做 CGEvent C 调用。
+    private enum TapAction {
+        case passthrough
+        case convertToMiddleDown
+        case convertToMiddleUp
+    }
 
     // MARK: - Config（由主线程设置，回调线程读取）
 
@@ -70,7 +82,8 @@ final class MiddleClickSession: @unchecked Sendable {
 
     private let touchCallback: MTFrameCallbackFunction = { _, data, nFingers, _, _ in
         guard let session = MiddleClickSession.activeSession else { return }
-        session.threeDown = (nFingers == Int32(session.requiredFingerCount))
+        let isDown = (nFingers == Int32(session.requiredFingerCount))
+        session.tapFlags.withLock { $0.threeDown = isDown }
     }
 
     // MARK: - CGEvent Tap
@@ -89,15 +102,27 @@ final class MiddleClickSession: @unchecked Sendable {
             let kCenter = Int64(CGMouseButton.center.rawValue)
             let passthrough = Unmanaged.passUnretained(event)
 
-            if session.threeDown && (type == .leftMouseDown || type == .rightMouseDown) {
-                session.wasThreeDown = true
-                session.threeDown = false
+            let action: TapAction = session.tapFlags.withLock { flags in
+                if flags.threeDown && (type == .leftMouseDown || type == .rightMouseDown) {
+                    flags.wasThreeDown = true
+                    flags.threeDown = false
+                    return .convertToMiddleDown
+                } else if flags.wasThreeDown && (type == .leftMouseUp || type == .rightMouseUp) {
+                    flags.wasThreeDown = false
+                    return .convertToMiddleUp
+                }
+                return .passthrough
+            }
+
+            switch action {
+            case .convertToMiddleDown:
                 event.type = .otherMouseDown
                 event.setIntegerValueField(.mouseEventButtonNumber, value: kCenter)
-            } else if session.wasThreeDown && (type == .leftMouseUp || type == .rightMouseUp) {
-                session.wasThreeDown = false
+            case .convertToMiddleUp:
                 event.type = .otherMouseUp
                 event.setIntegerValueField(.mouseEventButtonNumber, value: kCenter)
+            case .passthrough:
+                break
             }
 
             return passthrough
@@ -158,8 +183,7 @@ final class MiddleClickSession: @unchecked Sendable {
     private func stopTouchListeners() {
         devices.forEach { $0.unregister(contactFrameCallback: touchCallback); $0.stop(); $0.release() }
         devices.removeAll()
-        threeDown = false
-        wasThreeDown = false
+        tapFlags.withLock { $0 = TapFlags() }
     }
 
     // MARK: - Start / Stop
