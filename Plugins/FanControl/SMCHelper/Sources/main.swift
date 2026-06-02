@@ -211,6 +211,11 @@ private final class SMCConnection {
 }
 
 private func setFanSpeed(_ rpm: Int, fanIndex: Int, connection: SMCConnection) throws {
+    // Defensive clamp: this runs as a setuid-root helper and must never trap on
+    // out-of-range input from the CLI. FPE2 encodes (rpm << 2) into a UInt16, so
+    // rpm must stay within 0...0x3FFF; negative speeds are meaningless for FLT too.
+    let safeRPM = min(max(rpm, 0), 0x3FFF)
+
     try setFanMode(1, fanIndex: fanIndex, connection: connection)
 
     let key = "F\(fanIndex)Tg"
@@ -218,10 +223,10 @@ private func setFanSpeed(_ rpm: Int, fanIndex: Int, connection: SMCConnection) t
 
     switch (value.dataType, value.dataSize) {
     case (typeFLT, 4):
-        var float = Float32(rpm)
+        var float = Float32(safeRPM)
         value.bytes = withUnsafeBytes(of: &float) { Array($0) }
     case (typeFPE2, 2):
-        let encoded = UInt16(rpm << 2)
+        let encoded = UInt16(safeRPM << 2)
         value.bytes[0] = UInt8((encoded >> 8) & 0xff)
         value.bytes[1] = UInt8(encoded & 0xff)
     default:
