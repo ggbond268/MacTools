@@ -156,22 +156,33 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel {
         }
     }
     
-    nonisolated private static func getEjectableVolumes(from volumesPath: String) throws -> [String] {
+    nonisolated static func getEjectableVolumes(from volumesPath: String) throws -> [String] {
         let fileManager = FileManager.default
         let contents = try fileManager.contentsOfDirectory(atPath: volumesPath)
         
         return contents.filter { name in
-            // 排除系统卷
-            if name == "Macintosh HD" || name.hasPrefix(".") {
+            // 排除隐藏项
+            if name.hasPrefix(".") {
                 return false
             }
             
-            let volumePath = "\(volumesPath)/\(name)"
-            var isDir: ObjCBool = false
-            let exists = fileManager.fileExists(atPath: volumePath, isDirectory: &isDir)
-            
-            // 必须是目录
-            return exists && isDir.boolValue
+            // 通过卷资源属性判断可推出性，排除内部/不可移除卷
+            let volumeURL = URL(fileURLWithPath: "\(volumesPath)/\(name)")
+            guard let values = try? volumeURL.resourceValues(forKeys: [
+                .volumeIsRemovableKey,
+                .volumeIsEjectableKey,
+                .volumeIsInternalKey
+            ]) else {
+                return false
+            }
+
+            // 始终排除内部卷
+            if values.volumeIsInternal == true {
+                return false
+            }
+
+            // 仅保留可移除或可推出的卷
+            return values.volumeIsRemovable == true || values.volumeIsEjectable == true
         }
     }
 
