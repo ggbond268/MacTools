@@ -381,6 +381,12 @@ private final class RapooHIDDeviceSession {
     }
 
     deinit {
+        // Safety net for teardown paths that bypass the monitor's explicit
+        // teardownSession (e.g. the monitor deallocating without stop()): clear the
+        // input-report callback and unschedule before the buffer/context is freed,
+        // so a late HID report can never dereference this freed session.
+        IOHIDDeviceRegisterInputReportCallback(device, reportBuffer, RapooDeviceCatalog.reportLength, nil, nil)
+        IOHIDDeviceUnscheduleFromRunLoop(device, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         reportBuffer.deinitialize(count: RapooDeviceCatalog.reportLength)
         reportBuffer.deallocate()
     }
