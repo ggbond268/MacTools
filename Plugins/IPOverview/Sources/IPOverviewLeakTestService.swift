@@ -167,7 +167,7 @@ struct IPOverviewLeakTestService: IPOverviewLeakTesting {
     }
 }
 
-private struct STUNClient {
+struct STUNClient {
     enum Error: LocalizedError {
         case invalidPort
         case timedOut
@@ -262,7 +262,7 @@ private struct STUNClient {
         return Data(bytes)
     }
 
-    private static func parseMappedAddress(_ data: Data, transactionID: [UInt8]) -> String? {
+    static func parseMappedAddress(_ data: Data, transactionID: [UInt8]) -> String? {
         let bytes = [UInt8](data)
         guard bytes.count >= 20,
               bytes[0] == 0x01,
@@ -282,7 +282,7 @@ private struct STUNClient {
 
             if type == 0x0020 || type == 0x0001 {
                 let value = Array(bytes[valueStart..<valueEnd])
-                if let address = mappedAddress(value, isXOR: type == 0x0020) {
+                if let address = mappedAddress(value, isXOR: type == 0x0020, transactionID: transactionID) {
                     return address
                 }
             }
@@ -293,7 +293,7 @@ private struct STUNClient {
         return nil
     }
 
-    private static func mappedAddress(_ value: [UInt8], isXOR: Bool) -> String? {
+    private static func mappedAddress(_ value: [UInt8], isXOR: Bool, transactionID: [UInt8]) -> String? {
         guard value.count >= 8 else { return nil }
         let family = value[1]
         if family == 0x01 {
@@ -310,8 +310,10 @@ private struct STUNClient {
         if family == 0x02, value.count >= 20 {
             var address = Array(value[4..<20])
             if isXOR {
-                let mask: [UInt8] = [0x21, 0x12, 0xA4, 0x42]
-                for index in 0..<4 {
+                // RFC 5389: XOR-MAPPED-ADDRESS for IPv6 XORs all 16 bytes with
+                // the magic cookie concatenated with the 96-bit transaction ID.
+                let mask: [UInt8] = [0x21, 0x12, 0xA4, 0x42] + transactionID
+                for index in 0..<min(address.count, mask.count) {
                     address[index] ^= mask[index]
                 }
             }
