@@ -112,19 +112,23 @@ final class IntelDDCTransport: DDCBrightnessTransport, @unchecked Sendable {
         request.sendAddress = UInt32(DDCBrightnessControl.displayAddress)
         request.sendTransactionType = IOOptionBits(kIOI2CSimpleTransactionType)
         request.sendBytes = UInt32(command.count)
-        request.sendBuffer = command.withUnsafeBufferPointer {
-            vm_address_t(bitPattern: $0.baseAddress)
-        }
         request.minReplyDelay = 10
         request.replyAddress = UInt32(DDCBrightnessControl.displayReplyAddress)
         request.replySubAddress = DDCBrightnessControl.hostAddress
         request.replyTransactionType = replyTransactionType
         request.replyBytes = UInt32(reply.count)
-        request.replyBuffer = reply.withUnsafeMutableBufferPointer {
-            vm_address_t(bitPattern: $0.baseAddress)
+
+        // Keep both buffers pinned for the whole IOI2CSendRequest call: letting a
+        // baseAddress escape withUnsafeBufferPointer and using it later is UB.
+        let succeeded = command.withUnsafeBufferPointer { commandBuffer in
+            reply.withUnsafeMutableBufferPointer { replyBuffer in
+                request.sendBuffer = vm_address_t(bitPattern: commandBuffer.baseAddress)
+                request.replyBuffer = vm_address_t(bitPattern: replyBuffer.baseAddress)
+                return Self.send(request: &request, to: framebuffer)
+            }
         }
 
-        guard Self.send(request: &request, to: framebuffer) else {
+        guard succeeded else {
             throw DisplayBrightnessControllerError.i2cUnavailable(displayName: display.name)
         }
 
@@ -147,13 +151,14 @@ final class IntelDDCTransport: DDCBrightnessTransport, @unchecked Sendable {
         request.sendAddress = UInt32(DDCBrightnessControl.displayAddress)
         request.sendTransactionType = IOOptionBits(kIOI2CSimpleTransactionType)
         request.sendBytes = UInt32(command.count)
-        request.sendBuffer = command.withUnsafeBufferPointer {
-            vm_address_t(bitPattern: $0.baseAddress)
-        }
         request.replyTransactionType = IOOptionBits(kIOI2CNoTransactionType)
         request.replyBytes = 0
 
-        return Self.send(request: &request, to: framebuffer)
+        // Keep the send buffer pinned for the whole IOI2CSendRequest call.
+        return command.withUnsafeBufferPointer { commandBuffer in
+            request.sendBuffer = vm_address_t(bitPattern: commandBuffer.baseAddress)
+            return Self.send(request: &request, to: framebuffer)
+        }
     }
 
     static func parseReply(
