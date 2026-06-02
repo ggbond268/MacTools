@@ -36,12 +36,12 @@ final class SystemStatusCPUPowerReader {
             let channels,
             let sample = functions.createSamples(subscription, channels, nil)?.takeRetainedValue(),
             let sampleDictionary = sample as? [String: Any],
-            let rawItems = sampleDictionary["IOReportChannels"]
+            let rawArray = sampleDictionary["IOReportChannels"] as? NSArray
         else {
             return nil
         }
 
-        let items = rawItems as! CFArray
+        let items = rawArray as CFArray
         var cpuEnergyJoules: Double?
         for index in 0..<CFArrayGetCount(items) {
             let item = unsafeBitCast(CFArrayGetValueAtIndex(items, index), to: CFDictionary.self)
