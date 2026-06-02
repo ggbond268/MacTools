@@ -44,7 +44,12 @@ final class MiddleClickSession: @unchecked Sendable {
 
     // MARK: - Config（由主线程设置，回调线程读取）
 
-    nonisolated(unsafe) var requiredFingerCount: Int = 3
+    /// 由不公平锁保护：主线程写、CGEvent/MT 回调线程读，避免数据竞争。
+    private let requiredFingerCountLock = OSAllocatedUnfairLock(initialState: 3)
+    var requiredFingerCount: Int {
+        get { requiredFingerCountLock.withLock { $0 } }
+        set { requiredFingerCountLock.withLock { $0 = newValue } }
+    }
 
     // MARK: - Infrastructure
 
