@@ -71,12 +71,34 @@ final class OpenAICompatibleConfigurationTests: XCTestCase {
         let configurations = [
             OpenAICompatibleConfiguration(baseURL: "http://localhost:11434"),
             OpenAICompatibleConfiguration(baseURL: "http://127.0.0.1:11434"),
+            OpenAICompatibleConfiguration(baseURL: "http://127.0.0.2:11434"),
+            OpenAICompatibleConfiguration(baseURL: "http://127.1.2.3:11434"),
             OpenAICompatibleConfiguration(baseURL: "http://[::1]:11434"),
         ]
 
         for configuration in configurations {
             XCTAssertNil(configuration.validationError)
             XCTAssertTrue(try configuration.endpointURL().absoluteString.contains("/v1/chat/completions"))
+        }
+    }
+
+    func testHTTPBaseURLWith127PrefixButNonIPv4HostIsInvalidWithExactMessage() {
+        let configuration = OpenAICompatibleConfiguration(baseURL: "http://127.example.com")
+
+        XCTAssertEqual(configuration.validationError?.localizedDescription, "Base URL 无效。")
+    }
+
+    func testEndpointThrowsSpecificValidationErrorBeforeBuildingURL() {
+        let configurations: [(OpenAICompatibleConfiguration, OpenAICompatibleConfigurationError)] = [
+            (OpenAICompatibleConfiguration(baseURL: "   \n  "), .blankBaseURL),
+            (OpenAICompatibleConfiguration(model: " \n\t "), .blankModel),
+            (OpenAICompatibleConfiguration(promptTemplate: "翻译 {{source_language}} 到 {{target_language}}"), .missingTextPlaceholder),
+        ]
+
+        for (configuration, expectedError) in configurations {
+            XCTAssertThrowsError(try configuration.endpointURL()) { error in
+                XCTAssertEqual(error as? OpenAICompatibleConfigurationError, expectedError)
+            }
         }
     }
 

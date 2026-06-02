@@ -73,8 +73,8 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
     }
 
     func endpointURL() throws -> URL {
-        guard validationError != .blankBaseURL else {
-            throw OpenAICompatibleConfigurationError.invalidBaseURL
+        if let validationError {
+            throw validationError
         }
 
         guard var components = URLComponents(string: normalizedBaseURL),
@@ -121,8 +121,29 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
             .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
             .lowercased()
         return normalizedHost == "localhost"
-            || normalizedHost == "127.0.0.1"
+            || isIPv4Loopback(normalizedHost)
             || normalizedHost == "::1"
+    }
+
+    private static func isIPv4Loopback(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else {
+            return false
+        }
+
+        var octets: [Int] = []
+        for part in parts {
+            guard !part.isEmpty,
+                  part.allSatisfy(\.isNumber),
+                  let value = Int(part),
+                  (0...255).contains(value)
+            else {
+                return false
+            }
+            octets.append(value)
+        }
+
+        return octets.first == 127
     }
 }
 

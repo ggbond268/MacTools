@@ -87,6 +87,17 @@ final class PluginHostNavigationSelectionTests: XCTestCase {
         XCTAssertEqual(host.settingsPresentationRequestCount, 1)
     }
 
+    func testPluginConfigurationPresentationCallbackIgnoresDifferentPluginID() {
+        let plugin = MockNavigationPlugin(hasConfiguration: true)
+        let host = makeHost(plugin: plugin)
+
+        plugin.requestPluginConfigurationPresentation?("other-plugin")
+
+        XCTAssertEqual(host.selectedSettingsDestination, .general)
+        XCTAssertEqual(host.selectedFeatureSettingsPane, .installed)
+        XCTAssertEqual(host.settingsPresentationRequestCount, 0)
+    }
+
     private func makeHost(plugin: MockNavigationPlugin) -> PluginHost {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
