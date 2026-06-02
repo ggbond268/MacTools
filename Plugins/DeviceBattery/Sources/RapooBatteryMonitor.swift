@@ -174,15 +174,19 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
     }
 
     func stop() {
+        let activeSessions = Array(sessions.values)
+        sessions.removeAll()
+        for session in activeSessions {
+            teardownSession(session)
+        }
+
         guard let manager else {
-            sessions.removeAll()
             return
         }
 
         IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         self.manager = nil
-        sessions.removeAll()
     }
 
     func refresh() {
@@ -249,8 +253,28 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
             return
         }
 
-        sessions.removeValue(forKey: deviceInfo.stableKey)
+        if let session = sessions.removeValue(forKey: deviceInfo.stableKey) {
+            teardownSession(session)
+        }
         refresh()
+    }
+
+    // Clear the input-report callback and unschedule the device BEFORE its session
+    // (and reportBuffer) can be freed; otherwise a late HID report writes into freed
+    // memory and the callback dereferences a freed context (use-after-free).
+    private func teardownSession(_ session: RapooHIDDeviceSession) {
+        IOHIDDeviceRegisterInputReportCallback(
+            session.device,
+            session.reportBuffer,
+            RapooDeviceCatalog.reportLength,
+            nil,
+            nil
+        )
+        IOHIDDeviceUnscheduleFromRunLoop(
+            session.device,
+            CFRunLoopGetMain(),
+            CFRunLoopMode.defaultMode.rawValue
+        )
     }
 
     fileprivate func handleInputReport(
