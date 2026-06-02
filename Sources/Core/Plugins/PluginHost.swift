@@ -695,6 +695,12 @@ final class PluginHost: ObservableObject {
             plugin.shortcutBindingResolver = { [weak self] shortcutDefinitionID in
                 self?.resolvedBinding(forPluginID: pluginID, shortcutDefinitionID: shortcutDefinitionID)
             }
+            if let configurationPresenting = plugin as? any PluginConfigurationPresenting {
+                configurationPresenting.requestPluginConfigurationPresentation = { [weak self] requestedPluginID in
+                    guard requestedPluginID == pluginID else { return }
+                    self?.presentPluginConfiguration(pluginID: pluginID)
+                }
+            }
             if let anchorable = plugin as? any DropZoneAnchorProviding {
                 anchorable.anchorRectProvider = { [weak self] in
                     self?.statusItemButtonFrameProvider?()
@@ -1136,6 +1142,9 @@ final class PluginHost: ObservableObject {
         plugin.onStateChange = nil
         plugin.requestPermissionGuidance = nil
         plugin.shortcutBindingResolver = nil
+        if let configurationPresenting = plugin as? any PluginConfigurationPresenting {
+            configurationPresenting.requestPluginConfigurationPresentation = nil
+        }
         syncGlobalShortcuts()
     }
 

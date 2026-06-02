@@ -46,10 +46,6 @@ struct LanguagePreferenceStore {
             }
         }
 
-        if let language = languages.first, language != .english {
-            return TranslatorLanguagePair(first: language, second: .english)
-        }
-
         return TranslatorLanguagePair(first: .simplifiedChinese, second: .english)
     }
 }

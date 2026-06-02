@@ -30,7 +30,7 @@ final class OpenAICompatibleClientTests: XCTestCase {
         XCTAssertEqual(
             result,
             TranslationResult(
-                providerTitle: "OpenAI 翻译",
+                providerTitle: "翻译结果",
                 text: "你好",
                 sourceText: "Hello",
                 languageSelection: languageSelection
@@ -57,6 +57,35 @@ final class OpenAICompatibleClientTests: XCTestCase {
         XCTAssertTrue(prompt.contains("English"))
         XCTAssertTrue(prompt.contains("Simplified Chinese"))
         XCTAssertTrue(prompt.contains("Hello"))
+    }
+
+    func testAutomaticSourceUsesLocalizedPromptFallback() async throws {
+        let recorder = RequestRecorder()
+        let httpClient = StubTranslatorHTTPClient(
+            recorder: recorder,
+            result: .success((
+                Self.responsePayload(content: "你好"),
+                Self.httpResponse(statusCode: 200)
+            ))
+        )
+        let client = OpenAICompatibleClient(httpClient: httpClient)
+        let configuration = OpenAICompatibleConfiguration(
+            promptTemplate: "请将下面的文本从 {{source_language}} 翻译为 {{target_language}}：{{text}}"
+        )
+
+        _ = try await client.translate(
+            text: "bonjour",
+            languageSelection: TranslatorLanguageSelection(source: nil, target: .simplifiedChinese),
+            configuration: configuration,
+            apiKey: "test-key"
+        )
+
+        let recordedRequests = await recorder.requests
+        let request = try XCTUnwrap(recordedRequests.first)
+        let body = try Self.requestBody(from: request)
+        let prompt = try XCTUnwrap(body.messages.first?.content)
+        XCTAssertTrue(prompt.contains("自动检测"))
+        XCTAssertFalse(prompt.contains("Auto Detect"))
     }
 
     func testModelIsTrimmedInRequest() async throws {

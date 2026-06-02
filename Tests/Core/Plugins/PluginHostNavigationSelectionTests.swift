@@ -76,6 +76,17 @@ final class PluginHostNavigationSelectionTests: XCTestCase {
         XCTAssertEqual(host.settingsPresentationRequestCount, 2)
     }
 
+    func testPluginConfigurationPresentationCallbackOpensPluginSettings() {
+        let plugin = MockNavigationPlugin(hasConfiguration: true)
+        let host = makeHost(plugin: plugin)
+
+        plugin.requestPluginConfigurationPresentation?(plugin.metadata.id)
+
+        XCTAssertEqual(host.selectedSettingsDestination, .pluginConfiguration)
+        XCTAssertEqual(host.selectedFeatureSettingsPane, .configuration(plugin.metadata.id))
+        XCTAssertEqual(host.settingsPresentationRequestCount, 1)
+    }
+
     private func makeHost(plugin: MockNavigationPlugin) -> PluginHost {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -90,7 +101,7 @@ final class PluginHostNavigationSelectionTests: XCTestCase {
 }
 
 @MainActor
-private final class MockNavigationPlugin: MacToolsPlugin, PluginPrimaryPanel {
+private final class MockNavigationPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginConfigurationPresenting {
     let metadata = PluginMetadata(
         id: "mock-navigation",
         title: "Mock Navigation",
@@ -107,8 +118,14 @@ private final class MockNavigationPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
+    var requestPluginConfigurationPresentation: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     var receivedActions: [PluginPanelAction] = []
+    private let hasConfigurationSurface: Bool
+
+    init(hasConfiguration: Bool = false) {
+        hasConfigurationSurface = hasConfiguration
+    }
 
     var primaryPanelState: PluginPanelState {
         PluginPanelState(
@@ -125,6 +142,12 @@ private final class MockNavigationPlugin: MacToolsPlugin, PluginPrimaryPanel {
     var permissionRequirements: [PluginPermissionRequirement] { [] }
     var settingsSections: [PluginSettingsSection] { [] }
     var shortcutDefinitions: [PluginShortcutDefinition] { [] }
+    var configuration: PluginConfiguration? {
+        guard hasConfigurationSurface else { return nil }
+        return PluginConfiguration(description: "Mock settings") { _ in
+            EmptyView()
+        }
+    }
 
     func refresh() {}
 

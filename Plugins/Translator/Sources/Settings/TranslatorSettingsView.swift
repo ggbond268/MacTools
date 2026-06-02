@@ -1,6 +1,7 @@
 import SwiftUI
 import MacToolsPluginKit
 
+@MainActor
 struct TranslatorSettingsView: View {
     @State private var firstLanguage: TranslatorLanguage
     @State private var secondLanguage: TranslatorLanguage
@@ -11,14 +12,14 @@ struct TranslatorSettingsView: View {
     @State private var message: String?
 
     private let onSave: (OpenAICompatibleConfiguration, String, TranslatorLanguagePair) -> String?
-    private let onRestoreDefaults: () -> OpenAICompatibleConfiguration
+    private let onRestoreDefaults: () -> (configuration: OpenAICompatibleConfiguration, languagePair: TranslatorLanguagePair)
 
     init(
         configuration: OpenAICompatibleConfiguration,
         apiKey: String,
         languagePair: TranslatorLanguagePair,
         onSave: @escaping (OpenAICompatibleConfiguration, String, TranslatorLanguagePair) -> String?,
-        onRestoreDefaults: @escaping () -> OpenAICompatibleConfiguration
+        onRestoreDefaults: @escaping () -> (configuration: OpenAICompatibleConfiguration, languagePair: TranslatorLanguagePair)
     ) {
         _firstLanguage = State(initialValue: languagePair.first)
         _secondLanguage = State(initialValue: languagePair.second)
@@ -117,9 +118,11 @@ struct TranslatorSettingsView: View {
         HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
             Button("恢复默认") {
                 let defaults = onRestoreDefaults()
-                baseURL = defaults.baseURL
-                model = defaults.model
-                promptTemplate = defaults.promptTemplate
+                baseURL = defaults.configuration.baseURL
+                model = defaults.configuration.model
+                promptTemplate = defaults.configuration.promptTemplate
+                firstLanguage = defaults.languagePair.first
+                secondLanguage = defaults.languagePair.second
                 message = nil
             }
             .buttonStyle(.bordered)

@@ -86,6 +86,7 @@ final class TranslatorCoordinator {
             translation: nil,
             errorMessage: nil
         )
+        panelController?.show(snapshot: snapshot)
 
         let result = await selectedTextCapturePipeline.capture(
             context: SelectedTextCaptureContext(
@@ -100,6 +101,12 @@ final class TranslatorCoordinator {
         else {
             if result.failureReason == TranslatorPanelError.permissionRequired.message {
                 setError(.permissionRequired, sourceText: nil, languageSelection: nil)
+                panelController?.show(snapshot: snapshot)
+                return
+            }
+
+            if result.failureReason == TranslatorPanelError.automationPermissionRequired.message {
+                setError(.automationPermissionRequired, sourceText: nil, languageSelection: nil)
                 panelController?.show(snapshot: snapshot)
                 return
             }

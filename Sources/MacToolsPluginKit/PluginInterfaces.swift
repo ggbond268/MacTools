@@ -100,6 +100,11 @@ public protocol MacToolsPluginBundleFactory: AnyObject {
 }
 
 @MainActor
+public protocol PluginConfigurationPresenting: AnyObject {
+    var requestPluginConfigurationPresentation: ((String) -> Void)? { get set }
+}
+
+@MainActor
 public protocol AccessibilityPermissionRefreshing {
     func refreshAccessibilityPermission()
 }

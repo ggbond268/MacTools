@@ -106,7 +106,9 @@ enum TranslatorLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
             normalized == "zh-tw" ||
             normalized.hasPrefix("zh-tw-") ||
             normalized == "zh-hk" ||
-            normalized.hasPrefix("zh-hk-") {
+            normalized.hasPrefix("zh-hk-") ||
+            normalized == "zh-mo" ||
+            normalized.hasPrefix("zh-mo-") {
             return .traditionalChinese
         }
 

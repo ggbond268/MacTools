@@ -91,6 +91,23 @@ final class TranslatorPluginTests: XCTestCase {
         XCTAssertEqual(state.subtitle, "需要配置 OpenAI")
     }
 
+    func testPrimaryPanelSubtitleUsesResolvedShortcutBinding() throws {
+        let secretStore = OpenAICompatibleSecretStore(service: uniqueTestKeychainService())
+        try secretStore.saveAPIKey("sk-test")
+        let plugin = makePlugin(secretStore: secretStore)
+        plugin.shortcutBindingResolver = { shortcutID in
+            guard shortcutID == "translator.select-translation" else { return nil }
+            return ShortcutBinding(
+                keyCode: UInt16(kVK_ANSI_T),
+                modifiers: [.control, .option]
+            )
+        }
+
+        XCTAssertEqual(plugin.primaryPanelState.subtitle, "按 ⌃ + ⌥ + T 翻译选中文本")
+
+        try secretStore.deleteAPIKey()
+    }
+
     func testPrimaryPanelShowsAccessibilitySubtitleBeforeOpenAISetupWhenPermissionIsMissing() {
         let storage = TranslatorInMemoryPluginStorage()
         let plugin = makePlugin(storage: storage, accessibilityTrustProvider: { false })
@@ -249,11 +266,23 @@ final class TranslatorPluginTests: XCTestCase {
 
     func testPanelCloseActionClosesPanelEvenWithoutCoordinator() {
         let panelController = RecordingTranslatorPanelController()
-        _ = makePlugin(panelController: panelController)
+        let plugin = makePlugin(panelController: panelController)
 
         panelController.onAction?(.close)
 
         XCTAssertTrue(panelController.didClose)
+        _ = plugin
+    }
+
+    func testPanelOpenSettingsActionRequestsPluginConfiguration() {
+        let panelController = RecordingTranslatorPanelController()
+        let plugin = makePlugin(panelController: panelController)
+        var requestedSettingsPluginID: String?
+        plugin.requestPluginConfigurationPresentation = { requestedSettingsPluginID = $0 }
+
+        panelController.onAction?(.openSettings)
+
+        XCTAssertEqual(requestedSettingsPluginID, "translator")
     }
 
     func testPanelCloseActionDuringPendingCapturePreventsProviderInvocation() async {

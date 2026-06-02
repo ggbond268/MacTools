@@ -12,6 +12,7 @@ enum TranslatorPanelError: Equatable, Sendable {
     case missingSelection
     case missingConfiguration
     case permissionRequired
+    case automationPermissionRequired
     case requestFailed(String)
 
     var message: String {
@@ -22,6 +23,8 @@ enum TranslatorPanelError: Equatable, Sendable {
             return "请先配置 OpenAI"
         case .permissionRequired:
             return "需要辅助功能授权"
+        case .automationPermissionRequired:
+            return "需要自动化授权"
         case let .requestFailed(message):
             return message
         }

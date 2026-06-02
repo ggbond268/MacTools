@@ -21,6 +21,7 @@ final class TranslatorLanguageTests: XCTestCase {
         XCTAssertEqual(TranslatorLanguage.from(localeIdentifier: "zh-Hant"), .traditionalChinese)
         XCTAssertEqual(TranslatorLanguage.from(localeIdentifier: "zh-TW"), .traditionalChinese)
         XCTAssertEqual(TranslatorLanguage.from(localeIdentifier: "zh-HK"), .traditionalChinese)
+        XCTAssertEqual(TranslatorLanguage.from(localeIdentifier: "zh-MO"), .traditionalChinese)
         XCTAssertEqual(TranslatorLanguage.from(localeIdentifier: "zh-CN"), .simplifiedChinese)
     }
 
@@ -50,10 +51,10 @@ final class TranslatorLanguageTests: XCTestCase {
         )
     }
 
-    func testDefaultPairPairsOneNonEnglishPreferredLanguageWithEnglish() {
+    func testDefaultPairFallsBackWhenOnlyOneSupportedLocaleExists() {
         XCTAssertEqual(
             LanguagePreferenceStore.defaultPair(fromPreferredLanguages: ["fr-FR", "fr-CA"]),
-            TranslatorLanguagePair(first: .french, second: .english)
+            TranslatorLanguagePair(first: .simplifiedChinese, second: .english)
         )
     }
 
@@ -94,5 +95,12 @@ final class TranslatorLanguageTests: XCTestCase {
 
         XCTAssertNil(detector.detect(" \n\t "))
         XCTAssertNil(detector.detect("12345 !!!"))
+    }
+
+    func testLanguageDetectorReturnsNilForAmbiguousShortHanAndLatinText() {
+        let detector = LanguageDetector()
+
+        XCTAssertNil(detector.detect("漢字"))
+        XCTAssertNil(detector.detect("qzx"))
     }
 }

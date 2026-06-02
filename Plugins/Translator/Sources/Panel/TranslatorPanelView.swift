@@ -62,7 +62,7 @@ struct TranslatorPanelView: View {
     private var resultCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Text("OpenAI 翻译")
+                Text(snapshot.translation?.providerTitle ?? "翻译结果")
                     .font(.headline)
                 if case .translating = snapshot.phase {
                     ProgressView()

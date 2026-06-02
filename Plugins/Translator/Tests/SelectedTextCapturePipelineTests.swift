@@ -141,6 +141,46 @@ final class SelectedTextCapturePipelineTests: XCTestCase {
         XCTAssertEqual(result.failureReason, "需要辅助功能授权")
     }
 
+    func testAutomationPermissionRequiredFailureIsPreservedWhenNoStrategySucceeds() async {
+        let pipeline = SelectedTextCapturePipeline(strategies: [
+            StubSelectedTextCapture(
+                strategyID: .browserAppleScript,
+                result: SelectedTextCaptureResult(
+                    text: nil,
+                    strategyID: .browserAppleScript,
+                    isEditable: false,
+                    sourceApplicationBundleID: "com.apple.Safari",
+                    failureReason: "需要自动化授权"
+                )
+            ),
+            StubSelectedTextCapture(
+                strategyID: .simulatedCopy,
+                result: SelectedTextCaptureResult(
+                    text: nil,
+                    strategyID: .simulatedCopy,
+                    isEditable: false,
+                    sourceApplicationBundleID: nil,
+                    failureReason: "未找到选中文本"
+                )
+            ),
+        ])
+
+        let result = await pipeline.capture(context: SelectedTextCaptureContext())
+
+        XCTAssertNil(result.text)
+        XCTAssertEqual(result.strategyID, .browserAppleScript)
+        XCTAssertEqual(result.sourceApplicationBundleID, "com.apple.Safari")
+        XCTAssertEqual(result.failureReason, "需要自动化授权")
+    }
+
+    func testAppleScriptAuthorizationErrorMapsToAutomationPermissionReason() {
+        let reason = BrowserAppleScriptSelectedTextCapture.failureReason(
+            forAppleScriptError: [NSAppleScript.errorNumber: -1743] as NSDictionary
+        )
+
+        XCTAssertEqual(reason, "需要自动化授权")
+    }
+
     func testReturnedTextIsTrimmed() async {
         let pipeline = SelectedTextCapturePipeline(strategies: [
             StubSelectedTextCapture(
@@ -161,6 +201,22 @@ final class SelectedTextCapturePipelineTests: XCTestCase {
         XCTAssertEqual(result.strategyID, .simulatedCopy)
         XCTAssertEqual(result.sourceApplicationBundleID, "com.example.app")
         XCTAssertNil(result.failureReason)
+    }
+
+    func testFirefoxSupportsBrowserAppleScriptSelection() {
+        XCTAssertTrue(AppCaptureCompatibility.isBrowser("org.mozilla.firefox"))
+        XCTAssertTrue(AppCaptureCompatibility.supportsAppleScriptSelection("org.mozilla.firefox"))
+    }
+
+    func testMenuCopyStrategyReturnsFailureForExternalApps() async {
+        let result = await MenuCopySelectedTextCapture().capture(
+            context: SelectedTextCaptureContext(frontmostApplicationBundleID: "com.example.external")
+        )
+
+        XCTAssertNil(result.text)
+        XCTAssertEqual(result.strategyID, .menuCopy)
+        XCTAssertEqual(result.sourceApplicationBundleID, "com.example.external")
+        XCTAssertEqual(result.failureReason, "复制菜单不可用")
     }
 }
 

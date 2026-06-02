@@ -400,6 +400,9 @@ final class DynamicPluginManager: ObservableObject {
             plugin.onStateChange = nil
             plugin.requestPermissionGuidance = nil
             plugin.shortcutBindingResolver = nil
+            if let configurationPresenting = plugin as? any PluginConfigurationPresenting {
+                configurationPresenting.requestPluginConfigurationPresentation = nil
+            }
         }
     }
 

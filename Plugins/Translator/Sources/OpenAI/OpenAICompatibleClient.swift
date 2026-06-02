@@ -18,7 +18,7 @@ struct OpenAICompatibleClient: Sendable {
         configuration: OpenAICompatibleConfiguration,
         apiKey: String
     ) async throws -> TranslationResult {
-        let sourceLanguageName = languageSelection.source?.promptName ?? "Auto Detect"
+        let sourceLanguageName = languageSelection.source?.promptName ?? "自动检测"
         let targetLanguageName = languageSelection.target.promptName
         let prompt = try TranslationPromptRenderer(template: configuration.promptTemplate).render(
             text: text,
@@ -62,7 +62,7 @@ struct OpenAICompatibleClient: Sendable {
         let content = try decodeContent(from: data)
 
         return TranslationResult(
-            providerTitle: "OpenAI 翻译",
+            providerTitle: "翻译结果",
             text: content,
             sourceText: text,
             languageSelection: languageSelection

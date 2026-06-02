@@ -20,7 +20,7 @@ private struct TranslatorPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class TranslatorPlugin: MacToolsPlugin, PluginPrimaryPanel {
+final class TranslatorPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginConfigurationPresenting {
     let metadata = PluginMetadata(
         id: TranslatorConstants.pluginID,
         title: "翻译",
@@ -37,6 +37,7 @@ final class TranslatorPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
+    var requestPluginConfigurationPresentation: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
 
     private let storage: PluginStorage
@@ -140,7 +141,10 @@ final class TranslatorPlugin: MacToolsPlugin, PluginPrimaryPanel {
                         self?.saveConfiguration(configuration, apiKey: apiKey, languagePair: languagePair)
                     },
                     onRestoreDefaults: {
-                        OpenAICompatibleConfiguration()
+                        (
+                            configuration: OpenAICompatibleConfiguration(),
+                            languagePair: LanguagePreferenceStore.defaultPair(fromPreferredLanguages: Locale.preferredLanguages)
+                        )
                     }
                 )
             } else {
@@ -223,7 +227,11 @@ final class TranslatorPlugin: MacToolsPlugin, PluginPrimaryPanel {
         if !isShortcutEnabled { return "快捷键已暂停" }
         if !accessibilityTrustProvider() { return "启用前需要辅助功能授权" }
         if providerConfiguration.validationError != nil || !hasAPIKey { return "需要配置 OpenAI" }
-        return "按 ⌥D 翻译选中文本"
+        guard let binding = shortcutBindingResolver?(TranslatorConstants.ShortcutID.selectTranslation) else {
+            return "按快捷键翻译选中文本"
+        }
+
+        return "按 \(ShortcutFormatter.displayString(for: binding)) 翻译选中文本"
     }
 
     func saveConfiguration(
@@ -261,7 +269,7 @@ final class TranslatorPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     private func handlePanelAction(_ action: TranslatorPanelAction) {
         if action == .openSettings {
-            requestPermissionGuidance?(TranslatorConstants.PermissionID.automation)
+            requestPluginConfigurationPresentation?(metadata.id)
             return
         }
 

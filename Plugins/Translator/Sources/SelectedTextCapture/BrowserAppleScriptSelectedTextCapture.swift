@@ -21,7 +21,7 @@ struct BrowserAppleScriptSelectedTextCapture: SelectedTextCapturing {
         var errorInfo: NSDictionary?
         let descriptor = appleScript.executeAndReturnError(&errorInfo)
         guard errorInfo == nil else {
-            return failure(context: context, reason: "自动化取词失败")
+            return failure(context: context, reason: Self.failureReason(forAppleScriptError: errorInfo))
         }
 
         return SelectedTextCaptureResult(
@@ -63,5 +63,27 @@ struct BrowserAppleScriptSelectedTextCapture: SelectedTextCapturing {
             sourceApplicationBundleID: context.frontmostApplicationBundleID,
             failureReason: reason
         )
+    }
+
+    static func failureReason(forAppleScriptError errorInfo: NSDictionary?) -> String {
+        guard let errorInfo else {
+            return "自动化取词失败"
+        }
+
+        if let errorNumber = errorInfo[NSAppleScript.errorNumber] as? NSNumber,
+           errorNumber.intValue == -1743 {
+            return "需要自动化授权"
+        }
+
+        let message = (errorInfo[NSAppleScript.errorMessage] as? String ?? "").lowercased()
+        if message.contains("not authorized") ||
+            message.contains("not authorised") ||
+            message.contains("not permitted") ||
+            message.contains("not allowed") ||
+            message.contains("automation") {
+            return "需要自动化授权"
+        }
+
+        return "自动化取词失败"
     }
 }

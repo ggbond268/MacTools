@@ -49,7 +49,7 @@ struct OpenAICompatibleSecretStore: Sendable {
         let data = Data(trimmedAPIKey.utf8)
         var attributes = baseQuery
         attributes[kSecValueData as String] = data
-        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
         let status = SecItemAdd(attributes as CFDictionary, nil)
 
@@ -59,7 +59,7 @@ struct OpenAICompatibleSecretStore: Sendable {
         case errSecDuplicateItem:
             var updateAttributes: [String: Any] = [:]
             updateAttributes[kSecValueData as String] = data
-            updateAttributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            updateAttributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
             let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttributes as CFDictionary)
             guard updateStatus == errSecSuccess else {

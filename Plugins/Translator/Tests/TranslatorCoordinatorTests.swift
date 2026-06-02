@@ -5,18 +5,18 @@ import XCTest
 
 @MainActor
 final class TranslatorCoordinatorTests: XCTestCase {
-    private var originalPasteboardString: String?
+    private var originalPasteboardSnapshot: PasteboardSnapshot?
 
     override func setUp() async throws {
         try await super.setUp()
-        originalPasteboardString = NSPasteboard.general.string(forType: .string)
+        originalPasteboardSnapshot = PasteboardSnapshot.capture(from: NSPasteboard.general)
         NSPasteboard.general.clearContents()
     }
 
     override func tearDown() async throws {
         NSPasteboard.general.clearContents()
-        if let originalPasteboardString {
-            NSPasteboard.general.setString(originalPasteboardString, forType: .string)
+        if let originalPasteboardSnapshot {
+            _ = originalPasteboardSnapshot.restore(to: NSPasteboard.general)
         }
         try await super.tearDown()
     }
@@ -73,6 +73,30 @@ final class TranslatorCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.snapshot.phase, .error(.permissionRequired))
         XCTAssertEqual(coordinator.snapshot.errorMessage, "需要辅助功能授权")
+        XCTAssertNil(coordinator.snapshot.sourceText)
+        XCTAssertNil(coordinator.snapshot.languageSelection)
+        XCTAssertNil(coordinator.snapshot.translation)
+    }
+
+    func testAutomationFailureShowsAutomationPermissionRequiredError() async {
+        let panel = RecordingTranslatorPanelController()
+        let coordinator = makeCoordinator(
+            captureResult: SelectedTextCaptureResult(
+                text: nil,
+                strategyID: .browserAppleScript,
+                isEditable: false,
+                sourceApplicationBundleID: "com.apple.Safari",
+                failureReason: "需要自动化授权"
+            ),
+            providerFactory: { .provider(RecordingTranslationProvider(resultText: "unused")) },
+            panelController: panel
+        )
+
+        coordinator.startSelectTranslation()
+        await panel.waitUntilShown(.error(.automationPermissionRequired))
+
+        XCTAssertEqual(coordinator.snapshot.phase, .error(.automationPermissionRequired))
+        XCTAssertEqual(coordinator.snapshot.errorMessage, "需要自动化授权")
         XCTAssertNil(coordinator.snapshot.sourceText)
         XCTAssertNil(coordinator.snapshot.languageSelection)
         XCTAssertNil(coordinator.snapshot.translation)
@@ -222,6 +246,7 @@ final class TranslatorCoordinatorTests: XCTestCase {
         )
 
         coordinator.startSelectTranslation()
+        await panel.waitUntilShown(.capturing)
         await capture.waitUntilStarted()
 
         await coordinator.handle(.close)
@@ -230,6 +255,7 @@ final class TranslatorCoordinatorTests: XCTestCase {
 
         XCTAssertTrue(panel.didClose)
         XCTAssertTrue(provider.requests.isEmpty)
+        XCTAssertTrue(panel.shownSnapshots.contains { $0.phase == .capturing })
     }
 
     func testCloseDuringPendingTranslationCancelsProviderTask() async {

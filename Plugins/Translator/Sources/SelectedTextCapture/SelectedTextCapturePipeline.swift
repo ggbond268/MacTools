@@ -15,6 +15,7 @@ struct SelectedTextCapturePipeline {
 
     func capture(context: SelectedTextCaptureContext) async -> SelectedTextCaptureResult {
         var permissionRequiredResult: SelectedTextCaptureResult?
+        var automationPermissionRequiredResult: SelectedTextCaptureResult?
 
         for strategy in strategies {
             let result = await strategy.capture(context: context)
@@ -23,6 +24,11 @@ struct SelectedTextCapturePipeline {
                 if permissionRequiredResult == nil,
                    result.failureReason == "需要辅助功能授权" {
                     permissionRequiredResult = result
+                }
+
+                if automationPermissionRequiredResult == nil,
+                   result.failureReason == "需要自动化授权" {
+                    automationPermissionRequiredResult = result
                 }
 
                 continue
@@ -39,6 +45,10 @@ struct SelectedTextCapturePipeline {
 
         if let permissionRequiredResult {
             return permissionRequiredResult
+        }
+
+        if let automationPermissionRequiredResult {
+            return automationPermissionRequiredResult
         }
 
         return .missing

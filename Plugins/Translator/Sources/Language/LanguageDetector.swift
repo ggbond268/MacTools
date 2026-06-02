@@ -13,6 +13,10 @@ struct LanguageDetector: LanguageDetecting {
             return nil
         }
 
+        if Self.isShortHanOnlyText(trimmedText) {
+            return nil
+        }
+
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(trimmedText)
 
@@ -54,8 +58,6 @@ struct LanguageDetector: LanguageDetecting {
     }
 
     private static func detectByScript(_ text: String) -> TranslatorLanguage? {
-        var hasLatinLetter = false
-
         for scalar in text.unicodeScalars {
             if Self.isJapaneseScript(scalar) {
                 return .japanese
@@ -64,17 +66,9 @@ struct LanguageDetector: LanguageDetecting {
             if Self.isKoreanScript(scalar) {
                 return .korean
             }
-
-            if Self.isCJKScript(scalar) {
-                return .simplifiedChinese
-            }
-
-            if Self.isLatinLetter(scalar) {
-                hasLatinLetter = true
-            }
         }
 
-        return hasLatinLetter ? .english : nil
+        return nil
     }
 
     private static func isJapaneseScript(_ scalar: UnicodeScalar) -> Bool {
@@ -88,12 +82,28 @@ struct LanguageDetector: LanguageDetecting {
             (0x3130...0x318F).contains(Int(scalar.value))
     }
 
-    private static func isCJKScript(_ scalar: UnicodeScalar) -> Bool {
-        (0x4E00...0x9FFF).contains(Int(scalar.value))
+    private static func isShortHanOnlyText(_ text: String) -> Bool {
+        var hanScalarCount = 0
+
+        for scalar in text.unicodeScalars {
+            guard !CharacterSet.whitespacesAndNewlines.contains(scalar) else {
+                continue
+            }
+
+            guard Self.isHanScript(scalar) else {
+                return false
+            }
+
+            hanScalarCount += 1
+            if hanScalarCount > 3 {
+                return false
+            }
+        }
+
+        return hanScalarCount > 0
     }
 
-    private static func isLatinLetter(_ scalar: UnicodeScalar) -> Bool {
-        (0x0041...0x005A).contains(Int(scalar.value)) ||
-            (0x0061...0x007A).contains(Int(scalar.value))
+    private static func isHanScript(_ scalar: UnicodeScalar) -> Bool {
+        (0x4E00...0x9FFF).contains(Int(scalar.value))
     }
 }
