@@ -242,7 +242,7 @@ extension CGRect {
 }
 
 private extension CGEventField {
-    static let menuBarHiddenWindowID = CGEventField(rawValue: 0x33)!
+    static let menuBarHiddenWindowID = CGEventField(rawValue: 0x33)
 }
 
 private extension CGEvent {
@@ -251,8 +251,8 @@ private extension CGEvent {
         setIntegerValueField(.eventSourceUserData, value: Int64(Int(bitPattern: ObjectIdentifier(self))))
         setIntegerValueField(.mouseEventWindowUnderMousePointer, value: value)
         setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: value)
-        if includeWindowID {
-            setIntegerValueField(.menuBarHiddenWindowID, value: value)
+        if includeWindowID, let windowIDField = CGEventField.menuBarHiddenWindowID {
+            setIntegerValueField(windowIDField, value: value)
         }
     }
 }
