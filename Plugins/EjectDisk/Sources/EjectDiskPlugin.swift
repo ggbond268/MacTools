@@ -60,12 +60,8 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel {
     var shortcutDefinitions: [PluginShortcutDefinition] { [] }
 
     func refresh() {
-        let count = Self.ejectableDiskCountSync()
-        if self.ejectableDiskCount != count {
-            self.ejectableDiskCount = count
-            self.onStateChange?()
-        }
-        
+        scheduleEjectableDiskCountRefresh()
+
         // 设置磁盘挂载/卸载事件监听
         setupVolumeMountObserver()
     }
@@ -102,11 +98,21 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel {
     }
     
     private func checkForEjectableDiskAndUpdate() {
-        let count = Self.ejectableDiskCountSync()
-        if self.ejectableDiskCount != count {
-            self.ejectableDiskCount = count
-            self.onStateChange?()
+        scheduleEjectableDiskCountRefresh()
+    }
+
+    /// 把卷扫描放到后台线程，避免在慢速网络/可移动卷上阻塞主线程，扫完再回主线程更新计数。
+    private func scheduleEjectableDiskCountRefresh() {
+        Task.detached { [weak self] in
+            let count = Self.ejectableDiskCountSync()
+            await MainActor.run { self?.applyEjectableDiskCount(count) }
         }
+    }
+
+    private func applyEjectableDiskCount(_ count: Int) {
+        guard ejectableDiskCount != count else { return }
+        ejectableDiskCount = count
+        onStateChange?()
     }
 
     func handleAction(_ action: PluginPanelAction) {
@@ -223,7 +229,9 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel {
             throw NSError(domain: "EjectDiskPlugin", code: 1, userInfo: [NSLocalizedDescriptionKey: "/Volumes 目录不可用"])
         }
         
-        let ejectableVolumes = try Self.getEjectableVolumes(from: volumesPath)
+        let ejectableVolumes = try await Task.detached {
+            try Self.getEjectableVolumes(from: volumesPath)
+        }.value
         
         guard !ejectableVolumes.isEmpty else {
             throw NSError(domain: "EjectDiskPlugin", code: 2, userInfo: [NSLocalizedDescriptionKey: "未找到可推出的磁盘"])
