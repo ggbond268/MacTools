@@ -218,6 +218,29 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         XCTAssertEqual(writer.resumeCalls, 0, "manualPaused must never auto-resume")
     }
 
+    func testAutoInhibitFailureRetriesOnNextCycle() {
+        let writer = MockBatteryWriter()
+        let reader = MockBatteryReader(snapshot: makeSnapshot(level: 60))
+        let plugin = makePlugin(reader: reader, writer: writer)
+        plugin.refresh()
+        plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
+
+        // Make the SMC write fail, then cross the limit twice. A transient failure
+        // must NOT latch the direction — the next monitoring cycle has to retry.
+        writer.nextError = .writeFailed("transient")
+        writer.inhibitCalls.removeAll()
+
+        reader.snapshot = makeSnapshot(level: 85)
+        plugin.refresh()
+        reader.snapshot = makeSnapshot(level: 85)
+        plugin.refresh()
+
+        XCTAssertGreaterThanOrEqual(
+            writer.inhibitCalls.count, 2,
+            "A failed auto-inhibit must be retried on the next cycle, not latched"
+        )
+    }
+
     func testForceDischargeStartsWhenSupportedAndAboveLimit() {
         let writer = MockBatteryWriter()
         let reader = MockBatteryReader(snapshot: makeSnapshot(level: 90))

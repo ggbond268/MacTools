@@ -375,16 +375,19 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
             if let err = writer.inhibitCharging(limitPercent: limit) {
                 lastErrorMessage = err.errorDescription
                 BatteryChargeLimitLog.plugin.error("auto-inhibit failed (\(reason, privacy: .public)): \(err.localizedDescription, privacy: .public)")
-            } else {
-                lastErrorMessage = nil
+                // Leave lastAutoInhibited unchanged so the next monitoring cycle
+                // retries instead of short-circuiting on an unchanged direction.
+                return
             }
+            lastErrorMessage = nil
         } else {
             if let err = writer.resumeCharging() {
                 lastErrorMessage = err.errorDescription
                 BatteryChargeLimitLog.plugin.error("auto-resume failed (\(reason, privacy: .public)): \(err.localizedDescription, privacy: .public)")
-            } else {
-                lastErrorMessage = nil
+                // Leave lastAutoInhibited unchanged so the next monitoring cycle retries.
+                return
             }
+            lastErrorMessage = nil
         }
         lastAutoInhibited = shouldInhibit
     }
