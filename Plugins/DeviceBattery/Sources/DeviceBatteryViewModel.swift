@@ -140,6 +140,9 @@ final class DeviceBatteryViewModel: ObservableObject {
 
         let referenceDate = Date()
         let collectedItems = await sampler.collectSystemDevices(referenceDate: referenceDate)
+        // collectSystemDevices 会跑 system_profiler 子进程（~1s+）。期间面板可能被关闭
+        // （onDisappear -> stop()）；普通 await 不会因取消提前返回，续体仍会写入陈旧快照。
+        guard !Task.isCancelled, isStarted else { return }
         systemItems = collectedItems
         lastSystemUpdate = referenceDate
         rebuildSnapshot()

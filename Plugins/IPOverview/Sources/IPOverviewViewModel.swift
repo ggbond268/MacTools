@@ -168,18 +168,13 @@ final class IPOverviewViewModel: ObservableObject {
                 isCheckingConnectivity = false
             }
 
-            var nextResults: [IPOverviewConnectivityResult] = []
             for target in targets {
                 guard !Task.isCancelled else { return }
                 let result = await connectivityChecker.check(target: target)
-                nextResults.append(result)
-                connectivityResults = targets.map { candidate in
-                    nextResults.first(where: { $0.id == candidate.id })
-                        ?? IPOverviewConnectivityResult(
-                            id: candidate.id,
-                            target: candidate,
-                            status: .checking
-                        )
+                // 就地合并到当前发布数组，而不是从过期快照整体重建：
+                // 检测期间（最长十几秒）用户增删目标不会被覆盖——新增的不丢、删除的不复活。
+                if let index = connectivityResults.firstIndex(where: { $0.id == result.id }) {
+                    connectivityResults[index] = result
                 }
             }
         }

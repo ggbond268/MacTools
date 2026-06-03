@@ -207,6 +207,14 @@ final class FixDamagedAppPlugin: MacToolsPlugin, PluginPrimaryPanel, DropZoneAnc
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         let response = panel.runModal()
         guard response == .OK, let url = panel.url else { return }
+        // canChooseDirectories 为 true 且 allowedContentTypes 无法阻止选中普通目录，
+        // 因此与拖拽路径一致，必须校验是 .app，避免对任意目录执行管理员权限的 xattr 删除。
+        guard url.pathExtension.lowercased() == "app" else {
+            selectedApp = url
+            fixState = .failure(message: "请选择 .app 应用")
+            onStateChange?()
+            return
+        }
         selectedApp = url
         fixState = .idle
         onStateChange?()
