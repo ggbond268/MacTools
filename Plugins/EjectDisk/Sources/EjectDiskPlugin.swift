@@ -42,6 +42,7 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel {
     private var ejectableDiskCount: Int = 0
     private var lastErrorMessage: String?
     private var volumeMountObservers: [NSObjectProtocol] = []
+    private var ejectableScanToken = 0
 
     var primaryPanelState: PluginPanelState {
         PluginPanelState(
@@ -102,14 +103,18 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel {
     }
 
     /// 把卷扫描放到后台线程，避免在慢速网络/可移动卷上阻塞主线程，扫完再回主线程更新计数。
+    /// 用世代令牌保证乱序完成的后台扫描只让最新一次落地，避免旧扫描覆盖新结果。
     private func scheduleEjectableDiskCountRefresh() {
+        ejectableScanToken &+= 1
+        let token = ejectableScanToken
         Task.detached { [weak self] in
             let count = Self.ejectableDiskCountSync()
-            await MainActor.run { self?.applyEjectableDiskCount(count) }
+            await MainActor.run { self?.applyEjectableDiskCount(count, token: token) }
         }
     }
 
-    private func applyEjectableDiskCount(_ count: Int) {
+    private func applyEjectableDiskCount(_ count: Int, token: Int) {
+        guard token == ejectableScanToken else { return }
         guard ejectableDiskCount != count else { return }
         ejectableDiskCount = count
         onStateChange?()
@@ -133,6 +138,20 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel {
     func handlePermissionAction(id: String) {}
     func handleSettingsAction(id: String) {}
     func handleShortcutAction(id: String) {}
+
+    func deactivate(reason: PluginDeactivationReason) {
+        // 插件隐藏/禁用/卸载时移除挂载观察者，否则它们会一直存活并在每次卷变化时后台扫描 /Volumes。
+        // 恢复时 refresh() -> setupVolumeMountObserver() 会重新注册（其内部按 isEmpty 守卫）。
+        teardownVolumeMountObserver()
+    }
+
+    private func teardownVolumeMountObserver() {
+        let notificationCenter = NSWorkspace.shared.notificationCenter
+        for observer in volumeMountObservers {
+            notificationCenter.removeObserver(observer)
+        }
+        volumeMountObservers.removeAll()
+    }
 
     // MARK: - Private
 
