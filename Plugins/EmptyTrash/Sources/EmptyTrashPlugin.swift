@@ -174,6 +174,18 @@ private struct OsascriptResult {
     let errorOutput: String
 }
 
+/// Reads one pipe to EOF off the caller's thread. Access to `data` is serialized
+/// by the `DispatchGroup` barrier in `runOsascriptStandalone` (written before
+/// `leave()`, read after `wait()`), so `@unchecked Sendable` is safe here.
+private final class PipeDrainer: @unchecked Sendable {
+    private let handle: FileHandle
+    private(set) var data = Data()
+
+    init(_ handle: FileHandle) { self.handle = handle }
+
+    func drain() { data = handle.readDataToEndOfFile() }
+}
+
 private func runOsascriptStandalone(_ script: String) -> OsascriptResult {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -184,13 +196,22 @@ private func runOsascriptStandalone(_ script: String) -> OsascriptResult {
     process.standardError = errPipe
     do {
         try process.run()
-        // Drain both pipes before waiting to avoid deadlock on large output.
+        // Drain stdout and stderr concurrently. Reading them sequentially can
+        // deadlock: osascript may block writing to the not-yet-drained pipe once
+        // its buffer fills, while we wait on the other pipe to reach EOF.
+        let errDrainer = PipeDrainer(errPipe.fileHandleForReading)
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            errDrainer.drain()
+            group.leave()
+        }
         let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+        group.wait()
         process.waitUntilExit()
         let output = String(data: outData, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let errorOutput = String(data: errData, encoding: .utf8)?
+        let errorOutput = String(data: errDrainer.data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return OsascriptResult(exitCode: process.terminationStatus, output: output, errorOutput: errorOutput)
     } catch {

@@ -67,6 +67,16 @@ final class EmptyTrashPluginTests: XCTestCase {
         XCTAssertFalse(message.contains("-1743"))
     }
 
+    func testAutomationWouldRequireConsentStderrYieldsActionableGuidance() {
+        // -1744 == errAEEventWouldRequireUserConsent: also an Automation denial.
+        let stderr = "execution error: Finder got an error: Not authorized to send Apple events to Finder. (-1744)"
+        let message = EmptyTrashPlugin.emptyTrashFailureMessage(stderr: stderr)
+
+        XCTAssertTrue(message.contains("自动化"))
+        XCTAssertTrue(message.contains("访达"))
+        XCTAssertFalse(message.contains("-1744"))
+    }
+
     func testNonPermissionStderrYieldsGenericMessage() {
         let stderr = "execution error: The operation couldn't be completed. (-30720)"
         let message = EmptyTrashPlugin.emptyTrashFailureMessage(stderr: stderr)
