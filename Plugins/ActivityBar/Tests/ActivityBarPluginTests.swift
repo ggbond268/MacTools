@@ -52,6 +52,32 @@ final class ActivityBarPluginTests: XCTestCase {
         XCTAssertEqual(harness.controller.todayInputStats.totalInputs, 0)
     }
 
+    func testRefreshRetriesEventTapAfterPermissionGranted() {
+        let harness = makeHarness()
+        harness.plugin.handleAction(.setSwitch(true)) // tracking on
+
+        // Simulate the tap having been denied Input Monitoring on first start,
+        // then the user granting the permission in System Settings.
+        harness.inputMonitor.status = .inputMonitoringDenied
+        harness.inputMonitor.statusAfterRetry = .running
+
+        // A panel appear / refresh must re-attempt the tap and recover.
+        harness.plugin.refresh()
+
+        XCTAssertGreaterThanOrEqual(harness.inputMonitor.retryCallCount, 1)
+        XCTAssertEqual(harness.controller.monitorStatus, .running)
+    }
+
+    func testRefreshDoesNotRetryWhenTrackingDisabled() {
+        let harness = makeHarness()
+        // Tracking is off by default; a denied tap should not be retried.
+        harness.inputMonitor.status = .inputMonitoringDenied
+
+        harness.plugin.refresh()
+
+        XCTAssertEqual(harness.inputMonitor.retryCallCount, 0)
+    }
+
     private func makeHarness() -> Harness {
         let storage = ActivityBarMemoryStorage()
         let inputMonitor = ActivityBarFakeInputMonitor()

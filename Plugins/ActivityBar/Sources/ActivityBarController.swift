@@ -131,6 +131,12 @@ final class ActivityBarController: ObservableObject {
     }
 
     func refresh() {
+        // Recover input monitoring if the user granted the permission after the
+        // tap was first denied — refresh() runs on panel appear, so the feature
+        // starts working without requiring a tracking toggle or app restart.
+        if isTrackingEnabled {
+            inputMonitor.retryEventTapIfDenied()
+        }
         codingStats.flushActiveDurations()
         notifyChange()
     }

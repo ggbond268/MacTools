@@ -9,6 +9,9 @@ protocol ActivityBarInputMonitoring: AnyObject {
 
     func start()
     func stop()
+    /// Re-attempt only the event tap if a prior `start()` was denied Input
+    /// Monitoring permission. Safe to call repeatedly; no-op unless denied.
+    func retryEventTapIfDenied()
 }
 
 @MainActor
@@ -37,6 +40,16 @@ final class ActivityBarInputMonitor: ActivityBarInputMonitoring {
         }
 
         startScreenTimeTracking()
+        startEventTap()
+    }
+
+    /// Re-attempt only the event tap after an earlier denial. Screen-time
+    /// tracking already started during `start()`, so we must NOT re-run
+    /// `startScreenTimeTracking()` here — doing so would leak the existing
+    /// timer/workspace observer. Granting the permission then re-opening the
+    /// panel (which calls `refresh()`) now recovers without a restart.
+    func retryEventTapIfDenied() {
+        guard status == .inputMonitoringDenied else { return }
         startEventTap()
     }
 

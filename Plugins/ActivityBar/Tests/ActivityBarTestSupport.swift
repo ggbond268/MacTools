@@ -54,6 +54,10 @@ final class ActivityBarFakeInputMonitor: ActivityBarInputMonitoring {
     var onEvent: ((ActivityBarInputEvent) -> Void)?
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0
+    private(set) var retryCallCount = 0
+    /// When set, a retry while denied transitions the status to this value,
+    /// simulating the user granting the permission between attempts.
+    var statusAfterRetry: ActivityBarInputMonitorStatus?
 
     func start() {
         startCallCount += 1
@@ -63,6 +67,14 @@ final class ActivityBarFakeInputMonitor: ActivityBarInputMonitoring {
     func stop() {
         stopCallCount += 1
         status = .idle
+    }
+
+    func retryEventTapIfDenied() {
+        retryCallCount += 1
+        guard status == .inputMonitoringDenied else { return }
+        if let statusAfterRetry {
+            status = statusAfterRetry
+        }
     }
 
     func emit(_ event: ActivityBarInputEvent) {
