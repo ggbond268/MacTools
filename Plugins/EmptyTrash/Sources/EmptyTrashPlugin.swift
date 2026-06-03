@@ -138,25 +138,43 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel {
     private static func fetchTrashItemCount() async -> Int {
         let script = "tell application \"Finder\" to count items of trash"
         return await Task.detached(priority: .userInitiated) {
-            runOsascriptStandalone(script).flatMap { Int($0) } ?? 0
+            let result = runOsascriptStandalone(script)
+            guard result.exitCode == 0 else { return 0 }
+            return Int(result.output) ?? 0
         }.value
     }
 
     private static func emptyTrashViaAppleScript() async throws {
         let script = "tell application \"Finder\" to empty trash"
         try await Task.detached(priority: .userInitiated) {
-             if runOsascriptStandalone(script) == nil {
+            let result = runOsascriptStandalone(script)
+            guard result.exitCode == 0 else {
                 throw NSError(
                     domain: "EmptyTrashPlugin",
                     code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "清空废纸篓失败，请检查“自动操作”权限"]
+                    userInfo: [NSLocalizedDescriptionKey: emptyTrashFailureMessage(stderr: result.errorOutput)]
                 )
             }
         }.value
     }
+
+    /// Distinguishes an Automation-permission denial (so the user can fix it) from
+    /// other Finder failures, instead of always blaming the permission.
+    nonisolated static func emptyTrashFailureMessage(stderr: String) -> String {
+        if stderr.contains("-1743") || stderr.contains("-1744") {
+            return "需要自动化权限：请在 系统设置 › 隐私与安全性 › 自动化 中允许 MacTools 控制“访达”后重试。"
+        }
+        return "清空废纸篓失败"
+    }
 }
 
-private func runOsascriptStandalone(_ script: String) -> String? {
+private struct OsascriptResult {
+    let exitCode: Int32
+    let output: String
+    let errorOutput: String
+}
+
+private func runOsascriptStandalone(_ script: String) -> OsascriptResult {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
     process.arguments = ["-e", script]
@@ -166,14 +184,16 @@ private func runOsascriptStandalone(_ script: String) -> String? {
     process.standardError = errPipe
     do {
         try process.run()
+        // Drain both pipes before waiting to avoid deadlock on large output.
+        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            return nil
-        }
-        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let output = String(data: outData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let errorOutput = String(data: errData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return OsascriptResult(exitCode: process.terminationStatus, output: output, errorOutput: errorOutput)
     } catch {
-        return nil
+        return OsascriptResult(exitCode: -1, output: "", errorOutput: error.localizedDescription)
     }
 }

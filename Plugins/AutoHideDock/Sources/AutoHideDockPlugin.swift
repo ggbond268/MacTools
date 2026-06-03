@@ -4,6 +4,33 @@ import OSLog
 import SwiftUI
 import MacToolsPluginKit
 
+/// Classifies AppleScript / Apple Event failures that stem from the user denying
+/// the Automation privacy permission, and turns them into actionable guidance.
+enum AutomationDenial {
+    /// `errAEEventNotPermitted` — the app is not allowed to send Apple events to the target.
+    static let notPermittedErrorNumber = -1743
+    /// `errAEEventWouldRequireUserConsent` — consent has not been granted yet.
+    static let consentRequiredErrorNumber = -1744
+
+    static func isDenied(errorNumber: Int?) -> Bool {
+        errorNumber == notPermittedErrorNumber || errorNumber == consentRequiredErrorNumber
+    }
+
+    static func isDenied(_ error: Error) -> Bool {
+        isDenied(errorNumber: (error as NSError).code)
+    }
+
+    /// Returns actionable guidance when `error` is an Automation-denied failure, otherwise `nil`.
+    static func message(for error: Error, targetAppName: String) -> String? {
+        guard isDenied(error) else { return nil }
+        return message(targetAppName: targetAppName)
+    }
+
+    static func message(targetAppName: String) -> String {
+        "需要自动化权限：请在 系统设置 › 隐私与安全性 › 自动化 中允许 MacTools 控制“\(targetAppName)”后重试。"
+    }
+}
+
 protocol DockCommandRunning {
     func setDockAutohide(_ isEnabled: Bool) throws
 }
@@ -130,7 +157,8 @@ final class AutoHideDockPlugin: MacToolsPlugin, PluginPrimaryPanel {
             onStateChange?()
         } catch {
             logger.error("Failed to update Dock auto-hide: \(error.localizedDescription, privacy: .public)")
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = AutomationDenial.message(for: error, targetAppName: "系统事件")
+                ?? error.localizedDescription
             refresh()
             onStateChange?()
         }

@@ -55,4 +55,22 @@ final class EmptyTrashPluginTests: XCTestCase {
 
         XCTAssertEqual(plugin.primaryPanelDescriptor.menuActionBehavior, .keepPresented)
     }
+
+    // MARK: - Failure classification
+
+    func testAutomationDeniedStderrYieldsActionableGuidance() {
+        let stderr = "execution error: Finder got an error: Not authorized to send Apple events to Finder. (-1743)"
+        let message = EmptyTrashPlugin.emptyTrashFailureMessage(stderr: stderr)
+
+        XCTAssertTrue(message.contains("自动化"))
+        XCTAssertTrue(message.contains("访达"))
+        XCTAssertFalse(message.contains("-1743"))
+    }
+
+    func testNonPermissionStderrYieldsGenericMessage() {
+        let stderr = "execution error: The operation couldn't be completed. (-30720)"
+        let message = EmptyTrashPlugin.emptyTrashFailureMessage(stderr: stderr)
+
+        XCTAssertEqual(message, "清空废纸篓失败")
+    }
 }

@@ -4,6 +4,23 @@ import OSLog
 import SwiftUI
 import MacToolsPluginKit
 
+/// Classifies AppleScript / Apple Event failures that stem from the user denying
+/// the Automation privacy permission, and turns them into actionable guidance.
+enum AutomationDenial {
+    /// `errAEEventNotPermitted` — the app is not allowed to send Apple events to the target.
+    static let notPermittedErrorNumber = -1743
+    /// `errAEEventWouldRequireUserConsent` — consent has not been granted yet.
+    static let consentRequiredErrorNumber = -1744
+
+    static func isDenied(errorNumber: Int?) -> Bool {
+        errorNumber == notPermittedErrorNumber || errorNumber == consentRequiredErrorNumber
+    }
+
+    static func message(targetAppName: String) -> String {
+        "需要自动化权限：请在 系统设置 › 隐私与安全性 › 自动化 中允许 MacTools 控制“\(targetAppName)”后重试。"
+    }
+}
+
 public final class AppearancePluginFactory: NSObject, MacToolsPluginBundleFactory {
     public static func makeProvider(context: PluginRuntimeContext) throws -> any PluginProvider {
         AppearancePluginProvider()
@@ -39,6 +56,7 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools", category: "AppearancePlugin")
     private var isDarkMode: Bool = false
+    private var lastErrorMessage: String?
     private nonisolated(unsafe) var themeObserver: NSObjectProtocol?
 
     init() {
@@ -60,7 +78,7 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel {
             isEnabled: true,
             isVisible: true,
             detail: nil,
-            errorMessage: nil
+            errorMessage: lastErrorMessage
         )
     }
 
@@ -109,8 +127,20 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel {
         appleScript?.executeAndReturnError(&error)
         if let error {
             logger.error("Failed to set dark mode: \(error)")
+            let errorNumber = error[NSAppleScript.errorNumber] as? Int
+            if AutomationDenial.isDenied(errorNumber: errorNumber) {
+                lastErrorMessage = AutomationDenial.message(targetAppName: "系统事件")
+            } else {
+                let message = (error[NSAppleScript.errorMessage] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                lastErrorMessage = message?.isEmpty == false ? message : "切换深色模式失败"
+            }
+            // Re-sync the toggle to the real system state so it doesn't appear flipped.
+            isDarkMode = Self.readSystemDarkMode()
+            onStateChange?()
         } else {
             isDarkMode = enable
+            lastErrorMessage = nil
             onStateChange?()
         }
     }
