@@ -70,7 +70,10 @@ final class MiddleClickSession: @unchecked Sendable {
 
     // MARK: - 单例引用（供 C 回调访问）
 
-    nonisolated(unsafe) static weak var activeSession: MiddleClickSession?
+    /// 由不公平锁保护的强引用，替代原来 nonisolated(unsafe) 的 weak。
+    /// MT 驱动线程读、主线程写；Swift weak 读非原子会撕裂指针。锁内取强引用既原子又保活，
+    /// 取出后的强引用保证回调使用期间对象不被释放。
+    private static let activeSessionLock = OSAllocatedUnfairLock<MiddleClickSession?>(initialState: nil)
 
     // MARK: - MTDeviceCreateList（私有符号，通过 @_silgen_name 链接）
 
@@ -86,7 +89,7 @@ final class MiddleClickSession: @unchecked Sendable {
     // 只维护 threeDown 标志，不做手势识别。
 
     private let touchCallback: MTFrameCallbackFunction = { _, data, nFingers, _, _ in
-        guard let session = MiddleClickSession.activeSession else { return }
+        guard let session = MiddleClickSession.activeSessionLock.withLock({ $0 }) else { return }
         let isDown = (nFingers == Int32(session.requiredFingerCount))
         session.tapFlags.withLock { $0.threeDown = isDown }
     }
@@ -220,14 +223,14 @@ final class MiddleClickSession: @unchecked Sendable {
     }
 
     func activate() {
-        MiddleClickSession.activeSession?.stop()
-        MiddleClickSession.activeSession = self
+        MiddleClickSession.activeSessionLock.withLock { $0 }?.stop()
+        MiddleClickSession.activeSessionLock.withLock { $0 = self }
         start()
     }
 
     func deactivate() {
-        if MiddleClickSession.activeSession === self {
-            MiddleClickSession.activeSession = nil
+        MiddleClickSession.activeSessionLock.withLock { stored in
+            if stored === self { stored = nil }
         }
         stop()
     }
