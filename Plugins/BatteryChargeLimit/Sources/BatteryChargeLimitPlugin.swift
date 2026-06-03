@@ -94,6 +94,10 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
         // reset by firmware across sleep/hibernation, so on launch we
         // re-apply whatever the user last had configured.
         if store.isEnabled {
+            // 重新探测能力：capabilities 之前只在 handleEnableToggle 里赋值，重启（持久化
+            // enabled）时不经过那条路径，会停在 .none，导致强制放电功能与设置项静默消失。
+            // probeCapabilities() 是带缓存的纯 SMC 读，无副作用。
+            capabilities = writer.probeCapabilities()
             applyCurrentMode(reason: "activate")
         }
     }
@@ -101,11 +105,15 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
     func deactivate(reason: PluginDeactivationReason) {
         unregisterSleepWakeObservers()
         stopMonitoring()
+        // 强制放电(CH0I)在没有监控任务时持续放电，任何停用场景下都不安全，必须无条件停止。
+        // 尤其热更新(.updating) requiresStateCleanup==false 且新版不在进程内重新激活，
+        // 否则会让电池在插电状态下被持续放空。充电上限(inhibit)则只在真正清理时解除——
+        // 热更新期间保留限制是期望行为。
+        _ = writer.setForceDischarge(false)
         if reason.requiresStateCleanup {
             // Restore unrestricted charging so the user isn't left with the
             // SMC stuck in inhibit after disabling/uninstalling the plugin.
             _ = writer.resumeCharging()
-            _ = writer.setForceDischarge(false)
             BatteryChargeLimitLog.plugin.info("Deactivated (\(String(describing: reason), privacy: .public)) — cleared SMC charge inhibit")
         }
     }
