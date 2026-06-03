@@ -109,12 +109,23 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
         // 尤其热更新(.updating) requiresStateCleanup==false 且新版不在进程内重新激活，
         // 否则会让电池在插电状态下被持续放空。充电上限(inhibit)则只在真正清理时解除——
         // 热更新期间保留限制是期望行为。
-        _ = writer.setForceDischarge(false)
+        // This is the safety-critical cleanup path: a dropped failure can leave the
+        // battery stuck in forced discharge with no visibility. Log if it fails.
+        if let err = writer.setForceDischarge(false) {
+            BatteryChargeLimitLog.plugin.error(
+                "Deactivation (\(String(describing: reason), privacy: .public)) failed to clear force-discharge: \(err.localizedDescription, privacy: .public)"
+            )
+        }
         if reason.requiresStateCleanup {
             // Restore unrestricted charging so the user isn't left with the
             // SMC stuck in inhibit after disabling/uninstalling the plugin.
-            _ = writer.resumeCharging()
-            BatteryChargeLimitLog.plugin.info("Deactivated (\(String(describing: reason), privacy: .public)) — cleared SMC charge inhibit")
+            if let err = writer.resumeCharging() {
+                BatteryChargeLimitLog.plugin.error(
+                    "Deactivation (\(String(describing: reason), privacy: .public)) failed to clear charge inhibit: \(err.localizedDescription, privacy: .public)"
+                )
+            } else {
+                BatteryChargeLimitLog.plugin.info("Deactivated (\(String(describing: reason), privacy: .public)) — cleared SMC charge inhibit")
+            }
         }
     }
 
