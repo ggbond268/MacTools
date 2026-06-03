@@ -185,10 +185,17 @@ final class MiddleClickSession: @unchecked Sendable {
         devices.forEach { $0.register(contactFrameCallback: touchCallback); $0.start(runMode: 0) }
     }
 
-    private func stopTouchListeners() {
+    private func stopTouchListeners(resetConversionState: Bool = true) {
         devices.forEach { $0.unregister(contactFrameCallback: touchCallback); $0.stop(); $0.release() }
         devices.removeAll()
-        tapFlags.withLock { $0 = TapFlags() }
+        tapFlags.withLock { flags in
+            flags.threeDown = false
+            // 完全停止时清掉转换状态；重启监听（唤醒/显示器重配/触控板重新枚举）时保留，
+            // 否则会丢掉已转换中键 down 的配对 up，导致中键逻辑卡住。
+            if resetConversionState {
+                flags.wasThreeDown = false
+            }
+        }
     }
 
     // MARK: - Start / Stop
@@ -232,7 +239,7 @@ final class MiddleClickSession: @unchecked Sendable {
     private func restartListeners() {
         logger.info("重新建立多点触控与 CGEvent tap 监听")
         stopEventTap()
-        stopTouchListeners()
+        stopTouchListeners(resetConversionState: false)
         startTouchListeners()
         startEventTap()
         logger.info("监听重建完成，设备数：\(self.devices.count)")
