@@ -14,7 +14,7 @@ final class GlobalShortcutManager {
         let carbonID: UInt32
     }
 
-    private static let signature: OSType = 0x4D43544C
+    private nonisolated static let signature: OSType = 0x4D43544C
 
     var onShortcutTriggered: ((String) -> Void)?
 
@@ -141,6 +141,12 @@ final class GlobalShortcutManager {
 
         guard status == noErr else {
             return status
+        }
+
+        // 只处理本管理器签名的热键；签名不符返回 eventNotHandledErr，
+        // 让 Carbon 继续传递给真正的拥有者（如插件的 AppHotkeyManager）。
+        guard hotKeyID.signature == GlobalShortcutManager.signature else {
+            return OSStatus(eventNotHandledErr)
         }
 
         let manager = Unmanaged<GlobalShortcutManager>.fromOpaque(userData).takeUnretainedValue()

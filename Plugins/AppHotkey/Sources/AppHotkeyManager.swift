@@ -14,17 +14,26 @@ final class AppHotkeyManager {
     }
 
     // "AHKY" = 0x4148_4B59
-    private static let signature: OSType = 0x4148_4B59
+    private nonisolated static let signature: OSType = 0x4148_4B59
 
     var onTrigger: ((UUID) -> Void)?
 
-    private var handlerRef: EventHandlerRef?
+    nonisolated(unsafe) private var handlerRef: EventHandlerRef?
     private var registeredHotKeys: [UUID: RegisteredHotKey] = [:]
     private var idsByCarbon: [UInt32: UUID] = [:]
     private var nextCarbonID: UInt32 = 1
 
     init() {
         installHandler()
+    }
+
+    deinit {
+        // 进程级 Carbon handler 用 passUnretained(self) 安装，实例释放前必须移除，
+        // 否则悬挂 handler 仍会触发并解引用已释放的 self（use-after-free）。
+        // handlerRef 标 nonisolated(unsafe)：仅 init 写、deinit 读，无并发访问。
+        if let handlerRef {
+            RemoveEventHandler(handlerRef)
+        }
     }
 
     /// 根据当前 entries 重新同步热键注册（增量 diff）。
@@ -122,6 +131,12 @@ final class AppHotkeyManager {
             &hotKeyID
         )
         guard status == noErr else { return status }
+
+        // 只处理本管理器签名的热键；签名不符返回 eventNotHandledErr，
+        // 让 Carbon 继续把事件传给真正的拥有者（如宿主的 GlobalShortcutManager）。
+        guard hotKeyID.signature == AppHotkeyManager.signature else {
+            return OSStatus(eventNotHandledErr)
+        }
 
         let manager = Unmanaged<AppHotkeyManager>
             .fromOpaque(userData)
