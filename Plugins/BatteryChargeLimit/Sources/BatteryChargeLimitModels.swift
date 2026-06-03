@@ -3,20 +3,18 @@ import Foundation
 // MARK: - Charge Mode
 //
 // The user-facing mode. Once enabled, the plugin always sits in one of these
-// three modes. Mode transitions are explicit (user action) except for the
-// auto-fallback from `.charging` / `.discharging` back to `.holdAtLimit` when
-// the battery reaches the configured limit.
+// modes. `.holdAtLimit` is a software auto-maintain ceiling (the only option
+// on Apple Silicon, which exposes just a binary charge-inhibit). The auto loop
+// drives `.holdAtLimit` and auto-falls back from `.discharging`; `.manualPaused`
+// is never auto-resumed.
 
 enum BatteryChargeMode: String, Codable, Equatable {
-    /// Charging is inhibited at the SMC level. This is the default whenever
-    /// the plugin is enabled. Crucially: even if the battery is BELOW the
-    /// limit, charging stays inhibited until the user explicitly resumes.
+    /// Auto-maintain ceiling: plugged in + below limit (minus hysteresis) =
+    /// charge, at/above limit = stop. Loop-driven. Default. RawValue kept.
     case holdAtLimit
-    /// User explicitly resumed charging. The plugin will auto-transition back
-    /// to `.holdAtLimit` once the battery reaches the configured limit.
-    case charging
-    /// Force-discharge via CH0I. The plugin will auto-transition back to
-    /// `.holdAtLimit` once the battery falls to (or below) the configured limit.
+    /// User paused charging. Inhibited; the auto loop NEVER resumes it.
+    case manualPaused
+    /// Force-discharge via CH0I; auto-falls back to `.holdAtLimit` at/below limit.
     case discharging
 }
 
@@ -27,6 +25,9 @@ enum BatteryChargeLimits {
     static let maximumPercent = 100
     static let defaultPercent = 80
     static let percentStep = 1
+    /// Auto-maintain resume threshold = limit - this. Prevents CHIE write
+    /// thrashing by holding direction inside the [limit-hysteresis, limit) band.
+    static let resumeHysteresisPercent = 5
 }
 
 // MARK: - SMC Capabilities (reported by helper `probe`)

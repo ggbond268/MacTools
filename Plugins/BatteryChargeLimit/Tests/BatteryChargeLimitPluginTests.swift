@@ -93,9 +93,11 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
 
     // MARK: Enable / Disable
 
-    func testEnableTogglePersistsAndInhibitsCharging() {
+    func testEnableTogglePersistsAndInhibitsAtOrAboveLimit() {
         let writer = MockBatteryWriter()
-        let plugin = makePlugin(reader: MockBatteryReader(snapshot: makeSnapshot(level: 60)), writer: writer)
+        // At/above the limit, enabling must inhibit charging immediately
+        // (below the limit it auto-resumes instead — covered separately).
+        let plugin = makePlugin(reader: MockBatteryReader(snapshot: makeSnapshot(level: 85)), writer: writer)
         plugin.refresh()
 
         plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
@@ -131,15 +133,15 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
 
     func testLimitSliderUpdatesPersistedLimitOnEnd() {
         let writer = MockBatteryWriter()
-        let plugin = makePlugin(reader: MockBatteryReader(snapshot: makeSnapshot(level: 60)), writer: writer)
+        let plugin = makePlugin(reader: MockBatteryReader(snapshot: makeSnapshot(level: 70)), writer: writer)
         plugin.refresh()
         plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
 
-        plugin.handleAction(.setSlider(controlID: "battery-limit-slider", value: 70, phase: .ended))
+        // Lowering the limit below the current level must re-evaluate and inhibit.
+        plugin.handleAction(.setSlider(controlID: "battery-limit-slider", value: 65, phase: .ended))
 
-        XCTAssertEqual(plugin.store.limitPercent, 70)
-        // Limit change re-applies holdAtLimit using the new value.
-        XCTAssertTrue(writer.inhibitCalls.contains(70))
+        XCTAssertEqual(plugin.store.limitPercent, 65)
+        XCTAssertTrue(writer.inhibitCalls.contains(65))
     }
 
     func testLimitSliderChangedPhaseDoesNotPersist() {
@@ -154,52 +156,66 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
 
     // MARK: Mode Transitions
 
-    func testStartChargingResumesAndTransitionsToCharging() {
+    func testHoldAtLimitAutoResumesBelowLimit() {
         let writer = MockBatteryWriter()
-        let plugin = makePlugin(reader: MockBatteryReader(snapshot: makeSnapshot(level: 60)), writer: writer)
+        let reader = MockBatteryReader(snapshot: makeSnapshot(level: 80))
+        let plugin = makePlugin(reader: reader, writer: writer)
         plugin.refresh()
         plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
         writer.resumeCalls = 0
 
-        plugin.handleAction(.invokeAction(controlID: "battery-charge-action"))
+        // Auto-maintain: dropping below limit-hysteresis must resume charging on its own.
+        reader.snapshot = makeSnapshot(level: 60)
+        plugin.refresh()
 
-        XCTAssertEqual(plugin.store.mode, .charging)
-        XCTAssertGreaterThanOrEqual(writer.resumeCalls, 1)
+        XCTAssertEqual(plugin.store.mode, .holdAtLimit)
+        XCTAssertGreaterThanOrEqual(writer.resumeCalls, 1, "holdAtLimit must auto-resume below the limit")
     }
 
-    func testReachingLimitWhileChargingTransitionsBackToHold() {
+    func testAutoMaintainInhibitsAtLimit() {
         let writer = MockBatteryWriter()
         let reader = MockBatteryReader(snapshot: makeSnapshot(level: 60))
         let plugin = makePlugin(reader: reader, writer: writer)
         plugin.refresh()
         plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
-        plugin.handleAction(.invokeAction(controlID: "battery-charge-action"))
-        XCTAssertEqual(plugin.store.mode, .charging)
 
-        // Simulate the battery reaching the configured limit.
+        // Reaching the limit must stop charging.
         reader.snapshot = makeSnapshot(level: BatteryChargeLimits.defaultPercent)
         plugin.refresh()
 
         XCTAssertEqual(plugin.store.mode, .holdAtLimit)
+        XCTAssertTrue(writer.inhibitCalls.contains(BatteryChargeLimits.defaultPercent))
     }
 
-    func testHoldAtLimitDoesNotAutoResumeBelowLimit() {
+    func testChargeActionPausesAutoMaintain() {
+        let writer = MockBatteryWriter()
+        let plugin = makePlugin(reader: MockBatteryReader(snapshot: makeSnapshot(level: 60)), writer: writer)
+        plugin.refresh()
+        plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
+        writer.inhibitCalls.removeAll()
+
+        plugin.handleAction(.invokeAction(controlID: "battery-charge-action"))
+
+        XCTAssertEqual(plugin.store.mode, .manualPaused)
+        XCTAssertFalse(writer.inhibitCalls.isEmpty, "Pausing must inhibit charging")
+    }
+
+    func testManualPausedDoesNotAutoResumeBelowLimit() {
         let writer = MockBatteryWriter()
         let reader = MockBatteryReader(snapshot: makeSnapshot(level: 60))
         let plugin = makePlugin(reader: reader, writer: writer)
         plugin.refresh()
         plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
+        plugin.handleAction(.invokeAction(controlID: "battery-charge-action")) // -> manualPaused
         writer.resumeCalls = 0
 
-        // Battery drops further while in holdAtLimit — mode must NOT transition
-        // back to .charging on its own. This is the core behavior contract.
-        reader.snapshot = makeSnapshot(level: 50)
-        plugin.refresh()
         reader.snapshot = makeSnapshot(level: 40)
         plugin.refresh()
+        reader.snapshot = makeSnapshot(level: 30)
+        plugin.refresh()
 
-        XCTAssertEqual(plugin.store.mode, .holdAtLimit)
-        XCTAssertEqual(writer.resumeCalls, 0, "Plugin must not call resumeCharging() while in holdAtLimit")
+        XCTAssertEqual(plugin.store.mode, .manualPaused)
+        XCTAssertEqual(writer.resumeCalls, 0, "manualPaused must never auto-resume")
     }
 
     func testForceDischargeStartsWhenSupportedAndAboveLimit() {

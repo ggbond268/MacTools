@@ -76,9 +76,9 @@ struct BatteryChargeLimitSettingsView: View {
             sectionHeader(title: "充电行为", icon: "bolt.badge.checkmark")
 
             VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                Text("不自动恢复充电")
+                Text("自动维持上限")
                     .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-                Text("电量低于上限时不会自动充电，需要在菜单栏点击「开始充电」才会继续。这与系统自带的「优化电池充电」不同——系统会持续微充电以贴近上限。")
+                Text("电量达到上限后自动停止充电，掉到上限以下约 \(BatteryChargeLimits.resumeHysteresisPercent)% 时自动恢复充电，以此把电量维持在上限附近。点击「暂停充电」可手动停止，手动暂停后不会自动恢复，需再次点击恢复。")
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -110,10 +110,10 @@ struct BatteryChargeLimitSettingsView: View {
                 if capabilities.isBCLMOnly {
                     PluginSettingsListDivider()
                     VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Label("Intel Mac 限制", systemImage: "exclamationmark.triangle")
+                        Label("Intel Mac 说明", systemImage: "info.circle")
                             .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
                             .foregroundStyle(.orange)
-                        Text("当前 Mac 仅支持 BCLM，电量低于上限时仍可能被系统自动充至上限。「不自动恢复」语义在 Intel Mac 上无法保证。")
+                        Text("当前 Mac 使用 BCLM 固件充电上限，由固件自动把电量维持在上限附近。「暂停充电」依靠把上限临时调低实现，效果可能不如 Apple Silicon 精确。")
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

@@ -67,6 +67,9 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
     private var batterySnapshot: BatterySnapshot = .empty
     private var capabilities: BatterySMCCapabilities = .none
     private var lastErrorMessage: String?
+    /// Last auto-maintain direction (true=inhibit, false=resume, nil=undecided).
+    /// Only re-issue an SMC write when this flips — prevents 5s write thrashing.
+    private var lastAutoInhibited: Bool?
     private var monitoringTask: Task<Void, Never>?
     private var sleepObserver: (any NSObjectProtocol)?
     private var wakeObserver: (any NSObjectProtocol)?
@@ -186,12 +189,14 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
                 onStateChange?()
                 return
             }
-            // Enabling always starts in holdAtLimit — the core behavior is
-            // "don't auto-charge; user must explicitly resume."
+            // Enabling starts in holdAtLimit (auto-maintain). The loop decides
+            // inhibit vs resume based on level vs limit.
             store.setMode(.holdAtLimit)
+            lastAutoInhibited = nil
             applyCurrentMode(reason: "user-enable")
         } else {
             store.setMode(.holdAtLimit)
+            lastAutoInhibited = nil
             _ = writer.setForceDischarge(false)
             _ = writer.resumeCharging()
             lastErrorMessage = nil
@@ -201,11 +206,11 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     private func handleLimitChange(_ percent: Int) {
         store.setLimitPercent(percent)
-        // Changing the limit always returns to holdAtLimit. This matches the
-        // user's design: the act of setting a limit means "stop charging at
-        // this level; don't auto-resume."
-        if store.isEnabled {
-            store.setMode(.holdAtLimit)
+        // Re-evaluate the auto-maintain decision against the new threshold, but
+        // only when already auto-maintaining. Leave .manualPaused / .discharging
+        // untouched so a slider tweak doesn't silently override a manual choice.
+        if store.isEnabled, store.mode == .holdAtLimit {
+            lastAutoInhibited = nil
             applyCurrentMode(reason: "limit-change")
         }
         onStateChange?()
@@ -236,18 +241,18 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
         guard store.isEnabled else { return }
         switch store.mode {
         case .holdAtLimit:
-            // User explicitly asks to start charging. Move to .charging; the
-            // monitoring loop will revert to .holdAtLimit when the battery
-            // reaches the limit.
-            store.setMode(.charging)
-            applyCurrentMode(reason: "user-resume")
-        case .charging:
-            // User asks to stop charging — return to .holdAtLimit.
+            // User pauses the auto-maintain loop. Inhibit and never auto-resume.
+            store.setMode(.manualPaused)
+            applyCurrentMode(reason: "user-pause")
+        case .manualPaused:
+            // User resumes auto-maintain — let the loop re-decide from scratch.
             store.setMode(.holdAtLimit)
-            applyCurrentMode(reason: "user-stop-charging")
+            lastAutoInhibited = nil
+            applyCurrentMode(reason: "user-resume-auto")
         case .discharging:
-            // Treat as "stop discharging and hold at current level."
+            // Stop discharging and return to auto-maintain.
             store.setMode(.holdAtLimit)
+            lastAutoInhibited = nil
             applyCurrentMode(reason: "user-stop-discharge-via-charge")
         }
         onStateChange?()
@@ -258,6 +263,7 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
         switch store.mode {
         case .discharging:
             store.setMode(.holdAtLimit)
+            lastAutoInhibited = nil
             applyCurrentMode(reason: "user-stop-discharge")
         default:
             store.setMode(.discharging)
@@ -278,18 +284,13 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
         switch store.mode {
         case .holdAtLimit:
             _ = writer.setForceDischarge(false)
+            applyAutoMaintain(reason: reason)
+
+        case .manualPaused:
+            _ = writer.setForceDischarge(false)
             if let err = writer.inhibitCharging(limitPercent: store.limitPercent) {
                 lastErrorMessage = err.errorDescription
-                BatteryChargeLimitLog.plugin.error("inhibit failed (\(reason, privacy: .public)): \(err.localizedDescription, privacy: .public)")
-            } else {
-                lastErrorMessage = nil
-            }
-
-        case .charging:
-            _ = writer.setForceDischarge(false)
-            if let err = writer.resumeCharging() {
-                lastErrorMessage = err.errorDescription
-                BatteryChargeLimitLog.plugin.error("resume failed (\(reason, privacy: .public)): \(err.localizedDescription, privacy: .public)")
+                BatteryChargeLimitLog.plugin.error("inhibit (pause) failed (\(reason, privacy: .public)): \(err.localizedDescription, privacy: .public)")
             } else {
                 lastErrorMessage = nil
             }
@@ -311,31 +312,81 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
     }
 
     /// Automatic mode transitions driven by battery level changes.
-    /// Crucially, we DO NOT transition out of `.holdAtLimit` here — the user's
-    /// design choice is that "below limit, charging stays off until manual resume."
+    /// `.holdAtLimit` is auto-maintained here; `.manualPaused` is NEVER
+    /// auto-resumed (only re-asserted if firmware reset the inhibit).
     private func evaluateAutoTransitions() {
         guard store.isEnabled, let level = batterySnapshot.levelPercent else { return }
 
         switch store.mode {
-        case .charging where level >= store.limitPercent:
-            store.setMode(.holdAtLimit)
-            applyCurrentMode(reason: "auto-reached-limit")
-
         case .discharging where level <= store.limitPercent:
             store.setMode(.holdAtLimit)
+            lastAutoInhibited = nil
             applyCurrentMode(reason: "auto-discharged-to-limit")
 
         case .holdAtLimit:
-            // Re-assert the inhibit periodically — firmware can reset SMC
-            // keys across sleep, adapter unplug/replug, and rare hibernation
-            // events. Cheap to re-issue.
+            applyAutoMaintain(reason: "auto-maintain")
+
+        case .manualPaused:
+            // Re-assert the inhibit only when the system reports active
+            // charging (firmware can reset SMC keys across sleep/unplug).
+            // Never auto-resume — that's the whole point of manualPaused.
             if batterySnapshot.state == .charging {
-                applyCurrentMode(reason: "re-assert-inhibit")
+                _ = writer.inhibitCharging(limitPercent: store.limitPercent)
             }
 
-        default:
+        case .discharging:
             break
         }
+    }
+
+    /// Auto-maintain decision with hysteresis to prevent CHIE/CH0B+CH0C write
+    /// thrashing on the 5s loop. Issues an SMC write only when the decided
+    /// direction CHANGES:
+    ///   - level >= limit               -> inhibit
+    ///   - level <  limit - hysteresis  -> resume
+    ///   - inside the band              -> hold previous direction (no write)
+    private func applyAutoMaintain(reason: String) {
+        guard store.isEnabled, store.mode == .holdAtLimit else { return }
+        let limit = store.limitPercent
+        let resumeThreshold = max(
+            BatteryChargeLimits.minimumPercent,
+            limit - BatteryChargeLimits.resumeHysteresisPercent
+        )
+
+        let shouldInhibit: Bool
+        if let level = batterySnapshot.levelPercent {
+            if level >= limit {
+                shouldInhibit = true
+            } else if level < resumeThreshold {
+                shouldInhibit = false
+            } else {
+                // Hysteresis band — keep prior decision; default to inhibit.
+                shouldInhibit = lastAutoInhibited ?? true
+            }
+        } else {
+            // Unknown level: fail safe by inhibiting.
+            shouldInhibit = true
+        }
+
+        // No-op when the direction is unchanged — this is what kills thrashing.
+        guard shouldInhibit != lastAutoInhibited else { return }
+
+        if shouldInhibit {
+            if let err = writer.inhibitCharging(limitPercent: limit) {
+                lastErrorMessage = err.errorDescription
+                BatteryChargeLimitLog.plugin.error("auto-inhibit failed (\(reason, privacy: .public)): \(err.localizedDescription, privacy: .public)")
+            } else {
+                lastErrorMessage = nil
+            }
+        } else {
+            if let err = writer.resumeCharging() {
+                lastErrorMessage = err.errorDescription
+                BatteryChargeLimitLog.plugin.error("auto-resume failed (\(reason, privacy: .public)): \(err.localizedDescription, privacy: .public)")
+            } else {
+                lastErrorMessage = nil
+            }
+        }
+        lastAutoInhibited = shouldInhibit
     }
 
     // MARK: - Monitoring
@@ -413,9 +464,9 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
             if level >= limit {
                 return "已达上限 · \(level)% / \(limit)%"
             }
-            return "已停止充电 · \(level)% / \(limit)%"
-        case .charging:
-            return "充电中 · \(level)% → \(limit)%"
+            return "自动维持中 · \(level)% → \(limit)%"
+        case .manualPaused:
+            return "已暂停 · \(level)% / \(limit)%"
         case .discharging:
             return "放电中 · \(level)% → \(limit)%"
         }
@@ -466,11 +517,11 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
             let chargeIcon: String
             switch store.mode {
             case .holdAtLimit:
-                chargeTitle = "开始充电"
+                chargeTitle = "暂停充电"
+                chargeIcon = "pause.fill"
+            case .manualPaused:
+                chargeTitle = "恢复自动维持"
                 chargeIcon = "bolt.fill"
-            case .charging:
-                chargeTitle = "停止充电"
-                chargeIcon = "bolt.slash.fill"
             case .discharging:
                 chargeTitle = "停止放电"
                 chargeIcon = "stop.fill"
