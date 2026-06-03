@@ -18,12 +18,31 @@ final class AppHotkeyManager {
 
     var onTrigger: ((UUID) -> Void)?
 
+    /// Performs the actual Carbon registration. Returns the hot-key reference on
+    /// success, or `nil` if registration failed (e.g. the combo is already taken
+    /// by another app — `eventHotKeyExistsErr`). Injectable for testing.
+    typealias Registrar = (_ keyCode: UInt32, _ modifiers: UInt32, _ hotKeyID: EventHotKeyID) -> EventHotKeyRef?
+
+    /// Entry IDs whose shortcut could not be registered on the last `sync`.
+    private(set) var failedEntryIDs: Set<UUID> = []
+
+    private let registrar: Registrar
     private var handlerRef: EventHandlerRef?
     private var registeredHotKeys: [UUID: RegisteredHotKey] = [:]
     private var idsByCarbon: [UInt32: UUID] = [:]
     private var nextCarbonID: UInt32 = 1
 
-    init() {
+    init(registrar: Registrar? = nil) {
+        self.registrar = registrar ?? { keyCode, modifiers, hotKeyID in
+            var ref: EventHotKeyRef?
+            // 与 installHandler 一致用事件分发目标：全局热键不会路由到
+            // GetApplicationEventTarget()，否则注册成功却从不触发（main 的路由修复）。
+            let status = RegisterEventHotKey(
+                keyCode, modifiers, hotKeyID, GetEventDispatcherTarget(), 0, &ref
+            )
+            guard status == noErr, let ref else { return nil }
+            return ref
+        }
         installHandler()
     }
 
@@ -42,15 +61,20 @@ final class AppHotkeyManager {
         }
 
         // 新增或更新
+        var failures: Set<UUID> = []
         for (id, binding) in desired {
             if let existing = registeredHotKeys[id], existing.binding == binding { continue }
             unregister(id: id)
-            register(id: id, binding: binding)
+            if !register(id: id, binding: binding) {
+                failures.insert(id)
+            }
         }
+        failedEntryIDs = failures
     }
 
     func unregisterAll() {
         for id in Array(registeredHotKeys.keys) { unregister(id: id) }
+        failedEntryIDs = []
     }
 
     /// 录制期间临时注销指定条目的热键，录制结束后由调用方调用 `sync` 恢复。
@@ -77,26 +101,26 @@ final class AppHotkeyManager {
         )
     }
 
-    private func register(id: UUID, binding: ShortcutBinding) {
-        var ref: EventHotKeyRef?
+    /// Returns `true` on success, `false` if the OS rejected the registration.
+    @discardableResult
+    private func register(id: UUID, binding: ShortcutBinding) -> Bool {
         let cid = nextCarbonID
         nextCarbonID += 1
 
         let hotKeyID = EventHotKeyID(signature: Self.signature, id: cid)
-        let status = RegisterEventHotKey(
+        guard let ref = registrar(
             UInt32(binding.keyCode),
             binding.modifiers.carbonFlags,
-            hotKeyID,
-            GetEventDispatcherTarget(),
-            0,
-            &ref
-        )
-        guard status == noErr, let ref else { return }
+            hotKeyID
+        ) else {
+            return false
+        }
 
         registeredHotKeys[id] = RegisteredHotKey(
             entryID: id, binding: binding, reference: ref, carbonID: cid
         )
         idsByCarbon[cid] = id
+        return true
     }
 
     private func unregister(id: UUID) {

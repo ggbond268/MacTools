@@ -430,3 +430,71 @@ fileprivate final class InMemoryPluginStorage: PluginStorage {
     func removeObject(forKey key: String) { store.removeValue(forKey: key) }
     func migrateValueIfNeeded(fromLegacyKey: String, to key: String) {}
 }
+
+// MARK: - Registration Failure Surfacing
+
+@MainActor
+final class AppHotkeyRegistrationFailureTests: XCTestCase {
+
+    private func entry(_ name: String) -> AppShortcutEntry {
+        AppShortcutEntry(
+            bundleURL: URL(fileURLWithPath: "/Applications/\(name).app"),
+            displayName: name,
+            shortcut: ShortcutBinding(keyCode: 0, modifiers: [.command, .option])
+        )
+    }
+
+    func testManagerRecordsFailedRegistrations() {
+        // Registrar that always fails, simulating the OS rejecting the combo.
+        let manager = AppHotkeyManager(registrar: { _, _, _ in nil })
+        let e = entry("Safari")
+
+        manager.sync(entries: [e])
+
+        XCTAssertEqual(manager.failedEntryIDs, [e.id])
+    }
+
+    func testManagerClearsFailuresWhenEntriesRemoved() {
+        let manager = AppHotkeyManager(registrar: { _, _, _ in nil })
+        let e = entry("Safari")
+        manager.sync(entries: [e])
+        XCTAssertFalse(manager.failedEntryIDs.isEmpty)
+
+        manager.sync(entries: [])
+
+        XCTAssertTrue(manager.failedEntryIDs.isEmpty)
+    }
+
+    func testPluginSurfacesRegistrationFailureWithName() {
+        let storage = InMemoryPluginStorage()
+        // Seed the shared storage with an entry that has a shortcut.
+        AppHotkeyStore(storage: storage).addEntry(entry("Safari"))
+
+        let context = PluginRuntimeContext(pluginID: "app-hotkey", storage: storage)
+        let manager = AppHotkeyManager(registrar: { _, _, _ in nil })
+        let plugin = AppHotkeyPlugin(context: context, hotkeyManager: manager)
+
+        plugin.activate(context: context) // triggers syncHotkeys()
+
+        let message = plugin.primaryPanelState.errorMessage
+        XCTAssertNotNil(message)
+        XCTAssertTrue(message?.contains("Safari") == true)
+        XCTAssertTrue(message?.contains("注册失败") == true)
+    }
+
+    func testPluginHasNoErrorWhenRegistrationSucceeds() {
+        let storage = InMemoryPluginStorage()
+        AppHotkeyStore(storage: storage).addEntry(entry("Safari"))
+
+        let context = PluginRuntimeContext(pluginID: "app-hotkey", storage: storage)
+        // Registrar reports success by returning a non-nil reference.
+        let manager = AppHotkeyManager(registrar: { _, _, hotKeyID in
+            OpaquePointer(bitPattern: Int(hotKeyID.id) + 1)
+        })
+        let plugin = AppHotkeyPlugin(context: context, hotkeyManager: manager)
+
+        plugin.activate(context: context)
+
+        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+    }
+}

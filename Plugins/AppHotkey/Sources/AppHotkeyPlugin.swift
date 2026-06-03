@@ -52,13 +52,17 @@ final class AppHotkeyPlugin: MacToolsPlugin, PluginPrimaryPanel {
     private let hotkeyManager: AppHotkeyManager
     private let storage: PluginStorage
     private var isEnabled: Bool
+    private var registrationErrorMessage: String?
 
     // MARK: Init
 
-    init(context: PluginRuntimeContext = PluginRuntimeContext(pluginID: "app-hotkey")) {
+    init(
+        context: PluginRuntimeContext = PluginRuntimeContext(pluginID: "app-hotkey"),
+        hotkeyManager: AppHotkeyManager = AppHotkeyManager()
+    ) {
         self.storage = context.storage
         self.store = AppHotkeyStore(storage: context.storage)
-        self.hotkeyManager = AppHotkeyManager()
+        self.hotkeyManager = hotkeyManager
         // 默认启用；仅当用户明确关闭后才存储 false
         self.isEnabled = context.storage.object(forKey: "isEnabled") == nil
             ? true
@@ -116,7 +120,7 @@ final class AppHotkeyPlugin: MacToolsPlugin, PluginPrimaryPanel {
             isEnabled: true,
             isVisible: true,
             detail: nil,
-            errorMessage: nil
+            errorMessage: registrationErrorMessage
         )
     }
 
@@ -142,6 +146,24 @@ final class AppHotkeyPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     private func syncHotkeys() {
         hotkeyManager.sync(entries: isEnabled ? store.entries : [])
+        updateRegistrationError()
+    }
+
+    /// Surface hot-keys that the OS refused to register (most often because the
+    /// combo is already claimed by another app) so the user isn't left wondering
+    /// why a shortcut silently does nothing.
+    private func updateRegistrationError() {
+        let failedIDs = hotkeyManager.failedEntryIDs
+        guard !failedIDs.isEmpty else {
+            registrationErrorMessage = nil
+            return
+        }
+
+        let names = store.entries
+            .filter { failedIDs.contains($0.id) }
+            .map(\.displayName)
+        let joined = names.isEmpty ? "" : "：\(names.joined(separator: "、"))"
+        registrationErrorMessage = "\(failedIDs.count) 个快捷键注册失败\(joined)，可能已被其它应用占用"
     }
 
     /// 按下快捷键时：若目标应用在前台则隐藏，否则打开/激活。
