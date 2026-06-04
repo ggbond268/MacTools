@@ -13,18 +13,32 @@ final class AppHotkeyManager {
         let carbonID: UInt32
     }
 
-    // "AHKY" = 0x4148_4B59
-    private static let signature: OSType = 0x4148_4B59
+    // "AHKY" = 0x4148_4B59. Internal (not private) so a test can assert it never
+    // collides with GlobalShortcutManager's signature — the precondition that lets the
+    // signature-filtered handler pass foreign hot keys through to the other manager.
+    nonisolated static let signature: OSType = 0x4148_4B59
 
     var onTrigger: ((UUID) -> Void)?
 
-    private var handlerRef: EventHandlerRef?
+    // `nonisolated(unsafe)`: written only in `init` (via `installHandler`), read only in
+    // `deinit` — no concurrent access — so `deinit` can remove the handler without tripping
+    // Swift 6's "non-Sendable access from a nonisolated deinit" rule.
+    nonisolated(unsafe) private var handlerRef: EventHandlerRef?
     private var registeredHotKeys: [UUID: RegisteredHotKey] = [:]
     private var idsByCarbon: [UInt32: UUID] = [:]
     private var nextCarbonID: UInt32 = 1
 
     init() {
         installHandler()
+    }
+
+    deinit {
+        // 进程级 Carbon handler 用 passUnretained(self) 安装，实例释放前必须移除，
+        // 否则悬挂 handler 仍会触发并解引用已释放的 self（use-after-free）。
+        // AppHotkeyManager 属于可动态卸载/重载的插件，释放是真实路径，不是理论问题。
+        if let handlerRef {
+            RemoveEventHandler(handlerRef)
+        }
     }
 
     /// 根据当前 entries 重新同步热键注册（增量 diff）。
