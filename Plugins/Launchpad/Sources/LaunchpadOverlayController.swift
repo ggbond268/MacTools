@@ -69,6 +69,7 @@ final class LaunchpadOverlayController: NSObject, NSWindowDelegate {
 
     func open() {
         guard window == nil else { return }
+        guard let screen = activeScreen() else { return }   // no display → nothing to show
         // Restore the *user's* app on dismiss, not ourselves. When triggered from the
         // menu bar, frontmost may already be MacTools; capturing that would make
         // dismissal a no-op (Codex P2). The global-hotkey path captures the real app.
@@ -76,7 +77,6 @@ final class LaunchpadOverlayController: NSObject, NSWindowDelegate {
         previousApp = (front == .current) ? nil : front
         catalog.reload()
         sessionMode = preferences.windowMode      // snapshot for this session
-        let screen = activeScreen()
         let isCompact = sessionMode == .compact
         let frame = targetFrame(on: screen)
 
@@ -174,16 +174,12 @@ final class LaunchpadOverlayController: NSObject, NSWindowDelegate {
 
     /// v1 decision: open on the screen under the mouse (NOT NSScreen.main, NOT all
     /// screens). Documented single-display behavior.
-    private func activeScreen() -> NSScreen {
+    /// Screen under the mouse, else the main screen, else `nil` when no displays are
+    /// attached. Callers must handle `nil` (don't open / close) — never fabricate an
+    /// `NSScreen()`, which AppKit doesn't support (unbacked, invalid frame) (CodeRabbit).
+    private func activeScreen() -> NSScreen? {
         let mouse = NSEvent.mouseLocation
-        // `NSScreen.main` is nil ONLY when no displays are attached, which is exactly when
-        // `NSScreen.screens` is empty — so `screens[0]` as a terminal fallback would trap
-        // precisely in the state it's meant to cover (e.g. all displays unplugged while the
-        // launcher is open → fires via the screen-change observer). End with a degenerate
-        // `NSScreen()` instead of an out-of-bounds index (workflow QA).
-        return NSScreen.screens.first { $0.frame.contains(mouse) }
-            ?? NSScreen.main
-            ?? NSScreen()
+        return NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
     }
 
     /// Window frame for the current mode: the whole screen (fullscreen) or a centered
@@ -232,7 +228,8 @@ final class LaunchpadOverlayController: NSObject, NSWindowDelegate {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let win = self.window, win === session else { return }
-                win.setFrame(self.targetFrame(on: self.activeScreen()), display: true)
+                guard let screen = self.activeScreen() else { self.close(); return } // all displays gone
+                win.setFrame(self.targetFrame(on: screen), display: true)
             }
         }
         tokens.resignObserver = NotificationCenter.default.addObserver(
