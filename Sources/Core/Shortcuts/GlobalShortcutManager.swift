@@ -14,7 +14,9 @@ final class GlobalShortcutManager {
         let carbonID: UInt32
     }
 
-    private nonisolated static let signature: OSType = 0x4D43544C
+    // "MCTL" = 0x4D43544C. Internal (not private) for the cross-manager signature
+    // collision test; see AppHotkeyManager.signature.
+    nonisolated static let signature: OSType = 0x4D43544C
 
     var onShortcutTriggered: ((String) -> Void)?
 

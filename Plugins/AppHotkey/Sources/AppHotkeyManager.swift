@@ -13,8 +13,10 @@ final class AppHotkeyManager {
         let carbonID: UInt32
     }
 
-    // "AHKY" = 0x4148_4B59
-    private nonisolated static let signature: OSType = 0x4148_4B59
+    // "AHKY" = 0x4148_4B59. Internal (not private) so a test can assert it never
+    // collides with GlobalShortcutManager's signature — the precondition that lets the
+    // signature-filtered handler pass foreign hot keys through to the other manager.
+    nonisolated static let signature: OSType = 0x4148_4B59
 
     var onTrigger: ((UUID) -> Void)?
 
