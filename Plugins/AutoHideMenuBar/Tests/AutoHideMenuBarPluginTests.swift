@@ -52,6 +52,42 @@ final class AutoHideMenuBarPluginTests: XCTestCase {
         XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
     }
 
+    func testAutomationDeniedSurfacesActionableGuidance() {
+        let runner = MockMenuBarCommandRunner()
+        runner.shouldFailSet = true
+        // -1743 == errAEEventNotPermitted: user denied the Automation permission.
+        runner.failureCode = -1743
+        runner.failureMessage = "Not authorized to send Apple events to System Events."
+        let plugin = AutoHideMenuBarPlugin(
+            commandRunner: runner,
+            stateReader: { false }
+        )
+
+        plugin.handleAction(.setSwitch(true))
+
+        let message = plugin.primaryPanelState.errorMessage
+        XCTAssertNotNil(message)
+        // The cryptic system message is replaced with actionable, localized guidance.
+        XCTAssertTrue(message?.contains("自动化") == true)
+        XCTAssertTrue(message?.contains("系统设置") == true)
+        XCTAssertFalse(message?.contains("Not authorized") == true)
+    }
+
+    func testNonPermissionFailureKeepsRawMessage() {
+        let runner = MockMenuBarCommandRunner()
+        runner.shouldFailSet = true
+        runner.failureCode = 42
+        runner.failureMessage = "some other failure"
+        let plugin = AutoHideMenuBarPlugin(
+            commandRunner: runner,
+            stateReader: { false }
+        )
+
+        plugin.handleAction(.setSwitch(true))
+
+        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "some other failure")
+    }
+
     func testRefreshUpdatesStateWhenChangedExternally() {
         var externalState = false
         let plugin = AutoHideMenuBarPlugin(
@@ -74,14 +110,16 @@ final class AutoHideMenuBarPluginTests: XCTestCase {
 
 final class MockMenuBarCommandRunner: MenuBarCommandRunning {
     var shouldFailSet = false
+    var failureCode = 1
+    var failureMessage = "set failed"
     var setMenuBarAutohideCalls: [Bool] = []
 
     func setMenuBarAutohide(_ isEnabled: Bool) throws {
         if shouldFailSet {
             throw NSError(
                 domain: "AutoHideMenuBarPluginTests",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "set failed"]
+                code: failureCode,
+                userInfo: [NSLocalizedDescriptionKey: failureMessage]
             )
         }
 
