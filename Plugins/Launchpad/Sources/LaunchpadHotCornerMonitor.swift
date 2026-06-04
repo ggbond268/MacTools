@@ -12,6 +12,9 @@ final class LaunchpadHotCornerMonitor {
 
     private var corner: LaunchpadPreferences.HotCorner = .off
     private var pollTask: Task<Void, Never>?
+
+    /// Whether the cursor poll is active (for tests/diagnostics).
+    var isPolling: Bool { pollTask != nil }
     private var dwellTicks = 0
     private var armed = true
 
@@ -20,7 +23,10 @@ final class LaunchpadHotCornerMonitor {
     private let dwellTicksRequired = 2          // ~240ms in-corner before firing
 
     func update(corner: LaunchpadPreferences.HotCorner) {
-        guard corner != self.corner else { return }
+        // Idempotent: drives start/stop off the current corner. NOT guarded on
+        // `corner != self.corner` — after `stop()` (e.g. plugin deactivate) the poll task
+        // is gone but `corner` is unchanged, so a same-value re-apply on re-activate must
+        // still restart it. `start()` itself no-ops when the task is already running.
         self.corner = corner
         corner == .off ? stop() : start()
     }
@@ -36,11 +42,14 @@ final class LaunchpadHotCornerMonitor {
         guard pollTask == nil else { return }
         pollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                self?.tick()
-                try? await Task.sleep(for: self?.pollInterval ?? .milliseconds(120))
+                guard let self else { break }    // monitor gone → stop the loop, don't spin
+                self.tick()
+                try? await Task.sleep(for: self.pollInterval)
             }
         }
     }
+
+    deinit { pollTask?.cancel() }
 
     private func tick() {
         let point = NSEvent.mouseLocation

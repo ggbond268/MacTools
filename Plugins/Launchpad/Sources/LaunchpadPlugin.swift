@@ -64,7 +64,10 @@ final class LaunchpadPlugin: MacToolsPlugin, PluginPrimaryPanel {
         self.preferences = preferences
         self.overlay = LaunchpadOverlayController(preferences: preferences)
 
-        hotCornerMonitor.onTrigger = { [weak self] in self?.openLaunchpad() }
+        // Hot corner *summons* (open-only), it does not toggle: re-entering the corner
+        // while the launcher is already open must not close it (Codex P1). `open()` is a
+        // no-op when already shown. Menu button / global hotkey keep toggle semantics.
+        hotCornerMonitor.onTrigger = { [weak self] in self?.overlay.open() }
         // Apply the saved corner now and whenever the user changes it in settings.
         preferences.$hotCorner
             .sink { [weak hotCornerMonitor] corner in hotCornerMonitor?.update(corner: corner) }
@@ -119,10 +122,18 @@ final class LaunchpadPlugin: MacToolsPlugin, PluginPrimaryPanel {
         overlay.toggle()
     }
 
+    func activate(context: PluginRuntimeContext) {
+        // Re-arm the hot corner after a pause/resume cycle. `deactivate` stops the poll;
+        // without this, disable→enable would leave the corner "on" in settings but dead
+        // (Codex P1). `update` restarts the poll when the saved corner isn't `.off`.
+        hotCornerMonitor.update(corner: preferences.hotCorner)
+    }
+
     func deactivate(reason: PluginDeactivationReason) {
-        if reason.requiresStateCleanup {
-            hotCornerMonitor.stop()      // stop the cursor poll; no runaway timer
-            overlay.close()
-        }
+        // Always release the internal poll task + overlay window — including `.updating`
+        // (hot reload), so a replaced instance never leaves a stale 120ms poll or window
+        // behind (Codex P1). These are process-internal resources, not system side effects.
+        hotCornerMonitor.stop()
+        overlay.close()
     }
 }

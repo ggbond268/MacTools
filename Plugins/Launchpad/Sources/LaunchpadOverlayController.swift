@@ -176,9 +176,14 @@ final class LaunchpadOverlayController: NSObject, NSWindowDelegate {
     /// screens). Documented single-display behavior.
     private func activeScreen() -> NSScreen {
         let mouse = NSEvent.mouseLocation
+        // `NSScreen.main` is nil ONLY when no displays are attached, which is exactly when
+        // `NSScreen.screens` is empty — so `screens[0]` as a terminal fallback would trap
+        // precisely in the state it's meant to cover (e.g. all displays unplugged while the
+        // launcher is open → fires via the screen-change observer). End with a degenerate
+        // `NSScreen()` instead of an out-of-bounds index (workflow QA).
         return NSScreen.screens.first { $0.frame.contains(mouse) }
             ?? NSScreen.main
-            ?? NSScreen.screens[0]
+            ?? NSScreen()
     }
 
     /// Window frame for the current mode: the whole screen (fullscreen) or a centered

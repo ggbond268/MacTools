@@ -47,4 +47,21 @@ final class LaunchpadHotCornerTests: XCTestCase {
         XCTAssertTrue(LaunchpadHotCornerMonitor.isInCorner(
             CGPoint(x: -2, y: 2), corner: .bottomRight, screenFrame: secondary, threshold: t))
     }
+
+    // Regression for the pause/resume restart bug (Codex P1): a non-`.off` re-apply after
+    // `stop()` must restart the poll — the old `guard corner != self.corner` early-return broke it.
+    @MainActor
+    func testUpdateRestartsPollAfterStop() {
+        let monitor = LaunchpadHotCornerMonitor()
+        XCTAssertFalse(monitor.isPolling)
+        monitor.update(corner: .topLeft)
+        XCTAssertTrue(monitor.isPolling)
+        monitor.stop()
+        XCTAssertFalse(monitor.isPolling)
+        monitor.update(corner: .topLeft)        // same value as before stop → must still restart
+        XCTAssertTrue(monitor.isPolling)
+        monitor.update(corner: .off)
+        XCTAssertFalse(monitor.isPolling)
+        monitor.stop()                           // cleanup
+    }
 }

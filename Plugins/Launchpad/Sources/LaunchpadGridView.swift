@@ -91,6 +91,12 @@ struct LaunchpadGridView: View {
         }
         .onAppear { selectedIndex = 0; currentPage = 0; sessionHidden = hiddenAppIDs }
         .onChange(of: searchText) { _, _ in selectedIndex = 0; currentPage = 0 }
+        // An async `catalog.reload()` can shrink the list under a stale selection; keep the
+        // source-of-truth selection valid so Return never targets a gone/off-page item (Codex P2).
+        .onChange(of: catalog.apps.count) { _, _ in
+            selectedIndex = min(selectedIndex, max(0, filtered.count - 1))
+            currentPage = filtered.isEmpty ? 0 : selectedIndex / perPage
+        }
     }
 
     private var searchBar: some View {
@@ -223,7 +229,8 @@ struct LaunchpadGridView: View {
                     // AX press needs an explicit action to actually change page.
                     .accessibilityAction { goToPage(page) }
                     .accessibilityLabel("第 \(page + 1) 页")
-                    .accessibilityAddTraits(.isButton)
+                    // Announce which dot is the current page (was visual-only — workflow QA).
+                    .accessibilityAddTraits(page == current ? [.isButton, .isSelected] : .isButton)
             }
         }
         .padding(.top, 2)
