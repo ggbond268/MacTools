@@ -73,6 +73,26 @@ final class AutoHideMenuBarPluginTests: XCTestCase {
         XCTAssertFalse(message?.contains("Not authorized") == true)
     }
 
+    func testConsentRequiredDenialSurfacesActionableGuidance() {
+        let runner = MockMenuBarCommandRunner()
+        runner.shouldFailSet = true
+        // -1744 == errAEEventWouldRequireUserConsent: also an Automation denial.
+        runner.failureCode = -1744
+        runner.failureMessage = "User consent required to send Apple events to System Events."
+        let plugin = AutoHideMenuBarPlugin(
+            commandRunner: runner,
+            stateReader: { false }
+        )
+
+        plugin.handleAction(.setSwitch(true))
+
+        let message = plugin.primaryPanelState.errorMessage
+        XCTAssertNotNil(message)
+        XCTAssertTrue(message?.contains("自动化") == true)
+        XCTAssertTrue(message?.contains("系统设置") == true)
+        XCTAssertFalse(message?.contains("consent") == true)
+    }
+
     func testNonPermissionFailureKeepsRawMessage() {
         let runner = MockMenuBarCommandRunner()
         runner.shouldFailSet = true
