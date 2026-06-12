@@ -393,12 +393,17 @@ final class GammaBrightnessBackend: DisplayBrightnessBackend, @unchecked Sendabl
             return originalTransferTable
         }
 
-        var sampleCount: UInt32 = 0
-        let countResult = CGGetDisplayTransferByTable(display.id, 0, nil, nil, nil, &sampleCount)
-
-        guard countResult == .success, sampleCount > 0 else {
+        // macOS 27 beta: the historical "capacity = 0, nil buffers" size-query
+        // idiom regressed (CGGetDisplayTransferByTable returns 1001 instead of
+        // .success on 26A5353q), collapsing the whole gamma fallback. Query the
+        // table capacity with the public CGDisplayGammaTableCapacity instead —
+        // it returns a valid capacity on every shipping macOS (verified 1024 on
+        // beta; valid on 14…26 too), so this needs no OS gate.
+        let capacity = CGDisplayGammaTableCapacity(display.id)
+        guard capacity > 0 else {
             throw DisplayBrightnessControllerError.brightnessUnavailable(displayName: display.name)
         }
+        var sampleCount = UInt32(capacity)
 
         let red = UnsafeMutablePointer<CGGammaValue>.allocate(capacity: Int(sampleCount))
         let green = UnsafeMutablePointer<CGGammaValue>.allocate(capacity: Int(sampleCount))
@@ -432,9 +437,16 @@ final class GammaBrightnessBackend: DisplayBrightnessBackend, @unchecked Sendabl
     }
 
     private static func canControl(displayID: CGDirectDisplayID) -> Bool {
-        var sampleCount: UInt32 = 0
-        return CGGetDisplayTransferByTable(displayID, 0, nil, nil, nil, &sampleCount) == .success
-            && sampleCount > 0
+        // See loadOriginalTransferTableIfNeeded: the capacity = 0 size-query
+        // idiom regressed on the macOS 27 beta. CGDisplayGammaTableCapacity is
+        // the public capacity query and is correct on every shipping macOS.
+        gammaTableCapacityIsControllable(CGDisplayGammaTableCapacity(displayID))
+    }
+
+    /// Pure capacity gate, extracted so the gamma-capacity fix path is testable
+    /// without a live display.
+    static func gammaTableCapacityIsControllable(_ capacity: UInt32) -> Bool {
+        capacity > 0
     }
 }
 

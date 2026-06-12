@@ -120,4 +120,43 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
             [.leftMouseUp, .rightMouseUp]
         )
     }
+
+    // MARK: - Degenerate anchor rect → nil (rescues QuitApps/XcodeClean/FixDamagedApp)
+
+    func testStubWindowDegeneratesAnchorToNilEvenWithPositiveHeight() {
+        // The observed beta degenerate rect ({{0,-11},{22,22}}) has a positive
+        // height, so the stub flag alone must force the nil fallback.
+        XCTAssertTrue(
+            MenuBarStatusItemHostCompatibility.anchorRectDegeneratesToNil(
+                screenRectHeight: 22,
+                windowIsStub: true
+            )
+        )
+    }
+
+    func testZeroHeightAnchorRectDegeneratesToNil() {
+        XCTAssertTrue(
+            MenuBarStatusItemHostCompatibility.anchorRectDegeneratesToNil(
+                screenRectHeight: 0,
+                windowIsStub: false
+            )
+        )
+        XCTAssertTrue(
+            MenuBarStatusItemHostCompatibility.anchorRectDegeneratesToNil(
+                screenRectHeight: -11,
+                windowIsStub: false
+            )
+        )
+    }
+
+    func testHealthyAnchorRectIsNotDegenerate() {
+        // macOS 14…26: real window, menu-bar-height frame → keep the genuine
+        // rect (no regression in plugin anchoring).
+        XCTAssertFalse(
+            MenuBarStatusItemHostCompatibility.anchorRectDegeneratesToNil(
+                screenRectHeight: 22,
+                windowIsStub: false
+            )
+        )
+    }
 }

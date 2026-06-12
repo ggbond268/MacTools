@@ -381,21 +381,14 @@ struct DeviceBatterySampler: DeviceBatterySampling {
     ) -> [DeviceBatteryBluetoothPowerLogReading] {
         guard let output = runCommand(
             path: "/usr/bin/nice",
-            arguments: [
-                "-n",
-                "19",
-                "/usr/bin/log",
-                "show",
-                "--process",
-                "bluetoothd",
-                "--info",
-                "--last",
-                lookback,
-                "--style",
-                "compact",
-                "--predicate",
-                bluetoothPowerLogPredicate(for: targets)
-            ],
+            // Keep upstream's low-priority `nice -n 19` wrapper; route the log
+            // args through the macOS-27 helper that drops `--process` (the beta
+            // ignores `--predicate` when `--process` is also passed, returning the
+            // unfiltered firehose). The predicate alone pins the bluetooth subsystem.
+            arguments: ["-n", "19", "/usr/bin/log"] + bluetoothPowerLogShowArguments(
+                lookback: lookback,
+                predicate: bluetoothPowerLogPredicate(for: targets)
+            ),
             timeout: timeout,
             outputLineFilter: { line in
                 isBluetoothPowerLogLine(line, matching: targets)
@@ -596,6 +589,29 @@ struct DeviceBatterySampler: DeviceBatterySampling {
         }
 
         return readingProductID == targetProductID
+    }
+
+    /// Builds the `log show` argument vector. macOS 27 beta drops the
+    /// `--predicate` when `--process` is also passed (verified on 26A5353q:
+    /// `--process bluetoothd --predicate …` returns ~the unfiltered firehose),
+    /// which produces a CPU spike and timeout-truncated output. The predicate
+    /// already pins `subsystem == "com.apple.bluetooth"`, so it fully replaces
+    /// the process filter; dropping `--process` is correct on every macOS
+    /// (the predicate works standalone on all systems) and needs no OS gate.
+    static func bluetoothPowerLogShowArguments(
+        lookback: String,
+        predicate: String
+    ) -> [String] {
+        [
+            "show",
+            "--info",
+            "--last",
+            lookback,
+            "--style",
+            "compact",
+            "--predicate",
+            predicate
+        ]
     }
 
     private static func bluetoothPowerLogPredicate(for targets: [BluetoothBatteryTarget]) -> String {

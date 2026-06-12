@@ -40,6 +40,24 @@ enum MenuBarStatusItemHostCompatibility {
         )
     }
 
+    /// Pure decision for whether a derived button screen rect must collapse to
+    /// a nil anchor (so floating-window consumers fall back to a centered /
+    /// default position). The stub backing window on the macOS 27 single-window
+    /// menu bar host produces a degenerate, non-nil rect (e.g.
+    /// `{{0,-11},{22,22}}`) that lands plugin windows off-screen; returning nil
+    /// there is what makes the existing `anchor == nil → screen center` fallback
+    /// reachable. On every shipping macOS (14…26) the button is backed by a real
+    /// status bar window with a positive-height frame, so this stays false and
+    /// the genuine rect is used unchanged.
+    static func anchorRectDegeneratesToNil(
+        screenRectHeight: CGFloat,
+        windowIsStub: Bool
+    ) -> Bool {
+        if screenRectHeight <= 0 { return true }
+        if windowIsStub { return true }
+        return false
+    }
+
     /// Pure mask decision, OS-gated by the caller. Up-mask only when the new
     /// single-window menu bar host was detected (runtime stub probe) or the
     /// OS is known to use it (macOS 27+); otherwise the legacy down-mask is

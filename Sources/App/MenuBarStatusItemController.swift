@@ -117,11 +117,20 @@ final class MenuBarStatusItemController: NSObject {
         }
         let frameInWindow = button.convert(button.bounds, to: nil)
         let screenRect = window.convertToScreen(frameInWindow)
-        if screenRect.height <= 0 || MenuBarStatusItemHostCompatibility.isStubBackingWindow(window) {
+        // macOS 27 beta: the stub backing window still yields a non-nil but
+        // degenerate screen rect that drops plugin windows off-screen. Collapse
+        // to nil here so DropZoneAnchorProviding consumers reach their
+        // centered / default fallback. On macOS 14…26 this never trips (real
+        // window, positive-height frame), so the genuine rect is returned.
+        if MenuBarStatusItemHostCompatibility.anchorRectDegeneratesToNil(
+            screenRectHeight: screenRect.height,
+            windowIsStub: MenuBarStatusItemHostCompatibility.isStubBackingWindow(window)
+        ) {
             MenuBarStatusItemDiagnostics.trace(
-                "buttonScreenRect DEGENERATE rect=\(NSStringFromRect(screenRect)) "
+                "buttonScreenRect DEGENERATE→nil rect=\(NSStringFromRect(screenRect)) "
                     + MenuBarStatusItemDiagnostics.describeButtonWindow(button)
             )
+            return nil
         }
         return screenRect
     }
