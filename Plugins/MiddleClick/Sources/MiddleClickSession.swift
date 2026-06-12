@@ -89,15 +89,30 @@ final class MiddleClickSession: @unchecked Sendable {
             let kCenter = Int64(CGMouseButton.center.rawValue)
             let passthrough = Unmanaged.passUnretained(event)
 
-            if session.threeDown && (type == .leftMouseDown || type == .rightMouseDown) {
-                session.wasThreeDown = true
-                session.threeDown = false
+            let current = MiddleClickPairing.State(
+                threeDown: session.threeDown,
+                wasThreeDown: session.wasThreeDown
+            )
+            let decision = MiddleClickPairing.decide(type: type, state: current)
+            // Write back only changed flags: the touch callback thread may set
+            // `threeDown = true` between our read and write, and an
+            // unconditional write-back would stomp it.
+            if decision.state.threeDown != current.threeDown {
+                session.threeDown = decision.state.threeDown
+            }
+            if decision.state.wasThreeDown != current.wasThreeDown {
+                session.wasThreeDown = decision.state.wasThreeDown
+            }
+
+            switch decision.rewrite {
+            case .middleDown:
                 event.type = .otherMouseDown
                 event.setIntegerValueField(.mouseEventButtonNumber, value: kCenter)
-            } else if session.wasThreeDown && (type == .leftMouseUp || type == .rightMouseUp) {
-                session.wasThreeDown = false
+            case .middleUp:
                 event.type = .otherMouseUp
                 event.setIntegerValueField(.mouseEventButtonNumber, value: kCenter)
+            case .none:
+                break
             }
 
             return passthrough
