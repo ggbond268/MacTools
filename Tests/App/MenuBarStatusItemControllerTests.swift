@@ -187,4 +187,45 @@ final class MenuBarStatusItemControllerTests: XCTestCase {
         XCTAssertEqual(MenuBarClickBehaviorPreference.current(defaults), .swapped)
         XCTAssertTrue(MenuBarClickBehaviorPreference.current(defaults).isSwapped)
     }
+
+    // MARK: - Appearance-change refresh dedup
+
+    func testAppearanceRefreshSkipsWhenNameUnchanged() {
+        // Theme notification and KVO fallback both fire for one switch; the
+        // second delivery sees the already-applied name and must not rebuild
+        // the icon image again.
+        XCTAssertFalse(
+            MenuBarStatusIconAppearanceRefreshPolicy.shouldRefresh(
+                currentAppearanceName: .darkAqua,
+                lastAppliedAppearanceName: .darkAqua
+            )
+        )
+        XCTAssertFalse(
+            MenuBarStatusIconAppearanceRefreshPolicy.shouldRefresh(
+                currentAppearanceName: nil,
+                lastAppliedAppearanceName: nil
+            )
+        )
+    }
+
+    func testAppearanceRefreshRunsWhenNameChangesOrWasNeverApplied() {
+        XCTAssertTrue(
+            MenuBarStatusIconAppearanceRefreshPolicy.shouldRefresh(
+                currentAppearanceName: .aqua,
+                lastAppliedAppearanceName: .darkAqua
+            )
+        )
+        XCTAssertTrue(
+            MenuBarStatusIconAppearanceRefreshPolicy.shouldRefresh(
+                currentAppearanceName: .darkAqua,
+                lastAppliedAppearanceName: nil
+            )
+        )
+        XCTAssertTrue(
+            MenuBarStatusIconAppearanceRefreshPolicy.shouldRefresh(
+                currentAppearanceName: nil,
+                lastAppliedAppearanceName: .darkAqua
+            )
+        )
+    }
 }

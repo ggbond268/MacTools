@@ -159,4 +159,324 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
             )
         )
     }
+
+    // MARK: - Geometry-first status button hit test
+
+    /// A typical healthy button rect: 30pt wide item at the top of a
+    /// 1000pt-tall screen (menu bar height 24).
+    private let healthyButtonRect = NSRect(x: 100, y: 976, width: 30, height: 24)
+
+    func testLocationInsideHealthyButtonRectIsInside() {
+        XCTAssertEqual(
+            MenuBarStatusItemClickGeometry.isLocationInsideButton(
+                NSPoint(x: 110, y: 990),
+                buttonScreenRect: healthyButtonRect
+            ),
+            true
+        )
+    }
+
+    func testTopEdgeCountsAsInsideForSlamToTopClicks() {
+        // Cursor pinned against the top of the screen reports y == rect.maxY
+        // in flipped screen coordinates; menu bar items must stay clickable
+        // there.
+        XCTAssertEqual(
+            MenuBarStatusItemClickGeometry.isLocationInsideButton(
+                NSPoint(x: 110, y: 1000),
+                buttonScreenRect: healthyButtonRect
+            ),
+            true
+        )
+    }
+
+    func testLocationOutsideHealthyButtonRectIsOutside() {
+        XCTAssertEqual(
+            MenuBarStatusItemClickGeometry.isLocationInsideButton(
+                NSPoint(x: 99, y: 990),
+                buttonScreenRect: healthyButtonRect
+            ),
+            false
+        )
+        XCTAssertEqual(
+            MenuBarStatusItemClickGeometry.isLocationInsideButton(
+                NSPoint(x: 110, y: 900),
+                buttonScreenRect: healthyButtonRect
+            ),
+            false
+        )
+    }
+
+    func testTrailingEdgeBelongsToNeighborItem() {
+        XCTAssertEqual(
+            MenuBarStatusItemClickGeometry.isLocationInsideButton(
+                NSPoint(x: 130, y: 990),
+                buttonScreenRect: healthyButtonRect
+            ),
+            false
+        )
+    }
+
+    func testNilButtonRectMeansGeometryCannotDecide() {
+        // Stub host: the rect collapses to nil → the caller must fall back
+        // to the window-identity comparison instead of treating the click as
+        // outside outright.
+        XCTAssertNil(
+            MenuBarStatusItemClickGeometry.isLocationInsideButton(
+                NSPoint(x: 110, y: 990),
+                buttonScreenRect: nil
+            )
+        )
+    }
+
+    func testDegenerateButtonRectMeansGeometryCannotDecide() {
+        XCTAssertNil(
+            MenuBarStatusItemClickGeometry.isLocationInsideButton(
+                NSPoint(x: 110, y: 990),
+                buttonScreenRect: NSRect(x: 100, y: 976, width: 0, height: 24)
+            )
+        )
+        XCTAssertNil(
+            MenuBarStatusItemClickGeometry.isLocationInsideButton(
+                NSPoint(x: 110, y: 990),
+                buttonScreenRect: NSRect(x: 100, y: 976, width: 30, height: 0)
+            )
+        )
+    }
+
+    // MARK: - Menu bar band
+
+    private let screenFrame = NSRect(x: 0, y: 0, width: 1512, height: 982)
+
+    func testMenuBarBandContainsClickInTopStrip() {
+        XCTAssertTrue(
+            MenuBarStatusItemClickGeometry.isLocationInMenuBarBand(
+                NSPoint(x: 700, y: 970),
+                screenFrame: screenFrame,
+                bandHeight: 24
+            )
+        )
+    }
+
+    func testMenuBarBandTopEdgeIsInclusive() {
+        XCTAssertTrue(
+            MenuBarStatusItemClickGeometry.isLocationInMenuBarBand(
+                NSPoint(x: 700, y: 982),
+                screenFrame: screenFrame,
+                bandHeight: 24
+            )
+        )
+    }
+
+    func testMenuBarBandRejectsClickBelowBand() {
+        XCTAssertFalse(
+            MenuBarStatusItemClickGeometry.isLocationInMenuBarBand(
+                NSPoint(x: 700, y: 957),
+                screenFrame: screenFrame,
+                bandHeight: 24
+            )
+        )
+    }
+
+    func testMenuBarBandRejectsClickOutsideScreenXRange() {
+        // A second display to the right: its x range must not match this
+        // screen's band.
+        XCTAssertFalse(
+            MenuBarStatusItemClickGeometry.isLocationInMenuBarBand(
+                NSPoint(x: 1600, y: 970),
+                screenFrame: screenFrame,
+                bandHeight: 24
+            )
+        )
+    }
+
+    func testBandHeightDerivedFromVisibleFrameInset() {
+        // Notched / beta menu bars are taller than the status bar thickness;
+        // the visible-frame inset tracks the real height.
+        XCTAssertEqual(
+            MenuBarStatusItemClickGeometry.menuBarBandHeight(
+                screenFrameMaxY: 982,
+                visibleFrameMaxY: 944,
+                statusBarThickness: 24
+            ),
+            38
+        )
+    }
+
+    func testBandHeightFallsBackToThicknessWhenMenuBarAutoHidden() {
+        // Auto-hidden menu bar: visibleFrame reaches the screen top, so the
+        // derived inset is 0 and the status bar thickness keeps a usable
+        // minimum.
+        XCTAssertEqual(
+            MenuBarStatusItemClickGeometry.menuBarBandHeight(
+                screenFrameMaxY: 982,
+                visibleFrameMaxY: 982,
+                statusBarThickness: 24
+            ),
+            24
+        )
+    }
+
+    // MARK: - Toggle suppression (stub-host icon-click bounce)
+
+    func testSameClickWithinTimeoutSuppressesExactlyOnce() {
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            dismissedPanels: [.featurePanel]
+        )
+
+        XCTAssertTrue(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12),
+                target: .featurePanel
+            )
+        )
+        // Consumed: the same identity must not suppress a second time, or a
+        // genuine follow-up toggle would be eaten.
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.13),
+                target: .featurePanel
+            )
+        )
+    }
+
+    func testDifferentClickIsNotSuppressed() {
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            dismissedPanels: [.featurePanel]
+        )
+
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 8, timestamp: 100.10),
+                target: .featurePanel
+            )
+        )
+    }
+
+    func testSwitchToPanelThatWasNotDismissedIsNotSuppressed() {
+        // Stub-host panel switch: the primary panel was open, the user
+        // Option-clicks the icon to get the secondary panel. The dismissal
+        // closes the primary; the same click's action targets the component
+        // panel, which was NOT among the dismissed ones — that is a switch
+        // and must proceed (suppressing it would close everything and eat
+        // the only pointer channel to the secondary panel on the beta).
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            dismissedPanels: [.featurePanel]
+        )
+
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12),
+                target: .componentPanel
+            )
+        )
+    }
+
+    func testBothPanelsDismissedSuppressesEitherTarget() {
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            dismissedPanels: [.featurePanel, .componentPanel]
+        )
+
+        XCTAssertTrue(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12),
+                target: .componentPanel
+            )
+        )
+    }
+
+    func testNonMatchingToggleClearsThePendingRecord() {
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            dismissedPanels: [.featurePanel]
+        )
+
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 8, timestamp: 100.10),
+                target: .featurePanel
+            )
+        )
+        // The newer click superseded the stale record; the old identity must
+        // not suppress later.
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.20),
+                target: .featurePanel
+            )
+        )
+    }
+
+    func testExpiredRecordDoesNotSuppress() {
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            dismissedPanels: [.featurePanel]
+        )
+
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(
+                    eventNumber: 7,
+                    timestamp: 100.00 + MenuBarStatusItemToggleSuppressor.maximumClickDuration + 0.01
+                ),
+                target: .featurePanel
+            )
+        )
+    }
+
+    func testExactTimeoutBoundaryStillSuppresses() {
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            dismissedPanels: [.featurePanel]
+        )
+
+        XCTAssertTrue(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(
+                    eventNumber: 7,
+                    timestamp: 100.00 + MenuBarStatusItemToggleSuppressor.maximumClickDuration
+                ),
+                target: .featurePanel
+            )
+        )
+    }
+
+    func testOutOfOrderTimestampDoesNotSuppress() {
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            dismissedPanels: [.featurePanel]
+        )
+
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 99.90),
+                target: .featurePanel
+            )
+        )
+    }
+
+    func testNoRecordNeverSuppresses() {
+        // Healthy-host invariant: the suppressor is only ever armed on the
+        // geometry-less (stub host) dismissal path, so with nothing recorded
+        // every toggle must proceed.
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+                target: .featurePanel
+            )
+        )
+    }
 }

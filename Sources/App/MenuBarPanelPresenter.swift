@@ -87,8 +87,16 @@ final class MenuBarPanelPresenter: NSObject {
         }
     }
 
+    var isFeaturePanelShown: Bool {
+        featurePopover.isShown
+    }
+
+    var isComponentPanelShown: Bool {
+        componentPopover.isShown
+    }
+
     var isAnyPanelShown: Bool {
-        featurePopover.isShown || componentPopover.isShown
+        isFeaturePanelShown || isComponentPanelShown
     }
 
     func toggleFeaturePanel(relativeTo button: NSStatusBarButton) {

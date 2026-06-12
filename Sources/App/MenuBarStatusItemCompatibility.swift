@@ -81,3 +81,125 @@ enum MenuBarStatusItemHostCompatibility {
         return false
     }
 }
+
+// MARK: - MenuBarStatusItemClickGeometry
+
+/// Geometry-first click judgment for the status item button. Under the stub
+/// host the historical `event.window === button.window` identity chain is
+/// untrustworthy, while a screen-rect containment test keeps working wherever
+/// a healthy rect is available and explicitly reports "cannot decide" where
+/// it is not.
+enum MenuBarStatusItemClickGeometry {
+    /// Containment test in screen coordinates. Returns nil when no healthy
+    /// button rect is available (the stub host collapses the rect to nil),
+    /// telling the caller geometry cannot decide. The top edge counts as
+    /// inside — clicks slammed against the screen top must still hit the
+    /// item — while the trailing edge does not, because the neighboring
+    /// status item starts there.
+    static func isLocationInsideButton(
+        _ screenLocation: NSPoint,
+        buttonScreenRect: NSRect?
+    ) -> Bool? {
+        guard let rect = buttonScreenRect, rect.width > 0, rect.height > 0 else {
+            return nil
+        }
+        guard screenLocation.x >= rect.minX, screenLocation.x < rect.maxX else {
+            return false
+        }
+        return screenLocation.y >= rect.minY && screenLocation.y <= rect.maxY
+    }
+
+    /// Whether a click landed in the menu bar strip of the given screen. Used
+    /// only to decide whether an outside-click dismissal *could* have been a
+    /// click on our own geometry-less icon; the top edge is inclusive for the
+    /// same slam-to-top reason as above.
+    static func isLocationInMenuBarBand(
+        _ screenLocation: NSPoint,
+        screenFrame: NSRect,
+        bandHeight: CGFloat
+    ) -> Bool {
+        guard bandHeight > 0 else { return false }
+        guard
+            screenLocation.x >= screenFrame.minX,
+            screenLocation.x <= screenFrame.maxX
+        else {
+            return false
+        }
+        return screenLocation.y >= screenFrame.maxY - bandHeight
+            && screenLocation.y <= screenFrame.maxY
+    }
+
+    /// Menu bar strip height for one screen. The visible-frame inset tracks
+    /// the real height (including taller notched / beta bars); when the menu
+    /// bar is auto-hidden that inset is 0, so the status bar thickness keeps
+    /// a usable minimum. Overshooting is harmless: the band only gates
+    /// *recording* a suppression candidate, never the suppression match.
+    static func menuBarBandHeight(
+        screenFrameMaxY: CGFloat,
+        visibleFrameMaxY: CGFloat,
+        statusBarThickness: CGFloat
+    ) -> CGFloat {
+        max(screenFrameMaxY - visibleFrameMaxY, statusBarThickness)
+    }
+}
+
+// MARK: - Toggle suppression (stub-host icon-click bounce)
+
+/// Identity of one physical click, reduced to Sendable values so it can hop
+/// from an event monitor to the main actor and later be compared against the
+/// action's `NSApp.currentEvent`. Matching mouse-down/up events share one
+/// window-server event number (`kCGMouseEventNumber` semantics), and
+/// `timestamp` is the system-uptime timebase both events carry.
+struct MenuBarStatusItemClickIdentity: Equatable, Sendable {
+    let eventNumber: Int
+    let timestamp: TimeInterval
+}
+
+/// Stub host: a click on our own icon is first seen by the outside-click
+/// monitors (no usable geometry, untrustworthy identity chain → judged
+/// "outside" → panels dismissed), then the same click's leftMouseUp action
+/// arrives and would toggle the panels straight back open — the icon could
+/// never close them. Recording the dismissing click lets the controller treat
+/// the matching action as the already-completed toggle-off. Nothing is ever
+/// recorded on healthy hosts, so their behavior is unchanged.
+struct MenuBarStatusItemToggleSuppressor {
+    /// Staleness bound between the dismissing mouse-down and the action's
+    /// mouse-up. The event number is the primary identity (matching down/up
+    /// share one window-server number); this bound only guards against a
+    /// future host recycling numbers across unrelated clicks, so it must be
+    /// generous enough for any press-and-hold release.
+    static let maximumClickDuration: TimeInterval = 10
+
+    private struct PendingDismissal {
+        let click: MenuBarStatusItemClickIdentity
+        let dismissedPanels: Set<MenuBarStatusItemInvocation>
+    }
+
+    private var pendingDismissal: PendingDismissal?
+
+    mutating func recordOutsideDismissal(
+        _ click: MenuBarStatusItemClickIdentity,
+        dismissedPanels: Set<MenuBarStatusItemInvocation>
+    ) {
+        pendingDismissal = PendingDismissal(click: click, dismissedPanels: dismissedPanels)
+    }
+
+    /// True when `action` is the same physical click that already dismissed
+    /// the panel it targets — its toggle-off is complete and reopening must
+    /// be skipped. A click targeting a panel that was NOT among the dismissed
+    /// ones is a panel switch (e.g. Option-click for the secondary panel
+    /// while the primary was open) and must proceed. Every evaluation clears
+    /// the record: a match may only suppress once, and a non-match means a
+    /// newer click superseded it.
+    mutating func shouldSuppressToggle(
+        for action: MenuBarStatusItemClickIdentity,
+        target: MenuBarStatusItemInvocation
+    ) -> Bool {
+        guard let pending = pendingDismissal else { return false }
+        pendingDismissal = nil
+        guard pending.click.eventNumber == action.eventNumber else { return false }
+        guard pending.dismissedPanels.contains(target) else { return false }
+        let elapsed = action.timestamp - pending.click.timestamp
+        return elapsed >= 0 && elapsed <= Self.maximumClickDuration
+    }
+}

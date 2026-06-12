@@ -3,7 +3,7 @@ import Combine
 import SwiftUI
 import MacToolsPluginKit
 
-enum MenuBarStatusItemInvocation: Equatable {
+enum MenuBarStatusItemInvocation: Hashable {
     case featurePanel
     case componentPanel
 
@@ -34,6 +34,19 @@ enum MenuBarStatusItemInvocation: Equatable {
     }
 }
 
+enum MenuBarStatusIconAppearanceRefreshPolicy {
+    /// The icon payload depends only on the button's effective appearance, so
+    /// when the doubled change channels (undocumented theme notification +
+    /// effectiveAppearance KVO fallback) both deliver for one theme switch,
+    /// the callback that sees an unchanged name skips the image rebuild.
+    static func shouldRefresh(
+        currentAppearanceName: NSAppearance.Name?,
+        lastAppliedAppearanceName: NSAppearance.Name?
+    ) -> Bool {
+        currentAppearanceName != lastAppliedAppearanceName
+    }
+}
+
 @MainActor
 final class MenuBarStatusItemController: NSObject {
     private let pluginHost: PluginHost
@@ -48,6 +61,9 @@ final class MenuBarStatusItemController: NSObject {
     private var appearanceObserver: NSObjectProtocol?
     private var appTerminationObserver: NSObjectProtocol?
     private var statusItemWindowMoveObserver: NSObjectProtocol?
+    private var appearanceKVOObservation: NSKeyValueObservation?
+    private var lastAppliedAppearanceName: NSAppearance.Name?
+    private var toggleSuppressor = MenuBarStatusItemToggleSuppressor()
     private var animationTimer: DispatchSourceTimer?
     private var animationLoadSampleTimer: Timer?
     private let animationLoadMonitor = MenuBarIconAnimationLoadMonitor()
@@ -139,6 +155,7 @@ final class MenuBarStatusItemController: NSObject {
         MainActor.assumeIsolated {
             animationTimer?.cancel()
             animationLoadSampleTimer?.invalidate()
+            appearanceKVOObservation?.invalidate()
             if let appearanceObserver {
                 DistributedNotificationCenter.default().removeObserver(appearanceObserver)
             }
@@ -207,13 +224,40 @@ final class MenuBarStatusItemController: NSObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.updateStatusIcon()
+                self?.refreshStatusIconForAppearanceChange()
+            }
+        }
+
+        // Supported-API fallback for the undocumented notification above:
+        // should an OS rename or throttle it, the app-level appearance KVO
+        // still reports theme flips. It stays silent when the user pinned the
+        // app appearance (effectiveAppearance then never changes), in which
+        // case the notification path keeps working as before. Both channels
+        // funnel into the same deduplicated refresh.
+        appearanceKVOObservation = NSApplication.shared.observe(
+            \.effectiveAppearance
+        ) { @Sendable [weak self] _, _ in
+            Task { @MainActor in
+                self?.refreshStatusIconForAppearanceChange()
             }
         }
     }
 
+    private func refreshStatusIconForAppearanceChange() {
+        guard MenuBarStatusIconAppearanceRefreshPolicy.shouldRefresh(
+            currentAppearanceName: statusItem.button?.effectiveAppearance.name,
+            lastAppliedAppearanceName: lastAppliedAppearanceName
+        ) else {
+            return
+        }
+
+        updateStatusIcon()
+    }
+
     private func updateStatusIcon() {
-        let payload = iconSettings.imagePayload(for: statusItem.button?.effectiveAppearance)
+        let appearance = statusItem.button?.effectiveAppearance
+        lastAppliedAppearanceName = appearance?.name
+        let payload = iconSettings.imagePayload(for: appearance)
         payload.image.isTemplate = payload.isTemplate
 
         statusItem.length = NSStatusItem.variableLength
@@ -376,17 +420,36 @@ final class MenuBarStatusItemController: NSObject {
         )
         // Read the preference live on each click so a settings change takes
         // effect immediately without re-observing.
-        //
+        let swapped = MenuBarClickBehaviorPreference.current().isSwapped
+        let invocation = MenuBarStatusItemInvocation.invocation(for: currentEvent, swapped: swapped)
+
+        // Stub host only: the outside-click monitor may have just dismissed
+        // the panels for this same physical click — without button geometry
+        // an icon click is indistinguishable from an outside click there.
+        // Toggling again would reopen them, making the icon unable to close
+        // the panel, so treat this click's toggle-off as already done.
+        // Suppression is scoped to the panels that were actually dismissed:
+        // a click targeting the other panel is a switch and proceeds. The
+        // suppressor is armed exclusively on the geometry-less path, so
+        // healthy hosts never match.
+        if let currentEvent,
+           toggleSuppressor.shouldSuppressToggle(
+               for: Self.clickIdentity(of: currentEvent),
+               target: invocation
+           ) {
+            MenuBarStatusItemDiagnostics.trace(
+                "action suppressed: same click already dismissed its target panel "
+                    + "eventNumber=\(currentEvent.eventNumber)"
+            )
+            return
+        }
+
         // TODO(macOS 27 beta): when the button's backing window is the stub
         // (windowNumber 2^32, zero-height frame), NSPopover anchoring via
-        // `show(relativeTo:of:)` may misplace or fail, and
-        // `isEventInsideStatusButton`'s `event.window === button.window`
-        // identity check can misjudge clicks on the icon as outside clicks —
-        // both deliberately NOT reworked in this batch. Revisit on device
-        // once click delivery is confirmed and the real popover behavior is
+        // `show(relativeTo:of:)` may misplace or fail — deliberately NOT
+        // reworked yet. Revisit on device once the real popover behavior is
         // observable.
-        let swapped = MenuBarClickBehaviorPreference.current().isSwapped
-        switch MenuBarStatusItemInvocation.invocation(for: currentEvent, swapped: swapped) {
+        switch invocation {
         case .featurePanel:
             toggleFeaturePanel(relativeTo: sender)
         case .componentPanel:
@@ -426,9 +489,14 @@ final class MenuBarStatusItemController: NSObject {
         }
 
         if globalEventMonitor == nil {
-            globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self] _ in
+            globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self] event in
+                // Global-monitor events carry no window, so locationInWindow
+                // is already in screen coordinates. Reduce the event to
+                // Sendable values here; NSEvent must not hop actors.
+                let click = Self.clickIdentity(of: event)
+                let screenLocation = event.locationInWindow
                 Task { @MainActor in
-                    self?.dismissPanels()
+                    self?.dismissPanelsForOutsideClick(click, screenLocation: screenLocation)
                 }
             }
         }
@@ -477,8 +545,65 @@ final class MenuBarStatusItemController: NSObject {
             return event
         }
 
+        armToggleSuppressionIfNeeded(
+            for: Self.clickIdentity(of: event),
+            screenLocation: Self.screenLocation(of: event)
+        )
         dismissPanels()
         return event
+    }
+
+    private func dismissPanelsForOutsideClick(
+        _ click: MenuBarStatusItemClickIdentity,
+        screenLocation: NSPoint
+    ) {
+        armToggleSuppressionIfNeeded(for: click, screenLocation: screenLocation)
+        dismissPanels()
+    }
+
+    /// Stub host only: with no button geometry an icon click is judged an
+    /// outside click and dismisses the panels, so the matching action that
+    /// follows must not toggle them back open. With a healthy rect the
+    /// geometry test already tells icon clicks apart, nothing is armed, and
+    /// healthy-host dismissal behavior is untouched.
+    private func armToggleSuppressionIfNeeded(
+        for click: MenuBarStatusItemClickIdentity,
+        screenLocation: NSPoint
+    ) {
+        guard statusItemButtonScreenRect() == nil else { return }
+        guard isScreenLocationInMenuBarBand(screenLocation) else { return }
+
+        // Capture which panels this dismissal is about to close (the caller
+        // dismisses right after arming) so the matching action can tell a
+        // toggle-off from a switch to the other panel.
+        var dismissedPanels = Set<MenuBarStatusItemInvocation>()
+        if panelPresenter.isFeaturePanelShown {
+            dismissedPanels.insert(.featurePanel)
+        }
+        if panelPresenter.isComponentPanelShown {
+            dismissedPanels.insert(.componentPanel)
+        }
+        guard !dismissedPanels.isEmpty else { return }
+
+        toggleSuppressor.recordOutsideDismissal(click, dismissedPanels: dismissedPanels)
+        MenuBarStatusItemDiagnostics.trace(
+            "outside dismissal armed toggle suppression eventNumber=\(click.eventNumber) "
+                + "panels=\(dismissedPanels.count)"
+        )
+    }
+
+    private func isScreenLocationInMenuBarBand(_ screenLocation: NSPoint) -> Bool {
+        NSScreen.screens.contains { screen in
+            MenuBarStatusItemClickGeometry.isLocationInMenuBarBand(
+                screenLocation,
+                screenFrame: screen.frame,
+                bandHeight: MenuBarStatusItemClickGeometry.menuBarBandHeight(
+                    screenFrameMaxY: screen.frame.maxY,
+                    visibleFrameMaxY: screen.visibleFrame.maxY,
+                    statusBarThickness: NSStatusBar.system.thickness
+                )
+            )
+        }
     }
 
     private func isEventInsidePresentedPanel(_ event: NSEvent) -> Bool {
@@ -490,6 +615,20 @@ final class MenuBarStatusItemController: NSObject {
     }
 
     private func isEventInsideStatusButton(_ event: NSEvent) -> Bool {
+        // Geometry first: the screen-rect containment works regardless of
+        // which window the event was routed through. The window-identity
+        // comparison remains only as the last resort for a healthy host
+        // whose rect is unexpectedly unavailable; on the stub host both
+        // signals are gone (rect collapses to nil, identity chain
+        // untrustworthy), so this returns false there and the toggle
+        // suppressor absorbs the resulting icon-click bounce.
+        if let geometricallyInside = MenuBarStatusItemClickGeometry.isLocationInsideButton(
+            Self.screenLocation(of: event),
+            buttonScreenRect: statusItemButtonScreenRect()
+        ) {
+            return geometricallyInside
+        }
+
         guard
             let button = statusItem.button,
             event.window === button.window
@@ -499,6 +638,25 @@ final class MenuBarStatusItemController: NSObject {
 
         let pointInButton = button.convert(event.locationInWindow, from: nil)
         return button.bounds.contains(pointInButton)
+    }
+
+    nonisolated private static func clickIdentity(of event: NSEvent) -> MenuBarStatusItemClickIdentity {
+        MenuBarStatusItemClickIdentity(
+            eventNumber: event.eventNumber,
+            timestamp: event.timestamp
+        )
+    }
+
+    /// `NSEvent.mouseLocation` reads the cursor position at call time, which
+    /// may have drifted since the event was generated; deriving the location
+    /// from the event itself keeps the judgment tied to the click being
+    /// processed. Windowless events (global monitors, some synthesized
+    /// events) already carry screen coordinates in `locationInWindow`.
+    private static func screenLocation(of event: NSEvent) -> NSPoint {
+        guard let window = event.window else {
+            return event.locationInWindow
+        }
+        return window.convertPoint(toScreen: event.locationInWindow)
     }
 
     nonisolated private static func isCurrentApplicationActivationNotification(_ notification: Notification) -> Bool {
