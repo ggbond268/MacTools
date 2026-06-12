@@ -680,48 +680,49 @@ struct ActivityBarComponentView: View {
 
             ZStack {
                 Chart {
-                    if hasData {
-                        ForEach(days) { day in
-                            let d = chartLabel(day.date)
-                            let isHovered = hoveredDate == d
-                            let claudeMins = toolStats(.claudeCode, in: day).durationSeconds / 60
-                            let codexMins = toolStats(.codex, in: day).durationSeconds / 60
+                    // `hasData ? days : []` keeps the content a plain ForEach (no
+                    // `_ConditionalContent`, whose ChartContent conformance is macOS 27-only);
+                    // an empty range draws nothing, exactly as the old `if hasData` did.
+                    ForEach(hasData ? days : []) { day in
+                        let d = chartLabel(day.date)
+                        let isHovered = hoveredDate == d
+                        let claudeMins = toolStats(.claudeCode, in: day).durationSeconds / 60
+                        let codexMins = toolStats(.codex, in: day).durationSeconds / 60
 
-                            LineMark(x: .value("Date", d), y: .value("Minutes", claudeMins), series: .value("Tool", "Claude"))
-                                .foregroundStyle(by: .value("Tool", "Claude"))
-                                .interpolationMethod(.catmullRom)
-                            LineMark(x: .value("Date", d), y: .value("Minutes", codexMins), series: .value("Tool", "Codex"))
-                                .foregroundStyle(by: .value("Tool", "Codex"))
-                                .interpolationMethod(.catmullRom)
+                        LineMark(x: .value("Date", d), y: .value("Minutes", claudeMins), series: .value("Tool", "Claude"))
+                            .foregroundStyle(by: .value("Tool", "Claude"))
+                            .interpolationMethod(.catmullRom)
+                        LineMark(x: .value("Date", d), y: .value("Minutes", codexMins), series: .value("Tool", "Codex"))
+                            .foregroundStyle(by: .value("Tool", "Codex"))
+                            .interpolationMethod(.catmullRom)
 
-                            if isHovered {
-                                RuleMark(x: .value("Date", d))
-                                    .foregroundStyle(.gray.opacity(0.3))
-                                    .lineStyle(StrokeStyle(dash: [4, 4]))
-                                    .annotation(position: .top, spacing: 0, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                                        VStack(spacing: 2) {
-                                            Text(shortDate(day.date))
-                                                .font(.system(size: 9))
-                                                .foregroundStyle(.primary.opacity(0.55))
-                                            HStack(spacing: 6) {
-                                                Text(shortDuration(claudeMins * 60)).foregroundStyle(Self.claudeColor)
-                                                Text(shortDuration(codexMins * 60)).foregroundStyle(Self.codexColor)
-                                            }
-                                            .font(.system(size: 10).bold().monospacedDigit())
+                        // Unconditional marks; opacity/symbol size carry the hover state (the old
+                        // if/else-if produced _ConditionalContent). The annotation body is a plain
+                        // View, so its `if isHovered` is fine.
+                        RuleMark(x: .value("Date", d))
+                            .foregroundStyle(.gray.opacity(isHovered ? 0.3 : 0))
+                            .lineStyle(StrokeStyle(dash: [4, 4]))
+                            .annotation(position: .top, spacing: 0, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                                if isHovered {
+                                    VStack(spacing: 2) {
+                                        Text(shortDate(day.date))
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.primary.opacity(0.55))
+                                        HStack(spacing: 6) {
+                                            Text(shortDuration(claudeMins * 60)).foregroundStyle(Self.claudeColor)
+                                            Text(shortDuration(codexMins * 60)).foregroundStyle(Self.codexColor)
                                         }
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
-                                        .offset(y: 30)
+                                        .font(.system(size: 10).bold().monospacedDigit())
                                     }
-
-                                chartPoint(x: d, y: claudeMins, color: Self.claudeColor, size: 30)
-                                chartPoint(x: d, y: codexMins, color: Self.codexColor, size: 30)
-                            } else if !compactMode {
-                                chartPoint(x: d, y: claudeMins, color: Self.claudeColor, size: 12)
-                                chartPoint(x: d, y: codexMins, color: Self.codexColor, size: 12)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+                                    .offset(y: 30)
+                                }
                             }
-                        }
+
+                        chartPoint(x: d, y: claudeMins, color: Self.claudeColor, size: hoverPointSize(isHovered: isHovered, compactMode: compactMode))
+                        chartPoint(x: d, y: codexMins, color: Self.codexColor, size: hoverPointSize(isHovered: isHovered, compactMode: compactMode))
                     }
                 }
                 .chartForegroundStyleScale([
@@ -793,52 +794,47 @@ struct ActivityBarComponentView: View {
 
             ZStack {
                 Chart {
-                    if hasData {
-                        ForEach(days) { day in
-                            let d = chartLabel(day.date)
-                            let isHovered = hoveredDate == d
+                    // See codingToolsChart: `hasData ? days : []` avoids _ConditionalContent.
+                    ForEach(hasData ? days : []) { day in
+                        let d = chartLabel(day.date)
+                        let isHovered = hoveredDate == d
 
-                            LineMark(x: .value("Date", d), y: .value("Count", day.keystrokes), series: .value("Metric", "Keystrokes"))
-                                .foregroundStyle(by: .value("Metric", "Keystrokes"))
-                                .interpolationMethod(.catmullRom)
-                            LineMark(x: .value("Date", d), y: .value("Count", day.pointerClicks), series: .value("Metric", "Clicks"))
-                                .foregroundStyle(by: .value("Metric", "Clicks"))
-                                .interpolationMethod(.catmullRom)
-                            LineMark(x: .value("Date", d), y: .value("Count", day.scrollEvents), series: .value("Metric", "Scrolls"))
-                                .foregroundStyle(by: .value("Metric", "Scrolls"))
-                                .interpolationMethod(.catmullRom)
+                        LineMark(x: .value("Date", d), y: .value("Count", day.keystrokes), series: .value("Metric", "Keystrokes"))
+                            .foregroundStyle(by: .value("Metric", "Keystrokes"))
+                            .interpolationMethod(.catmullRom)
+                        LineMark(x: .value("Date", d), y: .value("Count", day.pointerClicks), series: .value("Metric", "Clicks"))
+                            .foregroundStyle(by: .value("Metric", "Clicks"))
+                            .interpolationMethod(.catmullRom)
+                        LineMark(x: .value("Date", d), y: .value("Count", day.scrollEvents), series: .value("Metric", "Scrolls"))
+                            .foregroundStyle(by: .value("Metric", "Scrolls"))
+                            .interpolationMethod(.catmullRom)
 
-                            if isHovered {
-                                RuleMark(x: .value("Date", d))
-                                    .foregroundStyle(.gray.opacity(0.3))
-                                    .lineStyle(StrokeStyle(dash: [4, 4]))
-                                    .annotation(position: .top, spacing: 0, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                                        VStack(spacing: 2) {
-                                            Text(shortDate(day.date))
-                                                .font(.system(size: 9))
-                                                .foregroundStyle(.primary.opacity(0.55))
-                                            HStack(spacing: 6) {
-                                                Text("\(day.keystrokes)").foregroundStyle(.blue)
-                                                Text("\(day.pointerClicks)").foregroundStyle(.orange)
-                                                Text("\(day.scrollEvents)").foregroundStyle(.green)
-                                            }
-                                            .font(.system(size: 10).bold().monospacedDigit())
+                        RuleMark(x: .value("Date", d))
+                            .foregroundStyle(.gray.opacity(isHovered ? 0.3 : 0))
+                            .lineStyle(StrokeStyle(dash: [4, 4]))
+                            .annotation(position: .top, spacing: 0, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                                if isHovered {
+                                    VStack(spacing: 2) {
+                                        Text(shortDate(day.date))
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.primary.opacity(0.55))
+                                        HStack(spacing: 6) {
+                                            Text("\(day.keystrokes)").foregroundStyle(.blue)
+                                            Text("\(day.pointerClicks)").foregroundStyle(.orange)
+                                            Text("\(day.scrollEvents)").foregroundStyle(.green)
                                         }
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
-                                        .offset(y: 30)
+                                        .font(.system(size: 10).bold().monospacedDigit())
                                     }
-
-                                chartPoint(x: d, y: Double(day.keystrokes), color: .blue, size: 30)
-                                chartPoint(x: d, y: Double(day.pointerClicks), color: .orange, size: 30)
-                                chartPoint(x: d, y: Double(day.scrollEvents), color: .green, size: 30)
-                            } else if !compactMode {
-                                chartPoint(x: d, y: Double(day.keystrokes), color: .blue, size: 12)
-                                chartPoint(x: d, y: Double(day.pointerClicks), color: .orange, size: 12)
-                                chartPoint(x: d, y: Double(day.scrollEvents), color: .green, size: 12)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+                                    .offset(y: 30)
+                                }
                             }
-                        }
+
+                        chartPoint(x: d, y: Double(day.keystrokes), color: .blue, size: hoverPointSize(isHovered: isHovered, compactMode: compactMode))
+                        chartPoint(x: d, y: Double(day.pointerClicks), color: .orange, size: hoverPointSize(isHovered: isHovered, compactMode: compactMode))
+                        chartPoint(x: d, y: Double(day.scrollEvents), color: .green, size: hoverPointSize(isHovered: isHovered, compactMode: compactMode))
                     }
                 }
                 .chartForegroundStyleScale([
@@ -998,6 +994,15 @@ struct ActivityBarComponentView: View {
         PointMark(x: .value("Date", x), y: .value("Value", y))
             .foregroundStyle(color)
             .symbolSize(size)
+    }
+
+    /// Hover-driven point size, kept unconditional (0 hides the mark on compact
+    /// non-hovered days) so the Chart body has no `_ConditionalContent` — whose
+    /// `ChartContent` conformance is macOS 27-only and fails the 27-SDK build at
+    /// a 14.0 deployment target.
+    private func hoverPointSize(isHovered: Bool, compactMode: Bool) -> CGFloat {
+        if isHovered { return 30 }
+        return compactMode ? 0 : 12
     }
 
     private func chartHoverOverlay(proxy: ChartProxy, labels: [String], hoveredLabel: Binding<String?>) -> some View {
