@@ -228,6 +228,154 @@ final class MenuBarStatusItemControllerTests: XCTestCase {
         XCTAssertTrue(MenuBarClickBehaviorPreference.current(defaults).isSwapped)
     }
 
+    // MARK: - Expanded-interface session invocation (macOS 27, eventless)
+
+    // didBegin carries no NSEvent, so the resolution is driven purely by the
+    // swapped preference and the live keyboard modifier state. Full
+    // combination coverage: {none, shift, control, option} x {standard,
+    // swapped}.
+
+    func testExpandedSessionNoModifiersOpensPrimaryPanel() {
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: false,
+                liveModifierFlags: []
+            ),
+            .componentPanel
+        )
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: true,
+                liveModifierFlags: []
+            ),
+            .featurePanel
+        )
+    }
+
+    func testExpandedSessionShiftStaysPrimary() {
+        // Shift is not a secondary modifier and must not flip the invocation.
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: false,
+                liveModifierFlags: [.shift]
+            ),
+            .componentPanel
+        )
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: true,
+                liveModifierFlags: [.shift]
+            ),
+            .featurePanel
+        )
+    }
+
+    func testExpandedSessionControlOpensSecondaryPanel() {
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: false,
+                liveModifierFlags: [.control]
+            ),
+            .featurePanel
+        )
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: true,
+                liveModifierFlags: [.control]
+            ),
+            .componentPanel
+        )
+    }
+
+    func testExpandedSessionOptionOpensSecondaryPanel() {
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: false,
+                liveModifierFlags: [.option]
+            ),
+            .featurePanel
+        )
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: true,
+                liveModifierFlags: [.option]
+            ),
+            .componentPanel
+        )
+    }
+
+    func testExpandedSessionSecondaryModifierWinsWhenCombinedWithShift() {
+        // A non-secondary modifier held alongside a secondary one must not
+        // mask the secondary intent.
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: false,
+                liveModifierFlags: [.option, .shift]
+            ),
+            .featurePanel
+        )
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocationForExpandedSession(
+                swapped: false,
+                liveModifierFlags: [.control, .option]
+            ),
+            .featurePanel
+        )
+    }
+
+    // MARK: - Replaced-session cancel sequence (controller recovery contract)
+
+    @MainActor
+    func testReplacedSessionCancelSequenceKeepsNewSessionTracked() {
+        // Mirrors handleExpandedSessionBegin under the COMPOSED takeover
+        // semantics: sessionDidBegin(new) arms a one-shot expectation that
+        // swallows the synchronous, session-LESS didEnd produced by
+        // cancelling the replaced session — the freshly stored NEW session
+        // survives untouched and no dismissal fires. The controller's
+        // follow-up re-begin of the identical session is then a harmless
+        // no-op that must NOT re-arm the expectation.
+        let coordinator = MenuBarExpandedSessionCoordinator()
+        let staleSession = NSObject()
+        let newSession = NSObject()
+        _ = coordinator.sessionDidBegin(staleSession)
+
+        // didBegin for the new session while the stale one is still tracked.
+        let replaced = coordinator.sessionDidBegin(newSession)
+        XCTAssertTrue(replaced === staleSession)
+
+        // cancel(replaced) → host fires didEnd synchronously; the armed
+        // expectation absorbs it: no dismissal, new session stays tracked.
+        var dismissCount = 0
+        coordinator.sessionDidEnd { dismissCount += 1 }
+        XCTAssertEqual(dismissCount, 0)
+        XCTAssertTrue(coordinator.activeSession === newSession)
+
+        // Controller recovery step (kept for host-ordering drift): identical
+        // re-begin is a no-op returning nothing to cancel.
+        XCTAssertNil(coordinator.sessionDidBegin(newSession))
+        XCTAssertTrue(coordinator.activeSession === newSession)
+
+        // The expectation was consumed exactly once: a later genuine didEnd
+        // must dismiss normally instead of being swallowed.
+        coordinator.sessionDidEnd { dismissCount += 1 }
+        XCTAssertEqual(dismissCount, 1)
+        XCTAssertNil(coordinator.activeSession)
+
+        // And a fresh session still closes through cancel, never
+        // directDismiss (which would leak the host-side session).
+        let thirdSession = NSObject()
+        XCTAssertNil(coordinator.sessionDidBegin(thirdSession))
+        var cancelledSessions: [NSObject] = []
+        coordinator.requestClose(
+            cancel: { cancelledSessions.append($0) },
+            directDismiss: {
+                XCTFail("an active session must close via cancel; directDismiss would leak it host-side")
+            }
+        )
+        XCTAssertEqual(cancelledSessions.count, 1)
+        XCTAssertTrue(cancelledSessions.first === thirdSession)
+    }
+
     // MARK: - Appearance-change refresh dedup
 
     func testAppearanceRefreshSkipsWhenNameUnchanged() {
