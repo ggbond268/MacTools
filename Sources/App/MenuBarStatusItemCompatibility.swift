@@ -150,9 +150,16 @@ enum MenuBarStatusItemClickGeometry {
 /// action's `NSApp.currentEvent`. Matching mouse-down/up events share one
 /// window-server event number (`kCGMouseEventNumber` semantics), and
 /// `timestamp` is the system-uptime timebase both events carry.
+///
+/// On the macOS 27 beta the rehosted menu bar delivers BOTH sides with
+/// eventNumber 0 (observed on device, 26A5353q), making the number equality
+/// vacuous there — `screenLocation` is the co-identity that still
+/// discriminates: a click's down and up land at the same point, while a
+/// click on a different status item lands tens of points away.
 struct MenuBarStatusItemClickIdentity: Equatable, Sendable {
     let eventNumber: Int
     let timestamp: TimeInterval
+    let screenLocation: CGPoint
 }
 
 /// Stub host: a click on our own icon is first seen by the outside-click
@@ -169,6 +176,12 @@ struct MenuBarStatusItemToggleSuppressor {
     /// future host recycling numbers across unrelated clicks, so it must be
     /// generous enough for any press-and-hold release.
     static let maximumClickDuration: TimeInterval = 10
+
+    /// Maximum distance between the dismissing down and the action's up for
+    /// them to count as one click. A click's down/up share a point (small
+    /// jitter aside); distinct status items sit tens of points apart. This
+    /// carries the identity on the beta, where every event number is 0.
+    static let maximumClickDrift: CGFloat = 8
 
     private struct PendingDismissal {
         let click: MenuBarStatusItemClickIdentity
@@ -199,6 +212,11 @@ struct MenuBarStatusItemToggleSuppressor {
         pendingDismissal = nil
         guard pending.click.eventNumber == action.eventNumber else { return false }
         guard pending.dismissedPanels.contains(target) else { return false }
+        let drift = hypot(
+            action.screenLocation.x - pending.click.screenLocation.x,
+            action.screenLocation.y - pending.click.screenLocation.y
+        )
+        guard drift <= Self.maximumClickDrift else { return false }
         let elapsed = action.timestamp - pending.click.timestamp
         return elapsed >= 0 && elapsed <= Self.maximumClickDuration
     }

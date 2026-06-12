@@ -434,7 +434,7 @@ final class MenuBarStatusItemController: NSObject {
         // healthy hosts never match.
         if let currentEvent,
            toggleSuppressor.shouldSuppressToggle(
-               for: Self.clickIdentity(of: currentEvent),
+               for: Self.clickIdentity(of: currentEvent, at: Self.screenLocation(of: currentEvent)),
                target: invocation
            ) {
             MenuBarStatusItemDiagnostics.trace(
@@ -458,12 +458,24 @@ final class MenuBarStatusItemController: NSObject {
     }
 
     private func toggleFeaturePanel(relativeTo button: NSStatusBarButton) {
+        MenuBarStatusItemDiagnostics.trace(
+            "toggleFeaturePanel pre: feature=\(panelPresenter.isFeaturePanelShown) component=\(panelPresenter.isComponentPanelShown)"
+        )
         panelPresenter.toggleFeaturePanel(relativeTo: button)
+        MenuBarStatusItemDiagnostics.trace(
+            "toggleFeaturePanel post: feature=\(panelPresenter.isFeaturePanelShown) component=\(panelPresenter.isComponentPanelShown)"
+        )
         handlePresentationResult()
     }
 
     private func toggleComponentPanel(relativeTo button: NSStatusBarButton) {
+        MenuBarStatusItemDiagnostics.trace(
+            "toggleComponentPanel pre: feature=\(panelPresenter.isFeaturePanelShown) component=\(panelPresenter.isComponentPanelShown)"
+        )
         panelPresenter.toggleComponentPanel(relativeTo: button)
+        MenuBarStatusItemDiagnostics.trace(
+            "toggleComponentPanel post: feature=\(panelPresenter.isFeaturePanelShown) component=\(panelPresenter.isComponentPanelShown)"
+        )
         handlePresentationResult()
     }
 
@@ -493,8 +505,8 @@ final class MenuBarStatusItemController: NSObject {
                 // Global-monitor events carry no window, so locationInWindow
                 // is already in screen coordinates. Reduce the event to
                 // Sendable values here; NSEvent must not hop actors.
-                let click = Self.clickIdentity(of: event)
                 let screenLocation = event.locationInWindow
+                let click = Self.clickIdentity(of: event, at: screenLocation)
                 Task { @MainActor in
                     self?.dismissPanelsForOutsideClick(click, screenLocation: screenLocation)
                 }
@@ -545,9 +557,10 @@ final class MenuBarStatusItemController: NSObject {
             return event
         }
 
+        let screenLocation = Self.screenLocation(of: event)
         armToggleSuppressionIfNeeded(
-            for: Self.clickIdentity(of: event),
-            screenLocation: Self.screenLocation(of: event)
+            for: Self.clickIdentity(of: event, at: screenLocation),
+            screenLocation: screenLocation
         )
         dismissPanels()
         return event
@@ -640,10 +653,14 @@ final class MenuBarStatusItemController: NSObject {
         return button.bounds.contains(pointInButton)
     }
 
-    nonisolated private static func clickIdentity(of event: NSEvent) -> MenuBarStatusItemClickIdentity {
+    nonisolated private static func clickIdentity(
+        of event: NSEvent,
+        at screenLocation: NSPoint
+    ) -> MenuBarStatusItemClickIdentity {
         MenuBarStatusItemClickIdentity(
             eventNumber: event.eventNumber,
-            timestamp: event.timestamp
+            timestamp: event.timestamp,
+            screenLocation: screenLocation
         )
     }
 

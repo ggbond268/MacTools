@@ -318,16 +318,65 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
 
     // MARK: - Toggle suppression (stub-host icon-click bounce)
 
+    private static let iconPoint = CGPoint(x: 2343, y: 16)
+
+    func testZeroEventNumbersMatchByLocationOnTheBeta() {
+        // On-device reality on 26A5353q: BOTH the monitor's down and the
+        // forwarded action's up carry eventNumber 0, so the number equality
+        // is vacuous and the location must carry the identity. Small jitter
+        // between down and up stays within the drift bound.
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 0, timestamp: 100.00, screenLocation: Self.iconPoint),
+            dismissedPanels: [.componentPanel]
+        )
+
+        XCTAssertTrue(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(
+                    eventNumber: 0,
+                    timestamp: 100.15,
+                    screenLocation: CGPoint(x: Self.iconPoint.x + 2, y: Self.iconPoint.y + 1)
+                ),
+                target: .componentPanel
+            )
+        )
+    }
+
+    func testFarawayClickWithDegenerateEventNumberIsNotSuppressed() {
+        // The trap the location bound closes: with every beta event number
+        // being 0, dismissing our panel by clicking a DIFFERENT status item
+        // arms a record that would otherwise eat the next icon click for up
+        // to the staleness window. Distinct items sit tens of points apart,
+        // far beyond the drift bound.
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(
+                eventNumber: 0,
+                timestamp: 100.00,
+                screenLocation: CGPoint(x: 2255, y: 16)
+            ),
+            dismissedPanels: [.componentPanel]
+        )
+
+        XCTAssertFalse(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 0, timestamp: 100.50, screenLocation: Self.iconPoint),
+                target: .componentPanel
+            )
+        )
+    }
+
     func testSameClickWithinTimeoutSuppressesExactlyOnce() {
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
-            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
             dismissedPanels: [.featurePanel]
         )
 
         XCTAssertTrue(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12, screenLocation: Self.iconPoint),
                 target: .featurePanel
             )
         )
@@ -335,7 +384,7 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
         // genuine follow-up toggle would be eaten.
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.13),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.13, screenLocation: Self.iconPoint),
                 target: .featurePanel
             )
         )
@@ -344,13 +393,13 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
     func testDifferentClickIsNotSuppressed() {
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
-            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
             dismissedPanels: [.featurePanel]
         )
 
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 8, timestamp: 100.10),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 8, timestamp: 100.10, screenLocation: Self.iconPoint),
                 target: .featurePanel
             )
         )
@@ -365,13 +414,13 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
         // the only pointer channel to the secondary panel on the beta).
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
-            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
             dismissedPanels: [.featurePanel]
         )
 
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12, screenLocation: Self.iconPoint),
                 target: .componentPanel
             )
         )
@@ -380,13 +429,13 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
     func testBothPanelsDismissedSuppressesEitherTarget() {
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
-            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
             dismissedPanels: [.featurePanel, .componentPanel]
         )
 
         XCTAssertTrue(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.12, screenLocation: Self.iconPoint),
                 target: .componentPanel
             )
         )
@@ -395,13 +444,13 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
     func testNonMatchingToggleClearsThePendingRecord() {
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
-            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
             dismissedPanels: [.featurePanel]
         )
 
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 8, timestamp: 100.10),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 8, timestamp: 100.10, screenLocation: Self.iconPoint),
                 target: .featurePanel
             )
         )
@@ -409,7 +458,7 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
         // not suppress later.
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.20),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.20, screenLocation: Self.iconPoint),
                 target: .featurePanel
             )
         )
@@ -418,7 +467,7 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
     func testExpiredRecordDoesNotSuppress() {
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
-            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
             dismissedPanels: [.featurePanel]
         )
 
@@ -426,7 +475,8 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
             suppressor.shouldSuppressToggle(
                 for: MenuBarStatusItemClickIdentity(
                     eventNumber: 7,
-                    timestamp: 100.00 + MenuBarStatusItemToggleSuppressor.maximumClickDuration + 0.01
+                    timestamp: 100.00 + MenuBarStatusItemToggleSuppressor.maximumClickDuration + 0.01,
+                    screenLocation: Self.iconPoint
                 ),
                 target: .featurePanel
             )
@@ -436,7 +486,7 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
     func testExactTimeoutBoundaryStillSuppresses() {
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
-            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
             dismissedPanels: [.featurePanel]
         )
 
@@ -444,7 +494,8 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
             suppressor.shouldSuppressToggle(
                 for: MenuBarStatusItemClickIdentity(
                     eventNumber: 7,
-                    timestamp: 100.00 + MenuBarStatusItemToggleSuppressor.maximumClickDuration
+                    timestamp: 100.00 + MenuBarStatusItemToggleSuppressor.maximumClickDuration,
+                    screenLocation: Self.iconPoint
                 ),
                 target: .featurePanel
             )
@@ -454,13 +505,13 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
     func testOutOfOrderTimestampDoesNotSuppress() {
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
-            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+            MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
             dismissedPanels: [.featurePanel]
         )
 
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 99.90),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 99.90, screenLocation: Self.iconPoint),
                 target: .featurePanel
             )
         )
@@ -474,7 +525,7 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
 
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00),
+                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
                 target: .featurePanel
             )
         )
