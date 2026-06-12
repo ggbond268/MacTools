@@ -39,6 +39,46 @@ final class MenuBarStatusItemControllerTests: XCTestCase {
         XCTAssertEqual(MenuBarStatusItemInvocation.invocation(for: event), .componentPanel)
     }
 
+    func testLiveOptionFlagMakesStrippedEventSecondary() {
+        // Rehosted menu bar reality: the forwarded action event carries no
+        // modifiers even for a physical Option-click; the caller-sampled
+        // live keyboard state must carry the intent instead.
+        let strippedEvent = NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 0
+        )
+
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocation(for: strippedEvent, liveModifierFlags: [.option]),
+            .featurePanel
+        )
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocation(for: strippedEvent, liveModifierFlags: [.control]),
+            .featurePanel
+        )
+        // Non-secondary live modifiers must not flip the invocation.
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocation(for: strippedEvent, liveModifierFlags: [.shift]),
+            .componentPanel
+        )
+    }
+
+    func testLiveFlagsAreIgnoredForProgrammaticNilEvent() {
+        // A programmatic invocation (no event) stays primary even if the
+        // user happens to be holding Option at that moment.
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocation(for: nil, liveModifierFlags: [.option]),
+            .componentPanel
+        )
+    }
+
     func testRightMouseDownOpensFeaturePanelImmediately() {
         let event = NSEvent.mouseEvent(
             with: .rightMouseDown,

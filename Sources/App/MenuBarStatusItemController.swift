@@ -9,7 +9,8 @@ enum MenuBarStatusItemInvocation: Hashable {
 
     static func invocation(
         for event: NSEvent?,
-        swapped: Bool = false
+        swapped: Bool = false,
+        liveModifierFlags: NSEvent.ModifierFlags = []
     ) -> MenuBarStatusItemInvocation {
         // A secondary click is a right-click, a Control-click or an
         // Option-click; everything else (including a nil event for
@@ -17,15 +18,25 @@ enum MenuBarStatusItemInvocation: Hashable {
         //
         // Option+left exists for macOS 27 beta reachability: the new
         // single-window menu bar host does not route right mouse events to
-        // third-party status items at all (verified on 26A5353q), so
-        // Option+left is the only pointer channel left for the secondary
-        // panel there. It is enabled on every OS as a general enhancement.
+        // third-party status items at all, so Option+left is the only
+        // pointer channel left for the secondary panel there. It is enabled
+        // on every OS as a general enhancement.
+        //
+        // `liveModifierFlags` is the caller-sampled current keyboard state
+        // (`NSEvent.modifierFlags` class property). The rehosted menu bar
+        // SYNTHESIZES the action's leftMouseUp and strips its modifiers
+        // (observed live on 26A5353q: modifiers always 0 even for physical
+        // Option-clicks), so the event alone cannot carry the user's intent
+        // there — the live keyboard state still can. It is only consulted
+        // for user-initiated invocations (non-nil event).
         let isSecondary: Bool = {
             guard let event else { return false }
             return event.type == .rightMouseDown
                 || event.type == .rightMouseUp
                 || event.modifierFlags.contains(.control)
                 || event.modifierFlags.contains(.option)
+                || liveModifierFlags.contains(.control)
+                || liveModifierFlags.contains(.option)
         }()
 
         let primary: MenuBarStatusItemInvocation = swapped ? .featurePanel : .componentPanel
@@ -421,7 +432,11 @@ final class MenuBarStatusItemController: NSObject {
         // Read the preference live on each click so a settings change takes
         // effect immediately without re-observing.
         let swapped = MenuBarClickBehaviorPreference.current().isSwapped
-        let invocation = MenuBarStatusItemInvocation.invocation(for: currentEvent, swapped: swapped)
+        let invocation = MenuBarStatusItemInvocation.invocation(
+            for: currentEvent,
+            swapped: swapped,
+            liveModifierFlags: NSEvent.modifierFlags
+        )
 
         // Stub host only: the outside-click monitor may have just dismissed
         // the panels for this same physical click — without button geometry
