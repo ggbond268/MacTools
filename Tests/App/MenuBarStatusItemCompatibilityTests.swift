@@ -391,6 +391,9 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
     }
 
     func testDifferentClickIsNotSuppressed() {
+        // A different click is told apart by WHERE it landed, never by the
+        // event number — the stub host synthesizes the action's up with a
+        // number unrelated to the monitored down.
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
             MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
@@ -399,8 +402,35 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
 
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 8, timestamp: 100.10, screenLocation: Self.iconPoint),
+                for: MenuBarStatusItemClickIdentity(
+                    eventNumber: 8,
+                    timestamp: 100.10,
+                    screenLocation: CGPoint(x: Self.iconPoint.x - 60, y: Self.iconPoint.y)
+                ),
                 target: .featurePanel
+            )
+        )
+    }
+
+    func testPhysicalClickPairWithMismatchedEventNumbersSuppresses() {
+        // The on-device bounce on 26A5353q: the monitor saw the physical
+        // down with its real number (6845) and the action got a
+        // host-synthesized up with an unrelated number ~1s later. Same
+        // location + the time window must identify them as one click.
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 6845, timestamp: 100.00, screenLocation: Self.iconPoint),
+            dismissedPanels: [.componentPanel]
+        )
+
+        XCTAssertTrue(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(
+                    eventNumber: 0,
+                    timestamp: 101.00,
+                    screenLocation: CGPoint(x: Self.iconPoint.x + 1, y: Self.iconPoint.y)
+                ),
+                target: .componentPanel
             )
         )
     }
@@ -450,7 +480,11 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
 
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 8, timestamp: 100.10, screenLocation: Self.iconPoint),
+                for: MenuBarStatusItemClickIdentity(
+                    eventNumber: 8,
+                    timestamp: 100.10,
+                    screenLocation: CGPoint(x: Self.iconPoint.x - 60, y: Self.iconPoint.y)
+                ),
                 target: .featurePanel
             )
         )

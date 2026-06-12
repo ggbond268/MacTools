@@ -147,15 +147,17 @@ enum MenuBarStatusItemClickGeometry {
 
 /// Identity of one physical click, reduced to Sendable values so it can hop
 /// from an event monitor to the main actor and later be compared against the
-/// action's `NSApp.currentEvent`. Matching mouse-down/up events share one
-/// window-server event number (`kCGMouseEventNumber` semantics), and
-/// `timestamp` is the system-uptime timebase both events carry.
+/// action's `NSApp.currentEvent`.
 ///
-/// On the macOS 27 beta the rehosted menu bar delivers BOTH sides with
-/// eventNumber 0 (observed on device, 26A5353q), making the number equality
-/// vacuous there — `screenLocation` is the co-identity that still
-/// discriminates: a click's down and up land at the same point, while a
-/// click on a different status item lands tens of points away.
+/// On the rehosted (stub) menu bar the event number CANNOT carry the
+/// identity: the monitor sees the user's physical mouse-down with its real
+/// window-server number, but the action receives a host-SYNTHESIZED up
+/// whose number is unrelated (observed live on 26A5353q: armed
+/// eventNumber=6845, the matching action arrived unsuppressed — while
+/// fully synthetic clicks deliver 0 on both sides). `eventNumber` is kept
+/// for diagnostics only; the identity is the location plus the time
+/// window: a click's down and up land at the same point, while a click on
+/// a different status item lands tens of points away.
 struct MenuBarStatusItemClickIdentity: Equatable, Sendable {
     let eventNumber: Int
     let timestamp: TimeInterval
@@ -171,16 +173,16 @@ struct MenuBarStatusItemClickIdentity: Equatable, Sendable {
 /// recorded on healthy hosts, so their behavior is unchanged.
 struct MenuBarStatusItemToggleSuppressor {
     /// Staleness bound between the dismissing mouse-down and the action's
-    /// mouse-up. The event number is the primary identity (matching down/up
-    /// share one window-server number); this bound only guards against a
-    /// future host recycling numbers across unrelated clicks, so it must be
-    /// generous enough for any press-and-hold release.
+    /// mouse-up. Must absorb both a press-and-hold release and the rehosted
+    /// menu bar's forwarding latency (observed up to ~1s on 26A5353q between
+    /// the monitored physical down and the synthesized action up).
     static let maximumClickDuration: TimeInterval = 10
 
     /// Maximum distance between the dismissing down and the action's up for
     /// them to count as one click. A click's down/up share a point (small
-    /// jitter aside); distinct status items sit tens of points apart. This
-    /// carries the identity on the beta, where every event number is 0.
+    /// jitter aside); distinct status items sit tens of points apart. The
+    /// location carries the whole identity on the stub host — see
+    /// `MenuBarStatusItemClickIdentity` for why the event number cannot.
     static let maximumClickDrift: CGFloat = 8
 
     private struct PendingDismissal {
@@ -210,7 +212,6 @@ struct MenuBarStatusItemToggleSuppressor {
     ) -> Bool {
         guard let pending = pendingDismissal else { return false }
         pendingDismissal = nil
-        guard pending.click.eventNumber == action.eventNumber else { return false }
         guard pending.dismissedPanels.contains(target) else { return false }
         let drift = hypot(
             action.screenLocation.x - pending.click.screenLocation.x,
