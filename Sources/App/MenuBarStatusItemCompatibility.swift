@@ -185,6 +185,13 @@ struct MenuBarStatusItemToggleSuppressor {
     /// `MenuBarStatusItemClickIdentity` for why the event number cannot.
     static let maximumClickDrift: CGFloat = 8
 
+    /// The activation-dismissal path has no NSEvent and stamps its record
+    /// with "now", which can land AFTER the forwarded action's own event
+    /// timestamp (observed live: the suppression was missed and the panel
+    /// bounced because elapsed came out negative). Allow that much backward
+    /// skew before treating the action as predating the record.
+    static let maximumTimestampSkew: TimeInterval = 2
+
     private struct PendingDismissal {
         let click: MenuBarStatusItemClickIdentity
         let dismissedPanels: Set<MenuBarStatusItemInvocation>
@@ -219,6 +226,6 @@ struct MenuBarStatusItemToggleSuppressor {
         )
         guard drift <= Self.maximumClickDrift else { return false }
         let elapsed = action.timestamp - pending.click.timestamp
-        return elapsed >= 0 && elapsed <= Self.maximumClickDuration
+        return elapsed >= -Self.maximumTimestampSkew && elapsed <= Self.maximumClickDuration
     }
 }

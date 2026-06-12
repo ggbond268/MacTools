@@ -536,7 +536,25 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
         )
     }
 
-    func testOutOfOrderTimestampDoesNotSuppress() {
+    func testActionSlightlyOlderThanRecordStillSuppresses() {
+        // The activation-dismissal record is stamped with "now", which can
+        // postdate the forwarded action's own event timestamp (observed live
+        // as a missed suppression). Backward skew within the bound matches.
+        var suppressor = MenuBarStatusItemToggleSuppressor()
+        suppressor.recordOutsideDismissal(
+            MenuBarStatusItemClickIdentity(eventNumber: 0, timestamp: 100.00, screenLocation: Self.iconPoint),
+            dismissedPanels: [.componentPanel]
+        )
+
+        XCTAssertTrue(
+            suppressor.shouldSuppressToggle(
+                for: MenuBarStatusItemClickIdentity(eventNumber: 0, timestamp: 99.20, screenLocation: Self.iconPoint),
+                target: .componentPanel
+            )
+        )
+    }
+
+    func testActionFarOlderThanRecordDoesNotSuppress() {
         var suppressor = MenuBarStatusItemToggleSuppressor()
         suppressor.recordOutsideDismissal(
             MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 100.00, screenLocation: Self.iconPoint),
@@ -545,7 +563,11 @@ final class MenuBarStatusItemCompatibilityTests: XCTestCase {
 
         XCTAssertFalse(
             suppressor.shouldSuppressToggle(
-                for: MenuBarStatusItemClickIdentity(eventNumber: 7, timestamp: 99.90, screenLocation: Self.iconPoint),
+                for: MenuBarStatusItemClickIdentity(
+                    eventNumber: 7,
+                    timestamp: 100.00 - MenuBarStatusItemToggleSuppressor.maximumTimestampSkew - 0.5,
+                    screenLocation: Self.iconPoint
+                ),
                 target: .featurePanel
             )
         )
