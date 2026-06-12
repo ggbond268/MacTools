@@ -14,17 +14,20 @@ window-server-owned window, third-party NSStatusItems exhibit the following
 regressions (all reproduced on 26A5353q, Apple Silicon, external 5K main
 display):
 
-1. **Right-clicks are never delivered, on any channel.** An action-based
-   item (`button.sendAction(on: [.leftMouseUp, .rightMouseUp])`) never
+1. **Right-clicks are never delivered, on any channel — including
+   first-party SwiftUI.** An action-based item
+   (`button.sendAction(on: [.leftMouseUp, .rightMouseUp])`) never
    receives a `rightMouseUp` action. A menu-backed item
    (`NSStatusItem.menu != nil`) does not open its menu on physical
    right-click either — left-click opens it natively. An item with an
    `expandedInterfaceDelegate` (the new macOS 27 API) receives no
    `didBeginExpandedInterfaceSession` for a physical right-click — left
-   clicks begin sessions normally. NSEvent global monitors in the owning
-   app see no right-mouse events in the menu bar band at all. The
-   right-click appears to be swallowed by the menu bar host before any
-   app-visible surface.
+   clicks begin sessions normally. A SwiftUI `MenuBarExtra` with
+   `.menuBarExtraStyle(.window)` does not present on physical
+   right-click either (left-click presents normally). NSEvent global
+   monitors in the owning app see no right-mouse events in the menu bar
+   band at all. The right-click is swallowed by the menu bar host before
+   any app-visible surface, AppKit or SwiftUI.
 
 2. **Forwarded left-click actions arrive with modifiers stripped.** The
    `NSApp.currentEvent` seen in the action handler is a synthesized
