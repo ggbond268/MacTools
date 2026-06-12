@@ -128,6 +128,35 @@ struct SystemHideNotchDisplayCatalog: HideNotchDisplayCatalogProviding {
         }
     }
 
+    /// The mask must be pinned to the physical notch height (auxiliary top
+    /// areas / safe area). The menu bar can be taller than the notch (observed
+    /// on macOS 27 beta with an external main display), so taking the max of
+    /// both would overflow the mask below the camera housing. Menu bar height
+    /// is only an estimate used when no auxiliary-area data exists; in that
+    /// case `hasUnobscuredTopArea` is false, so `isSupported` stays false and
+    /// the fallback only affects the recorded context value, never masking.
+    nonisolated static func notchHeight(
+        auxLeftHeight: CGFloat,
+        auxRightHeight: CGFloat,
+        menuBarHeight: CGFloat
+    ) -> CGFloat {
+        // Sanitize each side before max(): Swift's max() propagates a NaN
+        // first argument, which would discard a valid height on the other
+        // side instead of falling back to it.
+        let leftHeight = auxLeftHeight.isFinite ? max(auxLeftHeight, 0) : 0
+        let rightHeight = auxRightHeight.isFinite ? max(auxRightHeight, 0) : 0
+        let auxHeight = max(leftHeight, rightHeight)
+        if auxHeight > 0 {
+            return auxHeight
+        }
+
+        guard menuBarHeight.isFinite, menuBarHeight > 0 else {
+            return 0
+        }
+
+        return menuBarHeight
+    }
+
     private static func displayContext(for screen: NSScreen) -> HideNotchDisplayContext? {
         guard
             let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
@@ -145,9 +174,11 @@ struct SystemHideNotchDisplayCatalog: HideNotchDisplayCatalogProviding {
         let topRightArea = screen.auxiliaryTopRightArea ?? .zero
         let isBuiltin = CGDisplayIsBuiltin(displayID) != 0
         let hasUnobscuredTopArea = !topLeftArea.isEmpty || !topRightArea.isEmpty
-        let fallbackHeight = max(topLeftArea.height, topRightArea.height)
-        let menuBarHeight = NSApplication.shared.mainMenu?.menuBarHeight ?? 0
-        let notchHeight = max(menuBarHeight, fallbackHeight)
+        let notchHeight = Self.notchHeight(
+            auxLeftHeight: topLeftArea.height,
+            auxRightHeight: topRightArea.height,
+            menuBarHeight: NSApplication.shared.mainMenu?.menuBarHeight ?? 0
+        )
         let isSupported = isBuiltin && hasUnobscuredTopArea && notchHeight > 0
 
         return HideNotchDisplayContext(

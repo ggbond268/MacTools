@@ -28,6 +28,88 @@ final class HideNotchDisplayCatalogTests: XCTestCase {
         )
     }
 
+    func testNotchHeightUsesAuxHeightWhenMenuBarIsShorter() {
+        XCTAssertEqual(
+            SystemHideNotchDisplayCatalog.notchHeight(
+                auxLeftHeight: 32,
+                auxRightHeight: 32,
+                menuBarHeight: 30
+            ),
+            32
+        )
+    }
+
+    func testNotchHeightIgnoresTallerMenuBarWhenAuxHeightExists() {
+        // Regression: the old max(menuBar, aux) logic returned 40 here, which
+        // made the mask overflow below the physical notch.
+        XCTAssertEqual(
+            SystemHideNotchDisplayCatalog.notchHeight(
+                auxLeftHeight: 32,
+                auxRightHeight: 32,
+                menuBarHeight: 40
+            ),
+            32
+        )
+    }
+
+    func testNotchHeightUsesTallerAuxSideWhenSidesDiffer() {
+        XCTAssertEqual(
+            SystemHideNotchDisplayCatalog.notchHeight(
+                auxLeftHeight: 28,
+                auxRightHeight: 32,
+                menuBarHeight: 24
+            ),
+            32
+        )
+    }
+
+    func testNotchHeightFallsBackToMenuBarWhenAuxHeightsAreZero() {
+        XCTAssertEqual(
+            SystemHideNotchDisplayCatalog.notchHeight(
+                auxLeftHeight: 0,
+                auxRightHeight: 0,
+                menuBarHeight: 24
+            ),
+            24
+        )
+    }
+
+    func testNotchHeightIsZeroWhenAllInputsAreZero() {
+        XCTAssertEqual(
+            SystemHideNotchDisplayCatalog.notchHeight(
+                auxLeftHeight: 0,
+                auxRightHeight: 0,
+                menuBarHeight: 0
+            ),
+            0
+        )
+    }
+
+    func testNotchHeightRejectsNonFiniteInputs() {
+        XCTAssertEqual(
+            SystemHideNotchDisplayCatalog.notchHeight(
+                auxLeftHeight: .nan,
+                auxRightHeight: .infinity,
+                menuBarHeight: -1
+            ),
+            0
+        )
+    }
+
+    func testNotchHeightKeepsValidSideWhenOtherSideIsNaN() {
+        // max(.nan, 32) returns .nan in Swift, so a NaN left side must be
+        // sanitized before max() or it would discard the valid right side
+        // and wrongly fall back to the menu bar estimate.
+        XCTAssertEqual(
+            SystemHideNotchDisplayCatalog.notchHeight(
+                auxLeftHeight: .nan,
+                auxRightHeight: 32,
+                menuBarHeight: 24
+            ),
+            32
+        )
+    }
+
     func testResolverFiltersOutNonDesktopSpaces() {
         let spaces = HideNotchManagedDisplaySpaceResolver.spaces(from: [
             "Current Space": [
