@@ -524,6 +524,7 @@ final class MenuBarStatusItemController: NSObject {
                 }
 
                 Task { @MainActor in
+                    self?.armSuppressionForActivationDismissal()
                     self?.dismissPanels()
                 }
             }
@@ -564,6 +565,25 @@ final class MenuBarStatusItemController: NSObject {
         )
         dismissPanels()
         return event
+    }
+
+    /// Stub host: clicking our own icon can activate the rehosted menu bar's
+    /// owning process, so the panels die through this workspace observer
+    /// without our event monitors ever seeing the click (observed live on
+    /// 26A5353q: silent close, then the forwarded action reopened the panel —
+    /// the bounce through a side door). No NSEvent is available here; the
+    /// cursor position stands in for the click location — it is still at the
+    /// click point when the activation lands, and the suppressor's location
+    /// match then decides exactly like the monitored path. Activations not
+    /// caused by a menu-bar-band click (Cmd-Tab, desktop click) fail the band
+    /// guard or never produce a matching action, so nothing is eaten.
+    private func armSuppressionForActivationDismissal() {
+        let identity = MenuBarStatusItemClickIdentity(
+            eventNumber: 0,
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            screenLocation: NSEvent.mouseLocation
+        )
+        armToggleSuppressionIfNeeded(for: identity, screenLocation: identity.screenLocation)
     }
 
     private func dismissPanelsForOutsideClick(
