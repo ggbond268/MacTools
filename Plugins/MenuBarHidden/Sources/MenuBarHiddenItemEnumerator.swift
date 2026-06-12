@@ -758,7 +758,7 @@ enum MenuBarHiddenWindowServer {
         return spaces.takeRetainedValue() as? [CGSSpaceID] ?? []
     }
 
-    private static func activeDisplayIDs() -> [CGDirectDisplayID] {
+    static func activeDisplayIDs() -> [CGDirectDisplayID] {
         var count: UInt32 = 0
         guard CGGetActiveDisplayList(0, nil, &count) == .success else { return [] }
         var list = [CGDirectDisplayID](repeating: 0, count: Int(count))

@@ -27,11 +27,16 @@ final class MenuBarHiddenManager: ObservableObject {
     )
     /// Fail-closed host compatibility gate. On macOS 27 beta the menu bar was
     /// composited into a single WindowServer window and the CGS per-item
-    /// window list comes back empty — every mechanism of this plugin (10000pt
+    /// window list comes back empty (a future seed might instead return
+    /// implausibly shaped data — `MenuBarHiddenHostProbe` rejects both) —
+    /// every mechanism of this plugin (10000pt
     /// expanding divider, item enumeration, synthesised drags/clicks) then
-    /// either silently spins or risks swallowing menu bar clicks. Probed once
-    /// at first activation and cached; when unsupported the plugin installs
-    /// nothing and surfaces an explicit incompatibility message instead.
+    /// either silently spins or risks swallowing menu bar clicks. Probed at
+    /// first activation; determinate verdicts are cached for the manager's
+    /// lifetime, while indeterminate ones (no active displays, transient
+    /// CGWindow lookup failure) stay fail-closed but re-probe on a later
+    /// activation. When unsupported the plugin installs nothing and surfaces
+    /// an explicit incompatibility message instead.
     @Published private(set) var isHostMenuBarSupported = true
 
     let iconCache: MenuBarHiddenIconCache
@@ -43,7 +48,7 @@ final class MenuBarHiddenManager: ObservableObject {
     private let events: MenuBarHiddenEventSynthesis
     private let localization: PluginLocalization
     private let permissionProvider: () -> MenuBarHiddenPermissionsStatus
-    private let hostSupportProbe: () -> Bool
+    private let hostSupportProbe: () -> MenuBarHiddenHostProbe.Outcome
     private var hasProbedHostSupport = false
 
     private struct PendingClickRequest {
@@ -86,12 +91,8 @@ final class MenuBarHiddenManager: ObservableObject {
                 hasScreenRecording: MenuBarHiddenScreenRecordingPermission.isGranted()
             )
         },
-        hostSupportProbe: @escaping () -> Bool = {
-            // An empty CGS menu bar window list on a healthy system is
-            // impossible (the host's own status item is always present), so
-            // empty == the macOS 27 single-window menu bar host (or a CGS
-            // failure) — both mean fail-closed.
-            !MenuBarHiddenWindowServer.menuBarWindowIDs(itemsOnly: true, activeSpaceOnly: true).isEmpty
+        hostSupportProbe: @escaping () -> MenuBarHiddenHostProbe.Outcome = {
+            MenuBarHiddenHostProbe.hostMenuBarSupport()
         }
     ) {
         self.store = store
@@ -159,11 +160,25 @@ final class MenuBarHiddenManager: ObservableObject {
 
     private func probeHostSupportIfNeeded() {
         guard !hasProbedHostSupport else { return }
-        hasProbedHostSupport = true
-        isHostMenuBarSupported = hostSupportProbe()
-        if !isHostMenuBarSupported {
+        switch hostSupportProbe() {
+        case .supported:
+            hasProbedHostSupport = true
+            isHostMenuBarSupported = true
+        case .unsupported:
+            hasProbedHostSupport = true
+            isHostMenuBarSupported = false
+            // The probe logs the specific rejection reason (empty vs
+            // implausibly shaped enumeration) before returning.
             MenuBarHiddenLog.plugin.error(
-                "Menu bar window enumeration returned no items; entering fail-closed unsupported mode (incompatible menu bar host)"
+                "Menu bar host support probe failed; entering fail-closed unsupported mode (incompatible menu bar host)"
+            )
+        case .indeterminate:
+            // No positive evidence either way: stay fail-closed for this
+            // activation, but leave the verdict uncached so a later
+            // activate() re-probes once the environment recovers.
+            isHostMenuBarSupported = false
+            MenuBarHiddenLog.plugin.error(
+                "Menu bar host support probe was indeterminate; staying fail-closed until a later activation re-probes"
             )
         }
     }

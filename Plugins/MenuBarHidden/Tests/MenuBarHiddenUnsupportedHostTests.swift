@@ -14,7 +14,7 @@ final class MenuBarHiddenUnsupportedHostTests: XCTestCase {
             hasAccessibility: true,
             hasScreenRecording: true
         ),
-        hostSupportProbe: @escaping () -> Bool
+        hostSupportProbe: @escaping () -> MenuBarHiddenHostProbe.Outcome
     ) -> MenuBarHiddenController {
         MenuBarHiddenController(
             context: PluginRuntimeContext(
@@ -32,7 +32,7 @@ final class MenuBarHiddenUnsupportedHostTests: XCTestCase {
             pluginID: MenuBarHiddenConstants.pluginID,
             storage: storage
         )
-        let controller = makeController(storage: storage, hostSupportProbe: { false })
+        let controller = makeController(storage: storage, hostSupportProbe: { .unsupported })
         let plugin = MenuBarHiddenPlugin(context: context, controller: controller)
 
         controller.activate()
@@ -50,7 +50,7 @@ final class MenuBarHiddenUnsupportedHostTests: XCTestCase {
     func testUnsupportedHostIgnoresEnableAttemptsFailClosed() {
         let controller = makeController(
             storage: MenuBarHiddenMemoryStorage(),
-            hostSupportProbe: { false }
+            hostSupportProbe: { .unsupported }
         )
         controller.activate()
 
@@ -73,7 +73,7 @@ final class MenuBarHiddenUnsupportedHostTests: XCTestCase {
             pluginID: MenuBarHiddenConstants.pluginID,
             storage: storage
         )
-        let controller = makeController(storage: storage, hostSupportProbe: { false })
+        let controller = makeController(storage: storage, hostSupportProbe: { .unsupported })
         let plugin = MenuBarHiddenPlugin(context: context, controller: controller)
 
         controller.activate()
@@ -92,7 +92,7 @@ final class MenuBarHiddenUnsupportedHostTests: XCTestCase {
             pluginID: MenuBarHiddenConstants.pluginID,
             storage: storage
         )
-        let controller = makeController(storage: storage, hostSupportProbe: { false })
+        let controller = makeController(storage: storage, hostSupportProbe: { .unsupported })
         let plugin = MenuBarHiddenPlugin(context: context, controller: controller)
 
         controller.activate()
@@ -110,7 +110,7 @@ final class MenuBarHiddenUnsupportedHostTests: XCTestCase {
             storage: MenuBarHiddenMemoryStorage(),
             hostSupportProbe: {
                 probeCount += 1
-                return false
+                return .unsupported
             }
         )
 
@@ -123,13 +123,47 @@ final class MenuBarHiddenUnsupportedHostTests: XCTestCase {
         XCTAssertFalse(controller.isHostSupported)
     }
 
+    func testIndeterminateProbeStaysFailClosedButIsNotCached() {
+        var probeCount = 0
+        let controller = makeController(
+            storage: MenuBarHiddenMemoryStorage(),
+            hostSupportProbe: {
+                probeCount += 1
+                return .indeterminate
+            }
+        )
+
+        controller.activate()
+        XCTAssertFalse(controller.isHostSupported, "Indeterminate probes must stay fail-closed")
+
+        controller.activate()
+        XCTAssertEqual(probeCount, 2, "Indeterminate verdicts must not be cached")
+    }
+
+    func testIndeterminateProbeRecoversOnLaterActivation() {
+        // Displays asleep at first activation (indeterminate), awake by the
+        // next one: the gate must reopen instead of staying stuck.
+        var outcomes: [MenuBarHiddenHostProbe.Outcome] = [.indeterminate, .supported]
+        let controller = makeController(
+            storage: MenuBarHiddenMemoryStorage(),
+            hostSupportProbe: { outcomes.isEmpty ? .supported : outcomes.removeFirst() }
+        )
+
+        controller.activate()
+        XCTAssertFalse(controller.isHostSupported)
+
+        controller.activate()
+        XCTAssertTrue(controller.isHostSupported)
+        controller.deactivate()
+    }
+
     func testSupportedProbeKeepsNormalPanelBehavior() {
         let storage = MenuBarHiddenMemoryStorage()
         let context = PluginRuntimeContext(
             pluginID: MenuBarHiddenConstants.pluginID,
             storage: storage
         )
-        let controller = makeController(storage: storage, hostSupportProbe: { true })
+        let controller = makeController(storage: storage, hostSupportProbe: { .supported })
         let plugin = MenuBarHiddenPlugin(context: context, controller: controller)
 
         XCTAssertTrue(controller.isHostSupported)

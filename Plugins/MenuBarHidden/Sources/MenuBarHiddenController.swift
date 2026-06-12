@@ -36,8 +36,8 @@ final class MenuBarHiddenController: ObservableObject {
                 hasScreenRecording: MenuBarHiddenScreenRecordingPermission.isGranted()
             )
         },
-        hostSupportProbe: @escaping () -> Bool = {
-            !MenuBarHiddenWindowServer.menuBarWindowIDs(itemsOnly: true, activeSpaceOnly: true).isEmpty
+        hostSupportProbe: @escaping () -> MenuBarHiddenHostProbe.Outcome = {
+            MenuBarHiddenHostProbe.hostMenuBarSupport()
         }
     ) {
         self.localization = localization
@@ -129,9 +129,10 @@ final class MenuBarHiddenController: ObservableObject {
 
     // MARK: - Forwarded state / actions
 
-    /// Synchronous read of the manager's fail-closed host gate (probed once
-    /// at activation). False on hosts where the menu bar window list is
-    /// unavailable (macOS 27 beta single-window menu bar).
+    /// Synchronous read of the manager's fail-closed host gate (probed at
+    /// activation; indeterminate probes re-run on a later activation). False
+    /// on hosts where the menu bar window list is unavailable (macOS 27 beta
+    /// single-window menu bar).
     var isHostSupported: Bool {
         manager.isHostMenuBarSupported
     }
