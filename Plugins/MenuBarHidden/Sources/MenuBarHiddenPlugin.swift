@@ -136,6 +136,25 @@ final class MenuBarHiddenPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompo
     // MARK: - Panel state
 
     var primaryPanelState: PluginPanelState {
+        guard controller.isHostSupported else {
+            // Fail-closed unsupported host (macOS 27 beta single-window menu
+            // bar): keep the row visible so users see why, disable the switch.
+            return PluginPanelState(
+                subtitle: localization.string(
+                    "compat.unsupported.subtitle",
+                    defaultValue: "暂不兼容"
+                ),
+                isOn: false,
+                isExpanded: false,
+                isEnabled: false,
+                isVisible: true,
+                detail: nil,
+                errorMessage: localization.string(
+                    "compat.unsupported.message",
+                    defaultValue: "当前 macOS 版本暂不兼容菜单栏隐藏"
+                )
+            )
+        }
         return PluginPanelState(
             subtitle: controller.panelSubtitle,
             isOn: controller.isEnabled,
@@ -148,7 +167,8 @@ final class MenuBarHiddenPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompo
     }
 
     var componentPanelState: PluginComponentState {
-        let shouldShowHiddenIconsCard = controller.currentPermissions().canManageItems
+        let shouldShowHiddenIconsCard = controller.isHostSupported
+            && controller.currentPermissions().canManageItems
             && controller.showsHiddenIconsInPanel
         return PluginComponentState(
             subtitle: shouldShowHiddenIconsCard ? controller.componentSubtitle : "",

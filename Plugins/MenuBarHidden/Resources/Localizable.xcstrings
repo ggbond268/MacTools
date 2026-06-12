@@ -69,6 +69,57 @@
         }
       }
     },
+    "compat.unsupported.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system menu bar architecture changed and icon enumeration is unavailable; related features are disabled."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统菜单栏架构变化导致图标枚举不可用，相关功能已停用"
+          }
+        }
+      }
+    },
+    "compat.unsupported.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu bar icon hiding is not yet compatible with this version of macOS."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前 macOS 版本暂不兼容菜单栏隐藏"
+          }
+        }
+      }
+    },
+    "compat.unsupported.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not compatible"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂不兼容"
+          }
+        }
+      }
+    },
     "component.subtitle.count": {
       "extractionState": "manual",
       "localizations": {

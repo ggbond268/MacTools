@@ -87,6 +87,43 @@ final class MenuBarStatusItemControllerTests: XCTestCase {
         XCTAssertEqual(MenuBarStatusItemInvocation.invocation(for: event), .featurePanel)
     }
 
+    // MARK: - Option+left (macOS 27 beta right-click reachability channel)
+
+    func testOptionLeftMouseUpOpensFeaturePanel() {
+        // On the macOS 27 single-window menu bar host right mouse events are
+        // never routed to third-party items, so Option+left must carry the
+        // secondary (feature panel) semantics; the action arrives as mouseUp.
+        let event = NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: .zero,
+            modifierFlags: [.option],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 0
+        )
+
+        XCTAssertEqual(MenuBarStatusItemInvocation.invocation(for: event), .featurePanel)
+    }
+
+    func testOptionLeftMouseDownOpensFeaturePanelOnLegacyHosts() {
+        let event = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: .zero,
+            modifierFlags: [.option],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 0
+        )
+
+        XCTAssertEqual(MenuBarStatusItemInvocation.invocation(for: event), .featurePanel)
+    }
+
     // MARK: - Swapped click behavior
 
     private func mouseEvent(_ type: NSEvent.EventType, modifiers: NSEvent.ModifierFlags = []) -> NSEvent? {
@@ -128,6 +165,13 @@ final class MenuBarStatusItemControllerTests: XCTestCase {
         XCTAssertEqual(
             MenuBarStatusItemInvocation.invocation(for: nil, swapped: true),
             .featurePanel
+        )
+    }
+
+    func testSwappedOptionLeftClickFollowsSecondaryAndOpensComponentPanel() {
+        XCTAssertEqual(
+            MenuBarStatusItemInvocation.invocation(for: mouseEvent(.leftMouseUp, modifiers: [.option]), swapped: true),
+            .componentPanel
         )
     }
 

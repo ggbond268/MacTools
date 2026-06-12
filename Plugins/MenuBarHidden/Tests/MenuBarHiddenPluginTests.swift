@@ -28,7 +28,8 @@ final class MenuBarHiddenPluginTests: XCTestCase {
             context: context,
             permissionProvider: {
                 MenuBarHiddenPermissionsStatus(hasAccessibility: true, hasScreenRecording: true)
-            }
+            },
+            hostSupportProbe: { true }
         )
         controller.replaceSnapshotForTesting(
             hiddenItems: (0..<20).map { index in
@@ -75,7 +76,8 @@ final class MenuBarHiddenPluginTests: XCTestCase {
             context: context,
             permissionProvider: {
                 MenuBarHiddenPermissionsStatus(hasAccessibility: false, hasScreenRecording: false)
-            }
+            },
+            hostSupportProbe: { true }
         )
         let plugin = MenuBarHiddenPlugin(context: context, controller: controller)
         let state = plugin.componentPanelState
@@ -138,7 +140,8 @@ final class MenuBarHiddenPluginTests: XCTestCase {
             context: context,
             permissionProvider: {
                 MenuBarHiddenPermissionsStatus(hasAccessibility: true, hasScreenRecording: true)
-            }
+            },
+            hostSupportProbe: { true }
         )
         let plugin = MenuBarHiddenPlugin(context: context, controller: controller)
 
@@ -157,7 +160,8 @@ final class MenuBarHiddenPluginTests: XCTestCase {
             context: context,
             permissionProvider: {
                 MenuBarHiddenPermissionsStatus(hasAccessibility: false, hasScreenRecording: false)
-            }
+            },
+            hostSupportProbe: { true }
         )
 
         controller.isAlwaysHiddenEnabled = true

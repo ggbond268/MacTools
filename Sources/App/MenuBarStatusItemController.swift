@@ -11,13 +11,21 @@ enum MenuBarStatusItemInvocation: Equatable {
         for event: NSEvent?,
         swapped: Bool = false
     ) -> MenuBarStatusItemInvocation {
-        // A secondary click is a right-click or a Control-click; everything else
-        // (including a nil event for programmatic fallback) is a primary click.
+        // A secondary click is a right-click, a Control-click or an
+        // Option-click; everything else (including a nil event for
+        // programmatic fallback) is a primary click.
+        //
+        // Option+left exists for macOS 27 beta reachability: the new
+        // single-window menu bar host does not route right mouse events to
+        // third-party status items at all (verified on 26A5353q), so
+        // Option+left is the only pointer channel left for the secondary
+        // panel there. It is enabled on every OS as a general enhancement.
         let isSecondary: Bool = {
             guard let event else { return false }
             return event.type == .rightMouseDown
                 || event.type == .rightMouseUp
                 || event.modifierFlags.contains(.control)
+                || event.modifierFlags.contains(.option)
         }()
 
         let primary: MenuBarStatusItemInvocation = swapped ? .featurePanel : .componentPanel
@@ -58,8 +66,12 @@ final class MenuBarStatusItemController: NSObject {
         self.pluginHost = pluginHost
         self.windowRouter = windowRouter
         self.iconSettings = iconSettings
+        // Adopt upstream's position-preserving preflight (no longer force-resets the
+        // saved icon position on every relaunch — bdd26bb). Keep the beta-27 hit-region
+        // fix: create with variableLength (not 0) so the rehosted menu bar host never
+        // registers a zero-width hit region; the icon is set right after configuration.
         MenuBarControlItemDefaults.prepareVisibleControlItem()
-        self.statusItem = NSStatusBar.system.statusItem(withLength: 0)
+        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.statusItem.autosaveName = MenuBarControlItemDefaults.visibleAutosaveName
         super.init()
         panelPresenter = MenuBarPanelPresenter(
@@ -82,21 +94,36 @@ final class MenuBarStatusItemController: NSObject {
         )
         observeStatusItemPositionPersistence()
         configureStatusItem()
+        updateStatusIcon()
         observePluginHost()
         observeIconSettings()
-        updateStatusIcon()
         pluginHost.resetStatusItemPosition = { [weak self] in
             self?.resetStatusItemPosition()
         }
         pluginHost.statusItemButtonFrameProvider = { [weak self] in
             self?.statusItemButtonScreenRect()
         }
+        MenuBarStatusItemDiagnostics.trace(
+            "launch \(MenuBarStatusItemDiagnostics.describeButtonWindow(statusItem.button))"
+        )
     }
 
     private func statusItemButtonScreenRect() -> NSRect? {
-        guard let button = statusItem.button, let window = button.window else { return nil }
+        guard let button = statusItem.button, let window = button.window else {
+            MenuBarStatusItemDiagnostics.trace(
+                "buttonScreenRect DEGRADED→nil \(MenuBarStatusItemDiagnostics.describeButtonWindow(statusItem.button))"
+            )
+            return nil
+        }
         let frameInWindow = button.convert(button.bounds, to: nil)
-        return window.convertToScreen(frameInWindow)
+        let screenRect = window.convertToScreen(frameInWindow)
+        if screenRect.height <= 0 || MenuBarStatusItemHostCompatibility.isStubBackingWindow(window) {
+            MenuBarStatusItemDiagnostics.trace(
+                "buttonScreenRect DEGENERATE rect=\(NSStringFromRect(screenRect)) "
+                    + MenuBarStatusItemDiagnostics.describeButtonWindow(button)
+            )
+        }
+        return screenRect
     }
 
     deinit {
@@ -127,7 +154,17 @@ final class MenuBarStatusItemController: NSObject {
 
         button.target = self
         button.action = #selector(handleStatusItemAction(_:))
-        button.sendAction(on: [.leftMouseDown, .rightMouseDown])
+        // OS-gated mask: the macOS 27 beta menu bar host only delivers
+        // leftMouseUp (down never arrives → a down-only mask is completely
+        // dead there); on older systems the down-mask must stay byte-for-byte
+        // identical, because registering down+up would double-trigger.
+        let buttonWindowIsStub = MenuBarStatusItemHostCompatibility.isStubBackingWindow(button.window)
+        button.sendAction(
+            on: MenuBarStatusItemHostCompatibility.sendActionMask(
+                buttonWindowIsStub: buttonWindowIsStub,
+                isMacOS27OrLater: MenuBarStatusItemHostCompatibility.isMacOS27OrLater
+            )
+        )
         button.toolTip = AppMetadata.appName
     }
 
@@ -221,7 +258,9 @@ final class MenuBarStatusItemController: NSObject {
         MenuBarControlItemDefaults.resetVisibleControlItemPosition()
         MenuBarControlItemDefaults.snapshotVisibleControlItemPreferredPosition()
 
-        let newItem = NSStatusBar.system.statusItem(withLength: 0)
+        // Same as init: variableLength at creation so the registered hit
+        // region is never zero width (macOS 27 single-window host).
+        let newItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         newItem.autosaveName = MenuBarControlItemDefaults.visibleAutosaveName
         statusItem = newItem
 
@@ -320,10 +359,25 @@ final class MenuBarStatusItemController: NSObject {
 
     @objc
     private func handleStatusItemAction(_ sender: NSStatusBarButton) {
+        let currentEvent = NSApp.currentEvent
+        MenuBarStatusItemDiagnostics.trace(
+            "action event=\(currentEvent.map { String(describing: $0.type) } ?? "nil") "
+                + "modifiers=\(currentEvent?.modifierFlags.rawValue ?? 0) "
+                + MenuBarStatusItemDiagnostics.describeButtonWindow(sender)
+        )
         // Read the preference live on each click so a settings change takes
         // effect immediately without re-observing.
+        //
+        // TODO(macOS 27 beta): when the button's backing window is the stub
+        // (windowNumber 2^32, zero-height frame), NSPopover anchoring via
+        // `show(relativeTo:of:)` may misplace or fail, and
+        // `isEventInsideStatusButton`'s `event.window === button.window`
+        // identity check can misjudge clicks on the icon as outside clicks —
+        // both deliberately NOT reworked in this batch. Revisit on device
+        // once click delivery is confirmed and the real popover behavior is
+        // observable.
         let swapped = MenuBarClickBehaviorPreference.current().isSwapped
-        switch MenuBarStatusItemInvocation.invocation(for: NSApp.currentEvent, swapped: swapped) {
+        switch MenuBarStatusItemInvocation.invocation(for: currentEvent, swapped: swapped) {
         case .featurePanel:
             toggleFeaturePanel(relativeTo: sender)
         case .componentPanel:

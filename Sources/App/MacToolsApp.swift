@@ -53,6 +53,20 @@ final class MacToolsAppDelegate: NSObject, NSApplicationDelegate {
         pluginHost.dynamicPluginManager?.deactivateAll()
     }
 
+    /// Escape hatch: the app has no Dock icon, no URL scheme and no document
+    /// types, so when the menu bar status item becomes unreachable (macOS 27
+    /// beta 26A5353q stopped routing clicks to third-party status items) the
+    /// settings window would otherwise be impossible to open. Re-opening the
+    /// app (`open -a MacTools` or launching it again from Finder) must always
+    /// reach Settings.
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        windowRouter?.showSettings()
+        return false
+    }
+
     private func bootstrapDynamicPlugins() {
         let currentAppVersion = AppMetadata.versionDescription
 

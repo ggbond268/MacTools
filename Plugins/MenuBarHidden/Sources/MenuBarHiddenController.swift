@@ -35,6 +35,9 @@ final class MenuBarHiddenController: ObservableObject {
                 hasAccessibility: AXIsProcessTrusted(),
                 hasScreenRecording: MenuBarHiddenScreenRecordingPermission.isGranted()
             )
+        },
+        hostSupportProbe: @escaping () -> Bool = {
+            !MenuBarHiddenWindowServer.menuBarWindowIDs(itemsOnly: true, activeSpaceOnly: true).isEmpty
         }
     ) {
         self.localization = localization
@@ -42,7 +45,8 @@ final class MenuBarHiddenController: ObservableObject {
         self.manager = MenuBarHiddenManager(
             store: store,
             localization: localization,
-            permissionProvider: permissionProvider
+            permissionProvider: permissionProvider,
+            hostSupportProbe: hostSupportProbe
         )
         self.observer = MenuBarHiddenObserver()
 
@@ -68,13 +72,26 @@ final class MenuBarHiddenController: ObservableObject {
                 self?.onStateChange?()
             }
             .store(in: &cancellables)
+
+        manager.$isHostMenuBarSupported
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+                self?.onStateChange?()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Lifecycle
 
     func activate() {
-        observer.start()
         manager.activate()
+        // Unsupported host (macOS 27 single-window menu bar): the manager is
+        // fail-closed and inert, so the global event observer would only burn
+        // cycles — don't start it.
+        if manager.isHostMenuBarSupported {
+            observer.start()
+        }
     }
 
     func deactivate() {
@@ -111,6 +128,13 @@ final class MenuBarHiddenController: ObservableObject {
     #endif
 
     // MARK: - Forwarded state / actions
+
+    /// Synchronous read of the manager's fail-closed host gate (probed once
+    /// at activation). False on hosts where the menu bar window list is
+    /// unavailable (macOS 27 beta single-window menu bar).
+    var isHostSupported: Bool {
+        manager.isHostMenuBarSupported
+    }
 
     var isEnabled: Bool {
         get { manager.isEnabled }
@@ -189,7 +213,7 @@ final class MenuBarHiddenController: ObservableObject {
     // MARK: - Popup
 
     func showPopup(anchor: NSRect?) {
-        guard permissions.canManageItems else { return }
+        guard isHostSupported, permissions.canManageItems else { return }
         let panel = popupPanel ?? MenuBarHiddenPopupPanel(controller: self)
         popupPanel = panel
         panel.show(anchor: anchor)

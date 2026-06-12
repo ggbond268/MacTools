@@ -8,12 +8,45 @@ struct MenuBarHiddenSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.section) {
+            if !controller.isHostSupported {
+                unsupportedSection
+            }
             behaviorSection
+                .disabled(!controller.isHostSupported)
+                .opacity(controller.isHostSupported ? 1 : 0.4)
             layoutSection
+                .disabled(!controller.isHostSupported)
+                .opacity(controller.isHostSupported ? 1 : 0.4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { controller.setSettingsVisible(true) }
         .onDisappear { controller.setSettingsVisible(false) }
+    }
+
+    // MARK: - Unsupported host
+
+    private var unsupportedSection: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                Text(localization.string(
+                    "compat.unsupported.message",
+                    defaultValue: "当前 macOS 版本暂不兼容菜单栏隐藏"
+                ))
+                .font(PluginSettingsTheme.Typography.rowTitle)
+                Text(localization.string(
+                    "compat.unsupported.detail",
+                    defaultValue: "系统菜单栏架构变化导致图标枚举不可用，相关功能已停用"
+                ))
+                .font(PluginSettingsTheme.Typography.rowDescription)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+        .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+        .pluginSettingsCardBackground(.host)
     }
 
     // MARK: - Behavior
