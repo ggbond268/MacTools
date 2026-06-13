@@ -21,7 +21,9 @@ final class DynamicPluginLoaderTests: XCTestCase {
         if let temporaryRoot {
             try? FileManager.default.removeItem(at: temporaryRoot)
         }
-        defaults.removePersistentDomain(forName: suiteName)
+        if let defaults {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
         defaults = nil
         temporaryRoot = nil
     }

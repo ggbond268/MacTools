@@ -521,10 +521,12 @@ final class MenuBarStatusItemController: NSObject {
             toggleComponentPanel(relativeTo: button)
         }
 
-        // The panel now belongs to the right-click tap for its whole lifetime;
-        // neutralize the host session events it will emit for it (adopted
-        // begins, ignored ends) — see secondaryClickPanelActive.
-        secondaryClickPanelActive = true
+        // Claim tap ownership only if a panel actually opened — the toggle is a
+        // no-op if presentation failed, and a stranded `true` would push every
+        // later expanded-session begin into the adopt/ignore branch and make
+        // normal opens look inert. While genuinely owned, the host session
+        // events for this panel are neutralized — see secondaryClickPanelActive.
+        secondaryClickPanelActive = panelPresenter.isAnyPanelShown
     }
 
     private func observePluginHost() {

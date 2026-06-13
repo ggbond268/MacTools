@@ -116,7 +116,7 @@ final class DynamicPluginLoader: DynamicPluginLoading {
             )
         } catch {
             AppLog.dynamicPlugins.warning(
-                "Could not strip lingering quarantine from installed package \(record.id, privacy: .public); a hardened host may refuse to load it: \(error.localizedDescription, privacy: .public)"
+                "Could not strip lingering quarantine from installed package \(record.id, privacy: .public); a hardened host may refuse to load it: \(error.localizedDescription, privacy: .private)"
             )
         }
     }

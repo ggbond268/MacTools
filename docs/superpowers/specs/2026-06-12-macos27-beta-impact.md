@@ -101,7 +101,7 @@ macOS 27 (Golden Gate, beta 1, WWDC 2026 周期) 对第三方菜单栏 app 的�
 
 ## D. 探针原始结论
 
-- [ok] carbon-hotkey-registration: GetEventDispatcherTarget non-nil=true; InstallEventHandler=0; RegisterEventHotKey(F15+all-mods)=0 ref non-nil; UnregisterEventHotKey=0. Carbon hotkey registration chain fully intac
+- [ok] carbon-hotkey-registration: GetEventDispatcherTarget non-nil=true; InstallEventHandler=0; RegisterEventHotKey(F15+all-mods)=0 ref non-nil; UnregisterEventHotKey=0. Carbon hotkey registration chain fully intact.
 - [inconclusive] global-mouse-monitor-delivery: Ran the full 180s in background: installed=true, delivered=0, locChanges=0, systemSawMouseMove=false → no mouse activity in the entire window (machine unattended; CGEventSource rep
 - [ok] ax-permission-and-smappservice: AXIsProcessTrusted=true; AXIsProcessTrustedWithOptions(prompt:false)=true (no prompt shown); SMAppService.mainApp.status raw=3 (.notFound, expected for a bare CLI process). All aut
 - [ok] sparkle-appcast-chain: appcast 2051 bytes; v1.0.18 minOS=14.0 maxOS=None installable_on_27.0=True, edSignature present, enclosure HEAD 200 len=6096378. Update network/gating chain healthy for macOS 27.0.
@@ -165,4 +165,4 @@ DDC 外接屏亮度（端到端读通，虽然内部匹配路径单点化了）�
 ### 只能等 Apple 的
 MenuBarHidden 的事件合成面（per-item 窗口没了、右键不路由——维持 fail-closed）；DDC 匹配对 IOMobileFramebufferShim 的单点依赖（shim 再改名才需要动）；log show 的 predicate bug（已绕过，提 Feedback 观察 beta 2）。所有"本 seed 活着"的私有面（CoreBrightness/MultitouchSupport/SkyLight/IOAVService/catalog 签名规范化）建议把本轮探针固化成脚本，每个新 seed 一键重跑。
 
-修复 backlog 共 18 项：立即修 5 项（含上机验证批次）、适配修 8 项、standby 5 项，每项均附 file:line 入口。"
+修复 backlog 共 18 项：立即修 5 项（含上机验证批次）、适配修 8 项、standby 5 项，每项均附 file:line 入口。

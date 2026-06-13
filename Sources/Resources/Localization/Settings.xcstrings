@@ -861,7 +861,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On this macOS version, right-click the menu bar icon may not work; use Option-click for the secondary panel."
+            "value": "On this macOS version, right-clicking the menu bar icon may not work; use Option-click to open the secondary panel."
           }
         },
         "zh-Hans": {
