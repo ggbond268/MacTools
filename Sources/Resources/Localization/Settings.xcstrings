@@ -855,19 +855,36 @@
         }
       }
     },
+    "menuBarClick.betaRightClickNotice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this macOS version, right-click the menu bar icon may not work; use Option-click for the secondary panel."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 macOS 版本可能无法右键菜单栏图标，请使用 Option+左键打开次级面板。"
+          }
+        }
+      }
+    },
     "menuBarClick.description": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When off, left-click opens the dashboard and right-click opens the feature panel. When on, the click behaviors are swapped."
+            "value": "When off, left-click opens the dashboard and right-click or Option-click opens the feature panel. When on, the behaviors are swapped."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关闭时左键打开仪表盘、右键打开功能面板；开启后左右键行为互换。"
+            "value": "关闭时左键打开仪表盘、右键或 Option+左键打开功能面板；开启后行为互换。"
           }
         }
       }
@@ -878,13 +895,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When enabled, left-click opens the feature panel and right-click opens the dashboard"
+            "value": "When enabled, left-click opens the feature panel and right-click or Option-click opens the dashboard"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "开启后左键打开功能面板，右键打开仪表盘"
+            "value": "开启后左键打开功能面板，右键或 Option+左键打开仪表盘"
           }
         }
       }

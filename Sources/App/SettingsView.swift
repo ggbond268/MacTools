@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import MacToolsPluginKit
 
@@ -202,11 +203,29 @@ private struct MenuBarClickBehaviorSettingsRow: View {
                 Text(AppL10n.settings("menuBarClick.title", defaultValue: "交换左右键点击行为"))
                     .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
 
-                Text(AppL10n.settings("menuBarClick.description", defaultValue: "关闭时左键打开仪表盘、右键打开功能面板；开启后左右键行为互换。"))
+                Text(AppL10n.settings("menuBarClick.description", defaultValue: "关闭时左键打开仪表盘、右键或 Option+左键打开功能面板；开启后行为互换。"))
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+
+                // macOS 27 routes right-clicks nowhere high-level on its
+                // rehosted menu bar. A listen-only event tap attempts to revive
+                // them, but on the recorded beta seed the status item's backing
+                // window frame is degenerate (zero height), so the tap fails
+                // closed and right-click does not work there — Option+left-click
+                // is the reliable secondary path. The notice steers users to it
+                // without promising right-click. On macOS ≤26 the right-click
+                // never broke, so nothing shows.
+                if #available(macOS 27.0, *) {
+                    Text(AppL10n.settings(
+                        "menuBarClick.betaRightClickNotice",
+                        defaultValue: "此 macOS 版本可能无法右键菜单栏图标，请使用 Option+左键打开次级面板。"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -218,7 +237,7 @@ private struct MenuBarClickBehaviorSettingsRow: View {
         .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
         .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
         .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
-        .help(AppL10n.settings("menuBarClick.help", defaultValue: "开启后左键打开功能面板，右键打开仪表盘"))
+        .help(AppL10n.settings("menuBarClick.help", defaultValue: "开启后左键打开功能面板，右键或 Option+左键打开仪表盘"))
         .onAppear {
             DispatchQueue.main.async {
                 toggleID = UUID()

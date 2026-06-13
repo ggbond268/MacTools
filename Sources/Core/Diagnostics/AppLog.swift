@@ -10,6 +10,7 @@ enum AppLog {
     static let pluginHost = Logger(subsystem: subsystem, category: "PluginHost")
     static let dynamicPlugins = Logger(subsystem: subsystem, category: "DynamicPlugins")
     static let launchAtLogin = Logger(subsystem: subsystem, category: "LaunchAtLogin")
+    static let menuBarSecondaryClickTap = Logger(subsystem: subsystem, category: "MenuBarSecondaryClickTap")
 
     static var isVerboseLoggingEnabled: Bool {
         #if DEBUG
