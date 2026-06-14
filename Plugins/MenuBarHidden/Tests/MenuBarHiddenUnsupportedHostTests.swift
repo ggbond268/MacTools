@@ -1,6 +1,7 @@
 import AppKit
 import XCTest
 import MacToolsPluginKit
+@testable import MacTools
 @testable import MenuBarHiddenPlugin
 
 /// Fail-closed behavior when the menu bar host is incompatible (macOS 27 beta

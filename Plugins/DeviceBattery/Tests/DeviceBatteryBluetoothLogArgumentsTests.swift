@@ -1,4 +1,5 @@
 import XCTest
+@testable import MacTools
 @testable import DeviceBatteryPlugin
 
 /// Coverage for the macOS 27 beta `log show` fix. On 26A5353q passing

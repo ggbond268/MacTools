@@ -1,4 +1,5 @@
 import XCTest
+@testable import MacTools
 @testable import DisplayBrightnessPlugin
 
 /// Coverage for the macOS 27 beta gamma-capacity fix path. On 26A5353q the old

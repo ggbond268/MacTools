@@ -63,7 +63,7 @@ func probeCoreBrightness() {
     }
 
     let enabled = statusBuffer[1]
-    let mode = statusBuffer.withUnsafeBytes { $0.load(fromByteOffset: 4, as: Int32.self) }
+    let mode = statusBuffer.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 4, as: Int32.self) }
     let available = statusBuffer[32]
     report(
         .ok,

@@ -1,5 +1,6 @@
 import CoreGraphics
 import XCTest
+@testable import MacTools
 @testable import MenuBarHiddenPlugin
 
 /// Shape plausibility rules behind the fail-closed host gate. Pure-function
