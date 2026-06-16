@@ -4,6 +4,8 @@ MacTools supports trusted local native plugins through a host-owned package stor
 
 This phase intentionally supports only trusted local plugins built by the same developer identity as the host app. The host validates the plugin bundle signature before loading code. Disabling or uninstalling a plugin immediately removes its contributions from the UI and deletes package files when requested, while already-loaded native code is fully released after the app restarts.
 
+Locally installed packages that carry `com.apple.quarantine` (typically zips downloaded with a browser — `ditto` propagates the attribute into the extracted bundle) have the attribute stripped during install, strictly after trust validation succeeds; a package that fails validation keeps its quarantine and the install fails. If stripping itself fails, the install reports a clear error instead of leaving a package that a hardened (Release) host would later refuse to `dlopen` with an opaque Gatekeeper/AMFI error. Catalog downloads are unaffected (`URLSession` downloads carry no quarantine).
+
 For catalog-based installation, GitHub release distribution, and Debug `file://` development catalogs, see [plugin-catalog.md](plugin-catalog.md).
 
 ## Package Layout

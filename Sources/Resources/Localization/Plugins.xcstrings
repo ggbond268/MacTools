@@ -1361,6 +1361,57 @@
         }
       }
     },
+    "plugin.error.quarantine.attributeCheckFailedFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to read the quarantine flag of a plugin file: %@ (%@)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取插件文件的隔离标记：%@（%@）"
+          }
+        }
+      }
+    },
+    "plugin.error.quarantine.enumerationFailedFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to inspect the plugin package for quarantine: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查插件包的隔离状态：%@"
+          }
+        }
+      }
+    },
+    "plugin.error.quarantine.stripFailedFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to remove the quarantine flag from %d plugin file(s), for example %@ (%@)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法移除 %d 个插件文件的隔离标记，例如 %@（%@）。"
+          }
+        }
+      }
+    },
     "plugin.error.store.alreadyInstalledFormat": {
       "extractionState": "manual",
       "localizations": {

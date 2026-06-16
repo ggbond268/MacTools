@@ -16,13 +16,16 @@ protocol DynamicPluginLoading {
 final class DynamicPluginLoader: DynamicPluginLoading {
     private let packageStore: PluginPackageStore
     private let trustValidator: PluginTrustValidating
+    private let quarantineInspector: PluginQuarantineInspecting
 
     init(
         packageStore: PluginPackageStore,
-        trustValidator: PluginTrustValidating = SameTeamPluginTrustValidator()
+        trustValidator: PluginTrustValidating = SameTeamPluginTrustValidator(),
+        quarantineInspector: PluginQuarantineInspecting = PluginQuarantineInspector()
     ) {
         self.packageStore = packageStore
         self.trustValidator = trustValidator
+        self.quarantineInspector = quarantineInspector
     }
 
     func loadInstalledPlugins(from records: [PluginPackageRecord]) -> [DynamicPluginLoadResult] {
@@ -66,6 +69,7 @@ final class DynamicPluginLoader: DynamicPluginLoading {
 
     private func loadProvider(for record: PluginPackageRecord) throws -> any PluginProvider {
         try trustValidator.validatePluginBundle(at: record.bundleURL)
+        stripLingeringQuarantine(from: record)
 
         guard let bundle = Bundle(url: record.bundleURL) else {
             throw DynamicPluginLoaderError.unreadableBundle(record.bundleURL)
@@ -87,6 +91,34 @@ final class DynamicPluginLoader: DynamicPluginLoading {
         }
 
         return try factoryClass.makeProvider(context: context)
+    }
+
+    // Packages installed before install-time quarantine stripping existed may still carry
+    // the attribute, and dlopen of such a bundle fails with an opaque AMFI/Gatekeeper error
+    // in a hardened host. Stripping is gated on the trust validation in loadProvider having
+    // succeeded right before this call; a failed validation never reaches this point.
+    //
+    // Best-effort by design: an inspector failure here must not block the load — a
+    // non-hardened (Debug) host dlopens quarantined bundles just fine, and on a hardened
+    // host dlopen fails exactly as it did before this strip existed, with the warning
+    // below explaining why. The strict, user-facing quarantine error belongs to the
+    // install path in PluginPackageStore.
+    private func stripLingeringQuarantine(from record: PluginPackageRecord) {
+        do {
+            let quarantinedItems = try quarantineInspector.quarantinedItemURLs(in: record.packageURL)
+            guard !quarantinedItems.isEmpty else {
+                return
+            }
+
+            try quarantineInspector.stripQuarantine(at: record.packageURL)
+            AppLog.dynamicPlugins.info(
+                "Stripped lingering quarantine from \(quarantinedItems.count, privacy: .public) item(s) in installed package \(record.id, privacy: .public)"
+            )
+        } catch {
+            AppLog.dynamicPlugins.warning(
+                "Could not strip lingering quarantine from installed package \(record.id, privacy: .public); a hardened host may refuse to load it: \(error.localizedDescription, privacy: .private)"
+            )
+        }
     }
 
     static func validateLoadedPlugins(

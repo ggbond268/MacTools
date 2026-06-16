@@ -8,6 +8,7 @@ enum AppLog {
     static let displayConfigurationObserver = Logger(subsystem: subsystem, category: "DisplayConfigurationObserver")
     static let autoHideDockPlugin = Logger(subsystem: subsystem, category: "AutoHideDockPlugin")
     static let pluginHost = Logger(subsystem: subsystem, category: "PluginHost")
+    static let dynamicPlugins = Logger(subsystem: subsystem, category: "DynamicPlugins")
     static let launchAtLogin = Logger(subsystem: subsystem, category: "LaunchAtLogin")
 
     static var isVerboseLoggingEnabled: Bool {

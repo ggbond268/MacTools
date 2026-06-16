@@ -56,17 +56,23 @@ final class PluginPackageStore {
     private let fileManager: FileManager
     private let userDefaults: UserDefaults
     let hostVersion: String
+    private let trustValidator: PluginTrustValidating
+    private let quarantineInspector: PluginQuarantineInspecting
     private var pendingRestartPluginIDs: Set<String> = []
 
     init(
         rootDirectory: URL? = nil,
         fileManager: FileManager = .default,
         userDefaults: UserDefaults = .standard,
-        hostVersion: String = AppMetadata.shortVersion ?? "0"
+        hostVersion: String = AppMetadata.shortVersion ?? "0",
+        trustValidator: PluginTrustValidating = SameTeamPluginTrustValidator(),
+        quarantineInspector: PluginQuarantineInspecting = PluginQuarantineInspector()
     ) {
         self.fileManager = fileManager
         self.userDefaults = userDefaults
         self.hostVersion = hostVersion
+        self.trustValidator = trustValidator
+        self.quarantineInspector = quarantineInspector
 
         let root = rootDirectory ?? Self.defaultRootDirectory(fileManager: fileManager)
         self.rootDirectory = root
@@ -194,6 +200,20 @@ final class PluginPackageStore {
 
             guard fileManager.fileExists(atPath: stagedBundleURL.path) else {
                 throw PluginPackageStoreError.invalidPackage(stagingURL)
+            }
+
+            // Browser-downloaded zips carry com.apple.quarantine and ditto/copy propagate
+            // it onto every file; Gatekeeper then rejects dlopen of the non-notarized
+            // bundle in a hardened host. Strip the attribute from the staged copy, but
+            // only after the staged bundle passed trust validation — a bundle failing
+            // validation keeps its quarantine and the install fails closed.
+            let quarantinedItems = try quarantineInspector.quarantinedItemURLs(in: stagingURL)
+            if !quarantinedItems.isEmpty {
+                try trustValidator.validatePluginBundle(at: stagedBundleURL)
+                try quarantineInspector.stripQuarantine(at: stagingURL)
+                AppLog.dynamicPlugins.info(
+                    "Stripped quarantine from \(quarantinedItems.count, privacy: .public) item(s) in staged package \(stagedManifest.id, privacy: .public)"
+                )
             }
 
             if hadExistingPackage {

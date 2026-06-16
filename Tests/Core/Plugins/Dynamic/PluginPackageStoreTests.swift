@@ -146,6 +146,52 @@ final class PluginPackageStoreTests: XCTestCase {
         XCTAssertEqual(record.state, .disabled)
     }
 
+    func testInstallStripsQuarantineAfterTrustValidationPasses() throws {
+        let sourceURL = try makePackage(id: "com.example.demo")
+        quarantineSourcePackage(at: sourceURL)
+        let validator = RecordingTrustValidator()
+        let store = makeStore(trustValidator: validator)
+
+        let record = try store.installPackage(from: sourceURL)
+
+        XCTAssertEqual(validator.validatedBundleURLs.map(\.lastPathComponent), ["Demo.bundle"])
+        XCTAssertEqual(PluginQuarantineTestSupport.quarantinedPaths(under: record.packageURL), [])
+        // The source package is never modified, only the staged/installed copy is stripped.
+        XCTAssertTrue(PluginQuarantineTestSupport.hasQuarantine(atPath: sourceURL.path))
+    }
+
+    func testInstallFailsClosedWhenQuarantinedPackageFailsTrustValidation() throws {
+        let sourceURL = try makePackage(id: "com.example.demo")
+        quarantineSourcePackage(at: sourceURL)
+        let validator = RecordingTrustValidator()
+        validator.validationError = PluginTrustValidatorError.hostTeamIdentifierUnavailable
+        let store = makeStore(trustValidator: validator)
+
+        XCTAssertThrowsError(try store.installPackage(from: sourceURL)) { error in
+            guard case let PluginPackageStoreError.installFailed(reason) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+
+            XCTAssertEqual(reason, PluginTrustValidatorError.hostTeamIdentifierUnavailable.localizedDescription)
+        }
+
+        XCTAssertTrue(store.installedRecords().isEmpty)
+        XCTAssertTrue(PluginQuarantineTestSupport.hasQuarantine(atPath: sourceURL.path))
+        let stagedItems = try FileManager.default.contentsOfDirectory(atPath: store.stagingDirectory.path)
+        XCTAssertEqual(stagedItems, [])
+    }
+
+    func testInstallWithoutQuarantineSkipsTrustValidation() throws {
+        let sourceURL = try makePackage(id: "com.example.demo")
+        let validator = RecordingTrustValidator()
+        let store = makeStore(trustValidator: validator)
+
+        let record = try store.installPackage(from: sourceURL)
+
+        XCTAssertEqual(record.state, .enabled)
+        XCTAssertTrue(validator.validatedBundleURLs.isEmpty)
+    }
+
     func testDefaultRootDirectoryUsesCurrentApplicationSupportScope() {
         let rootDirectory = PluginPackageStore.defaultRootDirectory(fileManager: .default)
 
@@ -156,11 +202,24 @@ final class PluginPackageStoreTests: XCTestCase {
         )
     }
 
-    private func makeStore() -> PluginPackageStore {
+    private func makeStore(
+        trustValidator: PluginTrustValidating = RecordingTrustValidator()
+    ) -> PluginPackageStore {
         PluginPackageStore(
             rootDirectory: temporaryRoot,
             userDefaults: defaults,
-            hostVersion: "1.0.0"
+            hostVersion: "1.0.0",
+            trustValidator: trustValidator
+        )
+    }
+
+    private func quarantineSourcePackage(at packageURL: URL) {
+        PluginQuarantineTestSupport.setQuarantine(atPath: packageURL.path)
+        PluginQuarantineTestSupport.setQuarantine(
+            atPath: packageURL.appendingPathComponent("plugin.json").path
+        )
+        PluginQuarantineTestSupport.setQuarantine(
+            atPath: packageURL.appendingPathComponent("Demo.bundle", isDirectory: true).path
         )
     }
 
@@ -194,5 +253,18 @@ final class PluginPackageStoreTests: XCTestCase {
         try data.write(to: packageURL.appendingPathComponent("plugin.json"))
 
         return packageURL
+    }
+}
+
+private final class RecordingTrustValidator: PluginTrustValidating {
+    private(set) var validatedBundleURLs: [URL] = []
+    var validationError: Error?
+
+    func validatePluginBundle(at bundleURL: URL) throws {
+        validatedBundleURLs.append(bundleURL)
+
+        if let validationError {
+            throw validationError
+        }
     }
 }
