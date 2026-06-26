@@ -35,6 +35,12 @@ struct SettingsView: View {
                     Label(AppL10n.settings("tab.plugins", defaultValue: "插件"), systemImage: "slider.horizontal.3")
                 }
 
+            FinderMenuSettingsView()
+                .tag(SettingsDestination.finderMenu)
+                .tabItem {
+                    Label(AppL10n.settings("tab.finderMenu", defaultValue: "访达菜单"), systemImage: "contextualmenu.and.cursorarrow")
+                }
+
             AboutSettingsView(appUpdater: appUpdater)
                 .tag(SettingsDestination.about)
                 .tabItem {

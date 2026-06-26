@@ -75,6 +75,7 @@ public enum PluginPermissionKind {
 public enum SettingsDestination: Hashable {
     case general
     case pluginConfiguration
+    case finderMenu
     case about
 }
 
