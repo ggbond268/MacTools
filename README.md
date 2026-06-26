@@ -40,6 +40,7 @@
 | Xcode Cleanup | Scan DerivedData, device support files, archives, simulators, and preview caches by category; deletion is disabled while Xcode is running and only runs inside allowlisted roots. |
 | Eject Disks | Eject all removable disks in one click, automatically skipping system volumes and reporting when no disk can be ejected. |
 | Empty Trash | Show the number of Trash items and empty Trash through Finder; the action is disabled when Trash is empty. |
+| Finder Context Menu | Add MacTools actions to Finder's right-click menu: copy paths (absolute / shell-escaped / file name / file:// URL), create new files (.txt / .md / .json), open in Terminal, and open with a configurable list of apps. Every item can be toggled — and the app list managed — in Settings. |
 | Clear Clipboard | Clear the current clipboard content to protect privacy and avoid accidental paste. |
 | IP Check | View public IPv4/IPv6, local LAN IP, location, ISP, ASN, and timezone, with copy support for single fields or the full result. |
 | Translator | Translate the currently selected text with a global shortcut; the first version supports OpenAI-compatible services and automatic language selection. |
