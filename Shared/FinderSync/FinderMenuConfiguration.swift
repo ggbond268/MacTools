@@ -2,8 +2,8 @@ import Foundation
 
 /// User configuration for the MacTools Finder context menu, shared between the
 /// host app (writes it from the settings UI) and the sandboxed extension (reads
-/// it to decide which items to show). Persisted as JSON in the shared app group
-/// container — see `FinderMenuConfigStore`.
+/// it to decide which items to show). Persisted as JSON under the user's
+/// Application Support directory — see `FinderMenuConfigStore`.
 ///
 /// This file is compiled into BOTH the host app and the extension targets (they
 /// can't import each other); the JSON written by one is decoded by the other.

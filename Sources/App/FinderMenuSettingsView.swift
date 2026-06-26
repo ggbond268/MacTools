@@ -1,10 +1,10 @@
 import SwiftUI
 
 /// Host-app settings page for the Finder context menu. It writes the shared
-/// `FinderMenuConfiguration` (read by the sandboxed extension through the app
-/// group), so the user controls which items appear when right-clicking in
-/// Finder. Changes take effect on the next right-click — the extension reads the
-/// config on every `menu(for:)`.
+/// `FinderMenuConfiguration` (read by the sandboxed extension through a read-only
+/// file-access exception), so the user controls which items appear when
+/// right-clicking in Finder. Changes take effect on the next right-click — the
+/// extension reads the config on every `menu(for:)`.
 struct FinderMenuSettingsView: View {
     @State private var configuration = FinderMenuConfigStore.load()
 
