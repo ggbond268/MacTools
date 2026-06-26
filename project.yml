@@ -42,6 +42,7 @@ targets:
       - MacToolsPluginKit/**
       - "../Plugins/**"
       - Plugins/**/CalendarPluginResources/**
+    - path: Shared/FinderSync
     dependencies:
     - target: MacToolsPluginKit
       embed: true
@@ -82,6 +83,7 @@ targets:
       Release: Configs/Release.xcconfig
     sources:
     - path: FinderSyncExtension/Sources
+    - path: Shared/FinderSync
     settings:
       base:
         PRODUCT_NAME: MacToolsFinderSync

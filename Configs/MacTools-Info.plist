@@ -37,6 +37,8 @@
 	</array>
 	<key>LSUIElement</key>
 	<true/>
+	<key>MTAppGroupIdentifier</key>
+	<string>group.$(BUNDLE_IDENTIFIER_PREFIX).mactools</string>
 	<key>MTPluginCatalogPublicKey</key>
 	<string>$(PLUGIN_CATALOG_PUBLIC_KEY)</string>
 	<key>NSAppleEventsUsageDescription</key>

@@ -47,23 +47,37 @@ final class FinderContextMenuProvider: FIFinderSync {
     // MARK: - Menu
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
-        // Same MacTools actions regardless of where the click landed; each
-        // action resolves its own targets from the controller at click time.
+        // Read user configuration shared from the host app via the app group;
+        // each action still resolves its own targets from the controller.
+        let configuration = FinderMenuConfigStore.load()
         let menu = NSMenu(title: "MacTools")
-        addCopyMenu(to: menu)
-        addNewFileMenu(to: menu)
-        addOpenInTerminalItem(to: menu)
+        addCopyMenu(to: menu, configuration: configuration)
+        if configuration.newFileEnabled {
+            addNewFileMenu(to: menu)
+        }
+        if configuration.openInTerminal {
+            addOpenInTerminalItem(to: menu)
+        }
         return menu
     }
 
-    private func addCopyMenu(to menu: NSMenu) {
+    private func addCopyMenu(to menu: NSMenu, configuration: FinderMenuConfiguration) {
+        guard configuration.hasAnyCopyAction else { return }
         let parent = NSMenuItem(title: "复制路径", action: nil, keyEquivalent: "")
         parent.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: nil)
         let submenu = NSMenu(title: "复制路径")
-        submenu.addItem(makeItem("复制绝对路径", #selector(copyAbsolutePaths(_:))))
-        submenu.addItem(makeItem("复制转义路径", #selector(copyShellEscapedPaths(_:))))
-        submenu.addItem(makeItem("复制文件名", #selector(copyFileNames(_:))))
-        submenu.addItem(makeItem("复制 file:// 链接", #selector(copyFileURLs(_:))))
+        if configuration.copyAbsolutePath {
+            submenu.addItem(makeItem("复制绝对路径", #selector(copyAbsolutePaths(_:))))
+        }
+        if configuration.copyShellEscapedPath {
+            submenu.addItem(makeItem("复制转义路径", #selector(copyShellEscapedPaths(_:))))
+        }
+        if configuration.copyFileName {
+            submenu.addItem(makeItem("复制文件名", #selector(copyFileNames(_:))))
+        }
+        if configuration.copyFileURL {
+            submenu.addItem(makeItem("复制 file:// 链接", #selector(copyFileURLs(_:))))
+        }
         parent.submenu = submenu
         menu.addItem(parent)
     }
