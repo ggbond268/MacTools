@@ -14,8 +14,10 @@ import os
 /// never intercept mouse events), it is unaffected by the macOS 27 menu-bar
 /// rehosting that broke the status-item right-click.
 ///
-/// MVP scope: copy paths + create new files. Both run entirely inside the
-/// sandboxed extension — no app group, no container round-trip.
+/// Actions split by capability: copy actions run inside the sandboxed extension
+/// (the pasteboard needs no file access); file-creating / app-launching actions
+/// are forwarded to the non-sandboxed host app via the `mactools://` URL scheme,
+/// so this extension stays at minimal entitlements (sandbox only).
 ///
 /// Action identity note: macOS strips `representedObject` from the menu items
 /// handed back through FinderSync, so each action is a distinct `@objc`
@@ -50,6 +52,7 @@ final class FinderContextMenuProvider: FIFinderSync {
         let menu = NSMenu(title: "MacTools")
         addCopyMenu(to: menu)
         addNewFileMenu(to: menu)
+        addOpenInTerminalItem(to: menu)
         return menu
     }
 
@@ -60,6 +63,7 @@ final class FinderContextMenuProvider: FIFinderSync {
         submenu.addItem(makeItem("复制绝对路径", #selector(copyAbsolutePaths(_:))))
         submenu.addItem(makeItem("复制转义路径", #selector(copyShellEscapedPaths(_:))))
         submenu.addItem(makeItem("复制文件名", #selector(copyFileNames(_:))))
+        submenu.addItem(makeItem("复制 file:// 链接", #selector(copyFileURLs(_:))))
         parent.submenu = submenu
         menu.addItem(parent)
     }
@@ -75,13 +79,19 @@ final class FinderContextMenuProvider: FIFinderSync {
         menu.addItem(parent)
     }
 
+    private func addOpenInTerminalItem(to menu: NSMenu) {
+        let item = makeItem("在终端打开", #selector(openInTerminal(_:)))
+        item.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+        menu.addItem(item)
+    }
+
     private func makeItem(_ title: String, _ action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         return item
     }
 
-    // MARK: - Copy actions
+    // MARK: - Copy actions (run in-extension; pasteboard needs no file access)
 
     @objc private func copyAbsolutePaths(_ sender: NSMenuItem) {
         let urls = effectiveTargets()
@@ -104,11 +114,38 @@ final class FinderContextMenuProvider: FIFinderSync {
         writeToPasteboard(urls.map(\.lastPathComponent).joined(separator: "\n"))
     }
 
-    // MARK: - New file actions
+    @objc private func copyFileURLs(_ sender: NSMenuItem) {
+        let urls = effectiveTargets()
+        guard !urls.isEmpty else { return }
+        writeToPasteboard(urls.map(\.absoluteString).joined(separator: "\n"))
+    }
+
+    // MARK: - Forwarded actions (host app performs them; extension stays sandboxed)
 
     @objc private func newTextFile(_ sender: NSMenuItem) { requestNewFile(ext: "txt") }
     @objc private func newMarkdownFile(_ sender: NSMenuItem) { requestNewFile(ext: "md") }
     @objc private func newJSONFile(_ sender: NSMenuItem) { requestNewFile(ext: "json") }
+
+    private func requestNewFile(ext: String) {
+        guard let directory = targetDirectory() else {
+            logger.error("new file: no target directory available")
+            return
+        }
+        forwardRequest(host: "newfile", queryItems: [
+            URLQueryItem(name: "dir", value: directory.path),
+            URLQueryItem(name: "ext", value: ext)
+        ])
+    }
+
+    @objc private func openInTerminal(_ sender: NSMenuItem) {
+        guard let directory = targetDirectory() else {
+            logger.error("open in terminal: no target directory available")
+            return
+        }
+        forwardRequest(host: "openterminal", queryItems: [
+            URLQueryItem(name: "dir", value: directory.path)
+        ])
+    }
 
     // MARK: - Targets
 
@@ -125,9 +162,9 @@ final class FinderContextMenuProvider: FIFinderSync {
         return []
     }
 
-    /// Directory a new file should be created in: the selected folder, the
+    /// Directory new-file / open-in-terminal apply to: the selected folder, the
     /// selected file's parent, or the current directory.
-    private func newFileDirectory() -> URL? {
+    private func targetDirectory() -> URL? {
         let controller = FIFinderSyncController.default()
         if let first = controller.selectedItemURLs()?.first {
             return first.hasDirectoryPath ? first : first.deletingLastPathComponent()
@@ -135,26 +172,19 @@ final class FinderContextMenuProvider: FIFinderSync {
         return controller.targetedURL()
     }
 
-    // MARK: - File creation (forwarded to the host app)
+    // MARK: - Host app forwarding
 
-    /// Forward file creation to the non-sandboxed host app through the
-    /// `mactools://` URL scheme. The sandboxed extension cannot create files in
-    /// arbitrary user directories, so the host app performs it — which keeps this
-    /// extension at minimal entitlements (sandbox only, no file-access exception).
-    private func requestNewFile(ext: String) {
-        guard let directory = newFileDirectory() else {
-            logger.error("new file: no target directory available")
-            return
-        }
+    /// Forward an action to the non-sandboxed host app through the `mactools://`
+    /// URL scheme. The sandboxed extension cannot create files or launch apps in
+    /// arbitrary locations, so the host app performs them — keeping this extension
+    /// at minimal entitlements (sandbox only, no file-access exception).
+    private func forwardRequest(host: String, queryItems: [URLQueryItem]) {
         var components = URLComponents()
         components.scheme = "mactools"
-        components.host = "newfile"
-        components.queryItems = [
-            URLQueryItem(name: "dir", value: directory.path),
-            URLQueryItem(name: "ext", value: ext)
-        ]
+        components.host = host
+        components.queryItems = queryItems
         guard let url = components.url else {
-            logger.error("new file: failed to build request URL")
+            logger.error("failed to build \(host) request URL")
             return
         }
         NSWorkspace.shared.open(url)

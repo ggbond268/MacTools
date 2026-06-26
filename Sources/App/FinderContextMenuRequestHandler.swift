@@ -4,8 +4,8 @@ import Foundation
 /// Handles `mactools://` requests forwarded by the Finder Sync extension.
 ///
 /// The Finder extension is sandboxed and cannot create files in arbitrary user
-/// directories, so file-creating actions are forwarded to this non-sandboxed
-/// host app through a custom URL scheme. Keeping creation here lets the
+/// directories or launch other apps, so those actions are forwarded to this
+/// non-sandboxed host app through a custom URL scheme. Keeping them here lets the
 /// extension stay at minimal entitlements (sandbox only) instead of carrying a
 /// review-sensitive temporary-exception file-access entitlement.
 enum FinderContextMenuRequestHandler {
@@ -30,6 +30,8 @@ enum FinderContextMenuRequestHandler {
         switch url.host {
         case "newfile":
             return handleNewFile(url)
+        case "openterminal":
+            return handleOpenInTerminal(url)
         default:
             AppLog.finderContextMenu.warning(
                 "Unknown mactools URL host: \(url.host ?? "nil", privacy: .public)"
@@ -38,29 +40,16 @@ enum FinderContextMenuRequestHandler {
         }
     }
 
+    // MARK: - Actions
+
     @MainActor
     private static func handleNewFile(_ url: URL) -> Bool {
-        let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        var params: [String: String] = [:]
-        for item in queryItems {
-            if let value = item.value { params[item.name] = value }
-        }
-        guard let dir = params["dir"], !dir.isEmpty,
-              let ext = params["ext"], isSupportedNewFileExtension(ext) else {
-            AppLog.finderContextMenu.error("mactools://newfile missing dir or unsupported ext")
+        let params = queryParameters(of: url)
+        guard let ext = params["ext"], isSupportedNewFileExtension(ext) else {
+            AppLog.finderContextMenu.error("mactools://newfile missing or unsupported ext")
             return false
         }
-        // The host app is non-sandboxed; validate the target is a real directory
-        // so a malformed request can never create files in an unexpected place.
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: dir, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            AppLog.finderContextMenu.error(
-                "mactools://newfile target is not a directory: \(dir, privacy: .public)"
-            )
-            return false
-        }
-        let directory = URL(fileURLWithPath: dir, isDirectory: true)
+        guard let directory = validatedDirectory(params) else { return false }
         let fileURL = nextAvailableURL(in: directory, baseName: "未命名", ext: ext)
         // Defense-in-depth: the resolved file must sit directly inside the target
         // directory. The allow-listed ext already rules out traversal; this guard
@@ -80,6 +69,53 @@ enum FinderContextMenuRequestHandler {
         }
         NSWorkspace.shared.activateFileViewerSelecting([fileURL])
         return true
+    }
+
+    @MainActor
+    private static func handleOpenInTerminal(_ url: URL) -> Bool {
+        guard let directory = validatedDirectory(queryParameters(of: url)) else { return false }
+        guard let terminalURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.apple.Terminal"
+        ) else {
+            AppLog.finderContextMenu.error("mactools://openterminal: Terminal app not found")
+            return false
+        }
+        NSWorkspace.shared.open(
+            [directory],
+            withApplicationAt: terminalURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
+        return true
+    }
+
+    // MARK: - Helpers
+
+    private static func queryParameters(of url: URL) -> [String: String] {
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        var params: [String: String] = [:]
+        for item in items {
+            if let value = item.value { params[item.name] = value }
+        }
+        return params
+    }
+
+    /// Resolve and validate the `dir` parameter as an existing directory. The
+    /// host app is non-sandboxed, so a malformed request must never reach the
+    /// file system: anything that is not a real directory is rejected.
+    private static func validatedDirectory(_ params: [String: String]) -> URL? {
+        guard let dir = params["dir"], !dir.isEmpty else {
+            AppLog.finderContextMenu.error("mactools request missing dir")
+            return nil
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: dir, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            AppLog.finderContextMenu.error(
+                "mactools request dir is not a directory: \(dir, privacy: .public)"
+            )
+            return nil
+        }
+        return URL(fileURLWithPath: dir, isDirectory: true)
     }
 
     /// First non-colliding URL of the form `<baseName>.<ext>`,
