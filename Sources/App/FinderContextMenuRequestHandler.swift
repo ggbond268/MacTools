@@ -12,6 +12,16 @@ enum FinderContextMenuRequestHandler {
     /// Custom URL scheme the Finder extension uses to reach the host app.
     static let scheme = "mactools"
 
+    /// File extensions the New File action may create. A strict allow list keeps
+    /// the feature to its intended types and — because a custom URL scheme can be
+    /// invoked by any process on the system — prevents path traversal through the
+    /// `ext` parameter (e.g. `../../etc/foo`).
+    static let allowedNewFileExtensions: Set<String> = ["txt", "md", "json"]
+
+    static func isSupportedNewFileExtension(_ ext: String) -> Bool {
+        allowedNewFileExtensions.contains(ext)
+    }
+
     /// Route a forwarded URL. Returns true when it was a recognized request.
     @MainActor
     @discardableResult
@@ -36,8 +46,8 @@ enum FinderContextMenuRequestHandler {
             if let value = item.value { params[item.name] = value }
         }
         guard let dir = params["dir"], !dir.isEmpty,
-              let ext = params["ext"], !ext.isEmpty else {
-            AppLog.finderContextMenu.error("mactools://newfile missing dir or ext")
+              let ext = params["ext"], isSupportedNewFileExtension(ext) else {
+            AppLog.finderContextMenu.error("mactools://newfile missing dir or unsupported ext")
             return false
         }
         // The host app is non-sandboxed; validate the target is a real directory
@@ -52,6 +62,16 @@ enum FinderContextMenuRequestHandler {
         }
         let directory = URL(fileURLWithPath: dir, isDirectory: true)
         let fileURL = nextAvailableURL(in: directory, baseName: "未命名", ext: ext)
+        // Defense-in-depth: the resolved file must sit directly inside the target
+        // directory. The allow-listed ext already rules out traversal; this guard
+        // keeps that invariant even if the naming inputs ever change.
+        guard fileURL.deletingLastPathComponent().standardizedFileURL.path
+            == directory.standardizedFileURL.path else {
+            AppLog.finderContextMenu.error(
+                "mactools://newfile resolved outside target directory: \(fileURL.path, privacy: .public)"
+            )
+            return false
+        }
         guard FileManager.default.createFile(atPath: fileURL.path, contents: Data(), attributes: nil) else {
             AppLog.finderContextMenu.error(
                 "mactools://newfile failed to create \(fileURL.path, privacy: .public)"
