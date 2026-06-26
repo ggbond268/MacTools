@@ -64,8 +64,11 @@ struct FinderMenuSettingsView: View {
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.prompt = "选择"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let name = FileManager.default.displayName(atPath: url.path)
-            .replacingOccurrences(of: ".app", with: "")
+        // displayName is already localized and usually extension-free; strip only
+        // a trailing ".app" rather than a global replace (which could clip a
+        // ".app" substring in the middle of a name).
+        let displayName = FileManager.default.displayName(atPath: url.path)
+        let name = displayName.hasSuffix(".app") ? String(displayName.dropLast(4)) : displayName
         configuration.openWithApps.append(
             OpenWithApp(name: name, appPath: url.path, fileExtensions: [])
         )
