@@ -58,6 +58,7 @@ final class FinderContextMenuProvider: FIFinderSync {
         if configuration.openInTerminal {
             addOpenInTerminalItem(to: menu)
         }
+        addOpenWithMenu(to: menu, configuration: configuration)
         return menu
     }
 
@@ -97,6 +98,29 @@ final class FinderContextMenuProvider: FIFinderSync {
         let item = makeItem("在终端打开", #selector(openInTerminal(_:)))
         item.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
         menu.addItem(item)
+    }
+
+    private func addOpenWithMenu(to menu: NSMenu, configuration: FinderMenuConfiguration) {
+        guard !configuration.openWithApps.isEmpty else { return }
+        let targets = effectiveTargets()
+        guard !targets.isEmpty else { return }
+        // An app entry shows when it matches at least one selected item's
+        // extension (an entry with no extension filter matches everything).
+        let matching = configuration.openWithApps.filter { app in
+            targets.contains { app.matches(fileExtension: $0.pathExtension) }
+        }
+        guard !matching.isEmpty else { return }
+        let parent = NSMenuItem(title: "用应用打开", action: nil, keyEquivalent: "")
+        parent.image = NSImage(systemSymbolName: "app.badge.checkmark", accessibilityDescription: nil)
+        let submenu = NSMenu(title: "用应用打开")
+        for app in matching {
+            // Identified at click time by the title (its name): FinderSync
+            // preserves the title it displays, but strips `representedObject` and
+            // does not reliably carry `tag` across its menu round-trip.
+            submenu.addItem(makeItem(app.name, #selector(openWithApp(_:))))
+        }
+        parent.submenu = submenu
+        menu.addItem(parent)
     }
 
     private func makeItem(_ title: String, _ action: Selector) -> NSMenuItem {
@@ -159,6 +183,26 @@ final class FinderContextMenuProvider: FIFinderSync {
         forwardRequest(host: "openterminal", queryItems: [
             URLQueryItem(name: "dir", value: directory.path)
         ])
+    }
+
+    /// Open the selected items with a user-configured app. The chosen app is
+    /// identified by the menu item title (its name): FinderSync preserves the
+    /// title it displays but strips `representedObject` and does not reliably
+    /// carry `tag`, so the title is the dependable round-trip key.
+    @objc private func openWithApp(_ sender: NSMenuItem) {
+        let configuration = FinderMenuConfigStore.load()
+        guard let app = configuration.openWithApps.first(where: { $0.name == sender.title }) else {
+            logger.error("open with: no configured app named \(sender.title, privacy: .public)")
+            return
+        }
+        let targets = effectiveTargets()
+        guard !targets.isEmpty else {
+            logger.error("open with: no target items")
+            return
+        }
+        var queryItems = [URLQueryItem(name: "app", value: app.appPath)]
+        queryItems += targets.map { URLQueryItem(name: "file", value: $0.path) }
+        forwardRequest(host: "openwith", queryItems: queryItems)
     }
 
     // MARK: - Targets

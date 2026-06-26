@@ -44,4 +44,58 @@ final class FinderContextMenuRequestHandlerTests: XCTestCase {
         XCTAssertFalse(FinderContextMenuRequestHandler.isSupportedNewFileExtension("exe"))
         XCTAssertFalse(FinderContextMenuRequestHandler.isSupportedNewFileExtension(""))
     }
+
+    // MARK: - Open With
+
+    func testParseOpenWithAcceptsValidAppAndFiles() {
+        let items = [
+            URLQueryItem(name: "app", value: "/Applications/Code.app"),
+            URLQueryItem(name: "file", value: "/tmp/a.txt"),
+            URLQueryItem(name: "file", value: "/tmp/b.md")
+        ]
+        let request = FinderContextMenuRequestHandler.parseOpenWithRequest(
+            items, fileExists: { _ in true }, isApplicationBundle: { _ in true }
+        )
+        XCTAssertEqual(request?.appURL.path, "/Applications/Code.app")
+        XCTAssertEqual(request?.files.map(\.path), ["/tmp/a.txt", "/tmp/b.md"])
+    }
+
+    func testParseOpenWithRejectsNonAppBundle() {
+        let items = [
+            URLQueryItem(name: "app", value: "/tmp/not-an-app"),
+            URLQueryItem(name: "file", value: "/tmp/a.txt")
+        ]
+        XCTAssertNil(FinderContextMenuRequestHandler.parseOpenWithRequest(
+            items, fileExists: { _ in true }, isApplicationBundle: { _ in false }
+        ))
+    }
+
+    func testParseOpenWithRejectsWhenNoFilesExist() {
+        let items = [
+            URLQueryItem(name: "app", value: "/Applications/Code.app"),
+            URLQueryItem(name: "file", value: "/tmp/missing.txt")
+        ]
+        XCTAssertNil(FinderContextMenuRequestHandler.parseOpenWithRequest(
+            items, fileExists: { _ in false }, isApplicationBundle: { _ in true }
+        ))
+    }
+
+    func testParseOpenWithDropsMissingFilesButKeepsExisting() {
+        let items = [
+            URLQueryItem(name: "app", value: "/Applications/Code.app"),
+            URLQueryItem(name: "file", value: "/tmp/exists.txt"),
+            URLQueryItem(name: "file", value: "/tmp/missing.txt")
+        ]
+        let request = FinderContextMenuRequestHandler.parseOpenWithRequest(
+            items, fileExists: { $0 == "/tmp/exists.txt" }, isApplicationBundle: { _ in true }
+        )
+        XCTAssertEqual(request?.files.map(\.path), ["/tmp/exists.txt"])
+    }
+
+    func testParseOpenWithRejectsMissingApp() {
+        let items = [URLQueryItem(name: "file", value: "/tmp/a.txt")]
+        XCTAssertNil(FinderContextMenuRequestHandler.parseOpenWithRequest(
+            items, fileExists: { _ in true }, isApplicationBundle: { _ in true }
+        ))
+    }
 }

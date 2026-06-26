@@ -53,4 +53,20 @@ final class FinderMenuConfigStoreTests: XCTestCase {
         XCTAssertTrue(FinderMenuConfigStore.save(.default, to: fileURL))
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
     }
+
+    // MARK: - OpenWithApp matching
+
+    func testOpenWithAppMatchesListedExtensionsCaseInsensitively() {
+        let app = OpenWithApp(name: "Editor", appPath: "/E.app", fileExtensions: ["txt", "md"])
+        XCTAssertTrue(app.matches(fileExtension: "txt"))
+        XCTAssertTrue(app.matches(fileExtension: "TXT"))
+        XCTAssertTrue(app.matches(fileExtension: "md"))
+        XCTAssertFalse(app.matches(fileExtension: "png"))
+    }
+
+    func testOpenWithAppEmptyExtensionsMatchesEverything() {
+        let app = OpenWithApp(name: "Editor", appPath: "/E.app", fileExtensions: [])
+        XCTAssertTrue(app.matches(fileExtension: "txt"))
+        XCTAssertTrue(app.matches(fileExtension: ""))
+    }
 }

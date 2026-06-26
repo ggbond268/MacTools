@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Host-app settings page for the Finder context menu. It writes the shared
@@ -25,10 +26,94 @@ struct FinderMenuSettingsView: View {
                 Toggle("新建文件（.txt / .md / .json）", isOn: $configuration.newFileEnabled)
                 Toggle("在终端打开", isOn: $configuration.openInTerminal)
             }
+
+            Section {
+                if configuration.openWithApps.isEmpty {
+                    Text("暂无应用")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach($configuration.openWithApps) { $app in
+                    OpenWithAppRow(app: $app) {
+                        configuration.openWithApps.removeAll { $0.id == app.id }
+                    }
+                }
+                Button {
+                    addApp()
+                } label: {
+                    Label("添加应用…", systemImage: "plus")
+                }
+                .buttonStyle(.borderless)
+            } header: {
+                Text("「用应用打开」子菜单")
+            } footer: {
+                Text("右键文件时用指定应用打开。扩展名留空表示对所有文件显示;多个扩展名用逗号分隔。")
+            }
         }
         .formStyle(.grouped)
         .onChange(of: configuration) { _, newValue in
             FinderMenuConfigStore.save(newValue)
+        }
+    }
+
+    /// Let the user pick a `.app` bundle and append it to the list.
+    private func addApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "选择"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let name = FileManager.default.displayName(atPath: url.path)
+            .replacingOccurrences(of: ".app", with: "")
+        configuration.openWithApps.append(
+            OpenWithApp(name: name, appPath: url.path, fileExtensions: [])
+        )
+    }
+}
+
+/// One row in the "Open with app" list: app name + path, an editable
+/// comma-separated extension filter, and a delete button.
+private struct OpenWithAppRow: View {
+    @Binding var app: OpenWithApp
+    let onDelete: () -> Void
+
+    /// Comma-separated extensions, edited as text and synced back to
+    /// `app.fileExtensions` (lowercased, trimmed, de-blanked).
+    @State private var extensionsText: String
+
+    init(app: Binding<OpenWithApp>, onDelete: @escaping () -> Void) {
+        _app = app
+        self.onDelete = onDelete
+        _extensionsText = State(
+            initialValue: app.wrappedValue.fileExtensions.joined(separator: ", ")
+        )
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(app.name)
+                Text(app.appPath)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            TextField("扩展名", text: $extensionsText)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 120)
+                .onChange(of: extensionsText) { _, newValue in
+                    app.fileExtensions = newValue
+                        .split(separator: ",")
+                        .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                        .filter { !$0.isEmpty }
+                }
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
         }
     }
 }
