@@ -369,7 +369,10 @@ targets["MacToolsTests"] = {
     {
       "path" => relative_to_output_dir(File.join(repo_root, "Plugins"), output_dir),
       "includes" => ["*/Tests/**"]
-    }
+    },
+    # The Finder Sync extension is an app-extension, not an importable framework,
+    # so compile its pure logic straight into the test bundle to allow unit tests.
+    { "path" => relative_to_output_dir(File.join(repo_root, "FinderSyncExtension", "Sources", "FinderContextMenuLogic.swift"), output_dir) }
   ],
   "dependencies" => [
     { "target" => "MacTools" },

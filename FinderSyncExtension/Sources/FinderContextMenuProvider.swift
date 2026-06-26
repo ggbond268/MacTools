@@ -58,7 +58,7 @@ final class FinderContextMenuProvider: FIFinderSync {
         parent.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: nil)
         let submenu = NSMenu(title: "复制路径")
         submenu.addItem(makeItem("复制绝对路径", #selector(copyAbsolutePaths(_:))))
-        submenu.addItem(makeItem("复制相对路径", #selector(copyRelativePaths(_:))))
+        submenu.addItem(makeItem("复制转义路径", #selector(copyShellEscapedPaths(_:))))
         submenu.addItem(makeItem("复制文件名", #selector(copyFileNames(_:))))
         parent.submenu = submenu
         menu.addItem(parent)
@@ -89,13 +89,12 @@ final class FinderContextMenuProvider: FIFinderSync {
         writeToPasteboard(urls.map(\.path).joined(separator: "\n"))
     }
 
-    @objc private func copyRelativePaths(_ sender: NSMenuItem) {
+    /// Shell-escaped paths, space-separated so the whole line can be pasted as
+    /// terminal arguments.
+    @objc private func copyShellEscapedPaths(_ sender: NSMenuItem) {
         let urls = effectiveTargets()
         guard !urls.isEmpty else { return }
-        let base = FIFinderSyncController.default().targetedURL()
-        let text = urls.map { url in
-            base.map { FinderContextMenuLogic.relativePath(of: url, to: $0) } ?? url.path
-        }.joined(separator: "\n")
+        let text = urls.map { FinderContextMenuLogic.shellEscaped($0.path) }.joined(separator: " ")
         writeToPasteboard(text)
     }
 
