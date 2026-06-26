@@ -48,6 +48,14 @@ final class MacToolsAppDelegate: NSObject, NSApplicationDelegate {
         bootstrapDynamicPlugins()
     }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        // The Finder Sync extension forwards file-creating actions here via the
+        // mactools:// scheme so the non-sandboxed host app performs them.
+        for url in urls {
+            FinderContextMenuRequestHandler.handle(url)
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         statusItemController?.dismissPanels()
         pluginHost.dynamicPluginManager?.deactivateAll()

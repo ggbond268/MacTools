@@ -107,9 +107,9 @@ final class FinderContextMenuProvider: FIFinderSync {
 
     // MARK: - New file actions
 
-    @objc private func newTextFile(_ sender: NSMenuItem) { createNewFile(ext: "txt") }
-    @objc private func newMarkdownFile(_ sender: NSMenuItem) { createNewFile(ext: "md") }
-    @objc private func newJSONFile(_ sender: NSMenuItem) { createNewFile(ext: "json") }
+    @objc private func newTextFile(_ sender: NSMenuItem) { requestNewFile(ext: "txt") }
+    @objc private func newMarkdownFile(_ sender: NSMenuItem) { requestNewFile(ext: "md") }
+    @objc private func newJSONFile(_ sender: NSMenuItem) { requestNewFile(ext: "json") }
 
     // MARK: - Targets
 
@@ -136,32 +136,29 @@ final class FinderContextMenuProvider: FIFinderSync {
         return controller.targetedURL()
     }
 
-    // MARK: - File creation
+    // MARK: - File creation (forwarded to the host app)
 
-    private func createNewFile(ext: String) {
+    /// Forward file creation to the non-sandboxed host app through the
+    /// `mactools://` URL scheme. The sandboxed extension cannot create files in
+    /// arbitrary user directories, so the host app performs it — which keeps this
+    /// extension at minimal entitlements (sandbox only, no file-access exception).
+    private func requestNewFile(ext: String) {
         guard let directory = newFileDirectory() else {
             logger.error("new file: no target directory available")
             return
         }
-        let fileURL = FinderContextMenuLogic.nextAvailableURL(
-            in: directory, baseName: "未命名", ext: ext
-        )
-        let fileManager = FileManager.default
-
-        // FinderSync has implicit access to URLs Finder hands back, so a direct
-        // create usually succeeds; fall back to explicit security-scoped access.
-        if fileManager.createFile(atPath: fileURL.path, contents: Data(), attributes: nil) {
-            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        var components = URLComponents()
+        components.scheme = "mactools"
+        components.host = "newfile"
+        components.queryItems = [
+            URLQueryItem(name: "dir", value: directory.path),
+            URLQueryItem(name: "ext", value: ext)
+        ]
+        guard let url = components.url else {
+            logger.error("new file: failed to build request URL")
             return
         }
-
-        let didStart = directory.startAccessingSecurityScopedResource()
-        defer { if didStart { directory.stopAccessingSecurityScopedResource() } }
-        if fileManager.createFile(atPath: fileURL.path, contents: Data(), attributes: nil) {
-            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-        } else {
-            logger.error("new file: failed to create at \(fileURL.path, privacy: .public)")
-        }
+        NSWorkspace.shared.open(url)
     }
 
     // MARK: - Pasteboard

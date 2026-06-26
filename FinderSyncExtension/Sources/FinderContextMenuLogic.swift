@@ -29,24 +29,4 @@ enum FinderContextMenuLogic {
         let parts = Array(repeating: "..", count: ups) + downs
         return parts.isEmpty ? "." : parts.joined(separator: "/")
     }
-
-    /// First non-colliding URL of the form `<baseName>.<ext>`,
-    /// `<baseName> 2.<ext>`, `<baseName> 3.<ext>`, … inside `directory`.
-    ///
-    /// `fileExists` is injected so tests can drive the collision logic without a
-    /// real file system.
-    static func nextAvailableURL(
-        in directory: URL,
-        baseName: String,
-        ext: String,
-        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
-    ) -> URL {
-        var candidate = directory.appendingPathComponent("\(baseName).\(ext)")
-        var counter = 2
-        while fileExists(candidate.path) {
-            candidate = directory.appendingPathComponent("\(baseName) \(counter).\(ext)")
-            counter += 1
-        }
-        return candidate
-    }
 }
