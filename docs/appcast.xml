@@ -3,19 +3,51 @@
     <channel>
         <title>MacTools Releases</title>
         <description>Latest release metadata for MacTools.</description>
-        <language>zh-CN</language>
+        <language>en</language>
         <item>
-            <title>Version 1.0.31</title>
-            <link>https://github.com/ggbond268/MacTools/releases/tag/v1.0.31</link>
-            <sparkle:version>61</sparkle:version>
-            <sparkle:shortVersionString>1.0.31</sparkle:shortVersionString>
-            <description sparkle:format="markdown"><![CDATA[### Changed
+            <title>Version 1.1.0</title>
+            <link>https://github.com/ggbond268/MacTools/releases/tag/v1.1.0</link>
+            <sparkle:version>62</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <description sparkle:format="markdown"><![CDATA[## App Updates
 
-- Improved the menu bar icon settings previews so uploaded and online icons are easier to inspect.
+### Added
+
+- The plugin marketplace can sort by install status (not installed first, or installed first with updates prioritized) or by name (A–Z / Z–A).
+
+### Changed
+
+- Placed plugin-specific settings between permission and shortcut sections for a more natural configuration flow.
+- The in-app update dialog now includes plugin changes released since the previous app version.
+- Changing the app language now refreshes all Settings and plugin controls immediately without requiring a restart.
+- The language picker now shows each option in the system language alongside its native name.
+- New app versions use a PluginKit-versioned plugin catalog and update installed plugins before loading them, while older app versions continue using the legacy catalog.
+
+### Fixed
+
+- Custom and gallery menu bar icons now use one standard height and content inset with consistent settings previews.
+
+## Plugin Updates
+
+### Added
+
+- Device Battery can show trusted iPhone, iPad, iPod touch, Vision Pro, and paired Apple Watch battery and charging status over USB or Wi-Fi.
+- Keep Awake can optionally keep the display on for every session through its plugin settings and shows an indicator while that mode is active.
+
+### Changed
+
+- Refined the native window switcher overlay and added editable, stable single-key app shortcuts.
+- Device Battery now refreshes Apple mobile devices less often while the component panel is hidden.
+- All plugin packages are rebuilt for PluginKit 3 and published together in a versioned catalog so they remain compatible with the new app runtime.
+
+### Fixed
+
+- Eject Disks no longer treats internal system or non-ejectable volumes as removable disks.
+- Translator source text no longer overlaps the copy and speech actions when the text spans multiple lines.
 ]]></description>
             <sparkle:fullReleaseNotesLink>https://github.com/ggbond268/MacTools/releases</sparkle:fullReleaseNotesLink>
-            <pubDate>Thu, 09 Jul 2026 15:25:47 +0000</pubDate>
-            <enclosure url="https://github.com/ggbond268/MacTools/releases/download/v1.0.31/MacTools.dmg" length="6563514" type="application/octet-stream" sparkle:edSignature="ckpGnK0hY3OD5c2rQsLzeRmusnsx9DaglvHG3ZGfGjrKasaHN9gky8QyY8RUP1OSBqIdNS2QCBbohy6Z9ACkCg==" />
+            <pubDate>Sun, 12 Jul 2026 15:49:21 +0000</pubDate>
+            <enclosure url="https://github.com/ggbond268/MacTools/releases/download/v1.1.0/MacTools.dmg" length="6714323" type="application/octet-stream" sparkle:edSignature="92f3R6NQymNtnbKQO8MZ6oVj5/gvZAj5p0+wNucu4cJP+cEzE9ab47da5XyVt2/uVOBW+RuGHDInKlpaTGTKDw==" />
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>

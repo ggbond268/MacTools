@@ -1,0 +1,2607 @@
+{
+  "catalogID": "com.ggbond.mactools.plugins",
+  "generatedAt": "2026-07-12T15:52:19Z",
+  "minimumHostVersion": "1.0.31",
+  "pluginKitVersion": 3,
+  "plugins": [
+    {
+      "capabilities": {
+        "componentPanel": true,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "monitoring",
+      "displayName": "活动统计",
+      "id": "activity-bar",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إحصاءات النشاط",
+          "summary": "تتبع الإدخال ووقت استخدام التطبيق الأمامي ونشاط ترميز الذكاء الاصطناعي."
+        },
+        "de": {
+          "displayName": "Aktivitätsstatistik",
+          "summary": "Verfolgen Sie Eingaben, Nutzungsdauer der Vordergrund-App und KI-Codierungsaktivitäten."
+        },
+        "en": {
+          "displayName": "Activity Stats",
+          "summary": "Track input, foreground app usage time, and AI coding activity."
+        },
+        "es": {
+          "displayName": "Estadísticas de actividad",
+          "summary": "Seguimiento de la entrada, el tiempo de uso de la aplicación en primer plano y la actividad de codificación de IA."
+        },
+        "fr": {
+          "displayName": "Statistiques d’activité",
+          "summary": "Suivez les entrées, la durée d'utilisation de l'application au premier plan et l'activité de codage de l'IA."
+        },
+        "ja": {
+          "displayName": "アクティビティ統計",
+          "summary": "入力、フォアグラウンド アプリの使用時間、AI コーディング アクティビティを追跡します。"
+        },
+        "ko": {
+          "displayName": "활동 통계",
+          "summary": "입력, 포그라운드 앱 사용 시간 및 AI 코딩 활동을 추적합니다."
+        },
+        "pt": {
+          "displayName": "Estatísticas de atividade",
+          "summary": "Rastreie a entrada, o tempo de uso do aplicativo em primeiro plano e a atividade de codificação de IA."
+        },
+        "ru": {
+          "displayName": "Статистика активности",
+          "summary": "Отслеживайте ввод данных, время использования приложений на переднем плане и активность ИИ-кодирования."
+        },
+        "zh-Hans": {
+          "displayName": "活动统计",
+          "summary": "统计输入、前台应用使用时长和 AI 编程活动"
+        },
+        "zh-Hant": {
+          "displayName": "活動統計",
+          "summary": "統計輸入、前臺應用使用時長和 AI 編程活動"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "f728a16622253f7281a7d55a34ae5ea02263a7f86621725a726466a2e400ef42",
+        "size": 822707,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/activity-bar.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "统计输入、前台应用使用时长和 AI 编程活动",
+      "version": "1.0.15"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "productivity",
+      "displayName": "应用快捷键",
+      "id": "app-hotkey",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "اختصارات التطبيقات",
+          "summary": "قم بربط الاختصارات العالمية بالتطبيقات الشائعة للتشغيل أو التبديل السريع."
+        },
+        "de": {
+          "displayName": "App-Kurzbefehle",
+          "summary": "Binden Sie globale Verknüpfungen an gängige Apps, um sie schnell zu starten oder zu wechseln."
+        },
+        "en": {
+          "displayName": "App Hotkeys",
+          "summary": "Bind global shortcuts to common apps for quick launch or switching."
+        },
+        "es": {
+          "displayName": "Atajos de apps",
+          "summary": "Vincule accesos directos globales a aplicaciones comunes para iniciar o cambiar rápidamente."
+        },
+        "fr": {
+          "displayName": "Raccourcis d’apps",
+          "summary": "Liez des raccourcis globaux aux applications courantes pour un lancement ou une commutation rapide."
+        },
+        "ja": {
+          "displayName": "アプリショートカット",
+          "summary": "グローバル ショートカットを一般的なアプリにバインドして、すばやく起動したり切り替えたりできます。"
+        },
+        "ko": {
+          "displayName": "앱 단축키",
+          "summary": "빠른 실행 또는 전환을 위해 일반 앱에 전역 바로가기를 바인딩합니다."
+        },
+        "pt": {
+          "displayName": "Atalhos de apps",
+          "summary": "Vincule atalhos globais a aplicativos comuns para inicialização ou troca rápida."
+        },
+        "ru": {
+          "displayName": "Горячие клавиши приложений",
+          "summary": "Привяжите глобальные ярлыки к общим приложениям для быстрого запуска или переключения."
+        },
+        "zh-Hans": {
+          "displayName": "应用快捷键",
+          "summary": "为常用应用绑定全局快捷键，快速打开或切换到前台"
+        },
+        "zh-Hant": {
+          "displayName": "應用程式快速鍵",
+          "summary": "為常用應用綁定全局快速鍵，快速打開或切換到前臺"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "c3154f0031603995d051352f2f979492b2cab5550f45f10e62b6d940131dadea",
+        "size": 196598,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/app-hotkey.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "为常用应用绑定全局快捷键，快速打开或切换到前台",
+      "version": "1.0.8"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "深色模式",
+      "id": "appearance",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "الوضع الداكن",
+          "summary": "تبديل النظام بين المظهر الفاتح والداكن."
+        },
+        "de": {
+          "displayName": "Dunkelmodus",
+          "summary": "Schalten Sie das System zwischen heller und dunkler Darstellung um."
+        },
+        "en": {
+          "displayName": "Dark Mode",
+          "summary": "Switch the system between light and dark appearance."
+        },
+        "es": {
+          "displayName": "Modo oscuro",
+          "summary": "Cambie el sistema entre apariencia clara y oscura."
+        },
+        "fr": {
+          "displayName": "Mode sombre",
+          "summary": "Basculez le système entre l’apparence claire et sombre."
+        },
+        "ja": {
+          "displayName": "ダークモード",
+          "summary": "システムの外観を明暗で切り替えます。"
+        },
+        "ko": {
+          "displayName": "다크 모드",
+          "summary": "밝은 화면과 어두운 화면 간에 시스템을 전환합니다."
+        },
+        "pt": {
+          "displayName": "Modo escuro",
+          "summary": "Alterne o sistema entre aparência clara e escura."
+        },
+        "ru": {
+          "displayName": "Тёмный режим",
+          "summary": "Переключение системы между светлым и темным внешним видом."
+        },
+        "zh-Hans": {
+          "displayName": "深色模式",
+          "summary": "切换系统亮色与深色外观"
+        },
+        "zh-Hant": {
+          "displayName": "深色模式",
+          "summary": "切換系統亮色與深色外觀"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "b941e77869da0baa29879af4252759e3e3364d98a258d0ec3e952a1343255714",
+        "size": 62876,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/appearance.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "切换系统亮色与深色外观",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "自动隐藏程序坞",
+      "id": "auto-hide-dock",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إخفاء Dock تلقائيًا",
+          "summary": "قم بإخفاء Dock تلقائيًا للحصول على سطح مكتب أكثر نظافة."
+        },
+        "de": {
+          "displayName": "Dock automatisch ausblenden",
+          "summary": "Blenden Sie Dock automatisch aus, um den Desktop übersichtlicher zu gestalten."
+        },
+        "en": {
+          "displayName": "Auto-hide Dock",
+          "summary": "Hide the Dock automatically for a cleaner desktop."
+        },
+        "es": {
+          "displayName": "Ocultar Dock automáticamente",
+          "summary": "Oculte Dock automáticamente para tener un escritorio más limpio."
+        },
+        "fr": {
+          "displayName": "Masquer le Dock automatiquement",
+          "summary": "Masquez automatiquement le Dock pour un bureau plus propre."
+        },
+        "ja": {
+          "displayName": "Dockを自動的に隠す",
+          "summary": "デスクトップをすっきりさせるために、Dock を自動的に非表示にします。"
+        },
+        "ko": {
+          "displayName": "Dock 자동 숨기기",
+          "summary": "더 깔끔한 데스크탑을 위해 Dock을 자동으로 숨깁니다."
+        },
+        "pt": {
+          "displayName": "Ocultar Dock automaticamente",
+          "summary": "Oculte o Dock automaticamente para uma área de trabalho mais limpa."
+        },
+        "ru": {
+          "displayName": "Автоскрытие Dock",
+          "summary": "Скройте Dock автоматически, чтобы рабочий стол стал чище."
+        },
+        "zh-Hans": {
+          "displayName": "自动隐藏程序坞",
+          "summary": "自动隐藏程序坞，提供更干净的桌面环境"
+        },
+        "zh-Hant": {
+          "displayName": "自動隱藏 Dock",
+          "summary": "自動隱藏Dock，提供更乾淨的桌面環境"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "0121ebc62324847108b6eed5b6b028ab7cfaf906de8bae8fff0bd1f7518d6756",
+        "size": 67937,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/auto-hide-dock.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "自动隐藏程序坞，提供更干净的桌面环境",
+      "version": "1.0.9"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "自动隐藏菜单栏",
+      "id": "auto-hide-menu-bar",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إخفاء شريط القوائم تلقائيًا",
+          "summary": "إخفاء شريط القائمة تلقائيًا لتوفير مساحة أكبر على الشاشة."
+        },
+        "de": {
+          "displayName": "Menüleiste automatisch ausblenden",
+          "summary": "Blenden Sie die Menüleiste automatisch aus, um mehr Platz auf dem Bildschirm zu schaffen."
+        },
+        "en": {
+          "displayName": "Auto-hide Menu Bar",
+          "summary": "Hide the menu bar automatically for more screen space."
+        },
+        "es": {
+          "displayName": "Ocultar barra de menús automáticamente",
+          "summary": "Oculte la barra de menú automáticamente para obtener más espacio en la pantalla."
+        },
+        "fr": {
+          "displayName": "Masquer la barre des menus automatiquement",
+          "summary": "Masquez automatiquement la barre de menus pour plus d'espace sur l'écran."
+        },
+        "ja": {
+          "displayName": "メニューバーを自動的に隠す",
+          "summary": "画面スペースを増やすために、メニュー バーを自動的に非表示にします。"
+        },
+        "ko": {
+          "displayName": "메뉴 막대 자동 숨기기",
+          "summary": "더 많은 화면 공간을 위해 메뉴 표시줄을 자동으로 숨깁니다."
+        },
+        "pt": {
+          "displayName": "Ocultar barra de menus automaticamente",
+          "summary": "Oculte a barra de menu automaticamente para obter mais espaço na tela."
+        },
+        "ru": {
+          "displayName": "Автоскрытие строки меню",
+          "summary": "Автоматически скрывайте строку меню, чтобы освободить больше места на экране."
+        },
+        "zh-Hans": {
+          "displayName": "自动隐藏菜单栏",
+          "summary": "自动隐藏菜单栏，提供更完整的屏幕显示空间"
+        },
+        "zh-Hant": {
+          "displayName": "自動隱藏選單列",
+          "summary": "自動隱藏選單列，提供更完整的螢幕顯示空間"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "89768a0793a033d3e723b8c4ae4958b41f19e918feda34a11ff288616bcb76ac",
+        "size": 69851,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/auto-hide-menu-bar.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "自动隐藏菜单栏，提供更完整的屏幕显示空间",
+      "version": "1.0.6"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "system",
+      "displayName": "电池充电上限",
+      "id": "battery-charge-limit",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "حد شحن البطارية",
+          "summary": "تعيين حد شحن البطارية وإيقاف الشحن عند الوصول إليه؛ يتم استئناف الشحن فقط عندما تختار ذلك."
+        },
+        "de": {
+          "displayName": "Batterieladelimit",
+          "summary": "Legen Sie ein Batterieladelimit fest und stoppen Sie den Ladevorgang, wenn es erreicht ist. Der Ladevorgang wird erst fortgesetzt, wenn Sie dies wünschen."
+        },
+        "en": {
+          "displayName": "Battery Charge Limit",
+          "summary": "Set a battery charge limit and stop charging when it is reached; charging resumes only when you choose."
+        },
+        "es": {
+          "displayName": "Límite de carga de batería",
+          "summary": "Establezca un límite de carga de la batería y detenga la carga cuando lo alcance; la carga se reanuda solo cuando usted elige."
+        },
+        "fr": {
+          "displayName": "Limite de charge de la batterie",
+          "summary": "Fixez une limite de charge de la batterie et arrêtez la charge lorsqu'elle est atteinte ; la charge ne reprend que lorsque vous le souhaitez."
+        },
+        "ja": {
+          "displayName": "バッテリー充電上限",
+          "summary": "バッテリー充電制限を設定し、その制限に達したら充電を停止します。選択した場合にのみ充電が再開されます。"
+        },
+        "ko": {
+          "displayName": "배터리 충전 한도",
+          "summary": "배터리 충전 한도를 설정하고 한도에 도달하면 충전을 중지합니다. 선택한 경우에만 충전이 재개됩니다."
+        },
+        "pt": {
+          "displayName": "Limite de carga da bateria",
+          "summary": "Defina um limite de carga da bateria e pare de carregar quando ele for atingido; o carregamento é retomado somente quando você escolher."
+        },
+        "ru": {
+          "displayName": "Лимит заряда батареи",
+          "summary": "Установите лимит заряда аккумулятора и прекращайте зарядку при его достижении; зарядка возобновляется только тогда, когда вы выберете."
+        },
+        "zh-Hans": {
+          "displayName": "电池充电上限",
+          "summary": "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电"
+        },
+        "zh-Hant": {
+          "displayName": "電池充電上限",
+          "summary": "設定電池充電上限，達到上限後停止充電；不自動恢復，由用戶決定何時繼續充電"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "b93734fb46573b552eb3f13a48e7f0c81c677d9a4b6fbcc7411503bee31a865b",
+        "size": 292760,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/battery-charge-limit.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电",
+      "version": "1.0.5"
+    },
+    {
+      "capabilities": {
+        "componentPanel": true,
+        "configuration": false,
+        "primaryPanel": false
+      },
+      "category": "productivity",
+      "displayName": "日历",
+      "id": "calendar",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "التقويم",
+          "summary": "عرض التواريخ والعطلات وأحداث التقويم."
+        },
+        "de": {
+          "displayName": "Kalender",
+          "summary": "Termine, Feiertage und Kalenderereignisse anzeigen."
+        },
+        "en": {
+          "displayName": "Calendar",
+          "summary": "View dates, holidays, and calendar events."
+        },
+        "es": {
+          "displayName": "Calendario",
+          "summary": "Ver fechas, días festivos y eventos del calendario."
+        },
+        "fr": {
+          "displayName": "Calendrier",
+          "summary": "Afficher les dates, les jours fériés et les événements du calendrier."
+        },
+        "ja": {
+          "displayName": "カレンダー",
+          "summary": "日付、休日、カレンダーイベントを表示します。"
+        },
+        "ko": {
+          "displayName": "캘린더",
+          "summary": "날짜, 공휴일 및 달력 이벤트를 확인하세요."
+        },
+        "pt": {
+          "displayName": "Calendário",
+          "summary": "Veja datas, feriados e eventos da agenda."
+        },
+        "ru": {
+          "displayName": "Календарь",
+          "summary": "Просмотр дат, праздников и событий календаря."
+        },
+        "zh-Hans": {
+          "displayName": "日历",
+          "summary": "查看日期、节假日和系统日程"
+        },
+        "zh-Hant": {
+          "displayName": "行事曆",
+          "summary": "查看日期、節假日和系統行程"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "3b760127b1d2a5707da5402d858641fece2fb14c1ece1c981702abee1becc49c",
+        "size": 333640,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/calendar.mactoolsplugin.zip"
+      },
+      "permissions": [
+        "calendarFullAccess",
+        "automation"
+      ],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "查看日期、节假日和系统日程",
+      "version": "1.0.11"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "storage",
+      "displayName": "清空剪贴板",
+      "id": "clipboard-clear",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "مسح الحافظة",
+          "summary": "امسح محتويات الحافظة الحالية بنقرة واحدة."
+        },
+        "de": {
+          "displayName": "Zwischenablage leeren",
+          "summary": "Löschen Sie den aktuellen Inhalt der Zwischenablage mit einem Klick."
+        },
+        "en": {
+          "displayName": "Clear Clipboard",
+          "summary": "Clear the current clipboard contents with one click."
+        },
+        "es": {
+          "displayName": "Borrar portapapeles",
+          "summary": "Borra el contenido actual del portapapeles con un solo clic."
+        },
+        "fr": {
+          "displayName": "Vider le presse-papiers",
+          "summary": "Effacez le contenu actuel du presse-papiers en un seul clic."
+        },
+        "ja": {
+          "displayName": "クリップボードを消去",
+          "summary": "ワンクリックで現在のクリップボードの内容をクリアします。"
+        },
+        "ko": {
+          "displayName": "클립보드 지우기",
+          "summary": "한 번의 클릭으로 현재 클립보드 내용을 지웁니다."
+        },
+        "pt": {
+          "displayName": "Limpar área de transferência",
+          "summary": "Limpe o conteúdo atual da área de transferência com um clique."
+        },
+        "ru": {
+          "displayName": "Очистить буфер обмена",
+          "summary": "Очистите текущее содержимое буфера обмена одним щелчком мыши."
+        },
+        "zh-Hans": {
+          "displayName": "清空剪贴板",
+          "summary": "一键清空当前剪贴板内容"
+        },
+        "zh-Hant": {
+          "displayName": "清空剪貼簿",
+          "summary": "一鍵清空當前剪貼板內容"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "47bce81ee3a922799e2bd1ae69dc20e1a84066aa1077b183508e89563a65f43a",
+        "size": 59012,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/clipboard-clear.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "一键清空当前剪贴板内容",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": true,
+        "configuration": true,
+        "primaryPanel": false
+      },
+      "category": null,
+      "displayName": "设备电量",
+      "id": "device-battery",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "بطارية الأجهزة",
+          "summary": "عرض مستويات البطارية لجهاز Mac وأجهزة Apple المحمولة وملحقات Bluetooth وأجهزة الماوس Rapoo."
+        },
+        "de": {
+          "displayName": "Gerätebatterie",
+          "summary": "Zeigen Sie den Akkustand Ihres Mac, mobiler Apple-Geräte, von Bluetooth-Zubehör und Rapoo-Mäusen an."
+        },
+        "en": {
+          "displayName": "Device Battery",
+          "summary": "View battery levels for your Mac, Apple mobile devices, Bluetooth accessories, and Rapoo mice."
+        },
+        "es": {
+          "displayName": "Batería de dispositivos",
+          "summary": "Consulta la batería del Mac, dispositivos móviles Apple, accesorios Bluetooth y ratones Rapoo."
+        },
+        "fr": {
+          "displayName": "Batterie des appareils",
+          "summary": "Affichez la batterie du Mac, des appareils mobiles Apple, des accessoires Bluetooth et des souris Rapoo."
+        },
+        "ja": {
+          "displayName": "デバイスのバッテリー",
+          "summary": "Mac、Apple モバイルデバイス、Bluetooth アクセサリ、Rapoo マウスのバッテリー残量を表示します。"
+        },
+        "ko": {
+          "displayName": "기기 배터리",
+          "summary": "Mac, Apple 모바일 기기, Bluetooth 액세서리 및 Rapoo 마우스의 배터리를 확인합니다."
+        },
+        "pt": {
+          "displayName": "Bateria dos dispositivos",
+          "summary": "Veja a bateria do Mac, dispositivos móveis Apple, acessórios Bluetooth e mouses Rapoo."
+        },
+        "ru": {
+          "displayName": "Батарея устройств",
+          "summary": "Просматривайте заряд Mac, мобильных устройств Apple, Bluetooth-аксессуаров и мышей Rapoo."
+        },
+        "zh-Hans": {
+          "displayName": "设备电量",
+          "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏鼠标电量"
+        },
+        "zh-Hant": {
+          "displayName": "裝置電量",
+          "summary": "查看 Mac、Apple 行動裝置、藍牙外設和雷柏滑鼠電量"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "52734827acb5e97ce6ca4b29922fc2c8213ce8730fa5db4c0520a5771bd23a76",
+        "size": 776087,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/device-battery.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏鼠标电量",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "storage",
+      "displayName": "磁盘清理",
+      "id": "disk-clean",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "تنظيف القرص",
+          "summary": "تنظيف ذاكرة التخزين المؤقت، وذاكرة التخزين المؤقت للمطورين، وذاكرة التخزين المؤقت للمتصفح."
+        },
+        "de": {
+          "displayName": "Datenträgerbereinigung",
+          "summary": "Caches, Entwickler-Caches und Browser-Caches bereinigen."
+        },
+        "en": {
+          "displayName": "Disk Cleanup",
+          "summary": "Clean caches, developer caches, and browser caches."
+        },
+        "es": {
+          "displayName": "Limpieza de disco",
+          "summary": "Limpiar cachés, cachés de desarrolladores y cachés de navegador."
+        },
+        "fr": {
+          "displayName": "Nettoyage du disque",
+          "summary": "Nettoyer les caches, les caches des développeurs et les caches du navigateur."
+        },
+        "ja": {
+          "displayName": "ディスククリーンアップ",
+          "summary": "キャッシュ、開発者キャッシュ、ブラウザ キャッシュをクリーンアップします。"
+        },
+        "ko": {
+          "displayName": "디스크 정리",
+          "summary": "캐시, 개발자 캐시 및 브라우저 캐시를 정리합니다."
+        },
+        "pt": {
+          "displayName": "Limpeza de disco",
+          "summary": "Limpe caches, caches de desenvolvedores e caches de navegador."
+        },
+        "ru": {
+          "displayName": "Очистка диска",
+          "summary": "Очистка кеша, кеша разработчика и кеша браузера."
+        },
+        "zh-Hans": {
+          "displayName": "磁盘清理",
+          "summary": "缓存、开发者缓存和浏览器缓存清理"
+        },
+        "zh-Hant": {
+          "displayName": "磁碟清理",
+          "summary": "緩存、開發者緩存和瀏覽器緩存清理"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "dc57c242161ff5a604efb0c218c8d0d672ca4b0ae1561e070bb3ae8d57a2b0ff",
+        "size": 448122,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/disk-clean.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "缓存、开发者缓存和浏览器缓存清理",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "显示器亮度",
+      "id": "display-brightness",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "سطوع الشاشة",
+          "summary": "اضبط السطوع لكل شاشة بسرعة."
+        },
+        "de": {
+          "displayName": "Displayhelligkeit",
+          "summary": "Passen Sie die Helligkeit für jedes Display schnell an."
+        },
+        "en": {
+          "displayName": "Display Brightness",
+          "summary": "Adjust brightness for each display quickly."
+        },
+        "es": {
+          "displayName": "Brillo de pantalla",
+          "summary": "Ajuste el brillo de cada pantalla rápidamente."
+        },
+        "fr": {
+          "displayName": "Luminosité de l’écran",
+          "summary": "Ajustez rapidement la luminosité de chaque écran."
+        },
+        "ja": {
+          "displayName": "ディスプレイの明るさ",
+          "summary": "各ディスプレイの明るさを素早く調整します。"
+        },
+        "ko": {
+          "displayName": "디스플레이 밝기",
+          "summary": "각 디스플레이의 밝기를 빠르게 조정하세요."
+        },
+        "pt": {
+          "displayName": "Brilho da tela",
+          "summary": "Ajuste o brilho de cada tela rapidamente."
+        },
+        "ru": {
+          "displayName": "Яркость дисплея",
+          "summary": "Быстро отрегулируйте яркость каждого дисплея."
+        },
+        "zh-Hans": {
+          "displayName": "显示器亮度",
+          "summary": "快速调节每个显示器的亮度"
+        },
+        "zh-Hant": {
+          "displayName": "顯示器亮度",
+          "summary": "快速調節每個顯示器的亮度"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "48f15f8ed47f55a4e8fc90af6d6a0e1c2ea21f3c80057dc637f68d4d483c94af",
+        "size": 451379,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/display-brightness.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "快速调节每个显示器的亮度",
+      "version": "1.0.11"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "显示器分辨率",
+      "id": "display-resolution",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "دقة الشاشة",
+          "summary": "عرض وتبديل القرارات لكل شاشة."
+        },
+        "de": {
+          "displayName": "Displayauflösung",
+          "summary": "Sehen Sie sich die Auflösungen für jede Anzeige an und wechseln Sie sie."
+        },
+        "en": {
+          "displayName": "Display Resolution",
+          "summary": "View and switch resolutions for each display."
+        },
+        "es": {
+          "displayName": "Resolución de pantalla",
+          "summary": "Vea y cambie resoluciones para cada pantalla."
+        },
+        "fr": {
+          "displayName": "Résolution de l’écran",
+          "summary": "Affichez et changez de résolution pour chaque écran."
+        },
+        "ja": {
+          "displayName": "ディスプレイ解像度",
+          "summary": "各ディスプレイの解像度を表示および切り替えます。"
+        },
+        "ko": {
+          "displayName": "디스플레이 해상도",
+          "summary": "각 디스플레이의 해상도를 보고 전환합니다."
+        },
+        "pt": {
+          "displayName": "Resolução da tela",
+          "summary": "Visualize e alterne as resoluções para cada monitor."
+        },
+        "ru": {
+          "displayName": "Разрешение дисплея",
+          "summary": "Просмотр и переключение разрешения для каждого дисплея."
+        },
+        "zh-Hans": {
+          "displayName": "显示器分辨率",
+          "summary": "查看并切换每个显示器的分辨率"
+        },
+        "zh-Hant": {
+          "displayName": "顯示器解析度",
+          "summary": "查看並切換每個顯示器的分辨率"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "10e825ec17f8b4d85ac3c6b3868322b9bb4f3dc84ad408e8b18fa9a8f11cfb06",
+        "size": 137822,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/display-resolution.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "查看并切换每个显示器的分辨率",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "显示器休眠",
+      "id": "display-sleep",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إسبات الشاشات",
+          "summary": "ضع جميع شاشات العرض في وضع السكون على الفور."
+        },
+        "de": {
+          "displayName": "Display-Ruhezustand",
+          "summary": "Versetzen Sie alle Displays sofort in den Ruhezustand."
+        },
+        "en": {
+          "displayName": "Display Sleep",
+          "summary": "Put all displays to sleep immediately."
+        },
+        "es": {
+          "displayName": "Reposo de pantallas",
+          "summary": "Ponga todas las pantallas a dormir inmediatamente."
+        },
+        "fr": {
+          "displayName": "Mise en veille des écrans",
+          "summary": "Mettez immédiatement tous les écrans en veille."
+        },
+        "ja": {
+          "displayName": "ディスプレイをスリープ",
+          "summary": "すべてのディスプレイをすぐにスリープ状態にします。"
+        },
+        "ko": {
+          "displayName": "디스플레이 잠자기",
+          "summary": "모든 디스플레이를 즉시 절전 모드로 전환하세요."
+        },
+        "pt": {
+          "displayName": "Repouso das telas",
+          "summary": "Coloque todos os monitores em hibernação imediatamente."
+        },
+        "ru": {
+          "displayName": "Сон дисплеев",
+          "summary": "Немедленно переведите все дисплеи в спящий режим."
+        },
+        "zh-Hans": {
+          "displayName": "显示器休眠",
+          "summary": "一键让所有显示器立即进入休眠"
+        },
+        "zh-Hant": {
+          "displayName": "顯示器睡眠",
+          "summary": "一鍵讓所有顯示器立即進入休眠"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "d2e8241c6376800f081a5cf5c1f83d6b4de42fd4b1ed7c2ea998eff09d933a95",
+        "size": 57782,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/display-sleep.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "一键让所有显示器立即进入休眠",
+      "version": "1.0.5"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "原彩显示",
+      "id": "display-true-color",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "True Tone",
+          "summary": "ضبط ألوان العرض تلقائيًا لتتناسب مع الإضاءة المحيطة."
+        },
+        "de": {
+          "displayName": "True Tone",
+          "summary": "Passen Sie die Displayfarben automatisch an das Umgebungslicht an."
+        },
+        "en": {
+          "displayName": "True Tone",
+          "summary": "Automatically adjust display colors to match ambient light."
+        },
+        "es": {
+          "displayName": "True Tone",
+          "summary": "Ajuste automáticamente los colores de la pantalla para que coincidan con la luz ambiental."
+        },
+        "fr": {
+          "displayName": "True Tone",
+          "summary": "Ajustez automatiquement les couleurs de l’affichage en fonction de la lumière ambiante."
+        },
+        "ja": {
+          "displayName": "True Tone",
+          "summary": "周囲の光に合わせてディスプレイの色を自動的に調整します。"
+        },
+        "ko": {
+          "displayName": "True Tone",
+          "summary": "주변 조명에 맞게 디스플레이 색상을 자동으로 조정합니다."
+        },
+        "pt": {
+          "displayName": "True Tone",
+          "summary": "Ajuste automaticamente as cores da tela para corresponder à luz ambiente."
+        },
+        "ru": {
+          "displayName": "True Tone",
+          "summary": "Автоматически настраивайте цвета дисплея в соответствии с окружающим освещением."
+        },
+        "zh-Hans": {
+          "displayName": "原彩显示",
+          "summary": "自动调节显示器颜色以适应环境光"
+        },
+        "zh-Hant": {
+          "displayName": "原彩顯示",
+          "summary": "自動調節顯示器顏色以適應環境光"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "69207bf22fac391ad92cd5db13555be2343b1b6750c24bdbe21d8f8a72e26d4d",
+        "size": 62446,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/display-true-color.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "自动调节显示器颜色以适应环境光",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "storage",
+      "displayName": "推出磁盘",
+      "id": "eject-disk",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إخراج الأقراص",
+          "summary": "أخرج كافة الأقراص القابلة للإزالة."
+        },
+        "de": {
+          "displayName": "Datenträger auswerfen",
+          "summary": "Alle Wechseldatenträger auswerfen."
+        },
+        "en": {
+          "displayName": "Eject Disks",
+          "summary": "Eject all removable disks."
+        },
+        "es": {
+          "displayName": "Expulsar discos",
+          "summary": "Expulse todos los discos extraíbles."
+        },
+        "fr": {
+          "displayName": "Éjecter les disques",
+          "summary": "Éjectez tous les disques amovibles."
+        },
+        "ja": {
+          "displayName": "ディスクを取り出す",
+          "summary": "すべてのリムーバブル ディスクを取り出します。"
+        },
+        "ko": {
+          "displayName": "디스크 추출",
+          "summary": "모든 이동식 디스크를 꺼냅니다."
+        },
+        "pt": {
+          "displayName": "Ejetar discos",
+          "summary": "Ejete todos os discos removíveis."
+        },
+        "ru": {
+          "displayName": "Извлечь диски",
+          "summary": "Извлечь все съемные диски."
+        },
+        "zh-Hans": {
+          "displayName": "推出磁盘",
+          "summary": "推出所有可移动磁盘"
+        },
+        "zh-Hant": {
+          "displayName": "退出磁碟",
+          "summary": "推出所有可移動磁盤"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "91920aa5b42657658a03c34b14879867332ef54fd38cba14a8d6f3026206cccd",
+        "size": 106973,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/eject-disk.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "推出所有可移动磁盘",
+      "version": "1.0.8"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "storage",
+      "displayName": "清空废纸篓",
+      "id": "empty-trash",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إفراغ سلة المهملات",
+          "summary": "إفراغ كافة العناصر الموجودة في سلة المهملات."
+        },
+        "de": {
+          "displayName": "Papierkorb leeren",
+          "summary": "Leeren Sie alle Elemente im Papierkorb."
+        },
+        "en": {
+          "displayName": "Empty Trash",
+          "summary": "Empty all items in the Trash."
+        },
+        "es": {
+          "displayName": "Vaciar papelera",
+          "summary": "Vaciar todos los elementos de la Papelera."
+        },
+        "fr": {
+          "displayName": "Vider la corbeille",
+          "summary": "Videz tous les éléments de la corbeille."
+        },
+        "ja": {
+          "displayName": "ゴミ箱を空にする",
+          "summary": "ゴミ箱内のすべてのアイテムを空にします。"
+        },
+        "ko": {
+          "displayName": "휴지통 비우기",
+          "summary": "휴지통의 모든 항목을 비웁니다."
+        },
+        "pt": {
+          "displayName": "Esvaziar Lixo",
+          "summary": "Esvazie todos os itens da Lixeira."
+        },
+        "ru": {
+          "displayName": "Очистить корзину",
+          "summary": "Очистить все элементы в корзине."
+        },
+        "zh-Hans": {
+          "displayName": "清空废纸篓",
+          "summary": "清空废纸篓中的所有项目"
+        },
+        "zh-Hant": {
+          "displayName": "清空垃圾桶",
+          "summary": "清空垃圾桶中的所有項目"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "ecc512bb54d70481e6448c55e768288d8942896c8c6b34eabcf8de3b80bffa96",
+        "size": 85156,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/empty-trash.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "清空废纸篓中的所有项目",
+      "version": "1.0.8"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "system",
+      "displayName": "风扇控制",
+      "id": "fan-control",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "التحكم بالمراوح",
+          "summary": "قم بإدارة الإعدادات المسبقة لسرعة المروحة باستخدام إستراتيجيات تلقائية وكاملة السرعة ومخصصة."
+        },
+        "de": {
+          "displayName": "Lüftersteuerung",
+          "summary": "Verwalten Sie Voreinstellungen für die Lüftergeschwindigkeit mit automatischen, Vollgeschwindigkeits- und benutzerdefinierten Strategien."
+        },
+        "en": {
+          "displayName": "Fan Control",
+          "summary": "Manage fan speed presets with automatic, full-speed, and custom strategies."
+        },
+        "es": {
+          "displayName": "Control de ventiladores",
+          "summary": "Administre los ajustes preestablecidos de velocidad del ventilador con estrategias automáticas, de velocidad máxima y personalizadas."
+        },
+        "fr": {
+          "displayName": "Contrôle des ventilateurs",
+          "summary": "Gérez les préréglages de vitesse du ventilateur avec des stratégies automatiques, à pleine vitesse et personnalisées."
+        },
+        "ja": {
+          "displayName": "ファン制御",
+          "summary": "自動、フルスピード、カスタム戦略を使用してファン速度のプリセットを管理します。"
+        },
+        "ko": {
+          "displayName": "팬 제어",
+          "summary": "자동, 최대 속도 및 사용자 정의 전략을 사용하여 팬 속도 사전 설정을 관리합니다."
+        },
+        "pt": {
+          "displayName": "Controle de ventoinhas",
+          "summary": "Gerencie predefinições de velocidade do ventilador com estratégias automáticas, de velocidade total e personalizadas."
+        },
+        "ru": {
+          "displayName": "Управление вентиляторами",
+          "summary": "Управляйте предустановками скорости вращения вентилятора с помощью автоматических, полноскоростных и пользовательских стратегий."
+        },
+        "zh-Hans": {
+          "displayName": "风扇控制",
+          "summary": "管理风扇转速预设，支持自动、全速和自定义策略"
+        },
+        "zh-Hant": {
+          "displayName": "風扇控制",
+          "summary": "管理風扇轉速預設，支持自動、全速和自定義策略"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "5f29baf78070159ce0f7d0e1ac55edfd01c2d15cd61d58d17740031a2608a333",
+        "size": 368323,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/fan-control.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "管理风扇转速预设，支持自动、全速和自定义策略",
+      "version": "1.0.11"
+    },
+    {
+      "capabilities": {
+        "componentPanel": true,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "productivity",
+      "displayName": "修复损坏应用",
+      "id": "fix-damaged-app",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إصلاح التطبيقات التالفة",
+          "summary": "قم بإزالة سمات العزل لحل تحذيرات التطبيقات التالفة أو غير الموثوقة."
+        },
+        "de": {
+          "displayName": "Beschädigte Apps reparieren",
+          "summary": "Entfernen Sie Quarantäneattribute, um Warnungen zu beschädigten oder nicht vertrauenswürdigen Apps zu beheben."
+        },
+        "en": {
+          "displayName": "Fix Damaged Apps",
+          "summary": "Remove quarantine attributes to resolve damaged or untrusted app warnings."
+        },
+        "es": {
+          "displayName": "Reparar apps dañadas",
+          "summary": "Elimine los atributos de cuarentena para resolver advertencias de aplicaciones dañadas o que no son de confianza."
+        },
+        "fr": {
+          "displayName": "Réparer les apps endommagées",
+          "summary": "Supprimez les attributs de quarantaine pour résoudre les avertissements d'applications endommagées ou non fiables."
+        },
+        "ja": {
+          "displayName": "破損したアプリを修復",
+          "summary": "破損したアプリまたは信頼できないアプリの警告を解決するには、隔離属性を削除します。"
+        },
+        "ko": {
+          "displayName": "손상된 앱 복구",
+          "summary": "손상되었거나 신뢰할 수 없는 앱 경고를 해결하려면 격리 속성을 제거하세요."
+        },
+        "pt": {
+          "displayName": "Corrigir apps danificados",
+          "summary": "Remova atributos de quarentena para resolver avisos de aplicativos danificados ou não confiáveis."
+        },
+        "ru": {
+          "displayName": "Исправить повреждённые приложения",
+          "summary": "Удалите атрибуты карантина, чтобы устранить предупреждения поврежденных или ненадежных приложений."
+        },
+        "zh-Hans": {
+          "displayName": "修复损坏应用",
+          "summary": "移除隔离属性，解决「已损坏」或「不受信任」提示"
+        },
+        "zh-Hant": {
+          "displayName": "修復損壞的 App",
+          "summary": "移除隔離屬性，解決「已損壞」或「不受信任」提示"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "ea0a4c20521f0b4c9714ec27b46cc922f0366fd63500419e9e4b803bd87b62bc",
+        "size": 205021,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/fix-damaged-app.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "移除隔离属性，解决「已损坏」或「不受信任」提示",
+      "version": "1.0.8"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "隐藏刘海",
+      "id": "hide-notch",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إخفاء النتوء",
+          "summary": "قم بتغطية المنطقة العلوية تلقائيًا على الشاشات المسننة."
+        },
+        "de": {
+          "displayName": "Notch ausblenden",
+          "summary": "Decken Sie automatisch den oberen Kerbbereich auf gekerbten Displays ab."
+        },
+        "en": {
+          "displayName": "Hide Notch",
+          "summary": "Automatically cover the top notch area on notched displays."
+        },
+        "es": {
+          "displayName": "Ocultar muesca",
+          "summary": "Cubra automáticamente el área de muesca superior en pantallas con muescas."
+        },
+        "fr": {
+          "displayName": "Masquer l’encoche",
+          "summary": "Couvrez automatiquement la zone supérieure sur les écrans à encoches."
+        },
+        "ja": {
+          "displayName": "ノッチを隠す",
+          "summary": "ノッチ付きディスプレイの最上部のノッチ領域を自動的にカバーします。"
+        },
+        "ko": {
+          "displayName": "노치 숨기기",
+          "summary": "노치 디스플레이의 상단 노치 영역을 자동으로 덮습니다."
+        },
+        "pt": {
+          "displayName": "Ocultar entalhe",
+          "summary": "Cobre automaticamente a área superior em telas entalhadas."
+        },
+        "ru": {
+          "displayName": "Скрыть вырез",
+          "summary": "Автоматически закрывать верхнюю область на дисплеях с вырезом."
+        },
+        "zh-Hans": {
+          "displayName": "隐藏刘海",
+          "summary": "自动遮挡刘海屏顶部区域"
+        },
+        "zh-Hant": {
+          "displayName": "隱藏瀏海",
+          "summary": "自動遮擋劉海螢幕頂部區域"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "27113017dc243a39e3dbcb8ba283267e298765857455e357261e31c8f00efb30",
+        "size": 168209,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/hide-notch.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "自动遮挡刘海屏顶部区域",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "system",
+      "displayName": "Homebrew 管理",
+      "id": "homebrew",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "Homebrew",
+          "summary": "إدارة حزم Homebrew والمستودعات وتشغيل تشخيصات النظام."
+        },
+        "en": {
+          "displayName": "Homebrew Manager",
+          "summary": "Manage Homebrew packages, repositories, and perform system diagnostics"
+        },
+        "es": {
+          "displayName": "Homebrew",
+          "summary": "Administrar paquetes de Homebrew, repositorios y realizar diagnósticos del sistema."
+        },
+        "fr": {
+          "displayName": "Homebrew",
+          "summary": "Gérer les paquets Homebrew, les dépôts et effectuer des diagnostics système."
+        },
+        "ja": {
+          "displayName": "Homebrew",
+          "summary": "Homebrew パッケージ、リポジトリの管理、およびシステム診断の実行。"
+        },
+        "pt": {
+          "displayName": "Homebrew",
+          "summary": "Gerenciar pacotes do Homebrew, repositórios e executar diagnósticos do sistema."
+        },
+        "zh-Hans": {
+          "displayName": "Homebrew 管理",
+          "summary": "管理 Homebrew 包、软件仓库并执行系统诊断"
+        },
+        "zh-Hant": {
+          "displayName": "Homebrew 管理",
+          "summary": "管理 Homebrew 包、軟體倉庫並執行系統診斷"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "abbeca09ac12f0df9e5e068a7fcd64176cf4da097fdef163a078987838de8c36",
+        "size": 863309,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/homebrew.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "管理 Homebrew 包、库仓库并执行系统诊断",
+      "version": "1.0.1"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "monitoring",
+      "displayName": "IP 检测",
+      "id": "ip-overview",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "فحص IP",
+          "summary": "عرض IP الخروج وIP المحلي والموقع وجودة الشبكة."
+        },
+        "de": {
+          "displayName": "IP-Prüfung",
+          "summary": "Zeigt Ausgangs-IP, lokale IP, Standort und Netzwerkqualität an."
+        },
+        "en": {
+          "displayName": "IP Check",
+          "summary": "View egress IP, local IP, location, and network quality."
+        },
+        "es": {
+          "displayName": "Comprobación de IP",
+          "summary": "Consulta la IP de salida, la IP local, la ubicación y la calidad de red."
+        },
+        "fr": {
+          "displayName": "Vérification IP",
+          "summary": "Afficher l’IP de sortie, l’IP locale, la localisation et la qualité du réseau."
+        },
+        "ja": {
+          "displayName": "IPチェック",
+          "summary": "出口 IP、ローカル IP、所在地、ネットワーク品質を表示します。"
+        },
+        "ko": {
+          "displayName": "IP 확인",
+          "summary": "외부 IP, 로컬 IP, 위치 및 네트워크 품질을 확인합니다."
+        },
+        "pt": {
+          "displayName": "Verificação de IP",
+          "summary": "Veja IP de saída, IP local, localização e qualidade da rede."
+        },
+        "ru": {
+          "displayName": "Проверка IP",
+          "summary": "Просмотр исходящего IP, локального IP, местоположения и качества сети."
+        },
+        "zh-Hans": {
+          "displayName": "IP 检测",
+          "summary": "查看出口 IP、本地 IP、归属地与网络测速摘要"
+        },
+        "zh-Hant": {
+          "displayName": "IP 檢測",
+          "summary": "查看出口 IP、本地 IP、歸屬地與網路測速摘要"
+        }
+      },
+      "minimumHostVersion": "1.0.10",
+      "package": {
+        "sha256": "1ae3b651e15fa7a61a668faaa37e1fc75097e7d800011314da71aa2b3961e7a6",
+        "size": 1096425,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/ip-overview.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "查看出口 IP、本地 IP、归属地与网络测速摘要",
+      "version": "1.0.12"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "system",
+      "displayName": "阻止休眠",
+      "id": "keep-awake",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "منع السكون",
+          "summary": "يمنع سكون النظام؛ ويمكن اختياريًا إبقاء الشاشة قيد التشغيل."
+        },
+        "de": {
+          "displayName": "Wach halten",
+          "summary": "Verhindert den Leerlauf des Systems; optional bleibt das Display an."
+        },
+        "en": {
+          "displayName": "Keep Awake",
+          "summary": "Prevent idle system sleep; optionally keep the display on."
+        },
+        "es": {
+          "displayName": "Mantener activo",
+          "summary": "Evita la suspensión del sistema; opcionalmente mantiene la pantalla encendida."
+        },
+        "fr": {
+          "displayName": "Empêcher la suspension",
+          "summary": "Empêche la mise en veille du système ; option pour garder l’écran allumé."
+        },
+        "ja": {
+          "displayName": "スリープを防止",
+          "summary": "システムのアイドルスリープを防止。必要に応じてディスプレイもオンのままにできます。"
+        },
+        "ko": {
+          "displayName": "잠자기 방지",
+          "summary": "시스템 유휴 절전을 방지하며, 선택적으로 디스플레이를 켜 둡니다."
+        },
+        "pt": {
+          "displayName": "Manter ativo",
+          "summary": "Impede a suspensão ociosa do sistema; opcionalmente mantém a tela ligada."
+        },
+        "ru": {
+          "displayName": "Не давать уснуть",
+          "summary": "Предотвращает спящий режим системы; по желанию не даёт экрану гаснуть."
+        },
+        "zh-Hans": {
+          "displayName": "阻止休眠",
+          "summary": "阻止系统空闲休眠；可选保持屏幕常亮"
+        },
+        "zh-Hant": {
+          "displayName": "防止睡眠",
+          "summary": "阻止系統空閒休眠；可選保持螢幕常亮"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "d93ffd20652e3cb50335368d9b0ec39541530f24aa9af884cdd4246b8f24ecf6",
+        "size": 139497,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/keep-awake.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "阻止系统空闲休眠；可选保持屏幕常亮",
+      "version": "1.0.8"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "productivity",
+      "displayName": "启动项",
+      "id": "launch-control",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "عناصر التشغيل",
+          "summary": "عرض عناصر تشغيل launchctl وإدارتها."
+        },
+        "de": {
+          "displayName": "Startelemente",
+          "summary": "launchctl-Startelemente anzeigen und verwalten."
+        },
+        "en": {
+          "displayName": "Launch Items",
+          "summary": "View and manage launchctl launch items."
+        },
+        "es": {
+          "displayName": "Elementos de inicio",
+          "summary": "Ver y administrar elementos de inicio de launchctl."
+        },
+        "fr": {
+          "displayName": "Éléments de lancement",
+          "summary": "Affichez et gérez les éléments de lancement launchctl."
+        },
+        "ja": {
+          "displayName": "起動項目",
+          "summary": "launchctl 起動項目を表示および管理します。"
+        },
+        "ko": {
+          "displayName": "시작 항목",
+          "summary": "launchctl 시작 항목을 보고 관리합니다."
+        },
+        "pt": {
+          "displayName": "Itens de inicialização",
+          "summary": "Visualize e gerencie itens de inicialização do launchctl."
+        },
+        "ru": {
+          "displayName": "Элементы запуска",
+          "summary": "Просмотр элементов запуска launchctl и управление ими."
+        },
+        "zh-Hans": {
+          "displayName": "启动项",
+          "summary": "查看和管理 launchctl 启动项"
+        },
+        "zh-Hant": {
+          "displayName": "啟動項目",
+          "summary": "查看和管理 launchctl 啟動項"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "56559bee0ba00c1993adc391c7fb4e46a8bb355ba7ee0dca40a1f993566e893b",
+        "size": 574393,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/launch-control.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "查看和管理 launchctl 启动项",
+      "version": "1.0.8"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "system",
+      "displayName": "启动台",
+      "id": "launchpad",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "Launchpad",
+          "summary": "افتح شبكة التطبيقات من اختصار عام أو شريط القوائم، ثم ابحث وشغّل التطبيقات."
+        },
+        "de": {
+          "displayName": "Launchpad",
+          "summary": "Öffnet das App-Raster per globalem Kurzbefehl oder über die Menüleiste, sucht und startet Apps."
+        },
+        "en": {
+          "displayName": "Launchpad",
+          "summary": "Open the app grid from a global shortcut or the menu bar, then search and launch apps."
+        },
+        "es": {
+          "displayName": "Launchpad",
+          "summary": "Abre la cuadrícula de apps desde un atajo global o la barra de menús; busca y abre apps."
+        },
+        "fr": {
+          "displayName": "Launchpad",
+          "summary": "Ouvrez la grille d’apps avec un raccourci global ou la barre des menus, puis recherchez et lancez des apps."
+        },
+        "ja": {
+          "displayName": "Launchpad",
+          "summary": "グローバルショートカットまたはメニューバーからアプリグリッドを開き、検索して起動します。"
+        },
+        "ko": {
+          "displayName": "Launchpad",
+          "summary": "전역 단축키나 메뉴 막대에서 앱 그리드를 열고, 검색해 실행합니다."
+        },
+        "pt": {
+          "displayName": "Launchpad",
+          "summary": "Abra a grade de apps por um atalho global ou pela barra de menus, depois pesquise e abra apps."
+        },
+        "ru": {
+          "displayName": "Launchpad",
+          "summary": "Открывайте сетку приложений глобальным сочетанием клавиш или из строки меню, ищите и запускайте приложения."
+        },
+        "zh-Hans": {
+          "displayName": "启动台",
+          "summary": "用全局热键或菜单栏打开应用网格，搜索并启动。"
+        },
+        "zh-Hant": {
+          "displayName": "啟動台",
+          "summary": "用全域快速鍵或選單列打開 App 網格，搜尋並啟動。"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "a6774373471021dea21fe7947dbecb7666b8d7a4e42ffcb624f3bd0ebcc1c338",
+        "size": 987358,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/launchpad.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "用全局热键或菜单栏打开应用网格，搜索并启动。",
+      "version": "1.1.3"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "system",
+      "displayName": "锁定屏幕",
+      "id": "lock-screen",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "قفل الشاشة",
+          "summary": "قفل الشاشة على الفور ويتطلب فتح كلمة المرور."
+        },
+        "de": {
+          "displayName": "Bildschirm sperren",
+          "summary": "Sperren Sie den Bildschirm sofort und verlangen Sie eine Passwort-Entsperrung."
+        },
+        "en": {
+          "displayName": "Lock Screen",
+          "summary": "Lock the screen immediately and require password unlock."
+        },
+        "es": {
+          "displayName": "Bloquear pantalla",
+          "summary": "Bloquee la pantalla inmediatamente y solicite el desbloqueo con contraseña."
+        },
+        "fr": {
+          "displayName": "Verrouiller l’écran",
+          "summary": "Verrouillez l'écran immédiatement et exigez le déverrouillage par mot de passe."
+        },
+        "ja": {
+          "displayName": "画面をロック",
+          "summary": "すぐに画面をロックし、パスワードのロック解除を要求します。"
+        },
+        "ko": {
+          "displayName": "화면 잠그기",
+          "summary": "즉시 화면을 잠그고 비밀번호 잠금 해제를 요구합니다."
+        },
+        "pt": {
+          "displayName": "Bloquear tela",
+          "summary": "Bloqueie a tela imediatamente e exija o desbloqueio por senha."
+        },
+        "ru": {
+          "displayName": "Заблокировать экран",
+          "summary": "Немедленно заблокируйте экран и запросите разблокировку пароля."
+        },
+        "zh-Hans": {
+          "displayName": "锁定屏幕",
+          "summary": "一键立即锁定屏幕，进入密码解锁界面"
+        },
+        "zh-Hant": {
+          "displayName": "鎖定螢幕",
+          "summary": "一鍵立即鎖定螢幕，進入密碼解鎖界面"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "08f78d7683ff0ae45538823faec548bf54edfccb703abc6c78d5489ab3df1d7c",
+        "size": 57891,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/lock-screen.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "一键立即锁定屏幕，进入密码解锁界面",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": true,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "productivity",
+      "displayName": "隐藏菜单栏图标",
+      "id": "menu-bar-hidden",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إخفاء أيقونات شريط القوائم",
+          "summary": "إخفاء أيقونات شريط القائمة، وترتيبها عن طريق السحب، وفتح الأيقونات المخفية من اللوحة."
+        },
+        "de": {
+          "displayName": "Menüleistensymbole ausblenden",
+          "summary": "Menüleistensymbole ausblenden, durch Ziehen anordnen und ausgeblendete Symbole in einem Bedienfeld öffnen."
+        },
+        "en": {
+          "displayName": "Hide Menu Bar Icons",
+          "summary": "Hide menu bar icons, arrange them by dragging, and open hidden icons from a panel."
+        },
+        "es": {
+          "displayName": "Ocultar iconos de la barra de menús",
+          "summary": "Ocultar iconos de la barra de menú, organizarlos arrastrándolos y abrir iconos ocultos desde un panel."
+        },
+        "fr": {
+          "displayName": "Masquer les icônes de la barre des menus",
+          "summary": "Masquer les icônes de la barre de menus, les organiser en les faisant glisser et ouvrir les icônes masquées à partir d'un panneau."
+        },
+        "ja": {
+          "displayName": "メニューバーアイコンを隠す",
+          "summary": "メニュー バー アイコンを非表示にし、ドラッグして配置し、パネルから非表示のアイコンを開きます。"
+        },
+        "ko": {
+          "displayName": "메뉴 막대 아이콘 숨기기",
+          "summary": "메뉴 표시줄 아이콘을 숨기고 드래그하여 정렬하고 패널에서 숨겨진 아이콘을 엽니다."
+        },
+        "pt": {
+          "displayName": "Ocultar ícones da barra de menus",
+          "summary": "Oculte os ícones da barra de menu, organize-os arrastando e abra ícones ocultos em um painel."
+        },
+        "ru": {
+          "displayName": "Скрыть значки строки меню",
+          "summary": "Скрыть значки строки меню, упорядочить их путем перетаскивания и открыть скрытые значки на панели."
+        },
+        "zh-Hans": {
+          "displayName": "隐藏菜单栏图标",
+          "summary": "菜单栏图标隐藏功能的设置与弹窗界面"
+        },
+        "zh-Hant": {
+          "displayName": "隱藏選單列圖示",
+          "summary": "選單列圖標隱藏功能的設定與彈窗界面"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "969b963f1e43a1a78b8c3c69dcde18a9e926fb7b5f820171115dbe6a6c8dcc44",
+        "size": 822579,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/menu-bar-hidden.mactoolsplugin.zip"
+      },
+      "permissions": [
+        "accessibility",
+        "screen-recording"
+      ],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "菜单栏图标隐藏功能的设置与弹窗界面",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "audio",
+      "displayName": "麦克风静音",
+      "id": "microphone-mute",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "كتم الميكروفون",
+          "summary": "كتم صوت إدخال الميكروفون الافتراضي أو استعادته بسرعة."
+        },
+        "de": {
+          "displayName": "Mikrofon stummschalten",
+          "summary": "Schnell stummschalten oder den Standard-Mikrofoneingang wiederherstellen."
+        },
+        "en": {
+          "displayName": "Microphone Mute",
+          "summary": "Quickly mute or restore the default microphone input."
+        },
+        "es": {
+          "displayName": "Silenciar micrófono",
+          "summary": "Silencia o restablece rápidamente la entrada de micrófono predeterminada."
+        },
+        "fr": {
+          "displayName": "Couper le micro",
+          "summary": "Mettez rapidement en sourdine ou restaurez l'entrée microphone par défaut."
+        },
+        "ja": {
+          "displayName": "マイクをミュート",
+          "summary": "デフォルトのマイク入力を素早くミュートまたは復元します。"
+        },
+        "ko": {
+          "displayName": "마이크 음소거",
+          "summary": "기본 마이크 입력을 빠르게 음소거하거나 복원합니다."
+        },
+        "pt": {
+          "displayName": "Silenciar microfone",
+          "summary": "Silencie rapidamente ou restaure a entrada de microfone padrão."
+        },
+        "ru": {
+          "displayName": "Отключить микрофон",
+          "summary": "Быстро отключите звук или восстановите вход микрофона по умолчанию."
+        },
+        "zh-Hans": {
+          "displayName": "麦克风静音",
+          "summary": "快速静音或恢复默认麦克风输入"
+        },
+        "zh-Hant": {
+          "displayName": "麥克風靜音",
+          "summary": "快速靜音或恢復預設麥克風輸入"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "5524b9a03a805bfee193e626c7c847b6df510e927c5db45c930da41dcc6f0f15",
+        "size": 56841,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/microphone-mute.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "快速静音或恢复默认麦克风输入",
+      "version": "1.0.6"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "productivity",
+      "displayName": "鼠标增强",
+      "id": "mouse-enhancer",
+      "localizedMetadata": {
+        "en": {
+          "displayName": "Mouse Enhancer",
+          "summary": "Enhance mouse and trackpad controls."
+        },
+        "zh-Hans": {
+          "displayName": "鼠标增强",
+          "summary": "增强鼠标与触控板控制"
+        },
+        "zh-Hant": {
+          "displayName": "滑鼠增強",
+          "summary": "增強滑鼠與觸控板控制"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "fe064898f178b11eff7984f552267be323c832a6ecb8da41a3f994d607b4ebbc",
+        "size": 210039,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/mouse-enhancer.mactoolsplugin.zip"
+      },
+      "permissions": [
+        "accessibility",
+        "inputMonitoring"
+      ],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "增强鼠标与触控板控制",
+      "version": "1.0.3"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "夜览",
+      "id": "night-shift",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "Night Shift",
+          "summary": "قلل من الضوء الأزرق باستخدام ألوان الشاشة الأكثر دفئًا."
+        },
+        "de": {
+          "displayName": "Night Shift",
+          "summary": "Reduzieren Sie blaues Licht mit wärmeren Bildschirmfarben."
+        },
+        "en": {
+          "displayName": "Night Shift",
+          "summary": "Reduce blue light with warmer screen colors."
+        },
+        "es": {
+          "displayName": "Night Shift",
+          "summary": "Reduzca la luz azul con colores de pantalla más cálidos."
+        },
+        "fr": {
+          "displayName": "Night Shift",
+          "summary": "Réduisez la lumière bleue avec des couleurs d’écran plus chaudes."
+        },
+        "ja": {
+          "displayName": "Night Shift",
+          "summary": "暖色系の画面色でブルーライトを軽減します。"
+        },
+        "ko": {
+          "displayName": "Night Shift",
+          "summary": "따뜻한 화면 색상으로 블루라이트를 줄이세요."
+        },
+        "pt": {
+          "displayName": "Night Shift",
+          "summary": "Reduza a luz azul com cores de tela mais quentes."
+        },
+        "ru": {
+          "displayName": "Night Shift",
+          "summary": "Уменьшите синий свет с помощью более теплых цветов экрана."
+        },
+        "zh-Hans": {
+          "displayName": "夜览",
+          "summary": "降低蓝光，使屏幕颜色更暖"
+        },
+        "zh-Hant": {
+          "displayName": "Night Shift",
+          "summary": "降低藍光，使螢幕顏色更暖"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "9349d51e11f282301ecf62b06e92554802a567714b3bb85d101418c63a9d9fb2",
+        "size": 59692,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/night-shift.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "降低蓝光，使屏幕颜色更暖",
+      "version": "1.0.7"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "清洁模式",
+      "id": "physical-clean-mode",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "وضع التنظيف",
+          "summary": "تحويل الشاشة إلى اللون الأسود وتعطيل إدخال لوحة المفاتيح مؤقتًا."
+        },
+        "de": {
+          "displayName": "Reinigungsmodus",
+          "summary": "Schalten Sie den Bildschirm schwarz und deaktivieren Sie vorübergehend die Tastatureingabe."
+        },
+        "en": {
+          "displayName": "Clean Mode",
+          "summary": "Turn the screen black and temporarily disable keyboard input."
+        },
+        "es": {
+          "displayName": "Modo limpieza",
+          "summary": "Ponga la pantalla en negro y desactive temporalmente la entrada del teclado."
+        },
+        "fr": {
+          "displayName": "Mode nettoyage",
+          "summary": "Rendez l'écran noir et désactivez temporairement la saisie au clavier."
+        },
+        "ja": {
+          "displayName": "クリーニングモード",
+          "summary": "画面を黒くし、キーボード入力を一時的に無効にします。"
+        },
+        "ko": {
+          "displayName": "청소 모드",
+          "summary": "화면을 검게 만들고 키보드 입력을 일시적으로 비활성화합니다."
+        },
+        "pt": {
+          "displayName": "Modo de limpeza",
+          "summary": "Deixe a tela preta e desative temporariamente a entrada do teclado."
+        },
+        "ru": {
+          "displayName": "Режим очистки",
+          "summary": "Сделайте экран черным и временно отключите ввод с клавиатуры."
+        },
+        "zh-Hans": {
+          "displayName": "清洁模式",
+          "summary": "屏幕全黑并临时禁用键盘输入"
+        },
+        "zh-Hant": {
+          "displayName": "清潔模式",
+          "summary": "螢幕全黑並臨時禁用鍵盤輸入"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "a98d562e613500faa80119e2a502bb0a0f77440c1e64673dc6c1cbce346bc61e",
+        "size": 199453,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/physical-clean-mode.mactoolsplugin.zip"
+      },
+      "permissions": [
+        "accessibility"
+      ],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "屏幕全黑并临时禁用键盘输入",
+      "version": "1.0.8"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "productivity",
+      "displayName": "退出应用",
+      "id": "quit-apps",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إنهاء التطبيقات",
+          "summary": "اختر إنهاء التطبيقات قيد التشغيل، أو قم بإنهاءها جميعًا مرة واحدة."
+        },
+        "de": {
+          "displayName": "Apps beenden",
+          "summary": "Wählen Sie laufende Apps aus, die Sie beenden möchten, oder beenden Sie alle auf einmal."
+        },
+        "en": {
+          "displayName": "Quit Apps",
+          "summary": "Choose running apps to quit, or quit them all at once."
+        },
+        "es": {
+          "displayName": "Salir de apps",
+          "summary": "Elija aplicaciones en ejecución para cerrar o ciérrelas todas a la vez."
+        },
+        "fr": {
+          "displayName": "Quitter les apps",
+          "summary": "Choisissez les applications en cours d’exécution à quitter ou quittez-les toutes en même temps."
+        },
+        "ja": {
+          "displayName": "アプリを終了",
+          "summary": "実行中のアプリを選択して終了するか、すべてを一度に終了します。"
+        },
+        "ko": {
+          "displayName": "앱 종료",
+          "summary": "실행 중인 앱을 선택하여 종료하거나 한 번에 모두 종료하세요."
+        },
+        "pt": {
+          "displayName": "Encerrar apps",
+          "summary": "Escolha os aplicativos em execução para encerrar ou feche todos de uma vez."
+        },
+        "ru": {
+          "displayName": "Закрыть приложения",
+          "summary": "Выберите запущенные приложения, которые хотите закрыть, или закройте их все сразу."
+        },
+        "zh-Hans": {
+          "displayName": "退出应用",
+          "summary": "选择并退出正在运行的应用，或一键退出全部"
+        },
+        "zh-Hant": {
+          "displayName": "結束 App",
+          "summary": "選擇並退出正在運行的App，或一鍵退出全部"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "7339891d2fb56ae20f654f029d2ae00dd6607c797a36232bfe85903ed31bcbe3",
+        "size": 186516,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/quit-apps.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "选择并退出正在运行的应用，或一键退出全部",
+      "version": "1.0.6"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": false
+      },
+      "category": "productivity",
+      "displayName": "右键工具",
+      "id": "right-click",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "النقر بزر الماوس الأيمن",
+          "summary": "أضف إجراءات قائمة السياق Finder السريعة للمجلدات والمسارات."
+        },
+        "de": {
+          "displayName": "Rechtsklick",
+          "summary": "Fügen Sie schnelle Finder-Kontextmenüaktionen für Ordner und Pfade hinzu."
+        },
+        "en": {
+          "displayName": "Right Click",
+          "summary": "Add quick Finder context menu actions for folders and paths."
+        },
+        "es": {
+          "displayName": "Clic derecho",
+          "summary": "Agregue acciones rápidas del menú contextual Finder para carpetas y rutas."
+        },
+        "fr": {
+          "displayName": "Clic droit",
+          "summary": "Ajoutez des actions rapides de menu contextuel Finder pour les dossiers et les chemins."
+        },
+        "ja": {
+          "displayName": "右クリック",
+          "summary": "フォルダーとパスに対するクイック Finder コンテキスト メニュー アクションを追加します。"
+        },
+        "ko": {
+          "displayName": "오른쪽 클릭",
+          "summary": "폴더 및 경로에 대한 빠른 Finder 컨텍스트 메뉴 작업을 추가합니다."
+        },
+        "pt": {
+          "displayName": "Clique direito",
+          "summary": "Adicione ações rápidas do menu de contexto Finder para pastas e caminhos."
+        },
+        "ru": {
+          "displayName": "Правый клик",
+          "summary": "Добавьте быстрые действия контекстного меню Finder для папок и путей."
+        },
+        "zh-Hans": {
+          "displayName": "右键工具",
+          "summary": "为 Finder 右键菜单添加新建文件夹和路径复制"
+        },
+        "zh-Hant": {
+          "displayName": "右鍵工具",
+          "summary": "為 Finder 右鍵菜單添加新建資料夾和路徑複製"
+        }
+      },
+      "minimumHostVersion": "1.0.21",
+      "package": {
+        "sha256": "016d8bd684d5318acb472bbbf6721b8a69480bd597cae1323785a19c2b0f70b2",
+        "size": 216109,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/right-click.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "为 Finder 右键菜单添加新建文件夹和路径复制",
+      "version": "1.0.5"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "display",
+      "displayName": "台前调度",
+      "id": "stage-manager",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "Stage Manager",
+          "summary": "قم بتشغيل Stage Manager لتركيز النافذة الحالية وإبقاء النوافذ الأخرى جانبًا."
+        },
+        "de": {
+          "displayName": "Stage Manager",
+          "summary": "Aktivieren Sie Stage Manager, um das aktuelle Fenster zu fokussieren und andere auf der Seite zu halten."
+        },
+        "en": {
+          "displayName": "Stage Manager",
+          "summary": "Turn on Stage Manager to focus the current window and keep others on the side."
+        },
+        "es": {
+          "displayName": "Organizador Visual",
+          "summary": "Active Stage Manager para enfocar la ventana actual y mantener las demás a un lado."
+        },
+        "fr": {
+          "displayName": "Stage Manager",
+          "summary": "Activez Stage Manager pour concentrer la fenêtre actuelle et garder les autres de côté."
+        },
+        "ja": {
+          "displayName": "ステージマネージャ",
+          "summary": "Stage Manager をオンにすると、現在のウィンドウに焦点が当てられ、他のウィンドウは脇に表示されます。"
+        },
+        "ko": {
+          "displayName": "스테이지 매니저",
+          "summary": "현재 창에 초점을 맞추고 다른 창은 옆에 두려면 Stage Manager을 켜세요."
+        },
+        "pt": {
+          "displayName": "Organizador Visual",
+          "summary": "Ative Stage Manager para focar a janela atual e manter outras ao lado."
+        },
+        "ru": {
+          "displayName": "Stage Manager",
+          "summary": "Включите Stage Manager, чтобы сфокусировать текущее окно и оставить другие в стороне."
+        },
+        "zh-Hans": {
+          "displayName": "台前调度",
+          "summary": "开启台前调度，集中显示当前窗口并把其他窗口收纳到侧边"
+        },
+        "zh-Hant": {
+          "displayName": "幕前調度",
+          "summary": "開啟幕前調度，集中顯示當前窗口並把其他窗口收納到側邊"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "57c137b2b1bf2cf56301028aee6a028a26453caaf6b8aba334a86e2401e5e8bf",
+        "size": 66357,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/stage-manager.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "开启台前调度，集中显示当前窗口并把其他窗口收纳到侧边",
+      "version": "1.0.3"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": false,
+        "primaryPanel": true
+      },
+      "category": "audio",
+      "displayName": "系统静音",
+      "id": "system-mute",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "كتم صوت النظام",
+          "summary": "كتم صوت إخراج صوت النظام أو استعادته بسرعة."
+        },
+        "de": {
+          "displayName": "System stummschalten",
+          "summary": "System-Audioausgabe schnell stummschalten oder wiederherstellen."
+        },
+        "en": {
+          "displayName": "System Mute",
+          "summary": "Quickly mute or restore system audio output."
+        },
+        "es": {
+          "displayName": "Silenciar sistema",
+          "summary": "Silencia o restaura rápidamente la salida de audio del sistema."
+        },
+        "fr": {
+          "displayName": "Couper le son du système",
+          "summary": "Mettre ou restaurer rapidement la sortie audio du système."
+        },
+        "ja": {
+          "displayName": "システムをミュート",
+          "summary": "システムオーディオ出力を素早くミュートまたは復元します。"
+        },
+        "ko": {
+          "displayName": "시스템 음소거",
+          "summary": "시스템 오디오 출력을 빠르게 음소거하거나 복원합니다."
+        },
+        "pt": {
+          "displayName": "Silenciar sistema",
+          "summary": "Silencie ou restaure rapidamente a saída de áudio do sistema."
+        },
+        "ru": {
+          "displayName": "Отключить звук системы",
+          "summary": "Быстро отключить или восстановить звук системы."
+        },
+        "zh-Hans": {
+          "displayName": "系统静音",
+          "summary": "快速静音或恢复系统音频输出"
+        },
+        "zh-Hant": {
+          "displayName": "系統靜音",
+          "summary": "快速靜音或恢復系統音頻輸出"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "1fe2ae69d325d77ed292798c3745653931a692edfd8ac081922bca049b0ee056",
+        "size": 56427,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/system-mute.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "快速静音或恢复系统音频输出",
+      "version": "1.0.5"
+    },
+    {
+      "capabilities": {
+        "componentPanel": true,
+        "configuration": true,
+        "primaryPanel": false
+      },
+      "category": "monitoring",
+      "displayName": "系统状态",
+      "id": "system-status",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "حالة النظام",
+          "summary": "عرض حالة النظام المباشرة."
+        },
+        "de": {
+          "displayName": "Systemstatus",
+          "summary": "Live-Systemstatus anzeigen."
+        },
+        "en": {
+          "displayName": "System Status",
+          "summary": "View live system status."
+        },
+        "es": {
+          "displayName": "Estado del sistema",
+          "summary": "Ver el estado del sistema en vivo."
+        },
+        "fr": {
+          "displayName": "État du système",
+          "summary": "Afficher l'état du système en direct."
+        },
+        "ja": {
+          "displayName": "システム状況",
+          "summary": "ライブ システム ステータスを表示します。"
+        },
+        "ko": {
+          "displayName": "시스템 상태",
+          "summary": "실시간 시스템 상태를 확인하세요."
+        },
+        "pt": {
+          "displayName": "Status do sistema",
+          "summary": "Ver o status do sistema ao vivo."
+        },
+        "ru": {
+          "displayName": "Состояние системы",
+          "summary": "Просмотр текущего состояния системы."
+        },
+        "zh-Hans": {
+          "displayName": "系统状态",
+          "summary": "实时查看系统状态"
+        },
+        "zh-Hant": {
+          "displayName": "系統狀態",
+          "summary": "實時查看系統狀態"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "b8a55062a55b6a5757d00e3be72f8341add7a1ad9b46c4acecd86c2521e7fb08",
+        "size": 693348,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/system-status.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "实时查看系统状态",
+      "version": "1.0.13"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "productivity",
+      "displayName": "翻译",
+      "id": "translator",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "المترجم",
+          "summary": "ترجم النص المحدد أو مناطق لقطة الشاشة باستخدام اختصارات."
+        },
+        "de": {
+          "displayName": "Übersetzer",
+          "summary": "Ausgewählten Text oder Screenshot-Bereiche per Kurzbefehl übersetzen."
+        },
+        "en": {
+          "displayName": "Translator",
+          "summary": "Translate selected text or screenshot regions with shortcuts."
+        },
+        "es": {
+          "displayName": "Traductor",
+          "summary": "Traduce texto seleccionado o regiones de captura con atajos."
+        },
+        "fr": {
+          "displayName": "Traducteur",
+          "summary": "Traduit le texte sélectionné ou des zones de capture d’écran avec des raccourcis."
+        },
+        "ja": {
+          "displayName": "翻訳",
+          "summary": "選択したテキストやスクリーンショット範囲をショートカットで翻訳します。"
+        },
+        "ko": {
+          "displayName": "번역",
+          "summary": "선택한 텍스트나 스크린샷 영역을 단축키로 번역합니다."
+        },
+        "pt": {
+          "displayName": "Tradutor",
+          "summary": "Traduz texto selecionado ou regiões de captura de tela com atalhos."
+        },
+        "ru": {
+          "displayName": "Переводчик",
+          "summary": "Перевод выбранного текста или области снимка экрана по горячим клавишам."
+        },
+        "zh-Hans": {
+          "displayName": "翻译",
+          "summary": "划词与截图快捷键翻译"
+        },
+        "zh-Hant": {
+          "displayName": "翻譯",
+          "summary": "透過快速鍵翻譯選取文字或截圖區域。"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "7563077bfb05c5e1e6beacc18b47e808a406c3b9bf0ff1662416b410c831f83c",
+        "size": 795251,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/translator.mactoolsplugin.zip"
+      },
+      "permissions": [
+        "accessibility",
+        "automation",
+        "screen-recording"
+      ],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "划词与截图快捷键翻译",
+      "version": "0.1.8"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": false
+      },
+      "category": "productivity",
+      "displayName": "窗口切换",
+      "id": "window-switcher",
+      "localizedMetadata": {
+        "en": {
+          "displayName": "Window Switcher",
+          "summary": "Quickly switch between running windows with a configurable shortcut."
+        },
+        "zh-Hans": {
+          "displayName": "窗口切换",
+          "summary": "用可配置快捷键快速切换正在运行的窗口"
+        },
+        "zh-Hant": {
+          "displayName": "視窗切換",
+          "summary": "用可設定快速鍵快速切換正在執行的視窗"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "0798639b377db6185888b30164a67f423346b2e44b11bfec2c4b3d92d071f8fa",
+        "size": 450322,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/window-switcher.mactoolsplugin.zip"
+      },
+      "permissions": [
+        "accessibility"
+      ],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "用可配置快捷键快速切换正在运行的窗口",
+      "version": "1.0.1"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "storage",
+      "displayName": "Xcode 清理",
+      "id": "xcode-clean",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "تنظيف Xcode",
+          "summary": "تنظيف DerivedData ودعم الأجهزة والأرشيفات وذاكرات Xcode المؤقتة حسب الفئة."
+        },
+        "de": {
+          "displayName": "Xcode-Bereinigung",
+          "summary": "Xcode-DerivedData, Geräteunterstützung, Archive und Caches nach Kategorie bereinigen."
+        },
+        "en": {
+          "displayName": "Xcode Cleanup",
+          "summary": "Clean Xcode DerivedData, device support files, archives, and caches by category."
+        },
+        "es": {
+          "displayName": "Limpieza de Xcode",
+          "summary": "Limpia DerivedData, soporte de dispositivos, archivos y cachés de Xcode por categoría."
+        },
+        "fr": {
+          "displayName": "Nettoyage Xcode",
+          "summary": "Nettoie DerivedData, la prise en charge d’appareils, les archives et les caches Xcode par catégorie."
+        },
+        "ja": {
+          "displayName": "Xcode クリーンアップ",
+          "summary": "Xcode の DerivedData、デバイスサポート、アーカイブ、キャッシュをカテゴリ別に整理します。"
+        },
+        "ko": {
+          "displayName": "Xcode 정리",
+          "summary": "Xcode DerivedData, 기기 지원 파일, 아카이브 및 캐시를 분류별로 정리합니다."
+        },
+        "pt": {
+          "displayName": "Limpeza do Xcode",
+          "summary": "Limpa DerivedData, suporte de dispositivos, arquivos e caches do Xcode por categoria."
+        },
+        "ru": {
+          "displayName": "Очистка Xcode",
+          "summary": "Очищает DerivedData, файлы поддержки устройств, архивы и кэши Xcode по категориям."
+        },
+        "zh-Hans": {
+          "displayName": "Xcode 清理",
+          "summary": "分类清理 Xcode DerivedData、设备支持、归档与缓存"
+        },
+        "zh-Hant": {
+          "displayName": "Xcode 清理",
+          "summary": "分類清理 Xcode DerivedData、裝置支援、封存與快取"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "c02cb218f1faed36de9c391101384064ceb5324b1f4f351f4ea0f7c912ef7269",
+        "size": 484245,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/xcode-clean.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "分类清理 Xcode DerivedData、设备支持、归档与缓存",
+      "version": "1.0.4"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "configuration": true,
+        "primaryPanel": true
+      },
+      "category": "productivity",
+      "displayName": "zsh 配置",
+      "id": "zsh-config",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "إعدادات zsh",
+          "summary": "حرّر ~/.zshrc وملفات إعداد zsh الأخرى بسرعة، مع تحرير مدمج ومقتطفات شائعة."
+        },
+        "de": {
+          "displayName": "zsh-Konfig.",
+          "summary": "~/.zshrc und andere zsh-Konfigurationsdateien mit integriertem Editor und häufigen Snippets bearbeiten."
+        },
+        "en": {
+          "displayName": "zsh Config",
+          "summary": "Edit ~/.zshrc and other zsh config files quickly, with inline editing and common snippets."
+        },
+        "es": {
+          "displayName": "Config. zsh",
+          "summary": "Edita ~/.zshrc y otros archivos de config. zsh con edición integrada y fragmentos comunes."
+        },
+        "fr": {
+          "displayName": "Config. zsh",
+          "summary": "Modifiez ~/.zshrc et d’autres fichiers de config. zsh avec édition intégrée et extraits courants."
+        },
+        "ja": {
+          "displayName": "zsh 設定",
+          "summary": "~/.zshrc などの zsh 設定ファイルを、内蔵エディタとよく使うスニペットですばやく編集します。"
+        },
+        "ko": {
+          "displayName": "zsh 설정",
+          "summary": "내장 편집기와 자주 쓰는 스니펫으로 ~/.zshrc 등 zsh 설정 파일을 빠르게 편집합니다."
+        },
+        "pt": {
+          "displayName": "Config. zsh",
+          "summary": "Edite ~/.zshrc e outros arquivos de config. zsh com edição integrada e trechos comuns."
+        },
+        "ru": {
+          "displayName": "Настройки zsh",
+          "summary": "Быстро редактируйте ~/.zshrc и другие файлы zsh со встроенным редактором и типовыми фрагментами."
+        },
+        "zh-Hans": {
+          "displayName": "zsh 配置",
+          "summary": "快速编辑 ~/.zshrc 等 zsh 配置文件，支持内联编辑和常用片段快速插入"
+        },
+        "zh-Hant": {
+          "displayName": "zsh 設定",
+          "summary": "快速編輯 ~/.zshrc 等 zsh 設定檔，支援內嵌編輯與常用片段快速插入"
+        }
+      },
+      "minimumHostVersion": "1.0.2",
+      "package": {
+        "sha256": "aa57743a7e5d0286535d2431b950061397429a01de28e0d62b353470eaa5d579",
+        "size": 478276,
+        "url": "https://github.com/ggbond268/MacTools/releases/download/plugins-1.1.0/zsh-config.mactoolsplugin.zip"
+      },
+      "permissions": [],
+      "pluginKitVersion": 3,
+      "releaseChannel": null,
+      "releaseNotesURL": "https://github.com/ggbond268/MacTools/releases/tag/plugins-1.1.0",
+      "summary": "快速编辑 ~/.zshrc 等 zsh 配置文件，支持内联编辑和常用片段快速插入",
+      "version": "1.0.5"
+    }
+  ],
+  "revoked": [],
+  "schemaVersion": 1,
+  "signature": {
+    "algorithm": "ed25519",
+    "value": "1cla7Ed6CZqAw64TMx5bdd891bSfXEwTC6zP5EIR4qekpK9EmnEJbSzat+FThKHkisojycZifUP9YikOm4OPCA=="
+  }
+}

@@ -9882,13 +9882,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "名称 A → Z"
+            "value": "名称（升序）"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "名稱 A → Z"
+            "value": "名稱（遞增）"
           }
         },
         "de": {
@@ -9912,13 +9912,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "名前 A → Z"
+            "value": "名前順（昇順）"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이름 A → Z"
+            "value": "이름순 (오름차순)"
           }
         },
         "pt": {
@@ -9930,13 +9930,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Имя A → Z"
+            "value": "Имя (по возрастанию)"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاسم A → Z"
+            "value": "الاسم (تصاعدي)"
           }
         }
       }
@@ -9953,13 +9953,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "名称 Z → A"
+            "value": "名称（降序）"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "名稱 Z → A"
+            "value": "名稱（遞減）"
           }
         },
         "de": {
@@ -9983,13 +9983,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "名前 Z → A"
+            "value": "名前順（降順）"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이름 Z → A"
+            "value": "이름순 (내림차순)"
           }
         },
         "pt": {
@@ -10001,13 +10001,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Имя Z → A"
+            "value": "Имя (по убыванию)"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاسم Z → A"
+            "value": "الاسم (تنازلي)"
           }
         }
       }

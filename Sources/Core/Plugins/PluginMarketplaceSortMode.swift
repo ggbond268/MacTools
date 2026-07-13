@@ -1,4 +1,5 @@
 import Foundation
+import MacToolsPluginKit
 
 /// Display-only sort modes for the plugin marketplace list.
 /// Does not affect menu-bar feature order or installed-plugin preferences.
@@ -21,9 +22,9 @@ enum PluginMarketplaceSortMode: String, CaseIterable, Identifiable {
         case .installedFirst:
             return AppL10n.plugins("plugin.marketplace.sort.installedFirst", defaultValue: "已安装优先")
         case .nameAscending:
-            return AppL10n.plugins("plugin.marketplace.sort.nameAscending", defaultValue: "名称 A → Z")
+            return AppL10n.plugins("plugin.marketplace.sort.nameAscending", defaultValue: "名称（升序）")
         case .nameDescending:
-            return AppL10n.plugins("plugin.marketplace.sort.nameDescending", defaultValue: "名称 Z → A")
+            return AppL10n.plugins("plugin.marketplace.sort.nameDescending", defaultValue: "名称（降序）")
         }
     }
 
@@ -65,17 +66,19 @@ enum PluginMarketplaceSortMode: String, CaseIterable, Identifiable {
 
     static func sorted(
         _ items: [PluginManagementItem],
-        by mode: PluginMarketplaceSortMode
+        by mode: PluginMarketplaceSortMode,
+        locale: Locale = PluginRuntimeLocalization.locale
     ) -> [PluginManagementItem] {
         items.sorted { lhs, rhs in
-            compare(lhs, rhs, mode: mode) == .orderedAscending
+            compare(lhs, rhs, mode: mode, locale: locale) == .orderedAscending
         }
     }
 
     static func compare(
         _ lhs: PluginManagementItem,
         _ rhs: PluginManagementItem,
-        mode: PluginMarketplaceSortMode
+        mode: PluginMarketplaceSortMode,
+        locale: Locale = PluginRuntimeLocalization.locale
     ) -> ComparisonResult {
         switch mode {
         case .notInstalledFirst, .installedFirst:
@@ -84,11 +87,11 @@ enum PluginMarketplaceSortMode: String, CaseIterable, Identifiable {
             if leftRank != rightRank {
                 return leftRank < rightRank ? .orderedAscending : .orderedDescending
             }
-            return compareByName(lhs, rhs, ascending: true)
+            return compareByName(lhs, rhs, ascending: true, locale: locale)
         case .nameAscending:
-            return compareByName(lhs, rhs, ascending: true)
+            return compareByName(lhs, rhs, ascending: true, locale: locale)
         case .nameDescending:
-            return compareByName(lhs, rhs, ascending: false)
+            return compareByName(lhs, rhs, ascending: false, locale: locale)
         }
     }
 
@@ -110,14 +113,22 @@ enum PluginMarketplaceSortMode: String, CaseIterable, Identifiable {
     private static func compareByName(
         _ lhs: PluginManagementItem,
         _ rhs: PluginManagementItem,
-        ascending: Bool
+        ascending: Bool,
+        locale: Locale
     ) -> ComparisonResult {
-        let titleOrder = lhs.title.localizedStandardCompare(rhs.title)
+        let titleOrder = lhs.title.compare(
+            rhs.title,
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive, .numeric],
+            range: nil,
+            locale: locale
+        )
         if titleOrder != .orderedSame {
             return ascending ? titleOrder : inverted(titleOrder)
         }
 
-        let idOrder = lhs.id.localizedStandardCompare(rhs.id)
+        // IDs are stable, non-localized identifiers. A literal comparison ensures the
+        // list has a deterministic order when localized titles compare as equal.
+        let idOrder = lhs.id.compare(rhs.id, options: .literal)
         return ascending ? idOrder : inverted(idOrder)
     }
 

@@ -59,7 +59,7 @@
 | Fix Damaged Apps | Remove quarantine attributes to resolve "damaged and can't be opened" prompts by selecting a .app in a file panel and running the fix with administrator privileges. |
 | Quit Apps | Select and quit running apps, or quit all at once; reverse selection helps quickly choose the target set. |
 | zsh Config | View and edit zsh configuration files such as .zshrc and .zshenv inside the app, with syntax highlighting, common snippets, and automatic backup before saving. |
-| Plugins & Settings | Install, update, and batch-update plugins in the plugin marketplace (filter by category/search; sort by not-installed first, installed first, or name); manage permissions, shortcuts, and plugin-specific settings; and export/import portable app preferences, plugin display settings, and shortcut customizations as JSON. |
+| Plugins & Settings | Install, update, and batch-update plugins in the plugin marketplace (filter by category/search; sort by not-installed first, installed first, or name using the selected app language); manage permissions, shortcuts, and plugin-specific settings; and export/import portable app preferences, plugin display settings, and shortcut customizations as JSON. |
 | Menu Bar Icon Customization | Use local images or lightweight GIF/MP4 animations as the menu bar icon, download animated icons from the online gallery, remove backgrounds, adjust playback speed, restore the default icon, and preview every source with the same standard icon height and content inset as the default. |
 | Localization | Follow the system language by default, or choose a fixed app language in Settings > General > Appearance; the picker shows each language in the system language and its native spelling. |
 

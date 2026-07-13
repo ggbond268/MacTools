@@ -148,6 +148,65 @@ final class PluginMarketplaceSortModeTests: XCTestCase {
         )
     }
 
+    func testNameSortUsesSimplifiedChineseCollation() {
+        let items = [
+            makeItem(id: "calendar", title: "日历", state: .available),
+            makeItem(id: "fan-control", title: "风扇控制", state: .available),
+            makeItem(id: "stage-manager", title: "台前调度", state: .available),
+            makeItem(id: "right-click", title: "右键工具", state: .available),
+            makeItem(id: "battery-limit", title: "电池充电上限", state: .available),
+            makeItem(id: "auto-hide-dock", title: "自动隐藏程序坞", state: .available)
+        ]
+        let locale = Locale(identifier: "zh-Hans")
+
+        XCTAssertEqual(
+            PluginMarketplaceSortMode.sorted(items, by: .nameAscending, locale: locale).map(\.id),
+            ["battery-limit", "fan-control", "calendar", "stage-manager", "right-click", "auto-hide-dock"]
+        )
+        XCTAssertEqual(
+            PluginMarketplaceSortMode.sorted(items, by: .nameDescending, locale: locale).map(\.id),
+            ["auto-hide-dock", "right-click", "stage-manager", "calendar", "fan-control", "battery-limit"]
+        )
+    }
+
+    func testNameSortUsesJapaneseCollation() {
+        let items = [
+            makeItem(id: "right-click", title: "右クリック", state: .available),
+            makeItem(id: "lock-screen", title: "画面をロック", state: .available),
+            makeItem(id: "fix-damaged-app", title: "破損したアプリを修復", state: .available),
+            makeItem(id: "launch-control", title: "起動項目", state: .available),
+            makeItem(id: "translator", title: "翻訳", state: .available)
+        ]
+
+        XCTAssertEqual(
+            PluginMarketplaceSortMode.sorted(items, by: .nameAscending, locale: Locale(identifier: "ja")).map(\.id),
+            ["right-click", "lock-screen", "launch-control", "fix-damaged-app", "translator"]
+        )
+    }
+
+    func testNameSortSupportsEveryFixedAppLanguage() {
+        let items = [
+            makeItem(id: "calendar", title: "Calendar", state: .available),
+            makeItem(id: "eject-disk", title: "Éjecter", state: .available),
+            makeItem(id: "appearance", title: "Ändern", state: .available),
+            makeItem(id: "battery-limit", title: "Батарея", state: .available),
+            makeItem(id: "chinese-calendar", title: "日历", state: .available),
+            makeItem(id: "japanese-calendar", title: "カレンダー", state: .available),
+            makeItem(id: "korean-calendar", title: "달력", state: .available),
+            makeItem(id: "arabic-calendar", title: "التقويم", state: .available)
+        ]
+        let fixedLanguages = AppLanguagePreference.allCases.filter { $0 != .system }
+
+        for language in fixedLanguages {
+            let locale = Locale(identifier: language.rawValue)
+            let ascending = PluginMarketplaceSortMode.sorted(items, by: .nameAscending, locale: locale).map(\.id)
+            let descending = PluginMarketplaceSortMode.sorted(items, by: .nameDescending, locale: locale).map(\.id)
+
+            XCTAssertEqual(Set(ascending), Set(items.map(\.id)), "Missing item for \(language.rawValue)")
+            XCTAssertEqual(descending, ascending.reversed(), "Descending order for \(language.rawValue)")
+        }
+    }
+
     func testNameSortUsesIDAsStableTieBreaker() {
         let items = [
             makeItem(id: "plugin-b", title: "Same", state: .available),
