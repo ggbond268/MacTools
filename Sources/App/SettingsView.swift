@@ -299,7 +299,7 @@ private struct PreferencesBackupSettingsRow: View {
             defer { isPreparingImport = false }
 
             do {
-                let backup = try PreferencesBackup.decodeJSON(Data(contentsOf: url))
+                let backup = try await PreferencesBackup.decodeJSON(contentsOf: url)
                 await pluginHost.refreshPluginCatalog()
                 pendingImport = PendingPreferencesImport(
                     backup: backup,
@@ -363,6 +363,12 @@ private struct PreferencesBackupSettingsRow: View {
             return AppL10n.preferencesBackup(
                 "preferencesBackup.error.invalidApplicationPreferences",
                 defaultValue: "备份中的应用偏好设置无效。"
+            )
+        case let .fileTooLarge(maximumBytes):
+            return AppL10n.preferencesBackupFormat(
+                "preferencesBackup.error.fileTooLarge",
+                defaultValue: "偏好设置备份不能超过 %d MB。",
+                maximumBytes / (1024 * 1024)
             )
         case nil:
             return error.localizedDescription

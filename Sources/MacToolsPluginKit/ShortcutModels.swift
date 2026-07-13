@@ -14,6 +14,7 @@ public struct ShortcutModifiers: OptionSet, Hashable, Codable, Sendable {
     public static let control = ShortcutModifiers(rawValue: 1 << 1)
     public static let option = ShortcutModifiers(rawValue: 1 << 2)
     public static let shift = ShortcutModifiers(rawValue: 1 << 3)
+    public static let supported: ShortcutModifiers = [.command, .control, .option, .shift]
 
     public init(rawValue: UInt8) {
         self.rawValue = rawValue
@@ -21,7 +22,16 @@ public struct ShortcutModifiers: OptionSet, Hashable, Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        self.init(rawValue: try container.decode(UInt8.self))
+        let rawValue = try container.decode(UInt8.self)
+        let modifiers = Self(rawValue: rawValue)
+        guard modifiers.containsOnlySupportedValues else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Shortcut modifiers contain unsupported bits."
+            )
+        }
+
+        self = modifiers
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -49,6 +59,10 @@ public struct ShortcutModifiers: OptionSet, Hashable, Codable, Sendable {
         }
 
         return flags
+    }
+
+    public var containsOnlySupportedValues: Bool {
+        (rawValue & Self.supported.rawValue) == rawValue
     }
 
     public var symbolString: String {
@@ -84,11 +98,13 @@ public struct ShortcutBinding: Hashable, Codable, Sendable {
     }
 
     public var isValid: Bool {
-        !modifiers.isEmpty && !ShortcutKeyCode.isModifier(keyCode)
+        !modifiers.isEmpty
+            && modifiers.containsOnlySupportedValues
+            && !ShortcutKeyCode.isModifier(keyCode)
     }
 }
 
-public enum ShortcutCustomization: Equatable, Codable {
+public enum ShortcutCustomization: Equatable, Codable, Sendable {
     case inheritDefault
     case custom(ShortcutBinding)
     case cleared

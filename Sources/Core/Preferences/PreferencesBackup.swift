@@ -1,10 +1,11 @@
 import Foundation
 import MacToolsPluginKit
 
-struct PreferencesBackup: Codable, Equatable {
+struct PreferencesBackup: Codable, Equatable, Sendable {
     static let currentFormatVersion = 1
+    static let maximumFileSize = 1 * 1024 * 1024
 
-    struct ApplicationPreferences: Codable, Equatable {
+    struct ApplicationPreferences: Codable, Equatable, Sendable {
         let appearancePreference: String
         let languagePreference: String
         let menuBarClickBehavior: String
@@ -58,9 +59,45 @@ struct PreferencesBackup: Codable, Equatable {
         return backup
     }
 
+    static func decodeJSON(
+        contentsOf url: URL,
+        maximumFileSize: Int = maximumFileSize
+    ) async throws -> PreferencesBackup {
+        try await Task.detached(priority: .userInitiated) {
+            let data = try Self.readFile(at: url, maximumSize: maximumFileSize)
+            return try Self.decodeJSON(data)
+        }.value
+    }
+
+    private static func readFile(at url: URL, maximumSize: Int) throws -> Data {
+        precondition(maximumSize > 0)
+
+        let file = try FileHandle(forReadingFrom: url)
+        defer { try? file.close() }
+
+        var data = Data()
+        data.reserveCapacity(maximumSize + 1)
+
+        while data.count <= maximumSize {
+            let remainingByteCount = maximumSize + 1 - data.count
+            guard let chunk = try file.read(upToCount: min(64 * 1024, remainingByteCount)),
+                  !chunk.isEmpty
+            else {
+                break
+            }
+
+            data.append(chunk)
+        }
+
+        guard data.count <= maximumSize else {
+            throw PreferencesBackupError.fileTooLarge(maximumBytes: maximumSize)
+        }
+
+        return data
+    }
 }
 
-struct PluginDisplayPreferencesBackup: Codable, Equatable {
+struct PluginDisplayPreferencesBackup: Codable, Equatable, Sendable {
     let orderedPluginIDs: [String]
     let hiddenPluginIDs: [String]
 }
@@ -126,6 +163,7 @@ struct PreferencesImportResult: Equatable {
 enum PreferencesBackupError: Error, Equatable {
     case unsupportedFormatVersion(Int)
     case invalidApplicationPreferences
+    case fileTooLarge(maximumBytes: Int)
 }
 
 @MainActor

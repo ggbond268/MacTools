@@ -1492,6 +1492,77 @@
         }
       }
     },
+    "preferencesBackup.error.fileTooLarge": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يجب ألا يتجاوز حجم النسخة الاحتياطية للتفضيلات %d ميغابايت."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Einstellungssicherung darf nicht größer als %d MB sein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The preferences backup must not exceed %d MB."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La copia de preferencias no puede superar %d MB."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sauvegarde des préférences ne doit pas dépasser %d Mo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "環境設定バックアップは %d MB 以下にしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "환경설정 백업은 %dMB를 초과할 수 없습니다."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O backup de preferências não pode exceder %d MB."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Размер резервной копии настроек не должен превышать %d МБ."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏好设置备份不能超过 %d MB。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏好設定備份不能超過 %d MB。"
+          }
+        }
+      }
+    },
     "preferencesBackup.error.invalidApplicationPreferences": {
       "extractionState": "manual",
       "localizations": {

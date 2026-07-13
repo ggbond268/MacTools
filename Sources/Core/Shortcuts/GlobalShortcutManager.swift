@@ -33,6 +33,10 @@ final class GlobalShortcutManager {
         installHandlerIfNeeded()
 
         let targetGroups = registrations.reduce(into: [ShortcutBinding: [String]]()) { result, registration in
+            guard registration.binding.isValid else {
+                return
+            }
+
             if result[registration.binding]?.contains(registration.shortcutID) == true {
                 return
             }

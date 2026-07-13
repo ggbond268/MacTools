@@ -319,6 +319,57 @@ final class PreferencesBackupTests: XCTestCase {
         }
     }
 
+    func testDecodeRejectsUnsupportedShortcutModifierBits() throws {
+        let binding = ShortcutBinding(
+            keyCode: 12,
+            modifiers: ShortcutModifiers(rawValue: 1 << 4)
+        )
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: ["plugin.shortcut.action": .custom(binding)]
+        )
+
+        XCTAssertFalse(binding.isValid)
+        XCTAssertThrowsError(try PreferencesBackup.decodeJSON(backup.encodedJSON())) { error in
+            guard case DecodingError.dataCorrupted = error else {
+                return XCTFail("Expected invalid shortcut modifiers, got \(error)")
+            }
+        }
+    }
+
+    func testDecodeFileReadsValidBackupWithinSizeLimit() async throws {
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: [:],
+            exportedAt: Date(timeIntervalSince1970: 0)
+        )
+        let url = temporaryFileURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try backup.encodedJSON().write(to: url)
+
+        let decoded = try await PreferencesBackup.decodeJSON(contentsOf: url)
+
+        XCTAssertEqual(decoded, backup)
+    }
+
+    func testDecodeFileRejectsContentAboveSizeLimit() async throws {
+        let url = temporaryFileURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(repeating: 0x20, count: PreferencesBackup.maximumFileSize + 1).write(to: url)
+
+        do {
+            _ = try await PreferencesBackup.decodeJSON(contentsOf: url)
+            XCTFail("Expected oversized backup to be rejected")
+        } catch {
+            XCTAssertEqual(
+                error as? PreferencesBackupError,
+                .fileTooLarge(maximumBytes: PreferencesBackup.maximumFileSize)
+            )
+        }
+    }
+
     func testApplicationPreferenceValidationAcceptsEveryCurrentAppEnumValue() throws {
         let store = PreferencesBackupStore(userDefaults: makeDefaults())
 
@@ -371,6 +422,11 @@ final class PreferencesBackupTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+
+    private func temporaryFileURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("PreferencesBackupTests-\(UUID().uuidString).json")
     }
 
     private func makeHost(
