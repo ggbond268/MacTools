@@ -101,8 +101,18 @@ final class MouseEnhancerMiddleClickSession: MouseEnhancerMiddleClickSessionMana
         let tapCallback: CGEventTapCallBack = { _, type, event, userInfo in
             guard let ptr = userInfo else { return Unmanaged.passUnretained(event) }
             let session = Unmanaged<MouseEnhancerMiddleClickSession>.fromOpaque(ptr).takeUnretainedValue()
-            let kCenter = Int64(CGMouseButton.center.rawValue)
             let passthrough = Unmanaged.passUnretained(event)
+
+            // macOS can auto-disable a non-listen event tap on startup or after sleep.
+            // Re-enable it immediately so middle-click keeps working without a full restart.
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                if let tap = session.eventTap, CFMachPortIsValid(tap) {
+                    CGEvent.tapEnable(tap: tap, enable: true)
+                }
+                return passthrough
+            }
+
+            let kCenter = Int64(CGMouseButton.center.rawValue)
 
             if session.threeDown && (type == .leftMouseDown || type == .rightMouseDown) {
                 session.wasThreeDown = true
@@ -186,6 +196,15 @@ final class MouseEnhancerMiddleClickSession: MouseEnhancerMiddleClickSessionMana
         observeMultitouchDeviceArrival()
         observeDisplayReconfiguration()
         logger.info("multitouch listener started deviceCount=\(self.devices.count, privacy: .public)")
+
+        // MultitouchSupport may not yet have enumerated devices when the app starts
+        // as a login item. The IOKit notification only fires for future arrivals, so it
+        // does not recover the no-devices case when the device is already present in
+        // IOKit but MTDeviceCreateList returns empty. Schedule a short retry so that
+        // listeners are rebuilt once the private framework has fully initialised.
+        if devices.isEmpty {
+            scheduleRestart(after: 3, reason: "noDevicesAtStart")
+        }
     }
 
     func stop() {

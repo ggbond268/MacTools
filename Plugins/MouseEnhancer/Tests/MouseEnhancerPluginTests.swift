@@ -645,6 +645,48 @@ final class MouseEnhancerPluginTests: XCTestCase {
         XCTAssertEqual(result.deltas.deltaAxis1, 1)
     }
 
+    func testMiddleClickStartsOnActivateWhenSavedAsEnabledAndAccessibilityGranted() {
+        let storage = MouseEnhancerMemoryStorage()
+        storage.values["mouse-enhancer.middle-click.enabled"] = true
+        storage.values["mouse-enhancer.middle-click.finger-count"] = 4
+
+        let middleClickSession = MockMouseEnhancerMiddleClickSession()
+        let context = PluginRuntimeContext(pluginID: "mouse-enhancer", storage: storage)
+        let plugin = MouseEnhancerPlugin(
+            context: context,
+            makeMiddleClickSession: { middleClickSession },
+            accessibilityTrusted: { true },
+            requestAccessibilityTrust: { _ in true },
+            inputMonitoringAuthorizationStatus: { .granted },
+            openURL: { _ in }
+        )
+
+        plugin.activate(context: context)
+
+        XCTAssertEqual(middleClickSession.activateCallCount, 1)
+        XCTAssertEqual(middleClickSession.requiredFingerCount, 4)
+    }
+
+    func testMiddleClickDoesNotStartOnActivateWhenAccessibilityDenied() {
+        let storage = MouseEnhancerMemoryStorage()
+        storage.values["mouse-enhancer.middle-click.enabled"] = true
+
+        let middleClickSession = MockMouseEnhancerMiddleClickSession()
+        let context = PluginRuntimeContext(pluginID: "mouse-enhancer", storage: storage)
+        let plugin = MouseEnhancerPlugin(
+            context: context,
+            makeMiddleClickSession: { middleClickSession },
+            accessibilityTrusted: { false },
+            requestAccessibilityTrust: { _ in false },
+            inputMonitoringAuthorizationStatus: { .granted },
+            openURL: { _ in }
+        )
+
+        plugin.activate(context: context)
+
+        XCTAssertEqual(middleClickSession.activateCallCount, 0)
+    }
+
     private func makePlugin(
         session: MockMouseEnhancerSession? = nil,
         middleClickSession: MockMouseEnhancerMiddleClickSession? = nil,
