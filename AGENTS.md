@@ -95,6 +95,11 @@
 - Large product/interaction changes may add date-prefixed documents under `docs/superpowers/specs/` or `docs/superpowers/plans/`.
 - Icons, asset catalogs, `LocalConfig.xcconfig`, and release env files are usually maintained by the user or generation flow; avoid unrelated changes.
 
+## Cursor Cloud specific instructions
+- This project is a native macOS app (Swift 6 + SwiftUI/AppKit, `platform: macOS`, deploymentTarget 14.0) built with Xcode via XcodeGen. It depends on Apple-only frameworks (AppKit, SwiftUI, IOKit, CoreGraphics, EventKit, Sparkle) and requires `xcodebuild` + `xcodegen`.
+- The default Cursor Cloud Agent VM is Linux (Ubuntu x86_64) and CANNOT build, test, or run this repo: no Xcode/`xcodebuild`, no `xcodegen`, no Swift/Apple SDKs, and those SDKs are not installable on Linux. The open-source Swift-on-Linux toolchain lacks AppKit/SwiftUI/IOKit, so even installing it does not help.
+- There is no update script that can make this buildable on Linux; do not add one. Full setup, build (`make build`), tests (`xcodebuild ... test`), and run (`make run`) require a macOS host with Xcode. Use the standard commands in `## Build And Run` / `## Testing Requirements` on a Mac.
+
 ## Agent Workflow
 - Before modifying code, use `rg`/`rg --files` to quickly locate existing patterns and prefer adjacent implementations.
 - Keep changes focused. Do not opportunistically refactor unrelated modules or overwrite existing user edits.
