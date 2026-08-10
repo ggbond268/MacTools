@@ -21,3 +21,5 @@ xcuserdata/
 
 # Machine-local Claude Code session lock (records a local PID/session id)
 .claude/scheduled_tasks.lock
+
+.superpowers/

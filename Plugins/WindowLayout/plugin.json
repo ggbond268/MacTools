@@ -1,0 +1,67 @@
+{
+  "id": "window-layout",
+  "displayName": "窗口布局",
+  "summary": "用预设调整前台窗口大小与位置",
+  "localizedMetadata": {
+    "en": {
+      "displayName": "Window Layout",
+      "summary": "Resize and position the frontmost window with presets."
+    },
+    "zh-Hans": {
+      "displayName": "窗口布局",
+      "summary": "用预设调整前台窗口大小与位置"
+    },
+    "zh-Hant": {
+      "displayName": "視窗佈局",
+      "summary": "用預設調整前景視窗大小與位置"
+    },
+    "ja": {
+      "displayName": "ウィンドウレイアウト",
+      "summary": "プリセットで最前面ウィンドウのサイズと位置を調整します。"
+    },
+    "ko": {
+      "displayName": "윈도우 레이아웃",
+      "summary": "프리셋으로 맨 앞 윈도우 크기와 위치를 조정합니다."
+    },
+    "de": {
+      "displayName": "Fensterlayout",
+      "summary": "Größe und Position des vordersten Fensters mit Vorgaben anpassen."
+    },
+    "es": {
+      "displayName": "Disposición de ventanas",
+      "summary": "Ajuste el tamaño y la posición de la ventana frontal con ajustes preestablecidos."
+    },
+    "fr": {
+      "displayName": "Disposition des fenêtres",
+      "summary": "Redimensionnez et positionnez la fenêtre au premier plan avec des préréglages."
+    },
+    "pt": {
+      "displayName": "Layout de janelas",
+      "summary": "Redimensione e posicione a janela da frente com predefinições."
+    },
+    "ru": {
+      "displayName": "Расположение окон",
+      "summary": "Изменяйте размер и положение переднего окна с помощью пресетов."
+    },
+    "ar": {
+      "displayName": "تخطيط النوافذ",
+      "summary": "غيّر حجم النافذة الأمامية وموضعها باستخدام الإعدادات المسبقة."
+    }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 4,
+  "bundleRelativePath": "WindowLayout.bundle",
+  "factoryClass": "WindowLayoutPlugin.WindowLayoutPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "WindowLayoutPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": ["accessibility"],
+  "category": "productivity"
+}
