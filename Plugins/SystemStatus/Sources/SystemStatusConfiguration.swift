@@ -17,7 +17,10 @@ struct SystemStatusConfiguration: Equatable, Sendable {
             SystemStatusMetricPreference(kind: $0, isVisible: true)
         },
         menuBarItems: SystemStatusComponentLayout.defaultMenuBarMetricKinds.map {
-            SystemStatusMetricPreference(kind: $0, isVisible: false)
+            SystemStatusMetricPreference(
+                kind: $0,
+                isVisible: $0 == .cpu || $0 == .memory || $0 == .network
+            )
         }
     )
 
@@ -66,14 +69,16 @@ final class SystemStatusPluginStorageConfigurationStore: SystemStatusConfigurati
                 visibilityMode: .hiddenSet,
                 usesDefaultVisibility: panelHidden == nil
             ),
-            menuBarItems: Self.normalizedItems(
-                storedOrder: menuBarOrder,
-                visibilityIDs: Set(menuBarVisible ?? []),
-                defaults: SystemStatusComponentLayout.defaultMenuBarMetricKinds,
-                defaultVisibility: false,
-                visibilityMode: .visibleSet,
-                usesDefaultVisibility: menuBarVisible == nil
-            )
+            menuBarItems: menuBarVisible == nil
+                ? SystemStatusConfiguration.default.menuBarItems
+                : Self.normalizedItems(
+                    storedOrder: menuBarOrder,
+                    visibilityIDs: Set(menuBarVisible ?? []),
+                    defaults: SystemStatusComponentLayout.defaultMenuBarMetricKinds,
+                    defaultVisibility: false,
+                    visibilityMode: .visibleSet,
+                    usesDefaultVisibility: false
+                )
         )
     }
 

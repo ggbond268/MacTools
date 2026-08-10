@@ -19,7 +19,7 @@ final class SystemStatusPluginTests: XCTestCase {
         XCTAssertEqual(SystemStatusComponentLayout.contentHeight(for: [.cpu, .gpu, .topProcesses]), 201)
     }
 
-    func testConfigurationDefaultsShowPanelMetricsAndHideMenuBarMetrics() {
+    func testConfigurationDefaultsShowPanelMetricsAndUsefulMenuBarMetrics() {
         let controller = SystemStatusSettingsController(
             store: SystemStatusPluginStorageConfigurationStore(storage: SystemStatusMemoryPluginStorage())
         )
@@ -28,7 +28,10 @@ final class SystemStatusPluginTests: XCTestCase {
             controller.configuration.visiblePanelMetricKinds,
             SystemStatusComponentLayout.defaultPanelMetricKinds
         )
-        XCTAssertTrue(controller.configuration.visibleMenuBarMetricKinds.isEmpty)
+        XCTAssertEqual(
+            controller.configuration.visibleMenuBarMetricKinds,
+            [.cpu, .network, .memory]
+        )
     }
 
     func testConfigurationPersistsVisibilityAndOrder() {

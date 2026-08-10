@@ -28,6 +28,14 @@ enum BatteryChargeLimits {
     static let maximumPercent = 100
     static let defaultPercent = 80
     static let percentStep = 1
+
+    static let minimumFloorPercent = 10
+    static let maximumFloorPercent = 90
+    static let defaultFloorPercent = 20
+
+    static let minimumThermalThresholdCelsius = 35
+    static let maximumThermalThresholdCelsius = 50
+    static let defaultThermalThresholdCelsius = 42
 }
 
 // MARK: - SMC Capabilities (reported by helper `probe`)
@@ -76,6 +84,9 @@ struct BatterySnapshot: Equatable {
     var state: BatteryPowerState
     /// True when the AC adapter is connected (drawing external power).
     var isOnAdapter: Bool
+    var temperatureCelsius: Double?
+    var healthPercent: Int?
+    var cycleCount: Int?
 
     var hasBattery: Bool { isAvailable }
 
@@ -83,7 +94,10 @@ struct BatterySnapshot: Equatable {
         isAvailable: false,
         levelPercent: nil,
         state: .unavailable,
-        isOnAdapter: false
+        isOnAdapter: false,
+        temperatureCelsius: nil,
+        healthPercent: nil,
+        cycleCount: nil
     )
 }
 

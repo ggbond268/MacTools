@@ -333,6 +333,11 @@ struct SystemStatusDashboardView: View {
     }
 
     private var cpuFootnote: String {
+        let uptimeText = localization.format(
+            "cpu.footnote.uptimeFormat",
+            defaultValue: "开机 %@",
+            SystemStatusFormatter.uptime(snapshot.hardware.uptimeSeconds)
+        )
         let powerText = localization.format(
             "metric.powerFormat",
             defaultValue: "功率 %@",
@@ -340,15 +345,17 @@ struct SystemStatusDashboardView: View {
         )
         guard let load = snapshot.cpu.loadAverage1Minute else {
             return localization.format(
-                "cpu.footnote.loadUnavailableFormat",
-                defaultValue: "负载 — · %@",
+                "cpu.footnote.loadUnavailableWithUptimeFormat",
+                defaultValue: "%@ · 负载 — · %@",
+                uptimeText,
                 powerText
             )
         }
 
         return localization.format(
-            "cpu.footnote.loadFormat",
-            defaultValue: "负载 %.2f · %@",
+            "cpu.footnote.loadWithUptimeFormat",
+            defaultValue: "%@ · 负载 %.2f · %@",
+            uptimeText,
             load,
             powerText
         )

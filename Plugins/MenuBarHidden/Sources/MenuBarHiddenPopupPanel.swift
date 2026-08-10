@@ -8,12 +8,12 @@ import MacToolsPluginKit
 @MainActor
 final class MenuBarHiddenPopupPanel: NSPanel {
     private weak var controller: MenuBarHiddenController?
-    private let panelSize = NSSize(width: 400, height: 120)
+    private var panelSize = NSSize(width: 420, height: 132)
 
     init(controller: MenuBarHiddenController) {
         self.controller = controller
         super.init(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: 400, height: 120)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: 420, height: 132)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -24,6 +24,23 @@ final class MenuBarHiddenPopupPanel: NSPanel {
         isOpaque = false
         hasShadow = true
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        rebuildContent(iconCount: max(controller.snapshot.hiddenItems.count, 1))
+    }
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
+    func show(anchor: NSRect?) {
+        rebuildContent(iconCount: max(controller?.snapshot.hiddenItems.count ?? 1, 1))
+        position(anchor: anchor)
+        orderFrontRegardless()
+        makeKey()
+    }
+
+    private func rebuildContent(iconCount: Int) {
+        let width = min(560, max(320, CGFloat(iconCount) * 44 + 48))
+        let height: CGFloat = 132
+        panelSize = NSSize(width: width, height: height)
 
         let effect = NSVisualEffectView(frame: NSRect(origin: .zero, size: panelSize))
         effect.material = .popover
@@ -31,6 +48,7 @@ final class MenuBarHiddenPopupPanel: NSPanel {
         effect.state = .active
         effect.maskImage = Self.roundedMaskImage(size: panelSize, cornerRadius: 14)
 
+        guard let controller else { return }
         let hosting = NSHostingView(rootView: MenuBarHiddenPopupView(controller: controller))
         hosting.frame = effect.bounds
         hosting.autoresizingMask = [.width, .height]
@@ -38,15 +56,6 @@ final class MenuBarHiddenPopupPanel: NSPanel {
 
         contentView = effect
         setContentSize(panelSize)
-    }
-
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
-
-    func show(anchor: NSRect?) {
-        position(anchor: anchor)
-        orderFrontRegardless()
-        makeKey()
     }
 
     override func cancelOperation(_: Any?) {

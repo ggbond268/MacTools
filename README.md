@@ -33,7 +33,7 @@
 | Mouse Enhancer | Adjust mouse and trackpad scrolling independently, with separate horizontal and vertical direction reversal. |
 | Trackpad Gestures | Map only the gestures you choose—including repeatable TipTap while its fixed fingers stay down, three- to five-finger taps, double taps, and long touches—to keyboard shortcuts or middle clicks. TipTap consumes its matching native click, typing protection prevents palm-triggered gestures, and the accessible settings include a built-in TipTap guide, unique gesture mappings, shortcut-reuse guidance, and a no-action test mode. Existing Mouse Enhancer middle-click settings migrate automatically. |
 | Hide Notch | Mask the top notch area on built-in notch displays without modifying the original wallpaper. |
-| Hide Menu Bar Icons | Hide icons to the left of a menu bar divider, with drag-based layout for visible, hidden, and always-hidden areas. |
+| Hide Menu Bar Icons | Hide icons to the left of a menu bar divider, with drag-based layout for visible, hidden, and always-hidden areas; click the divider for an aggregate popup of hidden icons. |
 | Auto Hide Menu Bar | Automatically hide the menu bar to make more screen space available. |
 | Auto Hide Dock | Automatically hide the Dock for a cleaner desktop. |
 | Stage Manager | Toggle Stage Manager to focus the current window and place other windows on the side. |
@@ -56,11 +56,11 @@
 | Lock Screen | Lock the screen immediately, equivalent to Cmd+Ctrl+Q. |
 | Launch Items | Browse LaunchAgent/LaunchDaemon entries with search, field explanations, and user-level enable/disable controls. |
 | Calendar Widget | View a monthly calendar, lunar calendar data, holidays, and today's events, with any weekday as the start of the week. |
-| System Status | Show 1-hour charts for CPU, GPU, memory, disk, network, battery, and high-usage processes. |
+| System Status | Show 1-hour charts for CPU, GPU, memory, disk, network, battery, and high-usage processes; menu bar shows CPU, memory, and network by default, with uptime in the CPU card. |
 | Activity Stats | Track keyboard, mouse, scroll, and foreground app usage, with install/update and uninstall actions for Claude Code, Cursor, and Codex activity hooks. |
 | Device Battery | Aggregate battery levels for the Mac, trusted iPhone/iPad/Apple Watch devices over USB or Wi-Fi, Bluetooth peripherals, AirPods/Beats split batteries and charging state, and Rapoo VT series mice, with multiple widget layouts and optional low-battery notifications. Background sampling pauses when the widget is hidden unless notifications are enabled. |
 | Fan Control | Manage fan speed presets with automatic, full-speed, and custom fixed-RPM modes; installs the bundled helper on first control and verifies privileged SMC writes before reporting success. |
-| Battery Charge Limit | Limit battery charging to a chosen cap, defaulting to 80%; charging stops at the cap and does not automatically resume below it unless the user chooses to continue or force discharge. |
+| Battery Charge Limit | Limit battery charging to a chosen cap, defaulting to 80%; charging stops at the cap and does not automatically resume below it unless the user chooses to continue or force discharge. Adds low-battery floor reminders, thermal protection, sleep charging preference, and health/cycle/temperature details. |
 | Fix Damaged Apps | Remove quarantine attributes to resolve "damaged and can't be opened" prompts by selecting a .app in a file panel and running the fix with administrator privileges. |
 | Quit Apps | Select and quit running apps, or quit all at once; multiple instances of the same app are grouped into one stable entry, and reverse selection helps quickly choose the target set. |
 | zsh Config | View and edit zsh configuration files such as .zshrc and .zshenv inside the app, with syntax highlighting, common snippets, and automatic backup before saving. |

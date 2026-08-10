@@ -1,7 +1,7 @@
 {
   "id": "battery-charge-limit",
   "displayName": "电池充电上限",
-  "summary": "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电",
+  "summary": "设置电池充电上限与下限提醒、热保护与休眠停充，并显示电池健康信息",
   "localizedMetadata": {
     "ar": {
       "displayName": "حد شحن البطارية",
@@ -13,7 +13,7 @@
     },
     "en": {
       "displayName": "Battery Charge Limit",
-      "summary": "Set a battery charge limit and stop charging when it is reached; charging resumes only when you choose."
+      "summary": "Set a charge limit with floor reminders, thermal protection, sleep policy, and battery health details."
     },
     "es": {
       "displayName": "Límite de carga de batería",
@@ -41,14 +41,14 @@
     },
     "zh-Hans": {
       "displayName": "电池充电上限",
-      "summary": "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电"
+      "summary": "设置充电上限、下限提醒、热保护与休眠停充，并显示电池健康信息"
     },
     "zh-Hant": {
       "displayName": "電池充電上限",
-      "summary": "設定電池充電上限，達到上限後停止充電；不自動恢復，由用戶決定何時繼續充電"
+      "summary": "設定充電上限、下限提醒、熱保護與休眠停充，並顯示電池健康資訊"
     }
   },
-  "version": "1.0.8",
+  "version": "1.0.9",
   "minHostVersion": "1.1.6",
   "pluginKitVersion": 4,
   "bundleRelativePath": "BatteryChargeLimit.bundle",

@@ -29,6 +29,11 @@ private struct BatteryChargeLimitPluginProvider: PluginProvider {
 private enum ControlID {
     static let enableAction    = "battery-enable-action"
     static let limitSlider     = "battery-limit-slider"
+    static let floorSlider     = "battery-floor-slider"
+    static let floorReminderToggle = "battery-floor-reminder"
+    static let thermalToggle   = "battery-thermal-toggle"
+    static let thermalSlider   = "battery-thermal-slider"
+    static let sleepInhibitToggle = "battery-sleep-inhibit"
     static let chargeAction    = "battery-charge-action"
     static let dischargeAction = "battery-discharge-action"
     static let manageSettings  = "battery-manage-settings"
@@ -61,6 +66,7 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
     private let localization: PluginLocalization
     private let reader: any BatteryChargeLimitReading
     private let writer: any BatteryChargeLimitWriting
+    private let notifier: any BatteryChargeLimitNotifying
 
     private var isExpanded = false
     private var batterySnapshot: BatterySnapshot = .empty
@@ -70,6 +76,8 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
     private var monitoringTask: Task<Void, Never>?
     private var sleepObserver: (any NSObjectProtocol)?
     private var wakeObserver: (any NSObjectProtocol)?
+    private var didNotifyFloorReminder = false
+    private var didNotifyThermalThisSession = false
 
     // MARK: Init
 
@@ -77,6 +85,7 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
         context: PluginRuntimeContext = PluginRuntimeContext(pluginID: "battery-charge-limit"),
         reader: any BatteryChargeLimitReading = BatteryChargeLimitReader(),
         writer: (any BatteryChargeLimitWriting)? = nil,
+        notifier: any BatteryChargeLimitNotifying = BatteryChargeLimitUserNotifier(),
         localization: PluginLocalization = PluginLocalization(bundle: .main)
     ) {
         self.localization = localization
@@ -88,12 +97,13 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
             order: 48,
             defaultDescription: localization.string(
                 "metadata.description",
-                defaultValue: "限制电池充电至指定上限"
+                defaultValue: "限制电池充电至指定上限，并提供下限提醒与热保护"
             )
         )
         self.store = BatteryChargeLimitStore(storage: context.storage)
         self.reader = reader
         self.writer = writer ?? BatteryChargeLimitWriter(resourceBundle: context.resourceBundle)
+        self.notifier = notifier
     }
 
     // MARK: - Lifecycle
@@ -167,6 +177,100 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
                     ]
                 ),
                 PluginSettingsSection(
+                    id: "floor-reminder",
+                    title: localization.string("settings.floor.title", defaultValue: "下限提醒"),
+                    systemImage: "battery.25",
+                    rows: [
+                        PluginSettingsRow(
+                            id: ControlID.floorReminderToggle,
+                            title: localization.string("settings.floor.toggle", defaultValue: "电量过低时提醒"),
+                            description: localization.string(
+                                "settings.floor.toggleDescription",
+                                defaultValue: "未接电源且电量低于下限时发送通知，不会自动恢复充电。"
+                            ),
+                            systemImage: "bell.badge",
+                            control: .toggle(isOn: store.floorReminderEnabled)
+                        ),
+                        PluginSettingsRow(
+                            id: ControlID.floorSlider,
+                            title: localization.string("settings.floor.target", defaultValue: "下限电量"),
+                            description: localization.string(
+                                "settings.floor.description",
+                                defaultValue: "建议接电源的最低电量。"
+                            ),
+                            systemImage: "arrow.down.to.line",
+                            control: .slider(
+                                value: Double(store.floorPercent),
+                                range: Double(BatteryChargeLimits.minimumFloorPercent)...Double(
+                                    max(
+                                        BatteryChargeLimits.minimumFloorPercent,
+                                        store.limitPercent - BatteryChargeLimits.percentStep
+                                    )
+                                ),
+                                step: Double(BatteryChargeLimits.percentStep),
+                                valueFormat: .percentage
+                            )
+                        )
+                    ]
+                ),
+                PluginSettingsSection(
+                    id: "thermal-protection",
+                    title: localization.string("settings.thermal.title", defaultValue: "热保护"),
+                    systemImage: "thermometer.medium",
+                    rows: [
+                        PluginSettingsRow(
+                            id: ControlID.thermalToggle,
+                            title: localization.string("settings.thermal.toggle", defaultValue: "超温暂停充电"),
+                            description: localization.string(
+                                "settings.thermal.toggleDescription",
+                                defaultValue: "充电时电池温度超过阈值则停止充电并通知。"
+                            ),
+                            systemImage: "flame",
+                            control: .toggle(isOn: store.thermalProtectionEnabled)
+                        ),
+                        PluginSettingsRow(
+                            id: ControlID.thermalSlider,
+                            title: localization.string("settings.thermal.threshold", defaultValue: "温度阈值"),
+                            description: localization.string(
+                                "settings.thermal.thresholdDescription",
+                                defaultValue: "单位摄氏度。"
+                            ),
+                            systemImage: "degreesign.celsius",
+                            control: .slider(
+                                value: Double(store.thermalThresholdCelsius),
+                                range: Double(BatteryChargeLimits.minimumThermalThresholdCelsius)...Double(
+                                    BatteryChargeLimits.maximumThermalThresholdCelsius
+                                ),
+                                step: 1,
+                                valueFormat: PluginSettingsSliderValueFormat(suffix: " °C")
+                            )
+                        )
+                    ]
+                ),
+                PluginSettingsSection(
+                    id: "sleep-policy",
+                    title: localization.string("settings.sleep.title", defaultValue: "休眠充电"),
+                    systemImage: "moon.zzz",
+                    rows: [
+                        PluginSettingsRow(
+                            id: ControlID.sleepInhibitToggle,
+                            title: localization.string("settings.sleep.inhibit", defaultValue: "休眠时保持停充"),
+                            description: localization.string(
+                                "settings.sleep.inhibitDescription",
+                                defaultValue: "开启后，休眠前会再次写入停充；关闭则休眠期间不额外干预。"
+                            ),
+                            systemImage: "powersleep",
+                            control: .toggle(isOn: store.inhibitChargingDuringSleep)
+                        )
+                    ]
+                ),
+                PluginSettingsSection(
+                    id: "battery-info",
+                    title: localization.string("settings.info.title", defaultValue: "电池信息"),
+                    systemImage: "info.circle",
+                    rows: batteryInfoRows
+                ),
+                PluginSettingsSection(
                     id: "charging-behavior",
                     title: localization.string("settings.behavior.title", defaultValue: "充电行为"),
                     systemImage: "bolt.badge.checkmark",
@@ -226,13 +330,82 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     func handlePermissionAction(id: String) {}
     func handleSettingsAction(_ action: PluginSettingsAction) {
-        guard case let .setNumber(controlID, value, phase) = action,
-              controlID == ControlID.limitSlider,
-              phase == .committed
-        else { return }
-        handleLimitChange(Int(value.rounded()))
+        switch action {
+        case let .setNumber(controlID, value, phase):
+            guard phase == .committed else { return }
+            switch controlID {
+            case ControlID.limitSlider:
+                handleLimitChange(Int(value.rounded()))
+            case ControlID.floorSlider:
+                store.setFloorPercent(Int(value.rounded()))
+                onStateChange?()
+            case ControlID.thermalSlider:
+                store.setThermalThresholdCelsius(Int(value.rounded()))
+                onStateChange?()
+            default:
+                break
+            }
+
+        case let .setBoolean(controlID, value):
+            switch controlID {
+            case ControlID.floorReminderToggle:
+                store.setFloorReminderEnabled(value)
+                if !value { didNotifyFloorReminder = false }
+                onStateChange?()
+            case ControlID.thermalToggle:
+                store.setThermalProtectionEnabled(value)
+                if !value { didNotifyThermalThisSession = false }
+                onStateChange?()
+            case ControlID.sleepInhibitToggle:
+                store.setInhibitChargingDuringSleep(value)
+                onStateChange?()
+            default:
+                break
+            }
+
+        default:
+            break
+        }
     }
     func handleShortcutAction(id: String) {}
+
+    private var batteryInfoRows: [PluginSettingsRow] {
+        let levelText = batterySnapshot.levelPercent.map { "\($0)%" }
+            ?? localization.string("settings.info.unavailable", defaultValue: "—")
+        let healthText = batterySnapshot.healthPercent.map { "\($0)%" }
+            ?? localization.string("settings.info.unavailable", defaultValue: "—")
+        let cycleText = batterySnapshot.cycleCount.map(String.init)
+            ?? localization.string("settings.info.unavailable", defaultValue: "—")
+        let temperatureText = batterySnapshot.temperatureCelsius.map { String(format: "%.0f°C", $0) }
+            ?? localization.string("settings.info.unavailable", defaultValue: "—")
+
+        return [
+            PluginSettingsRow(
+                id: "info-level",
+                title: localization.string("settings.info.level", defaultValue: "当前电量"),
+                systemImage: "battery.50",
+                control: .status(text: levelText, systemImage: "battery.50", tone: .neutral, actionTitle: nil)
+            ),
+            PluginSettingsRow(
+                id: "info-health",
+                title: localization.string("settings.info.health", defaultValue: "健康度"),
+                systemImage: "heart",
+                control: .status(text: healthText, systemImage: "heart", tone: .neutral, actionTitle: nil)
+            ),
+            PluginSettingsRow(
+                id: "info-cycles",
+                title: localization.string("settings.info.cycles", defaultValue: "循环次数"),
+                systemImage: "arrow.triangle.2.circlepath",
+                control: .status(text: cycleText, systemImage: "arrow.triangle.2.circlepath", tone: .neutral, actionTitle: nil)
+            ),
+            PluginSettingsRow(
+                id: "info-temperature",
+                title: localization.string("settings.info.temperature", defaultValue: "温度"),
+                systemImage: "thermometer",
+                control: .status(text: temperatureText, systemImage: "thermometer", tone: .neutral, actionTitle: nil)
+            )
+        ]
+    }
 
     private var hardwareCompatibilityRows: [PluginSettingsRow] {
         var rows = [
@@ -484,6 +657,7 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
             while !Task.isCancelled {
                 self?.batterySnapshot = self?.reader.readSnapshot() ?? .empty
                 self?.evaluateAutoTransitions()
+                self?.evaluateHealthProtections()
                 self?.onStateChange?()
                 try? await Task.sleep(for: .seconds(5))
             }
@@ -523,17 +697,75 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
     }
 
     private func handleSystemWillSleep() {
-        // Keep the inhibit in place on sleep so the Mac doesn't quietly
-        // charge past the limit while the user is away.
         guard store.isEnabled else { return }
         BatteryChargeLimitLog.plugin.info("System will sleep — current mode: \(String(describing: self.store.mode), privacy: .public)")
+        guard store.inhibitChargingDuringSleep else { return }
+        applyCurrentMode(reason: "will-sleep-inhibit")
     }
 
     private func handleSystemDidWake() {
         guard store.isEnabled else { return }
         batterySnapshot = reader.readSnapshot()
         applyCurrentMode(reason: "did-wake")
+        evaluateHealthProtections()
         BatteryChargeLimitLog.plugin.info("System did wake — re-asserted mode: \(String(describing: self.store.mode), privacy: .public)")
+    }
+
+    private func evaluateHealthProtections() {
+        evaluateFloorReminder()
+        evaluateThermalProtection()
+    }
+
+    private func evaluateFloorReminder() {
+        guard store.isEnabled, store.floorReminderEnabled else {
+            didNotifyFloorReminder = false
+            return
+        }
+        guard batterySnapshot.hasBattery,
+              !batterySnapshot.isOnAdapter,
+              let level = batterySnapshot.levelPercent
+        else {
+            if batterySnapshot.isOnAdapter {
+                didNotifyFloorReminder = false
+            }
+            return
+        }
+
+        if level > store.floorPercent {
+            didNotifyFloorReminder = false
+            return
+        }
+
+        guard !didNotifyFloorReminder else { return }
+        didNotifyFloorReminder = true
+        notifier.notifyFloorReminder(level: level, floor: store.floorPercent, localization: localization)
+    }
+
+    private func evaluateThermalProtection() {
+        guard store.isEnabled, store.thermalProtectionEnabled else {
+            didNotifyThermalThisSession = false
+            return
+        }
+        guard let temperature = batterySnapshot.temperatureCelsius else { return }
+        let threshold = Double(store.thermalThresholdCelsius)
+        guard temperature >= threshold else {
+            didNotifyThermalThisSession = false
+            return
+        }
+
+        if store.mode == .charging || batterySnapshot.state == .charging {
+            store.setMode(.holdAtLimit)
+            applyCurrentMode(reason: "thermal-protection")
+        }
+
+        guard !didNotifyThermalThisSession, !store.isThermalReminderMutedToday else { return }
+        didNotifyThermalThisSession = true
+        store.muteThermalReminderForToday()
+        notifier.notifyThermalProtection(
+            temperature: temperature,
+            threshold: store.thermalThresholdCelsius,
+            localization: localization
+        )
     }
 
     // MARK: - Panel Builder
@@ -548,22 +780,33 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel {
             return localization.format("panel.subtitle.disabled", defaultValue: "未启用 · %d%%", level)
         }
 
+        var suffixParts: [String] = []
+        if let health = batterySnapshot.healthPercent {
+            suffixParts.append(localization.format("panel.subtitle.health", defaultValue: "健康 %d%%", health))
+        }
+        if let cycles = batterySnapshot.cycleCount {
+            suffixParts.append(localization.format("panel.subtitle.cycles", defaultValue: "%d 循环", cycles))
+        }
+        let infoSuffix = suffixParts.isEmpty ? "" : " · " + suffixParts.joined(separator: " · ")
+
         let limit = store.limitPercent
         switch store.mode {
         case .holdAtLimit:
             if level >= limit {
                 return localization.format(
                     "panel.subtitle.limitReached",
-                    defaultValue: "已达上限 · %d%% / %d%%",
+                    defaultValue: "已达上限 · %d%% / %d%%%@",
                     level,
-                    limit
+                    limit,
+                    infoSuffix
                 )
             }
             return localization.format(
                 "panel.subtitle.chargingStopped",
-                defaultValue: "已停止充电 · %d%% / %d%%",
+                defaultValue: "已停止充电 · %d%% / %d%%%@",
                 level,
-                limit
+                limit,
+                infoSuffix
             )
         case .charging:
             return localization.format("panel.subtitle.charging", defaultValue: "充电中 · %d%% → %d%%", level, limit)

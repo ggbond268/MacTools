@@ -30,7 +30,7 @@ struct MenuBarHiddenSettingsView: View {
                     title: localization.string("settings.hideIcons.title", defaultValue: "隐藏菜单栏图标"),
                     description: localization.string(
                         "settings.hideIcons.description",
-                        defaultValue: "开启后状态栏图标右侧的扩展条会隐藏其左侧的所有图标"
+                        defaultValue: "开启后用分割符隐藏左侧图标；点击分割符可在聚合浮窗中临时显示隐藏图标。"
                     ),
                     isOn: Binding(
                         get: { controller.isEnabled },
@@ -43,7 +43,7 @@ struct MenuBarHiddenSettingsView: View {
                     title: localization.string("settings.showInPanel.title", defaultValue: "面板中显示隐藏图标"),
                     description: localization.string(
                         "settings.showInPanel.description",
-                        defaultValue: "开启后左键菜单面板显示隐藏图标卡片"
+                        defaultValue: "在功能面板中显示隐藏图标卡片，方便不点分割符也能管理。"
                     ),
                     isOn: Binding(
                         get: { controller.showsHiddenIconsInPanel },
@@ -57,7 +57,7 @@ struct MenuBarHiddenSettingsView: View {
                     title: localization.string("settings.alwaysHidden.title", defaultValue: "永久隐藏"),
                     description: localization.string(
                         "settings.alwaysHidden.description",
-                        defaultValue: "开启后可将图标放入永久隐藏栏，隐藏开关关闭时也不会显示"
+                        defaultValue: "永久隐藏区中的图标在关闭「隐藏菜单栏图标」后也不会回到菜单栏，适合很少使用的图标。"
                     ),
                     isOn: Binding(
                         get: { controller.isAlwaysHiddenEnabled },

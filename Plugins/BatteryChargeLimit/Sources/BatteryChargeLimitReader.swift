@@ -2,10 +2,7 @@ import Foundation
 import IOKit
 import IOKit.ps
 
-/// Reads the current battery snapshot from IOPS.
-/// Mirrors the approach used by `SystemStatusSampler.collectBattery()` but is
-/// scoped to only the fields this plugin cares about (level, charging state,
-/// adapter presence), so it stays decoupled from the SystemStatus plugin.
+/// Reads the current battery snapshot from IOPS + AppleSmartBattery registry.
 @MainActor
 final class BatteryChargeLimitReader: BatteryChargeLimitReading {
 
@@ -22,7 +19,9 @@ final class BatteryChargeLimitReader: BatteryChargeLimitReading {
         var fallback: [String: Any]?
         var battery: [String: Any]?
         for source in sources {
-            guard let desc = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else { continue }
+            guard let desc = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
+                continue
+            }
             fallback = fallback ?? desc
             if desc[kIOPSTypeKey] as? String == kIOPSInternalBatteryType {
                 battery = desc
@@ -55,11 +54,62 @@ final class BatteryChargeLimitReader: BatteryChargeLimitReading {
             state = .unknown
         }
 
+        let registry = Self.collectRegistryInfo()
+
         return BatterySnapshot(
             isAvailable: true,
             levelPercent: levelPercent,
             state: state,
-            isOnAdapter: isOnAdapter
+            isOnAdapter: isOnAdapter,
+            temperatureCelsius: registry.temperatureCelsius,
+            healthPercent: registry.healthPercent,
+            cycleCount: registry.cycleCount
         )
+    }
+
+    private static func collectRegistryInfo() -> (
+        temperatureCelsius: Double?,
+        healthPercent: Int?,
+        cycleCount: Int?
+    ) {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        guard service != 0 else {
+            return (nil, nil, nil)
+        }
+        defer { IOObjectRelease(service) }
+
+        let temperature = registryInt(service, "Temperature").map { Double($0) / 100.0 }
+        let design = registryInt(service, "DesignCapacity")
+        let nominal = registryInt(service, "NominalChargeCapacity")
+        let rawMax = registryInt(service, "AppleRawMaxCapacity")
+        let health: Int?
+        if let design, design > 0 {
+            let currentMax = nominal ?? rawMax
+            if let currentMax, currentMax > 0 {
+                health = min(100, Int(round(Double(currentMax) / Double(design) * 100.0)))
+            } else {
+                health = nil
+            }
+        } else {
+            health = nil
+        }
+
+        return (temperature, health, registryInt(service, "CycleCount"))
+    }
+
+    private static func registryInt(_ service: io_registry_entry_t, _ key: String) -> Int? {
+        guard let unmanaged = IORegistryEntryCreateCFProperty(
+            service,
+            key as CFString,
+            kCFAllocatorDefault,
+            0
+        ) else {
+            return nil
+        }
+        let value = unmanaged.takeRetainedValue()
+        if let number = value as? NSNumber {
+            return number.intValue
+        }
+        return nil
     }
 }

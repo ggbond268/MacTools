@@ -358,7 +358,10 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
             isAvailable: true,
             levelPercent: level,
             state: state,
-            isOnAdapter: isOnAdapter
+            isOnAdapter: isOnAdapter,
+            temperatureCelsius: nil,
+            healthPercent: nil,
+            cycleCount: nil
         )
     }
 }

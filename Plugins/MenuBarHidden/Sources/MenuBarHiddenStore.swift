@@ -29,7 +29,7 @@ final class MenuBarHiddenStore {
     }
 
     var showsHiddenIconsInPanel: Bool {
-        get { storage.object(forKey: Key.showsHiddenIconsInPanel) as? Bool ?? false }
+        get { storage.object(forKey: Key.showsHiddenIconsInPanel) as? Bool ?? true }
         set { storage.set(newValue, forKey: Key.showsHiddenIconsInPanel) }
     }
 
