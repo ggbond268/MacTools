@@ -1,0 +1,34 @@
+{
+  "id": "dock-click-minimize",
+  "displayName": "点击程序坞以隐藏",
+  "summary": "点击活跃应用的程序坞图标即可隐藏该应用",
+  "localizedMetadata": {
+    "ar": { "displayName": "إخفاء بالنقر على Dock", "summary": "أخفِ التطبيق النشط بالنقر على أيقونته في Dock." },
+    "de": { "displayName": "Dock-Klick ausblenden", "summary": "Blendet die aktive App durch Klick auf ihr Symbol im Dock aus." },
+    "en": { "displayName": "Dock Click Hide", "summary": "Hide the active app by clicking it in the Dock." },
+    "es": { "displayName": "Ocultar al hacer clic en el Dock", "summary": "Oculta la app activa al hacer clic en ella en el Dock." },
+    "fr": { "displayName": "Masquer au clic dans le Dock", "summary": "Masque l’app active en cliquant sur son icône dans le Dock." },
+    "ja": { "displayName": "Dockクリックで非表示", "summary": "Dockでアクティブなアプリをクリックして非表示にします。" },
+    "ko": { "displayName": "Dock 클릭으로 가리기", "summary": "Dock에서 활성 앱을 클릭하여 가립니다." },
+    "pt": { "displayName": "Ocultar com clique no Dock", "summary": "Oculte o app ativo clicando nele no Dock." },
+    "ru": { "displayName": "Скрытие по клику в Dock", "summary": "Скрывайте активное приложение щелчком по нему в Dock." },
+    "zh-Hans": { "displayName": "点击程序坞以隐藏", "summary": "点击活跃应用的程序坞图标即可隐藏该应用" },
+    "zh-Hant": { "displayName": "點擊 Dock 來隱藏", "summary": "點擊使用中 App 的 Dock 圖示即可隱藏該 App" }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "DockClickMinimize.bundle",
+  "factoryClass": "DockClickMinimizePlugin.DockClickMinimizePluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "DockClickMinimizePlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": ["accessibility", "inputMonitoring"],
+  "category": "productivity"
+}

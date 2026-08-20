@@ -1,0 +1,3 @@
+import DockClickMinimizePlugin
+
+private let dockClickMinimizePluginFactoryAnchor: Any.Type = DockClickMinimizePluginFactory.self
