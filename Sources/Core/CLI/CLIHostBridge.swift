@@ -8,6 +8,9 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
     private var connection: NSXPCConnection?
     private var requestTasks: [UUID: Task<Void, Never>] = [:]
     private var reconnectTask: Task<Void, Never>?
+    private lazy var callbackRelay = CLIHostBridgeCallbackRelay { @MainActor [weak self] in
+        self?.scheduleReconnect()
+    }
 
     init(
         pluginHost: PluginHost,
@@ -87,18 +90,14 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
             serviceController.refresh()
             return
         }
-        connection.invalidationHandler = { [weak self] in
-            Task { @MainActor in self?.scheduleReconnect() }
-        }
-        connection.interruptionHandler = { [weak self] in
-            Task { @MainActor in self?.scheduleReconnect() }
-        }
+        connection.invalidationHandler = callbackRelay.makeReconnectHandler()
+        connection.interruptionHandler = callbackRelay.makeReconnectHandler()
         connection.activate()
         self.connection = connection
 
-        let proxy = connection.remoteObjectProxyWithErrorHandler { [weak self] _ in
-            Task { @MainActor in self?.scheduleReconnect() }
-        }
+        let proxy = connection.remoteObjectProxyWithErrorHandler(
+            callbackRelay.makeReconnectErrorHandler()
+        )
         guard let broker = proxy as? CLIBrokerXPCProtocol else {
             scheduleReconnect()
             return
@@ -110,20 +109,10 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
             hostBuild: AppMetadata.buildNumber ?? "unknown"
         )
         guard let data = try? CLIProtocolCodec.encodeRequest(registration) else { return }
-        broker.registerHost(data) { [weak self] response in
-            guard self?.identityValidator.accepts(connection, as: .broker) == true,
-                  (try? CLIProtocolCodec.decodeResponse(
-                CLIHandshakeResponse.self,
-                from: response,
-                allowedKeys: [
-                    "selectedProtocolVersion", "brokerVersion", "brokerBuild", "hostVersion",
-                    "hostBuild", "hostReady", "message",
-                ]
-            ))?.hostReady == true else {
-                Task { @MainActor in self?.scheduleReconnect() }
-                return
-            }
-        }
+        broker.registerHost(
+            data,
+            withReply: callbackRelay.makeRegistrationReplyHandler(for: connection)
+        )
     }
 
     private func scheduleReconnect() {
@@ -135,6 +124,60 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
             self?.reconnectTask = nil
             self?.connect()
         }
+    }
+}
+
+/// Keeps callbacks invoked by NSXPCConnection nonisolated, then explicitly hops UI state back to
+/// the main actor. Foundation does not annotate these callback parameters as `@Sendable`, so a
+/// closure created directly inside `CLIHostBridge.connect()` inherits `@MainActor` and traps when
+/// XPC invokes it on its private reply queue.
+final class CLIHostBridgeCallbackRelay: @unchecked Sendable {
+    private let reconnect: @MainActor @Sendable () -> Void
+
+    init(reconnect: @escaping @MainActor @Sendable () -> Void) {
+        self.reconnect = reconnect
+    }
+
+    nonisolated func makeReconnectHandler() -> @Sendable () -> Void {
+        { [weak self] in self?.requestReconnect() }
+    }
+
+    nonisolated func makeReconnectErrorHandler() -> @Sendable (Error) -> Void {
+        { [weak self] _ in self?.requestReconnect() }
+    }
+
+    nonisolated func makeRegistrationReplyHandler(
+        for connection: NSXPCConnection
+    ) -> @Sendable (Data) -> Void {
+        let connectionReference = CLIHostXPCConnectionReference(connection)
+        return { [weak self, connectionReference] response in
+            guard let connection = connectionReference.connection,
+                  CLIPeerIdentityValidator().accepts(connection, as: .broker),
+                  (try? CLIProtocolCodec.decodeResponse(
+                    CLIHandshakeResponse.self,
+                    from: response,
+                    allowedKeys: [
+                        "selectedProtocolVersion", "brokerVersion", "brokerBuild", "hostVersion",
+                        "hostBuild", "hostReady", "message",
+                    ]
+                  ))?.hostReady == true else {
+                self?.requestReconnect()
+                return
+            }
+        }
+    }
+
+    nonisolated func requestReconnect() {
+        let reconnect = reconnect
+        Task { @MainActor in reconnect() }
+    }
+}
+
+private final class CLIHostXPCConnectionReference: @unchecked Sendable {
+    weak var connection: NSXPCConnection?
+
+    init(_ connection: NSXPCConnection) {
+        self.connection = connection
     }
 }
 
