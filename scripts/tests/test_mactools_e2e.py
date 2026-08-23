@@ -133,6 +133,8 @@ class MacToolsE2ETests(unittest.TestCase):
             if path.is_symlink():
                 source_digest.update(b"L\0")
                 source_digest.update(os.readlink(path).encode("utf-8", "surrogateescape"))
+            elif not path.exists():
+                source_digest.update(b"D\0")
             else:
                 source_digest.update(b"F\0")
                 source_digest.update(path.read_bytes())

@@ -147,12 +147,12 @@ Steps:
 
 Steps:
 
-1. Add the `mactools` tool target under `Contents/MacOS` without a third-party
-   argument-parser dependency.
+1. Add a standalone `mactools` tool target without a third-party argument-parser
+   dependency; distribute it as a separate same-version release asset.
 2. Implement offline `help` and CLI-version output, plus handshake-backed
    `version` and `doctor` human/JSON output.
-3. Resolve the containing app through the real executable path first, then
-   Launch Services. Verify identity before launch.
+3. Read identity and version from the CLI executable's embedded Info.plist,
+   locate the matching host through Launch Services, and verify identity before launch.
 4. Launch without activation and retry broker/host readiness within one injected
    10-second deadline.
 5. Authenticate the broker and fail closed; never fall back to `CFMessagePort`
@@ -343,22 +343,18 @@ Steps:
 
 **Files:**
 
-- Create `Sources/Core/CLI/CLIInstallationController.swift`
 - Create `Sources/App/CLISettingsSection.swift`
 - Modify `Sources/App/SettingsView.swift`
 - Add localized strings to the appropriate `.xcstrings` catalog
-- Create `Tests/Core/CLI/CLIInstallationControllerTests.swift`
 
 Steps:
 
-1. Show broker registration/approval state, bundled CLI path, symlink state, and
-   setup command in Settings using existing host settings styles.
-2. Install only `~/.local/bin/mactools`; never request privilege or edit shell
-   startup files.
-3. Refuse to overwrite regular files and foreign symlinks. Require explicit
-   confirmation when ownership cannot be proven.
-4. Add remove/repair actions limited to the MacTools-owned symlink.
-5. Keep Chinese copy concise and add tests against a temporary home directory.
+1. Show broker registration and approval state in Settings using existing host
+   settings styles.
+2. Link to the separately downloadable CLI release asset.
+3. Enable or disable only the app-bundled broker integration; never write a CLI
+   executable, symlink, privileged path, or shell startup file.
+4. Keep Chinese copy concise and cover broker registration transitions.
 
 ### Task 13: Update build, signing, packaging, and Homebrew flow
 
@@ -375,14 +371,18 @@ Steps:
 
 Steps:
 
-1. Build universal CLI/broker binaries and embed the broker plist in the app.
-2. Sign CLI and broker before the outer app in local and GitHub release flows.
+1. Build universal CLI/broker binaries, embed only the broker and its plist in
+   the app, and package the CLI as a separate archive.
+2. Sign the standalone CLI and broker before the outer app in local and GitHub
+   release flows.
 3. Verify exact signing identifiers, Team Identifier parity, hardened runtime,
    inner/outer strict signatures, notarization, and bundle paths.
 4. Ensure debug install preserves/re-registers the broker safely without touching
    a release app's service.
-5. Expose the bundled CLI from Homebrew with no copied standalone binary.
-6. Add artifact-layout and signing-order script tests.
+5. Publish the version-matched CLI archive and checksum alongside the app DMG in
+   a Homebrew-friendly one-binary layout.
+6. Notarize the app DMG and CLI archive independently and add artifact-layout
+   and signing-order checks.
 
 ### Task 14: Documentation, changelog, and release verification
 
@@ -397,14 +397,14 @@ Steps:
 
 Steps:
 
-1. Document setup, all commands, JSON schema, exit codes, sensitive input,
-   confirmation, host startup, and uninstall behavior.
+1. Document separate installation, integration setup, all commands, JSON schema,
+   exit codes, sensitive input, confirmation, host startup, and uninstall behavior.
 2. Add an E2E pack for cold host launch, signed handshake, discovery, one safe
    parameterless action, cancellation, incompatible protocol, and redaction.
 3. Run focused Swift/script tests after each task, then `make build` and the full
    suite because this is cross-module infrastructure.
-4. Build a release-style signed app, verify nested signatures, run the CLI from
-   the bundle and symlink, and inspect the notarized DMG before release.
+4. Build release-style signed app and CLI artifacts, verify role signatures, run
+   the standalone CLI by absolute path, and inspect both notarization results.
 
 ---
 

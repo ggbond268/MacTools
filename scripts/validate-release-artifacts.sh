@@ -1,0 +1,205 @@
+#!/bin/zsh
+
+set -euo pipefail
+
+CLI_ARCHIVE=""
+DMG_PATH=""
+EXPECTED_VERSION=""
+EXPECTED_BUILD=""
+ALLOW_UNSIGNED=0
+CHECK_GATEKEEPER=0
+
+function fail() {
+  printf '[artifact-validation] error: %s\n' "$1" >&2
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cli-archive) CLI_ARCHIVE="${2:-}"; shift 2 ;;
+    --dmg) DMG_PATH="${2:-}"; shift 2 ;;
+    --version) EXPECTED_VERSION="${2:-}"; shift 2 ;;
+    --build) EXPECTED_BUILD="${2:-}"; shift 2 ;;
+    --allow-unsigned) ALLOW_UNSIGNED=1; shift ;;
+    --gatekeeper) CHECK_GATEKEEPER=1; shift ;;
+    *) fail "Unknown argument: $1" ;;
+  esac
+done
+
+[[ -f "$CLI_ARCHIVE" ]] || fail "CLI archive not found: $CLI_ARCHIVE"
+[[ -f "$DMG_PATH" ]] || fail "DMG not found: $DMG_PATH"
+[[ -n "$EXPECTED_VERSION" ]] || fail "Expected version is required."
+[[ -n "$EXPECTED_BUILD" ]] || fail "Expected build is required."
+
+STAGE_DIR="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/mactools-artifact-validation.XXXXXX")"
+MOUNT_POINT=""
+function cleanup() {
+  if [[ -n "$MOUNT_POINT" && -d "$MOUNT_POINT" ]]; then
+    /usr/bin/hdiutil detach "$MOUNT_POINT" -quiet || true
+  fi
+  /bin/rm -rf "$STAGE_DIR"
+}
+trap cleanup EXIT
+
+/usr/bin/python3 - "$CLI_ARCHIVE" <<'PY'
+import stat
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    infos = archive.infolist()
+    if [info.filename for info in infos] != ["mactools"]:
+        raise SystemExit("CLI archive must contain exactly one root entry named mactools")
+    mode = infos[0].external_attr >> 16
+    if not stat.S_ISREG(mode) or mode & 0o7777 != 0o755:
+        raise SystemExit("CLI archive entry must be a regular executable with exact mode 0755")
+PY
+
+/usr/bin/ditto -x -k "$CLI_ARCHIVE" "$STAGE_DIR/cli"
+CLI_PATH="$STAGE_DIR/cli/mactools"
+[[ -x "$CLI_PATH" && ! -L "$CLI_PATH" ]] || fail "Extracted CLI is not a regular executable."
+
+ARCHS="$(/usr/bin/lipo -archs "$CLI_PATH")"
+[[ " $ARCHS " == *" arm64 "* && " $ARCHS " == *" x86_64 "* ]] \
+  || fail "CLI must contain arm64 and x86_64 slices; found: $ARCHS"
+
+VERSION_JSON="$($CLI_PATH version --json)" || fail "CLI could not report its embedded version."
+VERSION_JSON="$VERSION_JSON" EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_BUILD="$EXPECTED_BUILD" \
+  /usr/bin/python3 - <<'PY'
+import json
+import os
+
+value = json.loads(os.environ["VERSION_JSON"])
+data = value.get("data") or {}
+actual = (str(data.get("cliVersion", "")), str(data.get("cliBuild", "")))
+expected = (os.environ["EXPECTED_VERSION"], os.environ["EXPECTED_BUILD"])
+if actual != expected:
+    raise SystemExit(f"CLI version/build mismatch: expected {expected}, found {actual}")
+PY
+
+function signing_detail() {
+  /usr/bin/codesign -dvvv "$1" 2>&1 \
+    | /usr/bin/awk -F= -v key="$2" '$1 == key { print substr($0, length(key) + 2); exit }'
+}
+
+function validate_embedded_info() {
+  local path="$1"
+  local architecture="$2"
+  local expected_identifier="$3"
+  local plist_path="$STAGE_DIR/$(/usr/bin/basename "$path").$architecture.plist"
+  local identifier version build
+  /usr/bin/otool -arch "$architecture" -s __TEXT __info_plist "$path" \
+    | /usr/bin/python3 -c '
+import re
+import sys
+
+output = bytearray()
+for line in sys.stdin:
+    fields = line.split()
+    if fields and re.fullmatch(r"[0-9a-fA-F]+", fields[0]):
+        for word in fields[1:]:
+            output.extend(bytes.fromhex(word)[::-1])
+sys.stdout.buffer.write(bytes(output).rstrip(b"\0"))
+' > "$plist_path"
+  /usr/bin/plutil -lint "$plist_path" >/dev/null 2>&1 \
+    || fail "Missing or invalid embedded Info.plist for $path ($architecture)."
+  identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist_path")"
+  version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist_path")"
+  build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist_path")"
+  [[ "$identifier" == "$expected_identifier" ]] \
+    || fail "Embedded identifier mismatch for $path ($architecture)."
+  [[ "$version" == "$EXPECTED_VERSION" && "$build" == "$EXPECTED_BUILD" ]] \
+    || fail "Embedded version/build mismatch for $path ($architecture)."
+}
+
+function validate_signed_role() {
+  local path="$1"
+  local expected_identifier="$2"
+  local expected_team="$3"
+  local details identifier team
+  /usr/bin/codesign --verify --strict --verbose=2 "$path" >/dev/null 2>&1 \
+    || fail "Invalid code signature: $path"
+  details="$(/usr/bin/codesign -dvvv "$path" 2>&1)"
+  identifier="$(signing_detail "$path" Identifier)"
+  team="$(signing_detail "$path" TeamIdentifier)"
+  [[ "$identifier" == "$expected_identifier" ]] \
+    || fail "Identifier mismatch for $path: expected $expected_identifier, found $identifier"
+  [[ -n "$expected_team" && "$team" == "$expected_team" ]] \
+    || fail "Team Identifier mismatch for $path"
+  [[ "$details" == *"runtime"* ]] || fail "Hardened runtime is missing: $path"
+}
+
+ATTACH_PLIST="$STAGE_DIR/attach.plist"
+/usr/bin/hdiutil attach -readonly -nobrowse -plist "$DMG_PATH" > "$ATTACH_PLIST"
+MOUNT_POINT="$(/usr/bin/python3 - "$ATTACH_PLIST" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as stream:
+    value = plistlib.load(stream)
+for entity in value.get("system-entities", []):
+    mount = entity.get("mount-point")
+    if mount:
+        print(mount)
+        break
+PY
+)"
+[[ -n "$MOUNT_POINT" && -d "$MOUNT_POINT" ]] || fail "Could not mount DMG."
+
+APP_PATH="$MOUNT_POINT/MacTools.app"
+[[ -d "$APP_PATH" ]] || fail "DMG must contain MacTools.app at its root."
+APP_COUNT="$(/usr/bin/find "$MOUNT_POINT" -maxdepth 1 -type d -name '*.app' | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
+[[ "$APP_COUNT" == "1" ]] || fail "DMG must contain exactly one root-level app."
+/usr/bin/python3 - "$APP_PATH/Contents/MacOS" <<'PY' \
+  || fail "DMG app must not contain an embedded mactools CLI."
+import os
+import sys
+
+if "mactools" in os.listdir(sys.argv[1]):
+    raise SystemExit(1)
+PY
+
+APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
+APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")"
+[[ "$APP_VERSION" == "$EXPECTED_VERSION" && "$APP_BUILD" == "$EXPECTED_BUILD" ]] \
+  || fail "App version/build does not match the CLI release."
+
+HOST_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
+BROKER_PATH="$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
+[[ -x "$BROKER_PATH" ]] || fail "DMG app is missing MacToolsCLIBroker."
+
+for architecture in arm64 x86_64; do
+  validate_embedded_info "$CLI_PATH" "$architecture" "$HOST_IDENTIFIER.cli"
+done
+for architecture in $(/usr/bin/lipo -archs "$BROKER_PATH"); do
+  validate_embedded_info "$BROKER_PATH" "$architecture" "$HOST_IDENTIFIER.cli-broker"
+done
+
+LAUNCH_AGENT_PATH="$APP_PATH/Contents/Library/LaunchAgents/app.ggbond.MacTools.cli-broker.plist"
+[[ -f "$LAUNCH_AGENT_PATH" ]] || fail "DMG app is missing the broker LaunchAgent plist."
+LAUNCH_AGENT_LABEL="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$LAUNCH_AGENT_PATH")"
+LAUNCH_AGENT_PROGRAM="$(/usr/libexec/PlistBuddy -c 'Print :BundleProgram' "$LAUNCH_AGENT_PATH")"
+LAUNCH_AGENT_SERVICE="$(/usr/libexec/PlistBuddy -c "Print :MachServices:$HOST_IDENTIFIER.cli-broker" "$LAUNCH_AGENT_PATH")"
+[[ "$LAUNCH_AGENT_LABEL" == "$HOST_IDENTIFIER.cli-broker" ]] \
+  || fail "Broker LaunchAgent label does not match the host identity."
+[[ "$LAUNCH_AGENT_PROGRAM" == "Contents/MacOS/MacToolsCLIBroker" ]] \
+  || fail "Broker LaunchAgent BundleProgram is invalid."
+[[ "$LAUNCH_AGENT_SERVICE" == "true" ]] \
+  || fail "Broker LaunchAgent MachServices entry is invalid."
+
+if [[ "$ALLOW_UNSIGNED" -eq 0 ]]; then
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH" >/dev/null 2>&1 \
+    || fail "Invalid app signature."
+  HOST_TEAM="$(signing_detail "$APP_PATH" TeamIdentifier)"
+  [[ -n "$HOST_TEAM" ]] || fail "App signature has no Team Identifier."
+  validate_signed_role "$APP_PATH" "$HOST_IDENTIFIER" "$HOST_TEAM"
+  validate_signed_role "$BROKER_PATH" "$HOST_IDENTIFIER.cli-broker" "$HOST_TEAM"
+  validate_signed_role "$CLI_PATH" "$HOST_IDENTIFIER.cli" "$HOST_TEAM"
+fi
+
+if [[ "$CHECK_GATEKEEPER" -eq 1 ]]; then
+  /usr/sbin/spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
+  /usr/sbin/spctl -a -t exec -v "$CLI_PATH"
+fi
+
+printf '[artifact-validation] app, broker, and standalone CLI passed\n'

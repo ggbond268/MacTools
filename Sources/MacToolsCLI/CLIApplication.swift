@@ -92,7 +92,7 @@ struct CLIApplication {
     }
 
     private func version(json: Bool) async throws -> Int32 {
-        let version = client.containingAppVersion()
+        let version = client.cliVersion()
         let handshake = try? await client.handshakeWithoutLaunching()
         if json {
             let object: [String: Any] = [
@@ -133,7 +133,7 @@ struct CLIApplication {
             _ = try await client.prepareHost()
             return try await execute(operation: .doctor, payload: payload, json: json)
         } catch let CLIBrokerClientError.unavailable(message) {
-            let applicationURL = CLIServiceConfiguration.containingApplicationURL()
+            let applicationURL = client.installedHostApplicationURL()
             let signatureAccepted = applicationURL.map {
                 CLIPeerIdentityValidator().acceptsApplication(at: $0, as: .host)
             } ?? false
@@ -145,9 +145,9 @@ struct CLIApplication {
                     message: message,
                     rejectionCategory: "brokerUnavailableOrApprovalRequired",
                     data: [
-                        "containingAppPath": applicationURL?.path as Any? ?? NSNull(),
-                        "containingAppSignatureAccepted": signatureAccepted,
-                        "brokerServiceName": CLIServiceConfiguration.runtimeServiceName,
+                        "hostAppPath": applicationURL?.path as Any? ?? NSNull(),
+                        "hostAppSignatureAccepted": signatureAccepted,
+                        "brokerServiceName": CLIServiceConfiguration.runtimeCLIServiceName,
                         "brokerStatus": "unreachableOrApprovalRequired",
                         "guidance": guidance,
                     ]

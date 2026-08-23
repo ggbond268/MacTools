@@ -16,30 +16,30 @@
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "允许后台运行" } },
       "zh-Hant": { "stringUnit": { "state": "translated", "value": "允許背景執行" } }
     } },
-    "commandLine.uninstall": { "extractionState": "manual", "localizations": {
-      "en": { "stringUnit": { "state": "translated", "value": "Remove Command" } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "移除命令" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "移除命令" } }
+    "commandLine.download": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Download CLI" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "下载 CLI" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "下載 CLI" } }
     } },
-    "commandLine.install": { "extractionState": "manual", "localizations": {
-      "en": { "stringUnit": { "state": "translated", "value": "Install Command" } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "安装命令" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "安裝命令" } }
+    "commandLine.enable": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Enable" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "启用" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "啟用" } }
     } },
-    "commandLine.conflict": { "extractionState": "manual", "localizations": {
-      "en": { "stringUnit": { "state": "translated", "value": "Another file already uses ~/.local/bin/mactools." } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "~/.local/bin/mactools 已被其他文件占用。" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "~/.local/bin/mactools 已被其他檔案佔用。" } }
+    "commandLine.enabled": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "The separately installed mactools-cli may connect to MacTools." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "已允许单独安装的 mactools-cli 连接到 MacTools。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "已允許單獨安裝的 mactools-cli 連接到 MacTools。" } }
     } },
-    "commandLine.installed": { "extractionState": "manual", "localizations": {
-      "en": { "stringUnit": { "state": "translated", "value": "Installed at ~/.local/bin/mactools. Run mactools help to begin." } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "已安装到 ~/.local/bin/mactools，可运行 mactools help 开始使用。" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "已安裝到 ~/.local/bin/mactools，可執行 mactools help 開始使用。" } }
+    "commandLine.requiresApproval": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Allow the MacTools command-line broker to run in the background in System Settings." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "请在系统设置中允许 MacTools 命令行代理后台运行。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "請在系統設定中允許 MacTools 命令列代理程式在背景執行。" } }
     } },
     "commandLine.description": { "extractionState": "manual", "localizations": {
-      "en": { "stringUnit": { "state": "translated", "value": "Install the local command for MacTools actions, workflows, and plugin diagnostics." } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "安装本机命令，调用 MacTools 的操作、工作流与插件诊断。" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "安裝本機命令，呼叫 MacTools 的操作、工作流程與外掛診斷。" } }
+      "en": { "stringUnit": { "state": "translated", "value": "After installing mactools-cli separately, enable local command-line integration here." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "单独安装 mactools-cli 后，在此启用本机命令行集成。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "單獨安裝 mactools-cli 後，在此啟用本機命令列整合。" } }
     } },
     "appIntents.title": { "extractionState": "manual", "localizations": {
       "ar": { "stringUnit": { "state": "translated", "value": "اختصارات Apple وSiri وSpotlight" } },

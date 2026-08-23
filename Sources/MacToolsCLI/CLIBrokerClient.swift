@@ -146,7 +146,7 @@ final class CLIBrokerClient: @unchecked Sendable {
     private func connectAndHandshake(timeout: TimeInterval) async throws -> CLIHandshakeResponse {
         connection?.invalidate()
         negotiatedProtocolVersion = nil
-        let connection = NSXPCConnection(machServiceName: CLIServiceConfiguration.runtimeServiceName)
+        let connection = NSXPCConnection(machServiceName: CLIServiceConfiguration.runtimeCLIServiceName)
         connection.remoteObjectInterface = NSXPCInterface(with: CLIBrokerXPCProtocol.self)
         guard identityValidator.configure(connection, toRequire: .broker) else {
             throw CLIBrokerClientError.unavailable("The broker identity could not be verified.")
@@ -156,8 +156,8 @@ final class CLIBrokerClient: @unchecked Sendable {
         let hello = CLIHandshakeRequest(
             minimumProtocolVersion: CLIProtocolVersion.minimum,
             maximumProtocolVersion: CLIProtocolVersion.current,
-            clientVersion: containingAppVersion().version,
-            clientBuild: containingAppVersion().build
+            clientVersion: cliVersion().version,
+            clientBuild: cliVersion().build
         )
         let request = try CLIProtocolCodec.encodeRequest(hello)
         let responseData: Data = try await awaitReply(timeout: timeout) { completion in
@@ -226,17 +226,8 @@ final class CLIBrokerClient: @unchecked Sendable {
     }
 
     private func launchHost() throws {
-        let applicationURL: URL
-        if let containing = CLIServiceConfiguration.containingApplicationURL() {
-            applicationURL = containing
-        } else {
-            let identifier = hostBundleIdentifier()
-            guard let installed = NSWorkspace.shared.urlForApplication(
-                withBundleIdentifier: identifier
-            ) else {
-                throw CLIBrokerClientError.unavailable("MacTools is not installed.")
-            }
-            applicationURL = installed
+        guard let applicationURL = installedHostApplicationURL() else {
+            throw CLIBrokerClientError.unavailable("MacTools is not installed.")
         }
         guard identityValidator.acceptsApplication(at: applicationURL, as: .host) else {
             throw CLIBrokerClientError.unavailable(
@@ -253,18 +244,22 @@ final class CLIBrokerClient: @unchecked Sendable {
         }
     }
 
-    func containingAppVersion() -> (version: String, build: String) {
-        let bundle = CLIServiceConfiguration.containingApplicationBundle()
+    func cliVersion() -> (version: String, build: String) {
+        let info = CLIServiceConfiguration.executableInfoDictionary()
         return (
-            bundle?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
-            bundle?.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+            info["CFBundleShortVersionString"] as? String ?? "unknown",
+            info["CFBundleVersion"] as? String ?? "unknown"
         )
     }
 
+    func installedHostApplicationURL() -> URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: hostBundleIdentifier())
+    }
+
     private func hostBundleIdentifier() -> String {
-        let identifier = Bundle.main.bundleIdentifier ?? "app.ggbond.MacTools"
-        return identifier.hasSuffix(".cli")
-            ? String(identifier.dropLast(".cli".count))
-            : identifier
+        CLIServiceConfiguration.hostBundleIdentifier(
+            for: CLIServiceConfiguration.executableInfoDictionary()["CFBundleIdentifier"]
+                as? String ?? "app.ggbond.MacTools.cli"
+        )
     }
 }

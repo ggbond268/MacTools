@@ -92,7 +92,6 @@ jobs:
           fi
 
           HOST_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
-          codesign --force --sign - --identifier "$HOST_IDENTIFIER.cli" "$APP_PATH/Contents/MacOS/mactools"
           codesign --force --sign - --identifier "$HOST_IDENTIFIER.cli-broker" "$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
 
           codesign --force --deep --sign - --entitlements Configs/MacTools.entitlements "$APP_PATH"
@@ -147,7 +146,10 @@ jobs:
           chmod +x "$ARTIFACT_ROOT/run-debug.sh"
 
           cat > "$ARTIFACT_ROOT/README.txt" <<'EOF'
-          This is an unsigned Debug build for local testing.
+          This is an ad-hoc signed Debug build for local testing.
+
+          This artifact intentionally omits the standalone CLI. An ad-hoc signature
+          has no Apple Team Identifier, so it cannot satisfy the CLI trust boundary.
 
           Run ./run-debug.sh to launch MacTools Dev with the bundled local plugin catalog.
           If macOS blocks the app because it was downloaded from the internet, remove quarantine:

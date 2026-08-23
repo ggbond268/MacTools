@@ -149,6 +149,8 @@ for raw in sorted(path for path in paths if path):
     if os.path.islink(path):
         digest.update(b"L\0")
         digest.update(os.readlink(path).encode("utf-8", "surrogateescape"))
+    elif not os.path.exists(path):
+        digest.update(b"D\0")
     else:
         digest.update(b"F\0")
         with open(path, "rb") as handle:

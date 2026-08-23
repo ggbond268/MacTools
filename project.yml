@@ -122,24 +122,21 @@ targets:
           DEPLOYMENT_POSTPROCESSING: true
           STRIP_INSTALLED_PRODUCT: true
     postBuildScripts:
-    - name: Embed MacTools CLI service
+    - name: Embed MacTools CLI broker
       script: |
         set -euo pipefail
         app_macos_dir="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/MacOS"
         launch_agents_dir="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
         mkdir -p "$app_macos_dir" "$launch_agents_dir"
-        ditto "$BUILT_PRODUCTS_DIR/MacToolsCLI" "$app_macos_dir/mactools"
         ditto "$BUILT_PRODUCTS_DIR/MacToolsCLIBroker" "$app_macos_dir/MacToolsCLIBroker"
         service_name="$PRODUCT_BUNDLE_IDENTIFIER.cli-broker"
         sed "s/__MACTOOLS_CLI_SERVICE_NAME__/$service_name/g" \
           "$SRCROOT/Configs/MacToolsCLIBroker-LaunchAgent.plist" \
           > "$launch_agents_dir/app.ggbond.MacTools.cli-broker.plist"
       inputFiles:
-      - "$(BUILT_PRODUCTS_DIR)/MacToolsCLI"
       - "$(BUILT_PRODUCTS_DIR)/MacToolsCLIBroker"
       - "$(SRCROOT)/Configs/MacToolsCLIBroker-LaunchAgent.plist"
       outputFiles:
-      - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/mactools"
       - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/MacToolsCLIBroker"
       - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/app.ggbond.MacTools.cli-broker.plist"
   MacToolsCLI:
@@ -163,6 +160,7 @@ targets:
         PRODUCT_MODULE_NAME: MacToolsCLI
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.cli"
         GENERATE_INFOPLIST_FILE: true
+        CREATE_INFOPLIST_SECTION_IN_BINARY: true
         SWIFT_VERSION: 6.0
         MACOSX_DEPLOYMENT_TARGET: '14.0'
         CODE_SIGN_STYLE: Automatic
@@ -196,6 +194,7 @@ targets:
         PRODUCT_MODULE_NAME: MacToolsCLIBroker
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.cli-broker"
         GENERATE_INFOPLIST_FILE: true
+        CREATE_INFOPLIST_SECTION_IN_BINARY: true
         SWIFT_VERSION: 6.0
         MACOSX_DEPLOYMENT_TARGET: '14.0'
         CODE_SIGN_STYLE: Automatic

@@ -75,6 +75,8 @@ jobs:
             echo "PRERELEASE=$PRERELEASE"
             echo "DMG_PATH=${ARTIFACT_DIR}/${TAG}/${PROJECT_NAME}.dmg"
             echo "SHA256_PATH=${ARTIFACT_DIR}/${TAG}/${PROJECT_NAME}.sha256"
+            echo "CLI_ARCHIVE_PATH=${ARTIFACT_DIR}/${TAG}/mactools-cli-${VERSION}-macos-universal.zip"
+            echo "CLI_SHA256_PATH=${ARTIFACT_DIR}/${TAG}/mactools-cli-${VERSION}-macos-universal.sha256"
           } >> "$GITHUB_ENV"
 
       - name: Verify production plugin catalog
@@ -262,10 +264,10 @@ jobs:
               "$1"
           }
 
-          CLI_PATH="$APP_PATH/Contents/MacOS/mactools"
+          CLI_PATH="${DERIVED_DATA}/Build/Products/Release/MacToolsCLI"
           BROKER_PATH="$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
           HOST_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
-          [[ -x "$CLI_PATH" ]] || { echo "Bundled CLI is missing" >&2; exit 1; }
+          [[ -x "$CLI_PATH" ]] || { echo "Standalone CLI is missing" >&2; exit 1; }
           [[ -x "$BROKER_PATH" ]] || { echo "CLI broker is missing" >&2; exit 1; }
           sign_path_with_identifier "$CLI_PATH" "$HOST_IDENTIFIER.cli"
           sign_path_with_identifier "$BROKER_PATH" "$HOST_IDENTIFIER.cli-broker"
@@ -338,6 +340,18 @@ jobs:
           validate_cli_role_signature "$CLI_PATH" "$HOST_IDENTIFIER.cli" "$HOST_TEAM"
           validate_cli_role_signature "$BROKER_PATH" "$HOST_IDENTIFIER.cli-broker" "$HOST_TEAM"
 
+      - name: Package standalone CLI
+        run: |
+          scripts/package-cli.sh \
+            --binary "${DERIVED_DATA}/Build/Products/Release/MacToolsCLI" \
+            --output "$CLI_ARCHIVE_PATH"
+
+          ARCHIVE_LIST="$(unzip -Z1 "$CLI_ARCHIVE_PATH")"
+          [[ "$ARCHIVE_LIST" == "mactools" ]] || {
+            echo "Unexpected standalone CLI archive contents: $ARCHIVE_LIST" >&2
+            exit 1
+          }
+
       - name: Create and sign DMG
         env:
           BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
@@ -370,7 +384,15 @@ jobs:
 
           /usr/bin/codesign --verify --verbose=2 "$DMG_PATH"
 
-      - name: Notarize and staple DMG
+      - name: Validate signed app and standalone CLI artifacts
+        run: |
+          scripts/validate-release-artifacts.sh \
+            --cli-archive "$CLI_ARCHIVE_PATH" \
+            --dmg "$DMG_PATH" \
+            --version "$VERSION" \
+            --build "$BUILD_NUMBER"
+
+      - name: Notarize app and standalone CLI
         env:
           ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
@@ -386,13 +408,29 @@ jobs:
             --wait \
             --timeout 30m
 
+          xcrun notarytool submit "$CLI_ARCHIVE_PATH" \
+            --key "$API_KEY_PATH" \
+            --key-id "$ASC_API_KEY_ID" \
+            --issuer "$ASC_API_ISSUER_ID" \
+            --wait \
+            --timeout 30m
+
           xcrun stapler staple "$DMG_PATH"
-          spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
+          scripts/validate-release-artifacts.sh \
+            --cli-archive "$CLI_ARCHIVE_PATH" \
+            --dmg "$DMG_PATH" \
+            --version "$VERSION" \
+            --build "$BUILD_NUMBER" \
+            --gatekeeper
           rm -f "$API_KEY_PATH"
 
       - name: Compute SHA256
         run: |
           shasum -a 256 "$DMG_PATH" | tee "$SHA256_PATH"
+          (
+            cd "$(dirname "$CLI_ARCHIVE_PATH")"
+            shasum -a 256 "$(basename "$CLI_ARCHIVE_PATH")"
+          ) | tee "$CLI_SHA256_PATH"
 
       - name: Extract release notes from CHANGELOG
         run: |
@@ -522,6 +560,8 @@ jobs:
           path: |
             ${{ env.DMG_PATH }}
             ${{ env.SHA256_PATH }}
+            ${{ env.CLI_ARCHIVE_PATH }}
+            ${{ env.CLI_SHA256_PATH }}
           if-no-files-found: error
           retention-days: 30
 
@@ -537,10 +577,20 @@ jobs:
           fi
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$DMG_PATH#${PROJECT_NAME}.dmg" "$SHA256_PATH#${PROJECT_NAME}.sha256" --clobber
+            gh release upload "$TAG" \
+              "$DMG_PATH#${PROJECT_NAME}.dmg" \
+              "$SHA256_PATH#${PROJECT_NAME}.sha256" \
+              "$CLI_ARCHIVE_PATH" \
+              "$CLI_SHA256_PATH" \
+              --clobber
             gh release edit "$TAG" "${RELEASE_ARGS[@]}"
           else
-            gh release create "$TAG" "$DMG_PATH#${PROJECT_NAME}.dmg" "$SHA256_PATH#${PROJECT_NAME}.sha256" "${RELEASE_ARGS[@]}"
+            gh release create "$TAG" \
+              "$DMG_PATH#${PROJECT_NAME}.dmg" \
+              "$SHA256_PATH#${PROJECT_NAME}.sha256" \
+              "$CLI_ARCHIVE_PATH" \
+              "$CLI_SHA256_PATH" \
+              "${RELEASE_ARGS[@]}"
           fi
 
       - name: Commit app release metadata to main

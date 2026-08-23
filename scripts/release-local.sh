@@ -42,7 +42,7 @@ Options:
   --tag <tag>                Git tag / release tag. Defaults to v<version>.
   --notes-file <path>        Release notes file for GitHub Release upload.
   --publish                  Push the tag and sync the DMG to GitHub Releases.
-  --publish-existing         Upload the existing DMG artifact without rebuilding.
+  --publish-existing         Upload the existing DMG and CLI artifacts without rebuilding.
   --skip-build               Reuse the existing Release app in build/DerivedData.
   --skip-sign                Skip Developer ID signing. Implies --skip-notarize.
   --skip-notarize            Skip notarization and stapling.
@@ -508,14 +508,11 @@ function dmg_signing_identifier() {
 
 function sign_app_bundle() {
   local app_path="$1"
-  local cli_path="$app_path/Contents/MacOS/mactools"
   local broker_path="$app_path/Contents/MacOS/MacToolsCLIBroker"
 
-  [[ -x "$cli_path" ]] || fail "未找到内置命令行工具：$cli_path"
   [[ -x "$broker_path" ]] || fail "未找到命令行代理：$broker_path"
   local host_identifier
   host_identifier="$(app_bundle_identifier "$app_path")"
-  sign_path_with_identifier "$cli_path" "$host_identifier.cli"
   sign_path_with_identifier "$broker_path" "$host_identifier.cli-broker"
 
   if [[ -d "$app_path/Contents" ]]; then
@@ -541,13 +538,23 @@ function sign_app_bundle() {
 
   sign_app_path "$app_path"
   validate_finder_sync_extension "$app_path"
-  /usr/bin/codesign --verify --strict --verbose=2 "$cli_path"
   /usr/bin/codesign --verify --strict --verbose=2 "$broker_path"
   /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
   local host_team
   host_team="$(signing_detail "$app_path" TeamIdentifier)"
-  validate_cli_role_signature "$cli_path" "$host_identifier.cli" "$host_team"
   validate_cli_role_signature "$broker_path" "$host_identifier.cli-broker" "$host_team"
+}
+
+function sign_cli_binary() {
+  local cli_path="$1"
+  local host_identifier="$2"
+  local cli_team
+
+  [[ -x "$cli_path" ]] || fail "未找到独立命令行工具：$cli_path"
+  sign_path_with_identifier "$cli_path" "$host_identifier.cli"
+  /usr/bin/codesign --verify --strict --verbose=2 "$cli_path"
+  cli_team="$(signing_detail "$cli_path" TeamIdentifier)"
+  validate_cli_role_signature "$cli_path" "$host_identifier.cli" "$cli_team"
 }
 
 function sign_disk_image() {
@@ -621,16 +628,37 @@ function notarize_dmg() {
   xcrun stapler staple -v "$dmg_path"
 }
 
-function validate_notarized_dmg() {
-  local dmg_path="$1"
-  local assessment_output
+function notarize_cli_archive() {
+  local archive_path="$1"
+  [[ -n "${APPLE_NOTARY_PROFILE:-}" ]] || fail "缺少 APPLE_NOTARY_PROFILE，无法公证。"
 
-  assessment_output="$(spctl -a -t open --context context:primary-signature -v "$dmg_path" 2>&1)" \
-    || fail "Gatekeeper 未接受最终 DMG：
-$assessment_output"
+  info "Submitting standalone CLI for notarization"
+  xcrun notarytool submit "$archive_path" --keychain-profile "$APPLE_NOTARY_PROFILE" --wait
+}
 
-  info "Gatekeeper assessment passed"
-  printf '%s\n' "$assessment_output"
+function validate_release_artifacts() {
+  local arguments
+  arguments=(
+    --cli-archive "$CLI_ARCHIVE_PATH"
+    --dmg "$DMG_PATH"
+    --version "$VERSION"
+    --build "$BUILD_NUMBER"
+  )
+  if [[ "$SKIP_SIGN" -eq 1 ]]; then
+    arguments+=(--allow-unsigned)
+  fi
+  if [[ "$SKIP_NOTARIZE" -eq 0 ]]; then
+    arguments+=(--gatekeeper)
+  fi
+  "$ROOT_DIR/scripts/validate-release-artifacts.sh" "${arguments[@]}"
+}
+
+function verify_existing_checksum() {
+  local checksum_path="$1"
+  (
+    cd "$(dirname "$checksum_path")"
+    /usr/bin/shasum -a 256 -c "$(basename "$checksum_path")"
+  ) || fail "现有发布文件的校验和不匹配：$checksum_path"
 }
 
 function require_existing_dmg() {
@@ -645,6 +673,9 @@ function require_existing_dmg() {
 
 function publish_release() {
   local dmg_path="$1"
+  local cli_archive_path="$2"
+  local dmg_sha256_path="$3"
+  local cli_sha256_path="$4"
   local repository
   repository="$(git_repository)" || fail "无法推断 GitHub 仓库，请在 scripts/release.local.env 中设置 GITHUB_REPOSITORY。"
 
@@ -675,10 +706,14 @@ function publish_release() {
   fi
 
   if gh release view "$TAG" --repo "$repository" >/dev/null 2>&1; then
-    gh release upload "$TAG" "$dmg_path" --repo "$repository" --clobber
+    gh release upload "$TAG" \
+      "$dmg_path" "$dmg_sha256_path" "$cli_archive_path" "$cli_sha256_path" \
+      --repo "$repository" --clobber
     gh release edit "$TAG" "${release_args[@]}"
   else
-    gh release create "$TAG" "$dmg_path" "${release_args[@]}"
+    gh release create "$TAG" \
+      "$dmg_path" "$dmg_sha256_path" "$cli_archive_path" "$cli_sha256_path" \
+      "${release_args[@]}"
   fi
 }
 
@@ -695,18 +730,28 @@ NOTES_FILE="${NOTES_FILE:-${GITHUB_RELEASE_NOTES_FILE:-}}"
 
 [[ -n "$VERSION" ]] || fail "无法从 Configs/AppVersion.xcconfig 读取 MARKETING_VERSION。"
 [[ -n "$BUILD_NUMBER" ]] || fail "无法从 Configs/AppVersion.xcconfig 读取 CURRENT_PROJECT_VERSION。"
+[[ "$TAG" == "v$VERSION" ]] \
+  || fail "发布标签必须与版本一致：期望 v$VERSION，实际 $TAG。"
 if [[ -n "$NOTES_FILE" && ! -f "$NOTES_FILE" ]]; then
   fail "Release notes 文件不存在：$NOTES_FILE"
 fi
 if [[ "$PUBLISH" -eq 1 && "$PUBLISH_EXISTING" -eq 1 ]]; then
   fail "--publish 和 --publish-existing 不能同时使用。"
 fi
+if [[ "$PUBLISH" -eq 1 || "$PUBLISH_EXISTING" -eq 1 ]]; then
+  [[ "$SKIP_SIGN" -eq 0 && "$SKIP_NOTARIZE" -eq 0 ]] \
+    || fail "发布到 GitHub 时不能跳过签名或公证。"
+fi
 
 ARTIFACT_DIR="$ROOT_DIR/build/release/$TAG"
 DERIVED_DATA="$ROOT_DIR/build/DerivedData"
 APP_PATH="$DERIVED_DATA/Build/Products/Release/$APP_NAME.app"
+CLI_PATH="$DERIVED_DATA/Build/Products/Release/MacToolsCLI"
 SIGNED_APP_PATH="$ARTIFACT_DIR/$APP_NAME.app"
 DMG_PATH="$ARTIFACT_DIR/$APP_NAME.dmg"
+DMG_SHA256_PATH="$ARTIFACT_DIR/$APP_NAME.sha256"
+CLI_ARCHIVE_PATH="$ARTIFACT_DIR/mactools-cli-$VERSION-macos-universal.zip"
+CLI_SHA256_PATH="$ARTIFACT_DIR/mactools-cli-$VERSION-macos-universal.sha256"
 DMG_IDENTIFIER=""
 DOCS_DIR="$ROOT_DIR/docs"
 APPCAST_PATH="$DOCS_DIR/appcast.xml"
@@ -716,7 +761,12 @@ mkdir -p "$ARTIFACT_DIR"
 
 if [[ "$PUBLISH_EXISTING" -eq 1 ]]; then
   require_existing_dmg "$DMG_PATH"
-  validate_notarized_dmg "$DMG_PATH"
+  [[ -f "$CLI_ARCHIVE_PATH" ]] || fail "未找到现有独立 CLI：$CLI_ARCHIVE_PATH"
+  [[ -f "$DMG_SHA256_PATH" ]] || fail "未找到现有 DMG 校验和：$DMG_SHA256_PATH"
+  [[ -f "$CLI_SHA256_PATH" ]] || fail "未找到现有 CLI 校验和：$CLI_SHA256_PATH"
+  verify_existing_checksum "$DMG_SHA256_PATH"
+  verify_existing_checksum "$CLI_SHA256_PATH"
+  validate_release_artifacts
 else
   if [[ "$SKIP_BUILD" -eq 0 ]]; then
     build_release_app
@@ -725,18 +775,34 @@ else
   [[ -d "$APP_PATH" ]] || fail "未找到 Release app：$APP_PATH"
 
   info "Preparing artifact directory $ARTIFACT_DIR"
-  rm -rf "$SIGNED_APP_PATH" "$DMG_PATH"
+  rm -rf \
+    "$SIGNED_APP_PATH" "$DMG_PATH" "$DMG_SHA256_PATH" \
+    "$CLI_ARCHIVE_PATH" "$CLI_SHA256_PATH"
   ditto "$APP_PATH" "$SIGNED_APP_PATH"
+
+  [[ -x "$CLI_PATH" ]] || fail "未找到 Release CLI：$CLI_PATH"
 
   if [[ "$SKIP_SIGN" -eq 0 ]]; then
     [[ -n "${DEVELOPER_ID_APPLICATION:-}" ]] || fail "缺少 DEVELOPER_ID_APPLICATION，无法做正式签名。"
     require_release_signing_identity
-    info "Signing app with Developer ID"
+    info "Signing standalone CLI before the outer app"
+    sign_cli_binary \
+      "$CLI_PATH" \
+      "$(app_bundle_identifier "$SIGNED_APP_PATH")"
+    info "Signing broker, nested app contents, and outer app with Developer ID"
     sign_app_bundle "$SIGNED_APP_PATH"
+    validate_cli_role_signature \
+      "$CLI_PATH" \
+      "$(app_bundle_identifier "$SIGNED_APP_PATH").cli" \
+      "$(signing_detail "$SIGNED_APP_PATH" TeamIdentifier)"
     DMG_IDENTIFIER="$(dmg_signing_identifier "$SIGNED_APP_PATH")"
   else
     info "Skipping code signing"
   fi
+
+  "$ROOT_DIR/scripts/package-cli.sh" \
+    --binary "$CLI_PATH" \
+    --output "$CLI_ARCHIVE_PATH"
 
   create_dmg "$SIGNED_APP_PATH" "$DMG_PATH"
 
@@ -748,24 +814,33 @@ else
   if [[ "$SKIP_NOTARIZE" -eq 0 ]]; then
     require_command xcrun
     notarize_dmg "$DMG_PATH"
-    validate_notarized_dmg "$DMG_PATH"
+    notarize_cli_archive "$CLI_ARCHIVE_PATH"
   else
     info "Skipping notarization"
   fi
+  validate_release_artifacts
 fi
 
 DMG_SHA256="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
+CLI_SHA256="$(shasum -a 256 "$CLI_ARCHIVE_PATH" | awk '{print $1}')"
+(
+  cd "$ARTIFACT_DIR"
+  shasum -a 256 "$(basename "$DMG_PATH")" > "$DMG_SHA256_PATH"
+  shasum -a 256 "$(basename "$CLI_ARCHIVE_PATH")" > "$CLI_SHA256_PATH"
+)
 info "DMG ready: $DMG_PATH"
 info "SHA256: $DMG_SHA256"
+info "CLI ready: $CLI_ARCHIVE_PATH"
+info "CLI SHA256: $CLI_SHA256"
 
 if [[ "$PUBLISH" -eq 1 ]]; then
-  publish_release "$DMG_PATH"
+  publish_release "$DMG_PATH" "$CLI_ARCHIVE_PATH" "$DMG_SHA256_PATH" "$CLI_SHA256_PATH"
   write_appcast "$DMG_PATH"
   info "Appcast updated after GitHub Release publish: $APPCAST_PATH"
 fi
 
 if [[ "$PUBLISH_EXISTING" -eq 1 ]]; then
-  publish_release "$DMG_PATH"
+  publish_release "$DMG_PATH" "$CLI_ARCHIVE_PATH" "$DMG_SHA256_PATH" "$CLI_SHA256_PATH"
   write_appcast "$DMG_PATH"
   info "Appcast updated after existing artifact publish: $APPCAST_PATH"
 fi

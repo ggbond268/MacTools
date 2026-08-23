@@ -297,7 +297,6 @@ struct GeneralSettingsView: View {
     @ObservedObject var launchAtLoginController: LaunchAtLoginController
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
     @ObservedObject private var cliService = CLIBrokerServiceController.shared
-    @ObservedObject private var cliInstallation = CLIInstallationController.shared
     @AppStorage(AppAppearancePreference.userDefaultsKey) private var appearancePreferenceRawValue = AppAppearancePreference.system.rawValue
     @AppStorage(AppLanguagePreference.userDefaultsKey) private var languagePreferenceRawValue = AppLanguagePreference.system.rawValue
     @AppStorage(MenuBarClickBehaviorPreference.userDefaultsKey) private var clickBehaviorRawValue = MenuBarClickBehaviorPreference.standard.rawValue
@@ -353,10 +352,7 @@ struct GeneralSettingsView: View {
                     )
                 }
                 Section {
-                    CLISettingsRow(
-                        service: cliService,
-                        installation: cliInstallation
-                    )
+                    CLISettingsRow(service: cliService)
                     .settingsGroupedFormRowWidth(widths.sectionLayout)
                 } header: {
                     SettingsGroupedFormSectionHeader(
@@ -537,7 +533,14 @@ struct GeneralSettingsView: View {
 
 private struct CLISettingsRow: View {
     @ObservedObject var service: CLIBrokerServiceController
-    @ObservedObject var installation: CLIInstallationController
+
+    private var downloadURL: URL {
+        CLIServiceConfiguration.releaseDownloadURL(
+            version: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleShortVersionString"
+            ) as? String
+        )
+    }
 
     var body: some View {
         HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
@@ -555,24 +558,18 @@ private struct CLISettingsRow: View {
                     .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
                 Text(subtitle)
                     .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle((service.lastError == nil && installation.lastError == nil) ? .secondary : Color.orange)
+                    .foregroundStyle(service.lastError == nil ? .secondary : Color.orange)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
-                if let bundledCLIURL = installation.bundledCLIURL {
-                    Text(bundledCLIURL.path)
-                        .font(PluginSettingsTheme.Typography.monospacedValue)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                }
-                Text(#"export PATH="$HOME/.local/bin:$PATH""#)
-                    .font(PluginSettingsTheme.Typography.monospacedValue)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .textSelection(.enabled)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            Link(
+                AppL10n.settings("commandLine.download", defaultValue: "下载 CLI"),
+                destination: downloadURL
+            )
+            .buttonStyle(.bordered)
+            .controlSize(.small)
 
             if service.status == .requiresApproval {
                 Button(AppL10n.settings("commandLine.approve", defaultValue: "允许后台运行")) {
@@ -581,37 +578,41 @@ private struct CLISettingsRow: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
-            Button(installation.status == .installed
-                   ? AppL10n.settings("commandLine.uninstall", defaultValue: "移除命令")
-                   : AppL10n.settings("commandLine.install", defaultValue: "安装命令")) {
-                if installation.status == .installed {
-                    installation.uninstallIntegration(using: service)
-                } else {
-                    installation.installIntegration(using: service)
-                }
-            }
-            .buttonStyle(.bordered)
+            Toggle(
+                AppL10n.settings("commandLine.enable", defaultValue: "启用"),
+                isOn: Binding(
+                    get: { service.isRegistered },
+                    set: { enabled in
+                        if enabled {
+                            _ = service.ensureRegistered()
+                        } else {
+                            _ = service.unregister()
+                        }
+                    }
+                )
+            )
+            .toggleStyle(.switch)
             .controlSize(.small)
-            .disabled(installation.status == .conflict || installation.status == .unavailable)
+            .fixedSize()
         }
         .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
         .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
         .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
         .onAppear {
             service.refresh()
-            installation.refresh()
         }
     }
 
     private var subtitle: String {
-        if let error = installation.lastError ?? service.lastError { return error }
-        if installation.status == .conflict {
-            return AppL10n.settings("commandLine.conflict", defaultValue: "~/.local/bin/mactools 已被其他文件占用。")
+        if let error = service.lastError { return error }
+        switch service.status {
+        case .enabled:
+            return AppL10n.settings("commandLine.enabled", defaultValue: "已允许单独安装的 mactools-cli 连接到 MacTools。")
+        case .requiresApproval:
+            return AppL10n.settings("commandLine.requiresApproval", defaultValue: "请在系统设置中允许 MacTools 命令行代理后台运行。")
+        case .notRegistered, .notFound, .registrationFailed:
+            return AppL10n.settings("commandLine.description", defaultValue: "单独安装 mactools-cli 后，在此启用本机命令行集成。")
         }
-        if installation.status == .installed {
-            return AppL10n.settings("commandLine.installed", defaultValue: "已安装到 ~/.local/bin/mactools，可运行 mactools help 开始使用。")
-        }
-        return AppL10n.settings("commandLine.description", defaultValue: "安装本机命令，调用 MacTools 的操作、工作流与插件诊断。")
     }
 }
 

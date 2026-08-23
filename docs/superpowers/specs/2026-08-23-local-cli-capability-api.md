@@ -38,8 +38,9 @@ The following decisions are part of the first contract:
   when the selected action or confirmation flow requires it.
 - Public parameters may be supplied on the command line. Sensitive parameters
   are accepted only from standard input or a tightly permissioned input file.
-- The CLI ships inside `MacTools.app`; Homebrew exposes the bundled binary and
-  the app can install a user-owned `~/.local/bin/mactools` symlink.
+- The CLI ships as a separately downloadable, notarized universal archive with
+  the same release version and cadence as the app. The app bundles only the
+  broker and lets the user explicitly enable Command-Line Integration.
 - The initial protocol is private to the bundled app and CLI. It is versioned,
   but it is not yet a supported third-party API.
 
@@ -107,7 +108,8 @@ connection. The broker retains the connection only while it is live and never
 persists a host endpoint or action payload.
 
 The CLI connects to the broker's Mach service. If the service or host is not
-ready, the CLI locates and launches the containing MacTools app, then retries
+ready, the CLI locates and launches the matching installed MacTools app through
+Launch Services, then retries
 the handshake until the startup deadline. The existing `CFMessagePort` single-
 instance channel remains limited to launch/reopen/deep-link forwarding and is
 not extended into a capability API.
@@ -437,8 +439,8 @@ Human-readable output is concise, localized using the current process locale,
 and written to stdout on success. Diagnostics and errors go to stderr. JSON mode
 emits exactly one UTF-8 JSON object to stdout and no decorative text.
 
-`mactools version` always reports the bundled CLI and containing-app versions
-without launching the host. If a broker and host are already reachable it also
+`mactools version` always reports the standalone CLI version without launching
+the host. If a broker and host are already reachable it also
 reports their selected protocol and runtime builds. `mactools doctor` performs
 the active registration, launch, identity, readiness, and compatibility checks.
 
@@ -517,9 +519,8 @@ when negotiation never occurred.
 
 For discovery, doctor, and execution commands, startup proceeds as follows:
 
-1. Resolve the real CLI executable path and verify its containing app bundle.
-2. Prefer that containing app; otherwise query Launch Services by the expected
-   release or debug bundle identifier.
+1. Derive the expected host identifier from the signed CLI role identifier.
+2. Query Launch Services for the installed release or debug app.
 3. Verify the app's signing identifier and Team Identifier before launching it.
 4. Connect to the broker and negotiate. If the broker is not registered or the
    host is absent, launch the app without activation and retry.
@@ -547,42 +548,32 @@ a clear host/confirmation category.
 
 ## Distribution and Shell Path
 
-The signed universal CLI binary is embedded at:
+The signed universal CLI is published as a separate release asset:
 
 ```text
-MacTools.app/Contents/MacOS/mactools
+mactools-cli-<version>-macos-universal.zip
+└── mactools
 ```
 
-Keeping it in `Contents/MacOS` gives the binary a stable relationship to the
-containing app and its embedded resources. The broker is a separate auxiliary
-executable referenced by the bundled LaunchAgent property list.
-
-Apple's command-line-tool embedding guidance identifies `Contents/MacOS` as a
-recommended location for an app-bundled tool:
-
-- <https://developer.apple.com/documentation/xcode/embedding-a-helper-tool-in-a-sandboxed-app>
+The CLI embeds its own version and role identifier, contains no app resources or
+PluginKit dependency, and locates the installed GUI host through Launch Services.
+The broker remains an auxiliary executable referenced by the app-bundled
+LaunchAgent property list.
 
 Distribution behavior is:
 
-- The Homebrew cask exposes the bundled `mactools` binary with its `binary`
-  stanza.
-- Settings provides “安装命令行工具” and “显示设置命令”. The install action
-  creates or replaces only the user-owned `~/.local/bin/mactools` symlink after
-  showing the exact target. It never edits shell startup files.
-- If `~/.local/bin` is not on `PATH`, Settings shows the appropriate shell line
-  for the user to copy. MacTools does not mutate `.zshrc`, `.bashrc`, or other
-  shell configuration.
-- After installing the broker integration, advanced users may invoke the
-  bundled path directly instead of using the symlink.
+- Each app release uploads a version-matched CLI archive and checksum. The
+  archive layout can be consumed directly by a future `mactools-cli` Homebrew
+  cask without coupling it to the app cask.
+- Settings links to the release download and independently enables or disables
+  the bundled broker integration. It never writes a CLI executable or symlink.
+- Users may install the executable in `~/.local/bin`, another directory on
+  `PATH`, or invoke its absolute path. MacTools does not mutate shell startup
+  files.
 - No privileged helper and no `/usr/local/bin` write are introduced.
 
-The symlink installer validates an existing path before replacement. It replaces
-only a symlink previously owned by MacTools or after explicit confirmation; it
-does not overwrite a regular file or another tool.
-
-Release signing must sign the CLI and broker before signing the outer app. The
-notarized DMG, Sparkle update, and Homebrew artifact continue distributing one
-app bundle.
+Release signing signs the standalone CLI and broker with exact role identifiers,
+then signs the outer app. CI separately notarizes the CLI archive and app DMG.
 
 ## Upgrade and Failure Behavior
 
@@ -590,10 +581,10 @@ CLI, broker, and host advertise minimum and maximum supported protocol versions.
 They select the highest overlapping version. No overlap returns exit code 10
 without forwarding a command.
 
-Ordinarily all three binaries come from one app bundle. The following edge
-cases remain defined:
+The three binaries can be upgraded at different times. The following edge cases
+remain defined:
 
-- An old shell symlink resolving into a removed app fails with setup guidance.
+- A CLI with no installed MacTools app fails with setup guidance.
 - An old CLI pointed at a newer registered broker can proceed only when their
   ranges overlap.
 - A running old broker is drained and restarted after app update registration;
@@ -689,11 +680,11 @@ modify the user's shell path.
 
 ### Release and distribution
 
-- CLI and broker embedded at expected bundle paths
-- inner binaries signed before outer app and strict signature verification passes
+- standalone CLI artifact and broker bundle path are both present
+- standalone CLI and broker are signed with exact same-team role identifiers
 - release archive contains the LaunchAgent plist
-- Homebrew cask resolves the bundled executable
-- symlink installer refuses regular files and foreign symlinks
+- standalone CLI archive contains only an executable named `mactools`
+- app and CLI archives are notarized independently
 - debug and release signing identifiers remain distinct
 
 ## Rollout
@@ -718,10 +709,10 @@ add `.cli` source/surface, and rebuild the plugin catalog. Then add parameterles
 externally eligible action execution, host-owned confirmation, waiting, durable
 acceptance, exit codes, interrupts, and cancellation.
 
-### Phase 3: typed parameters and installation UI
+### Phase 3: typed parameters and integration UI
 
 Add public `--parameter`, stdin/restricted-file JSON, sensitive metadata checks,
-the `~/.local/bin` installer, release signing changes, and Homebrew exposure.
+separate CLI packaging, release signing changes, and broker integration controls.
 
 ### Phase 4: richer integrations
 
@@ -746,6 +737,7 @@ data are available.
   workflow action.
 - **How are secrets transported?** Standard input or a verified user-only input
   file; never ordinary arguments or URLs.
-- **How is the binary installed?** Bundled and signed in the app, exposed by
-  Homebrew or a user-owned `~/.local/bin` symlink without privilege.
+- **How is the binary installed?** Downloaded as a separately signed and
+  notarized release asset, then placed in a user-owned `PATH` directory without
+  privilege. The app installs and controls only its broker.
 - **Is this a remote or public API commitment?** No.

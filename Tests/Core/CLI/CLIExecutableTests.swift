@@ -15,7 +15,54 @@ final class CLIExecutableTests: XCTestCase {
             JSONSerialization.jsonObject(with: Data(version.output.utf8)) as? [String: Any]
         )
         XCTAssertEqual(object["schemaVersion"] as? Int, 1)
-        XCTAssertNotNil((object["data"] as? [String: Any])?["cliVersion"])
+        let data = try XCTUnwrap(object["data"] as? [String: Any])
+        XCTAssertNotEqual(data["cliVersion"] as? String, "unknown")
+        XCTAssertNotEqual(data["cliBuild"] as? String, "unknown")
+    }
+
+    func testVersionIgnoresUnrelatedContainingAppBundle() throws {
+        let original = try runCLI(["version", "--json"])
+        let originalObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(original.output.utf8)) as? [String: Any]
+        )
+        let originalData = try XCTUnwrap(originalObject["data"] as? [String: Any])
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let appURL = root.appendingPathComponent("Unrelated.app")
+        let executableURL = appURL.appendingPathComponent("Tools/MacToolsCLI")
+        let infoURL = appURL.appendingPathComponent("Contents/Info.plist")
+        try FileManager.default.createDirectory(
+            at: executableURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: infoURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.copyItem(at: cliExecutableURL, to: executableURL)
+        let foreignInfo: [String: Any] = [
+            "CFBundleIdentifier": "example.Unrelated",
+            "CFBundleExecutable": "Unrelated",
+            "CFBundleShortVersionString": "99.0",
+            "CFBundleVersion": "999",
+            "CFBundlePackageType": "APPL",
+        ]
+        try PropertyListSerialization.data(
+            fromPropertyList: foreignInfo,
+            format: .xml,
+            options: 0
+        ).write(to: infoURL)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let nested = try runCLI(["version", "--json"], executableURL: executableURL)
+        XCTAssertEqual(nested.status, 0)
+        let nestedObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(nested.output.utf8)) as? [String: Any]
+        )
+        let nestedData = try XCTUnwrap(nestedObject["data"] as? [String: Any])
+        XCTAssertEqual(nestedData["cliVersion"] as? String, originalData["cliVersion"] as? String)
+        XCTAssertEqual(nestedData["cliBuild"] as? String, originalData["cliBuild"] as? String)
+        XCTAssertNotEqual(nestedData["cliVersion"] as? String, "99.0")
     }
 
     func testInvalidCommandUsesStableExitCode() throws {
@@ -149,10 +196,12 @@ final class CLIExecutableTests: XCTestCase {
         XCTAssertTrue(state.completedRequestIDs.contains(newest))
     }
 
-    private func runCLI(_ arguments: [String]) throws -> (status: Int32, output: String, error: String) {
+    private func runCLI(
+        _ arguments: [String],
+        executableURL: URL? = nil
+    ) throws -> (status: Int32, output: String, error: String) {
         let process = Process()
-        process.executableURL = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/mactools")
+        process.executableURL = executableURL ?? cliExecutableURL
         process.arguments = arguments
         let output = Pipe()
         let error = Pipe()
@@ -171,8 +220,7 @@ final class CLIExecutableTests: XCTestCase {
         signalNumber: Int32
     ) throws -> (status: Int32, output: String, error: String) {
         let process = Process()
-        process.executableURL = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/mactools")
+        process.executableURL = cliExecutableURL
         process.arguments = ["doctor", "--json"]
         var environment = [
             "HOME": NSHomeDirectory(),
@@ -224,6 +272,12 @@ final class CLIExecutableTests: XCTestCase {
             String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
             String(decoding: error.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         )
+    }
+
+    private var cliExecutableURL: URL {
+        Bundle.main.bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("MacToolsCLI")
     }
 }
 

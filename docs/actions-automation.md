@@ -2,7 +2,7 @@
 
 MacTools exposes one host-owned action platform to every invocation surface. Plugins publish stable action definitions and catalog entries; the host owns lookup, migration, availability, shortcut registration, confirmation, and execution.
 
-The bundled local [`mactools` CLI](cli.md) is another host-owned surface. It
+The separately installed [`mactools` CLI](cli.md) is another host-owned surface. It
 discovers published actions, workflows, and plugin diagnostics through a signed
 XPC broker and invokes only `ActionExecutor`; CLI eligibility never grants an
 action broader permissions or skips confirmation and availability checks.

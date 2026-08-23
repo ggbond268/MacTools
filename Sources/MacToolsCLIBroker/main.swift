@@ -2,7 +2,7 @@ import Dispatch
 import Foundation
 
 let broker = CLIBroker()
-let listener = NSXPCListener(machServiceName: CLIServiceConfiguration.runtimeServiceName)
+let listener = NSXPCListener(machServiceName: CLIServiceConfiguration.runtimeBrokerServiceName)
 guard let requirement = CLIPeerIdentityValidator().brokerListenerRequirement() else {
     exit(CLIExitCode.transportFailure.rawValue)
 }

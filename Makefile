@@ -26,6 +26,8 @@ GENERATED_PLUGIN_PROJECT_CONFIG := Configs/GeneratedPlugins.yml
 LOCAL_PLUGIN_BUILD_DIR ?= build/LocalPlugins
 LOCAL_PLUGIN_CATALOG := $(LOCAL_PLUGIN_BUILD_DIR)/catalog.dev.json
 DEBUG_BUILD_PRODUCTS_DIR := $(DERIVED_DATA)/Build/Products/Debug
+DEBUG_CLI_PATH := $(DEBUG_BUILD_PRODUCTS_DIR)/MacToolsCLI
+CLI_PACKAGE_PATH ?= build/CLI/mactools-cli-debug-macos-$(HOST_ARCH).zip
 DEBUG_PLUGIN_INSTALL_DIR ?= $(HOME)/Library/Application Support/MacTools Dev/Plugins/Installed
 LOCAL_ICON_GALLERY_DIR ?= build/LocalIconGallery
 LOCAL_ICON_GALLERY_CATALOG := $(LOCAL_ICON_GALLERY_DIR)/catalog.dev.json
@@ -44,7 +46,7 @@ E2E_SESSION ?=
 E2E_DURATION ?= 90
 E2E_PACK ?=
 
-.PHONY: setup validate-local-debug-config generate-plugin-config generate build script-tests ci sync-debug-plugins build-plugin build-plugins generate-icon-gallery package-plugins-release stop-debug-app install-debug-app run run-open e2e-preflight e2e-prepare e2e-upgrade e2e-reseed e2e-resume e2e-rebuild e2e-audit e2e-scenarios e2e-record e2e-record-pack e2e-verify-code e2e-collect e2e-restore e2e-self-test clean release release-local
+.PHONY: setup validate-local-debug-config generate-plugin-config generate build build-cli package-cli script-tests ci sync-debug-plugins build-plugin build-plugins generate-icon-gallery package-plugins-release stop-debug-app install-debug-app run run-open e2e-preflight e2e-prepare e2e-upgrade e2e-reseed e2e-resume e2e-rebuild e2e-audit e2e-scenarios e2e-record e2e-record-pack e2e-verify-code e2e-collect e2e-restore e2e-self-test clean release release-local
 
 setup:
 	@if [ ! -f LocalConfig.xcconfig ]; then cp LocalConfig.sample.xcconfig LocalConfig.xcconfig; fi
@@ -75,6 +77,17 @@ build: validate-local-debug-config generate
 	if [[ -x "$$LSREGISTER" ]]; then \
 		"$$LSREGISTER" -u "$(CURDIR)/$(APP_PATH)" >/dev/null 2>&1 || true; \
 	fi
+
+build-cli: validate-local-debug-config generate
+	@echo "Building standalone Debug CLI..."
+	@mkdir -p build
+	@touch build/.metadata_never_index
+	@$(XCODEBUILD) -project $(PROJECT_FILE) -scheme MacToolsCLI -configuration Debug -destination "$(BUILD_DESTINATION)" -derivedDataPath $(DERIVED_DATA) build -quiet
+	@echo "CLI ready: $(abspath $(DEBUG_CLI_PATH))"
+
+package-cli: build-cli
+	@./scripts/package-cli.sh --binary "$(DEBUG_CLI_PATH)" --output "$(CLI_PACKAGE_PATH)"
+	@echo "CLI package ready: $(abspath $(CLI_PACKAGE_PATH))"
 
 script-tests:
 	@$(PYTHON3) -m unittest discover -s scripts/tests -p 'test_*.py'

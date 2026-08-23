@@ -98,10 +98,11 @@ MacTools supports Simplified Chinese, Traditional Chinese, English, Spanish, Fre
 brew install --cask mactools
 ```
 
-MacTools also bundles an authenticated local CLI. Install its user-owned
-`~/.local/bin/mactools` symlink from **Settings > General > Command Line**, then
-use `mactools help` to discover actions, workflows, diagnostics, JSON output,
-with stable human and JSON output. See the [CLI guide](docs/cli.md).
+MacTools provides an optional, separately downloadable authenticated CLI. Install
+the `mactools-cli-<version>-macos-universal.zip` asset from the matching GitHub
+release, then enable **Settings > General > Command Line** in the app. Use
+`mactools help` to discover actions, workflows, diagnostics, and stable JSON
+output. See the [CLI guide](docs/cli.md).
 
 ## Upgrade
 

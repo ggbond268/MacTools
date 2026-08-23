@@ -4,9 +4,11 @@ The mutual-authentication path requires a normally signed Debug or Release app;
 an unsigned XCTest host cannot register an `SMAppService` LaunchAgent.
 
 1. Configure `LocalConfig.xcconfig`, then run `make build-plugin` and `make run`.
-2. In Settings > General > Command Line, install the command and approve the
+2. Build the standalone client with `make build-cli`, copy
+   `build/DerivedData/Build/Products/Debug/MacToolsCLI` to a stable path named
+   `mactools`, then enable Settings > General > Command Line. Approve the
    background item if macOS requests it.
-3. Quit MacTools, then run `~/.local/bin/mactools doctor --json`. Verify that the
+3. Quit MacTools, then run the absolute path to `mactools doctor --json`. Verify that the
    app cold-starts, the protocol is `1`, no Settings window is activated, and
    the first action count matches an immediate `actions list` response without
    waiting or retrying.
@@ -23,13 +25,14 @@ an unsigned XCTest host cannot register an `SMAppService` LaunchAgent.
 
 ```bash
 APP="$HOME/Applications/MacTools Dev.app"
+CLI="/absolute/path/to/mactools"
 codesign --verify --deep --strict --verbose=2 "$APP"
-codesign -dv --verbose=4 "$APP/Contents/MacOS/mactools"
+codesign -dv --verbose=4 "$CLI"
 codesign -dv --verbose=4 "$APP/Contents/MacOS/MacToolsCLIBroker"
 plutil -p "$APP/Contents/Library/LaunchAgents/app.ggbond.MacTools.cli-broker.plist"
 ```
 
-The signing identifiers must end in `.mactools.dev`, `.mactools.dev.cli`, and
+The host, standalone CLI, and broker signing identifiers must end in `.mactools.dev`, `.mactools.dev.cli`, and
 `.mactools.dev.cli-broker`, with matching non-empty Team identifiers.
 
 8. Configure a Saved Script that invokes the same `mactools` path. Start that

@@ -9,6 +9,45 @@ final class CLIServiceConfigurationTests: XCTestCase {
         )
     }
 
+    func testStandaloneCLIIdentifierResolvesHostService() {
+        XCTAssertEqual(
+            CLIServiceConfiguration.serviceName(
+                bundleIdentifier: "example.MacTools.dev.cli"
+            ),
+            "example.MacTools.dev.cli-broker"
+        )
+        XCTAssertEqual(
+            CLIServiceConfiguration.hostBundleIdentifier(
+                for: "example.MacTools.cli"
+            ),
+            "example.MacTools"
+        )
+        XCTAssertEqual(
+            CLIServiceConfiguration.hostBundleIdentifier(
+                for: "example.MacTools.cli-broker"
+            ),
+            "example.MacTools"
+        )
+    }
+
+    func testReleaseDownloadURLUsesMatchingVersionedAsset() {
+        XCTAssertEqual(
+            CLIServiceConfiguration.releaseDownloadURL(version: "1.2.0-beta.1").absoluteString,
+            "https://github.com/ggbond268/MacTools/releases/download/v1.2.0-beta.1/mactools-cli-1.2.0-beta.1-macos-universal.zip"
+        )
+    }
+
+    func testReleaseDownloadURLFallsBackToReleaseListForInvalidVersion() {
+        XCTAssertEqual(
+            CLIServiceConfiguration.releaseDownloadURL(version: "1/2").absoluteString,
+            "https://github.com/ggbond268/MacTools/releases"
+        )
+        XCTAssertEqual(
+            CLIServiceConfiguration.releaseDownloadURL(version: nil).absoluteString,
+            "https://github.com/ggbond268/MacTools/releases"
+        )
+    }
+
     func testFindsContainingApplicationThroughSymlinkedExecutable() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let executable = root.appendingPathComponent("MacTools.app/Contents/MacOS/mactools")

@@ -83,17 +83,11 @@ jobs:
           brew update
           current="$(brew info --cask --json=v2 mactools | jq -r '.casks[0].version')"
           latest="${{ steps.release.outputs.version }}"
-          cask_source="$(brew cat --cask mactools)"
-          exposes_cli=false
-          if [[ "$cask_source" == *'Contents/MacOS/mactools'* ]]; then
-            exposes_cli=true
-          fi
 
           {
             echo "current=$current"
             echo "latest=$latest"
-            echo "exposes_cli=$exposes_cli"
-            if [[ "$current" == "$latest" && "$exposes_cli" == "true" ]]; then
+            if [[ "$current" == "$latest" ]]; then
               echo "up_to_date=true"
             else
               echo "up_to_date=false"
@@ -115,10 +109,6 @@ jobs:
             --version "${{ steps.release.outputs.version }}" \
             --sha256 "${{ steps.release.outputs.sha256 }}" \
             --no-browse
-
-          if [[ "${{ steps.cask.outputs.exposes_cli }}" != "true" ]]; then
-            echo '::warning::The opened cask PR must also add binary "#{appdir}/MacTools.app/Contents/MacOS/mactools". This one-time artifact addition cannot be expressed by brew bump-cask-pr.'
-          fi
 
       - name: Already up to date
         if: steps.cask.outputs.up_to_date == 'true'
