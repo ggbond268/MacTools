@@ -135,6 +135,33 @@ final class PluginPanelControlLayoutTests: XCTestCase {
         XCTAssertEqual(long.fittingSize.height, ordinary.fittingSize.height, accuracy: 0.5)
     }
 
+    @MainActor
+    func testShortcutRecorderControlReservesClearButtonSpaceWhenUnassigned() {
+        let assigned = NSHostingView(rootView:
+            PluginSettingsShortcutRecorderControl(
+                title: "Shortcut",
+                displayText: "⌥ + ⌘ + V",
+                canClear: true,
+                clearTitle: "Clear",
+                onRecord: { _ in .accepted },
+                onClear: {}
+            )
+        )
+        let unassigned = NSHostingView(rootView:
+            PluginSettingsShortcutRecorderControl(
+                title: "Shortcut",
+                displayText: "",
+                canClear: false,
+                clearTitle: "Clear",
+                onRecord: { _ in .accepted },
+                onClear: {}
+            )
+        )
+
+        XCTAssertEqual(assigned.fittingSize.width, unassigned.fittingSize.width, accuracy: 0.5)
+        XCTAssertEqual(assigned.fittingSize.height, unassigned.fittingSize.height, accuracy: 0.5)
+    }
+
     private func tag(of kind: PluginPanelControlKind) -> UInt8 {
         withUnsafeBytes(of: kind) { bytes in
             bytes[0]

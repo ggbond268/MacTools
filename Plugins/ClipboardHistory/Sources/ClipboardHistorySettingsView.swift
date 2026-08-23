@@ -586,9 +586,15 @@ struct ClipboardHistorySettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Picker(title, selection: selection, content: content)
-                .labelsHidden()
-                .frame(minWidth: 120, idealWidth: 150, maxWidth: 180)
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Picker(title, selection: selection, content: content)
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .frame(width: 180, alignment: .trailing)
         }
         .pluginSettingsListRowPadding(interactive: true)
     }

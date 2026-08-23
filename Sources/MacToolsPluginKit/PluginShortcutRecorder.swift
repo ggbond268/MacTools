@@ -92,7 +92,7 @@ public struct PluginShortcutRecorderField: View {
     public var body: some View {
         Text(normalizedText)
             .font(PluginSettingsTheme.Typography.monospacedValue)
-            .foregroundStyle(isPlaceholderVisible ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+            .foregroundStyle(isPlaceholderVisible ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .padding(.horizontal, PluginSettingsTheme.Spacing.sectionHeaderContent)
@@ -161,6 +161,88 @@ public struct PluginShortcutRecorder: View {
             onBeginRecording: onBeginRecording,
             onEndRecording: onEndRecording
         )
+    }
+}
+
+/// Keeps the recorder and its trailing clear affordance in stable columns.
+/// Reset remains available from the recorder's context menu when a caller supports it.
+public struct PluginSettingsShortcutRecorderControl: View {
+    public let title: String
+    public let displayText: String
+    public let canAssign: Bool
+    public let canClear: Bool
+    public let resetTitle: String?
+    public let clearTitle: String
+    public let onRecord: (ShortcutBinding) -> PluginShortcutRecordingResult
+    public let onBeginRecording: (() -> Void)?
+    public let onReset: (() -> Void)?
+    public let onClear: () -> Void
+
+    public init(
+        title: String,
+        displayText: String,
+        canAssign: Bool = true,
+        canClear: Bool,
+        resetTitle: String? = nil,
+        clearTitle: String,
+        onRecord: @escaping (ShortcutBinding) -> PluginShortcutRecordingResult,
+        onBeginRecording: (() -> Void)? = nil,
+        onReset: (() -> Void)? = nil,
+        onClear: @escaping () -> Void
+    ) {
+        self.title = title
+        self.displayText = displayText
+        self.canAssign = canAssign
+        self.canClear = canClear
+        self.resetTitle = resetTitle
+        self.clearTitle = clearTitle
+        self.onRecord = onRecord
+        self.onBeginRecording = onBeginRecording
+        self.onReset = onReset
+        self.onClear = onClear
+    }
+
+    public var body: some View {
+        HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            recorder
+
+            Button(action: onClear) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(PluginSettingsTheme.Typography.rowIcon)
+                    .symbolRenderingMode(.monochrome)
+                    .frame(
+                        width: PluginSettingsTheme.Size.shortcutActionButtonSize,
+                        height: PluginSettingsTheme.Size.shortcutActionButtonSize
+                    )
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.secondary)
+            .help(clearTitle)
+            .opacity(canClear ? 1 : 0)
+            .disabled(!canClear)
+            .accessibilityHidden(!canClear)
+        }
+    }
+
+    @ViewBuilder
+    private var recorder: some View {
+        let recorder = PluginShortcutRecorder(
+            title: title,
+            displayText: displayText,
+            minWidth: PluginSettingsTheme.Size.shortcutRecorderWidth,
+            onRecord: onRecord,
+            onBeginRecording: onBeginRecording
+        )
+        .frame(width: PluginSettingsTheme.Size.shortcutRecorderWidth)
+        .disabled(!canAssign)
+
+        if let resetTitle, let onReset {
+            recorder.contextMenu {
+                Button(resetTitle, systemImage: "arrow.counterclockwise", action: onReset)
+            }
+        } else {
+            recorder
+        }
     }
 }
 

@@ -403,10 +403,6 @@ final class ClipboardHistoryPlugin:
                     "settings.shortcuts.primary.title",
                     defaultValue: "主要快捷键"
                 ),
-                description: localization.string(
-                    "settings.shortcuts.primary.description",
-                    defaultValue: "用快捷键显示或隐藏剪贴板历史，或直接粘贴纯文本和当前图片中已识别的文字。"
-                ),
                 systemImage: "keyboard",
                 actionIDs: [ActionID.openHistory],
                 shortcutDefinitionIDs: [ShortcutID.pastePlainText],
@@ -417,10 +413,6 @@ final class ClipboardHistoryPlugin:
                 title: localization.string(
                     "shortcut.group.title",
                     defaultValue: "敏感内容复制快捷键"
-                ),
-                description: localization.string(
-                    "shortcut.group.description",
-                    defaultValue: "“立即私密复制”一步复制当前选择；“忽略下一次复制”会等待之后的右键菜单或 Command-C，15 秒后自动取消。"
                 ),
                 systemImage: "eye.slash",
                 shortcutDefinitionIDs: [ShortcutID.privateCopy, ShortcutID.ignoreNextCopy],

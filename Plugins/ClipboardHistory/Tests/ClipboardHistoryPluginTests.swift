@@ -83,6 +83,9 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             "privacy-copy-shortcuts",
             "collection-shortcuts",
         ])
+        XCTAssertNil(plugin.shortcutSettingsGroups[0].description)
+        XCTAssertNil(plugin.shortcutSettingsGroups[1].description)
+        XCTAssertNotNil(plugin.shortcutSettingsGroups[2].description)
         XCTAssertEqual(plugin.shortcutSettingsGroups[0].actionIDs, [ClipboardHistoryPlugin.ActionID.openHistory])
         XCTAssertEqual(
             plugin.shortcutSettingsGroups[0].shortcutDefinitionIDs,
@@ -166,6 +169,65 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertTrue(reopenedStore.hasCompletedInitialSetup)
         XCTAssertTrue(reopenedStore.hasPresentedInitialSetup)
         XCTAssertFalse(reopenedStore.shouldAutomaticallyPresentInitialSetup())
+    }
+
+    func testSetupProgressRequiresCollectionBeforeRevealingShortcutSteps() {
+        let storagePending = ClipboardHistorySetupProgress(
+            storageReady: false,
+            collectionEnabled: false,
+            primaryShortcutAssigned: false,
+            privacyShortcutAssigned: false,
+            hasRevealedShortcutSections: false
+        )
+        XCTAssertTrue(storagePending.canReveal(.storage))
+        XCTAssertFalse(storagePending.canReveal(.collection))
+        XCTAssertEqual(storagePending.completedRequiredStepCount, 0)
+
+        let collectionPaused = ClipboardHistorySetupProgress(
+            storageReady: true,
+            collectionEnabled: false,
+            primaryShortcutAssigned: false,
+            privacyShortcutAssigned: false,
+            hasRevealedShortcutSections: false
+        )
+        XCTAssertTrue(collectionPaused.canReveal(.collection))
+        XCTAssertFalse(collectionPaused.canReveal(.primaryShortcuts))
+        XCTAssertFalse(collectionPaused.canReveal(.sensitiveCopy))
+        XCTAssertEqual(collectionPaused.completedRequiredStepCount, 1)
+        XCTAssertFalse(collectionPaused.canFinish)
+    }
+
+    func testSetupProgressTreatsShortcutSectionsAsOptional() {
+        let ready = ClipboardHistorySetupProgress(
+            storageReady: true,
+            collectionEnabled: true,
+            primaryShortcutAssigned: false,
+            privacyShortcutAssigned: false,
+            hasRevealedShortcutSections: true
+        )
+        XCTAssertTrue(ready.canFinish)
+        XCTAssertEqual(ready.completedRequiredStepCount, 2)
+        XCTAssertTrue(ready.canReveal(.primaryShortcuts))
+        XCTAssertTrue(ready.canReveal(.sensitiveCopy))
+        XCTAssertFalse(ready.isConfigured(.primaryShortcuts))
+        XCTAssertFalse(ready.isConfigured(.sensitiveCopy))
+    }
+
+    func testSetupProgressKeepsPreviouslyRevealedShortcutsVisibleWhenCollectionIsDisabled() {
+        let progress = ClipboardHistorySetupProgress(
+            storageReady: true,
+            collectionEnabled: false,
+            primaryShortcutAssigned: true,
+            privacyShortcutAssigned: true,
+            hasRevealedShortcutSections: true
+        )
+
+        XCTAssertEqual(progress.completedRequiredStepCount, 1)
+        XCTAssertFalse(progress.canFinish)
+        XCTAssertTrue(progress.canReveal(.primaryShortcuts))
+        XCTAssertTrue(progress.canReveal(.sensitiveCopy))
+        XCTAssertTrue(progress.isConfigured(.primaryShortcuts))
+        XCTAssertTrue(progress.isConfigured(.sensitiveCopy))
     }
 
     func testSettingsContextCanMutateActionBackedShortcutFromSetup() {

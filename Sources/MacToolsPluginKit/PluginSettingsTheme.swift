@@ -78,6 +78,7 @@ public enum PluginSettingsTheme {
         public static let rowIcon: CGFloat = 18
         public static let controlHeight: CGFloat = 30
         public static let shortcutRecorderWidth: CGFloat = 126
+        public static let shortcutActionButtonSize: CGFloat = 22
         public static let metricIcon: CGFloat = 36
         public static let emptyStateIcon: CGFloat = 28
     }

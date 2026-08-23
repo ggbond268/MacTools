@@ -7,23 +7,66 @@ enum ClipboardHistorySetupDestination: String, Identifiable {
     var id: String { rawValue }
 }
 
-@MainActor
-struct ClipboardHistorySetupSheet: View {
-    private enum Step: Int, CaseIterable {
-        case storage
-        case primaryShortcuts
-        case sensitiveCopy
-        case ready
+enum ClipboardHistorySetupStep: Int, CaseIterable, Identifiable {
+    case storage
+    case collection
+    case primaryShortcuts
+    case sensitiveCopy
+
+    var id: Int { rawValue }
+}
+
+struct ClipboardHistorySetupProgress: Equatable {
+    let storageReady: Bool
+    let collectionEnabled: Bool
+    let primaryShortcutAssigned: Bool
+    let privacyShortcutAssigned: Bool
+    let hasRevealedShortcutSections: Bool
+
+    var completedRequiredStepCount: Int {
+        [storageReady, collectionEnabled].filter { $0 }.count
     }
 
+    var canFinish: Bool {
+        storageReady && collectionEnabled
+    }
+
+    func isConfigured(_ step: ClipboardHistorySetupStep) -> Bool {
+        switch step {
+        case .storage:
+            storageReady
+        case .collection:
+            collectionEnabled
+        case .primaryShortcuts:
+            primaryShortcutAssigned
+        case .sensitiveCopy:
+            privacyShortcutAssigned
+        }
+    }
+
+    func canReveal(_ step: ClipboardHistorySetupStep) -> Bool {
+        switch step {
+        case .storage:
+            true
+        case .collection:
+            storageReady
+        case .primaryShortcuts, .sensitiveCopy:
+            hasRevealedShortcutSections
+        }
+    }
+}
+
+@MainActor
+struct ClipboardHistorySetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var controller: ClipboardHistoryController
     @ObservedObject private var settings: ClipboardHistorySettingsStore
     private let localization: PluginLocalization
     private let settingsContext: PluginSettingsContext
-    @State private var step: Step = .storage
+    @State private var expandedStep: ClipboardHistorySetupStep?
     @State private var shortcutBindingTexts: [String: String]
     @State private var assignedShortcutIDs: Set<String>
+    @State private var hasRevealedShortcutSections: Bool
 
     init(
         controller: ClipboardHistoryController,
@@ -34,6 +77,7 @@ struct ClipboardHistorySetupSheet: View {
         self.localization = localization
         self.settingsContext = settingsContext
         _settings = ObservedObject(wrappedValue: controller.settings)
+
         var bindingTexts: [String: String] = [:]
         var assignedIDs: Set<String> = []
         for item in settingsContext.shortcutItems {
@@ -49,8 +93,29 @@ struct ClipboardHistorySetupSheet: View {
                 assignedIDs.insert(key)
             }
         }
+
+        let primaryAssigned = assignedIDs.contains(Self.openHistoryShortcutKey)
+        let completedPreviously = controller.settings.hasCompletedInitialSetup
+        let collectionEnabled = !controller.settings.isPaused && controller.isCollectionOperational
+        let storageReady = controller.isLoaded && controller.errorMessage == nil
+        let initialProgress = ClipboardHistorySetupProgress(
+            storageReady: storageReady,
+            collectionEnabled: collectionEnabled,
+            primaryShortcutAssigned: primaryAssigned,
+            privacyShortcutAssigned: Self.privacyShortcutKeys.contains { assignedIDs.contains($0) },
+            hasRevealedShortcutSections: collectionEnabled || completedPreviously
+        )
+
         _shortcutBindingTexts = State(initialValue: bindingTexts)
         _assignedShortcutIDs = State(initialValue: assignedIDs)
+        _hasRevealedShortcutSections = State(
+            initialValue: collectionEnabled || completedPreviously
+        )
+        _expandedStep = State(
+            initialValue: completedPreviously || initialProgress.canFinish
+                ? nil
+                : (storageReady ? .collection : .storage)
+        )
     }
 
     var body: some View {
@@ -58,235 +123,218 @@ struct ClipboardHistorySetupSheet: View {
             header
             Divider()
             ScrollView {
-                stepContent
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(28)
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(ClipboardHistorySetupStep.allCases) { step in
+                        if progress.canReveal(step) || settings.hasCompletedInitialSetup {
+                            setupSection(for: step)
+                                .id(step)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(28)
             }
             Divider()
             footer
         }
-        .frame(width: 640, height: 520)
+        .frame(width: 680, height: 620)
+        .onChange(of: collectionEnabled) { _, isEnabled in
+            if isEnabled {
+                hasRevealedShortcutSections = true
+            }
+        }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(localization.string("setup.section", defaultValue: "开始使用"))
-                        .font(PluginSettingsTheme.Typography.pageTitle)
-                    Text(localization.string(
-                        "setup.changesSaved",
-                        defaultValue: "更改会自动保存。"
-                    ))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text("\(step.rawValue + 1) / \(Step.allCases.count)")
-                    .font(PluginSettingsTheme.Typography.monospacedValue)
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localization.string("setup.section", defaultValue: "开始使用"))
+                    .font(PluginSettingsTheme.Typography.pageTitle)
+                Text(localization.string(
+                    "setup.changesSaved",
+                    defaultValue: "更改会自动保存。"
+                ))
+                    .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
             }
-
-            HStack(spacing: 8) {
-                ForEach(Step.allCases, id: \.rawValue) { candidate in
-                    Capsule()
-                        .fill(candidate.rawValue <= step.rawValue ? Color.accentColor : Color.secondary.opacity(0.2))
-                        .frame(height: 4)
-                }
-            }
+            Spacer()
+            Text(progress.canFinish
+                ? localization.string("setup.readyStatus", defaultValue: "可以开始使用")
+                : localization.format(
+                    "setup.requiredProgress",
+                    defaultValue: "已完成 %d/%d 个必需步骤",
+                    progress.completedRequiredStepCount,
+                    2
+                )
+            )
+                .font(PluginSettingsTheme.Typography.monospacedValue)
+                .foregroundStyle(progress.canFinish ? Color.green : Color.secondary)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
     }
 
-    @ViewBuilder
-    private var stepContent: some View {
-        switch step {
-        case .storage:
-            storageStep
-        case .primaryShortcuts:
-            primaryShortcutsStep
-        case .sensitiveCopy:
-            sensitiveCopyStep
-        case .ready:
-            readyStep
-        }
-    }
-
-    private var storageStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            stepTitle(
-                localization.string("setup.collection.title", defaultValue: "准备安全存储"),
-                description: storageDescription,
-                systemImage: "lock.shield"
-            )
-
-            VStack(spacing: 0) {
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    Image(systemName: storageStatusImage)
-                        .font(.title2)
-                        .foregroundStyle(storageStatusColor)
-                        .frame(width: 32)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(storageStatusTitle)
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        if let errorMessage = controller.errorMessage {
-                            Text(errorMessage)
-                                .font(PluginSettingsTheme.Typography.rowDescription)
-                                .foregroundStyle(.orange)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if controller.errorMessage != nil {
-                        Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
-                            controller.retryStorageAccess()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                    }
+    private func setupSection(for step: ClipboardHistorySetupStep) -> some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    expandedStep = expandedStep == step ? nil : step
                 }
-                .pluginSettingsListRowPadding()
-
-                PluginSettingsListDivider()
-
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            } label: {
+                HStack(spacing: 12) {
+                    stepStatusIcon(for: step)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(localization.string(
-                            "settings.collection.toggleTitle",
-                            defaultValue: "收集剪贴板历史"
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(collectionDescription)
+                        HStack(spacing: 7) {
+                            Text(stepTitle(for: step))
+                                .font(PluginSettingsTheme.Typography.rowTitle)
+                                .foregroundStyle(.primary)
+                            if step == .collection {
+                                statusBadge(
+                                    localization.string("setup.required", defaultValue: "必需"),
+                                    color: .orange
+                                )
+                            } else if step == .primaryShortcuts {
+                                statusBadge(
+                                    localization.string("setup.recommended", defaultValue: "推荐"),
+                                    color: .secondary
+                                )
+                            } else if step == .sensitiveCopy {
+                                statusBadge(
+                                    localization.string("setup.optional", defaultValue: "可选"),
+                                    color: .secondary
+                                )
+                            }
+                        }
+                        Text(stepSummary(for: step))
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.secondary)
+                            .lineLimit(2)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Toggle("", isOn: Binding(
-                        get: { !settings.isPaused && controller.isCollectionOperational },
-                        set: { isEnabled in
-                            guard controller.isCollectionOperational else { return }
-                            settings.setPaused(!isEnabled)
-                        }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .disabled(!controller.isCollectionOperational)
+                    Image(systemName: expandedStep == step ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
                 }
+                .contentShape(Rectangle())
                 .pluginSettingsListRowPadding(interactive: true)
             }
-            .pluginSettingsCardBackground(.standard)
+            .buttonStyle(.plain)
+
+            if expandedStep == step {
+                PluginSettingsListDivider()
+                stepContent(for: step)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .pluginSettingsCardBackground(.standard)
+    }
+
+    @ViewBuilder
+    private func stepContent(for step: ClipboardHistorySetupStep) -> some View {
+        switch step {
+        case .storage:
+            storageContent
+        case .collection:
+            collectionContent
+        case .primaryShortcuts:
+            primaryShortcutsContent
+        case .sensitiveCopy:
+            sensitiveCopyContent
         }
     }
 
-    private var primaryShortcutsStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            stepTitle(
-                localization.string("setup.open.title", defaultValue: "设置打开历史快捷键"),
-                description: localization.string(
-                    "setup.open.description",
-                    defaultValue: "设置常用快捷键；再次按下即可关闭历史面板。"
-                ),
-                systemImage: "keyboard"
-            )
-
-            VStack(spacing: 0) {
-                actionShortcutRow(
-                    settingsContext.actionShortcutItem(
-                        actionID: ClipboardHistoryPlugin.ActionID.openHistory
-                    )
-                )
-                PluginSettingsListDivider()
-                pluginShortcutRow(
-                    settingsContext.shortcutItem(
-                        definitionID: ClipboardHistoryPlugin.ShortcutID.pastePlainText
-                    ),
-                    isOptional: true
-                )
+    private var storageContent: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(storageDescription)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(controller.errorMessage == nil ? Color.secondary : Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let errorMessage = controller.errorMessage {
+                    Text(errorMessage)
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .pluginSettingsCardBackground(.standard)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if controller.errorMessage != nil {
+                Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
+                    controller.retryStorageAccess()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .pluginSettingsListRowPadding()
+    }
+
+    private var collectionContent: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            Text(localization.string(
+                "setup.collection.actionDescription",
+                defaultValue: "开启后，新复制的内容会保存在本机加密历史中。你以后可以随时暂停收集。"
+            ))
+                .font(PluginSettingsTheme.Typography.rowDescription)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle("", isOn: Binding(
+                get: { collectionEnabled },
+                set: { isEnabled in
+                    guard controller.isCollectionOperational else { return }
+                    settings.setPaused(!isEnabled)
+                    if isEnabled {
+                        hasRevealedShortcutSections = true
+                    }
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .disabled(!controller.isCollectionOperational)
+        }
+        .pluginSettingsListRowPadding(interactive: true)
+    }
+
+    private var primaryShortcutsContent: some View {
+        VStack(spacing: 0) {
+            actionShortcutRow(
+                settingsContext.actionShortcutItem(
+                    actionID: ClipboardHistoryPlugin.ActionID.openHistory
+                )
+            )
+            PluginSettingsListDivider()
+            pluginShortcutRow(
+                settingsContext.shortcutItem(
+                    definitionID: ClipboardHistoryPlugin.ShortcutID.pastePlainText
+                ),
+                isOptional: true
+            )
         }
     }
 
-    private var sensitiveCopyStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            stepTitle(
-                localization.string("setup.privacy.title", defaultValue: "选择私密复制方式"),
-                description: localization.format(
-                    "setup.privacy.description",
-                    defaultValue: "“立即私密复制”一步完成；“忽略下一次复制”用于之后的右键复制。已设置 %d/2 个可选快捷键。",
-                    assignedPrivacyShortcutCount
+    private var sensitiveCopyContent: some View {
+        VStack(spacing: 0) {
+            pluginShortcutRow(
+                settingsContext.shortcutItem(
+                    definitionID: ClipboardHistoryPlugin.ShortcutID.privateCopy
                 ),
-                systemImage: "eye.slash"
+                isOptional: true
             )
-
-            VStack(spacing: 0) {
-                pluginShortcutRow(
-                    settingsContext.shortcutItem(
-                        definitionID: ClipboardHistoryPlugin.ShortcutID.privateCopy
-                    ),
-                    isOptional: true
-                )
-                PluginSettingsListDivider()
-                pluginShortcutRow(
-                    settingsContext.shortcutItem(
-                        definitionID: ClipboardHistoryPlugin.ShortcutID.ignoreNextCopy
-                    ),
-                    isOptional: true
-                )
-            }
-            .pluginSettingsCardBackground(.standard)
-        }
-    }
-
-    private var readyStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            stepTitle(
-                localization.string("setup.ready.title", defaultValue: "剪贴板历史已准备就绪"),
-                description: localization.string(
-                    "setup.ready.description",
-                    defaultValue: "请检查下面的设置。以后可随时重新打开设置指南。"
+            PluginSettingsListDivider()
+            pluginShortcutRow(
+                settingsContext.shortcutItem(
+                    definitionID: ClipboardHistoryPlugin.ShortcutID.ignoreNextCopy
                 ),
-                systemImage: "checkmark.circle"
+                isOptional: true
             )
-
-            VStack(spacing: 0) {
-                summaryRow(
-                    title: localization.string("setup.collection.title", defaultValue: "准备安全存储"),
-                    value: storageStatusTitle,
-                    isComplete: controller.isLoaded && controller.errorMessage == nil
-                )
-                PluginSettingsListDivider()
-                summaryRow(
-                    title: localization.string("settings.collection.toggleTitle", defaultValue: "收集剪贴板历史"),
-                    value: settings.isPaused
-                        ? localization.string("setup.collection.disabled", defaultValue: "已暂停")
-                        : localization.string("setup.collection.enabled", defaultValue: "已开启"),
-                    isComplete: !settings.isPaused
-                )
-                PluginSettingsListDivider()
-                summaryRow(
-                    title: localization.string("setup.open.title", defaultValue: "设置打开历史快捷键"),
-                    value: shortcutBindingTexts[
-                        Self.actionShortcutKey(ClipboardHistoryPlugin.ActionID.openHistory)
-                    ] ?? "",
-                    isComplete: assignedShortcutIDs.contains(
-                        Self.actionShortcutKey(ClipboardHistoryPlugin.ActionID.openHistory)
-                    )
-                )
-                PluginSettingsListDivider()
-                summaryRow(
-                    title: localization.string("setup.privacy.title", defaultValue: "选择私密复制方式"),
-                    value: "\(assignedPrivacyShortcutCount) / 2",
-                    isComplete: assignedPrivacyShortcutCount > 0
-                )
-            }
-            .pluginSettingsCardBackground(.standard)
         }
     }
 
     private var footer: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Button(localization.string("common.close", defaultValue: "关闭")) {
                 dismiss()
             }
@@ -294,53 +342,18 @@ struct ClipboardHistorySetupSheet: View {
 
             Spacer()
 
-            if step != .storage {
-                Button(localization.string("setup.back", defaultValue: "返回")) {
-                    move(by: -1)
-                }
-                .buttonStyle(.bordered)
-            }
-
-            if step == .ready {
-                Button(localization.string("setup.dismiss", defaultValue: "完成")) {
+            Button(localization.string("setup.dismiss", defaultValue: "完成")) {
+                if progress.canFinish {
                     settings.completeInitialSetup()
-                    dismiss()
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canFinish)
-            } else {
-                Button(localization.string("setup.next", defaultValue: "继续")) {
-                    move(by: 1)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canMoveForward)
+                dismiss()
             }
+            .buttonStyle(.borderedProminent)
+            .disabled(!progress.canFinish && !settings.hasCompletedInitialSetup)
         }
         .controlSize(.regular)
         .padding(.horizontal, 28)
         .padding(.vertical, 18)
-    }
-
-    private func stepTitle(
-        _ title: String,
-        description: String,
-        systemImage: String
-    ) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 34, height: 34)
-                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title)
-                    .font(.title3.weight(.semibold))
-                Text(description)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
     }
 
     @ViewBuilder
@@ -422,12 +435,10 @@ struct ClipboardHistorySetupSheet: View {
                     Text(title)
                         .font(PluginSettingsTheme.Typography.rowTitle)
                     if isOptional {
-                        Text(localization.string("setup.optional", defaultValue: "可选"))
-                            .font(PluginSettingsTheme.Typography.statusBadge)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.1), in: Capsule())
+                        statusBadge(
+                            localization.string("setup.optional", defaultValue: "可选"),
+                            color: .secondary
+                        )
                     }
                 }
                 Text(description)
@@ -436,53 +447,107 @@ struct ClipboardHistorySetupSheet: View {
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            PluginShortcutRecorder(
+            PluginSettingsShortcutRecorderControl(
                 title: title,
                 displayText: bindingText,
-                minWidth: PluginSettingsTheme.Size.shortcutRecorderWidth,
+                canAssign: canAssign,
+                canClear: canClear,
+                clearTitle: localization.string("common.remove", defaultValue: "移除"),
                 onRecord: onRecord,
-                onBeginRecording: onBeginRecording
+                onBeginRecording: onBeginRecording,
+                onClear: onClear
             )
-            .frame(width: PluginSettingsTheme.Size.shortcutRecorderWidth)
-            .disabled(!canAssign)
-            if canClear {
-                Button(action: onClear) {
-                    Image(systemName: "xmark.circle.fill")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(localization.string("common.remove", defaultValue: "移除"))
-            }
         }
         .pluginSettingsListRowPadding(interactive: true)
     }
 
-    private func summaryRow(title: String, value: String, isComplete: Bool) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: isComplete ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isComplete ? Color.green : Color.secondary)
-            Text(title)
-                .font(PluginSettingsTheme.Typography.rowTitle)
-            Spacer()
-            Text(value.isEmpty
-                ? localization.string("setup.notAssigned", defaultValue: "未设置")
-                : value
-            )
-                .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+    private func stepStatusIcon(for step: ClipboardHistorySetupStep) -> some View {
+        let isConfigured = progress.isConfigured(step)
+        let hasError = step == .storage && controller.errorMessage != nil
+        let imageName: String
+        let color: Color
+
+        if isConfigured {
+            imageName = "checkmark.circle.fill"
+            color = .green
+        } else if hasError || (step == .collection && storageReady) {
+            imageName = "exclamationmark.circle.fill"
+            color = .orange
+        } else {
+            imageName = "circle"
+            color = .secondary
         }
-        .pluginSettingsListRowPadding()
+
+        return Image(systemName: imageName)
+            .font(.title3)
+            .foregroundStyle(color)
+            .frame(width: 26)
+    }
+
+    private func statusBadge(_ title: String, color: Color) -> some View {
+        Text(title)
+            .font(PluginSettingsTheme.Typography.statusBadge)
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.1), in: Capsule())
+    }
+
+    private func stepTitle(for step: ClipboardHistorySetupStep) -> String {
+        switch step {
+        case .storage:
+            localization.string("setup.storage.title", defaultValue: "准备安全存储")
+        case .collection:
+            localization.string("settings.collection.toggleTitle", defaultValue: "收集剪贴板历史")
+        case .primaryShortcuts:
+            localization.string("setup.open.title", defaultValue: "设置主要快捷键")
+        case .sensitiveCopy:
+            localization.string("setup.privacy.title", defaultValue: "保护敏感复制内容")
+        }
+    }
+
+    private func stepSummary(for step: ClipboardHistorySetupStep) -> String {
+        switch step {
+        case .storage:
+            return storageStatusTitle
+        case .collection:
+            return collectionEnabled
+                ? localization.string("setup.collection.enabled", defaultValue: "已开启")
+                : localization.string("setup.collection.disabled", defaultValue: "已暂停")
+        case .primaryShortcuts:
+            let binding = shortcutBindingTexts[Self.openHistoryShortcutKey] ?? ""
+            return binding.isEmpty
+                ? localization.string("setup.notConfigured", defaultValue: "未配置")
+                : binding
+        case .sensitiveCopy:
+            return localization.format(
+                "setup.privacy.progress",
+                defaultValue: "已设置 %d/2 个隐私快捷键",
+                assignedPrivacyShortcutCount
+            )
+        }
+    }
+
+    private var progress: ClipboardHistorySetupProgress {
+        ClipboardHistorySetupProgress(
+            storageReady: storageReady,
+            collectionEnabled: collectionEnabled,
+            primaryShortcutAssigned: assignedShortcutIDs.contains(Self.openHistoryShortcutKey),
+            privacyShortcutAssigned: assignedPrivacyShortcutCount > 0,
+            hasRevealedShortcutSections: hasRevealedShortcutSections
+        )
+    }
+
+    private var storageReady: Bool {
+        controller.isLoaded && controller.errorMessage == nil
+    }
+
+    private var collectionEnabled: Bool {
+        !settings.isPaused && controller.isCollectionOperational
     }
 
     private var assignedPrivacyShortcutCount: Int {
-        [
-            ClipboardHistoryPlugin.ShortcutID.privateCopy,
-            ClipboardHistoryPlugin.ShortcutID.ignoreNextCopy,
-        ]
-        .map { "\(settingsContext.pluginID).shortcut.\($0)" }
-        .filter { assignedShortcutIDs.contains($0) }
-        .count
+        Self.privacyShortcutKeys.filter { assignedShortcutIDs.contains($0) }.count
     }
 
     private var storageDescription: String {
@@ -504,18 +569,6 @@ struct ClipboardHistorySetupSheet: View {
         )
     }
 
-    private var collectionDescription: String {
-        settings.isPaused
-            ? localization.string(
-                "setup.collection.pausedDescription",
-                defaultValue: "当前已暂停；可在下方开启“收集剪贴板历史”。"
-            )
-            : localization.string(
-                "settings.collection.activeDescription",
-                defaultValue: "收集已开启。历史保存在本机加密数据库中，钥匙串只保存加密密钥。"
-            )
-    }
-
     private var storageStatusTitle: String {
         if controller.errorMessage != nil {
             return localization.string("settings.storage.status.attention", defaultValue: "需要处理")
@@ -526,28 +579,14 @@ struct ClipboardHistorySetupSheet: View {
         return localization.string("settings.storage.status.preparing", defaultValue: "准备中")
     }
 
-    private var storageStatusImage: String {
-        if controller.errorMessage != nil { return "exclamationmark.triangle.fill" }
-        return controller.isLoaded ? "checkmark.shield.fill" : "hourglass"
-    }
+    private static let openHistoryShortcutKey = actionShortcutKey(
+        ClipboardHistoryPlugin.ActionID.openHistory
+    )
 
-    private var storageStatusColor: Color {
-        if controller.errorMessage != nil { return .orange }
-        return controller.isLoaded ? .green : .secondary
-    }
-
-    private var canMoveForward: Bool {
-        step != .storage || (controller.isLoaded && controller.errorMessage == nil)
-    }
-
-    private var canFinish: Bool {
-        controller.isLoaded && controller.errorMessage == nil
-    }
-
-    private func move(by offset: Int) {
-        guard let next = Step(rawValue: step.rawValue + offset) else { return }
-        step = next
-    }
+    private static let privacyShortcutKeys: [String] = [
+        ClipboardHistoryPlugin.ShortcutID.privateCopy,
+        ClipboardHistoryPlugin.ShortcutID.ignoreNextCopy,
+    ].map { "\(ClipboardHistoryPlugin.pluginID).shortcut.\($0)" }
 
     private static func actionShortcutKey(_ actionID: String) -> String {
         "action.\(actionID)"

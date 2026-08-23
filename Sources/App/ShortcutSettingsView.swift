@@ -39,13 +39,10 @@ func commonShortcutBindingWarningAlert(
 }
 
 private enum ShortcutSettingsLayout {
-    static let recorderWidth = PluginSettingsTheme.Size.shortcutRecorderWidth
     static let controlLabelMaxWidth: CGFloat = 160
     static let groupedControlMinWidth: CGFloat = 260
     static let groupedControlMaxWidth: CGFloat = 380
     static let summaryMinWidth: CGFloat = 220
-    static let actionButtonSize: CGFloat = 22
-    static let actionButtonsWidth: CGFloat = 50
 }
 
 struct ShortcutSettingsView: View {
@@ -512,11 +509,6 @@ private struct ActionShortcutGroup {
 }
 
 private struct ActionShortcutCatalogRow: View {
-    private enum Layout {
-        static let recorderWidth = PluginSettingsTheme.Size.shortcutRecorderWidth
-        static let actionButtonSize: CGFloat = 22
-    }
-
     @ObservedObject var pluginHost: PluginHost
     let item: ActionShortcutCatalogItem
     var displaysRunLink = true
@@ -555,26 +547,14 @@ private struct ActionShortcutCatalogRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                PluginShortcutRecorder(
+                PluginSettingsShortcutRecorderControl(
                     title: item.title,
                     displayText: item.bindingText,
-                    minWidth: Layout.recorderWidth,
-                    onRecord: onRecord
-                )
-                .frame(width: Layout.recorderWidth)
-                .disabled(!item.canAssign || pluginHost.actionShortcutLoadError != nil)
-
-                Button(action: onClear) {
-                    Image(systemName: "xmark.circle.fill")
-                        .frame(width: Layout.actionButtonSize, height: Layout.actionButtonSize)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(FeatureL10n.string("清除快捷键"))
-                .opacity(item.bindingText.isEmpty ? 0 : 1)
-                .disabled(
-                    item.bindingText.isEmpty
-                        || pluginHost.actionShortcutLoadError != nil
+                    canAssign: item.canAssign && pluginHost.actionShortcutLoadError == nil,
+                    canClear: !item.bindingText.isEmpty && pluginHost.actionShortcutLoadError == nil,
+                    clearTitle: FeatureL10n.string("清除快捷键"),
+                    onRecord: onRecord,
+                    onClear: onClear
                 )
             }
 
@@ -1033,14 +1013,10 @@ private struct ShortcutBindingControl: View {
                 maximumLabelWidth: ShortcutSettingsLayout.controlLabelMaxWidth
             ) {
                 controlLabel
-                recorderButton
-                actionButtons
+                recorderControl
             }
         } else {
-            HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.controlCluster) {
-                recorderButton
-                actionButtons
-            }
+            recorderControl
         }
     }
 
@@ -1063,53 +1039,28 @@ private struct ShortcutBindingControl: View {
         .help(title ?? item.title)
     }
 
-    private var recorderButton: some View {
-        PluginShortcutRecorder(
+    private var recorderControl: some View {
+        PluginSettingsShortcutRecorderControl(
             title: title ?? item.title,
             displayText: item.bindingText,
-            minWidth: ShortcutSettingsLayout.recorderWidth,
+            canClear: item.canClear,
+            resetTitle: shouldOfferReset
+                ? AppL10n.settings("shortcuts.resetHelp", defaultValue: "重置为默认快捷键")
+                : nil,
+            clearTitle: AppL10n.settings("shortcuts.clearHelp", defaultValue: "清除快捷键"),
             onRecord: onRecord,
-            onBeginRecording: onBeginRecording
+            onBeginRecording: onBeginRecording,
+            onReset: shouldOfferReset ? onReset : nil,
+            onClear: onClear
         )
-        .frame(width: ShortcutSettingsLayout.recorderWidth)
     }
 
     private var hasControlLabel: Bool {
         title != nil || systemImage != nil
     }
 
-    @ViewBuilder
-    private var actionButtons: some View {
-        if shouldShowReset || item.canClear {
-            HStack(spacing: 6) {
-                if shouldShowReset {
-                    ShortcutInlineActionButton(
-                        systemName: "arrow.counterclockwise",
-                        helpText: AppL10n.settings("shortcuts.resetHelp", defaultValue: "重置为默认快捷键"),
-                        action: onReset
-                    )
-                }
-
-                if item.canClear {
-                    ShortcutInlineActionButton(
-                        systemName: "xmark.circle.fill",
-                        helpText: AppL10n.settings("shortcuts.clearHelp", defaultValue: "清除快捷键"),
-                        action: onClear
-                    )
-                }
-            }
-            .frame(width: actionButtonsWidth, alignment: .leading)
-        }
-    }
-
-    private var shouldShowReset: Bool {
+    private var shouldOfferReset: Bool {
         !item.usesDefaultValue
-    }
-
-    private var actionButtonsWidth: CGFloat {
-        shouldShowReset && item.canClear
-            ? ShortcutSettingsLayout.actionButtonsWidth
-            : ShortcutSettingsLayout.actionButtonSize
     }
 }
 
@@ -1126,26 +1077,5 @@ private struct ShortcutStatusBadge: View {
                 Capsule(style: .continuous)
                     .fill(SettingsStyle.activeControlBackground)
             )
-    }
-}
-
-private struct ShortcutInlineActionButton: View {
-    let systemName: String
-    let helpText: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(PluginSettingsTheme.Typography.rowIcon)
-                .symbolRenderingMode(.monochrome)
-                .frame(
-                    width: ShortcutSettingsLayout.actionButtonSize,
-                    height: ShortcutSettingsLayout.actionButtonSize
-                )
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.secondary)
-        .help(helpText)
     }
 }
