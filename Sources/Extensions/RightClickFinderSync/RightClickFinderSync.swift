@@ -242,7 +242,17 @@ final class RightClickFinderSync: FIFinderSync {
             preferredLanguages: preferredLanguages
         )
         case "md": "Markdown (.md)"
+        case "csv": "CSV (.csv)"
         case "json": "JSON (.json)"
+        case "yaml": "YAML (.yaml)"
+        case "yml": "YAML (.yml)"
+        case "xml": "XML (.xml)"
+        case "html": "HTML (.html)"
+        case "css": "CSS (.css)"
+        case "js": "JavaScript (.js)"
+        case "ts": "TypeScript (.ts)"
+        case "sh": "Shell (.sh)"
+        case "py": "Python (.py)"
         default: ".\(ext)"
         }
     }

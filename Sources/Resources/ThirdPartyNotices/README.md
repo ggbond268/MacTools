@@ -18,3 +18,4 @@ This directory records third-party assets, dependencies, and implementation refe
 - [darrylmorley/whatbattery](https://github.com/darrylmorley/whatbattery)
 - [libimobiledevice/libimobiledevice](https://github.com/libimobiledevice/libimobiledevice)
 - [SuveenE/activity-bar](https://github.com/SuveenE/activity-bar)
+- [Lakr233/FixTim](https://github.com/Lakr233/FixTim) — MIT License; Copyright (c) 2024 Lakr Aream

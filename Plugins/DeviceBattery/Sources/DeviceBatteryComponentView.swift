@@ -17,14 +17,12 @@ struct DeviceBatteryComponentView: View {
                 switch store.layoutMode {
                 case .grid:
                     DeviceBatteryListCard(
-                        items: Array(visibleItems.prefix(DeviceBatteryLayout.maximumListItems)),
-                        totalCount: visibleItems.count,
+                        items: visibleItems,
                         localization: localization
                     )
                 case .list:
                     DeviceBatteryGaugeGrid(
-                        items: Array(visibleItems.prefix(DeviceBatteryLayout.maximumGaugeItems)),
-                        totalCount: visibleItems.count,
+                        items: visibleItems,
                         localization: localization
                     )
                 }
@@ -110,17 +108,14 @@ enum DeviceBatteryComponentLayout {
     static let cornerRadius: CGFloat = PluginComponentPanelLayoutMetrics.cardCornerRadius
     static let horizontalPadding: CGFloat = 12
     static let rowHeight: CGFloat = 34
-    static let overflowHeight: CGFloat = 20
     static let rowIconWidth: CGFloat = 26
     static let percentWidth: CGFloat = 38
     static let batteryWidth: CGFloat = 23
     static let cardVerticalPadding: CGFloat = 6
     static let gaugeHorizontalPadding: CGFloat = 12
     static let gaugeVerticalPadding: CGFloat = 10
-    static let maximumListItems = 6
-    static let maximumGaugeItems = 8
-    static let ringSpan: CGFloat = 0.78
-    static let ringRotation: Double = 129.6
+    static let ringStartAngle: Double = 129.6
+    static let ringSweepAngle: Double = 280.8
     static let ringTrackLineWidthScale: CGFloat = 1.15
     static let poweredRingLineWidthScale: CGFloat = 1.38
 
@@ -151,15 +146,14 @@ enum DeviceBatteryComponentLayout {
     }
 
     static func listCardHeight(totalCount: Int) -> CGFloat {
-        let displayCount = min(max(totalCount, 1), maximumListItems)
+        let displayCount = max(totalCount, 1)
         return cardVerticalPadding * 2
             + CGFloat(displayCount) * rowHeight
             + CGFloat(max(displayCount - 1, 0))
-            + overflowHeightIfNeeded(totalCount: totalCount, displayedCount: displayCount)
     }
 
     static func gaugeCardHeight(totalCount: Int) -> CGFloat {
-        let displayCount = min(max(totalCount, 1), maximumGaugeItems)
+        let displayCount = max(totalCount, 1)
         let tileSize = gaugeTileSize(for: displayCount)
         let rows = gaugeRowCount(totalCount: totalCount)
         let rowSpacing = gaugeRowSpacing(for: displayCount)
@@ -182,10 +176,9 @@ enum DeviceBatteryComponentLayout {
     }
 
     static func gaugeRowCount(totalCount: Int) -> Int {
-        let displayCount = min(max(totalCount, 1), maximumGaugeItems)
-        let cellCount = displayCount + (totalCount > displayCount ? 1 : 0)
+        let displayCount = max(totalCount, 1)
         let columns = gaugeColumnCount(for: displayCount)
-        return Int(ceil(Double(cellCount) / Double(columns)))
+        return Int(ceil(Double(displayCount) / Double(columns)))
     }
 
     static func gaugeTileSize(for itemCount: Int) -> CGFloat {
@@ -208,22 +201,17 @@ enum DeviceBatteryComponentLayout {
     static func gaugeRowSpacing(for itemCount: Int) -> CGFloat {
         itemCount > 4 ? 8 : 6
     }
-
-    static func overflowHeightIfNeeded(totalCount: Int, displayedCount: Int) -> CGFloat {
-        totalCount > displayedCount ? overflowHeight + 1 : 0
-    }
 }
 
 private typealias DeviceBatteryLayout = DeviceBatteryComponentLayout
 
 private struct DeviceBatteryListCard: View {
     let items: [DeviceBatteryItem]
-    let totalCount: Int
     let localization: PluginLocalization
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+            ForEach(Array(items.enumerated()), id: \.element.stableBatteryIdentityKey) { index, item in
                 DeviceBatteryNativeRow(
                     item: item,
                     rowHeight: DeviceBatteryLayout.rowHeight,
@@ -235,11 +223,6 @@ private struct DeviceBatteryListCard: View {
                     DeviceBatteryDivider()
                 }
             }
-
-            if totalCount > items.count {
-                DeviceBatteryDivider()
-                DeviceBatteryOverflowRow(count: totalCount - items.count, localization: localization)
-            }
         }
         .padding(.vertical, DeviceBatteryLayout.cardVerticalPadding)
         .frame(maxWidth: .infinity)
@@ -250,14 +233,12 @@ private struct DeviceBatteryListCard: View {
 
 private struct DeviceBatteryGaugeGrid: View {
     let items: [DeviceBatteryItem]
-    let totalCount: Int
     let localization: PluginLocalization
-    @Environment(\.pluginComponentTheme) private var theme
 
     var body: some View {
         Group {
             LazyVGrid(columns: columns, spacing: rowSpacing) {
-                ForEach(items) { item in
+                ForEach(items, id: \.stableBatteryIdentityKey) { item in
                     DeviceBatteryGaugeTile(
                         item: item,
                         tileSize: tileSize,
@@ -265,13 +246,6 @@ private struct DeviceBatteryGaugeGrid: View {
                         localization: localization
                     )
                     .frame(maxWidth: .infinity)
-                }
-
-                if totalCount > items.count {
-                    Text("+\(totalCount - items.count)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(theme.text.secondary)
-                        .frame(width: tileSize, height: tileSize + DeviceBatteryLayout.gaugePercentHeight)
                 }
             }
             .padding(.horizontal, DeviceBatteryLayout.gaugeHorizontalPadding)
@@ -391,59 +365,61 @@ private struct DeviceBatteryRing: View {
     @Environment(\.pluginComponentTheme) private var theme
 
     var body: some View {
-        ZStack {
-            Circle()
-                .inset(by: ringPathInset)
-                .trim(from: 0, to: DeviceBatteryLayout.ringSpan)
-                .stroke(
-                    theme.surfaces.track,
-                    style: StrokeStyle(
-                        lineWidth: lineWidth * DeviceBatteryLayout.ringTrackLineWidthScale,
-                        lineCap: .round,
-                        lineJoin: .round
-                    )
+        Canvas { context, canvasSize in
+            let center = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+            let radius = max(0, min(canvasSize.width, canvasSize.height) / 2 - ringPathInset)
+            let tint = batteryTint(for: item, theme: theme)
+
+            context.stroke(
+                ringPath(center: center, radius: radius, progress: 1),
+                with: .color(theme.surfaces.track),
+                style: StrokeStyle(
+                    lineWidth: lineWidth * DeviceBatteryLayout.ringTrackLineWidthScale,
+                    lineCap: .round
                 )
+            )
 
             if showsPoweredOverlay {
-                Circle()
-                    .inset(by: ringPathInset)
-                    .trim(from: 0, to: DeviceBatteryLayout.ringSpan)
-                    .stroke(
-                        batteryTint(for: item, theme: theme).opacity(0.12),
-                        style: StrokeStyle(
-                            lineWidth: lineWidth * DeviceBatteryLayout.poweredRingLineWidthScale,
-                            lineCap: .round,
-                            lineJoin: .round
-                        )
+                context.stroke(
+                    ringPath(center: center, radius: radius, progress: 1),
+                    with: .color(tint.opacity(0.12)),
+                    style: StrokeStyle(
+                        lineWidth: lineWidth * DeviceBatteryLayout.poweredRingLineWidthScale,
+                        lineCap: .round
                     )
-
-                if progressSpan > 0.002, progress < 0.995 {
-                    Circle()
-                        .inset(by: ringPathInset)
-                        .trim(from: max(progressSpan - 0.002, 0), to: max(progressSpan - 0.0004, 0))
-                        .stroke(
-                            batteryTint(for: item, theme: theme),
-                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
-                        )
-                        .shadow(color: batteryTint(for: item, theme: theme).opacity(0.32), radius: lineWidth * 0.7)
-                        .clipShape(
-                            Circle()
-                                .inset(by: ringPathInset)
-                                .trim(from: 0, to: DeviceBatteryLayout.ringSpan)
-                                .stroke(style: StrokeStyle(lineWidth: lineWidth * 1.4, lineCap: .round, lineJoin: .round))
-                        )
-                }
+                )
             }
 
-            Circle()
-                .inset(by: ringPathInset)
-                .trim(from: 0, to: progressSpan)
-                .stroke(
-                    batteryTint(for: item, theme: theme),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
-                )
+            context.stroke(
+                ringPath(center: center, radius: radius, progress: progress),
+                with: .color(tint),
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+            )
+
+            if showsPoweredOverlay, progress > 0.002, progress < 0.995 {
+                let endpoint = ringEndpoint(center: center, radius: radius, progress: progress)
+                let highlightSize = max(1.5, lineWidth * 0.42)
+                context.drawLayer { layer in
+                    layer.addFilter(
+                        .shadow(
+                            color: tint.opacity(0.34),
+                            radius: lineWidth * 0.72
+                        )
+                    )
+                    layer.fill(
+                        Path(
+                            ellipseIn: CGRect(
+                                x: endpoint.x - highlightSize / 2,
+                                y: endpoint.y - highlightSize / 2,
+                                width: highlightSize,
+                                height: highlightSize
+                            )
+                        ),
+                        with: .color(tint)
+                    )
+                }
+            }
         }
-        .rotationEffect(.degrees(DeviceBatteryLayout.ringRotation))
         .frame(width: size, height: size)
         .accessibilityLabel(
             localization.format(
@@ -459,16 +435,44 @@ private struct DeviceBatteryRing: View {
         CGFloat(item.clampedLevel ?? 0) / 100
     }
 
-    private var progressSpan: CGFloat {
-        DeviceBatteryLayout.ringSpan * progress
-    }
-
     private var showsPoweredOverlay: Bool {
         chargingSymbolName(for: item) != nil
     }
 
     private var ringPathInset: CGFloat {
         lineWidth * DeviceBatteryLayout.poweredRingLineWidthScale / 2
+    }
+
+    private func ringPath(
+        center: CGPoint,
+        radius: CGFloat,
+        progress: CGFloat
+    ) -> Path {
+        let start = Angle.degrees(DeviceBatteryLayout.ringStartAngle)
+        let sweep = DeviceBatteryLayout.ringSweepAngle * Double(min(max(progress, 0), 1))
+        var path = Path()
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: start,
+            endAngle: start + .degrees(sweep),
+            clockwise: false
+        )
+        return path
+    }
+
+    private func ringEndpoint(
+        center: CGPoint,
+        radius: CGFloat,
+        progress: CGFloat
+    ) -> CGPoint {
+        let degrees = DeviceBatteryLayout.ringStartAngle
+            + DeviceBatteryLayout.ringSweepAngle * Double(min(max(progress, 0), 1))
+        let radians = degrees * .pi / 180
+        return CGPoint(
+            x: center.x + CGFloat(cos(radians)) * radius,
+            y: center.y + CGFloat(sin(radians)) * radius
+        )
     }
 }
 
@@ -481,20 +485,6 @@ private struct DeviceBatteryDivider: View {
             .frame(height: 1)
             .padding(.leading, DeviceBatteryLayout.horizontalPadding + DeviceBatteryLayout.rowIconWidth + 10)
             .padding(.trailing, DeviceBatteryLayout.horizontalPadding)
-    }
-}
-
-private struct DeviceBatteryOverflowRow: View {
-    let count: Int
-    let localization: PluginLocalization
-    @Environment(\.pluginComponentTheme) private var theme
-
-    var body: some View {
-        Text(localization.format("overflow.moreDevices", defaultValue: "还有 %d 台设备", count))
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(theme.text.tertiary)
-            .frame(maxWidth: .infinity)
-            .frame(height: DeviceBatteryLayout.overflowHeight)
     }
 }
 

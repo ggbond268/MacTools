@@ -40,6 +40,7 @@ protocol R2UploadProgressPresenting: AnyObject {
 
 @MainActor
 final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
+    private let localization: PluginLocalization
     private var panel: NSPanel?
     private var nameField: NSTextField?
     private var validationLabel: NSTextField?
@@ -50,6 +51,11 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
     private var conflictContinuation: CheckedContinuation<R2UploadConflictResolution, Never>?
     private var cancellationHandler: (@MainActor () -> Void)?
     private var originalFileName = ""
+
+    init(localization: PluginLocalization = PluginLocalization(bundle: .main)) {
+        self.localization = localization
+        super.init()
+    }
 
     func requestObjectName(fileName: String) async -> String? {
         resolvePendingNaming(returning: nil)
@@ -137,7 +143,10 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
             backing: .buffered,
             defer: false
         )
-        panel.title = "Cloudflare R2 上传"
+        panel.title = localization.string(
+            "metadata.title",
+            defaultValue: "Cloudflare R2 上传"
+        )
         panel.level = .floating
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
@@ -154,7 +163,10 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
     private func makeNamingContentView(fileName: String) -> NSView {
         let contentView = NSView()
 
-        let promptLabel = NSTextField(labelWithString: "文件名")
+        let promptLabel = NSTextField(labelWithString: localization.string(
+            "upload.naming.fileName",
+            defaultValue: "文件名"
+        ))
         promptLabel.translatesAutoresizingMaskIntoConstraints = false
         promptLabel.font = .systemFont(ofSize: 12, weight: .medium)
         promptLabel.textColor = .secondaryLabelColor
@@ -163,19 +175,31 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
         nameField.translatesAutoresizingMaskIntoConstraints = false
         nameField.font = .systemFont(ofSize: 13)
         nameField.lineBreakMode = .byTruncatingMiddle
-        nameField.placeholderString = "输入上传后的文件名"
+        nameField.placeholderString = localization.string(
+            "upload.naming.placeholder",
+            defaultValue: "输入上传后的文件名"
+        )
         nameField.target = self
         nameField.action = #selector(confirmUpload)
 
         let randomButton = NSButton(
-            image: NSImage(systemSymbolName: "dice", accessibilityDescription: "生成随机文件名") ?? NSImage(),
+            image: NSImage(
+                systemSymbolName: "dice",
+                accessibilityDescription: localization.string(
+                    "upload.naming.random.accessibility",
+                    defaultValue: "生成随机文件名"
+                )
+            ) ?? NSImage(),
             target: self,
             action: #selector(generateRandomName)
         )
         randomButton.translatesAutoresizingMaskIntoConstraints = false
         randomButton.bezelStyle = .rounded
         randomButton.imagePosition = .imageOnly
-        randomButton.toolTip = "生成随机 UUID 文件名（保留扩展名）"
+        randomButton.toolTip = localization.string(
+            "upload.naming.random.help",
+            defaultValue: "生成随机 UUID 文件名（保留扩展名）"
+        )
 
         let validationLabel = NSTextField(labelWithString: "")
         validationLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -183,7 +207,7 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
         validationLabel.textColor = .systemRed
 
         let cancelButton = NSButton(
-            title: "取消",
+            title: localization.string("common.cancel", defaultValue: "取消"),
             target: self,
             action: #selector(cancelNaming)
         )
@@ -192,7 +216,10 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
         cancelButton.keyEquivalent = "\u{1b}"
 
         let uploadButton = NSButton(
-            title: "开始上传",
+            title: localization.string(
+                "upload.naming.start",
+                defaultValue: "开始上传"
+            ),
             target: self,
             action: #selector(confirmUpload)
         )
@@ -252,7 +279,10 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
         percentageLabel.alignment = .right
 
         let cancelButton = NSButton(
-            title: "取消上传",
+            title: localization.string(
+                "common.cancelUpload",
+                defaultValue: "取消上传"
+            ),
             target: self,
             action: #selector(cancelUpload)
         )
@@ -288,19 +318,29 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
     private func makeConflictContentView(fileName: String) -> NSView {
         let contentView = NSView()
 
-        let titleLabel = NSTextField(labelWithString: "“\(fileName)” 已存在")
+        let titleLabel = NSTextField(labelWithString: localization.format(
+            "upload.conflict.title",
+            defaultValue: "“%@” 已存在",
+            fileName
+        ))
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingMiddle
         titleLabel.maximumNumberOfLines = 1
 
-        let detailLabel = NSTextField(labelWithString: "覆盖上传会替换 R2 中的现有文件。")
+        let detailLabel = NSTextField(labelWithString: localization.string(
+            "upload.conflict.detail",
+            defaultValue: "覆盖上传会替换 R2 中的现有对象。"
+        ))
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
         detailLabel.font = .systemFont(ofSize: 12)
         detailLabel.textColor = .secondaryLabelColor
 
         let renameButton = NSButton(
-            title: "重新命名",
+            title: localization.string(
+                "upload.conflict.rename",
+                defaultValue: "重新命名"
+            ),
             target: self,
             action: #selector(resolveConflictByRenaming)
         )
@@ -309,7 +349,7 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
         renameButton.keyEquivalent = "\r"
 
         let cancelButton = NSButton(
-            title: "取消",
+            title: localization.string("common.cancel", defaultValue: "取消"),
             target: self,
             action: #selector(cancelConflict)
         )
@@ -318,7 +358,10 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
         cancelButton.keyEquivalent = "\u{1b}"
 
         let overwriteButton = NSButton(
-            title: "覆盖上传",
+            title: localization.string(
+                "upload.conflict.overwrite",
+                defaultValue: "覆盖上传"
+            ),
             target: self,
             action: #selector(resolveConflictByOverwriting)
         )
@@ -371,7 +414,10 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
     @objc private func confirmUpload() {
         let value = nameField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard R2ObjectNameValidator.isValid(value) else {
-            validationLabel?.stringValue = "请输入不包含 / 的有效文件名。"
+            validationLabel?.stringValue = localization.string(
+                "upload.naming.validation",
+                defaultValue: "请输入不包含 / 的有效文件名。"
+            )
             NSSound.beep()
             return
         }

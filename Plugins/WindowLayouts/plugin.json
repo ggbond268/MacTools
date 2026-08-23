@@ -1,0 +1,69 @@
+{
+  "id": "window-layouts",
+  "displayName": "窗口布局",
+  "summary": "移动聚焦窗口并调整其大小",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "تخطيطات النوافذ",
+      "summary": "نقل النافذة المركزة حاليًا وتغيير حجمها."
+    },
+    "de": {
+      "displayName": "Fensterlayouts",
+      "summary": "Das aktuell fokussierte Fenster verschieben und skalieren."
+    },
+    "en": {
+      "displayName": "Window Layouts",
+      "summary": "Move and resize the focused window."
+    },
+    "es": {
+      "displayName": "Diseños de ventanas",
+      "summary": "Mueve y cambia el tamaño de la ventana enfocada."
+    },
+    "fr": {
+      "displayName": "Disposition des fenêtres",
+      "summary": "Déplacez et redimensionnez la fenêtre active."
+    },
+    "ja": {
+      "displayName": "ウインドウレイアウト",
+      "summary": "現在フォーカスされているウインドウを移動、サイズ変更します。"
+    },
+    "ko": {
+      "displayName": "윈도우 레이아웃",
+      "summary": "현재 포커스된 윈도우를 이동하고 크기를 조절합니다."
+    },
+    "pt": {
+      "displayName": "Layouts de janelas",
+      "summary": "Mova e redimensione a janela em foco."
+    },
+    "ru": {
+      "displayName": "Расположение окон",
+      "summary": "Перемещайте активное окно и изменяйте его размер."
+    },
+    "zh-Hans": {
+      "displayName": "窗口布局",
+      "summary": "移动聚焦窗口并调整其大小"
+    },
+    "zh-Hant": {
+      "displayName": "視窗佈局",
+      "summary": "移動聚焦視窗並調整其大小"
+    }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "WindowLayouts.bundle",
+  "factoryClass": "WindowLayoutsPlugin.WindowLayoutsPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "WindowLayoutsPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": false,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": [
+    "accessibility"
+  ],
+  "category": "productivity"
+}

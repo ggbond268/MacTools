@@ -8,12 +8,32 @@
 - iPhone / iPad / iPod touch / Vision Pro：运行时加载 macOS 自带的 `MobileDevice.framework`，通过已建立的 lockdown 配对会话读取 `com.apple.mobile.battery`；必要时回退到 diagnostics relay 的 `AppleSmartBattery` 快照。
 - Apple Watch：通过已连接 iPhone 的 `com.apple.companion_proxy` 读取配对手表的电量与充电状态，不直接连接手表。
 - 蓝牙与 Apple 外设：`system_profiler SPBluetoothDataType -json`、`IOBluetoothDevice`、相关 `IORegistry` 服务，以及系统 BatteryCenter / bluetoothd 近期本地日志中的电源状态。
-- AirPods / Beats 分体状态：优先使用 `system_profiler` 中的盒、左耳、右耳电量；若系统日志或近场广播携带充电位，则用短时采样补齐“充电中”状态。
-- 雷柏 VT 系列鼠标：厂商 HID 接口，匹配 `VendorID = 0x24AE`、`PrimaryUsagePage = 0xFF00`、`PrimaryUsage = 0x0001`。
+- AirPods / Beats split batteries: when both left and right readings are available, they take precedence over a combined-earbuds reading. If either side is unavailable, the combined reading remains available. The charging case uses its own battery slot and does not, by itself, suppress the earbud reading.
+- Bluetooth observations prefer physical identifiers exposed by system sources. When a source exposes no stable identifier, the implementation may use a source-local fallback identity, or correlate by name only when the candidate is unique; ambiguous cross-source matches remain unresolved. AirPods records with different identifiers are correlated only by a mutual one-to-one match with a shared valid serial, or under one of two constrained shadow-record patterns: a complete matching non-uniform left/right/case snapshot with matching firmware, or a connected BLE-only component record without a product ID, valid serial, or aggregate reading matched to one connected or paired known split-battery record with a valid group serial.
+- AirPods / Beats model names: use a maintained product-ID mapping, falling back to names declared by the installed macOS CoreTypes catalog and device-reported model information.
+- Recognized AirPods Max models are represented by one headset battery. The Smart Case is not treated as a battery component, and component-shaped readings are excluded for those recognized single-battery models.
+- Battery percentage and charging state are resolved independently. Sources that expose only a percentage, including IOBluetooth and the standard GATT Battery Service, report an unknown charging state instead of assuming that the device is not charging. Only explicit state fields or flags can replace a known charging state.
+- Apple mobile devices use their stable MobileDevice identifier as the physical identity. The device-reported Bluetooth address is retained as a strong alias, allowing USB, Wi-Fi, and BLE observations of the same physical device to consolidate without comparing display names. Unmatched BatteryCenter mobile records are excluded because BatteryCenter identifiers cannot be proven equivalent to MobileDevice identifiers.
+- When a current MobileDevice percentage lacks charging fields, a current diagnostics-registry state can complete that observation without replacing its percentage. A recent explicit state may bridge a transient read failure for up to three minutes without advancing its original observation time; a confirmed disconnection clears the device immediately.
+- Rapoo VT-series mice use the vendor HID interface matched by `VendorID = 0x24AE`, `PrimaryUsagePage = 0xFF00`, and `PrimaryUsage = 0x0001`. Each connected HID device keeps its own stable snapshot instead of replacing the previously detected mouse.
+
+The AirPods component keys exposed by `system_profiler` and local logs, the installed CoreTypes product metadata, and Apple headphone manufacturer advertisements are undocumented macOS implementation details rather than stable public APIs. Unknown advertisement packet shapes and battery nibble values are ignored.
 
 雷柏鼠标电量来自本机 HID input report，不访问雷柏网页，也不请求网络。第一版只监听设备主动上报，不主动发送刷新命令。
 
-蓝牙日志补偿只查询最近的本机统一日志短窗口，并带有超时和目标过滤；AirPods / Beats 广播扫描只在系统已识别出 Apple/Beats 耳机目标时短时运行，不做常驻全量 BLE 扫描。所有数据均保留在本机。
+Bluetooth log fallback queries a bounded recent window of the local unified log with predicates, an output filter, and a timeout, then correlates usable readings with known battery targets. AirPods and Beats advertisement scans run for a short, bounded interval only when connected Apple headphone candidates require them. Standard GATT battery devices are retrieved through the Battery Service first; unresolved GATT targets use a Battery-Service-scoped scan, while an all-advertisement scan is reserved for Apple headphone manufacturer data that has no public service-UUID contract. The plugin stops each scan promptly, does not keep an all-device BLE scan running, and keeps all readings local.
+
+## Sampling and energy use
+
+- Opening the component requests an immediate asynchronous refresh while the UI stays responsive and keeps any available snapshot visible. Expensive supplemental state sources use a short revalidation throttle so repeated opens do not launch duplicate work.
+- Bluetooth and Apple mobile-device polling use the shorter visible-panel cadence. Low-battery monitoring uses a five-minute base background cadence.
+- While the component is visible, the lighter BatteryCenter state fallback can refresh with the Bluetooth sampling cycle; the more expensive bluetoothd power-log fallback remains throttled to five minutes. Background sampling remains bounded by the five-minute Bluetooth cadence.
+- Supplemental observations retain their own timestamps and source-specific freshness limits. Battery percentage and charging state also retain separate observation times, so a newly read level cannot make a carried charging state appear newer than it is. Fast-changing BatteryCenter and advertisement state expires sooner than the bluetoothd fallback, so a new percentage or explicit state is not overwritten or indefinitely renewed by an older source.
+- Closing the panel while monitoring remains enabled changes the next deadline without triggering another immediate scan.
+- Layout-only changes do not intentionally restart active samplers, and changing one source does not restart unrelated source loops.
+- Power-source and Bluetooth connection events still trigger source-targeted refreshes, while screen lock, display sleep, and system sleep suspend deferrable work.
+
+These measures reduce avoidable polling, process launches, and Bluetooth discovery. Actual refresh duration still depends on macOS system services and the connected devices.
 
 Apple 移动设备首次使用时，需要通过数据线连接 Mac 并在设备上选择“信任”。在 Finder 中启用通过 Wi-Fi 显示设备后，同一局域网内可无线读取。该路径使用 Apple 未公开但随 macOS 提供的系统框架；组件面板可见时按 90 秒最短间隔刷新，面板隐藏后放宽到 5 分钟。框架、符号或返回字段变化时会无崩溃降级，不影响其他电量来源。设备 UDID 不进入 UI 或普通日志，仅使用本地稳定摘要做去重。
 
@@ -29,13 +49,14 @@ AirBattery 没有雷蛇专用 VID/PID 表、HyperSpeed 接收器命令或厂商 
 
 当前实现固化了已确认的 VT 系列接收器 Product ID 与 Web 产品 ID 映射，并只处理 input report id `7`。协议 1 的电量解析优先使用 `status = data[6]`、`battery = data[7]`，同时保留 `status = data[7]`、`battery = data[8]` 作为候选偏移。`status` 取值 `1` 表示正常，`2` 表示充电中，`battery` 只接受 `0...100`。
 
-## 布局
+## Layout
 
-组件设置中提供三种布局：
+The component settings provide two layouts:
 
-- 网格：默认布局，适合 3 到 6 台设备同时扫读。
-- 列表：适合长设备名、AirPods 分体电量和来源排查。
-- 大卡片：参考 AirBattery 的大电量视觉，把低电量或主设备放在第一视觉层。
+- List: keeps long device names and split AirPods readings easy to scan.
+- Rings: emphasizes battery levels while retaining the same device data and controls.
+
+Both layouts consume the full normalized device snapshot without applying a fixed item-count truncation. When the resulting component is taller than the panel, the host panel provides vertical scrolling instead of replacing trailing items with an overflow count.
 
 ## 低电量通知
 

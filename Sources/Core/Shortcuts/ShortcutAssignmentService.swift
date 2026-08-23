@@ -217,6 +217,244 @@ final class ShortcutAssignmentService {
         }
     }
 
+    /// Previews the assignments managed by a plugin shortcut preset without mutating them.
+    func replacementPreview(
+        providerID: String,
+        managedActionIDs: Set<String>,
+        bindingsByActionID: [String: ShortcutBinding]
+    ) -> PluginActionShortcutPresetPreview {
+        guard !providerID.isEmpty,
+              !managedActionIDs.isEmpty,
+              Set(bindingsByActionID.keys).isSubset(of: managedActionIDs)
+        else {
+            return PluginActionShortcutPresetPreview(
+                items: [],
+                errorMessage: ActionShortcutAssignmentError.unavailableAction.localizedDescription
+            )
+        }
+
+        let records = store.assignments()
+        guard store.loadError == nil else {
+            return PluginActionShortcutPresetPreview(
+                items: [],
+                errorMessage: ActionShortcutAssignmentError.recoveryRequired.localizedDescription
+            )
+        }
+        let retainedRecords = records.filter { record in
+            record.reference.key.providerID != providerID
+                || !managedActionIDs.contains(record.reference.key.actionID)
+        }
+
+        var items: [PluginActionShortcutPresetPreviewItem] = []
+        var proposedBindingOwners: [ShortcutBinding: ActionReference] = [:]
+        items.reserveCapacity(managedActionIDs.count)
+        for actionID in managedActionIDs.sorted() {
+            let reference = ActionReference(
+                key: ActionKey(providerID: providerID, actionID: actionID)
+            )
+            let proposedBinding = bindingsByActionID[actionID]
+            let currentBinding = records.first(where: {
+                $0.reference.key == reference.key
+            })?.binding
+            guard case let .success(action) = registry.registeredAction(for: reference),
+                  action.catalogEntry != nil,
+                  action.definition.capabilities.contains(.foregroundInteractive)
+            else {
+                if proposedBinding == nil {
+                    items.append(PluginActionShortcutPresetPreviewItem(
+                        actionID: actionID,
+                        currentBinding: currentBinding,
+                        proposedBinding: nil
+                    ))
+                    continue
+                }
+                return PluginActionShortcutPresetPreview(
+                    items: items,
+                    errorMessage: ActionShortcutAssignmentError.unavailableAction.localizedDescription
+                )
+            }
+
+            let conflictOwnerDescription: String?
+            if let proposedBinding, !proposedBinding.hasRequiredModifiers {
+                return PluginActionShortcutPresetPreview(
+                    items: items,
+                    errorMessage: ActionShortcutAssignmentError
+                        .invalidBinding(.missingModifier).localizedDescription
+                )
+            } else if let proposedBinding, ShortcutKeyCode.isModifier(proposedBinding.keyCode) {
+                return PluginActionShortcutPresetPreview(
+                    items: items,
+                    errorMessage: ActionShortcutAssignmentError
+                        .invalidBinding(.modifierOnly).localizedDescription
+                )
+            } else if let proposedBinding,
+                      let error = MacToolsReservedShortcutBindings.validationError(
+                          for: proposedBinding
+                      ) {
+                return PluginActionShortcutPresetPreview(
+                    items: items,
+                    errorMessage: ActionShortcutAssignmentError
+                        .invalidBinding(error).localizedDescription
+                )
+            } else if let proposedBinding,
+                      let existingOwner = proposedBindingOwners[proposedBinding] {
+                conflictOwnerDescription = title(for: existingOwner)
+            } else if let proposedBinding,
+               let reserved = reservedRegistrations.first(where: {
+                   $0.binding == proposedBinding
+               }) {
+                conflictOwnerDescription = reservedOwnerDescriptions[reserved.shortcutID]
+                    ?? reserved.shortcutID
+            } else if let proposedBinding,
+                      let conflict = retainedRecords.first(where: {
+                          $0.binding == proposedBinding
+                      }) {
+                conflictOwnerDescription = title(for: conflict.reference)
+            } else {
+                conflictOwnerDescription = nil
+            }
+            if let proposedBinding {
+                proposedBindingOwners[proposedBinding] = reference
+            }
+
+            items.append(PluginActionShortcutPresetPreviewItem(
+                actionID: actionID,
+                currentBinding: currentBinding,
+                proposedBinding: proposedBinding,
+                conflictOwnerDescription: conflictOwnerDescription
+            ))
+        }
+        return PluginActionShortcutPresetPreview(items: items)
+    }
+
+    /// Atomically replaces the assignments managed by a plugin shortcut preset.
+    @discardableResult
+    func replaceAssignments(
+        providerID: String,
+        managedActionIDs: Set<String>,
+        bindingsByActionID: [String: ShortcutBinding]
+    ) -> ActionShortcutMutationResult {
+        guard !providerID.isEmpty,
+              !managedActionIDs.isEmpty,
+              Set(bindingsByActionID.keys).isSubset(of: managedActionIDs)
+        else {
+            return .failure(.unavailableAction)
+        }
+
+        var requestedRecords: [ActionShortcutAssignmentRecord] = []
+        var requestedBindingOwners: [ShortcutBinding: ActionReference] = [:]
+        for actionID in bindingsByActionID.keys.sorted() {
+            guard let binding = bindingsByActionID[actionID] else { continue }
+            guard binding.hasRequiredModifiers else {
+                return .failure(.invalidBinding(.missingModifier))
+            }
+            guard !ShortcutKeyCode.isModifier(binding.keyCode) else {
+                return .failure(.invalidBinding(.modifierOnly))
+            }
+            if let error = MacToolsReservedShortcutBindings.validationError(for: binding) {
+                return .failure(.invalidBinding(error))
+            }
+
+            let reference = ActionReference(
+                key: ActionKey(providerID: providerID, actionID: actionID)
+            )
+            guard case let .success(action) = registry.registeredAction(for: reference),
+                  action.catalogEntry != nil,
+                  action.definition.capabilities.contains(.foregroundInteractive)
+            else {
+                return .failure(.unavailableAction)
+            }
+            if let existingOwner = requestedBindingOwners[binding] {
+                return .failure(.conflict(ownerDescription: title(for: existingOwner)))
+            }
+            requestedBindingOwners[binding] = reference
+            requestedRecords.append(
+                ActionShortcutAssignmentRecord(reference: reference, binding: binding)
+            )
+        }
+
+        var records = store.assignments()
+        guard store.loadError == nil else {
+            return .failure(.recoveryRequired)
+        }
+        records.removeAll { record in
+            record.reference.key.providerID == providerID
+                && managedActionIDs.contains(record.reference.key.actionID)
+        }
+
+        for requested in requestedRecords {
+            if let reserved = reservedRegistrations.first(where: {
+                $0.binding == requested.binding
+            }) {
+                return .failure(
+                    .conflict(
+                        ownerDescription: reservedOwnerDescriptions[reserved.shortcutID]
+                            ?? reserved.shortcutID
+                    )
+                )
+            }
+            if let conflict = records.first(where: { $0.binding == requested.binding }) {
+                return .failure(.conflict(ownerDescription: title(for: conflict.reference)))
+            }
+        }
+        records.append(contentsOf: requestedRecords)
+
+        switch store.replaceAll(records) {
+        case .committed:
+            synchronize(
+                reservedRegistrations: reservedRegistrations,
+                reservedOwnerDescriptions: reservedOwnerDescriptions
+            )
+            return .success
+        case .rejected(rollbackSucceeded: true):
+            return .failure(.persistenceFailed)
+        case .rejected(rollbackSucceeded: false):
+            synchronize(
+                reservedRegistrations: reservedRegistrations,
+                reservedOwnerDescriptions: reservedOwnerDescriptions
+            )
+            return .failure(.persistenceRollbackFailed)
+        }
+    }
+
+    /// Removes shortcut assignments for actions a loaded plugin has explicitly retired.
+    @discardableResult
+    func removeRetiredAssignments(
+        providerID: String,
+        actionIDs: Set<String>
+    ) -> ActionShortcutMutationResult {
+        guard !providerID.isEmpty, !actionIDs.isEmpty else {
+            return .failure(.unavailableAction)
+        }
+        var records = store.assignments()
+        guard store.loadError == nil else {
+            return .failure(.recoveryRequired)
+        }
+        let previousCount = records.count
+        records.removeAll { record in
+            record.reference.key.providerID == providerID
+                && actionIDs.contains(record.reference.key.actionID)
+        }
+        guard records.count != previousCount else { return .success }
+
+        switch store.replaceAll(records) {
+        case .committed:
+            synchronize(
+                reservedRegistrations: reservedRegistrations,
+                reservedOwnerDescriptions: reservedOwnerDescriptions
+            )
+            return .success
+        case .rejected(rollbackSucceeded: true):
+            return .failure(.persistenceFailed)
+        case .rejected(rollbackSucceeded: false):
+            synchronize(
+                reservedRegistrations: reservedRegistrations,
+                reservedOwnerDescriptions: reservedOwnerDescriptions
+            )
+            return .failure(.persistenceRollbackFailed)
+        }
+    }
+
     @discardableResult
     func clear(
         _ reference: ActionReference,

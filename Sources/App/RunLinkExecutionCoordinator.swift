@@ -10,9 +10,46 @@ struct RunLinkExecutionFeedback: Equatable, Sendable {
         case progress
     }
 
+    enum Presentation: Equatable, Sendable {
+        case standard
+        case compact
+
+        var size: NSSize {
+            switch self {
+            case .standard: NSSize(width: 360, height: 86)
+            case .compact: NSSize(width: 280, height: 58)
+            }
+        }
+    }
+
     let tone: Tone
     let title: String
     let message: String
+    let presentation: Presentation
+    let dismissDelay: Duration?
+
+    var accessibilityLabel: String {
+        switch presentation {
+        case .standard:
+            FeatureL10n.joined([title, message])
+        case .compact:
+            title
+        }
+    }
+
+    init(
+        tone: Tone,
+        title: String,
+        message: String,
+        presentation: Presentation = .standard,
+        dismissDelay: Duration? = nil
+    ) {
+        self.tone = tone
+        self.title = title
+        self.message = message
+        self.presentation = presentation
+        self.dismissDelay = dismissDelay
+    }
 }
 
 @MainActor
@@ -34,7 +71,7 @@ final class SystemRunLinkFeedbackPresenter: RunLinkFeedbackPresenting {
 
     func present(_ feedback: RunLinkExecutionFeedback) {
         guard let screen = NSScreen.main else { return }
-        let size = NSSize(width: 360, height: 86)
+        let size = feedback.presentation.size
         let visibleFrame = screen.visibleFrame
         let frame = NSRect(
             x: visibleFrame.maxX - size.width - 18,
@@ -69,7 +106,7 @@ final class SystemRunLinkFeedbackPresenter: RunLinkFeedbackPresenting {
             ]
             self.panel = panel
         }
-        panel.setAccessibilityLabel(FeatureL10n.joined([feedback.title, feedback.message]))
+        panel.setAccessibilityLabel(feedback.accessibilityLabel)
         panel.contentView = NSHostingView(
             rootView: RunLinkFeedbackView(feedback: feedback)
         )
@@ -77,8 +114,9 @@ final class SystemRunLinkFeedbackPresenter: RunLinkFeedbackPresenting {
         panel.orderFrontRegardless()
 
         dismissTask?.cancel()
-        dismissTask = Task { @MainActor [weak self, dismissDelay] in
-            try? await Task.sleep(for: dismissDelay)
+        let effectiveDismissDelay = feedback.dismissDelay ?? dismissDelay
+        dismissTask = Task { @MainActor [weak self, effectiveDismissDelay] in
+            try? await Task.sleep(for: effectiveDismissDelay)
             guard !Task.isCancelled else { return }
             self?.dismiss()
         }
@@ -111,15 +149,20 @@ private struct RunLinkFeedbackView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(feedback.title)
                     .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-                Text(feedback.message)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                if feedback.presentation == .standard {
+                    Text(feedback.message)
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(14)
-        .frame(width: 360, height: 86)
+        .padding(feedback.presentation == .compact ? 12 : 14)
+        .frame(
+            width: feedback.presentation.size.width,
+            height: feedback.presentation.size.height
+        )
         .background {
             RoundedRectangle(cornerRadius: 14)
                 .fill(
@@ -129,7 +172,7 @@ private struct RunLinkFeedbackView: View {
                 )
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(FeatureL10n.joined([feedback.title, feedback.message]))
+        .accessibilityLabel(feedback.accessibilityLabel)
     }
 }
 
@@ -147,6 +190,43 @@ private extension RunLinkExecutionFeedback.Tone {
         case .success: .green
         case .failure: .red
         case .progress: .accentColor
+        }
+    }
+}
+
+enum WindowLayoutActionFeedback {
+    static func feedback(
+        actionTitle: String,
+        outcome: ActionExecutionOutcome
+    ) -> RunLinkExecutionFeedback? {
+        switch outcome {
+        case let .completed(.succeeded(message)):
+            guard let message else { return nil }
+            return RunLinkExecutionFeedback(
+                tone: .success,
+                title: message,
+                message: actionTitle,
+                presentation: .compact,
+                dismissDelay: .milliseconds(1_100)
+            )
+        case let .completed(.failed(message)):
+            return RunLinkExecutionFeedback(
+                tone: .failure,
+                title: actionTitle,
+                message: message
+            )
+        case .completed(.cancelled):
+            return RunLinkExecutionFeedback(
+                tone: .failure,
+                title: actionTitle,
+                message: FeatureL10n.string("操作已取消。")
+            )
+        case let .rejected(rejection):
+            return RunLinkExecutionFeedback(
+                tone: .failure,
+                title: actionTitle,
+                message: ActionSurfaceExecutionSupport.message(for: rejection)
+            )
         }
     }
 }

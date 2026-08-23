@@ -8,7 +8,8 @@ func makePluginHostForTests(
     suiteName: String = "PluginHostTestSupport-\(UUID().uuidString)",
     dynamicPluginManager: DynamicPluginManager? = nil,
     loadDynamicPluginsOnInit: Bool = true,
-    globalShortcutManager: GlobalShortcutManager? = nil
+    globalShortcutManager: GlobalShortcutManager? = nil,
+    focusedApplicationTargetProvider: (any FocusedApplicationTargetProviding)? = nil
 ) -> PluginHost {
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
@@ -20,6 +21,7 @@ func makePluginHostForTests(
         pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
         preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
         globalShortcutManager: globalShortcutManager ?? GlobalShortcutManager(),
+        focusedApplicationTargetProvider: focusedApplicationTargetProvider,
         loadDynamicPluginsOnInit: loadDynamicPluginsOnInit
     )
 }

@@ -1,13 +1,20 @@
 import AppKit
+import AppIntents
+import MacToolsAppIntents
 import SwiftUI
 @preconcurrency import UserNotifications
 
 @main
-struct MacToolsApp: App {
+struct MacToolsApp: App, AppIntentsPackage {
     @NSApplicationDelegateAdaptor(MacToolsAppDelegate.self) private var appDelegate
+
+    nonisolated static var includedPackages: [any AppIntentsPackage.Type] {
+        [MacToolsAppIntentsPackage.self]
+    }
 
     init() {
         AppLanguagePreference.applyStoredPreference()
+        MacToolsAppShortcuts.refreshParameters()
     }
 
     var body: some Scene {
@@ -66,6 +73,7 @@ final class MacToolsAppDelegate: NSObject, NSApplicationDelegate, UNUserNotifica
                 disposition = .primary(recoveryRequested: false)
             } else {
                 disposition = await instanceCoordinator.resolveSecondaryLaunch(
+                    requestSettings: false,
                     deadline: settingsRecoveryDeadline
                 )
             }
@@ -181,6 +189,8 @@ final class MacToolsAppDelegate: NSObject, NSApplicationDelegate, UNUserNotifica
 
     private func handleInstanceCommand(_ command: AppInstanceCommand) -> AppInstanceResponse {
         switch command.command {
+        case AppInstanceCommand.probe:
+            return .accepted
         case AppInstanceCommand.showSettings:
             return requestSettingsRecovery()
         case AppInstanceCommand.openURLs:

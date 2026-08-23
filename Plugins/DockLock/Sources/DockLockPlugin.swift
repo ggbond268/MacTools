@@ -264,6 +264,11 @@ final class DockLockPlugin:
         static let isEnabled = "dock-lock.enabled"
     }
 
+    private enum SettingsID {
+        static let section = "dock-lock.settings"
+        static let isEnabled = "dock-lock.settings.enabled"
+    }
+
     let metadata: PluginMetadata
     let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
         controlStyle: .switch,
@@ -452,6 +457,35 @@ final class DockLockPlugin:
         }
     }
 
+    var settingsPage: PluginSettingsPage? {
+        .form(
+            description: metadata.defaultDescription,
+            sections: [
+                PluginSettingsSection(
+                    id: SettingsID.section,
+                    title: localization.string("settings.section.title", defaultValue: "设置"),
+                    systemImage: "lock.rectangle",
+                    rows: [
+                        PluginSettingsRow(
+                            id: SettingsID.isEnabled,
+                            title: localization.string(
+                                "settings.enable.title",
+                                defaultValue: "启用"
+                            ),
+                            description: localization.string(
+                                "settings.enable.description",
+                                defaultValue: "开启后防止程序坞在多显示器之间意外移动。"
+                            ),
+                            systemImage: "power",
+                            error: lastErrorMessage,
+                            control: .toggle(isOn: isEnabled)
+                        ),
+                    ]
+                ),
+            ]
+        )
+    }
+
     func handleAction(_ action: PluginPanelAction) {
         guard case let .setSwitch(isEnabled) = action else {
             return
@@ -483,7 +517,15 @@ final class DockLockPlugin:
         onStateChange?()
     }
 
-    func handleSettingsAction(_ action: PluginSettingsAction) {}
+    func handleSettingsAction(_ action: PluginSettingsAction) {
+        guard case let .setBoolean(controlID, value) = action,
+              controlID == SettingsID.isEnabled
+        else {
+            return
+        }
+
+        handleAction(.setSwitch(value))
+    }
     func handleShortcutAction(id: String) {}
 
     func refreshAccessibilityPermission() {

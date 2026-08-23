@@ -2,13 +2,14 @@
 
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-    print -u2 -r -- "usage: $0 <built-app> <installed-app>"
+if [[ $# -ne 3 ]]; then
+    print -u2 -r -- "usage: $0 <built-app> <installed-app> <expected-bundle-identifier>"
     exit 2
 fi
 
 source_app="${1:A}"
 installed_app="${2:A}"
+expected_bundle_identifier="$3"
 install_parent="${installed_app:h}"
 expected_parent="${HOME:A}/Applications"
 
@@ -83,6 +84,10 @@ validate_bundle "$staged_app" || {
 }
 staged_bundle_identifier="$(read_bundle_value "$staged_app" CFBundleIdentifier)"
 staged_executable_name="$(read_bundle_value "$staged_app" CFBundleExecutable)"
+if [[ "$staged_bundle_identifier" != "$expected_bundle_identifier" ]]; then
+    print -u2 -r -- "error: staged Debug app bundle identifier '$staged_bundle_identifier' does not match configured identity '$expected_bundle_identifier'"
+    exit 1
+fi
 capture_designated_requirement "$staged_app" "$staged_requirement" || {
     print -u2 -r -- "error: staged Debug app has no designated signing requirement"
     exit 1
@@ -166,23 +171,28 @@ if [[ "$had_previous" == true ]]; then
     fi
 fi
 
-lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+lsregister="${MACTOOLS_LSREGISTER_PATH:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}"
 if [[ -x "$lsregister" ]]; then
     bundle_identifier="$staged_bundle_identifier"
+    app_name="${installed_app:t:r}"
     while IFS= read -r registered_app; do
+        registered_app="${registered_app:A}"
         [[ -n "$registered_app" && "$registered_app" != "$installed_app" ]] || continue
         "$lsregister" -u "$registered_app" >/dev/null 2>&1 || true
     done < <(
         "$lsregister" -dump | /usr/bin/awk \
             -v target="$bundle_identifier" \
+            -v target_name="$app_name" \
             -v keep="$installed_app" '
                 function emit() {
-                    if (identifier == target && path != "" && path != keep) print path
+                    if ((identifier == target || name == target_name) \
+                        && path != "" && path != keep) print path
                 }
                 /^-+$/ {
                     emit()
                     path = ""
                     identifier = ""
+                    name = ""
                     next
                 }
                 /^[[:space:]]*path:[[:space:]]*/ {
@@ -196,6 +206,12 @@ if [[ -x "$lsregister" ]]; then
                     value = $0
                     sub(/^[[:space:]]*identifier:[[:space:]]*/, "", value)
                     identifier = value
+                    next
+                }
+                /^[[:space:]]*name:[[:space:]]*/ {
+                    value = $0
+                    sub(/^[[:space:]]*name:[[:space:]]*/, "", value)
+                    name = value
                     next
                 }
                 END { emit() }

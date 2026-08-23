@@ -1,0 +1,3 @@
+import SystemSoftRestartPlugin
+
+private let systemSoftRestartPluginFactoryAnchor: Any.Type = SystemSoftRestartPluginFactory.self

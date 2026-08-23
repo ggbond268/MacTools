@@ -39,8 +39,10 @@
 - Sync only already-built Debug plugin packages and the local development catalog with `make sync-debug-plugins`.
 - Build the local plugin packages and generate the Debug catalog with `make build-plugin`.
 - Build one plugin with `make build-plugin PLUGIN=<plugin directory name or plugin ID>`.
+- Run repository script tests with `make script-tests`; these checks are separate from XCTest and include PluginKit minimum-host compatibility validation.
 - Run the full test suite with `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Run one test class by appending `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
+- Run the CI-equivalent local validation with `make ci` before pushing cross-module or PluginKit changes.
 - Use `./scripts/release-local.sh` only when a release is needed; confirm user intent before signing, notarizing, publishing, or tagging.
 
 ## Architecture Conventions
@@ -90,6 +92,7 @@
 - Plugin tests should prefer `Plugins/<PluginName>/Tests/`; shared Core/App tests should live under the corresponding `Tests/Core/` or `Tests/App/` path.
 - Filesystem tests must use temporary directories or fake stores, and must never delete real user directories.
 - Plugin interaction tests should cover `PluginPanelAction`, derived `PluginPanelState`, permission state, and error state.
+- Changes that make a public PluginKit type newly consumable by plugins must run `make script-tests` so minimum-host inventory checks are not skipped.
 - If tests cannot be run, explicitly state the reason and suggest the local verification command in the final response.
 
 ## Documentation And Resources

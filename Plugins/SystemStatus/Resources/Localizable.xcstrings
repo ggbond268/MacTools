@@ -4467,6 +4467,86 @@
         }
       }
     },
+    "settings.menuBarLayout.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تخطيط مؤشرات شريط القوائم" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Layout der Menüleistenmetriken" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Menu Bar Metrics Layout" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Diseño de métricas de la barra de menús" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Disposition des indicateurs de la barre des menus" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "メニューバー指標のレイアウト" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "메뉴 막대 측정항목 레이아웃" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Layout das métricas da barra de menus" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Макет показателей строки меню" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "菜单栏指标布局" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選單列指標佈局" } }
+      }
+    },
+    "settings.menuBarLayout.arrangement": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "طريقة الترتيب" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Anordnung" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Arrangement" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Disposición" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Disposition" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "配置方法" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "배치 방식" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Organização" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Расположение" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "排列方式" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "排列方式" } }
+      }
+    },
+    "settings.menuBarLayout.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يحافظ الأفقي على النمط الحالي؛ يرتب العمودي أحرف الاسم رأسيًا يسارًا والقيم بمحاذاة اليسار يمينًا." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Horizontal behält die aktuelle Darstellung bei; vertikal stehen die Buchstaben links untereinander und die Werte rechts linksbündig." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Horizontal keeps the current style; vertical stacks the label letters on the left and left-aligns the values on the right." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Horizontal conserva el estilo actual; vertical apila las letras a la izquierda y alinea los valores a la izquierda a la derecha." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Horizontal conserve le style actuel ; vertical empile les lettres à gauche et aligne les valeurs à gauche sur la droite." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "水平は現在のスタイルを維持し、垂直は左に文字を縦並び、右に値を左揃えで上下表示します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "수평은 현재 스타일을 유지하고, 수직은 왼쪽에 글자를 세로로 쌓고 오른쪽 값을 왼쪽 정렬합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Horizontal mantém o estilo atual; vertical empilha as letras à esquerda e alinha os valores à esquerda no lado direito." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Горизонтальный вид сохраняет текущий стиль; вертикальный ставит буквы друг под другом слева, а значения выравнивает по левому краю справа." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "水平保持现有样式；垂直时名称逐字竖排在左，数值在右侧上下左对齐。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "水平保留現有樣式；垂直時名稱逐字直排在左，數值在右側上下靠左對齊。" } }
+      }
+    },
+    "settings.menuBarLayout.horizontal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "أفقي" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Horizontal" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Horizontal" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Horizontal" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Horizontal" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "横" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "가로" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Horizontal" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Горизонтально" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "水平" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "水平" } }
+      }
+    },
+    "settings.menuBarLayout.vertical": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "عمودي" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Vertikal" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Vertical" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Vertical" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Vertical" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "縦" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "세로" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Vertical" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Вертикально" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "垂直" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "垂直" } }
+      }
+    },
     "component.empty.title": {
       "extractionState": "manual",
       "localizations": {

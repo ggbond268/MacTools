@@ -13579,6 +13579,148 @@
         }
       }
     },
+    "短时间内运行的 MacTools 操作过多。为防止循环，已停止执行。": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تشغيل عدد كبير جدًا من إجراءات MacTools خلال وقت قصير. تم إيقاف التنفيذ لمنع حدوث حلقة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In kurzer Zeit wurden zu viele MacTools-Aktionen ausgeführt. Die Ausführung wurde gestoppt, um eine Schleife zu verhindern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many MacTools actions ran in a short time. Execution was stopped to prevent a loop."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ejecutaron demasiadas acciones de MacTools en poco tiempo. La ejecución se detuvo para evitar un bucle."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop d’actions MacTools ont été exécutées en peu de temps. L’exécution a été arrêtée pour éviter une boucle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "短時間に多数のMacTools操作が実行されました。ループを防ぐため実行を停止しました。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "짧은 시간에 너무 많은 MacTools 동작이 실행되었습니다. 반복 실행을 방지하기 위해 중단했습니다."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muitas ações do MacTools foram executadas em pouco tempo. A execução foi interrompida para evitar um ciclo."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "За короткое время выполнено слишком много действий MacTools. Выполнение остановлено для предотвращения цикла."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "短时间内运行的 MacTools 操作过多。为防止循环，已停止执行。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "短時間內執行的 MacTools 操作過多。為防止循環，已停止執行。"
+          }
+        }
+      }
+    },
+    "无法验证 MacTools 操作的循环保护，请稍后重试。": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر التحقق من حماية إجراءات MacTools من التكرار. حاول مرة أخرى لاحقًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Schleifenschutz für MacTools-Aktionen konnte nicht geprüft werden. Versuche es später erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loop protection for MacTools actions could not be verified. Try again later."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo verificar la protección contra bucles de las acciones de MacTools. Inténtalo de nuevo más tarde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La protection contre les boucles des actions MacTools n’a pas pu être vérifiée. Réessayez plus tard."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacTools操作のループ保護を確認できませんでした。しばらくしてからもう一度お試しください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacTools 동작의 반복 실행 보호를 확인할 수 없습니다. 나중에 다시 시도하십시오."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível verificar a proteção contra ciclos das ações do MacTools. Tente novamente mais tarde."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось проверить защиту действий MacTools от циклов. Повторите попытку позже."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证 MacTools 操作的循环保护，请稍后重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法驗證 MacTools 操作的循環保護，請稍後再試。"
+          }
+        }
+      }
+    },
     "检测到递归工作流调用。": {
       "extractionState": "manual",
       "localizations": {

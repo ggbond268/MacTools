@@ -234,9 +234,17 @@ final class RightClickFileNamePlannerTests: XCTestCase {
     }
 
     func testNewFileAllowListAcceptsIntendedRejectsOthers() {
-        XCTAssertTrue(RightClickNewFile.isSupportedExtension("txt"))
+        XCTAssertEqual(
+            RightClickNewFile.supportedExtensions,
+            [
+                "txt", "md", "csv",
+                "json", "yaml", "yml", "xml",
+                "html", "css", "js", "ts",
+                "sh", "py"
+            ]
+        )
         XCTAssertTrue(RightClickNewFile.isSupportedExtension("MD"))
-        XCTAssertTrue(RightClickNewFile.isSupportedExtension("json"))
+        XCTAssertTrue(RightClickNewFile.isSupportedExtension("HTML"))
         XCTAssertFalse(RightClickNewFile.isSupportedExtension("exe"))
         XCTAssertFalse(RightClickNewFile.isSupportedExtension("../../etc/passwd"))
         XCTAssertFalse(RightClickNewFile.isSupportedExtension(""))

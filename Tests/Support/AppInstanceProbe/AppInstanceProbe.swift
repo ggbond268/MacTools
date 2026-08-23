@@ -27,7 +27,7 @@ struct AppInstanceProbe {
             return
         }
 
-        let disposition = await coordinator.resolveSecondaryLaunch()
+        let disposition = await coordinator.resolveSecondaryLaunch(requestSettings: false)
         switch disposition {
         case .primary:
             print("promoted")

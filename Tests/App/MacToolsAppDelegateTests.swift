@@ -4,6 +4,42 @@ import XCTest
 
 @MainActor
 final class MacToolsAppDelegateTests: XCTestCase {
+    func testBackgroundExecutionSuppressesSettingsInEitherEventOrder() {
+        var showSettingsCount = 0
+        let scheduler = SettingsRecoveryScheduler(delay: .seconds(60)) {
+            showSettingsCount += 1
+        }
+
+        scheduler.request()
+        XCTAssertTrue(scheduler.hasPendingRequestForTesting)
+
+        scheduler.noteBackgroundExecution()
+        XCTAssertFalse(scheduler.hasPendingRequestForTesting)
+        scheduler.runPendingRequestForTesting()
+        XCTAssertEqual(showSettingsCount, 0)
+
+        scheduler.cancel()
+        scheduler.request()
+        scheduler.runPendingRequestForTesting()
+        XCTAssertEqual(showSettingsCount, 1)
+
+        scheduler.noteBackgroundExecution()
+        XCTAssertTrue(scheduler.isSuppressionActiveForTesting)
+        scheduler.request()
+        XCTAssertFalse(scheduler.hasPendingRequestForTesting)
+        XCTAssertTrue(scheduler.isSuppressionActiveForTesting)
+        XCTAssertEqual(showSettingsCount, 1)
+
+        scheduler.request()
+        XCTAssertFalse(scheduler.hasPendingRequestForTesting)
+        XCTAssertEqual(showSettingsCount, 1)
+
+        scheduler.cancel()
+        scheduler.request()
+        scheduler.runPendingRequestForTesting()
+        XCTAssertEqual(showSettingsCount, 2)
+    }
+
     func testReopeningMacToolsShowsSettingsWithOrWithoutExistingWindows() {
         for hasVisibleWindows in [false, true] {
             let delegate = MacToolsAppDelegate()

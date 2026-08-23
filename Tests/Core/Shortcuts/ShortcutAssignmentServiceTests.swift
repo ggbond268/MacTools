@@ -172,6 +172,165 @@ final class ShortcutAssignmentServiceTests: XCTestCase {
         XCTAssertEqual(harness.service.assignments.map(\.reference), [second])
     }
 
+    func testPresetReplacementIsConflictCheckedAndAtomic() throws {
+        let harness = try makeHarness()
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[0], to: harness.references[1]),
+            .success
+        )
+
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1"],
+                bindingsByActionID: ["action-1": harness.bindings[0]]
+            ),
+            .failure(.conflict(ownerDescription: "操作 2"))
+        )
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[1]])
+
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1", "action-2"],
+                bindingsByActionID: [
+                    "action-1": harness.bindings[0],
+                    "action-2": harness.bindings[1],
+                ]
+            ),
+            .success
+        )
+        XCTAssertEqual(
+            Set(harness.service.assignments.map(\.reference)),
+            Set(harness.references)
+        )
+
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1", "action-2"],
+                bindingsByActionID: [:]
+            ),
+            .success
+        )
+        XCTAssertTrue(harness.service.assignments.isEmpty)
+    }
+
+    func testPresetPreviewShowsChangesWithoutMutatingAssignments() throws {
+        let harness = try makeHarness()
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[0], to: harness.references[0]),
+            .success
+        )
+        let assignmentsBeforePreview = harness.service.assignments
+
+        let preview = harness.service.replacementPreview(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1", "action-2"],
+            bindingsByActionID: [
+                "action-1": harness.bindings[1],
+                "action-2": harness.bindings[0],
+            ]
+        )
+
+        XCTAssertTrue(preview.canApply)
+        XCTAssertTrue(preview.hasChanges)
+        XCTAssertEqual(preview.items.count, 2)
+        XCTAssertEqual(
+            preview.items.first(where: { $0.actionID == "action-1" })?.currentBinding,
+            harness.bindings[0]
+        )
+        XCTAssertEqual(harness.service.assignments, assignmentsBeforePreview)
+    }
+
+    func testPresetPreviewReportsConflictOutsideManagedAssignments() throws {
+        let harness = try makeHarness()
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[0], to: harness.references[1]),
+            .success
+        )
+
+        let preview = harness.service.replacementPreview(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1"],
+            bindingsByActionID: ["action-1": harness.bindings[0]]
+        )
+
+        XCTAssertFalse(preview.canApply)
+        XCTAssertEqual(preview.items.first?.conflictOwnerDescription, "操作 2")
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[1]])
+    }
+
+    func testPresetCanPreviewAndClearRetiredManagedAction() throws {
+        let harness = try makeHarness()
+        let retiredReference = ActionReference(
+            key: ActionKey(providerID: "shortcut-tests", actionID: "retired-action")
+        )
+        let retiredRecord = ActionShortcutAssignmentRecord(
+            reference: retiredReference,
+            binding: harness.bindings[0]
+        )
+        XCTAssertEqual(
+            ActionShortcutAssignmentStore(userDefaults: harness.defaults)
+                .replaceAll([retiredRecord]),
+            .committed
+        )
+
+        let preview = harness.service.replacementPreview(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1", "retired-action"],
+            bindingsByActionID: ["action-1": harness.bindings[1]]
+        )
+
+        XCTAssertTrue(preview.canApply)
+        XCTAssertEqual(
+            preview.items.first(where: { $0.actionID == "retired-action" })?.currentBinding,
+            harness.bindings[0]
+        )
+        XCTAssertNil(
+            preview.items.first(where: { $0.actionID == "retired-action" })?.proposedBinding
+        )
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1", "retired-action"],
+                bindingsByActionID: ["action-1": harness.bindings[1]]
+            ),
+            .success
+        )
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[0]])
+    }
+
+    func testExplicitRetirementRemovesOnlyMatchingPluginAssignments() throws {
+        let harness = try makeHarness()
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[0], to: harness.references[0]),
+            .success
+        )
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[1], to: harness.references[1]),
+            .success
+        )
+
+        XCTAssertEqual(
+            harness.service.removeRetiredAssignments(
+                providerID: "shortcut-tests",
+                actionIDs: ["action-1"]
+            ),
+            .success
+        )
+
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[1]])
+        XCTAssertEqual(
+            harness.service.removeRetiredAssignments(
+                providerID: "shortcut-tests",
+                actionIDs: ["action-1"]
+            ),
+            .success
+        )
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[1]])
+    }
+
     func testUnavailableAssignmentsAreRetainedButNotRegistered() throws {
         let harness = try makeHarness()
         let reference = harness.references[0]

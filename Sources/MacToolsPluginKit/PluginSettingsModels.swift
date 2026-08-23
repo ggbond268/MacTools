@@ -323,6 +323,11 @@ public enum PluginSettingsControl {
     case textField(value: String, prompt: String?, isRequired: Bool)
     case secureField(value: String, prompt: String?, isRequired: Bool)
     case action(title: String, role: PluginSettingsActionRole)
+    case confirmationAction(
+        title: String,
+        role: PluginSettingsActionRole,
+        confirmation: PluginSettingsConfirmation
+    )
     case status(
         text: String,
         systemImage: String,
@@ -389,10 +394,29 @@ public struct PluginSettingsSliderValueFormat: Equatable, Sendable {
     }
 }
 
-public enum PluginSettingsActionRole: Sendable {
+public enum PluginSettingsActionRole: Equatable, Sendable {
     case normal
     case prominent
     case destructive
+}
+
+public struct PluginSettingsConfirmation: Equatable, Sendable {
+    public let title: String
+    public let message: String
+    public let confirmButtonTitle: String
+    public let cancelButtonTitle: String
+
+    public init(
+        title: String,
+        message: String,
+        confirmButtonTitle: String,
+        cancelButtonTitle: String
+    ) {
+        self.title = title
+        self.message = message
+        self.confirmButtonTitle = confirmButtonTitle
+        self.cancelButtonTitle = cancelButtonTitle
+    }
 }
 
 public enum PluginSettingsAction: Equatable, Sendable {
@@ -616,7 +640,7 @@ public enum PluginSettingsValidator {
             if let valueFormat, !(0...12).contains(valueFormat.fractionDigits) {
                 throw PluginSettingsValidationError.invalidSliderValueFormat(rowID: row.id)
             }
-        case .toggle, .textField, .secureField, .action, .status:
+        case .toggle, .textField, .secureField, .action, .confirmationAction, .status:
             break
         }
     }

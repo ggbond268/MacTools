@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import MacToolsPluginKit
 import UniformTypeIdentifiers
 
 struct R2UploadResult: Equatable, Sendable {
@@ -497,23 +498,46 @@ enum R2UploadError: LocalizedError, Equatable {
     case httpStatus(Int)
 
     var errorDescription: String? {
+        message(localization: PluginLocalization(bundle: .main))
+    }
+
+    func message(localization: PluginLocalization) -> String {
         switch self {
         case .incompleteConfiguration:
-            "请先完成 R2 配置。"
+            localization.string(
+                "error.configuration.incomplete",
+                defaultValue: "请先完成 R2 配置。"
+            )
         case .invalidConfiguration:
-            "R2 配置无效。"
+            localization.string(
+                "error.configuration.invalid",
+                defaultValue: "R2 配置无效。"
+            )
         case .invalidObjectName:
-            "文件名无效。"
+            localization.string("error.objectName.invalid", defaultValue: "文件名无效。")
         case .invalidObjectPrefix:
-            "对象路径前缀不能包含 . 或 ..。"
+            localization.string(
+                "error.objectPrefix.invalid",
+                defaultValue: "对象路径前缀不能包含 . 或 ..。"
+            )
         case .missingSecret:
-            "请先保存 Secret Access Key。"
+            localization.string(
+                "error.secret.missing",
+                defaultValue: "请先保存 Secret Access Key。"
+            )
         case .invalidFile:
-            "请选择有效的文件。"
+            localization.string("error.file.invalid", defaultValue: "请选择有效的文件。")
         case .invalidResponse:
-            "R2 返回了无效响应。"
+            localization.string(
+                "error.response.invalid",
+                defaultValue: "R2 返回了无效响应。"
+            )
         case let .httpStatus(status):
-            "上传失败（HTTP \(status)）。"
+            localization.format(
+                "error.upload.http",
+                defaultValue: "上传失败（HTTP %d）。",
+                status
+            )
         }
     }
 }

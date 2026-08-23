@@ -24,6 +24,8 @@ struct DeviceBatterySamplingSchedule: Equatable, Sendable {
 
 @MainActor
 final class DeviceBatteryViewModel: ObservableObject {
+    private static let appleMobileVisibleRevalidationInterval: TimeInterval = 15
+
     @Published private(set) var snapshot: DeviceBatterySnapshot = .idle {
         didSet {
             guard oldValue != snapshot else { return }
@@ -43,12 +45,16 @@ final class DeviceBatteryViewModel: ObservableObject {
     private var appleMobileTask: Task<Void, Never>?
     private var bluetoothEventTask: Task<Void, Never>?
     private var activityResumeTask: Task<Void, Never>?
+    private var pendingVisibleBluetoothRefresh = false
+    private var pendingVisibleAppleMobileRefresh = false
     private var activeCollectionIDs: Set<UUID> = []
+    private var collectionSourcesByID: [UUID: DeviceBatterySource] = [:]
 
     private var internalBatteryItems: [DeviceBatteryItem] = []
     private var bluetoothItems: [DeviceBatteryItem] = []
     private var appleMobileItems: [DeviceBatteryItem] = []
     private var rapooSnapshot = RapooMouseBatterySnapshot.idle
+    private var rapooSnapshots: [RapooMouseBatterySnapshot] = []
     private var sourceUpdateDates: [DeviceBatterySource: Date] = [:]
     private var activityState: PluginApplicationActivityState = .interactive
     private var needsBluetoothRefreshOnResume = false
@@ -88,6 +94,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         self.localization = localization
         self.schedule = schedule
         rapooSnapshot = rapooMonitor.snapshot
+        rapooSnapshots = rapooMonitor.deviceSnapshots
     }
 
     func start(
@@ -111,6 +118,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         isStarted = true
         rapooMonitor.onSnapshotChange = { [weak self] snapshot in
             self?.rapooSnapshot = snapshot
+            self?.rapooSnapshots = self?.rapooMonitor.deviceSnapshots ?? []
             self?.rebuildSnapshot()
         }
         powerSourceObserver.onChange = { [weak self] in
@@ -155,20 +163,108 @@ final class DeviceBatteryViewModel: ObservableObject {
         )
     }
 
+    func updateSources(
+        includeInternalBattery: Bool,
+        includeBluetoothDevices: Bool,
+        includeAppleMobileDevices: Bool,
+        includeRapooDevices: Bool
+    ) {
+        let previousInternalBattery = self.includeInternalBattery
+        let previousBluetoothDevices = self.includeBluetoothDevices
+        let previousAppleMobileDevices = self.includeAppleMobileDevices
+        let previousRapooDevices = self.includeRapooDevices
+        updateOptions(
+            includeInternalBattery: includeInternalBattery,
+            includeBluetoothDevices: includeBluetoothDevices,
+            includeAppleMobileDevices: includeAppleMobileDevices,
+            includeRapooDevices: includeRapooDevices
+        )
+        rebuildSnapshot()
+
+        guard isStarted,
+              activityState.allowsBackgroundWork,
+              hasSamplingDemand else {
+            return
+        }
+        guard activityResumeTask == nil else { return }
+
+        if previousInternalBattery != includeInternalBattery {
+            if includeInternalBattery {
+                powerSourceObserver.start()
+                restartInternalBatterySampling()
+            } else {
+                powerSourceObserver.stop()
+                internalBatteryTask?.cancel()
+                internalBatteryTask = nil
+                discardCollections(for: .internalBattery)
+            }
+        }
+
+        if previousBluetoothDevices != includeBluetoothDevices {
+            if includeBluetoothDevices {
+                bluetoothConnectionObserver.start()
+                restartBluetoothSampling(
+                    forceProfileRefresh: true,
+                    performActiveScan: true,
+                    revalidateSupplementalState: isComponentPanelVisible
+                )
+            } else {
+                bluetoothConnectionObserver.stop()
+                bluetoothTask?.cancel()
+                bluetoothTask = nil
+                bluetoothEventTask?.cancel()
+                bluetoothEventTask = nil
+                discardCollections(for: .bluetooth)
+                pendingVisibleBluetoothRefresh = false
+            }
+        }
+
+        if previousAppleMobileDevices != includeAppleMobileDevices {
+            if includeAppleMobileDevices {
+                restartAppleMobileSampling(
+                    revalidateImmediately: isComponentPanelVisible
+                )
+            } else {
+                appleMobileTask?.cancel()
+                appleMobileTask = nil
+                discardCollections(for: .appleMobile)
+                pendingVisibleAppleMobileRefresh = false
+            }
+        }
+
+        if previousRapooDevices != includeRapooDevices {
+            reconcileRapooMonitoring()
+        }
+    }
+
     func setComponentPanelVisible(_ isVisible: Bool) {
         guard isComponentPanelVisible != isVisible else { return }
         let hadSamplingDemand = hasSamplingDemand
         isComponentPanelVisible = isVisible
+        let hasCurrentSamplingDemand = hasSamplingDemand
 
-        reconcileSamplingDemand(
-            forceBluetoothProfileRefresh: isVisible && !hadSamplingDemand
-        )
+        guard hadSamplingDemand == hasCurrentSamplingDemand else {
+            reconcileSamplingDemand(
+                forceBluetoothProfileRefresh: isVisible && !hadSamplingDemand
+            )
+            return
+        }
+        guard isStarted, activityState.allowsBackgroundWork else { return }
+
+        if isVisible {
+            refreshVisibleSources()
+        } else {
+            pendingVisibleBluetoothRefresh = false
+            pendingVisibleAppleMobileRefresh = false
+            rescheduleBackgroundPolling()
+        }
     }
 
     func setLowBatteryMonitoringEnabled(_ isEnabled: Bool) {
         guard isLowBatteryMonitoringEnabled != isEnabled else { return }
         let hadSamplingDemand = hasSamplingDemand
         isLowBatteryMonitoringEnabled = isEnabled
+        guard hadSamplingDemand != hasSamplingDemand else { return }
         reconcileSamplingDemand(
             forceBluetoothProfileRefresh: isEnabled && !hadSamplingDemand
         )
@@ -251,6 +347,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         }
         if !includeRapooDevices {
             rapooSnapshot = .idle
+            rapooSnapshots.removeAll()
         }
     }
 
@@ -263,9 +360,10 @@ final class DeviceBatteryViewModel: ObservableObject {
         restartInternalBatterySampling()
         restartBluetoothSampling(
             forceProfileRefresh: forceBluetoothProfileRefresh,
-            performActiveScan: true
+            performActiveScan: true,
+            revalidateSupplementalState: isComponentPanelVisible
         )
-        restartAppleMobileSampling()
+        restartAppleMobileSampling(revalidateImmediately: isComponentPanelVisible)
     }
 
     private func restartInternalBatterySampling() {
@@ -281,7 +379,9 @@ final class DeviceBatteryViewModel: ObservableObject {
 
     private func restartBluetoothSampling(
         forceProfileRefresh: Bool,
-        performActiveScan: Bool
+        performActiveScan: Bool,
+        revalidateSupplementalState: Bool = false,
+        initialDelay: TimeInterval = 0
     ) {
         bluetoothTask?.cancel()
         bluetoothTask = nil
@@ -291,19 +391,27 @@ final class DeviceBatteryViewModel: ObservableObject {
             guard let self else { return }
             await self.runBluetoothLoop(
                 forceProfileRefresh: forceProfileRefresh,
-                performInitialActiveScan: performActiveScan
+                performInitialActiveScan: performActiveScan,
+                revalidateInitialSupplementalState: revalidateSupplementalState,
+                initialDelay: initialDelay
             )
         }
     }
 
-    private func restartAppleMobileSampling() {
+    private func restartAppleMobileSampling(
+        revalidateImmediately: Bool = false,
+        initialDelay: TimeInterval = 0
+    ) {
         appleMobileTask?.cancel()
         appleMobileTask = nil
         guard includeAppleMobileDevices else { return }
 
         appleMobileTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.runAppleMobileLoop()
+            await self.runAppleMobileLoop(
+                revalidateImmediately: revalidateImmediately,
+                initialDelay: initialDelay
+            )
         }
     }
 
@@ -320,18 +428,40 @@ final class DeviceBatteryViewModel: ObservableObject {
 
     private func runBluetoothLoop(
         forceProfileRefresh: Bool,
-        performInitialActiveScan: Bool
+        performInitialActiveScan: Bool,
+        revalidateInitialSupplementalState: Bool,
+        initialDelay: TimeInterval = 0
     ) async {
+        if initialDelay > 0 {
+            do {
+                try await Self.sleep(for: initialDelay)
+            } catch {
+                return
+            }
+        }
+
         var shouldForceProfileRefresh = forceProfileRefresh
         var shouldPerformActiveScan = performInitialActiveScan
+        var shouldRevalidateSupplementalState = revalidateInitialSupplementalState
 
         while !Task.isCancelled {
             await refreshBluetooth(
                 forceProfileRefresh: shouldForceProfileRefresh,
-                performActiveScan: shouldPerformActiveScan
+                performActiveScan: shouldPerformActiveScan,
+                revalidateSupplementalState: shouldRevalidateSupplementalState
             )
+            if pendingVisibleBluetoothRefresh,
+               isComponentPanelVisible,
+               includeBluetoothDevices {
+                pendingVisibleBluetoothRefresh = false
+                shouldForceProfileRefresh = false
+                shouldPerformActiveScan = false
+                shouldRevalidateSupplementalState = true
+                continue
+            }
             shouldForceProfileRefresh = false
             shouldPerformActiveScan = true
+            shouldRevalidateSupplementalState = false
 
             do {
                 try await Self.sleep(for: bluetoothRefreshInterval)
@@ -341,9 +471,33 @@ final class DeviceBatteryViewModel: ObservableObject {
         }
     }
 
-    private func runAppleMobileLoop() async {
+    private func runAppleMobileLoop(
+        revalidateImmediately: Bool,
+        initialDelay: TimeInterval = 0
+    ) async {
+        if initialDelay > 0 {
+            do {
+                try await Self.sleep(for: initialDelay)
+            } catch {
+                return
+            }
+        }
+
+        var minimumRefreshInterval = revalidateImmediately
+            ? Self.appleMobileVisibleRevalidationInterval
+            : appleMobileRefreshInterval
         while !Task.isCancelled {
-            await refreshAppleMobileDevices()
+            await refreshAppleMobileDevices(
+                minimumRefreshInterval: minimumRefreshInterval
+            )
+            if pendingVisibleAppleMobileRefresh,
+               isComponentPanelVisible,
+               includeAppleMobileDevices {
+                pendingVisibleAppleMobileRefresh = false
+                minimumRefreshInterval = Self.appleMobileVisibleRevalidationInterval
+                continue
+            }
+            minimumRefreshInterval = appleMobileRefreshInterval
             do {
                 try await Self.sleep(for: appleMobileRefreshInterval)
             } catch {
@@ -353,7 +507,7 @@ final class DeviceBatteryViewModel: ObservableObject {
     }
 
     private func refreshInternalBattery() async {
-        let collectionID = beginCollection()
+        let collectionID = beginCollection(source: .internalBattery)
         defer { endCollection(collectionID) }
         let referenceDate = Date()
         let items = await sampler.collectInternalBattery(referenceDate: referenceDate)
@@ -365,16 +519,18 @@ final class DeviceBatteryViewModel: ObservableObject {
 
     private func refreshBluetooth(
         forceProfileRefresh: Bool,
-        performActiveScan: Bool
+        performActiveScan: Bool,
+        revalidateSupplementalState: Bool
     ) async {
-        let collectionID = beginCollection()
+        let collectionID = beginCollection(source: .bluetooth)
         defer { endCollection(collectionID) }
         let referenceDate = Date()
         let items = await sampler.collectBluetoothDevices(
             referenceDate: referenceDate,
             options: DeviceBatteryBluetoothSamplingOptions(
                 forceProfileRefresh: forceProfileRefresh,
-                performActiveScan: performActiveScan
+                performActiveScan: performActiveScan,
+                revalidateSupplementalState: revalidateSupplementalState
             )
         )
         guard !Task.isCancelled else { return }
@@ -383,13 +539,15 @@ final class DeviceBatteryViewModel: ObservableObject {
         rebuildSnapshot()
     }
 
-    private func refreshAppleMobileDevices() async {
-        let collectionID = beginCollection()
+    private func refreshAppleMobileDevices(
+        minimumRefreshInterval: TimeInterval
+    ) async {
+        let collectionID = beginCollection(source: .appleMobile)
         defer { endCollection(collectionID) }
         let referenceDate = Date()
         let items = await sampler.collectAppleMobileDevices(
             referenceDate: referenceDate,
-            minimumRefreshInterval: appleMobileRefreshInterval
+            minimumRefreshInterval: minimumRefreshInterval
         )
         guard !Task.isCancelled else { return }
         appleMobileItems = items
@@ -432,7 +590,8 @@ final class DeviceBatteryViewModel: ObservableObject {
             self.bluetoothEventTask = nil
             self.restartBluetoothSampling(
                 forceProfileRefresh: true,
-                performActiveScan: true
+                performActiveScan: true,
+                revalidateSupplementalState: self.isComponentPanelVisible
             )
         }
     }
@@ -443,12 +602,88 @@ final class DeviceBatteryViewModel: ObservableObject {
               hasSamplingDemand else {
             rapooMonitor.stop()
             rapooSnapshot = .idle
+            rapooSnapshots.removeAll()
             rebuildSnapshot()
             return
         }
 
         rapooMonitor.start()
         rapooSnapshot = rapooMonitor.snapshot
+        rapooSnapshots = rapooMonitor.deviceSnapshots
+        rebuildSnapshot()
+    }
+
+    private func refreshVisibleSources() {
+        activityResumeTask?.cancel()
+        activityResumeTask = nil
+        let shouldForceBluetoothProfileRefresh = needsBluetoothRefreshOnResume
+        needsBluetoothRefreshOnResume = false
+
+        if includeInternalBattery {
+            powerSourceObserver.start()
+            if !isCollecting(.internalBattery) {
+                restartInternalBatterySampling()
+            }
+        }
+        if includeBluetoothDevices {
+            bluetoothConnectionObserver.start()
+            if isCollecting(.bluetooth) {
+                pendingVisibleBluetoothRefresh = true
+            } else {
+                restartBluetoothSampling(
+                    forceProfileRefresh: shouldForceBluetoothProfileRefresh,
+                    performActiveScan: true,
+                    revalidateSupplementalState: true
+                )
+            }
+        }
+        if includeAppleMobileDevices {
+            if isCollecting(.appleMobile) {
+                pendingVisibleAppleMobileRefresh = true
+            } else {
+                restartAppleMobileSampling(revalidateImmediately: true)
+            }
+        }
+        if includeRapooDevices {
+            rapooMonitor.refresh()
+            rapooSnapshot = rapooMonitor.snapshot
+            rapooSnapshots = rapooMonitor.deviceSnapshots
+            rebuildSnapshot()
+        }
+    }
+
+    private func rescheduleBackgroundPolling(referenceDate: Date = Date()) {
+        guard isLowBatteryMonitoringEnabled else { return }
+
+        if includeBluetoothDevices, !isCollecting(.bluetooth) {
+            restartBluetoothSampling(
+                forceProfileRefresh: false,
+                performActiveScan: true,
+                initialDelay: remainingDelay(
+                    since: sourceUpdateDates[.bluetooth],
+                    interval: schedule.bluetoothBackground,
+                    referenceDate: referenceDate
+                )
+            )
+        }
+        if includeAppleMobileDevices, !isCollecting(.appleMobile) {
+            restartAppleMobileSampling(
+                initialDelay: remainingDelay(
+                    since: sourceUpdateDates[.appleMobile],
+                    interval: schedule.appleMobileBackground,
+                    referenceDate: referenceDate
+                )
+            )
+        }
+    }
+
+    private func remainingDelay(
+        since lastUpdateDate: Date?,
+        interval: TimeInterval,
+        referenceDate: Date
+    ) -> TimeInterval {
+        guard let lastUpdateDate else { return 0 }
+        return max(0, interval - referenceDate.timeIntervalSince(lastUpdateDate))
     }
 
     private var hasSamplingDemand: Bool {
@@ -474,6 +709,8 @@ final class DeviceBatteryViewModel: ObservableObject {
             return
         }
 
+        activityResumeTask?.cancel()
+        activityResumeTask = nil
         let shouldForceBluetoothProfileRefresh = forceBluetoothProfileRefresh
             || needsBluetoothRefreshOnResume
         needsBluetoothRefreshOnResume = false
@@ -504,7 +741,10 @@ final class DeviceBatteryViewModel: ObservableObject {
         appleMobileTask = nil
         bluetoothEventTask = nil
         activityResumeTask = nil
+        pendingVisibleBluetoothRefresh = false
+        pendingVisibleAppleMobileRefresh = false
         activeCollectionIDs.removeAll()
+        collectionSourcesByID.removeAll()
         rebuildSnapshot()
     }
 
@@ -513,19 +753,39 @@ final class DeviceBatteryViewModel: ObservableObject {
         bluetoothItems.removeAll()
         appleMobileItems.removeAll()
         rapooSnapshot = .idle
+        rapooSnapshots.removeAll()
         sourceUpdateDates.removeAll()
         rebuildSnapshot()
     }
 
-    private func beginCollection() -> UUID {
+    private func beginCollection(source: DeviceBatterySource) -> UUID {
         let id = UUID()
         activeCollectionIDs.insert(id)
+        collectionSourcesByID[id] = source
         rebuildSnapshot()
         return id
     }
 
     private func endCollection(_ id: UUID) {
         guard activeCollectionIDs.remove(id) != nil else { return }
+        collectionSourcesByID.removeValue(forKey: id)
+        rebuildSnapshot()
+    }
+
+    private func isCollecting(_ source: DeviceBatterySource) -> Bool {
+        collectionSourcesByID.values.contains(source)
+    }
+
+    private func discardCollections(for source: DeviceBatterySource) {
+        let collectionIDs = collectionSourcesByID.compactMap { id, collectionSource in
+            collectionSource == source ? id : nil
+        }
+        guard !collectionIDs.isEmpty else { return }
+
+        for id in collectionIDs {
+            activeCollectionIDs.remove(id)
+            collectionSourcesByID.removeValue(forKey: id)
+        }
         rebuildSnapshot()
     }
 
@@ -544,9 +804,10 @@ final class DeviceBatteryViewModel: ObservableObject {
             }
         }
 
-        if includeRapooDevices,
-           let rapooItem = rapooSnapshot.batteryItem(localization: localization) {
-            items.append(rapooItem)
+        if includeRapooDevices {
+            items.append(contentsOf: rapooSnapshots.compactMap {
+                $0.batteryItem(localization: localization)
+            })
         }
 
         let accessState = items.isEmpty && !activeCollectionIDs.isEmpty
@@ -556,11 +817,15 @@ final class DeviceBatteryViewModel: ObservableObject {
             includeInternalBattery ? sourceUpdateDates[.internalBattery] : nil,
             includeBluetoothDevices ? sourceUpdateDates[.bluetooth] : nil,
             includeAppleMobileDevices ? sourceUpdateDates[.appleMobile] : nil,
-            includeRapooDevices ? rapooSnapshot.lastUpdated : nil
+            includeRapooDevices
+                ? rapooSnapshots.compactMap(\.lastUpdated).max() ?? rapooSnapshot.lastUpdated
+                : nil
         ].compactMap { $0 }
         snapshot = DeviceBatterySnapshot(
             accessState: accessState,
-            items: deduplicated(items),
+            items: deduplicated(
+                DeviceBatteryItemNormalizer.resolvingAppleMobileDeviceAliases(items)
+            ),
             lastUpdated: visibleSourceUpdateDates.max(),
             rapooState: includeRapooDevices ? rapooSnapshot.accessState : .idle
         )
@@ -577,29 +842,7 @@ final class DeviceBatteryViewModel: ObservableObject {
     }
 
     private func deduplicated(_ items: [DeviceBatteryItem]) -> [DeviceBatteryItem] {
-        var bestByKey: [String: DeviceBatteryItem] = [:]
-        var orderedKeys: [String] = []
-
-        for item in DeviceBatteryItemNormalizer.removingRedundantComponentAggregates(items) {
-            let key = "\(item.kind)-\(item.name.lowercased())-\(item.parentName ?? "")"
-            if let existing = bestByKey[key] {
-                bestByKey[key] = preferredItem(existing, item)
-            } else {
-                bestByKey[key] = item
-                orderedKeys.append(key)
-            }
-        }
-        return orderedKeys.compactMap { bestByKey[$0] }
-    }
-
-    private func preferredItem(
-        _ left: DeviceBatteryItem,
-        _ right: DeviceBatteryItem
-    ) -> DeviceBatteryItem {
-        if left.chargeState.isActiveChargingState != right.chargeState.isActiveChargingState {
-            return left.chargeState.isActiveChargingState ? left : right
-        }
-        return left.lastUpdated ?? .distantPast >= right.lastUpdated ?? .distantPast ? left : right
+        DeviceBatterySampler.deduplicated(items)
     }
 
     private static func sleep(for interval: TimeInterval) async throws {

@@ -22,6 +22,96 @@ final class NightShiftPluginTests: XCTestCase {
         }
     }
 
+    private final class MockCoreBrightnessClient: NightShiftCoreBrightnessCalling {
+        var enabled: Bool?
+        var acceptsWrites: Bool
+        var appliesWrites: Bool
+
+        init(
+            enabled: Bool?,
+            acceptsWrites: Bool = true,
+            appliesWrites: Bool = true
+        ) {
+            self.enabled = enabled
+            self.acceptsWrites = acceptsWrites
+            self.appliesWrites = appliesWrites
+        }
+
+        func isEnabled() -> Bool? {
+            enabled
+        }
+
+        func setEnabled(_ enabled: Bool) -> Bool {
+            guard acceptsWrites else {
+                return false
+            }
+            if appliesWrites {
+                self.enabled = enabled
+            }
+            return true
+        }
+    }
+
+    func testStatusLayoutUsesRuntimeEncodedSizeAndEnabledOffset() throws {
+        let armLayout = try XCTUnwrap(NightShiftStatusBufferLayout.resolve(
+            argumentType: "^{?=BBBi{?={?=ii}{?=ii}}QB}"
+        ))
+        let intelLayout = try XCTUnwrap(NightShiftStatusBufferLayout.resolve(
+            argumentType: "^{?=ccci{?={?=ii}{?=ii}}Qc}"
+        ))
+
+        XCTAssertEqual(armLayout.byteCount, 40)
+        XCTAssertEqual(armLayout.alignment, 8)
+        XCTAssertEqual(armLayout.enabledOffset, 1)
+        XCTAssertEqual(intelLayout.enabledOffset, 1)
+        XCTAssertGreaterThanOrEqual(intelLayout.byteCount, 33)
+    }
+
+    func testStatusLayoutAllowsCompatibleTailGrowth() throws {
+        let current = try XCTUnwrap(NightShiftStatusBufferLayout.resolve(
+            argumentType: "^{?=BBBi{?={?=ii}{?=ii}}QB}"
+        ))
+        let extended = try XCTUnwrap(NightShiftStatusBufferLayout.resolve(
+            argumentType: "^{?=BBBi{?={?=ii}{?=ii}}QBQ}"
+        ))
+
+        XCTAssertEqual(current.enabledOffset, extended.enabledOffset)
+        XCTAssertGreaterThan(extended.byteCount, current.byteCount)
+    }
+
+    func testStatusLayoutRejectsIncompatibleOrInvalidEncodings() {
+        XCTAssertNil(NightShiftStatusBufferLayout.resolve(
+            argumentType: "^{?=iBf{?={?=ii}{?=ii}}Q}"
+        ))
+        XCTAssertNil(NightShiftStatusBufferLayout.resolve(argumentType: "^v"))
+        XCTAssertNil(NightShiftStatusBufferLayout.resolve(argumentType: "B"))
+    }
+
+    func testControllerVerifiesAppliedRuntimeState() {
+        let applied = MockCoreBrightnessClient(enabled: false)
+        let ignored = MockCoreBrightnessClient(
+            enabled: false,
+            appliesWrites: false
+        )
+        let rejected = MockCoreBrightnessClient(
+            enabled: false,
+            acceptsWrites: false
+        )
+
+        XCTAssertTrue(CBNightShiftController(client: applied).setEnabled(true))
+        XCTAssertFalse(CBNightShiftController(client: ignored).setEnabled(true))
+        XCTAssertFalse(CBNightShiftController(client: rejected).setEnabled(true))
+        XCTAssertTrue(CBNightShiftController(client: applied).getStatus())
+    }
+
+    func testSystemRuntimeLayoutWhenNightShiftIsAvailable() throws {
+        guard let client = NightShiftCoreBrightnessClient.makeSystemClient() else {
+            throw XCTSkip("Night Shift is unavailable on this macOS environment")
+        }
+
+        XCTAssertNotNil(client.isEnabled())
+    }
+
     func testPanelStateReflectsControllerStatus() {
         let disabled = NightShiftPlugin(controller: MockController(status: false))
         let enabled = NightShiftPlugin(controller: MockController(status: true))

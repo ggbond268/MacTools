@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import MacToolsPluginKit
 
@@ -152,6 +153,7 @@ struct ActionShortcutSettingsView: View {
                 spacing: SettingsPageLayout.introductionContentSpacing
             ) {
                 introduction
+                appIntentsCard
                 controls
 
                 if let error = pluginHost.actionShortcutLoadError {
@@ -213,6 +215,51 @@ struct ActionShortcutSettingsView: View {
                 )
             )
         )
+    }
+
+    private var appIntentsCard: some View {
+        HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            Image(systemName: "square.stack.3d.up.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.purple)
+                .frame(width: 34, height: 34)
+
+            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                Text(AppL10n.settings(
+                    "appIntents.title",
+                    defaultValue: "Apple 快捷指令、Siri 与聚焦"
+                ))
+                .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                Text(AppL10n.settingsFormat(
+                    "appIntents.description",
+                    defaultValue: "已有 %d 个安全且可后台运行的操作可供系统选择；列表会随插件变化自动更新。",
+                    pluginHost.appIntentEligibleActionCount
+                ))
+                .font(PluginSettingsTheme.Typography.rowDescription)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                guard let url = URL(string: "shortcuts://") else { return }
+                NSWorkspace.shared.open(url)
+            } label: {
+                Label(
+                    AppL10n.settings(
+                        "appIntents.openShortcuts",
+                        defaultValue: "打开快捷指令"
+                    ),
+                    systemImage: "arrow.up.right"
+                )
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(PluginSettingsTheme.Spacing.cardContent)
+        .pluginSettingsCardBackground(.standard)
     }
 
     private var controls: some View {

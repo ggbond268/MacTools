@@ -10,6 +10,7 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts/install-debug-app.sh"
+DEFAULT_BUNDLE_IDENTIFIER = "com.example.mactools-test"
 
 
 class InstallDebugAppTests(unittest.TestCase):
@@ -59,7 +60,7 @@ class InstallDebugAppTests(unittest.TestCase):
         path: pathlib.Path,
         marker: str,
         *,
-        bundle_identifier: str = "com.example.mactools-test",
+        bundle_identifier: str = DEFAULT_BUNDLE_IDENTIFIER,
         executable_name: str = "MacTools Test",
     ) -> None:
         executable = path / "Contents/MacOS" / executable_name
@@ -102,10 +103,16 @@ class InstallDebugAppTests(unittest.TestCase):
             self.make_app(installed, "previous")
             environment = os.environ.copy()
             environment["HOME"] = str(root / "Home")
+            environment["MACTOOLS_LSREGISTER_PATH"] = "/usr/bin/true"
             environment["MACTOOLS_INSTALL_DEBUG_TEST_INTERRUPT_AFTER_BACKUP"] = "TERM"
 
             result = subprocess.run(
-                [str(SCRIPT), str(source), str(installed)],
+                [
+                    str(SCRIPT),
+                    str(source),
+                    str(installed),
+                    DEFAULT_BUNDLE_IDENTIFIER,
+                ],
                 env=environment,
                 capture_output=True,
                 text=True,
@@ -142,8 +149,14 @@ class InstallDebugAppTests(unittest.TestCase):
             self.make_app(installed, "previous")
             environment = os.environ.copy()
             environment["HOME"] = str(root / "Home")
+            environment["MACTOOLS_LSREGISTER_PATH"] = "/usr/bin/true"
             result = subprocess.run(
-                [str(SCRIPT), str(source), str(installed)],
+                [
+                    str(SCRIPT),
+                    str(source),
+                    str(installed),
+                    "com.example.unrelated",
+                ],
                 env=environment,
                 capture_output=True,
                 text=True,
@@ -166,6 +179,86 @@ class InstallDebugAppTests(unittest.TestCase):
             )
             process_stop = script.index('installed_executable="$installed_app/Contents/MacOS/')
             self.assertLess(identity_check, process_stop)
+
+    def test_configured_bundle_identifier_mismatch_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            source = root / "Built/MacTools Test.app"
+            installed = root / "Home/Applications/MacTools Test.app"
+            self.make_app(source, "new")
+            environment = os.environ.copy()
+            environment["HOME"] = str(root / "Home")
+            environment["MACTOOLS_LSREGISTER_PATH"] = "/usr/bin/true"
+
+            result = subprocess.run(
+                [
+                    str(SCRIPT),
+                    str(source),
+                    str(installed),
+                    "com.example.different.mactools.dev",
+                ],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("does not match configured identity", result.stderr)
+            self.assertFalse(installed.exists())
+
+    def test_unregisters_other_apps_with_the_same_debug_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            source = root / "Built/MacTools Test.app"
+            installed = root / "Home/Applications/MacTools Test.app"
+            stale = root / "OldBuild/MacTools Test.app"
+            registrar = root / "fake-lsregister"
+            registrar_log = root / "lsregister.log"
+            self.make_app(source, "new")
+            registrar.write_text(
+                """#!/bin/zsh
+if [[ \"$1\" == \"-dump\" ]]; then
+    print -r -- '----------------------------------------'
+    print -r -- 'path: __STALE_PATH__'
+    print -r -- 'name: MacTools Test'
+    print -r -- 'identifier: com.example.old-debug'
+    print -r -- '----------------------------------------'
+    print -r -- 'path: __KEEP_PATH__'
+    print -r -- 'name: MacTools Test'
+    print -r -- 'identifier: com.example.mactools-test'
+    print -r -- '----------------------------------------'
+    exit 0
+fi
+print -r -- \"$@\" >>\"$MACTOOLS_LSREGISTER_LOG\"
+""".replace("__STALE_PATH__", str(stale)).replace("__KEEP_PATH__", str(installed)),
+                encoding="utf-8",
+            )
+            registrar.chmod(0o755)
+            environment = os.environ.copy()
+            environment["HOME"] = str(root / "Home")
+            environment["MACTOOLS_LSREGISTER_PATH"] = str(registrar)
+            environment["MACTOOLS_LSREGISTER_LOG"] = str(registrar_log)
+
+            result = subprocess.run(
+                [
+                    str(SCRIPT),
+                    str(source),
+                    str(installed),
+                    DEFAULT_BUNDLE_IDENTIFIER,
+                ],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            registrations = registrar_log.read_text(encoding="utf-8").splitlines()
+            self.assertIn(f"-u {stale.resolve()}", registrations)
+            self.assertIn(f"-u {source.resolve()}", registrations)
+            self.assertIn(f"-f {installed.resolve()}", registrations)
+            self.assertNotIn(f"-u {installed.resolve()}", registrations)
 
     def test_stop_debug_app_targets_exact_installed_executable_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

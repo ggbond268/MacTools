@@ -19,8 +19,14 @@ protocol DeviceBatteryLowBatteryNotifying {
 
 @MainActor
 final class DeviceBatteryLowBatteryNotificationController {
+    private struct NotificationKeyGroup {
+        var keys: Set<String>
+        var wasNotified: Bool
+        var representativeItem: DeviceBatteryItem?
+    }
+
     private let notifier: any DeviceBatteryLowBatteryNotifying
-    private var notifiedDeviceKeys: Set<String> = []
+    private var notifiedDeviceKeyGroups: [Set<String>] = []
 
     init(notifier: any DeviceBatteryLowBatteryNotifying) {
         self.notifier = notifier
@@ -34,19 +40,55 @@ final class DeviceBatteryLowBatteryNotificationController {
     ) {
         let normalizedThreshold = DeviceBatteryLowBatteryThresholds.normalized(threshold)
         guard isEnabled else {
-            notifiedDeviceKeys.removeAll()
+            notifiedDeviceKeyGroups.removeAll()
             return
         }
 
         let lowBatteryItems = snapshot.lowBatteryItems(threshold: normalizedThreshold)
-        let recoveredDeviceKeys = snapshot.visibleItems
-            .filter { $0.shouldResetLowBatteryNotification(threshold: normalizedThreshold) }
-            .map(\.lowBatteryNotificationKey)
-        notifiedDeviceKeys.subtract(recoveredDeviceKeys)
-
-        let newLowBatteryItems = lowBatteryItems.filter {
-            !notifiedDeviceKeys.contains($0.lowBatteryNotificationKey)
+        for recoveredItem in snapshot.visibleItems
+            where recoveredItem.shouldResetLowBatteryNotification(threshold: normalizedThreshold) {
+            let recoveredKeys = recoveredItem.lowBatteryNotificationKeys
+            notifiedDeviceKeyGroups.removeAll {
+                !$0.isDisjoint(with: recoveredKeys)
+            }
         }
+
+        var keyGroups = notifiedDeviceKeyGroups.map {
+            NotificationKeyGroup(
+                keys: $0,
+                wasNotified: true,
+                representativeItem: nil
+            )
+        }
+        for item in lowBatteryItems {
+            let itemKeys = item.lowBatteryNotificationKeys
+            let matchingIndices = keyGroups.indices.filter {
+                !keyGroups[$0].keys.isDisjoint(with: itemKeys)
+            }
+            var mergedGroup = NotificationKeyGroup(
+                keys: itemKeys,
+                wasNotified: false,
+                representativeItem: item
+            )
+            for index in matchingIndices.reversed() {
+                let matchingGroup = keyGroups.remove(at: index)
+                mergedGroup.keys.formUnion(matchingGroup.keys)
+                mergedGroup.wasNotified = mergedGroup.wasNotified
+                    || matchingGroup.wasNotified
+                if let representativeItem = matchingGroup.representativeItem {
+                    mergedGroup.representativeItem = representativeItem
+                }
+            }
+            if mergedGroup.wasNotified {
+                mergedGroup.representativeItem = nil
+            }
+            keyGroups.append(mergedGroup)
+        }
+
+        let newLowBatteryItems = keyGroups.compactMap { group in
+            group.wasNotified ? nil : group.representativeItem
+        }
+        notifiedDeviceKeyGroups = keyGroups.map(\.keys)
         guard !newLowBatteryItems.isEmpty else {
             return
         }
@@ -56,26 +98,12 @@ final class DeviceBatteryLowBatteryNotificationController {
             threshold: normalizedThreshold,
             localization: localization
         )
-        notifiedDeviceKeys.formUnion(newLowBatteryItems.map(\.lowBatteryNotificationKey))
     }
 }
 
 private extension DeviceBatteryItem {
-    var lowBatteryNotificationKey: String {
-        [
-            parentName.map(Self.normalizedNotificationText) ?? "",
-            Self.normalizedNotificationText(name),
-            lowBatteryNotificationRoleKey
-        ]
-            .joined(separator: "|")
-    }
-
-    private var lowBatteryNotificationRoleKey: String {
-        guard let role = componentIdentity?.role, role != .aggregate else {
-            return ""
-        }
-
-        return role.rawValue
+    var lowBatteryNotificationKeys: Set<String> {
+        allEquivalentBatteryIdentityKeys
     }
 
     func shouldResetLowBatteryNotification(threshold: Int) -> Bool {
@@ -88,11 +116,6 @@ private extension DeviceBatteryItem {
         }
 
         return level >= threshold
-    }
-
-    private static func normalizedNotificationText(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
     }
 }
 
@@ -204,7 +227,7 @@ enum DeviceBatteryLowBatteryNotificationContent {
         return DeviceBatteryLowBatteryNotification(
             title: title,
             body: body,
-            deviceIDs: Set(sortedItems.map(\.id))
+            deviceIDs: Set(sortedItems.map(\.stableBatteryIdentityKey))
         )
     }
 

@@ -164,17 +164,12 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
                     title: localization.string("settings.layout.title", defaultValue: "组件布局"),
                     systemImage: "rectangle.grid.2x2",
                     presentation: .edgeToEdge
-                ) { [store, viewModel, localization] _ in
+                ) { [store, localization, weak self] _ in
                     DeviceBatterySettingsView(
                         store: store,
                         localization: localization,
                         onChange: {
-                            viewModel.refresh(
-                                includeInternalBattery: store.showInternalBattery,
-                                includeBluetoothDevices: store.showBluetoothDevices,
-                                includeAppleMobileDevices: store.showAppleMobileDevices,
-                                includeRapooDevices: store.showRapooDevices
-                            )
+                            self?.onStateChange?()
                         },
                         section: .layout
                     )
@@ -184,17 +179,18 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
                     title: localization.string("settings.sources.title", defaultValue: "显示内容"),
                     systemImage: "bolt.horizontal.circle",
                     presentation: .edgeToEdge
-                ) { [store, viewModel, localization] _ in
+                ) { [store, viewModel, localization, weak self] _ in
                     DeviceBatterySettingsView(
                         store: store,
                         localization: localization,
                         onChange: {
-                            viewModel.refresh(
+                            viewModel.updateSources(
                                 includeInternalBattery: store.showInternalBattery,
                                 includeBluetoothDevices: store.showBluetoothDevices,
                                 includeAppleMobileDevices: store.showAppleMobileDevices,
                                 includeRapooDevices: store.showRapooDevices
                             )
+                            self?.onStateChange?()
                         },
                         section: .sources
                     )

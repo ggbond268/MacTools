@@ -11,7 +11,8 @@
 
 ## 开发环境
 - 需要 Xcode 和 `xcodegen`，项目最低支持 macOS 14.0。
-- 首次初始化：运行 `make setup`，再编辑 `LocalConfig.xcconfig` 填写 `DEVELOPMENT_TEAM` 和 `BUNDLE_IDENTIFIER_PREFIX`。
+- 首次初始化：运行 `make setup`，再编辑 `LocalConfig.xcconfig`，填写 `DEVELOPMENT_TEAM` 和稳定、非占位的 `BUNDLE_IDENTIFIER_PREFIX`。任一值缺失时，Debug 构建会提前失败，避免 macOS 注册格式错误的重复应用身份。
+- 本地测试请使用 `make run`。它会把唯一的 Debug 应用安装到 `~/Applications/MacTools Dev.app`，并从 LaunchServices 注销其他 `MacTools Dev` 构建副本。
 - 常用命令：`make generate` 生成 Xcode 项目，`make build` 编译校验，`make run` 本地运行。
 - 插件开发：`make run` 会增量编译 App 和插件，并把最新 Debug 插件包同步到本地开发市场；`make sync-debug-plugins` 可只同步已编译插件。`make build-plugin` 保留给单独验证动态包或发布链路使用，指定插件可运行 `make build-plugin PLUGIN=calendar`。
 - 不要提交本地或生成文件：`MacTools.xcodeproj`、`MacTools.xcworkspace`、`LocalConfig.xcconfig`、`build/`、`scripts/release.local.env`。

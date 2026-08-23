@@ -16,7 +16,7 @@
       "summary": "防止程序坞在多显示器之间意外移动"
     }
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
   "bundleRelativePath": "DockLock.bundle",
@@ -28,7 +28,7 @@
   "capabilities": {
     "primaryPanel": true,
     "componentPanel": false,
-    "settings": "none"
+    "settings": "form"
   },
   "permissions": [
     "accessibility"

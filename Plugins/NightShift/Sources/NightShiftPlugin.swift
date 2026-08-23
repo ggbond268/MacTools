@@ -1,4 +1,3 @@
-import CoreBrightness
 import Foundation
 import OSLog
 import SwiftUI
@@ -16,25 +15,6 @@ private struct NightShiftPluginProvider: PluginProvider {
 
     func makePlugins() -> [any MacToolsPlugin] {
         [NightShiftPlugin(localization: PluginLocalization(bundle: context.resourceBundle))]
-    }
-}
-
-protocol NightShiftControlling {
-    func getStatus() -> Bool
-    func setEnabled(_ enabled: Bool) -> Bool
-}
-
-struct CBNightShiftController: NightShiftControlling {
-    private let client = CBBlueLightClient()
-
-    func getStatus() -> Bool {
-        var status = CBBlueLightStatus()
-        guard client.getBlueLightStatus(&status) else { return false }
-        return status.enabled.boolValue
-    }
-
-    func setEnabled(_ enabled: Bool) -> Bool {
-        client.setEnabled(enabled)
     }
 }
 

@@ -151,6 +151,43 @@ final class RunLinkExecutionCoordinatorTests: XCTestCase {
         XCTAssertEqual(panels.first?.accessibilityLabel(), "Failed and Action unavailable.")
     }
 
+    func testWindowLayoutHeadlessFeedbackIsCompactAndOptInOnSuccess() {
+        XCTAssertNil(WindowLayoutActionFeedback.feedback(
+            actionTitle: "Left Half",
+            outcome: .completed(.succeeded())
+        ))
+
+        let feedback = WindowLayoutActionFeedback.feedback(
+            actionTitle: "Left Half",
+            outcome: .completed(.succeeded(message: "Left Half"))
+        )
+        XCTAssertEqual(
+            feedback,
+            RunLinkExecutionFeedback(
+                tone: .success,
+                title: "Left Half",
+                message: "Left Half",
+                presentation: .compact,
+                dismissDelay: .milliseconds(1_100)
+            )
+        )
+        XCTAssertEqual(feedback?.accessibilityLabel, "Left Half")
+    }
+
+    func testWindowLayoutHeadlessFailureAlwaysProducesStandardFeedback() {
+        XCTAssertEqual(
+            WindowLayoutActionFeedback.feedback(
+                actionTitle: "Next Desktop",
+                outcome: .completed(.failed(message: "No adjacent Desktop."))
+            ),
+            RunLinkExecutionFeedback(
+                tone: .failure,
+                title: "Next Desktop",
+                message: "No adjacent Desktop."
+            )
+        )
+    }
+
     func testCancellingSystemConfirmationDismissesPresentationAndResumesOnce() async {
         var response: ((Bool) -> Void)?
         var dismissCount = 0

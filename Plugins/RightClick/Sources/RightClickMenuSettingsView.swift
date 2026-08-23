@@ -53,7 +53,10 @@ struct RightClickMenuSettingsView: View {
             PluginSettingsListDivider()
             toggleRow(
                 title: localization.string("settings.newFile.title", defaultValue: "新建文件"),
-                description: localization.string("settings.newFile.description", defaultValue: "支持 .txt / .md / .json"),
+                description: localization.string(
+                    "settings.newFile.description",
+                    defaultValue: "支持 .txt、.md、.json、.html 等常见扩展名"
+                ),
                 isOn: $session.configuration.newFile
             )
             PluginSettingsListDivider()
@@ -188,31 +191,48 @@ private struct RightClickOpenWithAppRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+
             Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-            TextField(localization.string("settings.extensions.placeholder", defaultValue: "扩展名"), text: $extensionsText)
-                .textFieldStyle(.roundedBorder)
-                .frame(minWidth: 108, idealWidth: 120, maxWidth: 140)
-                .onChange(of: extensionsText) { _, newValue in
-                    // pathExtension values are dotless; strip a leading "." so a
-                    // user entering ".txt" still matches.
-                    app.fileExtensions = newValue
-                        .split(separator: ",")
-                        .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-                        .map { $0.hasPrefix(".") ? String($0.dropFirst()) : $0 }
-                        .filter { !$0.isEmpty }
+
+            HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                Text(extensionsLabel)
+                    .font(PluginSettingsTheme.Typography.controlLabel)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                TextField("", text: $extensionsText)
+                    .labelsHidden()
+                    .accessibilityLabel(extensionsLabel)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 140)
+                    .onChange(of: extensionsText) { _, newValue in
+                        // pathExtension values are dotless; strip a leading "." so a
+                        // user entering ".txt" still matches.
+                        app.fileExtensions = newValue
+                            .split(separator: ",")
+                            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                            .map { $0.hasPrefix(".") ? String($0.dropFirst()) : $0 }
+                            .filter { !$0.isEmpty }
+                    }
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.red)
+                        .frame(
+                            width: PluginSettingsTheme.Size.controlHeight,
+                            height: PluginSettingsTheme.Size.controlHeight
+                        )
                 }
-            Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash")
-                    .foregroundStyle(.red)
-                    .frame(
-                        width: PluginSettingsTheme.Size.controlHeight,
-                        height: PluginSettingsTheme.Size.controlHeight
-                    )
+                .buttonStyle(.plain)
+                .help(localization.string("settings.deleteApp.help", defaultValue: "删除应用"))
             }
-            .buttonStyle(.plain)
-            .help(localization.string("settings.deleteApp.help", defaultValue: "删除应用"))
+            .layoutPriority(1)
         }
         .pluginSettingsListRowPadding(interactive: true)
+    }
+
+    private var extensionsLabel: String {
+        localization.string("settings.extensions.placeholder", defaultValue: "扩展名")
     }
 }
 

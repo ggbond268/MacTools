@@ -4,6 +4,38 @@ import MacToolsPluginKit
 
 @MainActor
 final class ActivityBarPluginTests: XCTestCase {
+    func testDashboardUsesReducedFallbackHeight() {
+        let harness = makeHarness()
+        let metrics = PluginComponentPanelLayoutMetrics.default
+
+        XCTAssertEqual(
+            metrics.itemHeight(forSpanHeight: harness.plugin.descriptor.span.height),
+            912
+        )
+    }
+
+    func testDashboardAdaptsToMeasuredContentHeight() {
+        let harness = makeHarness()
+        let metrics = PluginComponentPanelLayoutMetrics.default
+        var notificationCount = 0
+        harness.plugin.onStateChange = {
+            notificationCount += 1
+        }
+
+        harness.plugin.dashboardContentHeightDidChange(501)
+
+        XCTAssertEqual(
+            metrics.itemHeight(forSpanHeight: harness.plugin.descriptor.span.height),
+            504
+        )
+        XCTAssertEqual(notificationCount, 1)
+
+        harness.plugin.dashboardContentHeightDidChange(503)
+        harness.plugin.dashboardContentHeightDidChange(.nan)
+
+        XCTAssertEqual(notificationCount, 1)
+    }
+
     func testPrimaryPanelExpandsWithTrackingSwitchAndActions() throws {
         let harness = makeHarness()
 

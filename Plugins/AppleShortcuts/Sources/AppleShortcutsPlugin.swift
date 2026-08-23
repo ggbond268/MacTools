@@ -27,6 +27,7 @@ final class AppleShortcutsPlugin:
     PluginPortablePreferencesActionReferencesProviding,
     PluginActionReferenceBackupProviding,
     PluginActionSafetyStateChangeProviding,
+    PluginActionExposureProviding,
     PluginSettingsSearchFocusing
 {
     let metadata: PluginMetadata
@@ -172,6 +173,13 @@ final class AppleShortcutsPlugin:
             ))
         }
         return .available
+    }
+
+    func exposurePolicy(
+        for reference: ActionReference,
+        on surface: ActionExposureSurface
+    ) -> ActionExposurePolicy {
+        surface == .appIntents ? .excluded : .automatic
     }
 
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {

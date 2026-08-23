@@ -34,6 +34,27 @@ targets:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true
           STRIP_INSTALLED_PRODUCT: true
+  MacToolsAppIntents:
+    type: framework
+    platform: macOS
+    deploymentTarget: '14.0'
+    sources:
+    - path: Sources/MacToolsAppIntents
+    settings:
+      base:
+        PRODUCT_NAME: MacToolsAppIntents
+        PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.app-intents"
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: 6.0
+        DEVELOPMENT_LANGUAGE: zh-Hans
+        MACOSX_DEPLOYMENT_TARGET: '14.0'
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+      configs:
+        Release:
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
   MacTools:
     type: application
     platform: macOS
@@ -46,11 +67,14 @@ targets:
       excludes:
       - "**/.gitkeep"
       - MacToolsPluginKit/**
+      - MacToolsAppIntents/**
       - Extensions/**
       - "../Plugins/**"
       - Plugins/**/CalendarPluginResources/**
     dependencies:
     - target: MacToolsPluginKit
+      embed: true
+    - target: MacToolsAppIntents
       embed: true
     - target: RightClickFinderSync
       embed: true
@@ -73,8 +97,8 @@ targets:
         RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH: Library/Application Support/MacTools/right-click-menu.json
         SPARKLE_PUBLIC_ED_KEY: YS4ioWunyQC5rP/YQdDbG9panyqCKNyBd0iPTUqIFY0=
         SWIFT_OBJC_BRIDGING_HEADER: Sources/MacTools-Bridging-Header.h
-        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/Sources/Core/MultitouchSupport $(SRCROOT)/Sources/Core/CoreBrightness"
-        OTHER_LDFLAGS: "-framework MultitouchSupport -framework CoreBrightness -framework IOKit -framework EventKit -framework Network -F
+        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/Sources/Core/MultitouchSupport"
+        OTHER_LDFLAGS: "-framework MultitouchSupport -framework IOKit -framework EventKit -framework Network -F
           /System/Library/PrivateFrameworks"
       configs:
         Debug:
@@ -137,6 +161,22 @@ targets:
         PRODUCT_NAME: AppInstanceProbe
         PRODUCT_MODULE_NAME: AppInstanceProbe
         PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.instance-probe"
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: 6.0
+        CODE_SIGNING_ALLOWED: false
+  AppIntentCircuitBreakerProbe:
+    type: tool
+    platform: macOS
+    deploymentTarget: '14.0'
+    sources:
+    - path: Sources/Core/AppIntents/MacToolsAppIntentCircuitBreaker.swift
+    - path: Sources/Core/Diagnostics/AppLog.swift
+    - path: Tests/Support/AppIntentCircuitBreakerProbe/AppIntentCircuitBreakerProbe.swift
+    settings:
+      base:
+        PRODUCT_NAME: AppIntentCircuitBreakerProbe
+        PRODUCT_MODULE_NAME: AppIntentCircuitBreakerProbe
+        PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.app-intent-circuit-breaker-probe"
         GENERATE_INFOPLIST_FILE: true
         SWIFT_VERSION: 6.0
         CODE_SIGNING_ALLOWED: false

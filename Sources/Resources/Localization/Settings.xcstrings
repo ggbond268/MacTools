@@ -1,6 +1,45 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "appIntents.title": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "اختصارات Apple وSiri وSpotlight" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Apple-Kurzbefehle, Siri und Spotlight" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Apple Shortcuts, Siri, and Spotlight" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Atajos de Apple, Siri y Spotlight" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Raccourcis Apple, Siri et Spotlight" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "Appleショートカット、Siri、Spotlight" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "Apple 단축어, Siri 및 Spotlight" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Atalhos Apple, Siri e Spotlight" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Команды Apple, Siri и Spotlight" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Apple 快捷指令、Siri 与聚焦" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Apple 捷徑、Siri 與 Spotlight" } }
+    } },
+    "appIntents.description": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "يمكن للنظام الاختيار من بين %d من الإجراءات الآمنة القابلة للتشغيل في الخلفية؛ ويتم تحديث القائمة تلقائيًا عند تغيير المكونات الإضافية." } },
+      "de": { "stringUnit": { "state": "translated", "value": "%d sichere, im Hintergrund ausführbare Aktionen stehen dem System zur Auswahl; die Liste wird bei Plugin-Änderungen automatisch aktualisiert." } },
+      "en": { "stringUnit": { "state": "translated", "value": "%d safe, background-capable actions are available to the system; the list updates automatically when plugins change." } },
+      "es": { "stringUnit": { "state": "translated", "value": "El sistema puede elegir entre %d acciones seguras que se ejecutan en segundo plano; la lista se actualiza automáticamente cuando cambian los plugins." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Le système peut choisir parmi %d actions sûres exécutables en arrière-plan ; la liste se met à jour automatiquement avec les modules." } },
+      "ja": { "stringUnit": { "state": "translated", "value": "安全にバックグラウンド実行できる%d個の操作をシステムから選択できます。リストはプラグインの変更に合わせて自動更新されます。" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "시스템에서 안전하게 백그라운드 실행 가능한 동작 %d개를 선택할 수 있으며 플러그인 변경 시 목록이 자동으로 업데이트됩니다." } },
+      "pt": { "stringUnit": { "state": "translated", "value": "O sistema pode escolher entre %d ações seguras executáveis em segundo plano; a lista é atualizada automaticamente quando os plugins mudam." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Системе доступно %d безопасных действий с фоновым выполнением; список автоматически обновляется при изменении плагинов." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "已有 %d 个安全且可后台运行的操作可供系统选择；列表会随插件变化自动更新。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "已有 %d 個安全且可在背景執行的操作可供系統選擇；清單會隨外掛程式變更自動更新。" } }
+    } },
+    "appIntents.openShortcuts": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "فتح الاختصارات" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Kurzbefehle öffnen" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Open Shortcuts" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Abrir Atajos" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir Raccourcis" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "ショートカットを開く" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "단축어 열기" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Abrir Atalhos" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Открыть «Команды»" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开快捷指令" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開捷徑" } }
+    } },
     "panelTheme.title": { "extractionState": "manual", "localizations": {
       "en": { "stringUnit": { "state": "translated", "value": "Theme" } },
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "主题" } },

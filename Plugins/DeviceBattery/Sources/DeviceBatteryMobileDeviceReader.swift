@@ -9,9 +9,33 @@ protocol DeviceBatteryMobileDeviceSampling: Sendable {
 }
 
 actor DeviceBatteryMobileDeviceReader: DeviceBatteryMobileDeviceSampling {
+    typealias RecordReader = @Sendable () -> DeviceBatteryMobileDeviceReadResult
+
+    private struct CachedChargeState {
+        let value: DeviceBatteryChargeState
+        let observedAt: Date
+    }
+
+    private static let transientReadingGraceInterval: TimeInterval = 3 * 60
+
     private var cachedItems: [DeviceBatteryItem] = []
+    private var cachedChargeStates: [String: CachedChargeState] = [:]
     private var lastCollectionDate: Date?
-    private var inFlightTask: (id: UUID, task: Task<[DeviceBatteryMobileDeviceRecord], Never>)?
+    private let recordReader: RecordReader
+    private var inFlightTask: (
+        id: UUID,
+        task: Task<DeviceBatteryMobileDeviceReadResult, Never>
+    )?
+
+    init() {
+        recordReader = {
+            DeviceBatteryMobileDeviceBridge.readRecords()
+        }
+    }
+
+    init(recordReader: @escaping RecordReader) {
+        self.recordReader = recordReader
+    }
 
     func collectDevices(
         referenceDate: Date,
@@ -23,28 +47,117 @@ actor DeviceBatteryMobileDeviceReader: DeviceBatteryMobileDeviceSampling {
         }
 
         let requestID: UUID
-        let task: Task<[DeviceBatteryMobileDeviceRecord], Never>
+        let task: Task<DeviceBatteryMobileDeviceReadResult, Never>
         if let inFlightTask {
             requestID = inFlightTask.id
             task = inFlightTask.task
         } else {
             requestID = UUID()
+            let recordReader = self.recordReader
             let newTask = Task.detached(priority: .utility) {
-                DeviceBatteryMobileDeviceBridge.readRecords()
+                recordReader()
             }
             inFlightTask = (requestID, newTask)
             task = newTask
         }
 
-        let records = await task.value
+        let result = await task.value
         if inFlightTask?.id == requestID {
             inFlightTask = nil
         }
 
-        let items = records.map { $0.batteryItem(referenceDate: referenceDate) }
-        cachedItems = items
         lastCollectionDate = referenceDate
+        if result.didEnumerateDevices, result.connectedDeviceCount == 0 {
+            cachedItems.removeAll()
+            cachedChargeStates.removeAll()
+            return []
+        }
+
+        let records = DeviceBatteryMobileDeviceRecord.preferredRecords(in: result.records)
+        guard !records.isEmpty else {
+            guard result.hasTransientFailure else {
+                cachedItems.removeAll()
+                return []
+            }
+            cachedItems = cachedItems.compactMap {
+                retainedItem($0, referenceDate: referenceDate)
+            }
+            return cachedItems
+        }
+
+        var items = records.map { record in
+            let resolved = resolvedRecord(record, referenceDate: referenceDate)
+            return resolved.record.batteryItem(
+                referenceDate: referenceDate,
+                chargeStateReferenceDate: resolved.chargeStateObservedAt
+            )
+        }
+        if result.hasTransientFailure {
+            let currentIdentities = Set(items.map(\.deviceIdentity))
+            items.append(contentsOf: cachedItems.compactMap { item in
+                guard !currentIdentities.contains(item.deviceIdentity) else {
+                    return nil
+                }
+                return retainedItem(item, referenceDate: referenceDate)
+            })
+        }
+
+        cachedItems = items
         return items
+    }
+
+    private func resolvedRecord(
+        _ record: DeviceBatteryMobileDeviceRecord,
+        referenceDate: Date
+    ) -> (record: DeviceBatteryMobileDeviceRecord, chargeStateObservedAt: Date?) {
+        if Self.hasUsableChargeState(record.chargeState) {
+            cachedChargeStates[record.identifier] = CachedChargeState(
+                value: record.chargeState,
+                observedAt: referenceDate
+            )
+            return (record, referenceDate)
+        }
+
+        guard let cachedState = cachedChargeStates[record.identifier],
+              referenceDate.timeIntervalSince(cachedState.observedAt)
+                <= Self.transientReadingGraceInterval else {
+            cachedChargeStates.removeValue(forKey: record.identifier)
+            return (record, nil)
+        }
+        return (
+            record.replacingChargeState(cachedState.value),
+            cachedState.observedAt
+        )
+    }
+
+    private func retainedItem(
+        _ item: DeviceBatteryItem,
+        referenceDate: Date
+    ) -> DeviceBatteryItem? {
+        guard let lastUpdated = item.lastUpdated,
+              referenceDate.timeIntervalSince(lastUpdated)
+                <= Self.transientReadingGraceInterval else {
+            return nil
+        }
+
+        let identifier = item.deviceIdentity.value
+        guard item.deviceIdentity.namespace == .mobileDevice,
+              let cachedState = cachedChargeStates[identifier],
+              referenceDate.timeIntervalSince(cachedState.observedAt)
+                <= Self.transientReadingGraceInterval else {
+            cachedChargeStates.removeValue(forKey: identifier)
+            return item.replacingChargeState(.unknown, observedAt: nil)
+        }
+        return item.replacingChargeState(
+            cachedState.value,
+            observedAt: cachedState.observedAt
+        )
+    }
+
+    private static func hasUsableChargeState(
+        _ chargeState: DeviceBatteryChargeState
+    ) -> Bool {
+        chargeState != .unknown && chargeState != .invalid
     }
 }
 
@@ -98,6 +211,7 @@ enum DeviceBatteryMobileDeviceCategory: Equatable, Sendable {
 
 struct DeviceBatteryMobileDeviceRecord: Equatable, Sendable {
     let identifier: String
+    let bluetoothAddress: String?
     let name: String
     let productType: String
     let category: DeviceBatteryMobileDeviceCategory
@@ -106,9 +220,129 @@ struct DeviceBatteryMobileDeviceRecord: Equatable, Sendable {
     let connectionType: String
     let parentName: String?
 
-    func batteryItem(referenceDate: Date) -> DeviceBatteryItem {
+    init(
+        identifier: String,
+        bluetoothAddress: String? = nil,
+        name: String,
+        productType: String,
+        category: DeviceBatteryMobileDeviceCategory,
+        level: Int,
+        chargeState: DeviceBatteryChargeState,
+        connectionType: String,
+        parentName: String?
+    ) {
+        self.identifier = identifier
+        self.bluetoothAddress = bluetoothAddress
+        self.name = name
+        self.productType = productType
+        self.category = category
+        self.level = level
+        self.chargeState = chargeState
+        self.connectionType = connectionType
+        self.parentName = parentName
+    }
+
+    func replacingChargeState(
+        _ chargeState: DeviceBatteryChargeState
+    ) -> DeviceBatteryMobileDeviceRecord {
+        DeviceBatteryMobileDeviceRecord(
+            identifier: identifier,
+            bluetoothAddress: bluetoothAddress,
+            name: name,
+            productType: productType,
+            category: category,
+            level: level,
+            chargeState: chargeState,
+            connectionType: connectionType,
+            parentName: parentName
+        )
+    }
+
+    static func preferredRecords(
+        in records: [DeviceBatteryMobileDeviceRecord]
+    ) -> [DeviceBatteryMobileDeviceRecord] {
+        var identifiers: [String] = []
+        var recordsByIdentifier: [String: DeviceBatteryMobileDeviceRecord] = [:]
+        for record in records {
+            if recordsByIdentifier[record.identifier] == nil {
+                identifiers.append(record.identifier)
+                recordsByIdentifier[record.identifier] = record
+                continue
+            }
+            if let existing = recordsByIdentifier[record.identifier] {
+                recordsByIdentifier[record.identifier] = mergingDuplicateRecords(
+                    existing,
+                    record
+                )
+            }
+        }
+        return identifiers.compactMap { recordsByIdentifier[$0] }
+    }
+
+    private static func mergingDuplicateRecords(
+        _ left: DeviceBatteryMobileDeviceRecord,
+        _ right: DeviceBatteryMobileDeviceRecord
+    ) -> DeviceBatteryMobileDeviceRecord {
+        let preferred: DeviceBatteryMobileDeviceRecord
+        let supplemental: DeviceBatteryMobileDeviceRecord
+        if recordPrecedes(left, right) {
+            preferred = left
+            supplemental = right
+        } else {
+            preferred = right
+            supplemental = left
+        }
+
+        guard !hasUsableChargeState(preferred.chargeState),
+              hasUsableChargeState(supplemental.chargeState) else {
+            return preferred
+        }
+        return preferred.replacingChargeState(supplemental.chargeState)
+    }
+
+    private static func recordPrecedes(
+        _ left: DeviceBatteryMobileDeviceRecord,
+        _ right: DeviceBatteryMobileDeviceRecord
+    ) -> Bool {
+        let connectionRank = ["USB": 0, "Wi-Fi": 1, "": 2]
+        let leftConnectionRank = connectionRank[left.connectionType] ?? 3
+        let rightConnectionRank = connectionRank[right.connectionType] ?? 3
+        if leftConnectionRank != rightConnectionRank {
+            return leftConnectionRank < rightConnectionRank
+        }
+
+        let leftHasState = left.chargeState != .unknown && left.chargeState != .invalid
+        let rightHasState = right.chargeState != .unknown && right.chargeState != .invalid
+        if leftHasState != rightHasState {
+            return leftHasState
+        }
+
+        return [
+            left.name,
+            left.productType,
+            left.parentName ?? "",
+            String(left.level)
+        ].joined(separator: "\u{0}") < [
+            right.name,
+            right.productType,
+            right.parentName ?? "",
+            String(right.level)
+        ].joined(separator: "\u{0}")
+    }
+
+    private static func hasUsableChargeState(
+        _ chargeState: DeviceBatteryChargeState
+    ) -> Bool {
+        chargeState != .unknown && chargeState != .invalid
+    }
+
+    func batteryItem(
+        referenceDate: Date,
+        chargeStateReferenceDate: Date? = nil
+    ) -> DeviceBatteryItem {
         DeviceBatteryItem(
             id: "mobile-device-\(identifier)",
+            deviceIdentity: .mobileDevice(identifier),
             name: name,
             model: productType.isEmpty ? nil : productType,
             kind: category.itemKind,
@@ -117,16 +351,67 @@ struct DeviceBatteryMobileDeviceRecord: Equatable, Sendable {
             parentName: parentName,
             source: "MobileDevice",
             lastUpdated: referenceDate,
+            chargeStateLastUpdated: chargeStateReferenceDate,
             isConnected: true,
             detail: connectionType.isEmpty ? nil : connectionType,
-            componentIdentity: nil
+            componentIdentity: nil,
+            alternateDeviceIdentities: Set(
+                bluetoothAddress.map { [.bluetooth($0)] } ?? []
+            )
         )
     }
 }
 
+private extension DeviceBatteryItem {
+    func replacingChargeState(
+        _ chargeState: DeviceBatteryChargeState,
+        observedAt: Date? = nil
+    ) -> DeviceBatteryItem {
+        DeviceBatteryItem(
+            id: id,
+            deviceIdentity: deviceIdentity,
+            name: name,
+            model: model,
+            kind: kind,
+            level: level,
+            chargeState: chargeState,
+            parentName: parentName,
+            source: source,
+            lastUpdated: lastUpdated,
+            chargeStateLastUpdated: observedAt,
+            isConnected: isConnected,
+            detail: detail,
+            componentIdentity: componentIdentity,
+            alternateDeviceIdentities: alternateDeviceIdentities
+        )
+    }
+}
+
+struct DeviceBatteryMobileDeviceReadResult: Sendable {
+    let records: [DeviceBatteryMobileDeviceRecord]
+    let didEnumerateDevices: Bool
+    let connectedDeviceCount: Int
+    let failedDeviceCount: Int
+
+    var hasTransientFailure: Bool {
+        !didEnumerateDevices || failedDeviceCount > 0
+    }
+}
+
 enum DeviceBatteryMobileBatteryParser {
+    private static let chargeStateKeys: Set<String> = [
+        "BatteryIsFullyCharged",
+        "FullyCharged",
+        "IsFullyCharged",
+        "BatteryIsCharging",
+        "IsCharging",
+        "ExternalConnected",
+        "AppleRawExternalConnected"
+    ]
+
     static func record(
         identifier: String,
+        bluetoothAddress: String? = nil,
         name: String,
         productType: String,
         deviceClass: String?,
@@ -140,6 +425,7 @@ enum DeviceBatteryMobileBatteryParser {
 
         return DeviceBatteryMobileDeviceRecord(
             identifier: identifier,
+            bluetoothAddress: bluetoothAddress,
             name: name.isEmpty ? fallbackName(deviceClass: deviceClass, productType: productType) : name,
             productType: productType,
             category: DeviceBatteryMobileDeviceCategory.resolve(
@@ -151,6 +437,27 @@ enum DeviceBatteryMobileBatteryParser {
             connectionType: connectionType,
             parentName: parentName
         )
+    }
+
+    static func mergingBatteryDictionaries(
+        primary: [String: Any]?,
+        fallback: [String: Any]?
+    ) -> [String: Any]? {
+        guard primary != nil || fallback != nil else {
+            return nil
+        }
+
+        var merged = fallback ?? [:]
+        let primaryChargeStateIsUnknown = primary.map {
+            chargeState(from: $0) == .unknown
+        } ?? true
+        for (key, value) in primary ?? [:] {
+            if primaryChargeStateIsUnknown, chargeStateKeys.contains(key) {
+                continue
+            }
+            merged[key] = value
+        }
+        return merged
     }
 
     static func batteryLevel(from battery: [String: Any]) -> Int? {
@@ -175,19 +482,32 @@ enum DeviceBatteryMobileBatteryParser {
     }
 
     static func chargeState(from battery: [String: Any]) -> DeviceBatteryChargeState {
-        if boolValue(battery["BatteryIsFullyCharged"])
-            || boolValue(battery["FullyCharged"]) {
+        let isFullyCharged = firstBoolValue(
+            battery["BatteryIsFullyCharged"],
+            battery["FullyCharged"]
+        )
+        let isCharging = firstBoolValue(
+            battery["BatteryIsCharging"],
+            battery["IsCharging"]
+        )
+        let isExternalPowerConnected = firstBoolValue(
+            battery["ExternalConnected"],
+            battery["AppleRawExternalConnected"]
+        )
+
+        if isFullyCharged == true {
             return .charged
         }
-        if boolValue(battery["BatteryIsCharging"])
-            || boolValue(battery["IsCharging"]) {
+        if isCharging == true {
             return .charging
         }
-        if boolValue(battery["ExternalConnected"])
-            || boolValue(battery["AppleRawExternalConnected"]) {
+        if isExternalPowerConnected == true {
             return .plugged
         }
-        return .normal
+        if isCharging == false || isExternalPowerConnected == false {
+            return .normal
+        }
+        return .unknown
     }
 
     private static func fallbackName(deviceClass: String?, productType: String) -> String {
@@ -224,7 +544,11 @@ enum DeviceBatteryMobileBatteryParser {
         return nil
     }
 
-    private static func boolValue(_ value: Any?) -> Bool {
+    private static func firstBoolValue(_ values: Any?...) -> Bool? {
+        values.lazy.compactMap(boolValue).first
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool? {
         if let number = value as? NSNumber {
             return number.boolValue
         }
@@ -232,11 +556,18 @@ enum DeviceBatteryMobileBatteryParser {
             return value
         }
         if let value = value as? String {
-            return value.caseInsensitiveCompare("true") == .orderedSame
+            if value.caseInsensitiveCompare("true") == .orderedSame
                 || value.caseInsensitiveCompare("yes") == .orderedSame
-                || value == "1"
+                || value == "1" {
+                return true
+            }
+            if value.caseInsensitiveCompare("false") == .orderedSame
+                || value.caseInsensitiveCompare("no") == .orderedSame
+                || value == "0" {
+                return false
+            }
         }
-        return false
+        return nil
     }
 }
 
@@ -287,26 +618,43 @@ private enum DeviceBatteryMobileDeviceBridge {
 
     private static let symbols: Symbols? = loadSymbols()
 
-    static func readRecords() -> [DeviceBatteryMobileDeviceRecord] {
+    static func readRecords() -> DeviceBatteryMobileDeviceReadResult {
         lock.lock()
         defer { lock.unlock() }
 
         guard let symbols,
               let unmanagedList = symbols.createDeviceList()
         else {
-            return []
+            return DeviceBatteryMobileDeviceReadResult(
+                records: [],
+                didEnumerateDevices: false,
+                connectedDeviceCount: 0,
+                failedDeviceCount: 0
+            )
         }
 
         let list = unmanagedList.takeRetainedValue()
+        let connectedDeviceCount = CFArrayGetCount(list)
         var records: [DeviceBatteryMobileDeviceRecord] = []
-        for index in 0..<CFArrayGetCount(list) {
+        var failedDeviceCount = 0
+        for index in 0..<connectedDeviceCount {
             guard let value = CFArrayGetValueAtIndex(list, index) else {
+                failedDeviceCount += 1
                 continue
             }
             let device = UnsafeMutableRawPointer(mutating: value)
-            records.append(contentsOf: readDevice(device, symbols: symbols))
+            let deviceRecords = readDevice(device, symbols: symbols)
+            if deviceRecords.isEmpty {
+                failedDeviceCount += 1
+            }
+            records.append(contentsOf: deviceRecords)
         }
-        return records
+        return DeviceBatteryMobileDeviceReadResult(
+            records: records,
+            didEnumerateDevices: true,
+            connectedDeviceCount: connectedDeviceCount,
+            failedDeviceCount: failedDeviceCount
+        )
     }
 
     private static func readDevice(
@@ -333,6 +681,9 @@ private enum DeviceBatteryMobileDeviceBridge {
         let name = copiedString("DeviceName", device: device, symbols: symbols)
         let productType = copiedString("ProductType", device: device, symbols: symbols)
         let deviceClass = copiedString("DeviceClass", device: device, symbols: symbols)
+        let bluetoothAddress = normalizedBluetoothAddress(
+            copiedString("BluetoothAddress", device: device, symbols: symbols)
+        )
         let connectionType = connectionLabel(symbols.interfaceType(device))
         let directBattery = copiedDictionary(
             domain: "com.apple.mobile.battery",
@@ -340,14 +691,28 @@ private enum DeviceBatteryMobileDeviceBridge {
             device: device,
             symbols: symbols
         )
-        let battery = directBattery.flatMap {
-            DeviceBatteryMobileBatteryParser.batteryLevel(from: $0) == nil ? nil : $0
-        } ?? readIORegistryBattery(device: device, symbols: symbols)
+        let directBatteryHasLevel = directBattery.flatMap {
+            DeviceBatteryMobileBatteryParser.batteryLevel(from: $0)
+        } != nil
+        let directChargeState = directBattery.map {
+            DeviceBatteryMobileBatteryParser.chargeState(from: $0)
+        } ?? .unknown
+        let needsRegistryFallback = !directBatteryHasLevel
+            || directChargeState == .unknown
+            || directChargeState == .invalid
+        let registryBattery = needsRegistryFallback
+            ? readIORegistryBattery(device: device, symbols: symbols)
+            : nil
+        let battery = DeviceBatteryMobileBatteryParser.mergingBatteryDictionaries(
+            primary: directBattery,
+            fallback: registryBattery
+        )
 
         var records: [DeviceBatteryMobileDeviceRecord] = []
         if let battery,
            let record = DeviceBatteryMobileBatteryParser.record(
                identifier: opaqueIdentifier(identifier),
+               bluetoothAddress: bluetoothAddress,
                name: name,
                productType: productType,
                deviceClass: deviceClass,
@@ -369,6 +734,17 @@ private enum DeviceBatteryMobileDeviceBridge {
             ))
         }
         return records
+    }
+
+    private static func normalizedBluetoothAddress(_ value: String) -> String? {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: ":")
+            .uppercased()
+        guard !normalized.isEmpty else {
+            return nil
+        }
+        return normalized
     }
 
     private static func readPairedWatches(

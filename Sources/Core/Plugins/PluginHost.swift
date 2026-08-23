@@ -402,6 +402,7 @@ final class PluginHost: ObservableObject {
     private let displayConfigurationObserver: (any DisplayConfigurationObserving)?
     private let accessibilityPermissionObserver: (any AccessibilityPermissionObserving)?
     private let applicationActivityObserver: (any ApplicationActivityObserving)?
+    private let focusedApplicationTargetProvider: any FocusedApplicationTargetProviding
     private let displayTopologyRefreshDelay: Duration
     private let pluginStateChangeRebuildDelay: Duration
     let dynamicPluginManager: DynamicPluginManager?
@@ -489,6 +490,14 @@ final class PluginHost: ObservableObject {
     /// emits typed requests but never manipulates windows or popovers directly.
     var appPresentationHandler: ((AppPresentationRequest) -> Void)?
 
+    /// The app shell installs this to present source-appropriate feedback for actions invoked from
+    /// headless surfaces such as global shortcuts and trackpad gestures.
+    var actionExecutionFeedbackHandler: ((
+        ActionExecutionSource,
+        ActionReference,
+        ActionExecutionOutcome
+    ) -> Void)?
+
     /// Injected by `MenuBarStatusItemController`; returns the status-item button frame in screen coordinates.
     var statusItemButtonFrameProvider: (() -> NSRect?)? = nil {
         didSet {
@@ -533,6 +542,7 @@ final class PluginHost: ObservableObject {
         displayConfigurationObserver: (any DisplayConfigurationObserving)? = nil,
         accessibilityPermissionObserver: (any AccessibilityPermissionObserving)? = nil,
         applicationActivityObserver: (any ApplicationActivityObserving)? = nil,
+        focusedApplicationTargetProvider: (any FocusedApplicationTargetProviding)? = nil,
         displayTopologyRefreshDelay: Duration = .milliseconds(180),
         pluginStateChangeRebuildDelay: Duration = .milliseconds(80),
         loadDynamicPluginsOnInit: Bool = true,
@@ -552,6 +562,8 @@ final class PluginHost: ObservableObject {
         self.displayConfigurationObserver = displayConfigurationObserver
         self.accessibilityPermissionObserver = accessibilityPermissionObserver
         self.applicationActivityObserver = applicationActivityObserver
+        self.focusedApplicationTargetProvider = focusedApplicationTargetProvider
+            ?? SystemFocusedApplicationTargetProvider()
         self.applicationActivityState = applicationActivityObserver?.state ?? .interactive
         self.displayTopologyRefreshDelay = displayTopologyRefreshDelay
         self.pluginStateChangeRebuildDelay = pluginStateChangeRebuildDelay
@@ -1501,6 +1513,12 @@ final class PluginHost: ObservableObject {
         actionRegistry.availability(for: reference)
     }
 
+    var appIntentEligibleActionCount: Int {
+        MacToolsAppIntentActionCatalog(registry: actionRegistry)
+            .actions(includeUnavailable: false)
+            .count
+    }
+
     func actionExposurePolicy(
         for reference: ActionReference,
         on surface: ActionExposureSurface
@@ -1592,6 +1610,14 @@ final class PluginHost: ObservableObject {
     ) {
         actionGridPresentationHandler = presenter
         actionRegistry.invalidateAvailability()
+    }
+
+    func installFocusedHostWindowProvider(_ provider: @escaping () -> NSWindow?) {
+        focusedApplicationTargetProvider.currentHostWindowProvider = provider
+    }
+
+    func captureCurrentFocusedWindowTarget() {
+        focusedApplicationTargetProvider.captureCurrentTarget()
     }
 
     func presentPluginMarketplace() {
@@ -2618,6 +2644,47 @@ final class PluginHost: ObservableObject {
                     shortcutDefinitionID: shortcutDefinitionID
                 )
             }
+            if let focusTargetConsumer = plugin as? any PluginFocusedWindowTargetConsuming {
+                focusTargetConsumer.focusedWindowTargetProvider = { [weak self] in
+                    self?.focusedApplicationTargetProvider.target()
+                }
+            }
+            if let presetApplying = plugin as? any PluginActionShortcutPresetApplying {
+                presetApplying.previewActionShortcutPreset = { [weak self] actionIDs, bindings in
+                    guard let self else {
+                        return PluginActionShortcutPresetPreview(
+                            items: [],
+                            errorMessage: FeatureL10n.string("无法预览快捷键预设。")
+                        )
+                    }
+                    return self.shortcutAssignmentService.replacementPreview(
+                        providerID: pluginID,
+                        managedActionIDs: actionIDs,
+                        bindingsByActionID: bindings
+                    )
+                }
+                presetApplying.applyActionShortcutPreset = { [weak self] actionIDs, bindings in
+                    guard let self else {
+                        return FeatureL10n.string("无法应用快捷键预设。")
+                    }
+                    let previousBindings = self.actionBackedShortcutBindings()
+                    switch self.shortcutAssignmentService.replaceAssignments(
+                        providerID: pluginID,
+                        managedActionIDs: actionIDs,
+                        bindingsByActionID: bindings
+                    ) {
+                    case .success:
+                        self.rebuildDerivedState()
+                        self.syncGlobalShortcuts()
+                        self.notifyChangedActionBackedShortcutBindings(
+                            previous: previousBindings
+                        )
+                        return nil
+                    case let .failure(error):
+                        return error.localizedDescription
+                    }
+                }
+            }
             if let anchorable = plugin as? any DropZoneAnchorProviding {
                 anchorable.anchorRectProvider = { [weak self] in
                     self?.statusItemButtonFrameProvider?()
@@ -3356,6 +3423,7 @@ final class PluginHost: ObservableObject {
         automationController.migrateReferencesIfNeeded()
         migrateLegacyAppActionShortcutsIfNeeded()
         migrateLegacyPluginActionShortcutsIfNeeded()
+        removeRetiredPluginActionShortcutsIfNeeded()
         actionCatalogEntries = actionRegistry.catalogEntries
         actionShortcutCatalogItems = buildActionShortcutCatalogItems()
         for plugin in activePlugins {
@@ -3400,16 +3468,10 @@ final class PluginHost: ObservableObject {
                 self?.actionReferenceRestorePortability(reference) != .knownNonPortable
             },
             execute: { [weak self] reference in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    _ = await self.actionExecutor.execute(
-                        ActionInvocation(
-                            reference: reference,
-                            source: .trackpadGesture,
-                            mode: .foreground
-                        )
-                    )
-                }
+                self?.executeHeadlessAction(
+                    reference: reference,
+                    source: .trackpadGesture
+                )
             }
         )
     }
@@ -3619,6 +3681,28 @@ final class PluginHost: ObservableObject {
                 self.guardPluginCall(plugin, operation: "finish legacy action shortcut migration") {
                     provider.legacyActionShortcutsDidMigrate()
                 }
+            }
+        }
+    }
+
+    private func removeRetiredPluginActionShortcutsIfNeeded() {
+        for plugin in orderedCorePlugins() {
+            guard let provider = plugin as? any PluginRetiredActionShortcutProviding else {
+                continue
+            }
+            let actionIDs = guardedValue(
+                for: plugin,
+                operation: "read retired action shortcuts",
+                provider.retiredActionShortcutIDs
+            ) ?? []
+            guard !actionIDs.isEmpty else { continue }
+            if case let .failure(error) = shortcutAssignmentService.removeRetiredAssignments(
+                providerID: plugin.metadata.id,
+                actionIDs: actionIDs
+            ) {
+                AppLog.pluginHost.error(
+                    "Failed to remove retired shortcuts for plugin \(plugin.metadata.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
             }
         }
     }
@@ -3938,6 +4022,12 @@ final class PluginHost: ObservableObject {
         (plugin as? any PluginActionSafetyStateChangeProviding)?.onActionSafetyStateChange = nil
         plugin.requestPermissionGuidance = nil
         plugin.shortcutBindingResolver = nil
+        (plugin as? any PluginFocusedWindowTargetConsuming)?
+            .focusedWindowTargetProvider = nil
+        if let presetApplying = plugin as? any PluginActionShortcutPresetApplying {
+            presetApplying.previewActionShortcutPreset = nil
+            presetApplying.applyActionShortcutPreset = nil
+        }
         (plugin as? any PluginSettingsPresenting)?.requestSettingsPresentation = nil
         (plugin as? any ActionGridHostContextConsuming)?.actionGridHostContext = nil
         (plugin as? any TrackpadActionHostContextConsuming)?.trackpadActionHostContext = nil
@@ -5083,6 +5173,7 @@ final class PluginHost: ObservableObject {
     }
 
     private func syncGlobalShortcuts() {
+        let previousShortcutBindingRevision = shortcutBindingRevision
         let descriptors = shortcutDescriptors()
         let registrations = descriptors.compactMap { descriptor -> GlobalShortcutManager.Registration? in
             guard descriptor.definition.scope == .global,
@@ -5117,6 +5208,20 @@ final class PluginHost: ObservableObject {
         actionShortcutItems = shortcutAssignmentService.settingsItems
         shortcutBindingRevision = shortcutAssignmentService.revision
         actionShortcutCatalogItems = buildActionShortcutCatalogItems()
+        if shortcutBindingRevision != previousShortcutBindingRevision {
+            notifyActionShortcutAssignmentChanges()
+        }
+    }
+
+    private func notifyActionShortcutAssignmentChanges() {
+        for plugin in activePlugins {
+            guard let handling = plugin as? any PluginActionShortcutAssignmentChangeHandling else {
+                continue
+            }
+            guardPluginCall(plugin, operation: "update action shortcut assignments") {
+                handling.actionShortcutAssignmentsDidChange()
+            }
+        }
     }
 
     private func buildActionShortcutCatalogItems() -> [ActionShortcutCatalogItem] {
@@ -5252,12 +5357,9 @@ final class PluginHost: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 defer { activeActionShortcutReferences.remove(reference) }
-                _ = await actionExecutor.execute(
-                    ActionInvocation(
-                        reference: reference,
-                        source: .globalShortcut,
-                        mode: .foreground
-                    )
+                await executeHeadlessActionNow(
+                    reference: reference,
+                    source: .globalShortcut
                 )
             }
             return
@@ -5295,6 +5397,29 @@ final class PluginHost: ObservableObject {
                 eventHandler.handleShortcutEvent(id: descriptor.definition.actionID, phase: .released)
             }
         }
+    }
+
+    private func executeHeadlessAction(
+        reference: ActionReference,
+        source: ActionExecutionSource
+    ) {
+        Task { @MainActor [weak self] in
+            await self?.executeHeadlessActionNow(reference: reference, source: source)
+        }
+    }
+
+    private func executeHeadlessActionNow(
+        reference: ActionReference,
+        source: ActionExecutionSource
+    ) async {
+        let outcome = await actionExecutor.execute(
+            ActionInvocation(
+                reference: reference,
+                source: source,
+                mode: .foreground
+            )
+        )
+        actionExecutionFeedbackHandler?(source, reference, outcome)
     }
 
     private func requestPermissionGuidance(forPluginID pluginID: String, permissionID: String) {

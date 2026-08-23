@@ -1356,67 +1356,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يدعم .txt / .md / .json"
+            "value": "امتدادات شائعة تشمل .txt و.md و.json و.html"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unterstützt .txt / .md / .json"
+            "value": "Gängige Erweiterungen wie .txt, .md, .json und .html"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Supports .txt / .md / .json"
+            "value": "Common extensions including .txt, .md, .json, and .html"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Soporta .txt / .md / .json"
+            "value": "Extensiones comunes como .txt, .md, .json y .html"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prend en charge .txt / .md / .json"
+            "value": "Extensions courantes comme .txt, .md, .json et .html"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": ".txt / .md / .json をサポート"
+            "value": ".txt、.md、.json、.html などの一般的な拡張子"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": ".txt / .md / .json 지원"
+            "value": ".txt, .md, .json, .html 등 일반적인 확장자"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suporta .txt / .md / .json"
+            "value": "Extensões comuns como .txt, .md, .json e .html"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Поддерживает .txt / .md / .json"
+            "value": "Распространённые расширения: .txt, .md, .json и .html"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "支持 .txt / .md / .json"
+            "value": "支持 .txt、.md、.json、.html 等常见扩展名"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "支持 .txt / .md / .json"
+            "value": "支援 .txt、.md、.json、.html 等常見副檔名"
           }
         }
       }

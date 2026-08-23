@@ -33,6 +33,7 @@ struct AppInstanceCommand: Codable, Equatable {
     let requestID: UUID
 
     static let currentVersion = 1
+    static let probe = "probe"
     static let showSettings = "show-settings"
     static let openURLs = "open-urls"
     static let maximumPayloadSize = 16 * 1_024 * 1_024
@@ -65,6 +66,15 @@ struct AppInstanceCommand: Codable, Equatable {
         )
     }
 
+    static func probeRequest() -> Self {
+        Self(
+            version: currentVersion,
+            command: probe,
+            urlStrings: [],
+            requestID: UUID()
+        )
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decode(Int.self, forKey: .version)
@@ -91,6 +101,8 @@ struct AppInstanceCommand: Codable, Equatable {
         guard version == Self.currentVersion else { return false }
 
         switch command {
+        case Self.probe:
+            return urlStrings.isEmpty
         case Self.showSettings:
             return urlStrings.isEmpty
         case Self.openURLs:
@@ -147,10 +159,14 @@ actor AppInstanceCoordinator {
     }
 
     func resolveSecondaryLaunch(
+        requestSettings: Bool = false,
         deadline: Date = AppInstanceCoordinator.makeForwardingDeadline()
     ) async -> AppInstanceLaunchDisposition {
-        let command = AppInstanceCommand.showSettingsRequest()
-        let result = await forward(command, operation: "settings recovery", deadline: deadline)
+        let command = requestSettings
+            ? AppInstanceCommand.showSettingsRequest()
+            : AppInstanceCommand.probeRequest()
+        let operation = requestSettings ? "settings recovery" : "instance probe"
+        let result = await forward(command, operation: operation, deadline: deadline)
 
         switch result {
         case .acknowledged:
@@ -160,7 +176,7 @@ actor AppInstanceCoordinator {
         case .rejected:
             return .secondary(.rejected)
         case .becamePrimary:
-            return .primary(recoveryRequested: true)
+            return .primary(recoveryRequested: requestSettings)
         }
     }
 

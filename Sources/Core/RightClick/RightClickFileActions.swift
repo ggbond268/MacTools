@@ -353,7 +353,15 @@ struct RightClickFileActionService {
 /// feature to its intended types and — because the host's URL scheme can be
 /// invoked by any process — prevents path traversal through the `ext` parameter.
 enum RightClickNewFile {
-    static let supportedExtensions: [String] = ["txt", "md", "json"]
+    /// Keep this list concise because every entry appears in the Finder submenu.
+    /// Binary media and template-based formats are intentionally omitted because
+    /// this feature creates zero-byte files rather than usable encoded content.
+    static let supportedExtensions: [String] = [
+        "txt", "md", "csv",
+        "json", "yaml", "yml", "xml",
+        "html", "css", "js", "ts",
+        "sh", "py"
+    ]
 
     static func isSupportedExtension(_ ext: String) -> Bool {
         supportedExtensions.contains(ext.lowercased())

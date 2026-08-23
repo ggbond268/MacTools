@@ -1,0 +1,34 @@
+{
+  "id": "dock-click-minimize",
+  "displayName": "点击程序坞隐藏活跃 App",
+  "summary": "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。",
+  "localizedMetadata": {
+    "ar": { "displayName": "إخفاء التطبيق النشط بالنقر على Dock", "summary": "أخفِ التطبيق النشط بالنقر على أيقونته في Dock (كما في Windows)." },
+    "de": { "displayName": "Aktive App per Dock-Klick ausblenden", "summary": "Blendet die aktive App durch Klick auf ihr Dock-Symbol aus (wie unter Windows)." },
+    "en": { "displayName": "Hide Active App on Dock Click", "summary": "Hide the active app by clicking its Dock icon (like on Windows)." },
+    "es": { "displayName": "Ocultar la app activa al hacer clic en el Dock", "summary": "Oculta la app activa al hacer clic en su icono del Dock (como en Windows)." },
+    "fr": { "displayName": "Masquer l’app active par clic dans le Dock", "summary": "Masque l’app active en cliquant sur son icône dans le Dock (comme sous Windows)." },
+    "ja": { "displayName": "DockクリックでアクティブなAppを隠す", "summary": "DockのアイコンをクリックしてアクティブなAppを隠します（Windowsと同様）。" },
+    "ko": { "displayName": "Dock 클릭으로 활성 앱 가리기", "summary": "Dock 아이콘을 클릭해 활성 앱을 가립니다(Windows처럼)." },
+    "pt": { "displayName": "Ocultar app ativa com clique no Dock", "summary": "Oculta o app ativo ao clicar no ícone dele no Dock (como no Windows)." },
+    "ru": { "displayName": "Скрыть активное приложение щелчком по Dock", "summary": "Скрывает активное приложение щелчком по его значку в Dock (как в Windows)." },
+    "zh-Hans": { "displayName": "点击程序坞隐藏活跃 App", "summary": "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。" },
+    "zh-Hant": { "displayName": "點擊 Dock 隱藏使用中 App", "summary": "點擊使用中 App 的 Dock 圖示即可將其隱藏（如 Windows）。" }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "DockClickMinimize.bundle",
+  "factoryClass": "DockClickMinimizePlugin.DockClickMinimizePluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "DockClickMinimizePlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": ["accessibility", "inputMonitoring"],
+  "category": "productivity"
+}

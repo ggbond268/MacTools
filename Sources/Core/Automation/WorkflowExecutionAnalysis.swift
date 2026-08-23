@@ -43,6 +43,20 @@ enum WorkflowExecutionAnalysis {
         )
     }
 
+    static func allLeafActions(
+        in workflowID: UUID,
+        store: WorkflowStore,
+        satisfy predicate: (ActionReference) -> Bool
+    ) -> Bool {
+        allLeafActions(
+            in: workflowID,
+            store: store,
+            satisfy: predicate,
+            visiting: [],
+            depth: 0
+        )
+    }
+
     static func nestedWorkflowID(for key: ActionKey) -> UUID? {
         guard key.providerID == AutomationController.providerID,
               key.actionID.hasPrefix("workflow.") else {
@@ -169,6 +183,38 @@ enum WorkflowExecutionAnalysis {
             }
         }
         return nil
+    }
+
+    private static func allLeafActions(
+        in workflowID: UUID,
+        store: WorkflowStore,
+        satisfy predicate: (ActionReference) -> Bool,
+        visiting: Set<UUID>,
+        depth: Int
+    ) -> Bool {
+        guard depth < WorkflowExecutionLimits.maximumDepth,
+              !visiting.contains(workflowID),
+              let workflow = store.workflow(id: workflowID),
+              workflow.isEnabled,
+              !workflow.steps.isEmpty
+        else {
+            return false
+        }
+
+        var nextVisiting = visiting
+        nextVisiting.insert(workflowID)
+        return workflow.steps.allSatisfy { step in
+            if let nestedID = nestedWorkflowID(for: step.reference.key) {
+                return allLeafActions(
+                    in: nestedID,
+                    store: store,
+                    satisfy: predicate,
+                    visiting: nextVisiting,
+                    depth: depth + 1
+                )
+            }
+            return predicate(step.reference)
+        }
     }
 
     private static func unavailable(_ reason: String) -> WorkflowExecutionAnalysisResult {

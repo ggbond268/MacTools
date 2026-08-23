@@ -11,7 +11,8 @@ Thanks for your interest in MacTools. Please keep each contribution small and cl
 
 ## Development Environment
 - Xcode and `xcodegen` are required. The project supports macOS 14.0 and later.
-- First-time setup: run `make setup`, then edit `LocalConfig.xcconfig` and fill in `DEVELOPMENT_TEAM` and `BUNDLE_IDENTIFIER_PREFIX`.
+- First-time setup: run `make setup`, then edit `LocalConfig.xcconfig` and fill in `DEVELOPMENT_TEAM` and a stable, non-placeholder `BUNDLE_IDENTIFIER_PREFIX`. Debug builds fail early when either value is missing so macOS cannot register a malformed duplicate app identity.
+- Use `make run` for local app testing. It installs the canonical Debug app at `~/Applications/MacTools Dev.app` and unregisters other `MacTools Dev` build copies from LaunchServices.
 - Common commands: `make generate` generates the Xcode project, `make build` validates compilation, and `make run` installs the verified Debug bundle at `~/Applications/MacTools Dev.app` before running it locally.
 - Plugin development: `make run` incrementally builds the app and plugins, then syncs the latest Debug plugin packages to the local development marketplace. A full sync moves packages absent from the current checkout into the recoverable Debug quarantine; a filtered `PLUGIN=...` sync leaves unrelated packages untouched. `make sync-debug-plugins` only syncs already built plugins. `make build-plugin` is reserved for validating dynamic plugin packages or release flows; to build one plugin, run `make build-plugin PLUGIN=calendar`.
 - Do not commit local or generated files: `MacTools.xcodeproj`, `MacTools.xcworkspace`, `LocalConfig.xcconfig`, `build/`, or `scripts/release.local.env`.
@@ -53,6 +54,7 @@ Thanks for your interest in MacTools. Please keep each contribution small and cl
 - Prefer Apple native frameworks. When adding system frameworks, private include paths, or helper executables inside a plugin bundle, declare the smallest necessary differences in the plugin's own `project.yml`. Bundle resource executables that need separate signing should be listed in `plugin.json.package.signPaths`.
 - Plugins that use private Apple frameworks must load them dynamically at runtime and validate the required classes and selectors. Do not statically link private frameworks, and surface unsupported-system errors instead of crashing.
 - Plugins that intercept pointer events must declare Accessibility permission, stop their event tap on deactivation, and re-enable a tap disabled by macOS.
+- Plugins that move or resize windows must use public Accessibility APIs for ordinary position and size writes, revalidate the focused window immediately before writing, calculate against the current display visible frame, and keep pure multi-display geometry independently testable. Capabilities unavailable through Accessibility may use a narrowly scoped, dynamically loaded, version-gated private API after review and must fail closed when unsupported.
 
 ## Testing
 - Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.

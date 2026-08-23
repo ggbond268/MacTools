@@ -11,6 +11,15 @@ final class AppInstanceCoordinatorTests: XCTestCase {
         XCTAssertTrue(command.isSupported)
     }
 
+    func testProbeCommandUsesTheCurrentProtocolVersionWithoutRequestingUI() {
+        let command = AppInstanceCommand.probeRequest()
+
+        XCTAssertEqual(command.version, AppInstanceCommand.currentVersion)
+        XCTAssertEqual(command.command, AppInstanceCommand.probe)
+        XCTAssertTrue(command.urlStrings.isEmpty)
+        XCTAssertTrue(command.isSupported)
+    }
+
     func testCommandRejectsUnknownVersionAndCommand() {
         XCTAssertFalse(
             AppInstanceCommand(
@@ -168,7 +177,7 @@ final class AppInstanceCoordinatorTests: XCTestCase {
         )
         let startedAt = Date()
         let forwardingTask = Task {
-            await coordinator.resolveSecondaryLaunch()
+            await coordinator.resolveSecondaryLaunch(requestSettings: false)
         }
 
         try? await Task.sleep(for: .milliseconds(50))
@@ -209,9 +218,29 @@ final class AppInstanceCoordinatorTests: XCTestCase {
         XCTAssertTrue(primaryClaimed)
 
         let secondary = AppInstanceCoordinator(bundleIdentifier: bundleIdentifier)
-        let disposition = await secondary.resolveSecondaryLaunch()
+        let disposition = await secondary.resolveSecondaryLaunch(requestSettings: true)
         XCTAssertEqual(disposition, .secondary(.acknowledged))
         XCTAssertEqual(receivedRequestCount.value, 1)
+    }
+
+    func testPassiveSecondaryLaunchProbesPrimaryWithoutRequestingSettings() async {
+        let bundleIdentifier = "com.example.mactools.instance-test.\(UUID().uuidString)"
+        let primary = AppInstanceCoordinator(bundleIdentifier: bundleIdentifier)
+        let receivedCommand = LockedValue<String?>(nil)
+        await primary.setCommandHandler { command in
+            receivedCommand.set(command.command)
+            return .accepted
+        }
+        defer { Task { await primary.invalidate() } }
+
+        let primaryClaimed = await primary.claimPrimaryPortIfPossible()
+        XCTAssertTrue(primaryClaimed)
+
+        let secondary = AppInstanceCoordinator(bundleIdentifier: bundleIdentifier)
+        let disposition = await secondary.resolveSecondaryLaunch(requestSettings: false)
+
+        XCTAssertEqual(disposition, .secondary(.acknowledged))
+        XCTAssertEqual(receivedCommand.value, AppInstanceCommand.probe)
     }
 
     func testSecondaryForwardsDeepLinksToThePrimary() async {
@@ -272,7 +301,7 @@ final class AppInstanceCoordinatorTests: XCTestCase {
         XCTAssertTrue(primaryClaimed)
 
         let secondary = AppInstanceCoordinator(bundleIdentifier: bundleIdentifier)
-        let disposition = await secondary.resolveSecondaryLaunch()
+        let disposition = await secondary.resolveSecondaryLaunch(requestSettings: false)
         XCTAssertEqual(disposition, .secondary(.acknowledged))
         XCTAssertEqual(receivedRequestCount.value, 2)
     }

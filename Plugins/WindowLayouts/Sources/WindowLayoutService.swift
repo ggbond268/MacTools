@@ -1,0 +1,471 @@
+import CoreGraphics
+import Foundation
+
+@MainActor
+private final class WindowLayoutExecutionGate {
+    private var isExecuting = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquire() async {
+        guard isExecuting else {
+            isExecuting = true
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func release() {
+        guard !waiters.isEmpty else {
+            isExecuting = false
+            return
+        }
+        waiters.removeFirst().resume()
+    }
+}
+
+@MainActor
+protocol WindowLayoutExecuting: AnyObject {
+    func validationError(for operation: WindowLayoutOperation, options: WindowLayoutExecutionOptions) -> WindowLayoutError?
+    func execute(_ operation: WindowLayoutOperation, options: WindowLayoutExecutionOptions) async -> Result<Void, WindowLayoutError>
+    func validationError(for command: WindowCustomCommand, options: WindowLayoutExecutionOptions) -> WindowLayoutError?
+    func execute(_ command: WindowCustomCommand, options: WindowLayoutExecutionOptions) async -> Result<Void, WindowLayoutError>
+}
+
+@MainActor
+final class WindowLayoutService: WindowLayoutExecuting {
+    private enum PreparedAction {
+        case placement(PreparedPlacement)
+        case fullScreen(AccessibilityWindowHandle)
+    }
+
+    private struct PreparedPlacement {
+        let window: AccessibilityWindowHandle
+        let targetFrame: CGRect
+        let shouldResize: Bool
+        let halfCyclePlan: HalfCyclePlan?
+    }
+
+    private struct HalfCyclePlan {
+        let operation: WindowLayoutOperation
+        let screenID: String
+        let targetFrame: CGRect
+        let targetIndex: Int
+    }
+
+    private struct HalfCycleState {
+        let plan: HalfCyclePlan
+        let observedFrame: CGRect
+    }
+
+    private struct CycledFrame {
+        let frame: CGRect
+        let plan: HalfCyclePlan?
+    }
+
+    private let focusedWindowResolver: FocusedWindowResolving
+    private let frameReader: WindowFrameReading
+    private let frameWriter: WindowFrameWriting
+    private let screenProvider: WindowScreenProviding
+    private let screenResolver: WindowScreenResolver
+    private let calculator: WindowLayoutCalculator
+    private let history: WindowFrameHistory
+    private let fullScreenWriter: WindowFullScreenWriting
+    private let stageManagerSafeAreaProvider: StageManagerSafeAreaProviding
+    private let waitForFrameSettlement: @MainActor @Sendable (Duration) async throws -> Void
+    private let executionGate = WindowLayoutExecutionGate()
+    private var halfCycleStates: [WindowIdentity: HalfCycleState] = [:]
+
+    init(
+        focusedWindowResolver: FocusedWindowResolving = SystemFocusedWindowResolver(),
+        frameReader: WindowFrameReading = AccessibilityWindowFrameAdapter(),
+        frameWriter: WindowFrameWriting? = nil,
+        screenProvider: WindowScreenProviding = SystemWindowScreenProvider(),
+        screenResolver: WindowScreenResolver = WindowScreenResolver(),
+        calculator: WindowLayoutCalculator = WindowLayoutCalculator(),
+        history: WindowFrameHistory = InMemoryWindowFrameHistory(),
+        fullScreenWriter: WindowFullScreenWriting? = nil,
+        stageManagerSafeAreaProvider: StageManagerSafeAreaProviding = SystemStageManagerSafeAreaProvider(),
+        waitForFrameSettlement: @escaping @MainActor @Sendable (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        }
+    ) {
+        self.focusedWindowResolver = focusedWindowResolver
+        self.frameReader = frameReader
+        self.frameWriter = frameWriter ?? (frameReader as? WindowFrameWriting)
+            ?? AccessibilityWindowFrameAdapter()
+        self.screenProvider = screenProvider
+        self.screenResolver = screenResolver
+        self.calculator = calculator
+        self.history = history
+        self.fullScreenWriter = fullScreenWriter ?? (frameReader as? WindowFullScreenWriting)
+            ?? AccessibilityWindowFrameAdapter()
+        self.stageManagerSafeAreaProvider = stageManagerSafeAreaProvider
+        self.waitForFrameSettlement = waitForFrameSettlement
+    }
+
+    func validationError(
+        for operation: WindowLayoutOperation,
+        options: WindowLayoutExecutionOptions
+    ) -> WindowLayoutError? {
+        do {
+            _ = try prepare(operation, options: options)
+            return nil
+        } catch let error as WindowLayoutError {
+            return error
+        } catch {
+            return .windowUnavailable
+        }
+    }
+
+    func execute(
+        _ operation: WindowLayoutOperation,
+        options: WindowLayoutExecutionOptions
+    ) async -> Result<Void, WindowLayoutError> {
+        await executionGate.acquire()
+        defer { executionGate.release() }
+        do {
+            let action = try prepare(operation, options: options)
+            switch action {
+            case let .placement(placement):
+                try await apply(
+                    placement,
+                    to: revalidatedWindow(matching: placement.window.identity)
+                )
+            case let .fullScreen(window):
+                let currentWindow = try revalidatedWindow(matching: window.identity)
+                guard currentWindow.canToggleFullScreen else {
+                    throw WindowLayoutError.fullScreenUnsupported
+                }
+                try fullScreenWriter.setFullScreen(!currentWindow.isFullScreen, for: currentWindow)
+                halfCycleStates.removeValue(forKey: currentWindow.identity)
+            }
+            return .success(())
+        } catch let error as WindowLayoutError {
+            return .failure(error)
+        } catch {
+            return .failure(.frameWriteFailed)
+        }
+    }
+
+    func validationError(
+        for command: WindowCustomCommand,
+        options: WindowLayoutExecutionOptions
+    ) -> WindowLayoutError? {
+        do {
+            _ = try prepare(command, options: options)
+            return nil
+        } catch let error as WindowLayoutError {
+            return error
+        } catch {
+            return .windowUnavailable
+        }
+    }
+
+    func execute(
+        _ command: WindowCustomCommand,
+        options: WindowLayoutExecutionOptions
+    ) async -> Result<Void, WindowLayoutError> {
+        await executionGate.acquire()
+        defer { executionGate.release() }
+        do {
+            let placement = try prepare(command, options: options)
+            try await apply(
+                placement,
+                to: revalidatedWindow(matching: placement.window.identity)
+            )
+            return .success(())
+        } catch let error as WindowLayoutError {
+            return .failure(error)
+        } catch {
+            return .failure(.frameWriteFailed)
+        }
+    }
+
+    private func prepare(
+        _ operation: WindowLayoutOperation,
+        options: WindowLayoutExecutionOptions
+    ) throws -> PreparedAction {
+        history.removeInvalidEntries(using: frameReader.isValid)
+        let window = try focusedWindowResolver.resolveFocusedWindow()
+        if operation == .toggleFullScreen {
+            guard window.canToggleFullScreen else {
+                throw WindowLayoutError.fullScreenUnsupported
+            }
+            return .fullScreen(window)
+        }
+        let currentFrame = try frameReader.frame(of: window)
+        guard window.canMove else {
+            throw WindowLayoutError.windowCannotMove
+        }
+
+        let screens = screenProvider.currentScreens()
+        guard let currentScreen = screenResolver.screen(for: currentFrame, among: screens) else {
+            throw WindowLayoutError.noDisplay
+        }
+
+        let effectiveCurrentScreen = screen(
+            currentScreen,
+            respectingStageManager: options.respectsStageManager
+        )
+        let targetFrame: CGRect
+        var halfCyclePlan: HalfCyclePlan? = nil
+        switch operation {
+        case .moveToNextDisplay, .moveToPreviousDisplay:
+            guard let destination = screenResolver.adjacentScreen(
+                to: currentScreen,
+                direction: operation,
+                among: screens
+            ) else {
+                throw WindowLayoutError.noOtherDisplay
+            }
+            targetFrame = calculator.movedFrame(
+                currentFrame,
+                from: effectiveCurrentScreen.visibleFrame,
+                to: screen(destination, respectingStageManager: options.respectsStageManager).visibleFrame
+            )
+        case .restorePreviousFrame:
+            guard let previousFrame = history.previousFrame(for: window) else {
+                throw WindowLayoutError.noPreviousFrame
+            }
+            let safePreviousFrame: CGRect
+            if screens.contains(where: {
+                $0.visibleFrame.intersection(previousFrame).area > 0
+            }) {
+                safePreviousFrame = previousFrame
+            } else if let nearestScreen = screenResolver.screen(
+                for: previousFrame,
+                among: screens
+            ) {
+                safePreviousFrame = calculator.clamp(
+                    previousFrame,
+                    inside: nearestScreen.visibleFrame
+                )
+            } else {
+                throw WindowLayoutError.noDisplay
+            }
+            if safePreviousFrame.size != currentFrame.size, !window.canResize {
+                throw WindowLayoutError.windowCannotResize
+            }
+            targetFrame = safePreviousFrame
+        default:
+            if operation.requiresResize, !window.canResize {
+                throw WindowLayoutError.windowCannotResize
+            }
+            guard let cycledFrame = cycledFrame(
+                for: operation,
+                window: window,
+                currentFrame: currentFrame,
+                currentScreen: effectiveCurrentScreen,
+                options: options
+            ) else {
+                throw WindowLayoutError.frameWriteFailed
+            }
+            targetFrame = cycledFrame.frame
+            halfCyclePlan = cycledFrame.plan
+        }
+
+        if targetFrame.size != currentFrame.size, !window.canResize {
+            throw WindowLayoutError.windowCannotResize
+        }
+
+        return .placement(PreparedPlacement(
+            window: window,
+            targetFrame: targetFrame,
+            shouldResize: targetFrame.size != currentFrame.size,
+            halfCyclePlan: halfCyclePlan
+        ))
+    }
+
+    private func prepare(
+        _ command: WindowCustomCommand,
+        options: WindowLayoutExecutionOptions
+    ) throws -> PreparedPlacement {
+        history.removeInvalidEntries(using: frameReader.isValid)
+        let window = try focusedWindowResolver.resolveFocusedWindow()
+        guard window.canMove else { throw WindowLayoutError.windowCannotMove }
+        let currentFrame = try frameReader.frame(of: window)
+        let screens = screenProvider.currentScreens()
+        guard let rawScreen = screenResolver.screen(for: currentFrame, among: screens) else {
+            throw WindowLayoutError.noDisplay
+        }
+        let currentScreen = screen(rawScreen, respectingStageManager: options.respectsStageManager)
+        let targetFrame = calculator.customFrame(
+            for: command,
+            windowFrame: currentFrame,
+            visibleFrame: currentScreen.visibleFrame,
+            gap: options.gap
+        )
+        if targetFrame.size != currentFrame.size, !window.canResize {
+            throw WindowLayoutError.windowCannotResize
+        }
+        return PreparedPlacement(
+            window: window,
+            targetFrame: targetFrame,
+            shouldResize: targetFrame.size != currentFrame.size,
+            halfCyclePlan: nil
+        )
+    }
+
+    private func revalidatedWindow(
+        matching expectedIdentity: WindowIdentity
+    ) throws -> AccessibilityWindowHandle {
+        let currentWindow = try focusedWindowResolver.resolveFocusedWindow()
+        guard currentWindow.identity == expectedIdentity else {
+            throw WindowLayoutError.windowUnavailable
+        }
+        return currentWindow
+    }
+
+    private func apply(
+        _ placement: PreparedPlacement,
+        to currentWindow: AccessibilityWindowHandle
+    ) async throws {
+        guard currentWindow.canMove else {
+            throw WindowLayoutError.windowCannotMove
+        }
+        if placement.shouldResize, !currentWindow.canResize {
+            throw WindowLayoutError.windowCannotResize
+        }
+        let currentFrame = try frameReader.frame(of: currentWindow)
+        try frameWriter.setFrame(
+            placement.targetFrame,
+            of: currentWindow,
+            resize: placement.shouldResize
+        )
+        var observedFrame = try frameReader.frame(of: currentWindow)
+        var didRetryWrite = false
+        let settlementDelays: [Duration] = [
+            .milliseconds(16),
+            .milliseconds(34),
+            .milliseconds(75),
+            .milliseconds(125),
+        ]
+        for delay in settlementDelays where !approximatelyEqual(
+            observedFrame,
+            placement.targetFrame
+        ) {
+            try await waitForFrameSettlement(delay)
+            let settledWindow = try revalidatedWindow(matching: currentWindow.identity)
+            observedFrame = try frameReader.frame(of: settledWindow)
+            if !approximatelyEqual(observedFrame, placement.targetFrame), !didRetryWrite {
+                try frameWriter.setFrame(
+                    placement.targetFrame,
+                    of: settledWindow,
+                    resize: placement.shouldResize
+                )
+                didRetryWrite = true
+                observedFrame = try frameReader.frame(of: settledWindow)
+            }
+        }
+        history.record(currentFrame, for: currentWindow)
+        if let plan = placement.halfCyclePlan {
+            halfCycleStates[currentWindow.identity] = HalfCycleState(
+                plan: plan,
+                observedFrame: observedFrame
+            )
+        } else {
+            halfCycleStates.removeValue(forKey: currentWindow.identity)
+        }
+        if !approximatelyEqual(observedFrame.size, placement.targetFrame.size) {
+            throw WindowLayoutError.windowSizeConstrained
+        }
+        if !approximatelyEqual(observedFrame.origin, placement.targetFrame.origin) {
+            throw WindowLayoutError.frameWriteFailed
+        }
+    }
+
+    private func screen(
+        _ screen: WindowScreen,
+        respectingStageManager: Bool
+    ) -> WindowScreen {
+        guard respectingStageManager else { return screen }
+        return WindowScreen(
+            id: screen.id,
+            directDisplayID: screen.directDisplayID,
+            frame: screen.frame,
+            visibleFrame: stageManagerSafeAreaProvider.safeVisibleFrame(for: screen)
+        )
+    }
+
+    private func cycledFrame(
+        for operation: WindowLayoutOperation,
+        window: AccessibilityWindowHandle,
+        currentFrame: CGRect,
+        currentScreen: WindowScreen,
+        options: WindowLayoutExecutionOptions
+    ) -> CycledFrame? {
+        guard options.cyclesHalves else {
+            return calculator.placementFrame(
+                for: operation,
+                windowFrame: currentFrame,
+                visibleFrame: currentScreen.visibleFrame,
+                gap: options.gap
+            ).map { CycledFrame(frame: $0, plan: nil) }
+        }
+
+        let frames = calculator.halfCycleFrames(
+            for: operation,
+            windowFrame: currentFrame,
+            visibleFrame: currentScreen.visibleFrame,
+            gap: options.gap
+        )
+        guard !frames.isEmpty else {
+            return calculator.placementFrame(
+                for: operation,
+                windowFrame: currentFrame,
+                visibleFrame: currentScreen.visibleFrame,
+                gap: options.gap
+            ).map { CycledFrame(frame: $0, plan: nil) }
+        }
+
+        var currentIndex = frames.firstIndex(where: {
+            approximatelyEqual($0, currentFrame)
+        })
+        if let previous = halfCycleStates[window.identity],
+           previous.plan.operation == operation,
+           previous.plan.screenID == currentScreen.id {
+            if approximatelyEqual(previous.plan.targetFrame, currentFrame) {
+                currentIndex = previous.plan.targetIndex
+            } else if approximatelyEqual(previous.observedFrame, currentFrame) {
+                // Some windows publish a delayed frame or clamp requested dimensions. Continue
+                // from the step we requested while the observed frame remains unchanged.
+                currentIndex = previous.plan.targetIndex
+            }
+        }
+
+        let targetIndex = currentIndex.map { ($0 + 1) % frames.count } ?? 0
+        let targetFrame = frames[targetIndex]
+        return CycledFrame(
+            frame: targetFrame,
+            plan: HalfCyclePlan(
+                operation: operation,
+                screenID: currentScreen.id,
+                targetFrame: targetFrame,
+                targetIndex: targetIndex
+            )
+        )
+    }
+
+    private func approximatelyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+        abs(lhs.minX - rhs.minX) <= 2
+            && abs(lhs.minY - rhs.minY) <= 2
+            && abs(lhs.width - rhs.width) <= 2
+            && abs(lhs.height - rhs.height) <= 2
+    }
+
+    private func approximatelyEqual(_ lhs: CGSize, _ rhs: CGSize) -> Bool {
+        abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
+    }
+
+    private func approximatelyEqual(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {
+        abs(lhs.x - rhs.x) <= 2 && abs(lhs.y - rhs.y) <= 2
+    }
+}
+
+private extension CGRect {
+    var area: CGFloat {
+        isNull ? 0 : width * height
+    }
+}

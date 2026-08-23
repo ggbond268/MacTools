@@ -144,6 +144,28 @@ final class AppleShortcutsPluginTests: XCTestCase {
         XCTAssertEqual(plugin.backupDisposition(for: reference), .excluded)
     }
 
+    func testActionsAreExcludedFromAppIntentsToPreventShortcutRecursion() async throws {
+        let id = try XCTUnwrap(UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"))
+        let runner = AppleShortcutsRunnerStub(
+            shortcuts: [AppleShortcutItem(id: id, name: "No Recursion")]
+        )
+        let plugin = makePlugin(runner: runner)
+        await plugin.controller.performRefresh()
+        let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
+
+        XCTAssertEqual(
+            plugin.exposurePolicy(for: reference, on: .appIntents),
+            .excluded
+        )
+        XCTAssertEqual(
+            plugin.exposurePolicy(
+                for: reference,
+                on: ActionExposureSurface(rawValue: "future-surface")
+            ),
+            .automatic
+        )
+    }
+
     private func makePlugin(runner: AppleShortcutsRunnerStub) -> AppleShortcutsPlugin {
         AppleShortcutsPlugin(
             context: PluginRuntimeContext(

@@ -42,6 +42,7 @@ final class SystemStatusPluginTests: XCTestCase {
         controller.setMenuBarMetric(.cpu, visible: true)
         controller.setMenuBarMetric(.memory, visible: true)
         controller.moveMenuBarMetric(.memory, toOffset: 0)
+        controller.setMenuBarLayout(.vertical)
 
         let restoredController = SystemStatusSettingsController(
             store: SystemStatusPluginStorageConfigurationStore(storage: storage)
@@ -50,6 +51,57 @@ final class SystemStatusPluginTests: XCTestCase {
         XCTAssertEqual(restoredController.configuration.panelItems.map(\.kind).first, .battery)
         XCTAssertFalse(restoredController.configuration.panelItems.first { $0.kind == .gpu }?.isVisible ?? true)
         XCTAssertEqual(restoredController.configuration.visibleMenuBarMetricKinds, [.memory, .cpu])
+        XCTAssertEqual(restoredController.configuration.menuBarLayout, .vertical)
+    }
+
+    func testConfigurationMigratesLegacyNetworkLayoutToMenuBarLayout() {
+        let storage = SystemStatusMemoryPluginStorage()
+        storage.set("vertical", forKey: "settings.menuBar.network.layout")
+
+        let controller = SystemStatusSettingsController(
+            store: SystemStatusPluginStorageConfigurationStore(storage: storage)
+        )
+
+        XCTAssertEqual(controller.configuration.menuBarLayout, .vertical)
+        XCTAssertNil(storage.string(forKey: "settings.menuBar.network.layout"))
+        XCTAssertEqual(storage.string(forKey: "settings.menuBar.layout"), "vertical")
+    }
+
+    func testMenuBarLayoutUsesIndependentSettingsSection() throws {
+        let controller = SystemStatusSettingsController(
+            store: SystemStatusPluginStorageConfigurationStore(storage: SystemStatusMemoryPluginStorage())
+        )
+        let plugin = SystemStatusPlugin(
+            settingsController: controller,
+            storage: SystemStatusMemoryPluginStorage()
+        )
+        let page = try XCTUnwrap(plugin.settingsPage)
+        guard case let .form(sections) = page.body else {
+            return XCTFail("Expected a form settings page")
+        }
+
+        XCTAssertEqual(
+            sections.map(\.id),
+            ["panel-metrics", "menu-bar-metrics", "menu-bar-layout"]
+        )
+
+        let layoutSection = try XCTUnwrap(sections.last)
+        guard case let .rows(rows) = layoutSection.content,
+              let row = rows.first,
+              case let .picker(selectionID, options, style) = row.control else {
+            return XCTFail("Expected a menu-bar layout picker row")
+        }
+
+        XCTAssertEqual(selectionID, SystemStatusMenuBarLayout.horizontal.rawValue)
+        XCTAssertEqual(options.map(\.id), ["horizontal", "vertical"])
+        guard case .segmented = style else {
+            return XCTFail("Expected a segmented layout picker")
+        }
+
+        plugin.handleSettingsAction(
+            .setSelection(controlID: "menu-bar-layout", optionID: "vertical")
+        )
+        XCTAssertEqual(controller.configuration.menuBarLayout, .vertical)
     }
 
     func testPluginDescriptorShrinksWhenPanelMetricsAreHidden() {
@@ -101,7 +153,159 @@ final class SystemStatusPluginTests: XCTestCase {
 
         XCTAssertEqual(
             SystemStatusMenuBarMetricsFormatter.text(snapshot: snapshot, kinds: [.memory, .cpu, .network]),
-            "RAM 60% | CPU 13% 42° | NET ↓1K ↑2K"
+            "RAM 60% 5.9K | CPU 13% 42° | NET ↓1K ↑2K"
+        )
+    }
+
+    func testMenuBarFormatterProvidesReusableValueLinesForVerticalLayout() {
+        var snapshot = SystemStatusSnapshot.empty
+        snapshot.cpu = SystemStatusCPUSnapshot(
+            usage: 0.125,
+            loadAverage1Minute: nil,
+            temperatureCelsius: 42.4,
+            systemPowerWatts: nil,
+            isCollecting: false
+        )
+        snapshot.network = SystemStatusNetworkSnapshot(
+            interfaceName: "en0",
+            ipAddress: nil,
+            publicIPAddress: nil,
+            downloadBytesPerSecond: 1_024,
+            uploadBytesPerSecond: 2_048,
+            isConnected: true,
+            isCollecting: false
+        )
+
+        XCTAssertEqual(
+            SystemStatusMenuBarMetricsFormatter.blocks(
+                snapshot: snapshot,
+                kinds: [.cpu, .network]
+            ),
+            [
+                SystemStatusMenuBarMetricBlock(
+                    kind: .cpu,
+                    label: "CPU",
+                    values: ["13%", "42°"]
+                ),
+                SystemStatusMenuBarMetricBlock(
+                    kind: .network,
+                    label: "NET",
+                    values: ["↓1K", "↑2K"]
+                )
+            ]
+        )
+
+        XCTAssertEqual(
+            SystemStatusMenuBarMetricsFormatter.blocks(snapshot: snapshot, kinds: [.cpu]).first?.verticalLabelLines,
+            ["C", "P", "U"]
+        )
+
+        let metricsView = SystemStatusMenuBarMetricsView()
+        metricsView.blocks = SystemStatusMenuBarMetricsFormatter.blocks(
+            snapshot: snapshot,
+            kinds: [.cpu, .network]
+        )
+        let horizontalWidth = metricsView.intrinsicContentSize.width
+        metricsView.menuBarLayout = .vertical
+
+        XCTAssertNotEqual(metricsView.intrinsicContentSize.width, horizontalWidth)
+    }
+
+    func testVerticalMenuBarMetricsProvideUsefulSecondaryValues() {
+        var snapshot = SystemStatusSnapshot.empty
+        snapshot.memory = SystemStatusMemorySnapshot(
+            usedBytes: 6 * 1_024 * 1_024 * 1_024,
+            totalBytes: 10 * 1_024 * 1_024 * 1_024,
+            swapUsedBytes: nil,
+            swapTotalBytes: nil
+        )
+        snapshot.disk = SystemStatusDiskSnapshot(
+            usedBytes: 60,
+            totalBytes: 100,
+            readBytesPerSecond: 1 * 1_024 * 1_024,
+            writeBytesPerSecond: 2 * 1_024 * 1_024
+        )
+        snapshot.battery = SystemStatusBatterySnapshot(
+            isAvailable: true,
+            level: 0.8,
+            state: .acPower,
+            timeRemainingMinutes: nil,
+            adapterWatts: 70,
+            batteryPowerWatts: -18.5,
+            temperatureCelsius: 31,
+            healthPercent: 96,
+            cycleCount: 120
+        )
+
+        let blocks = SystemStatusMenuBarMetricsFormatter.blocks(
+            snapshot: snapshot,
+            kinds: [.memory, .disk, .battery]
+        )
+
+        XCTAssertEqual(blocks.map(\.values), [
+            ["60%", "6G"],
+            ["60%", "↕3M"],
+            ["80%", "19W"]
+        ])
+        XCTAssertEqual(blocks.map(\.horizontalValue), ["60% 6G", "60% ↕3M", "80% 19W"])
+    }
+
+    func testMenuBarMetricWidthsRemainStableAsValuesChange() {
+        let metricsView = SystemStatusMenuBarMetricsView()
+        metricsView.blocks = [
+            SystemStatusMenuBarMetricBlock(kind: .cpu, label: "CPU", values: ["1%", "9°"]),
+            SystemStatusMenuBarMetricBlock(kind: .network, label: "NET", values: ["↓1B", "↑2B"])
+        ]
+        let compactHorizontalWidth = metricsView.intrinsicContentSize.width
+
+        metricsView.blocks = [
+            SystemStatusMenuBarMetricBlock(kind: .cpu, label: "CPU", values: ["100%", "999°"]),
+            SystemStatusMenuBarMetricBlock(kind: .network, label: "NET", values: ["↓9.9M", "↑9.9M"])
+        ]
+        XCTAssertEqual(metricsView.intrinsicContentSize.width, compactHorizontalWidth)
+
+        metricsView.menuBarLayout = .vertical
+        let expandedVerticalWidth = metricsView.intrinsicContentSize.width
+        metricsView.blocks = [
+            SystemStatusMenuBarMetricBlock(kind: .cpu, label: "CPU", values: ["1%", "9°"]),
+            SystemStatusMenuBarMetricBlock(kind: .network, label: "NET", values: ["↓1B", "↑2B"])
+        ]
+        XCTAssertEqual(metricsView.intrinsicContentSize.width, expandedVerticalWidth)
+
+        let verticalMetricWidths = [
+            SystemStatusMenuBarMetricBlock(kind: .cpu, label: "CPU", values: ["1%", "9°"]),
+            SystemStatusMenuBarMetricBlock(kind: .gpu, label: "GPU", values: ["2%", "10°"]),
+            SystemStatusMenuBarMetricBlock(kind: .memory, label: "RAM", values: ["20%"]),
+            SystemStatusMenuBarMetricBlock(kind: .disk, label: "DSK", values: ["30%"]),
+            SystemStatusMenuBarMetricBlock(kind: .battery, label: "BAT", values: ["40%", "20°"]),
+            SystemStatusMenuBarMetricBlock(kind: .network, label: "NET", values: ["↓1K", "↑2K"])
+        ].map { block -> CGFloat in
+            metricsView.blocks = [block]
+            return metricsView.intrinsicContentSize.width
+        }
+        XCTAssertTrue(
+            verticalMetricWidths.dropFirst().allSatisfy { $0 == verticalMetricWidths[0] }
+        )
+    }
+
+    func testMenuBarNetworkRatesStayWithinCompactWidthReservation() {
+        var snapshot = SystemStatusSnapshot.empty
+        snapshot.network = SystemStatusNetworkSnapshot(
+            interfaceName: "en0",
+            ipAddress: nil,
+            publicIPAddress: nil,
+            downloadBytesPerSecond: 100 * 1_024 * 1_024,
+            uploadBytesPerSecond: UInt64.max,
+            isConnected: true,
+            isCollecting: false
+        )
+
+        XCTAssertEqual(
+            SystemStatusMenuBarMetricsFormatter.blocks(
+                snapshot: snapshot,
+                kinds: [.network]
+            ).first?.values,
+            ["↓0.1G", "↑16E"]
         )
     }
 

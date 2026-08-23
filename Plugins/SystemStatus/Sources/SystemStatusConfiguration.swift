@@ -8,9 +8,15 @@ struct SystemStatusMetricPreference: Codable, Equatable, Identifiable, Sendable 
     var id: String { kind.rawValue }
 }
 
+enum SystemStatusMenuBarLayout: String, Codable, Sendable {
+    case horizontal
+    case vertical
+}
+
 struct SystemStatusConfiguration: Equatable, Sendable {
     var panelItems: [SystemStatusMetricPreference]
     var menuBarItems: [SystemStatusMetricPreference]
+    var menuBarLayout: SystemStatusMenuBarLayout
 
     static let `default` = SystemStatusConfiguration(
         panelItems: SystemStatusComponentLayout.defaultPanelMetricKinds.map {
@@ -18,7 +24,8 @@ struct SystemStatusConfiguration: Equatable, Sendable {
         },
         menuBarItems: SystemStatusComponentLayout.defaultMenuBarMetricKinds.map {
             SystemStatusMetricPreference(kind: $0, isVisible: false)
-        }
+        },
+        menuBarLayout: .horizontal
     )
 
     var visiblePanelMetricKinds: [SystemStatusMetricKind] {
@@ -43,6 +50,8 @@ final class SystemStatusPluginStorageConfigurationStore: SystemStatusConfigurati
         static let panelHidden = "settings.panel.hidden"
         static let menuBarOrder = "settings.menuBar.order"
         static let menuBarVisible = "settings.menuBar.visible"
+        static let menuBarLayout = "settings.menuBar.layout"
+        static let legacyNetworkMenuBarLayout = "settings.menuBar.network.layout"
     }
 
     private let storage: PluginStorage
@@ -52,10 +61,18 @@ final class SystemStatusPluginStorageConfigurationStore: SystemStatusConfigurati
     }
 
     func load() -> SystemStatusConfiguration {
+        storage.migrateValueIfNeeded(
+            fromLegacyKey: Key.legacyNetworkMenuBarLayout,
+            to: Key.menuBarLayout
+        )
+
         let panelOrder = storage.stringArray(forKey: Key.panelOrder)
         let panelHidden = storage.stringArray(forKey: Key.panelHidden)
         let menuBarOrder = storage.stringArray(forKey: Key.menuBarOrder)
         let menuBarVisible = storage.stringArray(forKey: Key.menuBarVisible)
+        let menuBarLayout = storage.string(forKey: Key.menuBarLayout)
+            .flatMap(SystemStatusMenuBarLayout.init(rawValue:))
+            ?? .horizontal
 
         return SystemStatusConfiguration(
             panelItems: Self.normalizedItems(
@@ -73,7 +90,8 @@ final class SystemStatusPluginStorageConfigurationStore: SystemStatusConfigurati
                 defaultVisibility: false,
                 visibilityMode: .visibleSet,
                 usesDefaultVisibility: menuBarVisible == nil
-            )
+            ),
+            menuBarLayout: menuBarLayout
         )
     }
 
@@ -93,6 +111,7 @@ final class SystemStatusPluginStorageConfigurationStore: SystemStatusConfigurati
         storage.set(panelItems.filter { !$0.isVisible }.map { $0.kind.rawValue }, forKey: Key.panelHidden)
         storage.set(menuBarItems.map { $0.kind.rawValue }, forKey: Key.menuBarOrder)
         storage.set(menuBarItems.filter(\.isVisible).map { $0.kind.rawValue }, forKey: Key.menuBarVisible)
+        storage.set(configuration.menuBarLayout.rawValue, forKey: Key.menuBarLayout)
     }
 
     private enum VisibilityMode {
@@ -194,6 +213,12 @@ final class SystemStatusSettingsController: ObservableObject {
             }
 
             configuration.menuBarItems[index].isVisible = isVisible
+        }
+    }
+
+    func setMenuBarLayout(_ layout: SystemStatusMenuBarLayout) {
+        update { configuration in
+            configuration.menuBarLayout = layout
         }
     }
 

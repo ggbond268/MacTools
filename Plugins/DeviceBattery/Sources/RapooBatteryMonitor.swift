@@ -40,11 +40,16 @@ struct RapooMouseDeviceInfo: Equatable, Sendable {
     let displayName: String
     let serialNumber: String?
     let locationID: Int?
+    let registryEntryID: UInt64?
 
     var stableKey: String {
         let serial = serialNumber?.isEmpty == false ? serialNumber! : "no-serial"
         let location = locationID.map(String.init) ?? "no-location"
-        return "\(productID)-\(serial)-\(location)"
+        if serial != "no-serial" || location != "no-location" {
+            return "\(productID)-\(serial)-\(location)"
+        }
+        let registryEntry = registryEntryID.map(String.init) ?? "no-registry-entry"
+        return "\(productID)-\(serial)-\(location)-\(registryEntry)"
     }
 }
 
@@ -68,6 +73,7 @@ struct RapooMouseBatterySnapshot: Equatable, Sendable {
 
         return DeviceBatteryItem(
             id: "rapoo-\(device.stableKey)",
+            deviceIdentity: .rapooHID(device.stableKey),
             name: device.modelName,
             model: device.displayName == device.modelName ? nil : device.displayName,
             kind: .rapooMouse,
@@ -118,11 +124,18 @@ struct RapooMouseBatterySnapshot: Equatable, Sendable {
 @MainActor
 protocol RapooBatteryMonitoring: AnyObject {
     var snapshot: RapooMouseBatterySnapshot { get }
+    var deviceSnapshots: [RapooMouseBatterySnapshot] { get }
     var onSnapshotChange: ((RapooMouseBatterySnapshot) -> Void)? { get set }
 
     func start()
     func stop()
     func refresh()
+}
+
+extension RapooBatteryMonitoring {
+    var deviceSnapshots: [RapooMouseBatterySnapshot] {
+        snapshot.device == nil ? [] : [snapshot]
+    }
 }
 
 @MainActor
@@ -131,6 +144,7 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
 
     private var manager: IOHIDManager?
     private var sessions: [String: RapooHIDDeviceSession] = [:]
+    private var snapshotsByDeviceKey: [String: RapooMouseBatterySnapshot] = [:]
     private let localization: PluginLocalization
 
     init(localization: PluginLocalization = PluginLocalization(bundle: .main)) {
@@ -148,12 +162,19 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
 
     var onSnapshotChange: ((RapooMouseBatterySnapshot) -> Void)?
 
+    var deviceSnapshots: [RapooMouseBatterySnapshot] {
+        snapshotsByDeviceKey
+            .sorted { $0.key < $1.key }
+            .map(\.value)
+    }
+
     func start() {
         guard manager == nil else {
             refresh()
             return
         }
 
+        snapshotsByDeviceKey.removeAll()
         snapshot = RapooMouseBatterySnapshot(
             accessState: .scanning,
             device: nil,
@@ -183,6 +204,7 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
     func stop() {
         guard let manager else {
             sessions.removeAll()
+            snapshotsByDeviceKey.removeAll()
             return
         }
 
@@ -190,6 +212,7 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
         IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         self.manager = nil
         sessions.removeAll()
+        snapshotsByDeviceKey.removeAll()
     }
 
     func refresh() {
@@ -200,6 +223,7 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
 
         syncDevices(from: manager)
         if sessions.isEmpty {
+            snapshotsByDeviceKey.removeAll()
             snapshot = RapooMouseBatterySnapshot(
                 accessState: .noDevice,
                 device: nil,
@@ -215,12 +239,17 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
             || snapshot.accessState == .scanning
             || snapshot.accessState == .noDevice {
             let firstDevice = sessions.values.sorted { $0.deviceInfo.stableKey < $1.deviceInfo.stableKey }.first?.deviceInfo
-            snapshot = RapooMouseBatterySnapshot(
+            let waitingSnapshot = RapooMouseBatterySnapshot(
                 accessState: .waitingForReport,
                 device: firstDevice,
                 reading: nil,
                 lastUpdated: nil
             )
+            if let firstDevice {
+                snapshot = snapshotsByDeviceKey[firstDevice.stableKey] ?? waitingSnapshot
+            } else {
+                snapshot = waitingSnapshot
+            }
         }
     }
 
@@ -243,12 +272,14 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
             Unmanaged.passUnretained(session).toOpaque()
         )
 
-        snapshot = RapooMouseBatterySnapshot(
+        let waitingSnapshot = RapooMouseBatterySnapshot(
             accessState: .waitingForReport,
             device: deviceInfo,
             reading: nil,
             lastUpdated: nil
         )
+        snapshotsByDeviceKey[deviceInfo.stableKey] = waitingSnapshot
+        snapshot = waitingSnapshot
     }
 
     fileprivate func handleDeviceRemoved(_ device: IOHIDDevice) {
@@ -256,8 +287,13 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
             return
         }
 
+        let previousSnapshot = snapshot
         sessions.removeValue(forKey: deviceInfo.stableKey)
+        snapshotsByDeviceKey.removeValue(forKey: deviceInfo.stableKey)
         refresh()
+        if snapshot == previousSnapshot {
+            onSnapshotChange?(snapshot)
+        }
     }
 
     fileprivate func handleInputReport(
@@ -272,12 +308,14 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
             return
         }
 
-        snapshot = RapooMouseBatterySnapshot(
+        let updatedSnapshot = RapooMouseBatterySnapshot(
             accessState: .connected,
             device: session.deviceInfo,
             reading: reading,
             lastUpdated: Date()
         )
+        snapshotsByDeviceKey[session.deviceInfo.stableKey] = updatedSnapshot
+        snapshot = updatedSnapshot
     }
 
     private var matchingDictionary: [String: Int] {
@@ -315,8 +353,19 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
             modelName: modelName,
             displayName: displayName,
             serialNumber: stringProperty(kIOHIDSerialNumberKey, from: device),
-            locationID: intProperty(kIOHIDLocationIDKey, from: device)
+            locationID: intProperty(kIOHIDLocationIDKey, from: device),
+            registryEntryID: registryEntryID(for: device)
         )
+    }
+
+    private func registryEntryID(for device: IOHIDDevice) -> UInt64? {
+        let service = IOHIDDeviceGetService(device)
+        guard service != 0 else { return nil }
+        var identifier: UInt64 = 0
+        guard IORegistryEntryGetRegistryEntryID(service, &identifier) == KERN_SUCCESS else {
+            return nil
+        }
+        return identifier
     }
 
     private func intProperty(_ key: String, from device: IOHIDDevice) -> Int? {
@@ -332,6 +381,7 @@ final class RapooHIDBatteryMonitor: RapooBatteryMonitoring {
     }
 
     private func failureSnapshot(for result: IOReturn) -> RapooMouseBatterySnapshot {
+        snapshotsByDeviceKey.removeAll()
         let accessState: RapooBatteryAccessState
         if UInt32(bitPattern: result) == Self.permissionDeniedReturnCode {
             accessState = .permissionDenied

@@ -379,6 +379,45 @@ final class CloudflareR2PluginTests: XCTestCase {
         XCTAssertEqual(R2UploadStatus.failed("reason").errorMessage, "reason")
     }
 
+    func testRuntimeLocalizationCoversPluginStatusValidationAndErrors() throws {
+        let originalPreference = UserDefaults.standard.string(
+            forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey
+        )
+        defer { PluginRuntimeLocalization.source.setPreference(originalPreference) }
+        let resource = try makeLocalizationBundle()
+        defer { try? FileManager.default.removeItem(at: resource.directory) }
+        let localization = PluginLocalization(bundle: resource.bundle)
+
+        PluginRuntimeLocalization.source.setPreference("en")
+        let h = makeHarness(configured: false, resourceBundle: resource.bundle)
+        XCTAssertEqual(h.plugin.metadata.title, "Cloudflare R2 Upload")
+        XCTAssertEqual(h.plugin.primaryPanelDescriptor.buttonTitle, "Choose")
+        h.plugin.chooseAndUpload()
+        XCTAssertEqual(h.plugin.status, .failed("Complete the R2 configuration in Settings first."))
+        XCTAssertEqual(
+            R2UploadStatus.uploading("file.txt", progress: 0.42).subtitle(
+                localization: localization
+            ),
+            "Uploading file.txt… 42%"
+        )
+        h.store.publicBaseURL = "invalid"
+        XCTAssertEqual(
+            h.store.publicBaseURLValidationMessage,
+            "Enter a valid address beginning with http:// or https://."
+        )
+
+        PluginRuntimeLocalization.source.setPreference("zh-Hant")
+        XCTAssertEqual(h.plugin.actionDefinitions.first?.title, "選擇檔案並上傳至 R2")
+        XCTAssertEqual(
+            R2UploadError.httpStatus(403).message(localization: localization),
+            "上傳失敗（HTTP 403）。"
+        )
+        XCTAssertEqual(
+            h.store.publicBaseURLValidationMessage,
+            "請輸入以 http:// 或 https:// 開頭的有效網址。"
+        )
+    }
+
     private func makeHarness(
         configured: Bool = true, fileURL: URL? = nil,
         uploader: R2UploaderMock = R2UploaderMock(
@@ -388,13 +427,19 @@ final class CloudflareR2PluginTests: XCTestCase {
         objectNames: [String] = [],
         objectChecker: R2ObjectCheckerMock = R2ObjectCheckerMock(results: [false]),
         conflictResolutions: [R2UploadConflictResolution] = [],
-        mutateConfigurationOnConflict: Bool = false
+        mutateConfigurationOnConflict: Bool = false,
+        resourceBundle: Bundle = .main
     ) -> Harness {
         let storage = R2MemoryStorage(
             values: configured
                 ? ["account-id": "account", "bucket": "bucket", "access-key-id": "access"] : [:])
         let secrets = R2SecretStoreMock(secret: configured ? "stored-secret" : nil)
-        let store = R2ConfigurationStore(storage: storage, secrets: secrets)
+        let localization = PluginLocalization(bundle: resourceBundle)
+        let store = R2ConfigurationStore(
+            storage: storage,
+            secrets: secrets,
+            localization: localization
+        )
         let clipboard = R2ClipboardMock()
         let notifier = R2CompletionNotifierMock(copyLink: copyLinkOnNotification)
         let picker: @MainActor @Sendable () -> URL? = filePicker ?? { fileURL }
@@ -403,13 +448,68 @@ final class CloudflareR2PluginTests: XCTestCase {
             conflictResolutions: conflictResolutions,
             onConflict: mutateConfigurationOnConflict ? { store.bucket = "changed-bucket" } : nil)
         let plugin = CloudflareR2Plugin(
-            context: PluginRuntimeContext(pluginID: "cloudflare-r2", storage: storage),
+            context: PluginRuntimeContext(
+                pluginID: "cloudflare-r2",
+                resourceBundle: resourceBundle,
+                storage: storage
+            ),
             uploader: uploader, objectChecker: objectChecker, configurationStore: store,
             filePicker: picker, clipboard: clipboard, completionNotifier: notifier,
             progressPresenter: progressPresenter, terminalStatusDuration: terminalStatusDuration)
         return Harness(
             plugin: plugin, store: store, secrets: secrets, clipboard: clipboard, notifier: notifier,
             progressPresenter: progressPresenter)
+    }
+
+    private func makeLocalizationBundle() throws -> (bundle: Bundle, directory: URL) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let bundleURL = directory.appendingPathComponent(
+            "CloudflareR2Tests.bundle",
+            isDirectory: true
+        )
+        for (language, values) in [
+            "en": [
+                "action.upload.title": "Choose a File and Upload to R2",
+                "error.configuration.openSettings":
+                    "Complete the R2 configuration in Settings first.",
+                "error.upload.http": "Upload failed (HTTP %d).",
+                "metadata.description": "Upload files to Cloudflare R2",
+                "metadata.title": "Cloudflare R2 Upload",
+                "panel.button.choose": "Choose",
+                "status.uploading": "Uploading %@… %d%%",
+                "validation.publicURL":
+                    "Enter a valid address beginning with http:// or https://.",
+            ],
+            "zh-Hant": [
+                "action.upload.title": "選擇檔案並上傳至 R2",
+                "error.configuration.openSettings": "請先在「設定」中完成 R2 設定。",
+                "error.upload.http": "上傳失敗（HTTP %d）。",
+                "metadata.description": "將檔案上傳至 Cloudflare R2",
+                "metadata.title": "Cloudflare R2 上傳",
+                "panel.button.choose": "選擇",
+                "status.uploading": "正在上傳 %@… %d%%",
+                "validation.publicURL":
+                    "請輸入以 http:// 或 https:// 開頭的有效網址。",
+            ],
+        ] {
+            let languageURL = bundleURL.appendingPathComponent(
+                "\(language).lproj",
+                isDirectory: true
+            )
+            try FileManager.default.createDirectory(
+                at: languageURL,
+                withIntermediateDirectories: true
+            )
+            try values.map { "\"\($0.key)\" = \"\($0.value)\";" }
+                .joined(separator: "\n")
+                .write(
+                    to: languageURL.appendingPathComponent("Localizable.strings"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+        }
+        return (try XCTUnwrap(Bundle(url: bundleURL)), directory)
     }
 
     private func waitUntil(_ predicate: @escaping @MainActor () -> Bool) async {

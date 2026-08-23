@@ -205,6 +205,45 @@ final class AutomationControllerTests: XCTestCase {
         )
     }
 
+    func testAppIntentExposureRejectsExcludedLeafThroughNestedWorkflows() throws {
+        let suite = "AutomationControllerTests.app-intents.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let registry = ActionRegistry()
+        let provider = AutomationControllerTestProvider()
+        provider.appIntentExposurePolicy = .excluded
+        registry.synchronize([provider.registration])
+        let controller = AutomationController(
+            store: WorkflowStore(userDefaults: defaults),
+            registry: registry,
+            executor: ActionExecutor(registry: registry)
+        )
+        let child = try XCTUnwrap(controller.createWorkflow())
+        controller.addStep(workflowID: child.id, reference: provider.reference)
+        let parent = try XCTUnwrap(controller.createWorkflow())
+        controller.addStep(workflowID: parent.id, reference: child.actionReference)
+        registry.synchronize([provider.registration, controller.actionRegistration()])
+
+        XCTAssertEqual(
+            registry.exposurePolicy(for: child.actionReference, on: .appIntents),
+            .excluded
+        )
+        XCTAssertEqual(
+            registry.exposurePolicy(for: parent.actionReference, on: .appIntents),
+            .excluded
+        )
+
+        provider.appIntentExposurePolicy = .automatic
+        XCTAssertEqual(
+            registry.exposurePolicy(for: child.actionReference, on: .appIntents),
+            .automatic
+        )
+        XCTAssertEqual(
+            registry.exposurePolicy(for: parent.actionReference, on: .appIntents),
+            .automatic
+        )
+    }
+
     func testWorkflowCapabilitiesReflectNestedBackgroundSupport() throws {
         let suite = "AutomationControllerTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -676,6 +715,7 @@ private final class AutomationControllerTestProvider {
     let externalInvocationPolicy: ActionExternalInvocationPolicy
     let risk: ActionRisk
     var availability: ActionAvailability = .available
+    var appIntentExposurePolicy: ActionExposurePolicy = .automatic
 
     init(
         providerID: String = "automation-controller-tests",
@@ -719,6 +759,11 @@ private final class AutomationControllerTestProvider {
             definitions: [definition],
             catalogEntries: [ActionCatalogEntry(reference: reference, title: "运行")],
             availability: { [weak self] _ in self?.availability ?? .unavailable("Missing") },
+            exposurePolicy: { [weak self] _, surface in
+                surface == .appIntents
+                    ? self?.appIntentExposurePolicy ?? .excluded
+                    : .automatic
+            },
             begin: { [weak self] _ in
                 self?.invocationCount += 1
                 return .success(ActionExecutionHandle(operation: { .succeeded() }))

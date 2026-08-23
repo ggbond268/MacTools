@@ -413,6 +413,9 @@ final class AutomationController: ObservableObject {
                 self?.workflowActionAvailability(reference)
                     ?? .unavailable(FeatureL10n.string("自动化服务不可用。"))
             },
+            exposurePolicy: { [weak self] reference, surface in
+                self?.workflowActionExposurePolicy(reference, surface: surface) ?? .excluded
+            },
             begin: { [weak self] invocation in
                 guard let self,
                       let workflowID = self.workflowID(for: invocation.reference.key) else {
@@ -530,6 +533,26 @@ final class AutomationController: ObservableObject {
             definition: registry.definition(for:),
             availability: registry.availability(for:)
         ).availability
+    }
+
+    private func workflowActionExposurePolicy(
+        _ reference: ActionReference,
+        surface: ActionExposureSurface
+    ) -> ActionExposurePolicy {
+        guard surface == .appIntents else { return .automatic }
+        guard let currentWorkflowID = workflowID(for: reference.key) else {
+            return .excluded
+        }
+        return WorkflowExecutionAnalysis.allLeafActions(
+            in: currentWorkflowID,
+            store: store
+        ) { [registry] leafReference in
+            AppIntentActionEligibility.isDirectlyEligible(
+                leafReference,
+                registry: registry,
+                requireAvailability: false
+            )
+        } ? .automatic : .excluded
     }
 
     func supportsAutomaticRules(workflowID: UUID) -> Bool {

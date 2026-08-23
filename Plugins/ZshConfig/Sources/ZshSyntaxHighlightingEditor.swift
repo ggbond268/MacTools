@@ -5,6 +5,7 @@ import SwiftUI
 
 /// NSTextView-based code editor with zsh/shell syntax highlighting.
 /// Supports comments, keywords, quoted strings, and variable references.
+@MainActor
 struct ZshSyntaxHighlightingEditor: NSViewRepresentable {
     @Binding var text: String
     var isEditable: Bool = true
@@ -14,6 +15,10 @@ struct ZshSyntaxHighlightingEditor: NSViewRepresentable {
     var scrollToBottomID: Int = 0
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        coordinator.cancelPendingHighlighting()
+    }
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
@@ -53,6 +58,7 @@ struct ZshSyntaxHighlightingEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
+        context.coordinator.parent = self
         guard let textView = nsView.documentView as? NSTextView else { return }
         guard !context.coordinator.isHighlighting else { return }
 
@@ -61,6 +67,7 @@ struct ZshSyntaxHighlightingEditor: NSViewRepresentable {
         // emits `objectWillChange` in `willSet`, so `updateNSView` can observe the old value and
         // incorrectly reset the editor, clearing the undo stack.
         if text != context.coordinator.lastTextFedToBinding {
+            context.coordinator.cancelPendingHighlighting()
             context.coordinator.lastTextFedToBinding = text
             let sel = textView.selectedRange()
             textView.string = text
@@ -108,6 +115,9 @@ struct ZshSyntaxHighlightingEditor: NSViewRepresentable {
         guard let storage = textView.textStorage else { return }
         let string = textView.string
         let fullRange = NSRange(location: 0, length: (string as NSString).length)
+        let selectedRange = textView.selectedRange()
+        let scrollView = textView.enclosingScrollView
+        let scrollOrigin = scrollView?.contentView.bounds.origin
 
         // Syntax highlighting attributes must not enter the undo stack, or Cmd-Z would undo
         // highlighting instead of text edits.
@@ -138,19 +148,38 @@ struct ZshSyntaxHighlightingEditor: NSViewRepresentable {
 
         // Keep typing attributes consistent so new characters start with base style
         textView.typingAttributes = baseAttributes
+        textView.setSelectedRange(selectedRange)
+        if let scrollView, let scrollOrigin {
+            scrollView.contentView.scroll(to: scrollOrigin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
     }
 
     // MARK: - Coordinator
 
+    @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
+        typealias Highlighter = @MainActor (NSTextView) -> Void
+
+        static let highlightingDelay: TimeInterval = 0.1
+
         var parent: ZshSyntaxHighlightingEditor
         var isHighlighting = false
         var lastScrollToBottomID: Int = 0
         /// Last text pushed to the binding by `textDidChange`, used to distinguish user input from external assignment.
         var lastTextFedToBinding: String = ""
+        private let highlightingDelay: TimeInterval
+        private let highlighter: Highlighter
+        private var pendingHighlightingWork: DispatchWorkItem?
 
-        init(_ parent: ZshSyntaxHighlightingEditor) {
+        init(
+            _ parent: ZshSyntaxHighlightingEditor,
+            highlightingDelay: TimeInterval = Coordinator.highlightingDelay,
+            highlighter: @escaping Highlighter = ZshSyntaxHighlightingEditor.applyHighlighting
+        ) {
             self.parent = parent
+            self.highlightingDelay = highlightingDelay
+            self.highlighter = highlighter
         }
 
         func textDidChange(_ notification: Notification) {
@@ -158,9 +187,28 @@ struct ZshSyntaxHighlightingEditor: NSViewRepresentable {
             lastTextFedToBinding = textView.string
             parent.text = textView.string
             parent.onChange?()
-            isHighlighting = true
-            ZshSyntaxHighlightingEditor.applyHighlighting(to: textView)
-            isHighlighting = false
+
+            scheduleHighlighting(for: textView)
+        }
+
+        func cancelPendingHighlighting() {
+            pendingHighlightingWork?.cancel()
+            pendingHighlightingWork = nil
+        }
+
+        private func scheduleHighlighting(for textView: NSTextView) {
+            cancelPendingHighlighting()
+
+            let work = DispatchWorkItem { [weak self, weak textView] in
+                guard let self, let textView else { return }
+                self.pendingHighlightingWork = nil
+                guard !textView.hasMarkedText() else { return }
+                self.isHighlighting = true
+                defer { self.isHighlighting = false }
+                self.highlighter(textView)
+            }
+            pendingHighlightingWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + highlightingDelay, execute: work)
         }
     }
 }

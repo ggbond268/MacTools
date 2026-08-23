@@ -128,8 +128,9 @@ enum DeviceBatteryKind: Equatable, Sendable {
     }
 }
 
-enum DeviceBatteryComponentRole: String, Equatable, Sendable {
+enum DeviceBatteryComponentRole: String, Equatable, Hashable, Sendable {
     case aggregate
+    case earbuds
     case left
     case right
     case chargingCase
@@ -154,8 +155,52 @@ struct DeviceBatteryComponentIdentity: Equatable, Sendable {
     let role: DeviceBatteryComponentRole
 }
 
+struct DeviceBatteryDeviceIdentity: Equatable, Hashable, Sendable {
+    enum Namespace: String, Sendable {
+        case internalBattery
+        case bluetooth
+        case batteryCenter
+        case mobileDevice
+        case rapooHID
+        case source
+    }
+
+    let namespace: Namespace
+    let value: String
+
+    var key: String {
+        "\(namespace.rawValue):\(value)"
+    }
+
+    static let internalBattery = DeviceBatteryDeviceIdentity(
+        namespace: .internalBattery,
+        value: "main"
+    )
+
+    static func bluetooth(_ identifier: String) -> DeviceBatteryDeviceIdentity {
+        DeviceBatteryDeviceIdentity(namespace: .bluetooth, value: identifier)
+    }
+
+    static func batteryCenter(_ identifier: String) -> DeviceBatteryDeviceIdentity {
+        DeviceBatteryDeviceIdentity(namespace: .batteryCenter, value: identifier)
+    }
+
+    static func mobileDevice(_ identifier: String) -> DeviceBatteryDeviceIdentity {
+        DeviceBatteryDeviceIdentity(namespace: .mobileDevice, value: identifier)
+    }
+
+    static func rapooHID(_ identifier: String) -> DeviceBatteryDeviceIdentity {
+        DeviceBatteryDeviceIdentity(namespace: .rapooHID, value: identifier)
+    }
+
+    static func source(_ identifier: String) -> DeviceBatteryDeviceIdentity {
+        DeviceBatteryDeviceIdentity(namespace: .source, value: identifier)
+    }
+}
+
 struct DeviceBatteryItem: Identifiable, Equatable, Sendable {
     let id: String
+    let deviceIdentity: DeviceBatteryDeviceIdentity
     let name: String
     let model: String?
     let kind: DeviceBatteryKind
@@ -164,12 +209,15 @@ struct DeviceBatteryItem: Identifiable, Equatable, Sendable {
     let parentName: String?
     let source: String
     let lastUpdated: Date?
+    let chargeStateLastUpdated: Date?
     let isConnected: Bool
     let detail: String?
     let componentIdentity: DeviceBatteryComponentIdentity?
+    let alternateDeviceIdentities: Set<DeviceBatteryDeviceIdentity>
 
     init(
         id: String,
+        deviceIdentity: DeviceBatteryDeviceIdentity,
         name: String,
         model: String?,
         kind: DeviceBatteryKind,
@@ -178,11 +226,14 @@ struct DeviceBatteryItem: Identifiable, Equatable, Sendable {
         parentName: String?,
         source: String,
         lastUpdated: Date?,
+        chargeStateLastUpdated: Date? = nil,
         isConnected: Bool,
         detail: String?,
-        componentIdentity: DeviceBatteryComponentIdentity? = nil
+        componentIdentity: DeviceBatteryComponentIdentity? = nil,
+        alternateDeviceIdentities: Set<DeviceBatteryDeviceIdentity> = []
     ) {
         self.id = id
+        self.deviceIdentity = deviceIdentity
         self.name = name
         self.model = model
         self.kind = kind
@@ -191,9 +242,111 @@ struct DeviceBatteryItem: Identifiable, Equatable, Sendable {
         self.parentName = parentName
         self.source = source
         self.lastUpdated = lastUpdated
+        if chargeState == .unknown || chargeState == .invalid {
+            self.chargeStateLastUpdated = nil
+        } else {
+            self.chargeStateLastUpdated = chargeStateLastUpdated ?? lastUpdated
+        }
         self.isConnected = isConnected
         self.detail = detail
         self.componentIdentity = componentIdentity
+        self.alternateDeviceIdentities = alternateDeviceIdentities
+    }
+
+    var batterySlot: DeviceBatteryComponentRole {
+        componentIdentity?.role ?? .aggregate
+    }
+
+    var stableBatteryIdentityKey: String {
+        "\(deviceIdentity.key)|\(batterySlot.rawValue)"
+    }
+
+    var allDeviceIdentities: Set<DeviceBatteryDeviceIdentity> {
+        Set([deviceIdentity]).union(alternateDeviceIdentities)
+    }
+
+    var allEquivalentBatteryIdentityKeys: Set<String> {
+        let slots: [DeviceBatteryComponentRole]
+        if kind == .airPodsPart,
+           batterySlot == .aggregate || batterySlot == .earbuds {
+            slots = [.aggregate, .earbuds]
+        } else {
+            slots = [batterySlot]
+        }
+
+        return Set(
+            ([deviceIdentity] + alternateDeviceIdentities).flatMap { identity in
+                slots.map { "\(identity.key)|\($0.rawValue)" }
+            }
+        )
+    }
+
+    func resolvingDeviceIdentity(
+        to resolvedIdentity: DeviceBatteryDeviceIdentity
+    ) -> DeviceBatteryItem {
+        guard resolvedIdentity != deviceIdentity else {
+            return self
+        }
+
+        var alternateIdentities = alternateDeviceIdentities
+        alternateIdentities.insert(deviceIdentity)
+        alternateIdentities.remove(resolvedIdentity)
+        return copying(
+            deviceIdentity: resolvedIdentity,
+            alternateDeviceIdentities: alternateIdentities
+        )
+    }
+
+    func mergingDeviceIdentityAliases(from other: DeviceBatteryItem) -> DeviceBatteryItem {
+        var alternateIdentities = alternateDeviceIdentities
+            .union(other.alternateDeviceIdentities)
+        if other.deviceIdentity != deviceIdentity {
+            alternateIdentities.insert(other.deviceIdentity)
+        }
+        alternateIdentities.remove(deviceIdentity)
+        return copying(alternateDeviceIdentities: alternateIdentities)
+    }
+
+    func removingDeviceIdentityAliases(
+        _ identities: Set<DeviceBatteryDeviceIdentity>
+    ) -> DeviceBatteryItem {
+        copying(
+            alternateDeviceIdentities: alternateDeviceIdentities
+                .subtracting(identities)
+        )
+    }
+
+    private func copying(
+        deviceIdentity: DeviceBatteryDeviceIdentity? = nil,
+        alternateDeviceIdentities: Set<DeviceBatteryDeviceIdentity>
+    ) -> DeviceBatteryItem {
+        let resolvedDeviceIdentity = deviceIdentity ?? self.deviceIdentity
+        let resolvedComponentIdentity = componentIdentity.map { identity in
+            guard identity.groupID == self.deviceIdentity.key else {
+                return identity
+            }
+            return DeviceBatteryComponentIdentity(
+                groupID: resolvedDeviceIdentity.key,
+                role: identity.role
+            )
+        }
+        return DeviceBatteryItem(
+            id: id,
+            deviceIdentity: resolvedDeviceIdentity,
+            name: name,
+            model: model,
+            kind: kind,
+            level: level,
+            chargeState: chargeState,
+            parentName: parentName,
+            source: source,
+            lastUpdated: lastUpdated,
+            chargeStateLastUpdated: chargeStateLastUpdated,
+            isConnected: isConnected,
+            detail: detail,
+            componentIdentity: resolvedComponentIdentity,
+            alternateDeviceIdentities: alternateDeviceIdentities
+        )
     }
 
     var clampedLevel: Int? {
@@ -228,43 +381,123 @@ struct DeviceBatteryItem: Identifiable, Equatable, Sendable {
 }
 
 enum DeviceBatteryItemNormalizer {
-    static func removingRedundantComponentAggregates(
+    static func resolvingAppleMobileDeviceAliases(
         _ items: [DeviceBatteryItem]
     ) -> [DeviceBatteryItem] {
-        let componentGroups = Set(items.compactMap(componentGroupID))
-        guard !componentGroups.isEmpty else {
+        let mobileDeviceIndices = items.indices.filter { index in
+            items[index].source == "MobileDevice"
+                && items[index].deviceIdentity.namespace == .mobileDevice
+                && items[index].kind.isAppleMobileDevice
+        }
+        let supplementalIndices = items.indices.filter { index in
+            !mobileDeviceIndices.contains(index)
+        }
+        guard !mobileDeviceIndices.isEmpty, !supplementalIndices.isEmpty else {
+            return items
+        }
+
+        let candidatesBySupplemental = Dictionary(
+            uniqueKeysWithValues: supplementalIndices.map { supplementalIndex in
+                let candidates = mobileDeviceIndices.filter { mobileDeviceIndex in
+                    hasSharedDeviceIdentity(
+                        items[supplementalIndex],
+                        items[mobileDeviceIndex]
+                    )
+                }
+                return (supplementalIndex, candidates)
+            }
+        )
+
+        let resolvedIdentityByIndex = candidatesBySupplemental.reduce(
+            into: [Int: DeviceBatteryDeviceIdentity]()
+        ) { result, entry in
+            guard entry.value.count == 1,
+                  let mobileDeviceIndex = entry.value.first
+            else {
+                return
+            }
+            result[entry.key] = items[mobileDeviceIndex].deviceIdentity
+        }
+
+        return items.enumerated().map { index, item in
+            guard let resolvedIdentity = resolvedIdentityByIndex[index] else {
+                return item
+            }
+            return item.resolvingDeviceIdentity(to: resolvedIdentity)
+        }
+    }
+
+    private static func hasSharedDeviceIdentity(
+        _ supplementalItem: DeviceBatteryItem,
+        _ mobileDeviceItem: DeviceBatteryItem
+    ) -> Bool {
+        !supplementalItem.allDeviceIdentities
+            .isDisjoint(with: mobileDeviceItem.allDeviceIdentities)
+    }
+
+    static func removingComponentItems(
+        _ items: [DeviceBatteryItem],
+        forSingleBatteryDevices deviceIdentities: Set<DeviceBatteryDeviceIdentity>
+    ) -> [DeviceBatteryItem] {
+        guard !deviceIdentities.isEmpty else {
             return items
         }
 
         return items.filter { item in
-            guard let aggregateGroupID = aggregateGroupID(item) else {
+            guard let identity = item.componentIdentity,
+                  identity.role.isPart
+            else {
+                return true
+            }
+            return !deviceIdentities.contains(item.deviceIdentity)
+        }
+    }
+
+    static func preferringDetailedComponents(
+        _ items: [DeviceBatteryItem]
+    ) -> [DeviceBatteryItem] {
+        let rolesByDevice = items.reduce(
+            into: [DeviceBatteryDeviceIdentity: Set<DeviceBatteryComponentRole>]()
+        ) { result, item in
+            guard item.clampedLevel != nil else {
+                return
+            }
+            result[item.deviceIdentity, default: []].insert(item.batterySlot)
+        }
+        guard !rolesByDevice.isEmpty else {
+            return items
+        }
+
+        return items.filter { item in
+            guard item.clampedLevel != nil,
+                  let deviceRoles = rolesByDevice[item.deviceIdentity]
+            else {
                 return true
             }
 
-            return !componentGroups.contains(aggregateGroupID)
+            let hasIndividualEarbuds = deviceRoles.contains(.left)
+                && deviceRoles.contains(.right)
+            switch item.batterySlot {
+            case .aggregate:
+                return !deviceRoles.contains(.earbuds)
+                    && !hasIndividualEarbuds
+            case .earbuds:
+                return !hasIndividualEarbuds
+            case .left, .right, .chargingCase:
+                return true
+            }
         }
     }
+}
 
-    private static func aggregateGroupID(_ item: DeviceBatteryItem) -> String? {
-        guard let identity = item.componentIdentity,
-              identity.role == .aggregate,
-              item.clampedLevel != nil
-        else {
-            return nil
+extension DeviceBatteryKind {
+    var isAppleMobileDevice: Bool {
+        switch self {
+        case .phone, .tablet, .mediaPlayer, .watch, .spatialComputer:
+            return true
+        case .internalBattery, .bluetooth, .magicAccessory, .airPodsPart, .rapooMouse, .other:
+            return false
         }
-
-        return identity.groupID
-    }
-
-    private static func componentGroupID(_ item: DeviceBatteryItem) -> String? {
-        guard let identity = item.componentIdentity,
-              identity.role.isPart,
-              item.clampedLevel != nil
-        else {
-            return nil
-        }
-
-        return identity.groupID
     }
 }
 
@@ -366,7 +599,11 @@ struct DeviceBatterySnapshot: Equatable, Sendable {
             return leftRank < rightRank
         }
 
-        return left.name.localizedCompare(right.name) == .orderedAscending
+        let nameOrder = left.name.localizedCompare(right.name)
+        if nameOrder != .orderedSame {
+            return nameOrder == .orderedAscending
+        }
+        return left.stableBatteryIdentityKey < right.stableBatteryIdentityKey
     }
 
     private static func itemRank(_ item: DeviceBatteryItem) -> Int {

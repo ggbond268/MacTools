@@ -36,10 +36,16 @@ final class R2ConfigurationStore: ObservableObject {
 
     private let storage: PluginStorage
     private let secrets: R2SecretStoring
+    private let localization: PluginLocalization
 
-    init(storage: PluginStorage, secrets: R2SecretStoring = R2KeychainSecretStore()) {
+    init(
+        storage: PluginStorage,
+        secrets: R2SecretStoring = R2KeychainSecretStore(),
+        localization: PluginLocalization = PluginLocalization(bundle: .main)
+    ) {
         self.storage = storage
         self.secrets = secrets
+        self.localization = localization
         accountID = storage.string(forKey: Key.accountID) ?? ""
         bucket = storage.string(forKey: Key.bucket) ?? ""
         accessKeyID = storage.string(forKey: Key.accessKeyID) ?? ""
@@ -49,7 +55,7 @@ final class R2ConfigurationStore: ObservableObject {
         do {
             hasStoredSecret = try secrets.containsSecret()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = localizedMessage(for: error)
         }
     }
 
@@ -67,14 +73,20 @@ final class R2ConfigurationStore: ObservableObject {
         let value = publicBaseURL.trimmed
         guard !value.isEmpty else { return nil }
         return R2PublicURLValidator.baseURL(from: value) == nil
-            ? "请输入以 http:// 或 https:// 开头的有效地址。"
+            ? localization.string(
+                "validation.publicURL",
+                defaultValue: "请输入以 http:// 或 https:// 开头的有效地址。"
+            )
             : nil
     }
 
     var objectPrefixValidationMessage: String? {
         R2ObjectPrefixValidator.isValid(objectPrefix.trimmed)
             ? nil
-            : "对象前缀不能包含 . 或 .. 路径段。"
+            : localization.string(
+                "validation.objectPrefix",
+                defaultValue: "对象前缀不能包含 . 或 .. 路径段。"
+            )
     }
 
     func save() {
@@ -91,7 +103,7 @@ final class R2ConfigurationStore: ObservableObject {
             hasStoredSecret = try secrets.containsSecret()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = localizedMessage(for: error)
         }
     }
 
@@ -100,6 +112,13 @@ final class R2ConfigurationStore: ObservableObject {
             throw R2UploadError.missingSecret
         }
         return secret
+    }
+
+    private func localizedMessage(for error: Error) -> String {
+        if let secretError = error as? R2SecretStoreError {
+            return secretError.message(localization: localization)
+        }
+        return error.localizedDescription
     }
 }
 
@@ -170,10 +189,19 @@ enum R2SecretStoreError: LocalizedError {
     case security(OSStatus)
 
     var errorDescription: String? {
+        message(localization: PluginLocalization(bundle: .main))
+    }
+
+    func message(localization: PluginLocalization) -> String {
         switch self {
         case let .security(status):
             let detail = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
-            return "无法访问钥匙串：\(detail)（\(status)）"
+            return localization.format(
+                "error.keychain.access",
+                defaultValue: "无法访问钥匙串：%@（%d）",
+                detail,
+                status
+            )
         }
     }
 }

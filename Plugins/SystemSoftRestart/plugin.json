@@ -1,0 +1,72 @@
+{
+  "id": "system-soft-restart",
+  "displayName": "系统软重启",
+  "summary": "重启 macOS 用户服务，尝试恢复常见运行时异常",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "إعادة تشغيل النظام برمجيًا",
+      "summary": "أعد تشغيل خدمات مستخدم macOS لمحاولة إصلاح مشكلات وقت التشغيل الشائعة."
+    },
+    "de": {
+      "displayName": "System-Sanftneustart",
+      "summary": "Startet macOS-Benutzerdienste neu, um häufige Laufzeitprobleme zu beheben."
+    },
+    "en": {
+      "displayName": "System Soft Restart",
+      "summary": "Restart macOS user services to recover from common runtime issues."
+    },
+    "es": {
+      "displayName": "Reinicio suave del sistema",
+      "summary": "Reinicia los servicios de usuario de macOS para resolver problemas habituales de ejecución."
+    },
+    "fr": {
+      "displayName": "Redémarrage logiciel du système",
+      "summary": "Redémarrez les services utilisateur de macOS pour corriger les problèmes d’exécution courants."
+    },
+    "ja": {
+      "displayName": "システムソフト再起動",
+      "summary": "macOS のユーザーサービスを再起動し、一般的な実行時の問題から復旧します。"
+    },
+    "ko": {
+      "displayName": "시스템 소프트 재시작",
+      "summary": "macOS 사용자 서비스를 재시작하여 일반적인 런타임 문제를 복구합니다."
+    },
+    "pt": {
+      "displayName": "Reinicialização suave do sistema",
+      "summary": "Reinicie os serviços de usuário do macOS para corrigir problemas comuns de execução."
+    },
+    "ru": {
+      "displayName": "Мягкий перезапуск системы",
+      "summary": "Перезапускает пользовательские службы macOS для устранения типичных сбоев."
+    },
+    "zh-Hans": {
+      "displayName": "系统软重启",
+      "summary": "重启 macOS 用户服务，尝试恢复常见运行时异常"
+    },
+    "zh-Hant": {
+      "displayName": "系統軟重啟",
+      "summary": "重新啟動 macOS 使用者服務，嘗試恢復常見執行階段異常"
+    }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "SystemSoftRestart.bundle",
+  "factoryClass": "SystemSoftRestartPlugin.SystemSoftRestartPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "SystemSoftRestartPlugin"
+  },
+  "package": {
+    "signPaths": [
+      "SystemSoftRestart.bundle/Contents/Resources/RestartHelper/mactools-system-soft-restart-helper"
+    ]
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": [],
+  "category": "system"
+}

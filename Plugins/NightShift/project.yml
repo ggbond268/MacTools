@@ -1,4 +1,0 @@
-settings:
-  base:
-    SWIFT_INCLUDE_PATHS: $(SRCROOT)/Sources/Core/CoreBrightness
-    OTHER_LDFLAGS: -framework CoreBrightness -F /System/Library/PrivateFrameworks

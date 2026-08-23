@@ -25,15 +25,34 @@ protocol R2UploadCompletionNotifying: AnyObject {
 
 @MainActor
 final class R2SystemUploadCompletionNotifier: R2UploadCompletionNotifying {
+    private let localization: PluginLocalization
+
+    init(localization: PluginLocalization) {
+        self.localization = localization
+    }
+
     func notify(fileName: String, result: R2UploadResult) -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "R2 上传完成"
-        alert.informativeText = "\(fileName) 已上传到 R2。"
+        alert.messageText = localization.string(
+            "completion.title",
+            defaultValue: "R2 上传完成"
+        )
+        alert.informativeText = localization.format(
+            "completion.message",
+            defaultValue: "%@ 已上传到 R2。",
+            fileName
+        )
         if result.url != nil {
-            alert.addButton(withTitle: "复制链接")
+            alert.addButton(withTitle: localization.string(
+                "completion.copyLink",
+                defaultValue: "复制链接"
+            ))
         }
-        alert.addButton(withTitle: "好的")
+        alert.addButton(withTitle: localization.string(
+            "common.ok",
+            defaultValue: "好的"
+        ))
         PluginPresentationSafety.prepareForWindowOrdering()
         NSApp.activate(ignoringOtherApps: true)
         let response = alert.runModal()
@@ -112,6 +131,7 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
     private let clipboard: any R2ClipboardWriting
     private let completionNotifier: any R2UploadCompletionNotifying
     private let progressPresenter: any R2UploadProgressPresenting
+    private let localization: PluginLocalization
     private let logger: Logger
     private let terminalStatusDuration: Duration?
     private var uploadTask: Task<R2UploadResult, Error>?
@@ -130,14 +150,18 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
         logger: Logger? = nil,
         terminalStatusDuration: Duration? = .seconds(5)
     ) {
+        let localization = PluginLocalization(bundle: context.resourceBundle)
+        self.localization = localization
         self.configurationStore = configurationStore
-            ?? R2ConfigurationStore(storage: context.storage)
+            ?? R2ConfigurationStore(storage: context.storage, localization: localization)
         self.uploader = uploader
         self.objectChecker = objectChecker
-        self.filePicker = filePicker ?? Self.chooseFile
+        self.filePicker = filePicker ?? { Self.chooseFile(localization: localization) }
         self.clipboard = clipboard ?? R2SystemClipboardWriter()
-        self.completionNotifier = completionNotifier ?? R2SystemUploadCompletionNotifier()
-        self.progressPresenter = progressPresenter ?? R2UploadProgressPresenter()
+        self.completionNotifier = completionNotifier
+            ?? R2SystemUploadCompletionNotifier(localization: localization)
+        self.progressPresenter = progressPresenter
+            ?? R2UploadProgressPresenter(localization: localization)
         self.logger = logger ?? Logger(
             subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools",
             category: "CloudflareR2Plugin"
@@ -145,40 +169,68 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
         self.terminalStatusDuration = terminalStatusDuration
         metadata = PluginMetadata(
             id: "cloudflare-r2",
-            title: "Cloudflare R2 上传",
+            title: localization.string(
+                "metadata.title",
+                defaultValue: "Cloudflare R2 上传"
+            ),
             iconName: "icloud.and.arrow.up.fill",
             iconTint: Color(nsColor: .systemOrange),
             order: 75,
-            defaultDescription: "上传文件到 Cloudflare R2"
+            defaultDescription: localization.string(
+                "metadata.description",
+                defaultValue: "上传文件到 Cloudflare R2"
+            )
         )
         primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
-            buttonTitleProvider: { "选择" }
+            buttonTitleProvider: {
+                localization.string("panel.button.choose", defaultValue: "选择")
+            }
         )
     }
 
     var shortcutDefinitions: [PluginShortcutDefinition] {
         [PluginShortcutDefinition(
             id: ShortcutID.upload,
-            title: "选择文件并上传",
-            description: "打开文件选择器并上传到 Cloudflare R2。",
+            title: localization.string(
+                "shortcut.upload.title",
+                defaultValue: "选择文件并上传"
+            ),
+            description: localization.string(
+                "shortcut.upload.description",
+                defaultValue: "打开文件选择器并上传到 Cloudflare R2。"
+            ),
             actionID: ShortcutID.upload,
             scope: .global,
             defaultBinding: nil,
             isRequired: false,
             settingsGroupID: "upload",
-            settingsGroupTitle: "上传",
-            settingsGroupDescription: "设置打开 R2 文件上传器的全局快捷键。"
+            settingsGroupTitle: localization.string(
+                "shortcut.group.title",
+                defaultValue: "上传"
+            ),
+            settingsGroupDescription: localization.string(
+                "shortcut.group.description",
+                defaultValue: "设置打开 R2 文件上传器的全局快捷键。"
+            )
         )]
     }
 
     var actionDefinitions: [ActionDefinition] {
         [ActionDefinition(
             key: ActionKey(providerID: metadata.id, actionID: ActionID.upload),
-            title: "选择文件并上传到 R2",
+            title: localization.string(
+                "action.upload.title",
+                defaultValue: "选择文件并上传到 R2"
+            ),
             description: metadata.defaultDescription,
-            keywords: ["R2", "S3", "Cloudflare", "上传"],
+            keywords: [
+                "R2",
+                "S3",
+                "Cloudflare",
+                localization.string("action.upload.keyword", defaultValue: "上传"),
+            ],
             systemImage: metadata.iconName,
             externalInvocationPolicy: .unavailable,
             capabilities: [.foregroundInteractive, .cancellable],
@@ -193,7 +245,10 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
         }
         return isConfigured
             ? .available
-            : .unavailable("请先完成 R2 配置。")
+            : .unavailable(localization.string(
+                "error.configuration.incomplete",
+                defaultValue: "请先完成 R2 配置。"
+            ))
     }
 
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
@@ -215,7 +270,7 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
             } catch is CancellationError {
                 return .cancelled
             } catch {
-                return .failed(message: error.localizedDescription)
+                return .failed(message: localizedMessage(for: error))
             }
         }, cancel: { [weak self] in
             self?.cancelUpload()
@@ -224,7 +279,7 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
 
     var primaryPanelState: PluginPanelState {
         PluginPanelState(
-            subtitle: status.subtitle,
+            subtitle: status.subtitle(localization: localization),
             isOn: status.isUploading,
             isExpanded: false,
             isEnabled: !status.isUploading,
@@ -237,7 +292,7 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
     var settingsPage: PluginSettingsPage? {
         .workspace(description: metadata.defaultDescription, scrolling: .host) { [weak self] _ in
             if let self {
-                R2SettingsView(plugin: self)
+                R2SettingsView(plugin: self, localization: localization)
             } else {
                 EmptyView()
             }
@@ -260,7 +315,10 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
 
     func chooseAndUpload() {
         guard isConfigured else {
-            status = .failed("请先在设置中完成 R2 配置。")
+            status = .failed(localization.string(
+                "error.configuration.openSettings",
+                defaultValue: "请先在设置中完成 R2 配置。"
+            ))
             notifyStateChange()
             scheduleStatusReset(generation: uploadGeneration)
             requestSettingsPresentation?()
@@ -426,7 +484,7 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
             }
             uploadTask = nil
             progressPresenter.dismiss()
-            status = .failed(error.localizedDescription)
+            status = .failed(localizedMessage(for: error))
             notifyStateChange()
             scheduleStatusReset(generation: generation)
             logger.error(
@@ -444,7 +502,7 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
         if Task.isCancelled || Self.isCancellation(error) {
             status = .idle
         } else {
-            status = .failed(error.localizedDescription)
+            status = .failed(localizedMessage(for: error))
             scheduleStatusReset(generation: generation)
             logger.error(
                 "R2 object check failed: \(error.localizedDescription, privacy: .private)"
@@ -503,13 +561,26 @@ final class CloudflareR2Plugin: ObservableObject, MacToolsPlugin, PluginPrimaryP
         onStateChange?()
     }
 
+    private func localizedMessage(for error: Error) -> String {
+        if let uploadError = error as? R2UploadError {
+            return uploadError.message(localization: localization)
+        }
+        if let secretError = error as? R2SecretStoreError {
+            return secretError.message(localization: localization)
+        }
+        return error.localizedDescription
+    }
+
     private static func isCancellation(_ error: Error) -> Bool {
         error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 
-    private static func chooseFile() -> URL? {
+    private static func chooseFile(localization: PluginLocalization) -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "选择要上传到 R2 的文件"
+        panel.title = localization.string(
+            "filePicker.title",
+            defaultValue: "选择要上传到 R2 的文件"
+        )
         panel.allowedContentTypes = [.data]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -539,17 +610,37 @@ enum R2UploadStatus: Equatable {
     }
 
     var subtitle: String {
+        subtitle(localization: PluginLocalization(bundle: .main))
+    }
+
+    func subtitle(localization: PluginLocalization) -> String {
         switch self {
         case .idle:
-            "上传文件到 Cloudflare R2"
+            localization.string(
+                "status.idle",
+                defaultValue: "上传文件到 Cloudflare R2"
+            )
         case let .preparing(name):
-            "准备上传 \(name)…"
+            localization.format(
+                "status.preparing",
+                defaultValue: "准备上传 %@…",
+                name
+            )
         case let .uploading(name, progress):
-            "正在上传 \(name)… \(Int(progress * 100))%"
+            localization.format(
+                "status.uploading",
+                defaultValue: "正在上传 %@… %d%%",
+                name,
+                Int(progress * 100)
+            )
         case let .succeeded(result):
-            "上传完成：\(result.objectKey)"
+            localization.format(
+                "status.succeeded",
+                defaultValue: "上传完成：%@",
+                result.objectKey
+            )
         case .failed:
-            "上传失败"
+            localization.string("status.failed", defaultValue: "上传失败")
         }
     }
 }

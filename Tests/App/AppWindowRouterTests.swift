@@ -881,6 +881,37 @@ final class AppWindowRouterTests: XCTestCase {
         router.settingsWindow?.close()
     }
 
+    func testSettingsWindowLayoutTargetRequiresVisibleKeyWindowWithoutUnifiedSearch() {
+        XCTAssertTrue(
+            AppWindowRouter.isEligibleFocusedWindowLayoutTarget(
+                isKeyWindow: true,
+                isVisible: true,
+                isUnifiedSearchPresented: false
+            )
+        )
+        XCTAssertFalse(
+            AppWindowRouter.isEligibleFocusedWindowLayoutTarget(
+                isKeyWindow: false,
+                isVisible: true,
+                isUnifiedSearchPresented: false
+            )
+        )
+        XCTAssertFalse(
+            AppWindowRouter.isEligibleFocusedWindowLayoutTarget(
+                isKeyWindow: true,
+                isVisible: false,
+                isUnifiedSearchPresented: false
+            )
+        )
+        XCTAssertFalse(
+            AppWindowRouter.isEligibleFocusedWindowLayoutTarget(
+                isKeyWindow: true,
+                isVisible: true,
+                isUnifiedSearchPresented: true
+            )
+        )
+    }
+
     func testGlobalSearchRefreshesOnlyAppleShortcutsActions() throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

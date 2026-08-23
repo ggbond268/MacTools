@@ -164,6 +164,90 @@ final class DockLockPluginTests: XCTestCase {
         XCTAssertFalse(plugin.primaryPanelState.isOn)
     }
 
+    func testSettingsPageExposesPersistedEnableToggle() {
+        let plugin = DockLockPlugin(
+            context: makeContext(isEnabled: true),
+            accessibilityTrusted: { true }
+        )
+
+        guard case let .form(sections) = plugin.settingsPage?.body,
+              case let .rows(rows) = sections.first?.content,
+              let row = rows.first,
+              case let .toggle(isOn) = row.control
+        else {
+            return XCTFail("Expected a Dock Lock settings toggle")
+        }
+
+        XCTAssertEqual(row.title, "启用")
+        XCTAssertNotEqual(row.title, plugin.metadata.title)
+        XCTAssertEqual(row.description, "开启后防止程序坞在多显示器之间意外移动。")
+        XCTAssertNotEqual(row.description, plugin.metadata.defaultDescription)
+        XCTAssertTrue(isOn)
+    }
+
+    func testSettingsPageUsesValidPluginKitForm() throws {
+        let plugin = DockLockPlugin(
+            context: makeContext(),
+            accessibilityTrusted: { true }
+        )
+        let page = try XCTUnwrap(plugin.settingsPage)
+
+        XCTAssertEqual(page.body.layout, .form)
+        XCTAssertNoThrow(try PluginSettingsValidator.validate(page))
+    }
+
+    func testSettingsEnableToggleUsesPrimaryPanelActivationLifecycle() {
+        let monitor = MockDockLockMonitor()
+        let context = makeContext(isEnabled: false)
+        let plugin = DockLockPlugin(context: context, monitor: monitor, accessibilityTrusted: { true })
+
+        plugin.handleSettingsAction(
+            .setBoolean(controlID: "dock-lock.settings.enabled", value: true)
+        )
+
+        XCTAssertEqual(monitor.startCallCount, 1)
+        XCTAssertTrue(plugin.primaryPanelState.isOn)
+
+        let enabledReloadedPlugin = DockLockPlugin(
+            context: context,
+            monitor: MockDockLockMonitor(),
+            accessibilityTrusted: { true }
+        )
+        XCTAssertTrue(enabledReloadedPlugin.primaryPanelState.isOn)
+
+        plugin.handleSettingsAction(
+            .setBoolean(controlID: "dock-lock.settings.enabled", value: false)
+        )
+
+        XCTAssertEqual(monitor.stopCallCount, 1)
+        XCTAssertFalse(plugin.primaryPanelState.isOn)
+
+        let reloadedPlugin = DockLockPlugin(
+            context: context,
+            monitor: MockDockLockMonitor(),
+            accessibilityTrusted: { true }
+        )
+        XCTAssertFalse(reloadedPlugin.primaryPanelState.isOn)
+    }
+
+    func testSettingsEnableToggleReportsMissingAccessibilityPermission() {
+        let monitor = MockDockLockMonitor()
+        let plugin = DockLockPlugin(
+            context: makeContext(isEnabled: false),
+            monitor: monitor,
+            accessibilityTrusted: { false },
+            requestAccessibilityTrust: { _ in false }
+        )
+
+        plugin.handleSettingsAction(
+            .setBoolean(controlID: "dock-lock.settings.enabled", value: true)
+        )
+
+        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertEqual(monitor.startCallCount, 0)
+        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+    }
+
     func testMissingPermissionDoesNotStartMonitor() {
         let monitor = MockDockLockMonitor()
         let context = makeContext(isEnabled: true)

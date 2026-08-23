@@ -7,6 +7,14 @@ private enum ActivityBarComponentLayout {
     static let cardCornerRadius = PluginComponentPanelLayoutMetrics.cardCornerRadius
 }
 
+private struct ActivityBarContentHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private enum ActivityBarTrendMode: String, CaseIterable {
     case codingTools = "Coding Tools"
     case input = "Input"
@@ -120,7 +128,7 @@ struct ActivityBarComponentView: View {
 
     @ObservedObject var controller: ActivityBarController
     let localization: PluginLocalization
-    let dismiss: () -> Void
+    let onContentHeightChange: (CGFloat) -> Void
 
     @Environment(\.pluginComponentTheme) private var theme
 
@@ -135,11 +143,11 @@ struct ActivityBarComponentView: View {
     init(
         controller: ActivityBarController,
         localization: PluginLocalization = PluginLocalization(bundle: .main),
-        dismiss: @escaping () -> Void = {}
+        onContentHeightChange: @escaping (CGFloat) -> Void = { _ in }
     ) {
         self.controller = controller
         self.localization = localization
-        self.dismiss = dismiss
+        self.onContentHeightChange = onContentHeightChange
     }
 
     private var selectedDate: Date {
@@ -201,9 +209,18 @@ struct ActivityBarComponentView: View {
                     screenTimeSection
                 }
             }
-
-            divider
-            footerBar
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: ActivityBarContentHeightPreferenceKey.self,
+                    value: geometry.size.height
+                )
+            }
+        }
+        .onPreferenceChange(ActivityBarContentHeightPreferenceKey.self) { height in
+            onContentHeightChange(height)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
@@ -1081,43 +1098,6 @@ struct ActivityBarComponentView: View {
         }
     }
 
-    private var footerBar: some View {
-        HStack(spacing: 12) {
-            Button {
-                if controller.areHooksInstalled {
-                    controller.uninstallHooks()
-                } else {
-                    controller.installHooks()
-                }
-            } label: {
-                Text(hookActionTitle)
-                    .font(.subheadline)
-                    .foregroundStyle(theme.text.secondary)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                controller.openInputMonitoringSettings()
-            } label: {
-                Text(localization.string("component.footer.permissions", defaultValue: "Permissions"))
-                    .font(.subheadline)
-                    .foregroundStyle(theme.text.secondary)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Button(action: dismiss) {
-                Text(localization.string("component.footer.close", defaultValue: "Close"))
-                    .font(.subheadline)
-                    .foregroundStyle(theme.text.secondary)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-
     private var divider: some View {
         Rectangle()
             .fill(theme.surfaces.track)
@@ -1194,14 +1174,6 @@ struct ActivityBarComponentView: View {
                 iconSize: 13
             )
         }
-    }
-
-    private var hookActionTitle: String {
-        if controller.areHooksInstalled {
-            return localization.string("component.footer.uninstallHooks", defaultValue: "卸载 Hook")
-        }
-
-        return localization.string("component.footer.hooks", defaultValue: "Hooks")
     }
 
     private func toolStats(_ tool: ActivityBarCodingTool, in day: ActivityBarCodingDailyStats) -> ActivityBarProjectStats {

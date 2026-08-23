@@ -3093,6 +3093,7 @@ private struct PluginSettingsRowView: View {
     let pluginID: String
     let row: PluginSettingsRow
     let onAction: (PluginSettingsAction) -> Void
+    @State private var showsConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
@@ -3219,6 +3220,21 @@ private struct PluginSettingsRowView: View {
         case let .action(title, role):
             PluginSettingsActionButton(title: title, role: role) {
                 onAction(.invoke(controlID: row.id))
+            }
+        case let .confirmationAction(title, role, confirmation):
+            PluginSettingsActionButton(title: title, role: role) {
+                showsConfirmation = true
+            }
+            .alert(confirmation.title, isPresented: $showsConfirmation) {
+                Button(confirmation.cancelButtonTitle, role: .cancel) {}
+                Button(
+                    confirmation.confirmButtonTitle,
+                    role: role == .destructive ? .destructive : nil
+                ) {
+                    onAction(.invoke(controlID: row.id))
+                }
+            } message: {
+                Text(confirmation.message)
             }
         case let .status(text, systemImage, tone, actionTitle):
             HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {

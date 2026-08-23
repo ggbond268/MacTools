@@ -1,4 +1,7 @@
 import AppKit
+import Combine
+import MacToolsAppIntents
+import MacToolsPluginKit
 import SwiftUI
 @preconcurrency import UserNotifications
 
@@ -18,6 +21,17 @@ final class MacToolsAppRuntime {
     private var windowRouter: AppWindowRouter?
     private var statusItemController: MenuBarStatusItemController?
     private var actionGridOverlayController: ActionGridOverlayController?
+    private var appIntentCatalogCancellable: AnyCancellable?
+    private lazy var settingsRecoveryScheduler = SettingsRecoveryScheduler { [weak self] in
+        self?.windowRouter?.showSettings()
+    }
+    private lazy var appIntentCoordinator = MacToolsAppIntentCoordinator(
+        registry: pluginHost.actionRegistry,
+        executor: pluginHost.actionExecutor,
+        activityHandler: { [weak self] in
+            self?.settingsRecoveryScheduler.noteBackgroundExecution()
+        }
+    )
     private lazy var automationStartupCoordinator = AutomationStartupCoordinator { [weak self] in
         self?.pluginHost.automationController.startAutomaticRules()
     }
@@ -39,6 +53,16 @@ final class MacToolsAppRuntime {
         AppAppearancePreference.applyStoredPreference(userDefaults: appearanceUserDefaults)
         launchAtLoginController.refreshStatus()
         UNUserNotificationCenter.current().delegate = notificationDelegate
+        appIntentCoordinator.beginPreparation()
+        appIntentCatalogCancellable = Publishers.CombineLatest(
+            pluginHost.actionRegistry.$catalogRevision,
+            pluginHost.actionRegistry.$availabilityRevision
+        )
+            .dropFirst()
+            .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] _ in
+                self?.appIntentCoordinator.actionCatalogDidChange()
+            }
 
         let windowRouter = AppWindowRouter(
             pluginHost: pluginHost,
@@ -50,6 +74,16 @@ final class MacToolsAppRuntime {
             appearanceUserDefaults: appearanceUserDefaults
         )
         self.windowRouter = windowRouter
+        pluginHost.installFocusedHostWindowProvider { [weak windowRouter] in
+            windowRouter?.focusedWindowLayoutTarget
+        }
+        pluginHost.actionExecutionFeedbackHandler = { [weak self] source, reference, outcome in
+            self?.presentHeadlessActionFeedback(
+                source: source,
+                reference: reference,
+                outcome: outcome
+            )
+        }
         let actionConfirmationService = AppActionConfirmationService { [weak self] in
             self?.windowRouter?.windowForActionConfirmation()
         }
@@ -58,8 +92,9 @@ final class MacToolsAppRuntime {
         }
         let actionGridOverlayController = ActionGridOverlayController(pluginHost: pluginHost)
         self.actionGridOverlayController = actionGridOverlayController
-        pluginHost.installActionGridPresenter { [weak actionGridOverlayController] entries, source in
-            actionGridOverlayController?.present(entries: entries, source: source) ?? false
+        pluginHost.installActionGridPresenter { [weak self, weak actionGridOverlayController] entries, source in
+            self?.pluginHost.captureCurrentFocusedWindowTarget()
+            return actionGridOverlayController?.present(entries: entries, source: source) ?? false
         }
         statusItemController = MenuBarStatusItemController(
             pluginHost: pluginHost,
@@ -73,8 +108,8 @@ final class MacToolsAppRuntime {
     }
 
     func showSettings() -> Bool {
-        guard let windowRouter else { return false }
-        windowRouter.showSettings()
+        guard windowRouter != nil else { return false }
+        settingsRecoveryScheduler.request()
         return true
     }
 
@@ -83,10 +118,31 @@ final class MacToolsAppRuntime {
     }
 
     func terminate() {
+        settingsRecoveryScheduler.cancel()
         pluginHost.automationController.stopAutomaticRules()
         actionGridOverlayController?.close(restoringFocus: false)
         statusItemController?.dismissPanels()
         pluginHost.deactivateAllPlugins()
+    }
+
+    private func presentHeadlessActionFeedback(
+        source: ActionExecutionSource,
+        reference: ActionReference,
+        outcome: ActionExecutionOutcome
+    ) {
+        guard reference.key.providerID == "window-layouts",
+              source == .globalShortcut || source == .trackpadGesture,
+              case let .success(action) = pluginHost.actionRegistry.registeredAction(for: reference)
+        else {
+            return
+        }
+
+        if let feedback = WindowLayoutActionFeedback.feedback(
+            actionTitle: action.definition.title,
+            outcome: outcome
+        ) {
+            runLinkFeedbackPresenter.present(feedback)
+        }
     }
 
     private func bootstrapDynamicPlugins() {
@@ -122,12 +178,14 @@ final class MacToolsAppRuntime {
                     )
                 }
             }
+            appIntentCoordinator.actionRegistryDidBecomeReady()
             activateAppURLRouter()
         }
     }
 
     private func completeBootstrap() {
         automationStartupCoordinator.actionRegistryDidBecomeReady()
+        appIntentCoordinator.actionRegistryDidBecomeReady()
         activateAppURLRouter()
     }
 
@@ -151,4 +209,78 @@ final class MacToolsAppRuntime {
             }
         )
     }
+}
+
+@MainActor
+final class SettingsRecoveryScheduler {
+    private let delay: Duration
+    private let suppressionDuration: Duration
+    private let showSettings: @MainActor () -> Void
+    private var task: Task<Void, Never>?
+    private var suppressionTask: Task<Void, Never>?
+    private var isSuppressionActive = false
+
+    init(
+        delay: Duration = .milliseconds(400),
+        suppressionDuration: Duration = .seconds(2),
+        showSettings: @escaping @MainActor () -> Void
+    ) {
+        self.delay = delay
+        self.suppressionDuration = suppressionDuration
+        self.showSettings = showSettings
+    }
+
+    func request() {
+        guard !isSuppressionActive else { return }
+        task?.cancel()
+        task = Task { @MainActor [weak self, delay] in
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                return
+            }
+            guard let self else { return }
+            task = nil
+            showSettings()
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+        clearSuppression()
+    }
+
+    func noteBackgroundExecution() {
+        task?.cancel()
+        task = nil
+        isSuppressionActive = true
+        suppressionTask?.cancel()
+        suppressionTask = Task { @MainActor [weak self, suppressionDuration] in
+            do {
+                try await Task.sleep(for: suppressionDuration)
+            } catch {
+                return
+            }
+            self?.clearSuppression()
+        }
+    }
+
+    private func clearSuppression() {
+        suppressionTask?.cancel()
+        suppressionTask = nil
+        isSuppressionActive = false
+    }
+
+    #if DEBUG
+    var hasPendingRequestForTesting: Bool { task != nil }
+    var isSuppressionActiveForTesting: Bool { isSuppressionActive }
+
+    func runPendingRequestForTesting() {
+        guard task != nil else { return }
+        task?.cancel()
+        task = nil
+        showSettings()
+    }
+    #endif
 }

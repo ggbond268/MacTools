@@ -49,16 +49,18 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
         menuActionBehavior: .keepPresented
     )
 
-    let descriptor = PluginComponentDescriptor(
-        span: PluginComponentSpan(
-            width: 4,
-            height: PluginComponentPanelLayoutMetrics.default.heightSpan(closestToOriginalSpanHeight: 10)
-        )!
-    )
+    var descriptor: PluginComponentDescriptor {
+        PluginComponentDescriptor(
+            span: PluginComponentSpan(width: 4, height: dashboardSpanHeight)!
+        )
+    }
 
     private let localization: PluginLocalization
     private let controller: ActivityBarController
     private var isExpanded = false
+    private var dashboardSpanHeight = PluginComponentPanelLayoutMetrics.default.heightSpan(
+        closestToOriginalSpanHeight: 9
+    )
 
     var onStateChange: (() -> Void)? {
         didSet {
@@ -243,14 +245,32 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
         }
     }
 
-    func makeView(context: PluginComponentContext) -> AnyView {
+    func makeView(context _: PluginComponentContext) -> AnyView {
         AnyView(
             ActivityBarComponentView(
                 controller: controller,
                 localization: localization,
-                dismiss: context.dismiss
+                onContentHeightChange: { [weak self] height in
+                    self?.dashboardContentHeightDidChange(height)
+                }
             )
         )
+    }
+
+    func dashboardContentHeightDidChange(_ contentHeight: CGFloat) {
+        guard contentHeight.isFinite, contentHeight > 0 else {
+            return
+        }
+
+        let resolvedSpanHeight = PluginComponentPanelLayoutMetrics.default.heightSpan(
+            fittingContentHeight: contentHeight
+        )
+        guard resolvedSpanHeight != dashboardSpanHeight else {
+            return
+        }
+
+        dashboardSpanHeight = resolvedSpanHeight
+        onStateChange?()
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {

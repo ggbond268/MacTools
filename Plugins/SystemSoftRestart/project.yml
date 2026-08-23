@@ -1,0 +1,20 @@
+targets:
+  mactools-system-soft-restart-helper:
+    type: tool
+    platform: macOS
+    deploymentTarget: '14.0'
+    bundleResourcePath: RestartHelper
+    sources:
+      - path: RestartHelper/Sources
+      - path: Sources/SystemSoftRestartModels.swift
+    settings:
+      base:
+        PRODUCT_NAME: mactools-system-soft-restart-helper
+        PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.plugins.system-soft-restart.helper"
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: 6.0
+        SWIFT_OBJC_BRIDGING_HEADER: Plugins/SystemSoftRestart/RestartHelper/Sources/LaunchdRestart.h
+        MACOSX_DEPLOYMENT_TARGET: '14.0'
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+        OTHER_LDFLAGS: -framework AppKit

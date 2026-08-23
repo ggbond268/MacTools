@@ -1,6 +1,6 @@
 # Feature — Dock Lock
 
-Last verified: 2026-08-10
+Last verified: 2026-08-20
 
 Status: implemented
 Source of truth: yes
@@ -40,6 +40,7 @@ Source of truth: yes
 - [x] P002 — Implémenter le plugin et sa session CGEvent tap.
 - [x] P003 — Ajouter les tests ciblés et la documentation ; vérifier les contrôles disponibles.
 - [x] P004 — Créer la PR.
+- [x] P005 — Expose the persisted enable control on the plugin settings page.
 
 ## TODO
 
@@ -47,6 +48,7 @@ Source of truth: yes
 - [x] F002 — Créer le plugin — files: `Plugins/DockLock/` — status: done
 - [x] F003 — Ajouter la documentation utilisateur et le fragment de changelog — files: `README.md`, `changes/unreleased/` — status: done
 - [x] F004 — Publier les actions canoniques pour les surfaces partagées — files: `Plugins/DockLock/`, `docs/plugins/action-provider-coverage.md` — status: done
+- [x] F005 — Add the settings toggle, targeted tests, and release note — files: `Plugins/DockLock/`, `docs/user-stories/plugins/dock-lock-settings-toggle.md`, `changes/unreleased/` — status: done
 
 ## Journal impl Codex
 
@@ -60,6 +62,8 @@ Source of truth: yes
 - 2026-08-10 — XCTest local : le cas d’autorisation manquante était initialisé désactivé, donc ne pouvait pas produire l’erreur attendue. Le test initialise désormais le plugin activé ; la vérification couvre bien le refus d’autorisation. Le mock de test conserve l’isolation MainActor du scénario.
 - 2026-08-11 — Compatibilité Swift 6 : le polling du Dock utilise un `Timer` cible/sélecteur sur la boucle principale, sans closure `@Sendable` capturant le moniteur.
 - 2026-08-12 — Revue sécurité : le tap utilise la session utilisateur ; seuls les bords extérieurs sans Dock sont retenus. Le mode échoue ouvert pour le masquage automatique, les écrans empilés et une géométrie Dock inconnue.
+- 2026-08-20 — P005/F004 started. The settings page will reuse the existing primary-panel switch action, preserving storage, permission handling, monitor lifecycle, and state notifications.
+- 2026-08-20 — P005/F004 complete. `Plugins/DockLock/Sources/DockLockPlugin.swift:327` defines the settings form and routes its toggle through the primary-panel action at `:384`; `Plugins/DockLock/Tests/DockLockPluginTests.swift:167` covers the rendered form, persistence, lifecycle, and missing permission. `swiftc -parse`, JSON validation, and `git diff --check` passed. The focused XCTest build is blocked by the unrelated missing `Sources/MacToolsPluginKit/TrackpadGestureCatalog.swift` input; the user-story validator is blocked only by the pre-existing `docs/user-stories/app/dock-icon-for-settings-window.md` format.
 
 ## Files actuels
 

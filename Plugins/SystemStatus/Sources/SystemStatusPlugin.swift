@@ -23,6 +23,10 @@ private struct SystemStatusPluginProvider: PluginProvider {
 
 @MainActor
 final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPanelSurfaceLifecycleHandling, PluginSettingsPresenting {
+    private enum SettingsControlID {
+        static let menuBarLayout = "menu-bar-layout"
+    }
+
     let metadata: PluginMetadata
 
     var descriptor: PluginComponentDescriptor {
@@ -139,7 +143,49 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
                     localization: localization,
                     section: .menuBar
                 )
-            }
+            },
+            PluginSettingsSection(
+                id: "menu-bar-layout",
+                title: localization.string(
+                    "settings.menuBarLayout.title",
+                    defaultValue: "菜单栏指标布局"
+                ),
+                systemImage: "rectangle.split.2x1",
+                rows: [
+                    PluginSettingsRow(
+                        id: SettingsControlID.menuBarLayout,
+                        title: localization.string(
+                            "settings.menuBarLayout.arrangement",
+                            defaultValue: "排列方式"
+                        ),
+                        description: localization.string(
+                            "settings.menuBarLayout.description",
+                            defaultValue: "水平保持现有样式；垂直时名称逐字竖排在左，数值在右侧上下左对齐。"
+                        ),
+                        systemImage: "rectangle.split.2x1",
+                        control: .picker(
+                            selectionID: settingsController.configuration.menuBarLayout.rawValue,
+                            options: [
+                                PluginSettingsOption(
+                                    id: SystemStatusMenuBarLayout.horizontal.rawValue,
+                                    title: localization.string(
+                                        "settings.menuBarLayout.horizontal",
+                                        defaultValue: "水平"
+                                    )
+                                ),
+                                PluginSettingsOption(
+                                    id: SystemStatusMenuBarLayout.vertical.rawValue,
+                                    title: localization.string(
+                                        "settings.menuBarLayout.vertical",
+                                        defaultValue: "垂直"
+                                    )
+                                )
+                            ],
+                            style: .segmented
+                        )
+                    )
+                ]
+            )
         ])
     }
 
@@ -194,7 +240,15 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
     }
 
     func handlePermissionAction(id: String) {}
-    func handleSettingsAction(_ action: PluginSettingsAction) {}
+    func handleSettingsAction(_ action: PluginSettingsAction) {
+        guard case let .setSelection(controlID, optionID) = action,
+              controlID == SettingsControlID.menuBarLayout,
+              let layout = SystemStatusMenuBarLayout(rawValue: optionID) else {
+            return
+        }
+
+        settingsController.setMenuBarLayout(layout)
+    }
     func handleShortcutAction(id: String) {}
 }
 
