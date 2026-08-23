@@ -1880,7 +1880,7 @@ final class PreferencesBackupTests: XCTestCase {
             pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
             shortcutCustomizations: [:],
             pluginPreferences: Dictionary(uniqueKeysWithValues: (0..<4).map { index in
-                ("plugin-\(index)", Data(repeating: UInt8(index), count: 800_000))
+                ("plugin-\(index)", Data(repeating: UInt8(index), count: 3_200_000))
             })
         )
 
@@ -1894,7 +1894,7 @@ final class PreferencesBackupTests: XCTestCase {
 
     func testNearLimitExportRoundTripsThroughFileImporter() async throws {
         let payloads = Dictionary(uniqueKeysWithValues: (0..<4).map { index in
-            ("plugin-\(index)", Data(repeating: UInt8(index), count: 700_000))
+            ("plugin-\(index)", Data(repeating: UInt8(index), count: 3_000_000))
         })
         let backup = PreferencesBackup(
             application: validApplicationPreferences,

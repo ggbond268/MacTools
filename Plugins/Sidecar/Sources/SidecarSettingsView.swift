@@ -103,8 +103,9 @@ struct SidecarSettingsView: View {
                     AnyView(deviceSettingsRow(for: item, isLast: isLast))
                 },
                 onMoveBefore: { draggedDeviceID, targetDeviceID in
-                    store.move(deviceID: draggedDeviceID, before: targetDeviceID)
-                    onUpdate()
+                    if store.move(deviceID: draggedDeviceID, before: targetDeviceID) {
+                        onUpdate()
+                    }
                 }
             )
             .frame(height: SidecarDeviceSettingsTable.preferredHeight(for: displayedDeviceRows.count))
@@ -140,12 +141,14 @@ struct SidecarSettingsView: View {
                 localization: localization,
                 settingsContext: settingsContext,
                 onTransportChange: { transport in
-                    store.updateTransport(transport, for: item.preference.id)
-                    onUpdate()
+                    if store.updateTransport(transport, for: item.preference.id) {
+                        onUpdate()
+                    }
                 },
                 onShortcutActionChange: { action in
-                    store.updateShortcutAction(action, for: item.preference.id)
-                    onUpdate()
+                    if store.updateShortcutAction(action, for: item.preference.id) {
+                        onUpdate()
+                    }
                 },
                 isReorderable: item.state == .available
             )

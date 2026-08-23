@@ -231,6 +231,39 @@ public protocol PluginPortablePreferencesProviding: AnyObject {
     func restorePortablePreferences(from data: Data)
 }
 
+/// Optional signal for plugins that persist portable preferences outside the
+/// host's UserDefaults-backed stores. Emit only after a meaningful preference
+/// mutation, never for live status refreshes or cache updates.
+@MainActor
+public protocol PluginPersistentPreferencesChangeSignaling: AnyObject {
+    var onPersistentPreferencesChange: (() -> Void)? { get set }
+}
+
+/// Delivers successful portable-preference persistence to the host, buffering
+/// a construction-time migration until the host installs its callback.
+@MainActor
+public final class PluginPersistentPreferencesChangeEmitter {
+    public var onChange: (() -> Void)? {
+        didSet {
+            guard onChange != nil, hasPendingChange else { return }
+            hasPendingChange = false
+            onChange?()
+        }
+    }
+
+    private var hasPendingChange = false
+
+    public init() {}
+
+    public func didPersist() {
+        guard let onChange else {
+            hasPendingChange = true
+            return
+        }
+        onChange()
+    }
+}
+
 /// Optional companion for portable-preference providers that can verify validation and
 /// persistence. The host uses this result before restoring actions that depend on the payload.
 /// Keeping this separate preserves compatibility with existing dynamic plugins.

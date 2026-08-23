@@ -73,6 +73,7 @@ private struct SidecarSwitchRequest {
 @MainActor
 final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfaceLifecycleHandling,
     PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting,
+    PluginPersistentPreferencesChangeSignaling,
     PluginShortcutBindingChangeHandling, PluginActionProviding,
     PluginLegacyActionShortcutProviding, PluginPortablePreferencesActionReferencesProviding,
     PluginActionReferenceBackupProviding {
@@ -85,10 +86,15 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var onPersistentPreferencesChange: (() -> Void)? {
+        get { persistentPreferencesChanges.onChange }
+        set { persistentPreferencesChanges.onChange = newValue }
+    }
 
     private let service: any SidecarServicing
     private let localization: PluginLocalization
     private let preferences: SidecarPreferencesStore
+    private let persistentPreferencesChanges = PluginPersistentPreferencesChangeEmitter()
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools",
         category: "SidecarPlugin"
@@ -162,6 +168,9 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
         }
         refreshDevices(notify: false)
         isExpanded = !devices.isEmpty
+        if self.preferences.didPersistPortablePreferencesDuringInitialization {
+            persistentPreferencesChanges.didPersist()
+        }
     }
 
     deinit {
@@ -343,7 +352,8 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
     }
 
     func legacyActionShortcutsDidMigrate() {
-        preferences.clearLegacyShortcuts()
+        guard preferences.clearLegacyShortcuts() else { return }
+        persistentPreferencesChanges.didPersist()
         onStateChange?()
     }
 
@@ -446,6 +456,7 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
                             onRefresh: { [weak self] in self?.refresh() },
                             onUpdate: { [weak self] in
                                 self?.onStateChange?()
+                                self?.persistentPreferencesChanges.didPersist()
                             }
                         )
                     } else {
@@ -553,13 +564,17 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
     }
 
     func shortcutBindingDidChange(id: String, binding: ShortcutBinding?) {
+        var persistedPluginPreference = false
         if id.hasPrefix(SidecarShortcutID.devicePrefix) {
-            preferences.updateShortcutConfiguration(
+            persistedPluginPreference = preferences.updateShortcutConfiguration(
                 binding != nil,
                 for: String(id.dropFirst(SidecarShortcutID.devicePrefix.count))
             )
         }
         onStateChange?()
+        if persistedPluginPreference {
+            persistentPreferencesChanges.didPersist()
+        }
     }
 
     func makePortablePreferencesBackup() -> Data? {
@@ -571,9 +586,17 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
     }
 
     func restorePortablePreferencesReportingResult(from data: Data) -> Bool {
+        let previousDevices = preferences.devices
+        let previousDisconnectAllShortcut = preferences.disconnectAllShortcut
+        let previousConnectFirstAvailableShortcut = preferences.connectFirstAvailableShortcut
         guard preferences.restorePortablePreferences(from: data) else { return false }
+        let didChange = preferences.devices != previousDevices
+            || preferences.disconnectAllShortcut != previousDisconnectAllShortcut
+            || preferences.connectFirstAvailableShortcut != previousConnectFirstAvailableShortcut
+        guard didChange else { return true }
         refreshDevices(notify: false)
         onStateChange?()
+        persistentPreferencesChanges.didPersist()
         return true
     }
 
@@ -681,10 +704,12 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
     private func refreshDevices(notify: Bool) {
         let updatedDevices = service.reachableDevices().map(localizedDevice)
         let previousDevices = devices
-        let previousPreferences = preferences.devices
         devices = updatedDevices
-        preferences.reconcile(with: updatedDevices)
-        let changed = updatedDevices != previousDevices || preferences.devices != previousPreferences
+        let preferencesChanged = preferences.reconcile(with: updatedDevices)
+        let changed = updatedDevices != previousDevices || preferencesChanged
+        if preferencesChanged {
+            persistentPreferencesChanges.didPersist()
+        }
         if let operationDeviceID, !devices.contains(where: { $0.id == operationDeviceID }) {
             operation = nil
             self.operationDeviceID = nil

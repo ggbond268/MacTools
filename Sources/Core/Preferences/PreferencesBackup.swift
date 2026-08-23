@@ -3,7 +3,7 @@ import MacToolsPluginKit
 
 struct PreferencesBackup: Codable, Equatable, Sendable {
     static let currentFormatVersion = 6
-    static let maximumFileSize = 4 * 1024 * 1024
+    static let maximumFileSize = 16 * 1024 * 1024
 
     struct ApplicationPreferences: Codable, Equatable, Sendable {
         let appearancePreference: String
@@ -196,6 +196,48 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
             throw PreferencesBackupError.fileTooLarge(maximumBytes: Self.maximumFileSize)
         }
         return data
+    }
+
+    /// Export timestamps describe a snapshot file, not a restorable preference.
+    func hasSameMeaningfulContent(as other: PreferencesBackup) -> Bool {
+        formatVersion == other.formatVersion
+            && application == other.application
+            && pluginDisplay == other.pluginDisplay
+            && shortcutCustomizations == other.shortcutCustomizations
+            && actionShortcutAssignments == other.actionShortcutAssignments
+            && actionShortcutAssignmentsWereEncoded == other.actionShortcutAssignmentsWereEncoded
+            && pluginPreferencesHaveSameMeaningfulContent(as: other.pluginPreferences)
+            && pluginPreferenceActionReferences == other.pluginPreferenceActionReferences
+            && actionInvocationPresets == other.actionInvocationPresets
+            && workflows == other.workflows
+            && automationRules == other.automationRules
+            && selection == other.selection
+    }
+
+    private func pluginPreferencesHaveSameMeaningfulContent(
+        as other: [String: Data]
+    ) -> Bool {
+        guard pluginPreferences.count == other.count else { return false }
+        return pluginPreferences.allSatisfy { pluginID, data in
+            guard let otherData = other[pluginID] else { return false }
+            if data == otherData { return true }
+            guard let value = try? JSONSerialization.jsonObject(with: data),
+                  let otherValue = try? JSONSerialization.jsonObject(with: otherData),
+                  JSONSerialization.isValidJSONObject(value),
+                  JSONSerialization.isValidJSONObject(otherValue),
+                  let canonicalData = try? JSONSerialization.data(
+                      withJSONObject: value,
+                      options: [.sortedKeys]
+                  ),
+                  let canonicalOtherData = try? JSONSerialization.data(
+                      withJSONObject: otherValue,
+                      options: [.sortedKeys]
+                  )
+            else {
+                return false
+            }
+            return canonicalData == canonicalOtherData
+        }
     }
 
     static func decodeJSON(_ data: Data) throws -> PreferencesBackup {
@@ -455,7 +497,12 @@ enum PreferencesBackupError: Error, Equatable {
 
 @MainActor
 protocol PreferencesBackupApplicationStoring: AnyObject {
+    var preferencesBackupChangeReporter: PreferencesBackupChangeReporter? { get set }
+
     func applicationPreferences() -> PreferencesBackup.ApplicationPreferences
     func validates(_ preferences: PreferencesBackup.ApplicationPreferences) -> Bool
     func apply(_ preferences: PreferencesBackup.ApplicationPreferences)
+    func setAppearancePreference(rawValue: String) -> Bool
+    func setLanguagePreference(rawValue: String) -> Bool
+    func setMenuBarClickBehavior(rawValue: String) -> Bool
 }

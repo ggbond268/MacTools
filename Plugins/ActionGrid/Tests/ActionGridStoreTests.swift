@@ -378,11 +378,34 @@ final class ActionGridStoreTests: XCTestCase {
             )
         )
 
-        let store = ActionGridStore(storage: storage)
+        let plugin = ActionGridPlugin(context: PluginRuntimeContext(
+            pluginID: "action-grid",
+            storage: storage
+        ))
+        let store = plugin.store
+        var persistenceNotifications = 0
+        plugin.onPersistentPreferencesChange = { persistenceNotifications += 1 }
 
         XCTAssertNil(store.loadError)
         XCTAssertEqual(store.entries.map(\.slot), [0, 1, 2])
         XCTAssertEqual(store.entries.map(\.reference), references)
+        XCTAssertTrue(store.didPersistPortablePreferencesDuringInitialization)
+        XCTAssertEqual(persistenceNotifications, 1)
+    }
+
+    func testIdenticalPortableRestoreDoesNotEmitPersistentPreferenceSignal() throws {
+        let plugin = ActionGridPlugin(context: PluginRuntimeContext(
+            pluginID: "action-grid",
+            storage: ActionGridTestStorage()
+        ))
+        let backup = try XCTUnwrap(plugin.makePortablePreferencesBackup())
+        var persistenceNotifications = 0
+        plugin.onPersistentPreferencesChange = { persistenceNotifications += 1 }
+        persistenceNotifications = 0
+
+        XCTAssertTrue(plugin.restorePortablePreferencesReportingResult(from: backup))
+
+        XCTAssertEqual(persistenceNotifications, 0)
     }
 
     private func lockID(in store: ActionGridStore, folderID: UUID) -> UUID {

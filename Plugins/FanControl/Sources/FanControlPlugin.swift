@@ -34,6 +34,7 @@ private enum ControlID {
 @MainActor
 final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfaceLifecycleHandling,
     PluginActionProviding, PluginPortablePreferencesProviding,
+    PluginPersistentPreferencesChangeSignaling,
     PluginPortablePreferencesRestorationReporting,
     PluginPortablePreferencesActionReferencesProviding, PluginActionReferenceBackupProviding
 {
@@ -59,6 +60,10 @@ final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var onPersistentPreferencesChange: (() -> Void)? {
+        get { persistentPreferencesChanges.onChange }
+        set { persistentPreferencesChanges.onChange = newValue }
+    }
 
     // MARK: Private State
 
@@ -68,6 +73,7 @@ final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
     private let localization: PluginLocalization
     private let monitoringActiveInterval: Duration
     private let monitoringIdleInterval: Duration
+    private let persistentPreferencesChanges = PluginPersistentPreferencesChangeEmitter()
 
     private var isExpanded = false
     private var isPrimaryPanelVisible = false
@@ -109,6 +115,13 @@ final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
         )
         presetStore.onCatalogChange = { [weak self] in
             self?.onStateChange?()
+            self?.persistentPreferencesChanges.didPersist()
+        }
+        presetStore.onPersistentPreferencesChange = { [weak self] in
+            self?.persistentPreferencesChanges.didPersist()
+        }
+        if presetStore.didPersistPortablePreferencesDuringInitialization {
+            persistentPreferencesChanges.didPersist()
         }
     }
 

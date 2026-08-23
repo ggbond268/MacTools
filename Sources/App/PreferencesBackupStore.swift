@@ -3,9 +3,14 @@ import Foundation
 @MainActor
 final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
     private let userDefaults: UserDefaults
+    var preferencesBackupChangeReporter: PreferencesBackupChangeReporter?
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
         self.userDefaults = userDefaults
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
     }
 
     func applicationPreferences() -> PreferencesBackup.ApplicationPreferences {
@@ -56,6 +61,7 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
             return
         }
 
+        let previousPreferences = applicationPreferences()
         appearance.storeAndApply(in: userDefaults)
         language.store(in: userDefaults)
         userDefaults.set(clickBehavior.rawValue, forKey: MenuBarClickBehaviorPreference.userDefaultsKey)
@@ -68,5 +74,45 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
                 to: userDefaults
             )
         }
+        if applicationPreferences() != previousPreferences {
+            preferencesBackupChangeReporter?.didPersist(.application)
+        }
+    }
+
+    func setAppearancePreference(rawValue: String) -> Bool {
+        guard let preference = AppAppearancePreference(rawValue: rawValue) else { return false }
+        let changed = AppAppearancePreference.stored(in: userDefaults) != preference
+        preference.storeAndApply(in: userDefaults)
+        guard AppAppearancePreference.stored(in: userDefaults) == preference else { return false }
+        if changed {
+            preferencesBackupChangeReporter?.didPersist(.application)
+        }
+        return true
+    }
+
+    func setLanguagePreference(rawValue: String) -> Bool {
+        guard let preference = AppLanguagePreference(rawValue: rawValue) else { return false }
+        let changed = AppLanguagePreference.stored(in: userDefaults) != preference
+        preference.store(in: userDefaults)
+        guard AppLanguagePreference.stored(in: userDefaults) == preference else { return false }
+        if changed {
+            preferencesBackupChangeReporter?.didPersist(.application)
+        }
+        return true
+    }
+
+    func setMenuBarClickBehavior(rawValue: String) -> Bool {
+        guard let preference = MenuBarClickBehaviorPreference(rawValue: rawValue) else {
+            return false
+        }
+        let changed = MenuBarClickBehaviorPreference.current(userDefaults) != preference
+        userDefaults.set(preference.rawValue, forKey: MenuBarClickBehaviorPreference.userDefaultsKey)
+        guard MenuBarClickBehaviorPreference.current(userDefaults) == preference else {
+            return false
+        }
+        if changed {
+            preferencesBackupChangeReporter?.didPersist(.application)
+        }
+        return true
     }
 }

@@ -75,8 +75,21 @@ enum AppL10n {
     static func preferencesBackupFormat(_ key: String, defaultValue: String, _ arguments: CVarArg...) -> String {
         String(
             format: preferencesBackup(key, defaultValue: defaultValue),
-            locale: Locale.current,
+            locale: PluginRuntimeLocalization.locale,
             arguments: arguments
+        )
+    }
+
+    static func preferencesBackupPluralFormat(
+        _ key: String,
+        defaultValue: String,
+        count: Int,
+        _ arguments: CVarArg...
+    ) -> String {
+        String(
+            format: preferencesBackup(key, defaultValue: defaultValue),
+            locale: PluginRuntimeLocalization.locale,
+            arguments: [count as CVarArg] + arguments
         )
     }
 }

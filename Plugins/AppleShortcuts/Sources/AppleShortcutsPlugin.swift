@@ -23,6 +23,7 @@ final class AppleShortcutsPlugin:
     MacToolsPlugin,
     PluginActionProviding,
     PluginPortablePreferencesProviding,
+    PluginPersistentPreferencesChangeSignaling,
     PluginPortablePreferencesRestorationReporting,
     PluginPortablePreferencesActionReferencesProviding,
     PluginActionReferenceBackupProviding,
@@ -37,11 +38,16 @@ final class AppleShortcutsPlugin:
 
     var onStateChange: (() -> Void)?
     var onActionSafetyStateChange: (() -> Void)?
+    var onPersistentPreferencesChange: (() -> Void)? {
+        get { persistentPreferencesChanges.onChange }
+        set { persistentPreferencesChanges.onChange = newValue }
+    }
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
 
     private let localization: PluginLocalization
     private let beforeActionRegistration: (@MainActor () async -> Void)?
+    private let persistentPreferencesChanges = PluginPersistentPreferencesChangeEmitter()
 
     init(
         context: PluginRuntimeContext,
@@ -74,7 +80,13 @@ final class AppleShortcutsPlugin:
             )
         )
         controller.onStateChange = { [weak self] in self?.onStateChange?() }
+        store.onMutation = { [weak self] in
+            self?.persistentPreferencesChanges.didPersist()
+        }
         store.onSafetyPolicyMutation = { [weak self] in self?.onActionSafetyStateChange?() }
+        if store.didPersistPortablePreferencesDuringInitialization {
+            persistentPreferencesChanges.didPersist()
+        }
     }
 
     var settingsPage: PluginSettingsPage? {

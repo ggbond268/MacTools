@@ -57,14 +57,23 @@ final class ActionInvocationPresetStore {
     static let maximumPayloadByteCount = 512 * 1_024
 
     private let defaults: any ActionInvocationPresetPersisting
+    var preferencesBackupChangeReporter: PreferencesBackupChangeReporter?
     private(set) var loadError: String?
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
         self.defaults = userDefaults
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
     }
 
-    init(defaults: any ActionInvocationPresetPersisting) {
+    init(
+        defaults: any ActionInvocationPresetPersisting,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
         self.defaults = defaults
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
     }
 
     func presets() -> [ActionInvocationPreset] {
@@ -228,13 +237,18 @@ final class ActionInvocationPresetStore {
         _ presets: [ActionInvocationPreset],
         allowsRecovery: Bool
     ) -> Bool {
-        guard allowsRecovery || loadError == nil else { return false }
+        let previousPresets = self.presets()
+        let previousPayloadWasValid = loadError == nil
+        guard allowsRecovery || previousPayloadWasValid else { return false }
         guard presets.count <= Self.maximumPresetCount,
               Set(presets.map(\.id)).count == presets.count,
               presets.allSatisfy({
                   $0.formatVersion == ActionInvocationPreset.currentFormatVersion
               }) else {
             return false
+        }
+        if previousPayloadWasValid, previousPresets == presets {
+            return true
         }
         do {
             let data = try JSONEncoder().encode(
@@ -254,6 +268,7 @@ final class ActionInvocationPresetStore {
                 return false
             }
             loadError = nil
+            preferencesBackupChangeReporter?.didPersist(.actionInvocationPresets)
             return true
         } catch {
             return false

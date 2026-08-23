@@ -3,8 +3,7 @@ import ApplicationServices
 import Foundation
 import MacToolsPluginKit
 
-@MainActor
-final class AccessibilityWindowHandle {
+final class AccessibilityWindowHandle: @unchecked Sendable {
     let identity: WindowIdentity
     let bundleIdentifier: String?
     let title: String
@@ -43,13 +42,13 @@ final class AccessibilityWindowHandle {
 
 @MainActor
 protocol FocusedWindowResolving {
-    func resolveFocusedWindow() throws -> AccessibilityWindowHandle
+    func resolveFocusedWindow() async throws -> AccessibilityWindowHandle
 }
 
 @MainActor
 protocol WindowFrameReading {
-    func frame(of window: AccessibilityWindowHandle) throws -> CGRect
-    func isValid(_ window: AccessibilityWindowHandle) -> Bool
+    func frame(of window: AccessibilityWindowHandle) async throws -> CGRect
+    func isValid(_ window: AccessibilityWindowHandle) async -> Bool
 }
 
 @MainActor
@@ -58,75 +57,32 @@ protocol WindowFrameWriting {
         _ frame: CGRect,
         of window: AccessibilityWindowHandle,
         resize: Bool
-    ) throws
+    ) async throws
 }
 
 @MainActor
 protocol WindowFullScreenWriting {
-    func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) throws
+    func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) async throws
 }
 
-@MainActor
-final class SystemFocusedWindowResolver: FocusedWindowResolving {
-    private let accessibilityTrusted: @MainActor @Sendable () -> Bool
-    private let frontmostTarget: @MainActor @Sendable () -> PluginFocusedWindowTarget?
-    private let hostWindow: @MainActor @Sendable (Int) -> NSWindow?
+struct ExternalFocusedWindowTarget: Sendable {
+    let processIdentifier: pid_t
+    let bundleIdentifier: String?
+    let preferredWindowNumber: Int?
+}
+
+actor WindowAccessibilityWorker {
     private let messagingTimeout: Float
 
-    init(
-        accessibilityTrusted: @escaping @MainActor @Sendable () -> Bool = AXIsProcessTrusted,
-        frontmostTarget: @escaping @MainActor @Sendable () -> PluginFocusedWindowTarget? = {
-            guard let application = NSWorkspace.shared.frontmostApplication else { return nil }
-            return PluginFocusedWindowTarget(application: application)
-        },
-        hostWindow: @escaping @MainActor @Sendable (Int) -> NSWindow? = { windowNumber in
-            NSApp.windows.first(where: {
-                $0.windowNumber == windowNumber && $0.isVisible
-            })
-        },
-        messagingTimeout: Float = 0.25
-    ) {
-        self.accessibilityTrusted = accessibilityTrusted
-        self.frontmostTarget = frontmostTarget
-        self.hostWindow = hostWindow
+    init(messagingTimeout: Float = 0.25) {
         self.messagingTimeout = messagingTimeout
     }
 
-    func resolveFocusedWindow() throws -> AccessibilityWindowHandle {
-        guard accessibilityTrusted() else {
-            throw WindowLayoutError.accessibilityRequired
-        }
-        guard let target = frontmostTarget(), !target.application.isTerminated else {
-            throw WindowLayoutError.noFocusedWindow
-        }
-        let application = target.application
-        if application.processIdentifier == ProcessInfo.processInfo.processIdentifier {
-            guard let preferredWindowNumber = target.preferredWindowNumber,
-                  preferredWindowNumber > 0,
-                  let window = hostWindow(preferredWindowNumber),
-                  window.windowNumber == preferredWindowNumber,
-                  window.isVisible
-            else {
-                throw WindowLayoutError.noFocusedWindow
-            }
-            return AccessibilityWindowHandle(
-                identity: WindowIdentity(
-                    processIdentifier: application.processIdentifier,
-                    token: "window-number:\(preferredWindowNumber)"
-                ),
-                bundleIdentifier: application.bundleIdentifier,
-                title: window.title,
-                windowNumber: UInt32(exactly: preferredWindowNumber),
-                canMove: window.isMovable,
-                canResize: window.styleMask.contains(.resizable),
-                canToggleFullScreen: window.styleMask.contains(.titled)
-                    && window.styleMask.contains(.resizable),
-                isFullScreen: window.styleMask.contains(.fullScreen),
-                hostWindow: window
-            )
-        }
-
-        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+    func resolveFocusedWindow(
+        target: ExternalFocusedWindowTarget
+    ) throws -> AccessibilityWindowHandle {
+        try Task.checkCancellation()
+        let applicationElement = AXUIElementCreateApplication(target.processIdentifier)
         AXUIElementSetMessagingTimeout(applicationElement, messagingTimeout)
         let resolvedWindow: AXUIElement?
         if let preferredWindowNumber = target.preferredWindowNumber {
@@ -135,9 +91,8 @@ final class SystemFocusedWindowResolver: FocusedWindowResolving {
             resolvedWindow = copyWindowAttribute(applicationElement, kAXFocusedWindowAttribute)
                 ?? copyWindowAttribute(applicationElement, kAXMainWindowAttribute)
         }
-        guard let window = resolvedWindow,
-              !application.isTerminated
-        else {
+        try Task.checkCancellation()
+        guard let window = resolvedWindow else {
             throw WindowLayoutError.noFocusedWindow
         }
         AXUIElementSetMessagingTimeout(window, messagingTimeout)
@@ -145,34 +100,31 @@ final class SystemFocusedWindowResolver: FocusedWindowResolving {
         let isFullScreen = copyBooleanAttribute(window, "AXFullScreen") == true
             || copyStringAttribute(window, kAXSubroleAttribute) == "AXFullScreenWindow"
 
-        guard hasAttribute(window, kAXPositionAttribute), hasAttribute(window, kAXSizeAttribute) else {
+        guard hasAttribute(window, kAXPositionAttribute),
+              hasAttribute(window, kAXSizeAttribute) else {
             throw WindowLayoutError.windowUnavailable
         }
 
         var processIdentifier: pid_t = 0
         guard AXUIElementGetPid(window, &processIdentifier) == .success,
-              processIdentifier == application.processIdentifier
-        else {
+              processIdentifier == target.processIdentifier else {
             throw WindowLayoutError.windowUnavailable
         }
-        let token: String
         let windowNumber = copyNumberAttribute(window, "AXWindowNumber")?.uint32Value
         if let preferredWindowNumber = target.preferredWindowNumber,
            windowNumber.map(Int.init) != preferredWindowNumber {
             throw WindowLayoutError.windowUnavailable
         }
-        if let windowNumber {
-            token = "window-number:\(windowNumber)"
-        } else {
-            token = "ax-hash:\(CFHash(window))"
-        }
+        let token = windowNumber.map { "window-number:\($0)" }
+            ?? "ax-hash:\(CFHash(window))"
 
+        try Task.checkCancellation()
         return AccessibilityWindowHandle(
             identity: WindowIdentity(
                 processIdentifier: processIdentifier,
                 token: token
             ),
-            bundleIdentifier: application.bundleIdentifier,
+            bundleIdentifier: target.bundleIdentifier,
             title: copyStringAttribute(window, kAXTitleAttribute) ?? "",
             windowNumber: windowNumber,
             canMove: isAttributeSettable(window, kAXPositionAttribute),
@@ -183,12 +135,122 @@ final class SystemFocusedWindowResolver: FocusedWindowResolving {
         )
     }
 
+    func frame(of window: AccessibilityWindowHandle) throws -> CGRect {
+        try Task.checkCancellation()
+        let element = try externalElement(for: window)
+        let position = try pointAttribute(element, kAXPositionAttribute)
+        let size = try sizeAttribute(element, kAXSizeAttribute)
+        guard size.width > 0, size.height > 0 else {
+            throw WindowLayoutError.frameReadFailed
+        }
+        try Task.checkCancellation()
+        return CGRect(origin: position, size: size)
+    }
+
+    func isValid(_ window: AccessibilityWindowHandle) -> Bool {
+        guard let element = window.element else { return false }
+        var processIdentifier: pid_t = 0
+        guard AXUIElementGetPid(element, &processIdentifier) == .success,
+              processIdentifier == window.identity.processIdentifier else {
+            return false
+        }
+        var value: CFTypeRef?
+        return AXUIElementCopyAttributeValue(
+            element,
+            kAXRoleAttribute as CFString,
+            &value
+        ) == .success
+    }
+
+    func setFrame(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) throws {
+        try Task.checkCancellation()
+        let element = try externalElement(for: window)
+        guard window.canMove else {
+            throw WindowLayoutError.windowCannotMove
+        }
+        if resize, !window.canResize {
+            throw WindowLayoutError.windowCannotResize
+        }
+
+        guard resize else {
+            let originalPosition = try pointAttribute(element, kAXPositionAttribute)
+            try Task.checkCancellation()
+            try WindowFrameWriteTransaction.applyPosition(
+                originalPosition: originalPosition,
+                targetPosition: frame.origin,
+                setPosition: { [self] in
+                    try Task.checkCancellation()
+                    try setPoint($0, on: element)
+                },
+                readPosition: { [self] in
+                    try Task.checkCancellation()
+                    return try pointAttribute(element, kAXPositionAttribute)
+                }
+            )
+            return
+        }
+
+        let originalFrame = CGRect(
+            origin: try pointAttribute(element, kAXPositionAttribute),
+            size: try sizeAttribute(element, kAXSizeAttribute)
+        )
+        try Task.checkCancellation()
+        try WindowFrameWriteTransaction.apply(
+            originalFrame: originalFrame,
+            targetFrame: frame,
+            setPosition: { [self] in
+                try Task.checkCancellation()
+                try setPoint($0, on: element)
+            },
+            setSize: { [self] in
+                try Task.checkCancellation()
+                try setSize($0, on: element)
+            },
+            readFrame: { [self] in
+                try Task.checkCancellation()
+                return CGRect(
+                    origin: try pointAttribute(element, kAXPositionAttribute),
+                    size: try sizeAttribute(element, kAXSizeAttribute)
+                )
+            }
+        )
+    }
+
+    func setFullScreen(
+        _ isFullScreen: Bool,
+        for window: AccessibilityWindowHandle
+    ) throws {
+        try Task.checkCancellation()
+        let element = try externalElement(for: window)
+        guard window.canToggleFullScreen else {
+            throw WindowLayoutError.fullScreenUnsupported
+        }
+        let result = AXUIElementSetAttributeValue(
+            element,
+            "AXFullScreen" as CFString,
+            isFullScreen as CFBoolean
+        )
+        guard result == .success else {
+            throw mappedError(result, fallback: .fullScreenUnsupported)
+        }
+    }
+
+    private func externalElement(for window: AccessibilityWindowHandle) throws -> AXUIElement {
+        guard window.hostWindow == nil, let element = window.element else {
+            throw WindowLayoutError.windowUnavailable
+        }
+        return element
+    }
+
     private func copyWindowAttribute(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
               let value,
-              CFGetTypeID(value) == AXUIElementGetTypeID()
-        else {
+              CFGetTypeID(value) == AXUIElementGetTypeID() else {
             return nil
         }
         return (value as! AXUIElement)
@@ -202,8 +264,7 @@ final class SystemFocusedWindowResolver: FocusedWindowResolving {
             kAXWindowsAttribute as CFString,
             &value
         ) == .success,
-              let windows = value as? [AXUIElement]
-        else {
+              let windows = value as? [AXUIElement] else {
             return nil
         }
         for window in windows {
@@ -253,168 +314,12 @@ final class SystemFocusedWindowResolver: FocusedWindowResolving {
             &isSettable
         ) == .success && isSettable.boolValue
     }
-}
-
-@MainActor
-final class AccessibilityWindowFrameAdapter: WindowFrameReading, WindowFrameWriting, WindowFullScreenWriting {
-    func frame(of window: AccessibilityWindowHandle) throws -> CGRect {
-        if let hostWindow = window.hostWindow {
-            guard isValidHostWindow(hostWindow, for: window),
-                  let anchorMaximumY = WindowCoordinateSpace.anchorMaximumY(in: NSScreen.screens)
-            else {
-                throw WindowLayoutError.windowUnavailable
-            }
-            let frame = WindowCoordinateSpace.accessibilityRect(
-                hostWindow.frame,
-                anchorMaximumY: anchorMaximumY
-            )
-            guard frame.width > 0, frame.height > 0 else {
-                throw WindowLayoutError.frameReadFailed
-            }
-            return frame
-        }
-        guard let element = window.element else {
-            throw WindowLayoutError.windowUnavailable
-        }
-        let position = try pointAttribute(element, kAXPositionAttribute)
-        let size = try sizeAttribute(element, kAXSizeAttribute)
-        guard size.width > 0, size.height > 0 else {
-            throw WindowLayoutError.frameReadFailed
-        }
-        return CGRect(origin: position, size: size)
-    }
-
-    func isValid(_ window: AccessibilityWindowHandle) -> Bool {
-        if let hostWindow = window.hostWindow {
-            return isValidHostWindow(hostWindow, for: window)
-        }
-        guard NSRunningApplication(processIdentifier: window.identity.processIdentifier) != nil,
-              let element = window.element
-        else {
-            return false
-        }
-        var value: CFTypeRef?
-        return AXUIElementCopyAttributeValue(
-            element,
-            kAXRoleAttribute as CFString,
-            &value
-        ) == .success
-    }
-
-    func setFrame(
-        _ frame: CGRect,
-        of window: AccessibilityWindowHandle,
-        resize: Bool
-    ) throws {
-        if let hostWindow = window.hostWindow {
-            guard isValidHostWindow(hostWindow, for: window),
-                  let anchorMaximumY = WindowCoordinateSpace.anchorMaximumY(in: NSScreen.screens)
-            else {
-                throw WindowLayoutError.windowUnavailable
-            }
-            guard window.canMove else {
-                throw WindowLayoutError.windowCannotMove
-            }
-            if resize, !window.canResize {
-                throw WindowLayoutError.windowCannotResize
-            }
-            let appKitFrame = WindowCoordinateSpace.appKitRect(
-                frame,
-                anchorMaximumY: anchorMaximumY
-            )
-            if resize {
-                hostWindow.setFrame(appKitFrame, display: true)
-            } else {
-                hostWindow.setFrameOrigin(appKitFrame.origin)
-            }
-            return
-        }
-        guard let element = window.element else {
-            throw WindowLayoutError.windowUnavailable
-        }
-        guard window.canMove else {
-            throw WindowLayoutError.windowCannotMove
-        }
-        if resize, !window.canResize {
-            throw WindowLayoutError.windowCannotResize
-        }
-
-        guard resize else {
-            let originalPosition = try pointAttribute(element, kAXPositionAttribute)
-            try WindowFrameWriteTransaction.applyPosition(
-                originalPosition: originalPosition,
-                targetPosition: frame.origin,
-                setPosition: { [self] in try setPoint($0, on: element) },
-                readPosition: { [self] in
-                    try pointAttribute(element, kAXPositionAttribute)
-                }
-            )
-            return
-        }
-
-        let originalFrame = CGRect(
-            origin: try pointAttribute(element, kAXPositionAttribute),
-            size: try sizeAttribute(element, kAXSizeAttribute)
-        )
-        try WindowFrameWriteTransaction.apply(
-            originalFrame: originalFrame,
-            targetFrame: frame,
-            setPosition: { [self] in try setPoint($0, on: element) },
-            setSize: { [self] in try setSize($0, on: element) },
-            readFrame: { [self] in
-                CGRect(
-                    origin: try pointAttribute(element, kAXPositionAttribute),
-                    size: try sizeAttribute(element, kAXSizeAttribute)
-                )
-            }
-        )
-    }
-
-    func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) throws {
-        if let hostWindow = window.hostWindow {
-            guard isValidHostWindow(hostWindow, for: window) else {
-                throw WindowLayoutError.windowUnavailable
-            }
-            guard window.canToggleFullScreen else {
-                throw WindowLayoutError.fullScreenUnsupported
-            }
-            if hostWindow.styleMask.contains(.fullScreen) != isFullScreen {
-                hostWindow.toggleFullScreen(nil)
-            }
-            return
-        }
-        guard let element = window.element else {
-            throw WindowLayoutError.windowUnavailable
-        }
-        guard window.canToggleFullScreen else {
-            throw WindowLayoutError.fullScreenUnsupported
-        }
-        let result = AXUIElementSetAttributeValue(
-            element,
-            "AXFullScreen" as CFString,
-            isFullScreen as CFBoolean
-        )
-        guard result == .success else {
-            throw mappedError(result, fallback: .fullScreenUnsupported)
-        }
-    }
-
-    private func isValidHostWindow(
-        _ hostWindow: NSWindow,
-        for window: AccessibilityWindowHandle
-    ) -> Bool {
-        window.identity.processIdentifier == ProcessInfo.processInfo.processIdentifier
-            && hostWindow.isVisible
-            && hostWindow.windowNumber > 0
-            && window.windowNumber == UInt32(exactly: hostWindow.windowNumber)
-    }
 
     private func pointAttribute(_ element: AXUIElement, _ attribute: String) throws -> CGPoint {
         let value = try accessibilityValue(element, attribute: attribute)
         var point = CGPoint.zero
         guard AXValueGetType(value) == .cgPoint,
-              AXValueGetValue(value, .cgPoint, &point)
-        else {
+              AXValueGetValue(value, .cgPoint, &point) else {
             throw WindowLayoutError.frameReadFailed
         }
         return point
@@ -424,8 +329,7 @@ final class AccessibilityWindowFrameAdapter: WindowFrameReading, WindowFrameWrit
         let value = try accessibilityValue(element, attribute: attribute)
         var size = CGSize.zero
         guard AXValueGetType(value) == .cgSize,
-              AXValueGetValue(value, .cgSize, &size)
-        else {
+              AXValueGetValue(value, .cgSize, &size) else {
             throw WindowLayoutError.frameReadFailed
         }
         return size
@@ -483,6 +387,171 @@ final class AccessibilityWindowFrameAdapter: WindowFrameReading, WindowFrameWrit
             fallback
         }
     }
+}
+
+@MainActor
+final class SystemFocusedWindowResolver: FocusedWindowResolving {
+    private let accessibilityTrusted: @MainActor @Sendable () -> Bool
+    private let frontmostTarget: @MainActor @Sendable () -> PluginFocusedWindowTarget?
+    private let hostWindow: @MainActor @Sendable (Int) -> NSWindow?
+    private let worker: WindowAccessibilityWorker
+
+    init(
+        accessibilityTrusted: @escaping @MainActor @Sendable () -> Bool = AXIsProcessTrusted,
+        frontmostTarget: @escaping @MainActor @Sendable () -> PluginFocusedWindowTarget? = {
+            guard let application = NSWorkspace.shared.frontmostApplication else { return nil }
+            return PluginFocusedWindowTarget(application: application)
+        },
+        hostWindow: @escaping @MainActor @Sendable (Int) -> NSWindow? = { windowNumber in
+            NSApp.windows.first(where: {
+                $0.windowNumber == windowNumber && $0.isVisible
+            })
+        },
+        messagingTimeout: Float = 0.25,
+        worker: WindowAccessibilityWorker? = nil
+    ) {
+        self.accessibilityTrusted = accessibilityTrusted
+        self.frontmostTarget = frontmostTarget
+        self.hostWindow = hostWindow
+        self.worker = worker ?? WindowAccessibilityWorker(messagingTimeout: messagingTimeout)
+    }
+
+    func resolveFocusedWindow() async throws -> AccessibilityWindowHandle {
+        guard accessibilityTrusted() else {
+            throw WindowLayoutError.accessibilityRequired
+        }
+        guard let target = frontmostTarget(), !target.application.isTerminated else {
+            throw WindowLayoutError.noFocusedWindow
+        }
+        let application = target.application
+        if application.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            guard let preferredWindowNumber = target.preferredWindowNumber,
+                  preferredWindowNumber > 0,
+                  let window = hostWindow(preferredWindowNumber),
+                  window.windowNumber == preferredWindowNumber,
+                  window.isVisible
+            else {
+                throw WindowLayoutError.noFocusedWindow
+            }
+            return AccessibilityWindowHandle(
+                identity: WindowIdentity(
+                    processIdentifier: application.processIdentifier,
+                    token: "window-number:\(preferredWindowNumber)"
+                ),
+                bundleIdentifier: application.bundleIdentifier,
+                title: window.title,
+                windowNumber: UInt32(exactly: preferredWindowNumber),
+                canMove: window.isMovable,
+                canResize: window.styleMask.contains(.resizable),
+                canToggleFullScreen: window.styleMask.contains(.titled)
+                    && window.styleMask.contains(.resizable),
+                isFullScreen: window.styleMask.contains(.fullScreen),
+                hostWindow: window
+            )
+        }
+
+        return try await worker.resolveFocusedWindow(target: ExternalFocusedWindowTarget(
+            processIdentifier: application.processIdentifier,
+            bundleIdentifier: application.bundleIdentifier,
+            preferredWindowNumber: target.preferredWindowNumber
+        ))
+    }
+}
+
+@MainActor
+final class AccessibilityWindowFrameAdapter: WindowFrameReading, WindowFrameWriting, WindowFullScreenWriting {
+    private let worker: WindowAccessibilityWorker
+
+    init(
+        messagingTimeout: Float = 0.25,
+        worker: WindowAccessibilityWorker? = nil
+    ) {
+        self.worker = worker ?? WindowAccessibilityWorker(messagingTimeout: messagingTimeout)
+    }
+
+    func frame(of window: AccessibilityWindowHandle) async throws -> CGRect {
+        if let hostWindow = window.hostWindow {
+            guard isValidHostWindow(hostWindow, for: window),
+                  let anchorMaximumY = WindowCoordinateSpace.anchorMaximumY(in: NSScreen.screens)
+            else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            let frame = WindowCoordinateSpace.accessibilityRect(
+                hostWindow.frame,
+                anchorMaximumY: anchorMaximumY
+            )
+            guard frame.width > 0, frame.height > 0 else {
+                throw WindowLayoutError.frameReadFailed
+            }
+            return frame
+        }
+        return try await worker.frame(of: window)
+    }
+
+    func isValid(_ window: AccessibilityWindowHandle) async -> Bool {
+        if let hostWindow = window.hostWindow {
+            return isValidHostWindow(hostWindow, for: window)
+        }
+        return await worker.isValid(window)
+    }
+
+    func setFrame(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws {
+        if let hostWindow = window.hostWindow {
+            guard isValidHostWindow(hostWindow, for: window),
+                  let anchorMaximumY = WindowCoordinateSpace.anchorMaximumY(in: NSScreen.screens)
+            else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            guard window.canMove else {
+                throw WindowLayoutError.windowCannotMove
+            }
+            if resize, !window.canResize {
+                throw WindowLayoutError.windowCannotResize
+            }
+            let appKitFrame = WindowCoordinateSpace.appKitRect(
+                frame,
+                anchorMaximumY: anchorMaximumY
+            )
+            if resize {
+                hostWindow.setFrame(appKitFrame, display: true)
+            } else {
+                hostWindow.setFrameOrigin(appKitFrame.origin)
+            }
+            return
+        }
+        try await worker.setFrame(frame, of: window, resize: resize)
+    }
+
+    func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) async throws {
+        if let hostWindow = window.hostWindow {
+            guard isValidHostWindow(hostWindow, for: window) else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            guard window.canToggleFullScreen else {
+                throw WindowLayoutError.fullScreenUnsupported
+            }
+            if hostWindow.styleMask.contains(.fullScreen) != isFullScreen {
+                hostWindow.toggleFullScreen(nil)
+            }
+            return
+        }
+        try await worker.setFullScreen(isFullScreen, for: window)
+    }
+
+    private func isValidHostWindow(
+        _ hostWindow: NSWindow,
+        for window: AccessibilityWindowHandle
+    ) -> Bool {
+        window.identity.processIdentifier == ProcessInfo.processInfo.processIdentifier
+            && hostWindow.isVisible
+            && hostWindow.windowNumber > 0
+            && window.windowNumber == UInt32(exactly: hostWindow.windowNumber)
+    }
+
 }
 
 enum WindowFrameWriteTransaction {

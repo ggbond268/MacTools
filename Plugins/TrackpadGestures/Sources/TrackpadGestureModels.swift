@@ -168,6 +168,7 @@ final class TrackpadGestureStore: ObservableObject {
     @Published private(set) var mappingSort: TrackpadGestureMappingSort
     @Published private(set) var mappingStatusFilter: TrackpadGestureMappingStatusFilter
     @Published private(set) var mappingActionFilter: TrackpadGestureMappingActionFilter
+    private(set) var didPersistPortablePreferencesDuringInitialization = false
 
     private let storage: any PluginStorage
     private let encoder = JSONEncoder()
@@ -177,6 +178,15 @@ final class TrackpadGestureStore: ObservableObject {
         legacyMiddleClick: LegacyMiddleClickPreferences? = LegacyMiddleClickPreferences.load()
     ) {
         self.storage = storage
+        let initialMappingsData = storage.data(forKey: Key.mappings)
+        let initialIgnoresGesturesWhileTyping = Self.storedBool(
+            forKey: Key.ignoreWhileTyping,
+            storage: storage
+        )
+        let initialTypingGracePeriod = Self.storedDouble(
+            forKey: Key.typingGracePeriod,
+            storage: storage
+        )
         _ = Self.recoverInterruptedPortableRestore(storage: storage)
         let decoded = storage.data(forKey: Key.mappings)
             .flatMap { try? JSONDecoder().decode([TrackpadGestureMapping].self, from: $0) }
@@ -198,6 +208,12 @@ final class TrackpadGestureStore: ObservableObject {
             .flatMap(TrackpadGestureMappingActionFilter.init(rawValue:))
             ?? .all
         migrateLegacyMiddleClickIfNeeded(legacyMiddleClick)
+        didPersistPortablePreferencesDuringInitialization =
+            storage.data(forKey: Key.mappings) != initialMappingsData
+            || Self.storedBool(forKey: Key.ignoreWhileTyping, storage: storage)
+                != initialIgnoresGesturesWhileTyping
+            || Self.storedDouble(forKey: Key.typingGracePeriod, storage: storage)
+                != initialTypingGracePeriod
     }
 
     var enabledGestures: Set<TrackpadGesture> {
@@ -289,17 +305,31 @@ final class TrackpadGestureStore: ObservableObject {
         lastTestGesture = gesture
     }
 
-    func setIgnoresGesturesWhileTyping(_ isEnabled: Bool) {
-        guard ignoresGesturesWhileTyping != isEnabled else { return }
-        ignoresGesturesWhileTyping = isEnabled
+    @discardableResult
+    func setIgnoresGesturesWhileTyping(_ isEnabled: Bool) -> Bool {
+        guard ignoresGesturesWhileTyping != isEnabled else { return false }
+        let previousRawValue = storage.object(forKey: Key.ignoreWhileTyping)
         storage.set(isEnabled, forKey: Key.ignoreWhileTyping)
+        guard Self.storedBool(forKey: Key.ignoreWhileTyping, storage: storage) == isEnabled else {
+            Self.setOptional(previousRawValue, forKey: Key.ignoreWhileTyping, storage: storage)
+            return false
+        }
+        ignoresGesturesWhileTyping = isEnabled
+        return true
     }
 
-    func setTypingGracePeriod(_ gracePeriod: TimeInterval) {
+    @discardableResult
+    func setTypingGracePeriod(_ gracePeriod: TimeInterval) -> Bool {
         let clamped = TrackpadTypingSuppressionGate.clamped(gracePeriod)
-        guard typingGracePeriod != clamped else { return }
-        typingGracePeriod = clamped
+        guard typingGracePeriod != clamped else { return false }
+        let previousRawValue = storage.object(forKey: Key.typingGracePeriod)
         storage.set(clamped, forKey: Key.typingGracePeriod)
+        guard Self.storedDouble(forKey: Key.typingGracePeriod, storage: storage) == clamped else {
+            Self.setOptional(previousRawValue, forKey: Key.typingGracePeriod, storage: storage)
+            return false
+        }
+        typingGracePeriod = clamped
+        return true
     }
 
     func setMappingSort(_ sort: TrackpadGestureMappingSort) {
@@ -393,6 +423,11 @@ final class TrackpadGestureStore: ObservableObject {
         }
         guard let mappingData = try? encoder.encode(backup.mappings) else { return false }
         let gracePeriod = TrackpadTypingSuppressionGate.clamped(backup.typingGracePeriod)
+        if backup.mappings == mappings,
+           backup.ignoresGesturesWhileTyping == ignoresGesturesWhileTyping,
+           gracePeriod == typingGracePeriod {
+            return true
+        }
         guard recoverInterruptedPortableRestore(),
               beginPortableRestoreTransaction(),
               writePortableValues(

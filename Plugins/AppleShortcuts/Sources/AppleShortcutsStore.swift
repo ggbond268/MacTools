@@ -34,6 +34,7 @@ final class AppleShortcutsStore: ObservableObject {
 
     @Published private(set) var state = AppleShortcutsSettingsState()
     @Published private(set) var loadError: String?
+    private(set) var didPersistPortablePreferencesDuringInitialization = false
 
     var onMutation: (() -> Void)?
     var onSafetyPolicyMutation: (() -> Void)?
@@ -44,7 +45,7 @@ final class AppleShortcutsStore: ObservableObject {
 
     init(storage: any PluginStorage) {
         self.storage = storage
-        reload()
+        didPersistPortablePreferencesDuringInitialization = reload()
     }
 
     func policy(for id: UUID) -> AppleShortcutPolicy { state.policies[id] ?? .default }
@@ -77,6 +78,7 @@ final class AppleShortcutsStore: ObservableObject {
     func restorePortableBackup(_ data: Data) -> Bool {
         guard let portable = decodePortable(data) else { return false }
         let restored = AppleShortcutsSettingsState(policies: portable.policies)
+        guard restored != state || loadError != nil else { return true }
         do {
             try persist(restored)
             state = restored
@@ -134,38 +136,41 @@ final class AppleShortcutsStore: ObservableObject {
         }
     }
 
-    private func reload() {
+    @discardableResult
+    private func reload() -> Bool {
         if let rawValue = storage.object(forKey: Self.storageKey) {
             guard let data = rawValue as? Data,
                   data.count <= Self.maximumPayloadByteCount,
                   let envelope = try? decoder.decode(Envelope.self, from: data),
                   envelope.formatVersion == Self.currentFormatVersion else {
                 loadError = "invalid-apple-shortcuts-settings"
-                return
+                return false
             }
             state = envelope.state
             loadError = nil
-            return
+            return false
         }
 
         guard let rawValue = storage.object(forKey: Self.legacyStorageKey) else {
             loadError = nil
-            return
+            return false
         }
         guard let data = rawValue as? Data,
               data.count <= Self.maximumPayloadByteCount,
               let legacy = try? decoder.decode(LegacyEnvelope.self, from: data),
               legacy.formatVersion == 1 else {
             loadError = "invalid-apple-shortcuts-settings"
-            return
+            return false
         }
         let migrated = AppleShortcutsSettingsState(policies: legacy.state.policies)
         do {
             try persist(migrated)
             state = migrated
             loadError = nil
+            return true
         } catch {
             loadError = "invalid-apple-shortcuts-settings"
+            return false
         }
     }
 

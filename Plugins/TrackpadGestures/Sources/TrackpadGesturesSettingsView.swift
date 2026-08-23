@@ -71,9 +71,12 @@ struct TrackpadGesturesSettingsView: View {
                     onChange()
                 } : nil,
                 onSave: { mapping in
+                    let previousMappings = store.mappings
                     guard store.save(mapping) else { return }
                     editingDraft = nil
-                    onChange()
+                    if store.mappings != previousMappings {
+                        onChange()
+                    }
                 }
             )
         }
@@ -111,8 +114,9 @@ struct TrackpadGesturesSettingsView: View {
                     Toggle("", isOn: Binding(
                         get: { store.ignoresGesturesWhileTyping },
                         set: { isEnabled in
-                            store.setIgnoresGesturesWhileTyping(isEnabled)
-                            onChange()
+                            if store.setIgnoresGesturesWhileTyping(isEnabled) {
+                                onChange()
+                            }
                         }
                     ))
                     .labelsHidden()
@@ -153,8 +157,9 @@ struct TrackpadGesturesSettingsView: View {
                         value: Binding(
                             get: { store.typingGracePeriod },
                             set: { gracePeriod in
-                                store.setTypingGracePeriod(gracePeriod)
-                                onChange()
+                                if store.setTypingGracePeriod(gracePeriod) {
+                                    onChange()
+                                }
                             }
                         ),
                         in: TrackpadTypingSuppressionGate.minimumGracePeriod

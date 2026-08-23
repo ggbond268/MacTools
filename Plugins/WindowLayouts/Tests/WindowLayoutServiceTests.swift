@@ -94,7 +94,7 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
     }
 
-    func testNonResizableWindowCanCenterButCannotTile() {
+    func testNonResizableWindowCanCenterButCannotTile() async {
         let window = makeWindow(canResize: false)
         let frameAdapter = MockWindowFrameAdapter(
             window: window,
@@ -102,14 +102,13 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
         let service = makeService(window: window, frameAdapter: frameAdapter)
 
-        XCTAssertNil(service.validationError(for: .center, options: options()))
-        XCTAssertEqual(
-            service.validationError(for: .maximize, options: options()),
-            .windowCannotResize
-        )
+        let centerError = await service.validationError(for: .center, options: options())
+        let maximizeError = await service.validationError(for: .maximize, options: options())
+        XCTAssertNil(centerError)
+        XCTAssertEqual(maximizeError, .windowCannotResize)
     }
 
-    func testRestoreRemovesStaleHistoryEntry() {
+    func testRestoreRemovesStaleHistoryEntry() async {
         let window = makeWindow()
         let frameAdapter = MockWindowFrameAdapter(
             window: window,
@@ -124,13 +123,14 @@ final class WindowLayoutServiceTests: XCTestCase {
             history: history
         )
 
-        XCTAssertEqual(
-            service.validationError(for: .restorePreviousFrame, options: options()),
-            .noPreviousFrame
+        let error = await service.validationError(
+            for: .restorePreviousFrame,
+            options: options()
         )
+        XCTAssertEqual(error, .noPreviousFrame)
     }
 
-    func testSingleDisplayMoveReturnsSpecificError() {
+    func testSingleDisplayMoveReturnsSpecificError() async {
         let window = makeWindow()
         let frameAdapter = MockWindowFrameAdapter(
             window: window,
@@ -138,10 +138,11 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
         let service = makeService(window: window, frameAdapter: frameAdapter)
 
-        XCTAssertEqual(
-            service.validationError(for: .moveToNextDisplay, options: options()),
-            .noOtherDisplay
+        let error = await service.validationError(
+            for: .moveToNextDisplay,
+            options: options()
         )
+        XCTAssertEqual(error, .noOtherDisplay)
     }
 
     func testRestoreClampsFrameFromDisconnectedDisplayIntoCurrentVisibleFrame() async {
@@ -363,6 +364,118 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
     }
 
+    func testCancelledQueuedExecutionNeverWritesAfterGateBecomesAvailable() async {
+        let window = makeFullScreenWindow()
+        let frameAdapter = MockWindowFrameAdapter(
+            window: window,
+            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
+        )
+        let fullScreenWriter = BlockingFullScreenWriter()
+        let service = makeService(
+            window: window,
+            frameAdapter: frameAdapter,
+            fullScreenWriter: fullScreenWriter
+        )
+
+        let active = Task { @MainActor in
+            await service.execute(.toggleFullScreen, options: options())
+        }
+        while !fullScreenWriter.isBlocked { await Task.yield() }
+
+        let queued = Task { @MainActor in
+            await service.execute(.leftHalf, options: options())
+        }
+        for _ in 0 ..< 10 { await Task.yield() }
+        queued.cancel()
+
+        assertFailure(await queued.value, equals: .executionCancelled)
+        XCTAssertTrue(frameAdapter.writtenFrames.isEmpty)
+
+        fullScreenWriter.resume()
+        assertSuccess(await active.value)
+        XCTAssertTrue(frameAdapter.writtenFrames.isEmpty)
+    }
+
+    func testQueuedExecutionRejectsFocusDriftInsteadOfUsingNewFrontmostWindow() async {
+        let originalWindow = makeFullScreenWindow(token: "original")
+        let replacementWindow = makeWindow(token: "replacement")
+        let resolver = MutableFocusedWindowResolver(window: originalWindow)
+        let frameAdapter = MockWindowFrameAdapter(
+            window: replacementWindow,
+            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
+        )
+        let fullScreenWriter = BlockingFullScreenWriter()
+        let service = makeService(
+            window: originalWindow,
+            frameAdapter: frameAdapter,
+            fullScreenWriter: fullScreenWriter,
+            focusedWindowResolver: resolver
+        )
+
+        let active = Task { @MainActor in
+            await service.execute(.toggleFullScreen, options: options())
+        }
+        while !fullScreenWriter.isBlocked { await Task.yield() }
+
+        let queued = Task { @MainActor in
+            await service.execute(.leftHalf, options: options())
+        }
+        while resolver.resolveCount < 4 { await Task.yield() }
+        resolver.window = replacementWindow
+        fullScreenWriter.resume()
+
+        assertSuccess(await active.value)
+        assertFailure(await queued.value, equals: .windowUnavailable)
+        XCTAssertTrue(frameAdapter.writtenFrames.isEmpty)
+    }
+
+    func testExecutionQueueRejectsRequestsBeyondBoundedCapacity() async {
+        let window = makeFullScreenWindow()
+        let frameAdapter = MockWindowFrameAdapter(
+            window: window,
+            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
+        )
+        let fullScreenWriter = BlockingFullScreenWriter()
+        let service = makeService(
+            window: window,
+            frameAdapter: frameAdapter,
+            fullScreenWriter: fullScreenWriter
+        )
+
+        let active = Task { @MainActor in
+            await service.execute(.toggleFullScreen, options: options())
+        }
+        while !fullScreenWriter.isBlocked { await Task.yield() }
+
+        var queued: [Task<Result<Void, WindowLayoutError>, Never>] = []
+        for _ in 0 ..< 9 {
+            queued.append(Task { @MainActor in
+                await service.execute(.leftHalf, options: options())
+            })
+            for _ in 0 ..< 5 { await Task.yield() }
+        }
+
+        assertFailure(await queued[8].value, equals: .executionQueueFull)
+        for task in queued.prefix(8) { task.cancel() }
+        for task in queued.prefix(8) {
+            assertFailure(await task.value, equals: .executionCancelled)
+        }
+        fullScreenWriter.resume()
+        assertSuccess(await active.value)
+    }
+
+    func testWindowFrameHistoryRetainsOnlyMostRecentEntries() {
+        let history = InMemoryWindowFrameHistory()
+        let windows = (0 ..< 65).map { makeWindow(token: "window-\($0)") }
+        for (index, window) in windows.enumerated() {
+            history.record(CGRect(x: index, y: 0, width: 100, height: 100), for: window)
+        }
+
+        XCTAssertEqual(history.entryCountForTesting, 64)
+        XCTAssertNil(history.previousFrame(for: windows[0]))
+        XCTAssertNotNil(history.previousFrame(for: windows[64]))
+    }
+
     func testPlacementReportsWhenApplicationPermanentlyConstrainsSize() async {
         let window = makeWindow()
         let frameAdapter = MockWindowFrameAdapter(
@@ -471,6 +584,15 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
     }
 
+    private func makeFullScreenWindow(token: String = "fullscreen") -> AccessibilityWindowHandle {
+        AccessibilityWindowHandle(
+            identity: WindowIdentity(processIdentifier: 42, token: token),
+            canMove: true,
+            canResize: true,
+            canToggleFullScreen: true
+        )
+    }
+
     private func makeService(
         window: AccessibilityWindowHandle,
         frameAdapter: MockWindowFrameAdapter,
@@ -531,8 +653,27 @@ final class WindowLayoutServiceTests: XCTestCase {
 private final class MockFullScreenWriter: WindowFullScreenWriting {
     private(set) var values: [Bool] = []
 
-    func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) throws {
+    func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) async throws {
         values.append(isFullScreen)
+    }
+}
+
+@MainActor
+private final class BlockingFullScreenWriter: WindowFullScreenWriting {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var values: [Bool] = []
+    var isBlocked: Bool { continuation != nil }
+
+    func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) async throws {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+        values.append(isFullScreen)
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
     }
 }
 
@@ -549,7 +690,7 @@ private final class MockFocusedWindowResolver: FocusedWindowResolving {
         self.windows = windows
     }
 
-    func resolveFocusedWindow() throws -> AccessibilityWindowHandle {
+    func resolveFocusedWindow() async throws -> AccessibilityWindowHandle {
         guard let window = windows.indices.contains(nextIndex)
             ? windows[nextIndex]
             : windows.last
@@ -557,6 +698,21 @@ private final class MockFocusedWindowResolver: FocusedWindowResolving {
             throw WindowLayoutError.noFocusedWindow
         }
         nextIndex += 1
+        return window
+    }
+}
+
+@MainActor
+private final class MutableFocusedWindowResolver: FocusedWindowResolving {
+    var window: AccessibilityWindowHandle
+    private(set) var resolveCount = 0
+
+    init(window: AccessibilityWindowHandle) {
+        self.window = window
+    }
+
+    func resolveFocusedWindow() async throws -> AccessibilityWindowHandle {
+        resolveCount += 1
         return window
     }
 }
@@ -585,14 +741,14 @@ private final class MockWindowFrameAdapter: WindowFrameReading, WindowFrameWriti
         self.defersWritesUntilSettlement = defersWritesUntilSettlement
     }
 
-    func frame(of window: AccessibilityWindowHandle) throws -> CGRect {
+    func frame(of window: AccessibilityWindowHandle) async throws -> CGRect {
         guard let frame = frames[window.identity] else {
             throw WindowLayoutError.windowUnavailable
         }
         return frame
     }
 
-    func isValid(_ window: AccessibilityWindowHandle) -> Bool {
+    func isValid(_ window: AccessibilityWindowHandle) async -> Bool {
         validIdentities.contains(window.identity)
     }
 
@@ -600,7 +756,7 @@ private final class MockWindowFrameAdapter: WindowFrameReading, WindowFrameWriti
         _ frame: CGRect,
         of window: AccessibilityWindowHandle,
         resize: Bool
-    ) throws {
+    ) async throws {
         writtenFrames.append(frame)
         guard appliesWrites else { return }
         if ignoredWritesRemaining > 0 {

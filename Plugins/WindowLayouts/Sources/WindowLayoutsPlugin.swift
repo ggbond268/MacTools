@@ -63,6 +63,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     var applyActionShortcutPreset: ((Set<String>, [String: ShortcutBinding]) -> String?)?
     @Published private(set) var actionShortcutAssignmentRevision: UInt64 = 0
     @Published private(set) var customCommandSettingsRevision: UInt64 = 0
+    @Published private(set) var customCommandDeletionError: String?
     var focusedWindowTargetProvider: (() -> PluginFocusedWindowTarget?)? {
         didSet {
             applicationTarget.targetProvider = focusedWindowTargetProvider
@@ -98,12 +99,22 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         self.isAccessibilityGranted = accessibilityTrusted()
         let applicationTarget = WindowLayoutsApplicationTarget()
         self.applicationTarget = applicationTarget
-        self.executor = executor ?? WindowLayoutService(
-            focusedWindowResolver: SystemFocusedWindowResolver(
-                accessibilityTrusted: accessibilityTrusted,
-                frontmostTarget: { applicationTarget.target() }
+        if let executor {
+            self.executor = executor
+        } else {
+            let accessibilityWorker = WindowAccessibilityWorker()
+            let frameAdapter = AccessibilityWindowFrameAdapter(worker: accessibilityWorker)
+            self.executor = WindowLayoutService(
+                focusedWindowResolver: SystemFocusedWindowResolver(
+                    accessibilityTrusted: accessibilityTrusted,
+                    frontmostTarget: { applicationTarget.target() },
+                    worker: accessibilityWorker
+                ),
+                frameReader: frameAdapter,
+                frameWriter: frameAdapter,
+                fullScreenWriter: frameAdapter
             )
-        )
+        }
         self.metadata = PluginMetadata(
             id: "window-layouts",
             title: localization.string("metadata.title", defaultValue: "窗口布局"),
@@ -339,6 +350,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     ) -> ActionExecutionResult {
         switch result {
         case .success: .succeeded(message: successMessage)
+        case .failure(.executionCancelled): .cancelled
         case let .failure(error): .failed(message: localizedMessage(for: error))
         }
     }
@@ -370,7 +382,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
             systemImage: systemImage,
             risk: .safe,
             externalInvocationPolicy: externalInvocationPolicy,
-            capabilities: [.background, .foregroundInteractive],
+            capabilities: [.background, .foregroundInteractive, .cancellable],
             concurrencyPolicy: .serialize,
             executionTimeoutSeconds: 15
         )
@@ -467,7 +479,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
             id: "custom-commands",
             title: localizedKey("settings.custom.title", "自定义布局"),
             systemImage: "macwindow.on.rectangle",
-            footer: localizedKey(
+            footer: customCommandDeletionError ?? localizedKey(
                 "settings.custom.description",
                 "可组合相对或固定大小、九点定位和偏移，并作为快捷键或 Run Link 使用。"
             ),
@@ -531,8 +543,72 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         )
     }
 
-    func deleteCustomCommand(_ id: UUID) {
-        _ = store.removeCustomCommand(id: id)
+    @discardableResult
+    func deleteCustomCommand(_ id: UUID) -> Bool {
+        guard let command = store.customCommand(id: id) else { return false }
+
+        var previousBinding: ShortcutBinding?
+        if applyActionShortcutPreset != nil || previewActionShortcutPreset != nil {
+            guard let previewActionShortcutPreset else {
+                publishCustomCommandDeletionError(localizedKey(
+                    "settings.custom.delete.shortcutUnavailable",
+                    "删除前无法读取此布局的快捷键。"
+                ))
+                return false
+            }
+            let preview = previewActionShortcutPreset([command.actionID], [:])
+            guard preview.errorMessage == nil,
+                  let previewItem = preview.items.first(where: {
+                $0.actionID == command.actionID
+            }) else {
+                publishCustomCommandDeletionError(localizedKey(
+                    "settings.custom.delete.shortcutUnavailable",
+                    "删除前无法读取此布局的快捷键。"
+                ))
+                return false
+            }
+            previousBinding = previewItem.currentBinding
+            guard let applyActionShortcutPreset else {
+                publishCustomCommandDeletionError(localizedKey(
+                    "settings.custom.delete.shortcutUnavailable",
+                    "删除前无法读取此布局的快捷键。"
+                ))
+                return false
+            }
+            if let error = applyActionShortcutPreset([command.actionID], [:]) {
+                publishCustomCommandDeletionError(error)
+                return false
+            }
+        }
+
+        guard store.removeCustomCommand(id: id) else {
+            if let previousBinding,
+               let rollbackError = applyActionShortcutPreset?(
+                   [command.actionID],
+                   [command.actionID: previousBinding]
+               ) {
+                publishCustomCommandDeletionError(localizedKey(
+                    "settings.custom.delete.rollbackFailed",
+                    "无法删除布局，也无法恢复其快捷键："
+                ) + " " + rollbackError)
+            } else {
+                publishCustomCommandDeletionError(localizedKey(
+                    "settings.custom.delete.failed",
+                    "无法删除自定义布局；其快捷键已恢复。"
+                ))
+            }
+            return false
+        }
+
+        publishCustomCommandDeletionError(nil)
+        return true
+    }
+
+    private func publishCustomCommandDeletionError(_ error: String?) {
+        guard customCommandDeletionError != error else { return }
+        customCommandDeletionError = error
+        customCommandSettingsRevision &+= 1
+        onStateChange?()
     }
 
     func customCommandShortcutBinding(for id: UUID) -> ShortcutBinding? {
@@ -627,7 +703,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
                         copySuffix: localizedKey("settings.custom.copySuffix", "副本")
                     )
                 }
-                if field == "delete" { _ = store.removeCustomCommand(id: id) }
+                if field == "delete" { _ = deleteCustomCommand(id) }
             }
         }
     }
@@ -849,6 +925,8 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
 
     private func localizedMessage(for error: WindowLayoutError) -> String {
         switch error {
+        case .executionCancelled: localizedKey("error.executionCancelled", "窗口布局操作已取消。")
+        case .executionQueueFull: localizedKey("error.executionQueueFull", "等待中的窗口布局操作过多。")
         case .accessibilityRequired: localizedKey("error.accessibilityRequired", "窗口布局需要辅助功能权限。")
         case .noFocusedWindow: localizedKey("error.noFocusedWindow", "没有可用的聚焦窗口。")
         case .windowUnavailable: localizedKey("error.windowUnavailable", "当前窗口已不可用。")

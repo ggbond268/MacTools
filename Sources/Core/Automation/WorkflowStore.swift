@@ -42,15 +42,18 @@ final class AutomationDefinitionStore {
     private static let maximumCombinedPayloadByteCount = 3 * 1_024 * 1_024 + 4_096
 
     let userDefaults: UserDefaults
+    var preferencesBackupChangeReporter: PreferencesBackupChangeReporter?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let setCombinedValue: (Any?) -> Void
 
     init(
         userDefaults: UserDefaults,
-        setCombinedValue: ((Any?) -> Void)? = nil
+        setCombinedValue: ((Any?) -> Void)? = nil,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
     ) {
         self.userDefaults = userDefaults
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         self.setCombinedValue = setCombinedValue ?? { value in
             if let value {
                 userDefaults.set(value, forKey: DefaultsKey.combined)
@@ -90,9 +93,8 @@ final class AutomationDefinitionStore {
     }
 
     func replace(_ snapshot: Snapshot, allowsRecovery: Bool) -> Bool {
-        if !allowsRecovery {
-            guard load().isValid else { return false }
-        }
+        let previous = load()
+        if !allowsRecovery { guard previous.isValid else { return false } }
         guard WorkflowStore.validationFailure(snapshot.workflows) == nil,
               AutomationRuleStore.validationFailure(snapshot.rules) == nil else {
             return false
@@ -128,6 +130,9 @@ final class AutomationDefinitionStore {
             guard userDefaults.data(forKey: DefaultsKey.combined) == data else {
                 _ = restore(previousValue, forKey: DefaultsKey.combined)
                 return false
+            }
+            if !previous.isValid || previous.snapshot != snapshot {
+                preferencesBackupChangeReporter?.didPersist(.automationDefinitions)
             }
             return true
         } catch {
@@ -330,8 +335,14 @@ final class WorkflowStore {
     private(set) var workflowLoadError: String?
     private(set) var historyLoadError: String?
 
-    init(userDefaults: UserDefaults = .standard) {
-        self.definitionStore = AutomationDefinitionStore(userDefaults: userDefaults)
+    init(
+        userDefaults: UserDefaults = .standard,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
+        self.definitionStore = AutomationDefinitionStore(
+            userDefaults: userDefaults,
+            preferencesBackupChangeReporter: preferencesBackupChangeReporter
+        )
         let defaults = WorkflowHistoryDefaults(userDefaults)
         self.defaults = defaults
         self.historyPersistence = WorkflowHistoryPersistence(

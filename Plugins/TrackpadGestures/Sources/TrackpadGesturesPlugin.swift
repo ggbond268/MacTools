@@ -40,6 +40,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
     AccessibilityPermissionRefreshing, PluginSettingsPresenting,
     PluginFeatureExtractionReadinessProviding, TrackpadActionHostContextConsuming,
     PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting,
+    PluginPersistentPreferencesChangeSignaling,
     PluginPortablePreferencesActionReferencesProviding, PluginInputGestureClaimProviding,
     TrackpadGestureEventProviding {
     private enum PermissionID {
@@ -56,13 +57,19 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
     var requestSettingsPresentation: (() -> Void)?
     var trackpadActionHostContext: TrackpadActionHostContext? {
         didSet {
-            if let trackpadActionHostContext {
-                _ = store.migrateActions(using: trackpadActionHostContext)
+            if let trackpadActionHostContext,
+               store.migrateActions(using: trackpadActionHostContext) {
+                onStateChange?()
+                persistentPreferencesChanges.didPersist()
             }
         }
     }
     var requestTrackpadGestureOwnership: ((TrackpadGesture) -> Void)?
     var onTrackpadGestureRequestsChange: (() -> Void)?
+    var onPersistentPreferencesChange: (() -> Void)? {
+        get { persistentPreferencesChanges.onChange }
+        set { persistentPreferencesChanges.onChange = newValue }
+    }
 
     let store: TrackpadGestureStore
 
@@ -101,6 +108,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools",
         category: "TrackpadGesturesPlugin"
     )
+    private let persistentPreferencesChanges = PluginPersistentPreferencesChangeEmitter()
 
     init(
         context: PluginRuntimeContext = PluginRuntimeContext(pluginID: "trackpad-gestures"),
@@ -158,6 +166,9 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
                 defaultValue: "将触控板手势映射为 MacTools 操作、快捷键或中键点击"
             )
         )
+        if store.didPersistPortablePreferencesDuringInitialization {
+            persistentPreferencesChanges.didPersist()
+        }
 
         self.session.onRecognized = { [weak self] gesture, deviceID in
             self?.handleRecognizedGesture(gesture, deviceID: deviceID)
@@ -358,7 +369,10 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         }
     }
 
-    func configurationDidChange() {
+    func configurationDidChange(persistent: Bool = true) {
+        if persistent {
+            persistentPreferencesChanges.didPersist()
+        }
         let enabledLocalGestures = store.enabledGestures
         let newlyEnabledGestures = enabledLocalGestures.subtracting(lastKnownEnabledLocalGestures)
         lastKnownEnabledLocalGestures = enabledLocalGestures
@@ -376,7 +390,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
 
     private func setTesting(_ enabled: Bool) {
         store.setTesting(enabled)
-        configurationDidChange()
+        configurationDidChange(persistent: false)
     }
 
     private func handleRecognizedGesture(_ gesture: TrackpadGesture, deviceID: UInt64) {
@@ -621,6 +635,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         guard let trackpadActionHostContext else { return }
         if store.migrateActions(using: trackpadActionHostContext) {
             onStateChange?()
+            persistentPreferencesChanges.didPersist()
         }
     }
 
@@ -629,18 +644,29 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
     }
 
     func restorePortablePreferences(from data: Data) {
-        if store.restorePortableBackup(data, using: trackpadActionHostContext) {
-            configurationDidChange()
-        }
+        _ = restorePortablePreferencesAndNotify(from: data)
     }
 
     func restorePortablePreferencesReportingResult(from data: Data) -> Bool {
-        let restored = store.restorePortableBackup(data, using: trackpadActionHostContext)
-        if restored { configurationDidChange() }
-        return restored
+        restorePortablePreferencesAndNotify(from: data)
     }
 
     func actionReferences(inPortablePreferences data: Data) -> [ActionReference]? {
         store.actionReferences(inPortableBackup: data)
+    }
+
+    private func restorePortablePreferencesAndNotify(from data: Data) -> Bool {
+        let previousMappings = store.mappings
+        let previousIgnoresGesturesWhileTyping = store.ignoresGesturesWhileTyping
+        let previousTypingGracePeriod = store.typingGracePeriod
+        guard store.restorePortableBackup(data, using: trackpadActionHostContext) else {
+            return false
+        }
+        if store.mappings != previousMappings
+            || store.ignoresGesturesWhileTyping != previousIgnoresGesturesWhileTyping
+            || store.typingGracePeriod != previousTypingGracePeriod {
+            configurationDidChange()
+        }
+        return true
     }
 }

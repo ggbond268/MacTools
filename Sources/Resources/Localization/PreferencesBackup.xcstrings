@@ -72,73 +72,316 @@
         }
       }
     },
+    "preferencesBackup.automatic.noBackups": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لا توجد نسخ احتياطية بعد" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Noch keine Backups" } },
+        "en": { "stringUnit": { "state": "translated", "value": "No backups yet" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Aún no hay copias" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aucune sauvegarde" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "バックアップはまだありません" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "아직 백업 없음" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Nenhum backup ainda" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Резервных копий пока нет" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "还没有备份" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "尚無備份" } }
+      }
+    },
+    "preferencesBackup.automatic.lastBackup": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "آخر نسخة احتياطية: %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Letztes Backup: %@" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Last backup: %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Última copia: %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Dernière sauvegarde : %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "前回のバックアップ：%@" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "최근 백업: %@" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Último backup: %@" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Последняя копия: %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "上次备份：%@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "上次備份：%@" } }
+      }
+    },
+    "preferencesBackup.automatic.history": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "variations": { "plural": {
+          "zero": { "stringUnit": { "state": "translated", "value": "%d نسخ احتياطية · %@" } },
+          "one": { "stringUnit": { "state": "translated", "value": "%d نسخة احتياطية · %@" } },
+          "two": { "stringUnit": { "state": "translated", "value": "%d نسختان احتياطيتان · %@" } },
+          "few": { "stringUnit": { "state": "translated", "value": "%d نسخ احتياطية · %@" } },
+          "many": { "stringUnit": { "state": "translated", "value": "%d نسخة احتياطية · %@" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%d نسخة احتياطية · %@" } }
+        } } },
+        "de": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%d Backup · %@" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%d Backups · %@" } }
+        } } },
+        "en": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%d snapshot · %@" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%d snapshots · %@" } }
+        } } },
+        "es": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%d copia · %@" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%d copias · %@" } }
+        } } },
+        "fr": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%d sauvegarde · %@" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%d sauvegardes · %@" } }
+        } } },
+        "ja": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "%d件 · %@" } }
+        } } },
+        "ko": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "백업 %d개 · %@" } }
+        } } },
+        "pt": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%d backup · %@" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%d backups · %@" } }
+        } } },
+        "ru": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%d копия · %@" } },
+          "few": { "stringUnit": { "state": "translated", "value": "%d копии · %@" } },
+          "many": { "stringUnit": { "state": "translated", "value": "%d копий · %@" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%d копии · %@" } }
+        } } },
+        "zh-Hans": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "%d 个备份 · %@" } }
+        } } },
+        "zh-Hant": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "%d 個備份 · %@" } }
+        } } }
+      }
+    },
+    "preferencesBackup.automatic.justNow": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "الآن" } },
+        "de": { "stringUnit": { "state": "translated", "value": "gerade eben" } },
+        "en": { "stringUnit": { "state": "translated", "value": "just now" } },
+        "es": { "stringUnit": { "state": "translated", "value": "ahora mismo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "à l’instant" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "たった今" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "방금" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "agora mesmo" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "только что" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "刚刚" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剛剛" } }
+      }
+    },
+    "preferencesBackup.automatic.enabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نسخ الإعدادات احتياطيًا تلقائيًا" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Einstellungen automatisch sichern" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Automatically back up settings" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Crear copias de los ajustes automáticamente" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Sauvegarder automatiquement les réglages" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "設定を自動的にバックアップ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "설정 자동 백업" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Fazer backup automático dos ajustes" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Автоматически создавать резервные копии настроек" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自动备份设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自動備份設定" } }
+      }
+    },
+    "preferencesBackup.automatic.backUpNow": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نسخ احتياطي الآن" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Jetzt sichern" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Back Up Now" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Crear copia ahora" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Sauvegarder maintenant" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "今すぐバックアップ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "지금 백업" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Fazer backup agora" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Создать копию" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "立即备份" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "立即備份" } }
+      }
+    },
+    "preferencesBackup.automatic.openFolder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "فتح مجلد النسخ الاحتياطية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Backup-Ordner öffnen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Open Backup Folder" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Abrir carpeta de copias" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir le dossier de sauvegarde" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "バックアップフォルダを開く" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "백업 폴더 열기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Abrir pasta de backup" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Открыть папку резервных копий" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开备份文件夹" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開備份檔案夾" } }
+      }
+    },
+    "preferencesBackup.manual.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نسخ احتياطي يدوي" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Manuelles Backup" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Manual Backup" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Copia manual" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Sauvegarde manuelle" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "手動バックアップ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "수동 백업" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Backup manual" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Резервное копирование вручную" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "手动备份" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "手動備份" } }
+      }
+    },
+    "preferencesBackup.manual.created": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تم النسخ الاحتياطي للتو" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Gerade gesichert" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Backed up just now" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Copia creada ahora" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Sauvegarde effectuée à l’instant" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "たった今バックアップしました" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "방금 백업함" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Backup criado agora" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Копия только что создана" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "刚刚已备份" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剛剛已備份" } }
+      }
+    },
+    "preferencesBackup.manual.unchanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لا تغييرات منذ آخر نسخة احتياطية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Keine Änderungen seit dem letzten Backup" } },
+        "en": { "stringUnit": { "state": "translated", "value": "No changes since the last backup" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Sin cambios desde la última copia" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aucun changement depuis la dernière sauvegarde" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "前回のバックアップから変更はありません" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "최근 백업 이후 변경 사항 없음" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Sem alterações desde o último backup" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Изменений с последней копии нет" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "与上次备份相比没有变化" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "與上次備份相比沒有變更" } }
+      }
+    },
+    "preferencesBackup.transfer.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نقل التفضيلات" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Einstellungen übertragen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Transfer Preferences" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Transferir preferencias" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Transférer les préférences" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "環境設定を転送" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "환경설정 전송" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Transferir preferências" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Перенос настроек" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "迁移偏好设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "移轉偏好設定" } }
+      }
+    },
+    "preferencesBackup.automatic.created": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تم نسخ التفضيلات احتياطيًا." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die Einstellungen wurden gesichert." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Preferences were backed up." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Se ha creado la copia de preferencias." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les préférences ont été sauvegardées." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "環境設定をバックアップしました。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "환경설정을 백업했습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "O backup das preferências foi criado." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Резервная копия настроек создана." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "偏好设置已备份。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "偏好設定已備份。" } }
+      }
+    },
+    "preferencesBackup.automatic.unchanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لم تتغير التفضيلات؛ لم يتم إنشاء نسخة احتياطية جديدة." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die Einstellungen sind unverändert; es wurde kein neues Backup erstellt." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Preferences have not changed, so no new backup was created." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Las preferencias no han cambiado; no se creó otra copia." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les préférences sont inchangées ; aucune sauvegarde n’a été créée." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "環境設定に変更がないため、新しいバックアップは作成されませんでした。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "환경설정이 변경되지 않아 새 백업을 만들지 않았습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "As preferências não mudaram; nenhum novo backup foi criado." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Настройки не изменились, новая копия не создана." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "偏好设置没有变化，无需创建新备份。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "偏好設定沒有變更，無需建立新備份。" } }
+      }
+    },
     "preferencesBackup.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تصدير واستيراد التفضيلات"
+            "value": "النسخ الاحتياطي للتفضيلات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einstellungen exportieren und importieren"
+            "value": "Sicherung der Einstellungen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Export and Import Preferences"
+            "value": "Preferences Backup"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exportar e importar preferencias"
+            "value": "Copia de preferencias"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exporter et importer les préférences"
+            "value": "Sauvegarde des préférences"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "環境設定をエクスポート／インポート"
+            "value": "環境設定のバックアップ"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "환경설정 내보내기 및 가져오기"
+            "value": "환경설정 백업"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exportar e importar preferências"
+            "value": "Backup de preferências"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Экспорт и импорт настроек"
+            "value": "Резервное копирование настроек"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "导出与导入偏好设置"
+            "value": "偏好设置备份"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "匯出與匯入偏好設定"
+            "value": "偏好設定備份"
           }
         }
       }
@@ -149,67 +392,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يتضمن تفضيلات التطبيق وتخطيط الإضافات والاختصارات وسير العمل وقواعد الأتمتة وروابط التشغيل المحفوظة وإعدادات الإضافات القابلة للتصدير؛ ويستثني الأذونات وذاكرات التخزين المؤقت وبيانات الاعتماد وسجل التشغيل."
+            "value": "تُخزَّن النسخ الاحتياطية التلقائية محليًا وتشمل إعدادات التطبيق والإضافات القابلة للنقل؛ وتُستبعد الأذونات وذاكرات التخزين المؤقت وبيانات الاعتماد والبيانات الخاصة الأخرى."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enthält App-Einstellungen, Plugin-Layout, Tastaturkurzbefehle, Workflows, Automationsregeln, gespeicherte Run Links und exportierbare Plug-in-Einstellungen; Berechtigungen, Caches, Zugangsdaten und der Ausführungsverlauf sind ausgeschlossen."
+            "value": "Automatische Backups werden lokal gespeichert und enthalten übertragbare App- und Plug-in-Einstellungen; Berechtigungen, Caches, Zugangsdaten und andere private Daten sind ausgeschlossen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Includes app preferences, plugin layout, keyboard shortcuts, workflows, automation rules, saved Run Links, and supported exportable plugin settings; permissions, caches, credentials, and run history are excluded."
+            "value": "Automatic backups are stored locally and include portable app and plugin settings; permissions, caches, credentials, and other private data are excluded."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Incluye preferencias de la app, diseño de plugins, atajos de teclado, flujos de trabajo, reglas de automatización, enlaces de ejecución guardados y ajustes de plugins exportables; no incluye permisos, cachés, credenciales ni el historial de ejecuciones."
+            "value": "Las copias de seguridad automáticas se guardan localmente e incluyen ajustes portátiles de la app y los plugins; se excluyen permisos, cachés, credenciales y otros datos privados."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inclut les préférences de l’app, la disposition des extensions, les raccourcis clavier, les workflows, les règles d’automatisation, les liens d’exécution enregistrés et les réglages d’extension exportables ; les autorisations, caches, identifiants et l’historique d’exécution sont exclus."
+            "value": "Les sauvegardes automatiques sont stockées localement et incluent les réglages transférables de l’app et des extensions ; les autorisations, caches, identifiants et autres données privées sont exclus."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アプリの環境設定、プラグインの配置、キーボードショートカット、ワークフロー、自動化ルール、保存済みの実行リンク、対応するプラグイン設定を含みます。権限、キャッシュ、認証情報、実行履歴は含まれません。"
+            "value": "自動バックアップはローカルに保存され、移行可能なアプリとプラグインの設定が含まれます。権限、キャッシュ、認証情報、その他の個人データは含まれません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "앱 환경설정, 플러그인 배치, 키보드 단축키, 워크플로, 자동화 규칙, 저장된 실행 링크 및 내보내기를 지원하는 플러그인 설정을 포함합니다. 권한, 캐시, 자격 증명 및 실행 기록은 제외됩니다."
+            "value": "자동 백업은 로컬에 저장되며 이동 가능한 앱 및 플러그인 설정을 포함합니다. 권한, 캐시, 자격 증명 및 기타 개인 데이터는 제외됩니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inclui preferências do app, layout dos plugins, atalhos de teclado, fluxos de trabalho, regras de automação, links de execução salvos e definições de plugins exportáveis; permissões, caches, credenciais e o histórico de execuções são excluídos."
+            "value": "Os backups automáticos são armazenados localmente e incluem ajustes portáteis do app e dos plugins; permissões, caches, credenciais e outros dados privados são excluídos."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Включает настройки приложения, раскладку плагинов, сочетания клавиш, рабочие процессы, правила автоматизации, сохранённые ссылки запуска и экспортируемые настройки плагинов; разрешения, кэш, учётные данные и история запусков исключены."
+            "value": "Автоматические резервные копии хранятся локально и включают переносимые настройки приложения и плагинов; разрешения, кэш, учётные данные и другие личные данные исключены."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "包含应用偏好、插件布局、快捷键、工作流、自动化规则、已保存的运行链接和支持导出的插件设置；不包含权限、缓存、凭证或运行历史。"
+            "value": "自动备份保存在本机，包含可移植的应用与插件设置；不包含权限、缓存、凭证或其他私密数据。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "包含應用程式偏好、插件佈局、快速鍵、工作流程、自動化規則、已儲存的執行連結和支援匯出的插件設定；不包含權限、快取、憑證或執行歷史。"
+            "value": "自動備份儲存在本機，包含可攜式的應用程式與插件設定；不包含權限、快取、憑證或其他私密資料。"
           }
         }
       }

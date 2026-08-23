@@ -8,8 +8,14 @@ final class AutomationRuleStore {
     let definitionStore: AutomationDefinitionStore
     private(set) var loadError: String?
 
-    init(userDefaults: UserDefaults = .standard) {
-        self.definitionStore = AutomationDefinitionStore(userDefaults: userDefaults)
+    init(
+        userDefaults: UserDefaults = .standard,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
+        self.definitionStore = AutomationDefinitionStore(
+            userDefaults: userDefaults,
+            preferencesBackupChangeReporter: preferencesBackupChangeReporter
+        )
     }
 
     init(definitionStore: AutomationDefinitionStore) {

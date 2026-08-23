@@ -219,6 +219,8 @@ struct WindowIdentity: Hashable, Sendable {
 }
 
 enum WindowLayoutError: Error, Equatable {
+    case executionCancelled
+    case executionQueueFull
     case accessibilityRequired
     case noFocusedWindow
     case windowUnavailable

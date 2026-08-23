@@ -43,6 +43,19 @@ final class AppleShortcutsStoreTests: XCTestCase {
         XCTAssertFalse(restored.policy(for: id).requiresConfirmation)
     }
 
+    func testIdenticalPortableRestoreDoesNotReportMutation() throws {
+        let store = AppleShortcutsStore(storage: AppleShortcutsTestStorage())
+        let id = UUID()
+        try store.setRequiresConfirmation(false, for: id).get()
+        let backup = try XCTUnwrap(store.portableBackup())
+        var mutationCount = 0
+        store.onMutation = { mutationCount += 1 }
+
+        XCTAssertTrue(store.restorePortableBackup(backup))
+
+        XCTAssertEqual(mutationCount, 0)
+    }
+
     func testLegacyEnablementSettingsMigrateOnlySafetyPolicies() throws {
         let id = UUID()
         let legacyPayload = try JSONEncoder().encode(LegacyEnvelope(
@@ -62,6 +75,7 @@ final class AppleShortcutsStoreTests: XCTestCase {
 
         XCTAssertEqual(store.policy(for: id), AppleShortcutPolicy(requiresConfirmation: false))
         XCTAssertNotNil(storage.data(forKey: AppleShortcutsStore.storageKey))
+        XCTAssertTrue(store.didPersistPortablePreferencesDuringInitialization)
     }
 }
 

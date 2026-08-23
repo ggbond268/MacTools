@@ -56,16 +56,25 @@ final class ActionShortcutAssignmentStore {
     private static let currentVersion = 1
 
     private let defaults: any ActionShortcutAssignmentPersisting
+    var preferencesBackupChangeReporter: PreferencesBackupChangeReporter?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
     private(set) var loadError: String?
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
         self.defaults = userDefaults
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
     }
 
-    init(defaults: any ActionShortcutAssignmentPersisting) {
+    init(
+        defaults: any ActionShortcutAssignmentPersisting,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
         self.defaults = defaults
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
     }
 
     func assignments() -> [ActionShortcutAssignmentRecord] {
@@ -111,13 +120,18 @@ final class ActionShortcutAssignmentStore {
         _ assignments: [ActionShortcutAssignmentRecord],
         allowsRecovery: Bool
     ) -> ActionShortcutStoreWriteResult {
-        guard allowsRecovery || loadError == nil else {
+        let previousAssignments = self.assignments()
+        let previousPayloadWasValid = loadError == nil
+        guard allowsRecovery || previousPayloadWasValid else {
             return .rejected(rollbackSucceeded: true)
         }
         guard assignments.count <= Self.maximumAssignmentCount,
               Set(assignments.map(\.id)).count == assignments.count,
               let data = encodedPayload(assignments) else {
             return .rejected(rollbackSucceeded: true)
+        }
+        if previousPayloadWasValid, previousAssignments == assignments {
+            return .committed
         }
         let previousValue = defaults.object(forKey: DefaultsKey.payload)
         defaults.set(data, forKey: DefaultsKey.payload)
@@ -127,6 +141,7 @@ final class ActionShortcutAssignmentStore {
             )
         }
         loadError = nil
+        preferencesBackupChangeReporter?.didPersist(.actionShortcutAssignments)
         return .committed
     }
 
@@ -193,6 +208,7 @@ final class ActionShortcutAssignmentStore {
         markerKey: String,
         didPersist: () -> Void
     ) -> ActionShortcutLegacyMigrationResult {
+        let previousAssignments = assignments()
         guard records.count <= Self.maximumAssignmentCount,
               Set(records.map(\.id)).count == records.count,
               let candidateData = encodedPayload(records) else {
@@ -218,6 +234,9 @@ final class ActionShortcutAssignmentStore {
 
         loadError = nil
         didPersist()
+        if previousAssignments != records {
+            preferencesBackupChangeReporter?.didPersist(.actionShortcutAssignments)
+        }
         return .migrated
     }
 

@@ -77,6 +77,24 @@ final class SavedScriptsStoreTests: XCTestCase {
         XCTAssertEqual(restored.scripts.first?.workingDirectory, "")
     }
 
+    func testIdenticalSaveAndPortableRestoreDoNotReportMutation() throws {
+        let store = SavedScriptsStore(storage: SavedScriptsTestStorage())
+        let script = try store.save(SavedScript(
+            name: "Portable",
+            kind: .zsh,
+            source: "echo portable",
+            includeSourceInBackup: true
+        )).get()
+        let backup = try XCTUnwrap(store.portableBackup())
+        var mutationCount = 0
+        store.onMutation = { mutationCount += 1 }
+
+        _ = try store.save(script).get()
+        XCTAssertTrue(store.restorePortableBackup(backup))
+
+        XCTAssertEqual(mutationCount, 0)
+    }
+
     func testPortableRestoreRequiresRenewedTrustForExecution() throws {
         let source = SavedScriptsStore(storage: SavedScriptsTestStorage())
         let included = try source.save(SavedScript(

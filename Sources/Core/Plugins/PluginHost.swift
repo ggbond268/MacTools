@@ -398,6 +398,8 @@ final class PluginHost: ObservableObject {
     private let shortcutStore: ShortcutStore
     private let pluginDisplayPreferencesStore: PluginDisplayPreferencesStore
     private let preferencesBackupStore: any PreferencesBackupApplicationStoring
+    private let automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator?
+    let preferencesBackupChangeReporter: PreferencesBackupChangeReporter
     private let globalShortcutManager: GlobalShortcutManager
     private let displayConfigurationObserver: (any DisplayConfigurationObserving)?
     private let accessibilityPermissionObserver: (any AccessibilityPermissionObserving)?
@@ -485,6 +487,9 @@ final class PluginHost: ObservableObject {
     @Published private(set) var automaticPluginUpdateStatus: PluginAutomaticUpdateStatus = .idle
     @Published private(set) var hasActivePlugin = false
     @Published private(set) var localizationRevision = 0
+    @Published private(set) var automaticPreferencesBackupEnabled = false
+    @Published private(set) var automaticPreferencesBackupSummary =
+        AutomaticPreferencesBackupSummary.empty
 
     /// The app shell installs this while the application is running. The host
     /// emits typed requests but never manipulates windows or popovers directly.
@@ -512,17 +517,28 @@ final class PluginHost: ObservableObject {
 
     convenience init(
         loadDynamicPluginsOnInit: Bool = true,
-        preferencesBackupStore: any PreferencesBackupApplicationStoring
+        preferencesBackupStore: any PreferencesBackupApplicationStoring,
+        enablesAutomaticPreferencesBackups: Bool = false
     ) {
         let dynamicPluginManager = DynamicPluginManager()
         let pluginCatalogManager = PluginCatalogManager.live(dynamicPluginManager: dynamicPluginManager)
+        let preferencesBackupChangeReporter = PreferencesBackupChangeReporter()
+        let shortcutStore = ShortcutStore(
+            preferencesBackupChangeReporter: preferencesBackupChangeReporter
+        )
         self.init(
             plugins: BuiltInPluginRegistry().makePlugins(),
             dynamicPluginManager: dynamicPluginManager,
             pluginCatalogManager: pluginCatalogManager,
-            shortcutStore: ShortcutStore(),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(),
+            shortcutStore: shortcutStore,
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(
+                preferencesBackupChangeReporter: preferencesBackupChangeReporter
+            ),
             preferencesBackupStore: preferencesBackupStore,
+            preferencesBackupChangeReporter: preferencesBackupChangeReporter,
+            automaticPreferencesBackupCoordinator: enablesAutomaticPreferencesBackups
+                ? AutomaticPreferencesBackupCoordinator(userDefaults: shortcutStore.userDefaults)
+                : nil,
             globalShortcutManager: GlobalShortcutManager(),
             displayConfigurationObserver: SystemDisplayConfigurationObserver(),
             accessibilityPermissionObserver: AccessibilityPermissionObserver(),
@@ -538,6 +554,9 @@ final class PluginHost: ObservableObject {
         shortcutStore: ShortcutStore,
         pluginDisplayPreferencesStore: PluginDisplayPreferencesStore,
         preferencesBackupStore: any PreferencesBackupApplicationStoring,
+        preferencesBackupChangeReporter providedPreferencesBackupChangeReporter:
+            PreferencesBackupChangeReporter? = nil,
+        automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator? = nil,
         globalShortcutManager: GlobalShortcutManager,
         displayConfigurationObserver: (any DisplayConfigurationObserving)? = nil,
         accessibilityPermissionObserver: (any AccessibilityPermissionObserving)? = nil,
@@ -548,6 +567,13 @@ final class PluginHost: ObservableObject {
         loadDynamicPluginsOnInit: Bool = true,
         actionURLScheme: String = RightClickURLRouter.bundleURLSchemes().sorted().first ?? "mactools"
     ) {
+        let preferencesBackupChangeReporter = providedPreferencesBackupChangeReporter
+            ?? PreferencesBackupChangeReporter()
+        shortcutStore.preferencesBackupChangeReporter = preferencesBackupChangeReporter
+        pluginDisplayPreferencesStore.preferencesBackupChangeReporter =
+            preferencesBackupChangeReporter
+        preferencesBackupStore.preferencesBackupChangeReporter = preferencesBackupChangeReporter
+
         self.builtInPlugins = plugins.sorted {
             if $0.metadata.order == $1.metadata.order {
                 return $0.metadata.title.localizedCompare($1.metadata.title) == .orderedAscending
@@ -558,6 +584,8 @@ final class PluginHost: ObservableObject {
         self.shortcutStore = shortcutStore
         self.pluginDisplayPreferencesStore = pluginDisplayPreferencesStore
         self.preferencesBackupStore = preferencesBackupStore
+        self.automaticPreferencesBackupCoordinator = automaticPreferencesBackupCoordinator
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         self.globalShortcutManager = globalShortcutManager
         self.displayConfigurationObserver = displayConfigurationObserver
         self.accessibilityPermissionObserver = accessibilityPermissionObserver
@@ -571,10 +599,12 @@ final class PluginHost: ObservableObject {
         self.pluginCatalogManager = pluginCatalogManager
         let actionRegistry = ActionRegistry()
         let actionShortcutStore = ActionShortcutAssignmentStore(
-            userDefaults: shortcutStore.userDefaults
+            userDefaults: shortcutStore.userDefaults,
+            preferencesBackupChangeReporter: preferencesBackupChangeReporter
         )
         let actionPresetStore = ActionInvocationPresetStore(
-            userDefaults: shortcutStore.userDefaults
+            userDefaults: shortcutStore.userDefaults,
+            preferencesBackupChangeReporter: preferencesBackupChangeReporter
         )
         let actionConfirmationService = ActionConfirmationRouter()
         let actionExecutor = ActionExecutor(
@@ -596,14 +626,25 @@ final class PluginHost: ObservableObject {
             presetStore: actionPresetStore,
             scheme: actionURLScheme
         )
-        let workflowStore = WorkflowStore(userDefaults: shortcutStore.userDefaults)
+        let workflowStore = WorkflowStore(
+            userDefaults: shortcutStore.userDefaults,
+            preferencesBackupChangeReporter: preferencesBackupChangeReporter
+        )
         self.automationController = AutomationController(
             store: workflowStore,
-            ruleStore: AutomationRuleStore(userDefaults: shortcutStore.userDefaults),
+            ruleStore: AutomationRuleStore(
+                userDefaults: shortcutStore.userDefaults,
+                preferencesBackupChangeReporter: preferencesBackupChangeReporter
+            ),
             registry: actionRegistry,
             executor: actionExecutor,
             systemServices: SystemAutomationServices.make()
         )
+
+        preferencesBackupChangeReporter.onCommittedChange = {
+            [weak automaticPreferencesBackupCoordinator] _ in
+            automaticPreferencesBackupCoordinator?.committedPreferencesDidChange()
+        }
 
         self.automationController.onCatalogChange = { [weak self] in
             self?.rebuildDerivedState()
@@ -684,6 +725,24 @@ final class PluginHost: ObservableObject {
                 }
             }
 
+        if let automaticPreferencesBackupCoordinator {
+            automaticPreferencesBackupEnabled = automaticPreferencesBackupCoordinator.isEnabled
+            automaticPreferencesBackupCoordinator.snapshotProvider = { [weak self] in
+                self?.makePreferencesBackup()
+            }
+            automaticPreferencesBackupCoordinator.failureHandler = { error in
+                AppLog.preferencesBackup.error(
+                    "Automatic preferences backup failed: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+            automaticPreferencesBackupCoordinator.summaryHandler = { [weak self] summary in
+                self?.automaticPreferencesBackupSummary = summary
+            }
+            Task { [weak automaticPreferencesBackupCoordinator] in
+                await automaticPreferencesBackupCoordinator?.refreshSummary()
+            }
+        }
+
         refreshAll()
     }
 
@@ -691,6 +750,44 @@ final class PluginHost: ObservableObject {
         displayTopologyRefreshTask?.cancel()
         pluginStateChangeRebuildTask?.cancel()
         runtimeLocaleCancellable?.cancel()
+    }
+
+    func setAutomaticPreferencesBackupEnabled(_ enabled: Bool) {
+        automaticPreferencesBackupCoordinator?.setEnabled(enabled)
+        automaticPreferencesBackupEnabled = automaticPreferencesBackupCoordinator?.isEnabled ?? false
+    }
+
+    @discardableResult
+    func setApplicationAppearancePreference(rawValue: String) -> Bool {
+        preferencesBackupStore.setAppearancePreference(rawValue: rawValue)
+    }
+
+    @discardableResult
+    func setApplicationLanguagePreference(rawValue: String) -> Bool {
+        preferencesBackupStore.setLanguagePreference(rawValue: rawValue)
+    }
+
+    @discardableResult
+    func setMenuBarClickBehaviorPreference(rawValue: String) -> Bool {
+        preferencesBackupStore.setMenuBarClickBehavior(rawValue: rawValue)
+    }
+
+    func createAutomaticPreferencesBackupNow() async throws -> AutomaticPreferencesBackupWriteResult {
+        guard let automaticPreferencesBackupCoordinator else {
+            throw CocoaError(.featureUnsupported)
+        }
+        return try await automaticPreferencesBackupCoordinator.createBackupNow()
+    }
+
+    func prepareAutomaticPreferencesBackupDirectory() throws -> URL {
+        guard let automaticPreferencesBackupCoordinator else {
+            throw CocoaError(.featureUnsupported)
+        }
+        return try automaticPreferencesBackupCoordinator.prepareBackupDirectory()
+    }
+
+    func flushAutomaticPreferencesBackupBeforeTermination() {
+        automaticPreferencesBackupCoordinator?.flushPendingBackupBeforeTermination()
     }
 
     func deactivateAllPlugins(reason: PluginDeactivationReason = .hostShutdown) {
@@ -773,8 +870,7 @@ final class PluginHost: ObservableObject {
         let portableWorkflows = automationSnapshot.workflows.filter {
             portableWorkflowIDs.contains($0.id)
         }
-        let portablePreferences = portablePluginPreferences()
-        let selectedPortablePreferences = portablePreferences.filter {
+        let selectedPortablePreferences = proposedPortablePreferences.filter {
             selection.pluginPreferenceIDs.contains($0.key)
         }
         let referenceIsPortable: (ActionReference) -> Bool = { [weak self] reference in
@@ -913,6 +1009,7 @@ final class PluginHost: ObservableObject {
         let availableSelection = backup.effectiveSelection
         let selection = (requestedSelection ?? availableSelection).intersecting(availableSelection)
         _ = try preferencesImportPreview(for: backup, selection: selection)
+        try automaticPreferencesBackupCoordinator?.createSafetySnapshotBeforeImport()
         var restoreContext = makePreferencesActionRestoreContext(
             backup: backup,
             selection: selection
@@ -2683,6 +2780,11 @@ final class PluginHost: ObservableObject {
                     case let .failure(error):
                         return error.localizedDescription
                     }
+                }
+            }
+            if let persistentPreferencesSignaling = plugin as? any PluginPersistentPreferencesChangeSignaling {
+                persistentPreferencesSignaling.onPersistentPreferencesChange = { [weak self] in
+                    self?.preferencesBackupChangeReporter.didPersist(.plugin(pluginID))
                 }
             }
             if let anchorable = plugin as? any DropZoneAnchorProviding {

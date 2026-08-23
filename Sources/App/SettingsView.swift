@@ -296,7 +296,6 @@ struct GeneralSettingsView: View {
     @ObservedObject var menuBarIconGallery: MenuBarIconGalleryLibrary
     @ObservedObject var launchAtLoginController: LaunchAtLoginController
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
-    private let appearanceUserDefaults: UserDefaults
     @AppStorage(AppAppearancePreference.userDefaultsKey) private var appearancePreferenceRawValue = AppAppearancePreference.system.rawValue
     @AppStorage(AppLanguagePreference.userDefaultsKey) private var languagePreferenceRawValue = AppLanguagePreference.system.rawValue
     @AppStorage(MenuBarClickBehaviorPreference.userDefaultsKey) private var clickBehaviorRawValue = MenuBarClickBehaviorPreference.standard.rawValue
@@ -318,10 +317,19 @@ struct GeneralSettingsView: View {
         self.menuBarIconGallery = menuBarIconGallery
         self.launchAtLoginController = launchAtLoginController
         self.menuBarPanelThemeStore = menuBarPanelThemeStore
-        self.appearanceUserDefaults = appearanceUserDefaults
         _appearancePreferenceRawValue = AppStorage(
             wrappedValue: AppAppearancePreference.system.rawValue,
             AppAppearancePreference.userDefaultsKey,
+            store: appearanceUserDefaults
+        )
+        _languagePreferenceRawValue = AppStorage(
+            wrappedValue: AppLanguagePreference.system.rawValue,
+            AppLanguagePreference.userDefaultsKey,
+            store: appearanceUserDefaults
+        )
+        _clickBehaviorRawValue = AppStorage(
+            wrappedValue: MenuBarClickBehaviorPreference.standard.rawValue,
+            MenuBarClickBehaviorPreference.userDefaultsKey,
             store: appearanceUserDefaults
         )
     }
@@ -344,8 +352,7 @@ struct GeneralSettingsView: View {
                 }
                 Section {
                     AppearanceSettingsRow(
-                        selectionRawValue: $appearancePreferenceRawValue,
-                        userDefaults: appearanceUserDefaults
+                        selectionRawValue: appearancePreferenceBinding
                     )
                         .generalSettingsSearchAnchor(
                             target: .appearance,
@@ -359,7 +366,7 @@ struct GeneralSettingsView: View {
                         ) ?? .system
                     )
                     .settingsGroupedFormRowWidth(widths.sectionLayout)
-                    LanguageSettingsRow(selectionRawValue: $languagePreferenceRawValue)
+                    LanguageSettingsRow(selectionRawValue: languagePreferenceBinding)
                         .generalSettingsSearchAnchor(
                             target: .language,
                             activeTarget: activeSearchTarget
@@ -381,7 +388,7 @@ struct GeneralSettingsView: View {
                         activeTarget: activeSearchTarget
                     )
                     .settingsGroupedFormRowWidth(widths.sectionLayout)
-                    MenuBarClickBehaviorSettingsRow(selectionRawValue: $clickBehaviorRawValue)
+                    MenuBarClickBehaviorSettingsRow(selectionRawValue: clickBehaviorPreferenceBinding)
                         .generalSettingsSearchAnchor(
                             target: .menuBarClickBehavior,
                             activeTarget: activeSearchTarget
@@ -475,6 +482,42 @@ struct GeneralSettingsView: View {
             activeSearchTarget = nil
             navigationCoordinator.clearSearchRevealRequest(request)
         }
+    }
+
+    private var appearancePreferenceBinding: Binding<String> {
+        Binding(
+            get: { appearancePreferenceRawValue },
+            set: { rawValue in
+                guard pluginHost.setApplicationAppearancePreference(rawValue: rawValue) else {
+                    return
+                }
+                appearancePreferenceRawValue = rawValue
+            }
+        )
+    }
+
+    private var languagePreferenceBinding: Binding<String> {
+        Binding(
+            get: { languagePreferenceRawValue },
+            set: { rawValue in
+                guard pluginHost.setApplicationLanguagePreference(rawValue: rawValue) else {
+                    return
+                }
+                languagePreferenceRawValue = rawValue
+            }
+        )
+    }
+
+    private var clickBehaviorPreferenceBinding: Binding<String> {
+        Binding(
+            get: { clickBehaviorRawValue },
+            set: { rawValue in
+                guard pluginHost.setMenuBarClickBehaviorPreference(rawValue: rawValue) else {
+                    return
+                }
+                clickBehaviorRawValue = rawValue
+            }
+        )
     }
 }
 
@@ -683,6 +726,11 @@ private struct PendingPreferencesImport: Identifiable {
 }
 
 private struct PreferencesBackupSettingsRow: View {
+    private enum ManualBackupFeedback {
+        case created
+        case unchanged
+    }
+
     @ObservedObject var pluginHost: PluginHost
     @State private var pendingImport: PendingPreferencesImport?
     @State private var isChoosingExport = false
@@ -692,46 +740,137 @@ private struct PreferencesBackupSettingsRow: View {
     @State private var alertMessage: String?
     @State private var isPreparingImport = false
     @State private var isImporting = false
+    @State private var isBackingUp = false
+    @State private var manualBackupFeedback: ManualBackupFeedback?
 
     var body: some View {
-        HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
-            ZStack {
-                RoundedRectangle(cornerRadius: GeneralSettingsCardLayout.iconCornerRadius, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.12))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: GeneralSettingsCardLayout.iconCornerRadius, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.12))
 
-                Image(systemName: "externaldrive.badge.checkmark")
-                    .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
+                    Image(systemName: "externaldrive.badge.checkmark")
+                        .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .frame(width: GeneralSettingsCardLayout.iconSize, height: GeneralSettingsCardLayout.iconSize)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(AppL10n.preferencesBackup("preferencesBackup.title", defaultValue: "偏好设置备份"))
+                        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                    Text(AppL10n.preferencesBackup(
+                        "preferencesBackup.description",
+                        defaultValue: "自动备份保存在本机，包含可移植的应用与插件设置；不包含权限、缓存、凭证或其他私密数据。"
+                    ))
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: GeneralSettingsCardLayout.iconSize, height: GeneralSettingsCardLayout.iconSize)
+            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+            .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(AppL10n.preferencesBackup("preferencesBackup.title", defaultValue: "导出与导入偏好设置"))
-                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+            backupRowDivider
 
-                Text(AppL10n.preferencesBackup(
-                    "preferencesBackup.description",
-                    defaultValue: "包含应用偏好、插件布局、快捷键、工作流、自动化规则、已保存的运行链接和支持导出的插件设置；不包含权限、缓存、凭证或运行历史。"
-                ))
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            Toggle(
+                isOn: Binding(
+                    get: { pluginHost.automaticPreferencesBackupEnabled },
+                    set: { enabled in
+                        pluginHost.setAutomaticPreferencesBackupEnabled(enabled)
+                    }
+                )
+            ) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(
+                        AppL10n.preferencesBackup(
+                            "preferencesBackup.automatic.enabled",
+                            defaultValue: "自动备份设置"
+                        )
+                    )
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+
+                    automaticBackupSummaryView
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
 
-            HStack(spacing: 8) {
-                Button(AppL10n.preferencesBackup("preferencesBackup.export", defaultValue: "导出偏好设置…"), action: exportPreferences)
+            backupRowDivider
+
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(AppL10n.preferencesBackup(
+                        "preferencesBackup.manual.title",
+                        defaultValue: "手动备份"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+
+                    if let manualBackupFeedback {
+                        Text(manualBackupFeedbackText(manualBackupFeedback))
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+                Button(
+                    AppL10n.preferencesBackup(
+                        "preferencesBackup.automatic.backUpNow",
+                        defaultValue: "立即备份"
+                    ),
+                    action: backUpNow
+                )
+                    .buttonStyle(.bordered)
+                    .disabled(isPreparingImport || isImporting || isBackingUp)
+
+                Button(
+                    AppL10n.preferencesBackup(
+                        "preferencesBackup.automatic.openFolder",
+                        defaultValue: "打开备份文件夹"
+                    ),
+                    action: openBackupFolder
+                )
                     .buttonStyle(.bordered)
                     .disabled(isPreparingImport || isImporting)
+            }
+            .controlSize(.small)
+            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
+
+            backupRowDivider
+
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                Text(AppL10n.preferencesBackup(
+                    "preferencesBackup.transfer.title",
+                    defaultValue: "迁移偏好设置"
+                ))
+                .font(PluginSettingsTheme.Typography.rowTitle)
+
+                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+                Button(AppL10n.preferencesBackup("preferencesBackup.export", defaultValue: "导出偏好设置…"), action: exportPreferences)
+                    .buttonStyle(.bordered)
+                    .disabled(isPreparingImport || isImporting || isBackingUp)
 
                 Button(AppL10n.preferencesBackup("preferencesBackup.import", defaultValue: "导入偏好设置…"), action: choosePreferencesImport)
                     .buttonStyle(.bordered)
-                    .disabled(isPreparingImport || isImporting)
+                    .disabled(isPreparingImport || isImporting || isBackingUp)
             }
+            .controlSize(.small)
+            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
         }
         .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
-        .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
-        .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
         .sheet(item: $pendingImport) { pending in
             PreferencesImportPreviewSheet(
                 preview: pending.preview,
@@ -779,6 +918,127 @@ private struct PreferencesBackupSettingsRow: View {
             Button(AppL10n.settings("common.ok", defaultValue: "好"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
+        }
+    }
+
+    private var backupRowDivider: some View {
+        PluginSettingsListDivider(
+            leadingInset: GeneralSettingsCardLayout.horizontalPadding,
+            trailingInset: GeneralSettingsCardLayout.horizontalPadding
+        )
+    }
+
+    @ViewBuilder
+    private var automaticBackupSummaryView: some View {
+        let summary = pluginHost.automaticPreferencesBackupSummary
+        if let latestBackupDate = summary.latestBackupDate {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(automaticBackupRelativeText(
+                        latestBackupDate,
+                        relativeTo: context.date
+                    ))
+                    Text(automaticBackupDetailsText(
+                        summary,
+                        latestBackupDate: latestBackupDate
+                    ))
+                }
+                .accessibilityElement(children: .combine)
+            }
+        } else {
+            Text(AppL10n.preferencesBackup(
+                "preferencesBackup.automatic.noBackups",
+                defaultValue: "还没有备份"
+            ))
+        }
+    }
+
+    private func automaticBackupRelativeText(
+        _ latestBackupDate: Date,
+        relativeTo referenceDate: Date
+    ) -> String {
+        let locale = PluginRuntimeLocalization.locale
+        let relativeDate = PreferencesBackupStatusFormatter.relativeDate(
+            latestBackupDate,
+            relativeTo: referenceDate,
+            locale: locale,
+            justNow: AppL10n.preferencesBackup(
+                "preferencesBackup.automatic.justNow",
+                defaultValue: "刚刚"
+            )
+        )
+        return String(
+            format: AppL10n.preferencesBackup(
+                "preferencesBackup.automatic.lastBackup",
+                defaultValue: "上次备份：%@"
+            ),
+            locale: locale,
+            relativeDate
+        )
+    }
+
+    private func automaticBackupDetailsText(
+        _ summary: AutomaticPreferencesBackupSummary,
+        latestBackupDate: Date
+    ) -> String {
+        let locale = PluginRuntimeLocalization.locale
+        let date = PreferencesBackupStatusFormatter.absoluteDate(
+            latestBackupDate,
+            locale: locale
+        )
+        let size = PreferencesBackupStatusFormatter.byteCount(
+            summary.totalSize,
+            locale: locale
+        )
+        let history = AppL10n.preferencesBackupPluralFormat(
+            "preferencesBackup.automatic.history",
+            defaultValue: "%d 个备份 · %@",
+            count: summary.snapshotCount,
+            size
+        )
+        return "\(date) · \(history)"
+    }
+
+    private func manualBackupFeedbackText(_ feedback: ManualBackupFeedback) -> String {
+        switch feedback {
+        case .created:
+            AppL10n.preferencesBackup(
+                "preferencesBackup.manual.created",
+                defaultValue: "刚刚已备份"
+            )
+        case .unchanged:
+            AppL10n.preferencesBackup(
+                "preferencesBackup.manual.unchanged",
+                defaultValue: "与上次备份相比没有变化"
+            )
+        }
+    }
+
+    private func backUpNow() {
+        Task { @MainActor in
+            isBackingUp = true
+            defer { isBackingUp = false }
+            do {
+                let result = try await pluginHost.createAutomaticPreferencesBackupNow()
+                switch result {
+                case .created:
+                    manualBackupFeedback = .created
+                case .unchanged:
+                    manualBackupFeedback = .unchanged
+                }
+            } catch {
+                alertMessage = preferencesBackupErrorMessage(error)
+            }
+        }
+    }
+
+    private func openBackupFolder() {
+        do {
+            NSWorkspace.shared.open(
+                try pluginHost.prepareAutomaticPreferencesBackupDirectory()
+            )
+        } catch {
+            alertMessage = preferencesBackupErrorMessage(error)
         }
     }
 
@@ -928,6 +1188,39 @@ private struct PreferencesBackupSettingsRow: View {
 private struct PreferencesPluginOption: Identifiable, Equatable {
     let id: String
     let title: String
+}
+
+enum PreferencesBackupStatusFormatter {
+    static func relativeDate(
+        _ date: Date,
+        relativeTo referenceDate: Date,
+        locale: Locale,
+        justNow: String
+    ) -> String {
+        guard referenceDate.timeIntervalSince(date) >= 60 else {
+            return justNow
+        }
+
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = locale
+        formatter.dateTimeStyle = .numeric
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: referenceDate)
+    }
+
+    static func absoluteDate(_ date: Date, locale: Locale) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    static func byteCount(_ count: Int, locale: Locale) -> String {
+        Int64(count).formatted(
+            ByteCountFormatStyle(style: .file).locale(locale)
+        )
+    }
 }
 
 private struct PreferencesExportSelectionSheet: View {
@@ -1408,7 +1701,6 @@ private struct MenuBarClickBehaviorSettingsRow: View {
 
 private struct AppearanceSettingsRow: View {
     @Binding var selectionRawValue: String
-    let userDefaults: UserDefaults
 
     var body: some View {
         HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
@@ -1446,13 +1738,6 @@ private struct AppearanceSettingsRow: View {
         .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
         .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
         .help(AppL10n.settings("appearance.help", defaultValue: "设置应用外观"))
-        .onChange(of: selectionRawValue) { _, rawValue in
-            guard let preference = AppAppearancePreference(rawValue: rawValue) else {
-                selectionRawValue = AppAppearancePreference.system.rawValue
-                return
-            }
-            preference.storeAndApply(in: userDefaults)
-        }
     }
 }
 
@@ -1497,13 +1782,6 @@ private struct LanguageSettingsRow: View {
         .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
         .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
         .help(AppL10n.settings("language.help", defaultValue: "设置应用语言"))
-        .onChange(of: selectionRawValue) { _, rawValue in
-            guard let preference = AppLanguagePreference(rawValue: rawValue) else {
-                selectionRawValue = AppLanguagePreference.system.rawValue
-                return
-            }
-            preference.store()
-        }
     }
 }
 

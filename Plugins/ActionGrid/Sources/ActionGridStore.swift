@@ -93,6 +93,7 @@ final class ActionGridStore: ObservableObject {
 
     @Published private(set) var entries: [ActionGridEntry] = []
     @Published private(set) var loadError: String?
+    private(set) var didPersistPortablePreferencesDuringInitialization = false
 
     private let storage: any PluginStorage
     private let encoder = JSONEncoder()
@@ -100,7 +101,10 @@ final class ActionGridStore: ObservableObject {
 
     init(storage: any PluginStorage) {
         self.storage = storage
+        let initialData = storage.data(forKey: Self.storageKey)
         reload()
+        didPersistPortablePreferencesDuringInitialization =
+            storage.data(forKey: Self.storageKey) != initialData
     }
 
     @discardableResult
@@ -339,6 +343,7 @@ final class ActionGridStore: ObservableObject {
               }) else {
             return false
         }
+        guard restoredEntries != entries else { return true }
         return replace(restoredEntries)
     }
 
@@ -364,7 +369,10 @@ final class ActionGridStore: ObservableObject {
     }
 
     @discardableResult
-    private func replace(_ entries: [ActionGridEntry]) -> Bool {
+    private func replace(
+        _ entries: [ActionGridEntry],
+        persistWhenUnchanged: Bool = false
+    ) -> Bool {
         guard validate(entries),
               let data = try? encoder.encode(
                 Envelope(formatVersion: Self.currentFormatVersion, entries: entries)
@@ -372,6 +380,7 @@ final class ActionGridStore: ObservableObject {
               data.count <= Self.maximumPayloadByteCount else {
             return false
         }
+        guard persistWhenUnchanged || entries != self.entries else { return false }
         let previousRawValue = storage.object(forKey: Self.storageKey)
         storage.set(data, forKey: Self.storageKey)
         guard storage.data(forKey: Self.storageKey) == data else {
@@ -411,7 +420,7 @@ final class ActionGridStore: ObservableObject {
             entries = decodedEntries.sorted(by: Self.slotOrder)
             loadError = nil
             if performLegacyMigration {
-                _ = replace(decodedEntries)
+                _ = replace(decodedEntries, persistWhenUnchanged: true)
             }
             return
         }

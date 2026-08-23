@@ -457,6 +457,10 @@ final class SidecarPluginTests: XCTestCase {
         store.updateConnectFirstAvailableShortcut(connectBinding)
         store.updateShortcut(deviceBinding, for: "ipad-1")
         let plugin = makePlugin(service: service, preferences: store)
+        var persistentPreferenceNotifications = 0
+        plugin.onPersistentPreferencesChange = {
+            persistentPreferenceNotifications += 1
+        }
         plugin.shortcutBindingResolver = { definitionID in
             switch definitionID {
             case "connect-first-available": connectBinding
@@ -480,6 +484,7 @@ final class SidecarPluginTests: XCTestCase {
         plugin.legacyActionShortcutsDidMigrate()
         XCTAssertNil(store.connectFirstAvailableShortcut)
         XCTAssertNil(store.preference(for: "ipad-1")?.shortcut)
+        XCTAssertEqual(persistentPreferenceNotifications, 1)
     }
 
     func testSidecarDeviceIdentifierAcceptsUUIDAndStringValues() {
@@ -760,6 +765,31 @@ final class SidecarPluginTests: XCTestCase {
         XCTAssertEqual(reloaded.devices.map(\.id), ["old-ipad"])
         XCTAssertEqual(reloaded.disconnectAllShortcut, oldDisconnect)
         XCTAssertNil(reloaded.connectFirstAvailableShortcut)
+    }
+
+    func testFailedMutationAndIdenticalRestoreDoNotEmitPersistentPreferenceSignal() throws {
+        let storage = InMemoryPluginStorage()
+        let service = FakeSidecarService(devices: [
+            SidecarDevice(id: "ipad-1", name: "My iPad", connectionState: .disconnected),
+        ])
+        let preferences = SidecarPreferencesStore(storage: storage)
+        XCTAssertTrue(preferences.reconcile(with: service.reachableDevices()))
+        let plugin = makePlugin(service: service, preferences: preferences)
+        let backup = try XCTUnwrap(plugin.makePortablePreferencesBackup())
+        var notifications = 0
+        plugin.onPersistentPreferencesChange = { notifications += 1 }
+        notifications = 0
+
+        storage.blockedSetKeys = ["savedDevices"]
+        plugin.shortcutBindingDidChange(
+            id: "device.ipad-1",
+            binding: ShortcutBinding(keyCode: 0, modifiers: [.command])
+        )
+        storage.blockedSetKeys = []
+        XCTAssertTrue(plugin.restorePortablePreferencesReportingResult(from: backup))
+
+        XCTAssertFalse(preferences.preference(for: "ipad-1")?.hasShortcutConfiguration == true)
+        XCTAssertEqual(notifications, 0)
     }
 
     func testPortablePreferencesRejectWrongTypedRawDeviceValueWithoutRemovingIt() throws {

@@ -34,15 +34,18 @@ final class SettingsSidebarPreferencesStore: ObservableObject {
 
     private let userDefaults: UserDefaults
     private let locale: () -> Locale
+    private let preferencesBackupChangeReporter: PreferencesBackupChangeReporter?
     private var isCustomOrderInitialized: Bool
     private var importObserver: NSObjectProtocol?
 
     init(
         userDefaults: UserDefaults = .standard,
-        locale: @escaping () -> Locale = { PluginRuntimeLocalization.locale }
+        locale: @escaping () -> Locale = { PluginRuntimeLocalization.locale },
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
     ) {
         self.userDefaults = userDefaults
         self.locale = locale
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         sortMode = Self.storedSortMode(in: userDefaults)
         customOrderedPluginIDs = Self.storedCustomOrder(in: userDefaults)
         isCustomOrderInitialized = userDefaults.object(forKey: DefaultsKey.customOrder) != nil
@@ -127,15 +130,22 @@ final class SettingsSidebarPreferencesStore: ObservableObject {
         _ sortMode: SettingsSidebarPluginSortMode,
         availableItems: [SettingsSidebarPluginOrderItem]
     ) {
+        let previousSortMode = self.sortMode
+        let previousCustomOrder = customOrderedPluginIDs
         if sortMode == .custom, !isCustomOrderInitialized {
             customOrderedPluginIDs = orderedPluginIDs(for: availableItems)
             isCustomOrderInitialized = true
             userDefaults.set(customOrderedPluginIDs, forKey: DefaultsKey.customOrder)
         }
 
-        guard self.sortMode != sortMode else { return }
-        self.sortMode = sortMode
-        userDefaults.set(sortMode.rawValue, forKey: DefaultsKey.sortMode)
+        if self.sortMode != sortMode {
+            self.sortMode = sortMode
+            userDefaults.set(sortMode.rawValue, forKey: DefaultsKey.sortMode)
+        }
+        if previousSortMode != self.sortMode
+            || previousCustomOrder != customOrderedPluginIDs {
+            preferencesBackupChangeReporter?.didPersist(.settingsSidebar)
+        }
     }
 
     @discardableResult
@@ -177,15 +187,22 @@ final class SettingsSidebarPreferencesStore: ObservableObject {
             forKey: DefaultsKey.sortMode
         )
         userDefaults.set(mergedOrder, forKey: DefaultsKey.customOrder)
+        preferencesBackupChangeReporter?.didPersist(.settingsSidebar)
         return true
     }
 
     func resetCustomOrder() {
+        let changed = sortMode != .nameAscending
+            || isCustomOrderInitialized
+            || !customOrderedPluginIDs.isEmpty
         sortMode = .nameAscending
         customOrderedPluginIDs = []
         isCustomOrderInitialized = false
         userDefaults.removeObject(forKey: DefaultsKey.sortMode)
         userDefaults.removeObject(forKey: DefaultsKey.customOrder)
+        if changed {
+            preferencesBackupChangeReporter?.didPersist(.settingsSidebar)
+        }
     }
 
     private func reloadFromUserDefaults() {

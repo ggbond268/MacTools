@@ -7,7 +7,7 @@ import XCTest
 
 @MainActor
 final class SystemFocusedWindowResolverTests: XCTestCase {
-    func testResolvesExactVisibleHostWindowWithoutAXWindowNumber() throws {
+    func testResolvesExactVisibleHostWindowWithoutAXWindowNumber() async throws {
         let hostWindow = makeHostWindow()
         defer { hostWindow.close() }
         let application = try XCTUnwrap(NSRunningApplication.current)
@@ -24,7 +24,7 @@ final class SystemFocusedWindowResolverTests: XCTestCase {
             }
         )
 
-        let resolved = try resolver.resolveFocusedWindow()
+        let resolved = try await resolver.resolveFocusedWindow()
 
         XCTAssertTrue(resolved.hostWindow === hostWindow)
         XCTAssertNil(resolved.element)
@@ -38,7 +38,7 @@ final class SystemFocusedWindowResolverTests: XCTestCase {
         )
     }
 
-    func testRejectsMissingPreferredHostWindow() throws {
+    func testRejectsMissingPreferredHostWindow() async throws {
         let application = try XCTUnwrap(NSRunningApplication.current)
         let resolver = SystemFocusedWindowResolver(
             accessibilityTrusted: { true },
@@ -51,12 +51,15 @@ final class SystemFocusedWindowResolverTests: XCTestCase {
             hostWindow: { _ in nil }
         )
 
-        XCTAssertThrowsError(try resolver.resolveFocusedWindow()) { error in
+        do {
+            _ = try await resolver.resolveFocusedWindow()
+            XCTFail("Expected no focused window")
+        } catch {
             XCTAssertEqual(error as? WindowLayoutError, .noFocusedWindow)
         }
     }
 
-    func testHostWindowFrameAdapterUsesAccessibilityCoordinates() throws {
+    func testHostWindowFrameAdapterUsesAccessibilityCoordinates() async throws {
         let hostWindow = makeHostWindow()
         defer { hostWindow.close() }
         let application = try XCTUnwrap(NSRunningApplication.current)
@@ -71,7 +74,7 @@ final class SystemFocusedWindowResolverTests: XCTestCase {
             hostWindow: hostWindow
         )
         let adapter = AccessibilityWindowFrameAdapter()
-        let originalFrame = try adapter.frame(of: handle)
+        let originalFrame = try await adapter.frame(of: handle)
         let targetFrame = CGRect(
             x: originalFrame.minX + 20,
             y: originalFrame.minY + 30,
@@ -79,9 +82,9 @@ final class SystemFocusedWindowResolverTests: XCTestCase {
             height: originalFrame.height + 50
         )
 
-        try adapter.setFrame(targetFrame, of: handle, resize: true)
+        try await adapter.setFrame(targetFrame, of: handle, resize: true)
 
-        let updatedFrame = try adapter.frame(of: handle)
+        let updatedFrame = try await adapter.frame(of: handle)
         XCTAssertEqual(updatedFrame.origin.x, targetFrame.origin.x, accuracy: 0.5)
         XCTAssertEqual(updatedFrame.origin.y, targetFrame.origin.y, accuracy: 0.5)
         XCTAssertEqual(updatedFrame.width, targetFrame.width, accuracy: 0.5)

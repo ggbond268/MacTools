@@ -73,10 +73,16 @@ final class SidecarPreferencesStore: ObservableObject {
         static let portableRestoreTransaction = "portable-restore-transaction.v1"
     }
 
-    private struct PortablePreferences: Codable {
+    private struct PortablePreferences: Codable, Equatable {
         let devices: [SidecarDevicePreference]
         let disconnectAllShortcut: ShortcutBinding?
         let connectFirstAvailableShortcut: ShortcutBinding?
+    }
+
+    private enum PersistenceResult {
+        case unchanged
+        case persisted
+        case failed
     }
 
     private struct PortableRestoreTransaction: Codable {
@@ -88,6 +94,7 @@ final class SidecarPreferencesStore: ObservableObject {
     @Published private(set) var devices: [SidecarDevicePreference]
     @Published private(set) var disconnectAllShortcut: ShortcutBinding?
     @Published private(set) var connectFirstAvailableShortcut: ShortcutBinding?
+    private(set) var didPersistPortablePreferencesDuringInitialization = false
 
     private let storage: PluginStorage
     private let encoder = JSONEncoder()
@@ -95,6 +102,13 @@ final class SidecarPreferencesStore: ObservableObject {
 
     init(storage: PluginStorage) {
         self.storage = storage
+        let initialDevicesData = storage.data(forKey: StorageKey.devices)
+        let initialDisconnectAllShortcutData = storage.data(
+            forKey: StorageKey.disconnectAllShortcut
+        )
+        let initialConnectFirstAvailableShortcutData = storage.data(
+            forKey: StorageKey.connectFirstAvailableShortcut
+        )
         _ = Self.recoverInterruptedPortableRestore(
             storage: storage,
             encoder: JSONEncoder(),
@@ -129,20 +143,29 @@ final class SidecarPreferencesStore: ObservableObject {
             disconnectAllShortcut: storedDisconnectAllShortcut,
             connectFirstAvailableShortcut: storedConnectFirstAvailableShortcut
         )
-        devices = normalized.devices
-        disconnectAllShortcut = normalized.disconnectAllShortcut
-        connectFirstAvailableShortcut = normalized.connectFirstAvailableShortcut
+        devices = storedDevices
+        disconnectAllShortcut = storedDisconnectAllShortcut
+        connectFirstAvailableShortcut = storedConnectFirstAvailableShortcut
 
         if normalized.devices != storedDevices
             || normalized.disconnectAllShortcut != storedDisconnectAllShortcut
             || normalized.connectFirstAvailableShortcut != storedConnectFirstAvailableShortcut {
-            persistDevices()
-            persistShortcut(disconnectAllShortcut, forKey: StorageKey.disconnectAllShortcut)
-            persistShortcut(connectFirstAvailableShortcut, forKey: StorageKey.connectFirstAvailableShortcut)
+            _ = persistPortablePreferences(PortablePreferences(
+                devices: normalized.devices,
+                disconnectAllShortcut: normalized.disconnectAllShortcut,
+                connectFirstAvailableShortcut: normalized.connectFirstAvailableShortcut
+            ))
         }
+        didPersistPortablePreferencesDuringInitialization =
+            storage.data(forKey: StorageKey.devices) != initialDevicesData
+            || storage.data(forKey: StorageKey.disconnectAllShortcut)
+                != initialDisconnectAllShortcutData
+            || storage.data(forKey: StorageKey.connectFirstAvailableShortcut)
+                != initialConnectFirstAvailableShortcutData
     }
 
-    func reconcile(with reachableDevices: [SidecarDevice]) {
+    @discardableResult
+    func reconcile(with reachableDevices: [SidecarDevice]) -> Bool {
         var updated = devices
         var didChange = false
 
@@ -157,76 +180,88 @@ final class SidecarPreferencesStore: ObservableObject {
             }
         }
 
-        guard didChange else { return }
-        devices = updated
-        persistDevices()
+        guard didChange else { return false }
+        return persistPortablePreferences(currentPreferences(replacingDevices: updated)) == .persisted
     }
 
     func preference(for deviceID: String) -> SidecarDevicePreference? {
         devices.first(where: { $0.id == deviceID })
     }
 
-    func updateTransport(_ transport: SidecarConnectionTransport, for deviceID: String) {
+    @discardableResult
+    func updateTransport(_ transport: SidecarConnectionTransport, for deviceID: String) -> Bool {
         update(deviceID: deviceID) { $0.transport = transport }
     }
 
-    func updateShortcutAction(_ action: SidecarShortcutAction, for deviceID: String) {
+    @discardableResult
+    func updateShortcutAction(_ action: SidecarShortcutAction, for deviceID: String) -> Bool {
         update(deviceID: deviceID) { $0.shortcutAction = action }
     }
 
-    func updateShortcut(_ shortcut: ShortcutBinding?, for deviceID: String) {
-        guard let index = devices.firstIndex(where: { $0.id == deviceID }) else { return }
+    @discardableResult
+    func updateShortcut(_ shortcut: ShortcutBinding?, for deviceID: String) -> Bool {
+        guard let index = devices.firstIndex(where: { $0.id == deviceID }) else { return false }
         guard devices[index].shortcut != shortcut
             || devices[index].hasShortcutConfiguration != (shortcut != nil)
         else {
-            return
+            return false
         }
-        devices[index].shortcut = shortcut
-        devices[index].hasShortcutConfiguration = shortcut != nil
-        normalizeAndPersistShortcuts(persistWhenUnchanged: true)
+        var updated = devices
+        updated[index].shortcut = shortcut
+        updated[index].hasShortcutConfiguration = shortcut != nil
+        return persistPortablePreferences(currentPreferences(replacingDevices: updated)) == .persisted
     }
 
-    func updateShortcutConfiguration(_ hasConfiguration: Bool, for deviceID: String) {
+    @discardableResult
+    func updateShortcutConfiguration(_ hasConfiguration: Bool, for deviceID: String) -> Bool {
         update(deviceID: deviceID) { $0.hasShortcutConfiguration = hasConfiguration }
     }
 
-    func updateDisconnectAllShortcut(_ shortcut: ShortcutBinding?) {
-        guard disconnectAllShortcut != shortcut else { return }
-        disconnectAllShortcut = shortcut
-        normalizeAndPersistShortcuts(persistWhenUnchanged: true)
+    @discardableResult
+    func updateDisconnectAllShortcut(_ shortcut: ShortcutBinding?) -> Bool {
+        guard disconnectAllShortcut != shortcut else { return false }
+        return persistPortablePreferences(PortablePreferences(
+            devices: devices,
+            disconnectAllShortcut: shortcut,
+            connectFirstAvailableShortcut: connectFirstAvailableShortcut
+        )) == .persisted
     }
 
-    func updateConnectFirstAvailableShortcut(_ shortcut: ShortcutBinding?) {
-        guard connectFirstAvailableShortcut != shortcut else { return }
-        connectFirstAvailableShortcut = shortcut
-        normalizeAndPersistShortcuts(persistWhenUnchanged: true)
+    @discardableResult
+    func updateConnectFirstAvailableShortcut(_ shortcut: ShortcutBinding?) -> Bool {
+        guard connectFirstAvailableShortcut != shortcut else { return false }
+        return persistPortablePreferences(PortablePreferences(
+            devices: devices,
+            disconnectAllShortcut: disconnectAllShortcut,
+            connectFirstAvailableShortcut: shortcut
+        )) == .persisted
     }
 
-    func clearLegacyShortcuts() {
+    @discardableResult
+    func clearLegacyShortcuts() -> Bool {
         var updatedDevices = devices
         for index in updatedDevices.indices {
             updatedDevices[index].shortcut = nil
             updatedDevices[index].hasShortcutConfiguration = false
         }
-        devices = updatedDevices
-        disconnectAllShortcut = nil
-        connectFirstAvailableShortcut = nil
-        persistDevices()
-        persistShortcut(nil, forKey: StorageKey.disconnectAllShortcut)
-        persistShortcut(nil, forKey: StorageKey.connectFirstAvailableShortcut)
+        return persistPortablePreferences(PortablePreferences(
+            devices: updatedDevices,
+            disconnectAllShortcut: nil,
+            connectFirstAvailableShortcut: nil
+        )) == .persisted
     }
 
-    func move(deviceID: String, before beforeDeviceID: String?) {
-        guard let sourceIndex = devices.firstIndex(where: { $0.id == deviceID }) else { return }
+    @discardableResult
+    func move(deviceID: String, before beforeDeviceID: String?) -> Bool {
+        guard let sourceIndex = devices.firstIndex(where: { $0.id == deviceID }) else { return false }
         var updated = devices
         let device = updated.remove(at: sourceIndex)
         let destinationIndex = beforeDeviceID.flatMap { targetID in
             updated.firstIndex(where: { $0.id == targetID })
         } ?? updated.endIndex
         updated.insert(device, at: destinationIndex)
-        guard updated != devices else { return }
-        devices = updated
-        persistDevices()
+        guard updated != devices else { return false }
+        return persistPortablePreferences(currentPreferences(replacingDevices: updated)) == .persisted
     }
 
     func priorityIndex(for deviceID: String) -> Int {
@@ -251,36 +286,16 @@ final class SidecarPreferencesStore: ObservableObject {
             disconnectAllShortcut: portablePreferences.disconnectAllShortcut,
             connectFirstAvailableShortcut: portablePreferences.connectFirstAvailableShortcut
         )
-        guard let devicesData = try? encoder.encode(normalized.devices) else { return false }
-        let disconnectData: Data?
-        if let shortcut = normalized.disconnectAllShortcut {
-            guard let encoded = try? encoder.encode(shortcut) else { return false }
-            disconnectData = encoded
-        } else {
-            disconnectData = nil
-        }
-        let connectData: Data?
-        if let shortcut = normalized.connectFirstAvailableShortcut {
-            guard let encoded = try? encoder.encode(shortcut) else { return false }
-            connectData = encoded
-        } else {
-            connectData = nil
-        }
-        guard recoverInterruptedPortableRestore(),
-              beginPortableRestoreTransaction(),
-              writePortableValues(
-                  devices: devicesData,
-                  disconnectAllShortcut: disconnectData,
-                  connectFirstAvailableShortcut: connectData
-              ),
-              finishPortableRestoreTransaction() else {
-            rollbackPortableRestoreTransaction()
+        switch persistPortablePreferences(PortablePreferences(
+            devices: normalized.devices,
+            disconnectAllShortcut: normalized.disconnectAllShortcut,
+            connectFirstAvailableShortcut: normalized.connectFirstAvailableShortcut
+        )) {
+        case .unchanged, .persisted:
+            return true
+        case .failed:
             return false
         }
-        devices = normalized.devices
-        disconnectAllShortcut = normalized.disconnectAllShortcut
-        connectFirstAvailableShortcut = normalized.connectFirstAvailableShortcut
-        return true
     }
 
     func deviceIDs(inPortablePreferences data: Data) -> [String]? {
@@ -398,46 +413,72 @@ final class SidecarPreferencesStore: ObservableObject {
         return rawValue is Data
     }
 
-    private func update(deviceID: String, _ change: (inout SidecarDevicePreference) -> Void) {
-        guard let index = devices.firstIndex(where: { $0.id == deviceID }) else { return }
-        var updated = devices[index]
-        change(&updated)
-        guard updated != devices[index] else { return }
-        devices[index] = updated
-        persistDevices()
+    private func update(
+        deviceID: String,
+        _ change: (inout SidecarDevicePreference) -> Void
+    ) -> Bool {
+        guard let index = devices.firstIndex(where: { $0.id == deviceID }) else { return false }
+        var updatedDevices = devices
+        change(&updatedDevices[index])
+        guard updatedDevices != devices else { return false }
+        return persistPortablePreferences(currentPreferences(replacingDevices: updatedDevices)) == .persisted
     }
 
-    private func persistDevices() {
-        guard let data = try? encoder.encode(devices) else { return }
-        storage.set(data, forKey: StorageKey.devices)
-    }
-
-    private func persistShortcut(_ shortcut: ShortcutBinding?, forKey key: String) {
-        if let shortcut, let data = try? encoder.encode(shortcut) {
-            storage.set(data, forKey: key)
-        } else {
-            storage.removeObject(forKey: key)
-        }
-    }
-
-    private func normalizeAndPersistShortcuts(persistWhenUnchanged: Bool = false) {
-        let normalized = Self.normalizedShortcuts(
-            devices: devices,
+    private func currentPreferences(
+        replacingDevices replacementDevices: [SidecarDevicePreference]? = nil
+    ) -> PortablePreferences {
+        PortablePreferences(
+            devices: replacementDevices ?? devices,
             disconnectAllShortcut: disconnectAllShortcut,
             connectFirstAvailableShortcut: connectFirstAvailableShortcut
         )
-        let didChange = normalized.devices != devices
-            || normalized.disconnectAllShortcut != disconnectAllShortcut
-            || normalized.connectFirstAvailableShortcut != connectFirstAvailableShortcut
-        guard didChange || persistWhenUnchanged else {
-            return
+    }
+
+    private func persistPortablePreferences(_ candidate: PortablePreferences) -> PersistenceResult {
+        let normalized = Self.normalizedShortcuts(
+            devices: candidate.devices,
+            disconnectAllShortcut: candidate.disconnectAllShortcut,
+            connectFirstAvailableShortcut: candidate.connectFirstAvailableShortcut
+        )
+        let normalizedCandidate = PortablePreferences(
+            devices: normalized.devices,
+            disconnectAllShortcut: normalized.disconnectAllShortcut,
+            connectFirstAvailableShortcut: normalized.connectFirstAvailableShortcut
+        )
+        let current = currentPreferences()
+        guard normalizedCandidate != current else { return .unchanged }
+        guard let devicesData = try? encoder.encode(normalizedCandidate.devices) else {
+            return .failed
         }
-        devices = normalized.devices
-        disconnectAllShortcut = normalized.disconnectAllShortcut
-        connectFirstAvailableShortcut = normalized.connectFirstAvailableShortcut
-        persistDevices()
-        persistShortcut(disconnectAllShortcut, forKey: StorageKey.disconnectAllShortcut)
-        persistShortcut(connectFirstAvailableShortcut, forKey: StorageKey.connectFirstAvailableShortcut)
+        let disconnectData: Data?
+        if let shortcut = normalizedCandidate.disconnectAllShortcut {
+            guard let encoded = try? encoder.encode(shortcut) else { return .failed }
+            disconnectData = encoded
+        } else {
+            disconnectData = nil
+        }
+        let connectData: Data?
+        if let shortcut = normalizedCandidate.connectFirstAvailableShortcut {
+            guard let encoded = try? encoder.encode(shortcut) else { return .failed }
+            connectData = encoded
+        } else {
+            connectData = nil
+        }
+        guard recoverInterruptedPortableRestore(),
+              beginPortableRestoreTransaction(),
+              writePortableValues(
+                  devices: devicesData,
+                  disconnectAllShortcut: disconnectData,
+                  connectFirstAvailableShortcut: connectData
+              ),
+              finishPortableRestoreTransaction() else {
+            rollbackPortableRestoreTransaction()
+            return .failed
+        }
+        devices = normalizedCandidate.devices
+        disconnectAllShortcut = normalizedCandidate.disconnectAllShortcut
+        connectFirstAvailableShortcut = normalizedCandidate.connectFirstAvailableShortcut
+        return .persisted
     }
 
     private static func normalizedShortcuts(

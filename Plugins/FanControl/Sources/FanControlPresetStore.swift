@@ -54,6 +54,8 @@ final class FanControlPresetStore: ObservableObject {
     @Published private(set) var customPresets: [FanPreset] = []
     @Published private(set) var activePresetID: String = FanPresetBuiltInID.auto
     var onCatalogChange: (() -> Void)?
+    var onPersistentPreferencesChange: (() -> Void)?
+    private(set) var didPersistPortablePreferencesDuringInitialization = false
 
     var allPresets: [FanPreset] {
         Self.builtInPresets + customPresets
@@ -76,8 +78,13 @@ final class FanControlPresetStore: ObservableObject {
     ) {
         self.storage = storage
         self.localization = localization
+        let initialCustomPresetsData = storage.data(forKey: Key.customPresets)
+        let initialActivePresetID = storage.string(forKey: Key.activePresetID)
         _ = recoverInterruptedPortableRestore()
         load()
+        didPersistPortablePreferencesDuringInitialization =
+            storage.data(forKey: Key.customPresets) != initialCustomPresetsData
+            || storage.string(forKey: Key.activePresetID) != initialActivePresetID
     }
 
     // MARK: - Persistence
@@ -135,6 +142,11 @@ final class FanControlPresetStore: ObservableObject {
               Self.isValidPortablePayload(payload)
         else {
             return false
+        }
+
+        guard payload.customPresets != customPresets
+                || payload.activePresetID != activePresetID else {
+            return true
         }
 
         guard let presetData = try? JSONEncoder().encode(payload.customPresets) else {
@@ -268,6 +280,7 @@ final class FanControlPresetStore: ObservableObject {
     @discardableResult
     func setActivePreset(id: String) -> Bool {
         guard allPresets.contains(where: { $0.id == id }) else { return false }
+        guard id != activePresetID else { return true }
         let previousID = activePresetID
         activePresetID = id
         saveActivePresetID()
@@ -276,6 +289,7 @@ final class FanControlPresetStore: ObservableObject {
             saveActivePresetID()
             return false
         }
+        onPersistentPreferencesChange?()
         return true
     }
 
@@ -300,12 +314,14 @@ final class FanControlPresetStore: ObservableObject {
         guard let idx = customPresets.firstIndex(where: { $0.id == id }) else { return false }
         let previous = customPresets[idx]
         let clamped = max(FanRPMLimits.absoluteMin, min(FanRPMLimits.absoluteMax, rpm))
+        guard previous.strategy != .fixed(rpm: clamped) else { return true }
         customPresets[idx].strategy = .fixed(rpm: clamped)
         guard saveCustomPresets() else {
             customPresets[idx] = previous
             _ = saveCustomPresets()
             return false
         }
+        onPersistentPreferencesChange?()
         return true
     }
 
@@ -316,6 +332,7 @@ final class FanControlPresetStore: ObservableObject {
         guard !trimmed.isEmpty else { return false }
         var candidate = customPresets
         candidate[idx].name = String(trimmed.prefix(Self.maximumPresetNameLength))
+        guard candidate != customPresets else { return true }
         guard saveCustomPresets(candidate) else { return false }
         customPresets = candidate
         onCatalogChange?()

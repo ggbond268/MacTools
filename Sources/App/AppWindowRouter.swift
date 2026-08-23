@@ -452,7 +452,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         self.menuBarPanelThemeStore = menuBarPanelThemeStore
         self.appearanceUserDefaults = appearanceUserDefaults
         self.settingsSidebarPreferences = SettingsSidebarPreferencesStore(
-            userDefaults: appearanceUserDefaults
+            userDefaults: appearanceUserDefaults,
+            preferencesBackupChangeReporter: pluginHost.preferencesBackupChangeReporter
         )
         self.commandPaletteFocusRestoration = commandPaletteFocusRestoration
         super.init()

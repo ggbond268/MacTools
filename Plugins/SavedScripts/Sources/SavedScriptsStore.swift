@@ -44,6 +44,11 @@ final class SavedScriptsStore: ObservableObject {
             let normalized = try candidate.normalized()
             var updated = scripts
             if let index = updated.firstIndex(where: { $0.id == normalized.id }) {
+                var candidateAtStoredRevision = normalized
+                candidateAtStoredRevision.updatedAt = updated[index].updatedAt
+                if candidateAtStoredRevision == updated[index] {
+                    return .success(updated[index])
+                }
                 updated[index] = normalized
             } else {
                 guard updated.count < Self.maximumScriptCount else {
@@ -140,6 +145,7 @@ final class SavedScriptsStore: ObservableObject {
 
         let updated = restored.sorted(by: Self.scriptOrder)
         guard updated.count <= Self.maximumScriptCount else { return false }
+        guard updated != scripts || loadError != nil else { return true }
         let previousScripts = scripts
         let previousLoadError = loadError
         do {

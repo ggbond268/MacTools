@@ -354,8 +354,9 @@ enum AppHostCommandExecutor {
             return .performed(.dismissPalette)
 
         case let .setAppearance(preference):
-            preference.storeAndApply(in: context.appearanceUserDefaults)
-            guard AppAppearancePreference.stored(in: context.appearanceUserDefaults) == preference else {
+            guard context.pluginHost.setApplicationAppearancePreference(
+                rawValue: preference.rawValue
+            ) else {
                 return .failed
             }
             return .performed(.refreshIndex)

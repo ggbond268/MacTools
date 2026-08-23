@@ -81,6 +81,7 @@ final class PluginDisplayPreferencesStore {
     }
 
     private let userDefaults: UserDefaults
+    var preferencesBackupChangeReporter: PreferencesBackupChangeReporter?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private var cachedPreferences: StoredPreferences?
@@ -95,8 +96,12 @@ final class PluginDisplayPreferencesStore {
     /// only after the staged state has become durable in this store.
     var onNextSuccessfulPersistence: (() -> Void)?
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
         self.userDefaults = userDefaults
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
     }
 
     // MARK: - Plugin settings navigation
@@ -518,12 +523,18 @@ final class PluginDisplayPreferencesStore {
             return false
         }
 
+        let previousPreferences = userDefaults.data(forKey: DefaultsKey.storage).flatMap { data in
+            try? decoder.decode(StoredPreferences.self, from: data)
+        }
         userDefaults.set(data, forKey: DefaultsKey.storage)
         cachedPreferences = preferences
         shouldPreserveStoredPayload = false
         let completion = onNextSuccessfulPersistence
         onNextSuccessfulPersistence = nil
         completion?()
+        if previousPreferences != preferences {
+            preferencesBackupChangeReporter?.didPersist(.pluginDisplay)
+        }
         return true
     }
 

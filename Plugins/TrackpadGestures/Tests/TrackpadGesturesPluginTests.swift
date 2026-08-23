@@ -826,12 +826,14 @@ final class TrackpadGestureStoreTests: XCTestCase {
         XCTAssertEqual(store.mappings[0].gesture, .fiveFingerTap)
         XCTAssertEqual(store.mappings[0].action, .middleClick)
         XCTAssertNotNil(storage.data(forKey: "migration.mouse-enhancer-middle-click.v2"))
+        XCTAssertTrue(store.didPersistPortablePreferencesDuringInitialization)
 
         let reloaded = TrackpadGestureStore(
             storage: storage,
             legacyMiddleClick: legacy
         )
         XCTAssertEqual(reloaded.mappings, store.mappings)
+        XCTAssertFalse(reloaded.didPersistPortablePreferencesDuringInitialization)
     }
 
     func testDisabledLegacyMiddleClickMigratesAsDisabledAndPreservesFingerCount() {
@@ -967,6 +969,29 @@ final class TrackpadGestureStoreTests: XCTestCase {
 
 @MainActor
 final class TrackpadGesturesPluginTests: XCTestCase {
+    func testFailedTypingMutationAndIdenticalRestoreDoNotEmitPersistentPreferenceSignal() throws {
+        let storage = TrackpadGestureMemoryStorage()
+        let plugin = makePlugin(storage: storage).plugin
+        let backup = try XCTUnwrap(plugin.makePortablePreferencesBackup())
+        var notifications = 0
+        plugin.onPersistentPreferencesChange = { notifications += 1 }
+        notifications = 0
+
+        storage.blockedSetKeys = ["ignore-while-typing", "typing-grace-period"]
+        if plugin.store.setIgnoresGesturesWhileTyping(false) {
+            plugin.configurationDidChange()
+        }
+        if plugin.store.setTypingGracePeriod(0.8) {
+            plugin.configurationDidChange()
+        }
+        storage.blockedSetKeys = []
+        XCTAssertTrue(plugin.restorePortablePreferencesReportingResult(from: backup))
+
+        XCTAssertTrue(plugin.store.ignoresGesturesWhileTyping)
+        XCTAssertEqual(plugin.store.typingGracePeriod, 0.4)
+        XCTAssertEqual(notifications, 0)
+    }
+
     func testActionPickerAccessibilityExposesConfirmationRequirement() {
         XCTAssertNil(TrackpadActionPickerAccessibility(
             isSafe: true,
@@ -2304,6 +2329,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
     }
 
     private func makePlugin(
+        storage: TrackpadGestureMemoryStorage? = nil,
         accessibilityTrusted: @escaping @Sendable @MainActor () -> Bool = { true },
         inputMonitoringStatus: @escaping @Sendable @MainActor () -> TrackpadInputMonitoringStatus = {
             .granted
@@ -2318,7 +2344,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         let plugin = TrackpadGesturesPlugin(
             context: PluginRuntimeContext(
                 pluginID: "trackpad-gestures",
-                storage: TrackpadGestureMemoryStorage()
+                storage: storage ?? TrackpadGestureMemoryStorage()
             ),
             legacyMiddleClick: nil,
             session: session,

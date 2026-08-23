@@ -3,33 +3,71 @@ import Foundation
 
 @MainActor
 private final class WindowLayoutExecutionGate {
-    private var isExecuting = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func acquire() async {
-        guard isExecuting else {
-            isExecuting = true
-            return
-        }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-        }
+    struct Reservation: Hashable {
+        fileprivate let id = UUID()
     }
 
-    func release() {
-        guard !waiters.isEmpty else {
-            isExecuting = false
-            return
+    enum Acquisition {
+        case acquired
+        case cancelled
+    }
+
+    private static let maximumReservationCount = 9
+    private var reservations: [Reservation] = []
+    private var waiters: [Reservation: CheckedContinuation<Bool, Never>] = [:]
+
+    func reserve() -> Reservation? {
+        guard reservations.count < Self.maximumReservationCount else { return nil }
+        let reservation = Reservation()
+        reservations.append(reservation)
+        return reservation
+    }
+
+    func acquire(_ reservation: Reservation) async -> Acquisition {
+        guard !Task.isCancelled,
+              reservations.contains(reservation) else { return .cancelled }
+        guard reservations.first != reservation else { return .acquired }
+        let acquired = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !Task.isCancelled,
+                      reservations.contains(reservation) else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                waiters[reservation] = continuation
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancel(reservation)
+            }
         }
-        waiters.removeFirst().resume()
+        return acquired ? .acquired : .cancelled
+    }
+
+    func finish(_ reservation: Reservation) {
+        remove(reservation, acquired: true)
+    }
+
+    private func cancel(_ reservation: Reservation) {
+        remove(reservation, acquired: false)
+    }
+
+    private func remove(_ reservation: Reservation, acquired: Bool) {
+        guard let index = reservations.firstIndex(of: reservation) else { return }
+        let wasFirst = index == reservations.startIndex
+        reservations.remove(at: index)
+        waiters.removeValue(forKey: reservation)?.resume(returning: acquired)
+        if wasFirst, let next = reservations.first {
+            waiters.removeValue(forKey: next)?.resume(returning: true)
+        }
     }
 }
 
 @MainActor
 protocol WindowLayoutExecuting: AnyObject {
-    func validationError(for operation: WindowLayoutOperation, options: WindowLayoutExecutionOptions) -> WindowLayoutError?
+    func validationError(for operation: WindowLayoutOperation, options: WindowLayoutExecutionOptions) async -> WindowLayoutError?
     func execute(_ operation: WindowLayoutOperation, options: WindowLayoutExecutionOptions) async -> Result<Void, WindowLayoutError>
-    func validationError(for command: WindowCustomCommand, options: WindowLayoutExecutionOptions) -> WindowLayoutError?
+    func validationError(for command: WindowCustomCommand, options: WindowLayoutExecutionOptions) async -> WindowLayoutError?
     func execute(_ command: WindowCustomCommand, options: WindowLayoutExecutionOptions) async -> Result<Void, WindowLayoutError>
 }
 
@@ -108,10 +146,13 @@ final class WindowLayoutService: WindowLayoutExecuting {
     func validationError(
         for operation: WindowLayoutOperation,
         options: WindowLayoutExecutionOptions
-    ) -> WindowLayoutError? {
+    ) async -> WindowLayoutError? {
         do {
-            _ = try prepare(operation, options: options)
+            let window = try await focusedWindowResolver.resolveFocusedWindow()
+            _ = try await prepare(operation, for: window, options: options)
             return nil
+        } catch is CancellationError {
+            return .executionCancelled
         } catch let error as WindowLayoutError {
             return error
         } catch {
@@ -123,25 +164,39 @@ final class WindowLayoutService: WindowLayoutExecuting {
         _ operation: WindowLayoutOperation,
         options: WindowLayoutExecutionOptions
     ) async -> Result<Void, WindowLayoutError> {
-        await executionGate.acquire()
-        defer { executionGate.release() }
+        guard let reservation = executionGate.reserve() else {
+            return .failure(.executionQueueFull)
+        }
+        defer { executionGate.finish(reservation) }
         do {
-            let action = try prepare(operation, options: options)
+            let intendedWindow = try await focusedWindowResolver.resolveFocusedWindow()
+            switch await executionGate.acquire(reservation) {
+            case .acquired:
+                break
+            case .cancelled:
+                return .failure(.executionCancelled)
+            }
+            try Task.checkCancellation()
+            let currentWindow = try await revalidatedWindow(matching: intendedWindow.identity)
+            let action = try await prepare(operation, for: currentWindow, options: options)
             switch action {
             case let .placement(placement):
                 try await apply(
                     placement,
-                    to: revalidatedWindow(matching: placement.window.identity)
+                    to: try await revalidatedWindow(matching: placement.window.identity)
                 )
             case let .fullScreen(window):
-                let currentWindow = try revalidatedWindow(matching: window.identity)
+                let currentWindow = try await revalidatedWindow(matching: window.identity)
                 guard currentWindow.canToggleFullScreen else {
                     throw WindowLayoutError.fullScreenUnsupported
                 }
-                try fullScreenWriter.setFullScreen(!currentWindow.isFullScreen, for: currentWindow)
+                try Task.checkCancellation()
+                try await fullScreenWriter.setFullScreen(!currentWindow.isFullScreen, for: currentWindow)
                 halfCycleStates.removeValue(forKey: currentWindow.identity)
             }
             return .success(())
+        } catch is CancellationError {
+            return .failure(.executionCancelled)
         } catch let error as WindowLayoutError {
             return .failure(error)
         } catch {
@@ -152,10 +207,13 @@ final class WindowLayoutService: WindowLayoutExecuting {
     func validationError(
         for command: WindowCustomCommand,
         options: WindowLayoutExecutionOptions
-    ) -> WindowLayoutError? {
+    ) async -> WindowLayoutError? {
         do {
-            _ = try prepare(command, options: options)
+            let window = try await focusedWindowResolver.resolveFocusedWindow()
+            _ = try await prepare(command, for: window, options: options)
             return nil
+        } catch is CancellationError {
+            return .executionCancelled
         } catch let error as WindowLayoutError {
             return error
         } catch {
@@ -167,15 +225,28 @@ final class WindowLayoutService: WindowLayoutExecuting {
         _ command: WindowCustomCommand,
         options: WindowLayoutExecutionOptions
     ) async -> Result<Void, WindowLayoutError> {
-        await executionGate.acquire()
-        defer { executionGate.release() }
+        guard let reservation = executionGate.reserve() else {
+            return .failure(.executionQueueFull)
+        }
+        defer { executionGate.finish(reservation) }
         do {
-            let placement = try prepare(command, options: options)
+            let intendedWindow = try await focusedWindowResolver.resolveFocusedWindow()
+            switch await executionGate.acquire(reservation) {
+            case .acquired:
+                break
+            case .cancelled:
+                return .failure(.executionCancelled)
+            }
+            try Task.checkCancellation()
+            let currentWindow = try await revalidatedWindow(matching: intendedWindow.identity)
+            let placement = try await prepare(command, for: currentWindow, options: options)
             try await apply(
                 placement,
-                to: revalidatedWindow(matching: placement.window.identity)
+                to: try await revalidatedWindow(matching: placement.window.identity)
             )
             return .success(())
+        } catch is CancellationError {
+            return .failure(.executionCancelled)
         } catch let error as WindowLayoutError {
             return .failure(error)
         } catch {
@@ -185,17 +256,17 @@ final class WindowLayoutService: WindowLayoutExecuting {
 
     private func prepare(
         _ operation: WindowLayoutOperation,
+        for window: AccessibilityWindowHandle,
         options: WindowLayoutExecutionOptions
-    ) throws -> PreparedAction {
-        history.removeInvalidEntries(using: frameReader.isValid)
-        let window = try focusedWindowResolver.resolveFocusedWindow()
+    ) async throws -> PreparedAction {
+        try Task.checkCancellation()
         if operation == .toggleFullScreen {
             guard window.canToggleFullScreen else {
                 throw WindowLayoutError.fullScreenUnsupported
             }
             return .fullScreen(window)
         }
-        let currentFrame = try frameReader.frame(of: window)
+        let currentFrame = try await frameReader.frame(of: window)
         guard window.canMove else {
             throw WindowLayoutError.windowCannotMove
         }
@@ -226,6 +297,10 @@ final class WindowLayoutService: WindowLayoutExecuting {
                 to: screen(destination, respectingStageManager: options.respectsStageManager).visibleFrame
             )
         case .restorePreviousFrame:
+            guard await frameReader.isValid(window) else {
+                history.removeFrame(for: window)
+                throw WindowLayoutError.noPreviousFrame
+            }
             guard let previousFrame = history.previousFrame(for: window) else {
                 throw WindowLayoutError.noPreviousFrame
             }
@@ -280,12 +355,12 @@ final class WindowLayoutService: WindowLayoutExecuting {
 
     private func prepare(
         _ command: WindowCustomCommand,
+        for window: AccessibilityWindowHandle,
         options: WindowLayoutExecutionOptions
-    ) throws -> PreparedPlacement {
-        history.removeInvalidEntries(using: frameReader.isValid)
-        let window = try focusedWindowResolver.resolveFocusedWindow()
+    ) async throws -> PreparedPlacement {
+        try Task.checkCancellation()
         guard window.canMove else { throw WindowLayoutError.windowCannotMove }
-        let currentFrame = try frameReader.frame(of: window)
+        let currentFrame = try await frameReader.frame(of: window)
         let screens = screenProvider.currentScreens()
         guard let rawScreen = screenResolver.screen(for: currentFrame, among: screens) else {
             throw WindowLayoutError.noDisplay
@@ -310,8 +385,9 @@ final class WindowLayoutService: WindowLayoutExecuting {
 
     private func revalidatedWindow(
         matching expectedIdentity: WindowIdentity
-    ) throws -> AccessibilityWindowHandle {
-        let currentWindow = try focusedWindowResolver.resolveFocusedWindow()
+    ) async throws -> AccessibilityWindowHandle {
+        try Task.checkCancellation()
+        let currentWindow = try await focusedWindowResolver.resolveFocusedWindow()
         guard currentWindow.identity == expectedIdentity else {
             throw WindowLayoutError.windowUnavailable
         }
@@ -328,13 +404,14 @@ final class WindowLayoutService: WindowLayoutExecuting {
         if placement.shouldResize, !currentWindow.canResize {
             throw WindowLayoutError.windowCannotResize
         }
-        let currentFrame = try frameReader.frame(of: currentWindow)
-        try frameWriter.setFrame(
+        try Task.checkCancellation()
+        let currentFrame = try await frameReader.frame(of: currentWindow)
+        try await frameWriter.setFrame(
             placement.targetFrame,
             of: currentWindow,
             resize: placement.shouldResize
         )
-        var observedFrame = try frameReader.frame(of: currentWindow)
+        var observedFrame = try await frameReader.frame(of: currentWindow)
         var didRetryWrite = false
         let settlementDelays: [Duration] = [
             .milliseconds(16),
@@ -347,16 +424,17 @@ final class WindowLayoutService: WindowLayoutExecuting {
             placement.targetFrame
         ) {
             try await waitForFrameSettlement(delay)
-            let settledWindow = try revalidatedWindow(matching: currentWindow.identity)
-            observedFrame = try frameReader.frame(of: settledWindow)
+            let settledWindow = try await revalidatedWindow(matching: currentWindow.identity)
+            observedFrame = try await frameReader.frame(of: settledWindow)
             if !approximatelyEqual(observedFrame, placement.targetFrame), !didRetryWrite {
-                try frameWriter.setFrame(
+                try Task.checkCancellation()
+                try await frameWriter.setFrame(
                     placement.targetFrame,
                     of: settledWindow,
                     resize: placement.shouldResize
                 )
                 didRetryWrite = true
-                observedFrame = try frameReader.frame(of: settledWindow)
+                observedFrame = try await frameReader.frame(of: settledWindow)
             }
         }
         history.record(currentFrame, for: currentWindow)

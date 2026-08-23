@@ -8,11 +8,16 @@ final class ShortcutStore {
     }
 
     let userDefaults: UserDefaults
+    var preferencesBackupChangeReporter: PreferencesBackupChangeReporter?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) {
         self.userDefaults = userDefaults
+        self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
     }
 
     func customization(for shortcutID: String) -> ShortcutCustomization {
@@ -32,6 +37,7 @@ final class ShortcutStore {
 
     func setCustomization(_ customization: ShortcutCustomization, for shortcutID: String) {
         let key = storageKey(for: shortcutID)
+        guard self.customization(for: shortcutID) != customization else { return }
 
         switch customization {
         case .inheritDefault:
@@ -43,6 +49,8 @@ final class ShortcutStore {
 
             userDefaults.set(data, forKey: key)
         }
+        guard self.customization(for: shortcutID) == customization else { return }
+        preferencesBackupChangeReporter?.didPersist(.shortcuts)
     }
 
     func customizations(for shortcutIDs: [String]) -> [String: ShortcutCustomization] {
@@ -58,9 +66,15 @@ final class ShortcutStore {
 
     func removeCustomizations(forPluginID pluginID: String) {
         let prefix = DefaultsKey.prefix + pluginID + ".shortcut."
-        for key in userDefaults.dictionaryRepresentation().keys where key.hasPrefix(prefix) {
+        let matchingKeys = userDefaults.dictionaryRepresentation().keys.filter {
+            $0.hasPrefix(prefix)
+        }
+        guard !matchingKeys.isEmpty else { return }
+        for key in matchingKeys {
             userDefaults.removeObject(forKey: key)
         }
+        guard matchingKeys.allSatisfy({ userDefaults.object(forKey: $0) == nil }) else { return }
+        preferencesBackupChangeReporter?.didPersist(.shortcuts)
     }
 
     func resolvedBinding(for shortcutID: String, default defaultBinding: ShortcutBinding?) -> ShortcutBinding? {

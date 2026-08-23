@@ -18,7 +18,7 @@ final class WindowLayoutsPluginTests: XCTestCase {
             XCTAssertEqual(definition.risk, .safe)
             XCTAssertEqual(definition.externalInvocationPolicy, .allowed)
             XCTAssertEqual(definition.concurrencyPolicy, .serialize)
-            XCTAssertEqual(definition.capabilities, [.background, .foregroundInteractive])
+            XCTAssertEqual(definition.capabilities, [.background, .foregroundInteractive, .cancellable])
             XCTAssertFalse(definition.capabilities.contains(.automatic))
             XCTAssertEqual(
                 plugin.permissionRequirementIDs(for: definition.key),
@@ -280,6 +280,94 @@ final class WindowLayoutsPluginTests: XCTestCase {
         XCTAssertNil(plugin.customCommandShortcutBinding(for: id))
     }
 
+    func testDeletingCustomCommandClearsItsShortcutBeforeRemovingAction() throws {
+        let plugin = makePlugin()
+        plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
+        let definition = try XCTUnwrap(plugin.actionDefinitions.first(where: {
+            $0.key.actionID.hasPrefix("custom.")
+        }))
+        let id = try XCTUnwrap(UUID(uuidString: String(
+            definition.key.actionID.dropFirst("custom.".count)
+        )))
+        let binding = ShortcutBinding(
+            keyCode: UInt16(kVK_ANSI_L),
+            modifiers: [.control, .option]
+        )
+        let shortcutState = WindowLayoutsShortcutState(
+            bindings: [definition.key.actionID: binding]
+        )
+        configureShortcutHost(plugin, state: shortcutState)
+
+        XCTAssertTrue(plugin.deleteCustomCommand(id))
+
+        XCTAssertNil(shortcutState.bindings[definition.key.actionID])
+        XCTAssertFalse(plugin.actionDefinitions.contains(where: {
+            $0.key.actionID == definition.key.actionID
+        }))
+        XCTAssertNil(plugin.customCommandDeletionError)
+    }
+
+    func testShortcutClearFailureKeepsCustomCommand() throws {
+        let plugin = makePlugin()
+        plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
+        let definition = try XCTUnwrap(plugin.actionDefinitions.first(where: {
+            $0.key.actionID.hasPrefix("custom.")
+        }))
+        let id = try XCTUnwrap(UUID(uuidString: String(
+            definition.key.actionID.dropFirst("custom.".count)
+        )))
+        let binding = ShortcutBinding(
+            keyCode: UInt16(kVK_ANSI_L),
+            modifiers: [.control, .option]
+        )
+        plugin.previewActionShortcutPreset = { actionIDs, proposedBindings in
+            PluginActionShortcutPresetPreview(items: actionIDs.map { actionID in
+                PluginActionShortcutPresetPreviewItem(
+                    actionID: actionID,
+                    currentBinding: binding,
+                    proposedBinding: proposedBindings[actionID]
+                )
+            })
+        }
+        plugin.applyActionShortcutPreset = { _, _ in "Shortcut storage failed" }
+
+        XCTAssertFalse(plugin.deleteCustomCommand(id))
+
+        XCTAssertTrue(plugin.actionDefinitions.contains(where: {
+            $0.key.actionID == definition.key.actionID
+        }))
+        XCTAssertEqual(plugin.customCommandDeletionError, "Shortcut storage failed")
+    }
+
+    func testCustomCommandDeleteFailureRestoresClearedShortcut() throws {
+        let storage = WindowLayoutsMemoryStorage()
+        let plugin = makePlugin(storage: storage)
+        plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
+        let definition = try XCTUnwrap(plugin.actionDefinitions.first(where: {
+            $0.key.actionID.hasPrefix("custom.")
+        }))
+        let id = try XCTUnwrap(UUID(uuidString: String(
+            definition.key.actionID.dropFirst("custom.".count)
+        )))
+        let binding = ShortcutBinding(
+            keyCode: UInt16(kVK_ANSI_L),
+            modifiers: [.control, .option]
+        )
+        let shortcutState = WindowLayoutsShortcutState(
+            bindings: [definition.key.actionID: binding]
+        )
+        configureShortcutHost(plugin, state: shortcutState)
+        storage.rejectLibraryWrites = true
+
+        XCTAssertFalse(plugin.deleteCustomCommand(id))
+
+        XCTAssertEqual(shortcutState.bindings[definition.key.actionID], binding)
+        XCTAssertTrue(plugin.actionDefinitions.contains(where: {
+            $0.key.actionID == definition.key.actionID
+        }))
+        XCTAssertNotNil(plugin.customCommandDeletionError)
+    }
+
     func testCustomCommandShortcutReportsHostValidationConflict() throws {
         let plugin = makePlugin()
         plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
@@ -405,6 +493,22 @@ final class WindowLayoutsPluginTests: XCTestCase {
         XCTAssertTrue(executor.executions.isEmpty)
     }
 
+    func testCancelledServiceExecutionPropagatesAsCancelledActionResult() async throws {
+        let executor = MockWindowLayoutExecutor()
+        executor.executionError = .executionCancelled
+        let plugin = makePlugin(executor: executor)
+        let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
+
+        let handle = try plugin.beginAction(ActionInvocation(
+            reference: reference,
+            source: .test,
+            mode: .background
+        ))
+        let result = await handle.result()
+
+        XCTAssertEqual(result, .cancelled)
+    }
+
     func testBeginActionSnapshotsExecutionOptions() async throws {
         let executor = MockWindowLayoutExecutor()
         let plugin = makePlugin(executor: executor)
@@ -481,17 +585,48 @@ final class WindowLayoutsPluginTests: XCTestCase {
 
     private func makePlugin(
         executor: MockWindowLayoutExecutor? = nil,
+        storage: PluginStorage? = nil,
         accessibilityTrusted: @escaping @MainActor @Sendable () -> Bool = { true }
     ) -> WindowLayoutsPlugin {
         WindowLayoutsPlugin(
             context: PluginRuntimeContext(
                 pluginID: "window-layouts",
-                storage: WindowLayoutsMemoryStorage()
+                storage: storage ?? WindowLayoutsMemoryStorage()
             ),
             executor: executor ?? MockWindowLayoutExecutor(),
             accessibilityTrusted: accessibilityTrusted,
             requestAccessibilityTrust: { _ in accessibilityTrusted() }
         )
+    }
+
+    private func configureShortcutHost(
+        _ plugin: WindowLayoutsPlugin,
+        state: WindowLayoutsShortcutState
+    ) {
+        plugin.previewActionShortcutPreset = { actionIDs, proposedBindings in
+            PluginActionShortcutPresetPreview(items: actionIDs.map { actionID in
+                PluginActionShortcutPresetPreviewItem(
+                    actionID: actionID,
+                    currentBinding: state.bindings[actionID],
+                    proposedBinding: proposedBindings[actionID]
+                )
+            })
+        }
+        plugin.applyActionShortcutPreset = { actionIDs, bindings in
+            for actionID in actionIDs {
+                state.bindings[actionID] = bindings[actionID]
+            }
+            return nil
+        }
+    }
+}
+
+@MainActor
+private final class WindowLayoutsShortcutState {
+    var bindings: [String: ShortcutBinding]
+
+    init(bindings: [String: ShortcutBinding]) {
+        self.bindings = bindings
     }
 }
 
@@ -520,7 +655,7 @@ private final class MockWindowLayoutExecutor: WindowLayoutExecuting {
     func validationError(
         for operation: WindowLayoutOperation,
         options: WindowLayoutExecutionOptions
-    ) -> WindowLayoutError? {
+    ) async -> WindowLayoutError? {
         validationCallCount += 1
         return validationError
     }
@@ -539,7 +674,7 @@ private final class MockWindowLayoutExecutor: WindowLayoutExecuting {
     func validationError(
         for command: WindowCustomCommand,
         options: WindowLayoutExecutionOptions
-    ) -> WindowLayoutError? {
+    ) async -> WindowLayoutError? {
         validationCallCount += 1
         return validationError
     }
@@ -559,6 +694,7 @@ private final class MockWindowLayoutExecutor: WindowLayoutExecuting {
 @MainActor
 private final class WindowLayoutsMemoryStorage: PluginStorage {
     private var values: [String: Any] = [:]
+    var rejectLibraryWrites = false
 
     func object(forKey key: String) -> Any? { values[key] }
     func data(forKey key: String) -> Data? { values[key] as? Data }
@@ -566,7 +702,10 @@ private final class WindowLayoutsMemoryStorage: PluginStorage {
     func stringArray(forKey key: String) -> [String]? { values[key] as? [String] }
     func integer(forKey key: String) -> Int { values[key] as? Int ?? 0 }
     func bool(forKey key: String) -> Bool { values[key] as? Bool ?? false }
-    func set(_ value: Any?, forKey key: String) { values[key] = value }
+    func set(_ value: Any?, forKey key: String) {
+        if rejectLibraryWrites, key == "library.v1" { return }
+        values[key] = value
+    }
     func removeObject(forKey key: String) { values.removeValue(forKey: key) }
     func migrateValueIfNeeded(fromLegacyKey legacyKey: String, to key: String) {
         guard values[key] == nil, let value = values[legacyKey] else { return }

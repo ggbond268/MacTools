@@ -258,6 +258,37 @@ final class FanControlPluginTests: XCTestCase {
         XCTAssertEqual(notifications, 3)
     }
 
+    func testPortablePresetMutationsEmitPersistentPreferenceSignal() throws {
+        let plugin = makePlugin()
+        var notifications = 0
+        plugin.onPersistentPreferencesChange = { notifications += 1 }
+        let preset = try XCTUnwrap(plugin.presetStore.addCustomPreset())
+
+        XCTAssertTrue(plugin.presetStore.setActivePreset(id: preset.id))
+        XCTAssertTrue(plugin.presetStore.updateCustomPresetRPM(id: preset.id, rpm: 3_800))
+
+        XCTAssertEqual(notifications, 3)
+    }
+
+    func testIdenticalPresetMutationsAndRestoreDoNotEmitPersistentPreferenceSignal() throws {
+        let plugin = makePlugin()
+        let preset = try XCTUnwrap(plugin.presetStore.addCustomPreset())
+        let backup = try XCTUnwrap(plugin.makePortablePreferencesBackup())
+        var notifications = 0
+        plugin.onPersistentPreferencesChange = { notifications += 1 }
+        notifications = 0
+
+        XCTAssertTrue(plugin.presetStore.setActivePreset(id: FanPresetBuiltInID.auto))
+        XCTAssertTrue(plugin.presetStore.updateCustomPresetRPM(
+            id: preset.id,
+            rpm: FanRPMLimits.absoluteMin
+        ))
+        XCTAssertTrue(plugin.presetStore.renameCustomPreset(id: preset.id, newName: preset.name))
+        XCTAssertTrue(plugin.restorePortablePreferencesReportingResult(from: backup))
+
+        XCTAssertEqual(notifications, 0)
+    }
+
     func testPresetMutationsPublishOnlyAfterDurablePersistence() throws {
         let storage = FanControlMemoryStorage()
         let plugin = makePlugin(storage: storage)

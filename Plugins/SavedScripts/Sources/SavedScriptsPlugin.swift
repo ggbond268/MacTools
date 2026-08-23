@@ -28,6 +28,7 @@ final class SavedScriptsPlugin:
     PluginSettingsPresenting,
     PluginPrimaryPanelIndicatorProviding,
     PluginPortablePreferencesProviding,
+    PluginPersistentPreferencesChangeSignaling,
     PluginPortablePreferencesRestorationReporting,
     PluginPortablePreferencesActionReferencesProviding,
     PluginActionReferenceBackupProviding
@@ -46,9 +47,14 @@ final class SavedScriptsPlugin:
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     var requestSettingsPresentation: (() -> Void)?
+    var onPersistentPreferencesChange: (() -> Void)? {
+        get { persistentPreferencesChanges.onChange }
+        set { persistentPreferencesChanges.onChange = newValue }
+    }
 
     private let localization: PluginLocalization
     private let runner: any SavedScriptRunning
+    private let persistentPreferencesChanges = PluginPersistentPreferencesChangeEmitter()
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools",
         category: "SavedScriptsPlugin"
@@ -97,6 +103,7 @@ final class SavedScriptsPlugin:
         )
         self.store.onMutation = { [weak self] in
             self?.onStateChange?()
+            self?.persistentPreferencesChanges.didPersist()
         }
     }
 
