@@ -39,6 +39,24 @@ final class CLIParameterInputTests: XCTestCase {
         }
     }
 
+    func testDuplicateDefinitionsAreRejectedWithoutTrapping() throws {
+        let definitions = [
+            parameter("value", kind: "string"),
+            parameter("value", kind: "string"),
+        ]
+        XCTAssertThrowsError(try CLIParameterInput().arguments(
+            ["value": "demo"], definitions: definitions
+        )) { error in
+            XCTAssertEqual(error as? CLIParameterInputError, .invalidValue("value"))
+        }
+        XCTAssertThrowsError(try parseJSONObject(
+            #"{"value":"demo"}"#,
+            definitions: definitions
+        )) { error in
+            XCTAssertEqual(error as? CLIParameterInputError, .invalidValue("value"))
+        }
+    }
+
     func testProtectedJSONRequiresOwnedUserOnlyRegularFile() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

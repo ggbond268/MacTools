@@ -122,6 +122,59 @@ final class CLIExecutableTests: XCTestCase {
         }
     }
 
+    func testResponseSemanticViolationsUseProtocolExitCodeForTextAndJSON() throws {
+        for fixture in ["invalidOutcome", "missingFinishedAt", "unexpectedActionReference"] {
+            try assertInvalidPeerResponse(["doctor"], fixture: fixture)
+        }
+    }
+
+    func testActionTimeoutRemainsAValidExecutionOutcomeForTextAndJSON() throws {
+        for arguments in [
+            ["actions", "run", "fixture/action"],
+            ["workflows", "run", "fixture"],
+        ] {
+            let environment = [
+                CLIServiceConfiguration.testPeerResponseEnvironmentKey: "validActionTimeout",
+            ]
+            let command = arguments.joined(separator: " ")
+            let text = try runCLI(arguments, environment: environment)
+            XCTAssertEqual(text.status, CLIExitCode.timeout.rawValue, command)
+            XCTAssertTrue(text.output.isEmpty, command)
+            XCTAssertTrue(text.error.contains("timed out"), command)
+
+            let json = try runCLI(arguments + ["--json"], environment: environment)
+            XCTAssertEqual(json.status, CLIExitCode.timeout.rawValue, command)
+            XCTAssertTrue(json.error.isEmpty, command)
+            let object = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(json.output.utf8)) as? [String: Any]
+            )
+            XCTAssertEqual(object["outcome"] as? String, "timedOut", command)
+        }
+    }
+
+    func testOversizedDiscoveryPagesUseProtocolExitCodeForTextAndJSON() throws {
+        for arguments in [
+            ["actions", "list"],
+            ["workflows", "list"],
+            ["plugins", "list"],
+        ] {
+            try assertInvalidPeerResponse(arguments, fixture: "oversizedPage")
+        }
+    }
+
+    func testInvalidActionParameterDefinitionsUseProtocolExitCodeForTextAndJSON() throws {
+        for fixture in [
+            "invalidParameterID", "invalidParameterKind",
+            "invalidParameterPrivacy", "invalidParameterPortability",
+        ] {
+            try assertInvalidPeerResponse(["actions", "list"], fixture: fixture)
+        }
+        try assertInvalidPeerResponse(
+            ["actions", "describe", "fixture/action"],
+            fixture: "duplicateParameterDefinitions"
+        )
+    }
+
     func testRunCommandsRejectForbiddenPayloadForTextAndJSON() throws {
         let environment = [
             CLIServiceConfiguration.testPeerResponseEnvironmentKey: "malformedPayload",
@@ -419,6 +472,33 @@ final class CLIExecutableTests: XCTestCase {
             process.terminationStatus,
             String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
             String(decoding: error.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        )
+    }
+
+    private func assertInvalidPeerResponse(
+        _ arguments: [String],
+        fixture: String
+    ) throws {
+        let environment = [
+            CLIServiceConfiguration.testPeerResponseEnvironmentKey: fixture,
+        ]
+        let context = "\(arguments.joined(separator: " ")): \(fixture)"
+        let text = try runCLI(arguments, environment: environment)
+        XCTAssertEqual(text.status, CLIExitCode.protocolIncompatible.rawValue, context)
+        XCTAssertTrue(text.output.isEmpty, context)
+        XCTAssertTrue(text.error.contains("invalid response"), context)
+
+        let json = try runCLI(arguments + ["--json"], environment: environment)
+        XCTAssertEqual(json.status, CLIExitCode.protocolIncompatible.rawValue, context)
+        XCTAssertTrue(json.error.isEmpty, context)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(json.output.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(object["outcome"] as? String, "protocolIncompatible", context)
+        XCTAssertEqual(
+            (object["rejection"] as? [String: Any])?["category"] as? String,
+            "invalidPeerResponse",
+            context
         )
     }
 

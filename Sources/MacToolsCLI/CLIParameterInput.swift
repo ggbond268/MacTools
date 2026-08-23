@@ -17,7 +17,7 @@ struct CLIParameterInput {
         _ values: [String: String],
         definitions: [CLIActionParameter]
     ) throws -> [String: CLIParameterValue] {
-        let definitionsByID = Dictionary(uniqueKeysWithValues: definitions.map { ($0.id, $0) })
+        let definitionsByID = try definitionsByID(definitions)
         return try values.mapValuesWithKeys { name, rawValue in
             guard let definition = definitionsByID[name] else {
                 throw CLIParameterInputError.unknownParameter(name)
@@ -53,7 +53,7 @@ struct CLIParameterInput {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw CLIParameterInputError.invalidJSON
         }
-        let definitionsByID = Dictionary(uniqueKeysWithValues: definitions.map { ($0.id, $0) })
+        let definitionsByID = try definitionsByID(definitions)
         var values: [String: CLIParameterValue] = [:]
         for (name, value) in object {
             guard values[name] == nil else { throw CLIParameterInputError.invalidJSON }
@@ -99,6 +99,18 @@ struct CLIParameterInput {
             }
         }
         return (values, source)
+    }
+
+    private func definitionsByID(
+        _ definitions: [CLIActionParameter]
+    ) throws -> [String: CLIActionParameter] {
+        var values: [String: CLIActionParameter] = [:]
+        for definition in definitions {
+            guard values.updateValue(definition, forKey: definition.id) == nil else {
+                throw CLIParameterInputError.invalidValue(definition.id)
+            }
+        }
+        return values
     }
 
     private func protectedFileData(path: String) throws -> Data {
