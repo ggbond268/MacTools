@@ -67,6 +67,15 @@ struct CLIApplication {
                 json: jsonRequested
             )
             return CLIExitCode.protocolIncompatible.rawValue
+        } catch CLIBrokerClientError.replyTimedOut {
+            emitLocalFailure(
+                command: commandName(arguments),
+                outcome: .hostUnavailable,
+                category: "hostTransportFailure",
+                message: "Timed out waiting for the broker reply; delivery state is unknown.",
+                json: jsonRequested
+            )
+            return CLIExitCode.transportFailure.rawValue
         } catch let error as CLIBrokerClientError where error.hostFailureDiagnostic != nil {
             let diagnostic = error.hostFailureDiagnostic!
             emitLocalFailure(

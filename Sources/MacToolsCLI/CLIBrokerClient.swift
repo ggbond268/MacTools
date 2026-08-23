@@ -4,6 +4,7 @@ import Foundation
 enum CLIBrokerClientError: Error {
     case unavailable(String)
     case timedOut
+    case replyTimedOut
     case protocolIncompatible
     case peerContractInvalid
     case hostDiscovery(CLIHostLocationError)
@@ -70,7 +71,8 @@ extension CLIBrokerClientError {
                 signatureAccepted: true,
                 guidance: "Open System Settings > General > Login Items & Extensions and allow the MacTools background item, then retry."
             )
-        case .unavailable, .timedOut, .protocolIncompatible, .peerContractInvalid:
+        case .unavailable, .timedOut, .replyTimedOut, .protocolIncompatible,
+             .peerContractInvalid:
             return nil
         }
     }
@@ -262,9 +264,7 @@ final class CLIBrokerClient: @unchecked Sendable {
             }
             throw CancellationError()
         } catch CLIBrokerClientError.timedOut {
-            throw CLIBrokerClientError.unavailable(
-                "Timed out waiting for the broker reply; delivery state is unknown."
-            )
+            throw CLIBrokerClientError.replyTimedOut
         }
         guard !responseData.isEmpty else { throw CLIBrokerClientError.peerContractInvalid }
         let response: CLIResponseEnvelope
@@ -285,6 +285,11 @@ final class CLIBrokerClient: @unchecked Sendable {
               response.protocolVersion == request.protocolVersion,
               response.requestID == request.requestID,
               response.operation == request.operation else {
+            throw CLIBrokerClientError.peerContractInvalid
+        }
+        do {
+            try CLIResponsePayloadValidator.validate(response)
+        } catch {
             throw CLIBrokerClientError.peerContractInvalid
         }
         return response
@@ -471,6 +476,34 @@ final class CLIBrokerClient: @unchecked Sendable {
                 rejection: nil,
                 payload: Data("{".utf8)
             ))
+        case "missingPayload":
+            return try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope(
+                schemaVersion: 1,
+                protocolVersion: request.protocolVersion,
+                requestID: request.requestID,
+                operation: request.operation,
+                actionReference: nil,
+                startedAt: .now,
+                finishedAt: .now,
+                outcome: .completed,
+                message: nil,
+                rejection: nil,
+                payload: nil
+            ))
+        case "schemaInvalidPayload":
+            return try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope(
+                schemaVersion: 1,
+                protocolVersion: request.protocolVersion,
+                requestID: request.requestID,
+                operation: request.operation,
+                actionReference: nil,
+                startedAt: .now,
+                finishedAt: .now,
+                outcome: .completed,
+                message: nil,
+                rejection: nil,
+                payload: Data("{}".utf8)
+            ))
         case "timeout":
             throw CLIBrokerClientError.timedOut
         default:
@@ -559,6 +592,116 @@ final class CLIBrokerClient: @unchecked Sendable {
         CLIServiceConfiguration.hostBundleIdentifier(
             for: CLIServiceConfiguration.executableInfoDictionary()["CFBundleIdentifier"]
                 as? String ?? "app.ggbond.MacTools.cli"
+        )
+    }
+}
+
+private enum CLIResponsePayloadValidator {
+    private struct StartedPayload: Decodable, Equatable {
+        let accepted: Bool
+    }
+
+    static func validate(_ response: CLIResponseEnvelope) throws {
+        if response.outcome == .started {
+            guard response.operation == .actionsRun || response.operation == .workflowsRun,
+                  let payload = response.payload else {
+                throw CLIProtocolCodecError.invalidObject
+            }
+            let value = try CLIProtocolCodec.decodeResponse(
+                StartedPayload.self,
+                from: payload,
+                allowedKeys: ["accepted"]
+            )
+            guard value.accepted else { throw CLIProtocolCodecError.invalidObject }
+            return
+        }
+
+        guard response.outcome == .completed else {
+            guard response.payload == nil else {
+                throw CLIProtocolCodecError.invalidObject
+            }
+            return
+        }
+
+        switch response.operation {
+        case .doctor:
+            try decode(
+                CLIDoctorRecord.self,
+                response.payload,
+                allowedKeys: [
+                    "hostVersion", "hostBuild", "protocolVersion", "actionCount",
+                    "workflowCount", "pluginCount", "brokerServiceStatus",
+                ]
+            )
+        case .actionsList:
+            try decode(
+                CLIPage<CLIActionRecord>.self,
+                response.payload,
+                allowedKeys: ["records", "continuationToken"]
+            )
+        case .actionsDescribe:
+            try decode(
+                CLIActionRecord.self,
+                response.payload,
+                allowedKeys: [
+                    "reference", "title", "subtitle", "description", "systemImage",
+                    "parameters", "availability", "cliEligibility", "capabilities",
+                    "externalInvocationPolicy",
+                ]
+            )
+        case .actionsAvailability:
+            try decode(
+                CLIAvailabilityRecord.self,
+                response.payload,
+                allowedKeys: ["isAvailable", "reason"]
+            )
+        case .workflowsList:
+            try decode(
+                CLIPage<CLIWorkflowRecord>.self,
+                response.payload,
+                allowedKeys: ["records", "continuationToken"]
+            )
+        case .workflowsDescribe:
+            try decode(
+                CLIWorkflowRecord.self,
+                response.payload,
+                allowedKeys: [
+                    "id", "name", "isEnabled", "stepCount", "actionReference",
+                    "availability",
+                ]
+            )
+        case .pluginsList:
+            try decode(
+                CLIPage<CLIPluginRecord>.self,
+                response.payload,
+                allowedKeys: ["records", "continuationToken"]
+            )
+        case .pluginsDescribe, .pluginsDoctor:
+            try decode(
+                CLIPluginRecord.self,
+                response.payload,
+                allowedKeys: [
+                    "id", "title", "summary", "version", "state", "diagnostic",
+                    "requiresRestart", "permissions", "publishedActionCount",
+                ]
+            )
+        case .actionsRun, .workflowsRun:
+            guard response.payload == nil else {
+                throw CLIProtocolCodecError.invalidObject
+            }
+        }
+    }
+
+    private static func decode<T: Decodable>(
+        _ type: T.Type,
+        _ payload: Data?,
+        allowedKeys: Set<String>
+    ) throws {
+        guard let payload else { throw CLIProtocolCodecError.invalidObject }
+        _ = try CLIProtocolCodec.decodeResponse(
+            type,
+            from: payload,
+            allowedKeys: allowedKeys
         )
     }
 }

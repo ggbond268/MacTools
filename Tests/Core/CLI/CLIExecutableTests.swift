@@ -84,7 +84,10 @@ final class CLIExecutableTests: XCTestCase {
     }
 
     func testInvalidPeerResponsesUseProtocolExitCodeForTextAndJSON() throws {
-        for fixture in ["empty", "malformed", "mismatched", "malformedPayload"] {
+        for fixture in [
+            "empty", "malformed", "mismatched", "malformedPayload",
+            "missingPayload", "schemaInvalidPayload",
+        ] {
             let environment = [
                 CLIServiceConfiguration.testPeerResponseEnvironmentKey: fixture,
             ]
@@ -119,6 +122,35 @@ final class CLIExecutableTests: XCTestCase {
         }
     }
 
+    func testRunCommandsRejectForbiddenPayloadForTextAndJSON() throws {
+        let environment = [
+            CLIServiceConfiguration.testPeerResponseEnvironmentKey: "malformedPayload",
+        ]
+        for arguments in [
+            ["actions", "run", "fixture/action"],
+            ["workflows", "run", "fixture"],
+        ] {
+            let command = arguments.joined(separator: " ")
+            let text = try runCLI(arguments, environment: environment)
+            XCTAssertEqual(text.status, CLIExitCode.protocolIncompatible.rawValue, command)
+            XCTAssertTrue(text.output.isEmpty, command)
+            XCTAssertTrue(text.error.contains("invalid response"), command)
+
+            let json = try runCLI(arguments + ["--json"], environment: environment)
+            XCTAssertEqual(json.status, CLIExitCode.protocolIncompatible.rawValue, command)
+            XCTAssertTrue(json.error.isEmpty, command)
+            let object = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(json.output.utf8)) as? [String: Any]
+            )
+            XCTAssertEqual(object["outcome"] as? String, "protocolIncompatible", command)
+            XCTAssertEqual(
+                (object["rejection"] as? [String: Any])?["category"] as? String,
+                "invalidPeerResponse",
+                command
+            )
+        }
+    }
+
     func testUncertainPeerTimeoutUsesTransportExitCodeForTextAndJSON() throws {
         let environment = [
             CLIServiceConfiguration.testPeerResponseEnvironmentKey: "timeout",
@@ -140,6 +172,23 @@ final class CLIExecutableTests: XCTestCase {
         XCTAssertEqual(object["outcome"] as? String, "hostUnavailable")
         XCTAssertEqual(
             (object["rejection"] as? [String: Any])?["category"] as? String,
+            "hostTransportFailure"
+        )
+
+        let doctorText = try runCLI(["doctor"], environment: environment)
+        XCTAssertEqual(doctorText.status, CLIExitCode.transportFailure.rawValue)
+        XCTAssertTrue(doctorText.output.isEmpty)
+        XCTAssertTrue(doctorText.error.contains("delivery state is unknown"))
+
+        let doctorJSON = try runCLI(["doctor", "--json"], environment: environment)
+        XCTAssertEqual(doctorJSON.status, CLIExitCode.transportFailure.rawValue)
+        XCTAssertTrue(doctorJSON.error.isEmpty)
+        let doctorObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(doctorJSON.output.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(doctorObject["outcome"] as? String, "hostUnavailable")
+        XCTAssertEqual(
+            (doctorObject["rejection"] as? [String: Any])?["category"] as? String,
             "hostTransportFailure"
         )
     }
