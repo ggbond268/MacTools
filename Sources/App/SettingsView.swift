@@ -585,10 +585,9 @@ private struct CLISettingsRow: View {
                    ? AppL10n.settings("commandLine.uninstall", defaultValue: "移除命令")
                    : AppL10n.settings("commandLine.install", defaultValue: "安装命令")) {
                 if installation.status == .installed {
-                    installation.uninstall()
+                    installation.uninstallIntegration(using: service)
                 } else {
-                    service.ensureRegistered()
-                    installation.install()
+                    installation.installIntegration(using: service)
                 }
             }
             .buttonStyle(.bordered)

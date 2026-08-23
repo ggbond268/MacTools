@@ -12,10 +12,16 @@ creates only `~/.local/bin/mactools`, as a symlink to the executable inside the
 installed app. MacTools does not request administrator access or edit shell
 startup files. Add `~/.local/bin` to `PATH` yourself if it is not already there.
 
-The app also registers its bundled, user-scoped background broker. macOS may ask
+After the symlink is installed, the app registers its bundled, user-scoped
+background broker. Merely launching MacTools does not register it. macOS may ask
 for approval in **System Settings > General > Login Items & Extensions**. The
 CLI starts the installed MacTools app without activation when the host is not
 running and waits up to ten seconds for its action registry.
+
+Choosing **Remove Command** unregisters the background broker before removing
+the MacTools-owned symlink. If unregistration fails, the command remains
+installed for a safe retry. A conflicting file at the command path is never
+removed.
 
 ## Commands
 
@@ -38,10 +44,25 @@ mactools plugins doctor <plugin-id> [--json]
 Workflow names resolve only when there is one exact match. Action identity is
 always the stable `provider/action` key printed by `actions list`.
 
+One action definition may publish several parameter presets to graphical action
+surfaces. CLI discovery still emits one record for its stable key, using the
+definition's title, description, parameter schema, and capabilities. Its
+availability and CLI eligibility are true when at least one published preset is
+available or eligible. Execution always validates the caller's submitted
+parameters and rechecks availability and exposure for that exact reference.
+
 `--no-wait` is accepted only for actions that hand durable progress ownership to
 MacTools. Ordinary actions wait for a terminal outcome. `SIGINT` and `SIGTERM`
 request cancellation; the provider receives it only when its canonical action
-declares cancellation support.
+declares cancellation support. The CLI exits with status `8` after forwarding
+the interrupt, including during host startup, parameter discovery, confirmation,
+and the request-admission boundary.
+
+Saved Scripts propagates an opaque invocation marker to child processes. If a
+script invokes `mactools` again while its parent CLI request is active, the
+broker rejects the nested request as recursive. Invocation markers are bounded,
+never printed, and are not credentials; the normal global request and action
+concurrency limits remain in force.
 
 ## Parameters and secrets
 
@@ -60,7 +81,9 @@ mactools actions run provider/action --input-json "$HOME/private-input.json"
 
 A file must be a regular, non-symlink file owned by the current user, have no
 group or other permission bits, and fit within the 64 KiB request limit. Values
-are validated again by the host and omitted from output and logs.
+are decoded against the current action schema, validated again by the host, and
+omitted from output and logs. JSON Booleans are not accepted as numbers (or vice
+versa); integer and number parameters retain their declared schema types.
 
 ## JSON and exit status
 

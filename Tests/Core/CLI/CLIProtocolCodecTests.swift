@@ -61,6 +61,83 @@ final class CLIProtocolCodecTests: XCTestCase {
         }
     }
 
+    func testInvocationContextEnvironmentRequiresCompleteBoundedValues() throws {
+        let chainID = UUID()
+        XCTAssertEqual(
+            try CLIInvocationContext.inherited(environment: [
+                CLIInvocationContext.chainEnvironmentKey: chainID.uuidString,
+                CLIInvocationContext.depthEnvironmentKey: "1",
+            ]),
+            CLIInvocationContext(chainID: chainID, depth: 1)
+        )
+        XCTAssertNil(try CLIInvocationContext.inherited(environment: [:]))
+        XCTAssertThrowsError(try CLIInvocationContext.inherited(environment: [
+            CLIInvocationContext.chainEnvironmentKey: chainID.uuidString,
+        ]))
+        XCTAssertThrowsError(try CLIInvocationContext.inherited(environment: [
+            CLIInvocationContext.chainEnvironmentKey: chainID.uuidString,
+            CLIInvocationContext.depthEnvironmentKey: "2",
+        ]))
+    }
+
+    func testRequestEnvelopeRoundTripPreservesBrokerInvocationContext() throws {
+        let request = CLIRequestEnvelope(
+            protocolVersion: 1,
+            requestID: UUID(),
+            operation: .actionsRun,
+            sentAt: .now,
+            invocationContext: CLIInvocationContext(chainID: UUID(), depth: 0),
+            payload: nil
+        )
+
+        let data = try CLIProtocolCodec.encodeRequest(request)
+        let decoded = try CLIProtocolCodec.decodeRequest(
+            CLIRequestEnvelope.self,
+            from: data,
+            allowedKeys: [
+                "protocolVersion", "requestID", "operation", "sentAt",
+                "invocationContext", "payload",
+            ]
+        )
+
+        XCTAssertEqual(decoded.protocolVersion, request.protocolVersion)
+        XCTAssertEqual(decoded.requestID, request.requestID)
+        XCTAssertEqual(decoded.operation, request.operation)
+        XCTAssertEqual(decoded.invocationContext, request.invocationContext)
+        XCTAssertEqual(decoded.payload, request.payload)
+        XCTAssertEqual(
+            decoded.sentAt.timeIntervalSince1970,
+            request.sentAt.timeIntervalSince1970,
+            accuracy: 0.001
+        )
+    }
+
+    func testVersionOneDraftAcceptsRequestShapeFromBeforeInvocationContext() throws {
+        let requestID = UUID()
+        let data = Data("""
+        {
+          "protocolVersion": 1,
+          "requestID": "\(requestID.uuidString)",
+          "operation": "doctor",
+          "sentAt": "2026-08-23T17:00:00.000Z"
+        }
+        """.utf8)
+
+        let request = try CLIProtocolCodec.decodeRequest(
+            CLIRequestEnvelope.self,
+            from: data,
+            allowedKeys: [
+                "protocolVersion", "requestID", "operation", "sentAt",
+                "invocationContext", "payload",
+            ]
+        )
+
+        XCTAssertEqual(request.requestID, requestID)
+        XCTAssertEqual(request.operation, .doctor)
+        XCTAssertNil(request.invocationContext)
+        XCTAssertNil(request.payload)
+    }
+
     func testRejectsOversizedRequestsAndNonFiniteValues() throws {
         let oversized = Data(repeating: 0x20, count: CLIProtocolVersion.maximumRequestBytes + 1)
         XCTAssertThrowsError(try CLIProtocolCodec.decodeRequest(

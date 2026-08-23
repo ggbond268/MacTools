@@ -22,6 +22,7 @@ final class MacToolsAppRuntime {
     private var statusItemController: MenuBarStatusItemController?
     private var actionGridOverlayController: ActionGridOverlayController?
     private var appIntentCatalogCancellable: AnyCancellable?
+    private var bootstrapTask: Task<Void, Never>?
     private lazy var cliHostBridge = CLIHostBridge(pluginHost: pluginHost)
     private lazy var settingsRecoveryScheduler = SettingsRecoveryScheduler { [weak self] in
         self?.windowRouter?.showSettings()
@@ -108,6 +109,8 @@ final class MacToolsAppRuntime {
     }
 
     func terminate() {
+        bootstrapTask?.cancel()
+        bootstrapTask = nil
         settingsRecoveryScheduler.cancel()
         cliHostBridge.stop()
         pluginHost.flushAutomaticPreferencesBackupBeforeTermination()
@@ -140,7 +143,9 @@ final class MacToolsAppRuntime {
             return
         }
 
-        Task { @MainActor in
+        bootstrapTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { bootstrapTask = nil }
             await automationStartupCoordinator.startAfterActionRegistryPreparation {
                 let updateSucceeded = await pluginHost
                     .automaticUpdateInstalledPluginsBeforeLoading()
@@ -149,7 +154,9 @@ final class MacToolsAppRuntime {
                         currentAppVersion: currentAppVersion
                     )
                 }
+                await pluginHost.prepareActionCatalogForExternalDiscovery()
             }
+            guard !Task.isCancelled else { return }
             appIntentCoordinator.actionRegistryDidBecomeReady()
             activateAppURLRouter()
             startCLIHostIfAvailable()
@@ -157,10 +164,16 @@ final class MacToolsAppRuntime {
     }
 
     private func completeBootstrap() {
-        automationStartupCoordinator.actionRegistryDidBecomeReady()
-        appIntentCoordinator.actionRegistryDidBecomeReady()
-        activateAppURLRouter()
-        startCLIHostIfAvailable()
+        bootstrapTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { bootstrapTask = nil }
+            await pluginHost.prepareActionCatalogForExternalDiscovery()
+            guard !Task.isCancelled else { return }
+            automationStartupCoordinator.actionRegistryDidBecomeReady()
+            appIntentCoordinator.actionRegistryDidBecomeReady()
+            activateAppURLRouter()
+            startCLIHostIfAvailable()
+        }
     }
 
     private func startCLIHostIfAvailable() {

@@ -75,6 +75,7 @@ targets:
       - Plugins/**/CalendarPluginResources/**
     - path: Sources/MacToolsCLI/CLIArgumentParser.swift
     - path: Sources/MacToolsCLI/CLIParameterInput.swift
+    - path: Sources/MacToolsCLI/CLISignalCoordinator.swift
     dependencies:
     - target: MacToolsPluginKit
       embed: true
@@ -154,6 +155,7 @@ targets:
     - path: Sources/Core/CLI/CLIServiceConfiguration.swift
     - path: Sources/Core/CLI/CLIXPCProtocols.swift
     - path: Sources/Core/CLI/CLIPeerIdentityValidator.swift
+    - path: Sources/Core/CLI/CLIRequestLifecycleState.swift
     - path: Sources/MacToolsCLI
     settings:
       base:

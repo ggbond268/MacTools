@@ -1,4 +1,5 @@
 import Darwin
+import CoreFoundation
 import Foundation
 
 enum CLIParameterInputError: Error, Equatable {
@@ -28,7 +29,10 @@ struct CLIParameterInput {
         }
     }
 
-    func json(path: String) throws -> (values: [String: CLIParameterValue], source: CLIParameterInputSource) {
+    func json(
+        path: String,
+        definitions: [CLIActionParameter]
+    ) throws -> (values: [String: CLIParameterValue], source: CLIParameterInputSource) {
         let data: Data
         let source: CLIParameterInputSource
         if path == "-" {
@@ -49,21 +53,47 @@ struct CLIParameterInput {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw CLIParameterInputError.invalidJSON
         }
+        let definitionsByID = Dictionary(uniqueKeysWithValues: definitions.map { ($0.id, $0) })
         var values: [String: CLIParameterValue] = [:]
         for (name, value) in object {
             guard values[name] == nil else { throw CLIParameterInputError.invalidJSON }
-            switch value {
-            case let value as Bool: values[name] = .boolean(value)
-            case let value as String: values[name] = .string(value)
-            case let value as NSNumber:
+            guard let definition = definitionsByID[name] else {
+                throw CLIParameterInputError.unknownParameter(name)
+            }
+            switch definition.kind {
+            case "string":
+                guard let value = value as? String else {
+                    throw CLIParameterInputError.invalidValue(name)
+                }
+                values[name] = .string(value)
+            case "boolean":
+                guard let value = value as? NSNumber,
+                      CFGetTypeID(value) == CFBooleanGetTypeID() else {
+                    throw CLIParameterInputError.invalidValue(name)
+                }
+                values[name] = .boolean(value.boolValue)
+            case "integer":
+                guard let value = value as? NSNumber,
+                      CFGetTypeID(value) != CFBooleanGetTypeID() else {
+                    throw CLIParameterInputError.invalidValue(name)
+                }
+                let decimal = value.decimalValue
+                var rounded = Decimal()
+                var decimalToRound = decimal
+                NSDecimalRound(&rounded, &decimalToRound, 0, .plain)
+                guard rounded == decimal,
+                      decimal >= Decimal(Int64.min), decimal <= Decimal(Int64.max) else {
+                    throw CLIParameterInputError.invalidValue(name)
+                }
+                values[name] = .integer(NSDecimalNumber(decimal: decimal).int64Value)
+            case "double":
+                guard let value = value as? NSNumber,
+                      CFGetTypeID(value) != CFBooleanGetTypeID() else {
+                    throw CLIParameterInputError.invalidValue(name)
+                }
                 let double = value.doubleValue
                 guard double.isFinite else { throw CLIParameterInputError.invalidValue(name) }
-                if double.rounded() == double,
-                   double >= Double(Int64.min), double <= Double(Int64.max) {
-                    values[name] = .integer(value.int64Value)
-                } else {
-                    values[name] = .double(double)
-                }
+                values[name] = .double(double)
             default:
                 throw CLIParameterInputError.invalidValue(name)
             }

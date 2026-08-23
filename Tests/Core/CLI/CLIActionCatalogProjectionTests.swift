@@ -3,7 +3,7 @@ import XCTest
 @testable import MacTools
 
 final class CLIActionCatalogProjectionTests: XCTestCase {
-    func testUniqueEntriesKeepsOneStableActionPerKeyInCatalogOrder() throws {
+    func testGroupsKeepEveryPresetUnderOneStableActionInCatalogOrder() throws {
         let enabled = try ActionParameterSet(["enabled": .boolean(true)])
         let disabled = try ActionParameterSet(["enabled": .boolean(false)])
         let appearanceKey = ActionKey(providerID: "appearance", actionID: "set-enabled")
@@ -23,13 +23,17 @@ final class CLIActionCatalogProjectionTests: XCTestCase {
             )
         ]
 
-        let projected = CLIActionCatalogProjection.uniqueEntries(entries)
+        let projected = CLIActionCatalogProjection.groups(entries)
 
-        XCTAssertEqual(projected.map(\.reference.key), [appearanceKey, otherKey])
-        XCTAssertEqual(projected.map(\.title), ["Enable Dark Mode", "Toggle Appearance"])
+        XCTAssertEqual(projected.map(\.key), [appearanceKey, otherKey])
+        XCTAssertEqual(projected.map(\.entries.count), [2, 1])
+        XCTAssertEqual(
+            projected[0].entries.map(\.title),
+            ["Enable Dark Mode", "Enable Light Mode"]
+        )
     }
 
-    func testUniqueEntriesDoesNotMergeMatchingActionIDsAcrossProviders() {
+    func testGroupsDoNotMergeMatchingActionIDsAcrossProviders() {
         let firstKey = ActionKey(providerID: "first", actionID: "set-enabled")
         let secondKey = ActionKey(providerID: "second", actionID: "set-enabled")
         let entries = [
@@ -38,7 +42,7 @@ final class CLIActionCatalogProjectionTests: XCTestCase {
         ]
 
         XCTAssertEqual(
-            CLIActionCatalogProjection.uniqueEntries(entries).map(\.reference.key),
+            CLIActionCatalogProjection.groups(entries).map(\.key),
             [firstKey, secondKey]
         )
     }

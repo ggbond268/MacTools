@@ -32,6 +32,7 @@ NEW_API_MINIMUM_HOSTS = {
     "ActionExposureSurface": "1.2.0",
     "ActionExposurePolicy": "1.2.0",
     "PluginActionProviding": "1.2.0",
+    "PluginActionCatalogPreparing": "1.2.0",
     "PluginActionShortcutSettingsConfiguration": "1.2.0",
     "PluginActionShortcutSettingsProviding": "1.2.0",
     "PluginActionExecutionRevisionProviding": "1.2.0",
@@ -58,6 +59,8 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginInputGestureConflictConsuming": "1.2.0",
     # Shared lifecycle and presentation helpers introduced in host 1.2.
     "PluginCallbackContext": "1.2.0",
+    "PluginCLIInvocationContext": "1.2.0",
+    "PluginActionExecutionContext": "1.2.0",
     "PluginPresentationSafety": "1.2.0",
     "PluginProcessGroupLease": "1.2.0",
     "PluginSystemImage": "1.2.0",

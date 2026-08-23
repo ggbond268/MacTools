@@ -27,15 +27,28 @@ struct CLIApplication {
             case let .version(json):
                 return try await version(json: json)
             case let .request(operation, payload, json):
-                if operation == .doctor {
-                    return try await doctor(payload: payload, json: json)
+                return try await interruptibleRemoteCommand {
+                    if operation == .doctor {
+                        return try await doctor(payload: payload, json: json)
+                    }
+                    _ = try await client.prepareHost()
+                    return try await execute(operation: operation, payload: payload, json: json)
                 }
-                _ = try await client.prepareHost()
-                return try await execute(operation: operation, payload: payload, json: json)
             case let .actionRun(arguments):
-                _ = try await client.prepareHost()
-                return try await executeRun(arguments)
+                return try await interruptibleRemoteCommand {
+                    _ = try await client.prepareHost()
+                    return try await executeRun(arguments)
+                }
             }
+        } catch is CancellationError {
+            emitLocalFailure(
+                command: commandName(arguments),
+                outcome: .cancelled,
+                category: "cancelled",
+                message: "The request was cancelled.",
+                json: jsonRequested
+            )
+            return CLIExitCode.cancellation.rawValue
         } catch CLIBrokerClientError.protocolIncompatible {
             emitLocalFailure(
                 command: commandName(arguments),
@@ -56,6 +69,7 @@ struct CLIApplication {
             return CLIExitCode.transportFailure.rawValue
         } catch let error where error is CLIArgumentError
             || error is CLIParameterInputError
+            || error is CLIInvocationContextError
             || error is CLIProtocolCodecError {
             emitLocalFailure(
                 command: commandName(arguments),
@@ -158,11 +172,8 @@ struct CLIApplication {
         }
         let values: [String: CLIParameterValue]
         let source: CLIParameterInputSource
-        if let path = arguments.inputJSONPath {
-            let parsed = try CLIParameterInput().json(path: path)
-            values = parsed.values
-            source = parsed.source
-        } else if !arguments.rawParameters.isEmpty {
+        let definitions: [CLIActionParameter]
+        if arguments.inputJSONPath != nil || !arguments.rawParameters.isEmpty {
             let describePayload = try CLIProtocolCodec.encodeRequest(CLIActionTargetRequest(key: key))
             let describe = try await client.send(operation: .actionsDescribe, payload: describePayload)
             guard describe.outcome == .completed, let payload = describe.payload else {
@@ -171,10 +182,24 @@ struct CLIApplication {
                     json: arguments.json
                 )
             }
-            let action = try CLIProtocolCodec.decodeResponse(CLIActionRecord.self, from: payload)
+            definitions = try CLIProtocolCodec.decodeResponse(
+                CLIActionRecord.self,
+                from: payload
+            ).parameters
+        } else {
+            definitions = []
+        }
+        if let path = arguments.inputJSONPath {
+            let parsed = try CLIParameterInput().json(
+                path: path,
+                definitions: definitions
+            )
+            values = parsed.values
+            source = parsed.source
+        } else if !arguments.rawParameters.isEmpty {
             values = try CLIParameterInput().arguments(
                 arguments.rawParameters,
-                definitions: action.parameters
+                definitions: definitions
             )
             source = .arguments
         } else {
@@ -191,17 +216,26 @@ struct CLIApplication {
     }
 
     private func execute(operation: CLIOperation, payload: Data?, json: Bool) async throws -> Int32 {
-        let requestID = UUID()
-        let signalCoordinator = CLISignalCoordinator { [client] in
-            Task { _ = await client.cancel(requestID: requestID) }
-        }
-        _ = signalCoordinator
-        let response = try await client.send(
-            operation: operation,
-            payload: payload,
-            requestID: requestID
-        )
+        let response = try await client.send(operation: operation, payload: payload)
         return try emit(response, json: json)
+    }
+
+    private func interruptibleRemoteCommand(
+        _ operation: @escaping @Sendable () async throws -> Int32
+    ) async throws -> Int32 {
+        let taskState = CLICommandTaskState()
+        let signalCoordinator = CLISignalCoordinator { taskState.cancel() }
+        defer { signalCoordinator.finish() }
+#if DEBUG
+        if ProcessInfo.processInfo.environment[
+            CLIServiceConfiguration.testSignalReadyEnvironmentKey
+        ] == "1" {
+            FileHandle.standardError.write(Data("MACTOOLS_CLI_SIGNAL_READY\n".utf8))
+        }
+#endif
+        let task = Task { try await operation() }
+        taskState.install(task)
+        return try await task.value
     }
 
     private func emit(_ response: CLIResponseEnvelope, json: Bool) throws -> Int32 {

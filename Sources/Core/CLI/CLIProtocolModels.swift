@@ -6,6 +6,7 @@ enum CLIProtocolVersion {
     static let maximumRequestBytes = 64 * 1_024
     static let maximumResponseBytes = 4 * 1_024 * 1_024
     static let maximumPageSize = 256
+    static let maximumInvocationDepth = 1
 }
 
 enum CLIProtocolNegotiator {
@@ -100,7 +101,64 @@ struct CLIRequestEnvelope: Codable, Equatable, Sendable {
     let requestID: UUID
     let operation: CLIOperation
     let sentAt: Date
+    let invocationContext: CLIInvocationContext?
     let payload: Data?
+
+    init(
+        protocolVersion: Int,
+        requestID: UUID,
+        operation: CLIOperation,
+        sentAt: Date,
+        invocationContext: CLIInvocationContext? = nil,
+        payload: Data?
+    ) {
+        self.protocolVersion = protocolVersion
+        self.requestID = requestID
+        self.operation = operation
+        self.sentAt = sentAt
+        self.invocationContext = invocationContext
+        self.payload = payload
+    }
+
+    func replacingInvocationContext(_ invocationContext: CLIInvocationContext) -> Self {
+        Self(
+            protocolVersion: protocolVersion,
+            requestID: requestID,
+            operation: operation,
+            sentAt: sentAt,
+            invocationContext: invocationContext,
+            payload: payload
+        )
+    }
+}
+
+struct CLIInvocationContext: Codable, Equatable, Sendable {
+    static let chainEnvironmentKey = "MACTOOLS_CLI_CHAIN_ID"
+    static let depthEnvironmentKey = "MACTOOLS_CLI_CHAIN_DEPTH"
+
+    let chainID: UUID
+    let depth: Int
+
+    static func inherited(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> Self? {
+        let chainValue = environment[chainEnvironmentKey]
+        let depthValue = environment[depthEnvironmentKey]
+        guard chainValue != nil || depthValue != nil else { return nil }
+        guard let chainValue,
+              let chainID = UUID(uuidString: chainValue),
+              let depthValue,
+              let depth = Int(depthValue),
+              depth > 0,
+              depth <= CLIProtocolVersion.maximumInvocationDepth else {
+            throw CLIInvocationContextError.invalidEnvironment
+        }
+        return Self(chainID: chainID, depth: depth)
+    }
+}
+
+enum CLIInvocationContextError: Error, Equatable {
+    case invalidEnvironment
 }
 
 struct CLIRejection: Codable, Equatable, Sendable {

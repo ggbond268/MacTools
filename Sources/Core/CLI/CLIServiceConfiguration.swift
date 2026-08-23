@@ -3,6 +3,12 @@ import Foundation
 enum CLIServiceConfiguration {
     static let launchAgentPlistName = "app.ggbond.MacTools.cli-broker.plist"
 
+#if DEBUG
+    static let testServiceNameEnvironmentKey = "MACTOOLS_CLI_TEST_SERVICE_NAME"
+    static let testDisableHostLaunchEnvironmentKey = "MACTOOLS_CLI_TEST_DISABLE_HOST_LAUNCH"
+    static let testSignalReadyEnvironmentKey = "MACTOOLS_CLI_TEST_SIGNAL_READY"
+#endif
+
     static func serviceName(bundleIdentifier: String?) -> String {
         "\(bundleIdentifier ?? "app.ggbond.MacTools.dev").cli-broker"
     }
@@ -50,6 +56,12 @@ enum CLIServiceConfiguration {
     }
 
     static var runtimeServiceName: String {
+#if DEBUG
+        if let override = ProcessInfo.processInfo.environment[testServiceNameEnvironmentKey],
+           !override.isEmpty {
+            return override
+        }
+#endif
         let identifier = containingApplicationBundle()?.bundleIdentifier
             ?? Bundle.main.bundleIdentifier
         return serviceName(bundleIdentifier: identifier)

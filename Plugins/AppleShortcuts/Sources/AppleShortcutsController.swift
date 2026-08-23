@@ -128,6 +128,10 @@ final class AppleShortcutsController: ObservableObject {
         )
     }
 
+    func waitForLibraryRefresh() async {
+        await refreshTask?.value
+    }
+
     /// Requests folders and visual metadata only while the Apple Shortcuts settings workspace is visible.
     func refreshForSettings(force: Bool = true) {
         guard refreshTask == nil else {

@@ -124,22 +124,38 @@ final class CLIBroker: NSObject, CLIBrokerXPCProtocol, NSXPCListenerDelegate {
         guard let envelope = try? CLIProtocolCodec.decodeRequest(
             CLIRequestEnvelope.self,
             from: request,
-            allowedKeys: ["protocolVersion", "requestID", "operation", "sentAt", "payload"]
+            allowedKeys: [
+                "protocolVersion", "requestID", "operation", "sentAt",
+                "invocationContext", "payload",
+            ]
         ) else {
             reply(Data())
             return
         }
         let clientID = ObjectIdentifier(connection)
-        let admissionFailure: String? = lock.withLock {
-            switch admissionState.admit(requestID: envelope.requestID, clientID: clientID) {
-            case .duplicateRequestID: "The request identifier is already active."
-            case .globalCapacity: "The broker request limit has been reached."
-            case .clientCapacity: "The client request limit has been reached."
-            case nil: nil
-            }
+        let admissionRejection = lock.withLock {
+            admissionState.admit(
+                requestID: envelope.requestID,
+                clientID: clientID,
+                invocationContext: envelope.invocationContext
+            )
         }
-        if let admissionFailure {
-            reply(encodedTransportFailure(request, message: admissionFailure))
+        if let admissionRejection {
+            reply(encodedAdmissionRejection(envelope, rejection: admissionRejection))
+            return
+        }
+        guard let invocationContext = lock.withLock({
+            admissionState.invocationContext(
+                requestID: envelope.requestID,
+                clientID: clientID
+            )
+        }), let forwardedRequest = try? CLIProtocolCodec.encodeRequest(
+            envelope.replacingInvocationContext(invocationContext)
+        ) else {
+            lock.withLock {
+                admissionState.finish(requestID: envelope.requestID, clientID: clientID)
+            }
+            reply(encodedTransportFailure(request, message: "The request context is unavailable."))
             return
         }
         let finish = BrokerReplyOnce<Data> { [weak self] response in
@@ -169,25 +185,55 @@ final class CLIBroker: NSObject, CLIBrokerXPCProtocol, NSXPCListenerDelegate {
             finish.call(encodedTransportFailure(request, message: "Host interface is unavailable."))
             return
         }
-        host.handle(request) { response in
-            guard response.count <= CLIProtocolVersion.maximumResponseBytes else {
-                finish.call(self.encodedTransportFailure(request, message: "Host response is too large."))
-                return
+        let didBeginForwarding = lock.withLock {
+            admissionState.beginForwarding(
+                requestID: envelope.requestID,
+                clientID: clientID
+            )
+        }
+        if didBeginForwarding {
+            // Never invoke an XPC proxy while holding the broker state lock. If cancel
+            // overtakes this send, the host's bounded pre-registration relay records it
+            // and consumes the request before creating its execution task.
+            host.handle(forwardedRequest) { response in
+                guard response.count <= CLIProtocolVersion.maximumResponseBytes else {
+                    finish.call(self.encodedTransportFailure(
+                        request,
+                        message: "Host response is too large."
+                    ))
+                    return
+                }
+                finish.call(response)
             }
-            finish.call(response)
+        } else {
+            finish.call(encodedAdmissionRejection(
+                envelope,
+                rejection: .cancelledBeforeAdmission
+            ))
         }
     }
 
     func cancel(_ requestID: UUID, withReply reply: @escaping (Bool) -> Void) {
         guard let connection = NSXPCConnection.current(),
-              identityValidator.accepts(connection, as: .commandLineTool),
-              lock.withLock({
-                  admissionState.owns(
-                      requestID: requestID,
-                      clientID: ObjectIdentifier(connection)
-                  )
-              }),
-              let hostConnection = lock.withLock({ self.hostConnection }) else {
+              identityValidator.accepts(connection, as: .commandLineTool) else {
+            reply(false)
+            return
+        }
+        let cancellation = lock.withLock {
+            admissionState.cancel(
+                requestID: requestID,
+                clientID: ObjectIdentifier(connection)
+            )
+        }
+        guard let cancellation else {
+            reply(false)
+            return
+        }
+        guard cancellation == .forwardToHost else {
+            reply(true)
+            return
+        }
+        guard let hostConnection = lock.withLock({ self.hostConnection }) else {
             reply(false)
             return
         }
@@ -242,7 +288,10 @@ final class CLIBroker: NSObject, CLIBrokerXPCProtocol, NSXPCListenerDelegate {
         guard let request = try? CLIProtocolCodec.decodeRequest(
             CLIRequestEnvelope.self,
             from: requestData,
-            allowedKeys: ["protocolVersion", "requestID", "operation", "sentAt", "payload"]
+            allowedKeys: [
+                "protocolVersion", "requestID", "operation", "sentAt",
+                "invocationContext", "payload",
+            ]
         ) else { return Data() }
         return (try? CLIProtocolCodec.encodeResponse(CLIResponseEnvelope.failure(
             request: request,
@@ -279,12 +328,56 @@ final class CLIBroker: NSObject, CLIBrokerXPCProtocol, NSXPCListenerDelegate {
         guard let request = try? CLIProtocolCodec.decodeRequest(
             CLIRequestEnvelope.self,
             from: requestData,
-            allowedKeys: ["protocolVersion", "requestID", "operation", "sentAt", "payload"]
+            allowedKeys: [
+                "protocolVersion", "requestID", "operation", "sentAt",
+                "invocationContext", "payload",
+            ]
         ) else { return Data() }
         return (try? CLIProtocolCodec.encodeResponse(CLIResponseEnvelope.failure(
             request: request,
             outcome: .hostUnavailable,
             category: "hostTransportFailure",
+            message: message
+        ))) ?? Data()
+    }
+
+    private func encodedAdmissionRejection(
+        _ request: CLIRequestEnvelope,
+        rejection: CLIRequestAdmissionState<ObjectIdentifier>.Rejection
+    ) -> Data {
+        let outcome: CLIOutcome
+        let category: String
+        let message: String
+        switch rejection {
+        case .duplicateRequestID:
+            outcome = .hostUnavailable
+            category = "duplicateRequestID"
+            message = "The request identifier is already active."
+        case .globalCapacity:
+            outcome = .hostUnavailable
+            category = "globalCapacity"
+            message = "The broker request limit has been reached."
+        case .clientCapacity:
+            outcome = .hostUnavailable
+            category = "clientCapacity"
+            message = "The client request limit has been reached."
+        case .recursiveInvocation:
+            outcome = .invalidInput
+            category = "recursiveInvocation"
+            message = "Recursive CLI invocation is not allowed."
+        case .invalidInvocationContext:
+            outcome = .invalidInput
+            category = "invalidInvocationContext"
+            message = "The CLI invocation context is invalid."
+        case .cancelledBeforeAdmission:
+            outcome = .cancelled
+            category = "cancelled"
+            message = "The request was cancelled."
+        }
+        return (try? CLIProtocolCodec.encodeResponse(CLIResponseEnvelope.failure(
+            request: request,
+            outcome: outcome,
+            category: category,
             message: message
         ))) ?? Data()
     }

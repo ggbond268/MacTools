@@ -1,4 +1,5 @@
 import Foundation
+import MacToolsPluginKit
 import XCTest
 @testable import SavedScriptsPlugin
 
@@ -20,6 +21,31 @@ final class SavedScriptRunnerTests: XCTestCase {
         XCTAssertEqual(result.standardOutput, "hello")
         XCTAssertEqual(result.standardError, "warning")
         XCTAssertFalse(result.outputWasTruncated)
+    }
+
+    func testCLIInvocationContextPropagatesOnlyOpaqueChildEnvironment() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+        let runner = ProcessSavedScriptRunner(temporaryDirectory: temporaryDirectory)
+        let chainID = UUID()
+        let script = SavedScript(
+            name: "CLI Context",
+            kind: .sh,
+            source: "printf '%s\\n%s' \"$MACTOOLS_CLI_CHAIN_ID\" \"$MACTOOLS_CLI_CHAIN_DEPTH\""
+        )
+
+        let result = try await PluginActionExecutionContext.$cliInvocation.withValue(
+            PluginCLIInvocationContext(chainID: chainID, depth: 0)
+        ) {
+            try await runner.run(script)
+        }
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(
+            result.standardOutput.split(separator: "\n").map(String.init),
+            [chainID.uuidString, "1"]
+        )
     }
 
     func testWorkingDirectoryWithSpacesIsPassedWithoutShellInterpolation() async throws {

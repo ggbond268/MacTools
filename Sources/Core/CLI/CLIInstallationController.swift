@@ -17,17 +17,20 @@ final class CLIInstallationController: ObservableObject {
     private let fileManager: FileManager
     private let homeDirectory: URL
     private let sourceURL: URL?
+    private let removeItem: (URL) throws -> Void
 
     init(
         fileManager: FileManager = .default,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
-        bundledCLIURL: URL? = nil
+        bundledCLIURL: URL? = nil,
+        removeItem: ((URL) throws -> Void)? = nil
     ) {
         self.fileManager = fileManager
         self.homeDirectory = homeDirectory
         self.sourceURL = bundledCLIURL ?? Bundle.main.executableURL?
             .deletingLastPathComponent()
             .appendingPathComponent("mactools")
+        self.removeItem = removeItem ?? { try fileManager.removeItem(at: $0) }
         refresh()
     }
 
@@ -60,7 +63,7 @@ final class CLIInstallationController: ObservableObject {
                     refresh()
                     return
                 }
-                try fileManager.removeItem(at: installURL)
+                try removeItem(installURL)
             }
             try fileManager.createSymbolicLink(at: installURL, withDestinationURL: source)
             lastError = nil
@@ -70,19 +73,38 @@ final class CLIInstallationController: ObservableObject {
         refresh()
     }
 
-    func uninstall() {
+    @discardableResult
+    func uninstall() -> Bool {
         guard pointsToBundledCLI else {
             lastError = "未移除：安装位置不是 MacTools 创建的链接。"
             refresh()
-            return
+            return false
         }
         do {
-            try fileManager.removeItem(at: installURL)
+            try removeItem(installURL)
             lastError = nil
         } catch {
             lastError = error.localizedDescription
         }
         refresh()
+        return status == .notInstalled
+    }
+
+    func installIntegration(using service: CLIBrokerServiceController) {
+        install()
+        guard status == .installed else { return }
+        if !service.ensureRegistered() {
+            uninstall()
+        }
+    }
+
+    func uninstallIntegration(using service: CLIBrokerServiceController) {
+        guard status == .installed else { return }
+        let shouldRestoreService = service.isRegistered
+        guard service.unregister() else { return }
+        if !uninstall(), shouldRestoreService {
+            _ = service.ensureRegistered()
+        }
     }
 
     func refresh() {

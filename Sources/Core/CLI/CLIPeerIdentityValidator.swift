@@ -15,6 +15,18 @@ enum CLIPeerRole {
 }
 
 struct CLIPeerIdentityValidator {
+    private let allowsUnverifiedPeersForTesting: Bool
+
+    init() {
+        allowsUnverifiedPeersForTesting = false
+    }
+
+    #if DEBUG
+    init(allowsUnverifiedPeersForTesting: Bool) {
+        self.allowsUnverifiedPeersForTesting = allowsUnverifiedPeersForTesting
+    }
+    #endif
+
     func identity(for connection: NSXPCConnection) -> CLIPeerIdentity? {
         identity(
             processIdentifier: connection.processIdentifier,
@@ -32,11 +44,7 @@ struct CLIPeerIdentityValidator {
         relativeTo currentIdentity: CLIPeerIdentity? = nil
     ) -> Bool {
         guard let currentIdentity = currentIdentity ?? self.currentIdentity() else {
-            #if DEBUG
-            return true
-            #else
-            return false
-            #endif
+            return allowsUnverifiedPeersForTesting
         }
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(applicationURL as CFURL, [], &staticCode) == errSecSuccess,
@@ -48,11 +56,7 @@ struct CLIPeerIdentityValidator {
               ) == errSecSuccess,
               let metadata = signingMetadata(for: staticCode)
         else {
-            #if DEBUG
-            return true
-            #else
-            return false
-            #endif
+            return allowsUnverifiedPeersForTesting
         }
         return metadata.teamIdentifier == currentIdentity.teamIdentifier
             && metadata.signingIdentifier == expectedSigningIdentifier(
@@ -67,17 +71,11 @@ struct CLIPeerIdentityValidator {
         brokerIdentity: CLIPeerIdentity? = nil
     ) -> Bool {
         guard connection.effectiveUserIdentifier == geteuid() else { return false }
-        #if DEBUG
         if let identity = identity(for: connection),
            let brokerIdentity = brokerIdentity ?? currentIdentity() {
             return matches(identity, as: role, relativeTo: brokerIdentity)
         }
-        return true
-        #else
-        guard let identity = identity(for: connection),
-              let brokerIdentity = brokerIdentity ?? currentIdentity() else { return false }
-        return matches(identity, as: role, relativeTo: brokerIdentity)
-        #endif
+        return allowsUnverifiedPeersForTesting
     }
 
     func matches(
@@ -98,10 +96,9 @@ struct CLIPeerIdentityValidator {
         toRequire role: CLIPeerRole,
         currentIdentity: CLIPeerIdentity? = nil
     ) -> Bool {
-        #if DEBUG
-        return true
-        #else
-        guard let currentIdentity = currentIdentity ?? self.currentIdentity() else { return false }
+        guard let currentIdentity = currentIdentity ?? self.currentIdentity() else {
+            return allowsUnverifiedPeersForTesting
+        }
         let identifier = expectedSigningIdentifier(
             for: role,
             brokerIdentifier: currentIdentity.signingIdentifier
@@ -112,7 +109,6 @@ struct CLIPeerIdentityValidator {
         )
         connection.setCodeSigningRequirement(requirement)
         return true
-        #endif
     }
 
     func brokerListenerRequirement() -> String? {

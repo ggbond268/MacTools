@@ -2,9 +2,26 @@ import Foundation
 import MacToolsPluginKit
 
 enum CLIActionCatalogProjection {
-    static func uniqueEntries(_ entries: [ActionCatalogEntry]) -> [ActionCatalogEntry] {
-        var seenKeys = Set<ActionKey>()
-        return entries.filter { seenKeys.insert($0.reference.key).inserted }
+    struct Group {
+        let key: ActionKey
+        let entries: [ActionCatalogEntry]
+    }
+
+    static func groups(_ entries: [ActionCatalogEntry]) -> [Group] {
+        var indicesByKey: [ActionKey: Int] = [:]
+        var groups: [Group] = []
+        for entry in entries {
+            if let index = indicesByKey[entry.reference.key] {
+                groups[index] = Group(
+                    key: entry.reference.key,
+                    entries: groups[index].entries + [entry]
+                )
+            } else {
+                indicesByKey[entry.reference.key] = groups.count
+                groups.append(Group(key: entry.reference.key, entries: [entry]))
+            }
+        }
+        return groups
     }
 }
 
@@ -12,16 +29,10 @@ enum CLIActionCatalogProjection {
 final class CLIHostRequestRouter {
     private let pluginHost: PluginHost
     private let serviceStatus: () -> String
-    private let initialRegistryReadyAt: ContinuousClock.Instant
 
     init(pluginHost: PluginHost, serviceStatus: @escaping () -> String) {
         self.pluginHost = pluginHost
         self.serviceStatus = serviceStatus
-        // Dynamic providers can publish their first hardware-backed catalog entries on the
-        // main actor immediately after PluginHost's synchronous bootstrap. Keep the local
-        // transport responsive while allowing that initial publication wave to settle, so
-        // the first cold-start discovery response is not a partial registry snapshot.
-        initialRegistryReadyAt = .now.advanced(by: .milliseconds(500))
     }
 
     func handle(_ request: CLIRequestEnvelope) async -> CLIResponseEnvelope {
@@ -37,8 +48,6 @@ final class CLIHostRequestRouter {
             )
         }
 
-        try? await Task.sleep(until: initialRegistryReadyAt, clock: .continuous)
-
         do {
             switch request.operation {
             case .doctor:
@@ -49,7 +58,7 @@ final class CLIHostRequestRouter {
                         hostVersion: AppMetadata.shortVersion ?? "unknown",
                         hostBuild: AppMetadata.buildNumber ?? "unknown",
                         protocolVersion: CLIProtocolVersion.current,
-                        actionCount: cliCatalogEntries.count,
+                        actionCount: cliCatalogGroups.count,
                         workflowCount: pluginHost.automationController.workflows.count,
                         pluginCount: pluginHost.pluginManagementItems.count,
                         brokerServiceStatus: serviceStatus()
@@ -61,7 +70,7 @@ final class CLIHostRequestRouter {
                     request: request,
                     allowedKeys: ["runnableOnly", "continuationToken"]
                 )
-                let actions = cliCatalogEntries.map(actionRecord)
+                let actions = cliCatalogGroups.map(actionRecord)
                     .filter { !payload.runnableOnly || $0.cliEligibility.isAvailable }
                     .sorted { lhs, rhs in
                         if lhs.title == rhs.title { return lhs.reference.key.id < rhs.reference.key.id }
@@ -90,7 +99,9 @@ final class CLIHostRequestRouter {
                     request: request,
                     allowedKeys: ["key", "parameters", "inputSource", "noWait"]
                 )
-                return await runAction(payload, request: request, startedAt: startedAt)
+                return await withCLIInvocationContext(request) {
+                    await runAction(payload, request: request, startedAt: startedAt)
+                }
             case .workflowsList:
                 let list = try listRequest(request)
                 return try response(
@@ -136,19 +147,21 @@ final class CLIHostRequestRouter {
                     }
                     return unknown(request, startedAt: startedAt, noun: "workflow")
                 }
-                return await runAction(
-                    CLIActionRunRequest(
-                        key: CLIActionKey(
-                            providerID: workflow.actionKey.providerID,
-                            actionID: workflow.actionKey.actionID
+                return await withCLIInvocationContext(request) {
+                    await runAction(
+                        CLIActionRunRequest(
+                            key: CLIActionKey(
+                                providerID: workflow.actionKey.providerID,
+                                actionID: workflow.actionKey.actionID
+                            ),
+                            parameters: [:],
+                            inputSource: .arguments,
+                            noWait: payload.noWait
                         ),
-                        parameters: [:],
-                        inputSource: .arguments,
-                        noWait: payload.noWait
-                    ),
-                    request: request,
-                    startedAt: startedAt
-                )
+                        request: request,
+                        startedAt: startedAt
+                    )
+                }
             case .pluginsList:
                 let list = try listRequest(request)
                 return try response(
@@ -275,23 +288,21 @@ final class CLIHostRequestRouter {
     }
 
     private func actionRecord(for key: CLIActionKey) -> CLIActionRecord? {
-        cliCatalogEntries
-            .first(where: { entry in
-                entry.reference.key.providerID == key.providerID
-                    && entry.reference.key.actionID == key.actionID
+        cliCatalogGroups
+            .first(where: { group in
+                group.key.providerID == key.providerID
+                    && group.key.actionID == key.actionID
             })
             .map(actionRecord)
     }
 
-    private var cliCatalogEntries: [ActionCatalogEntry] {
-        CLIActionCatalogProjection.uniqueEntries(pluginHost.actionRegistry.catalogEntries)
+    private var cliCatalogGroups: [CLIActionCatalogProjection.Group] {
+        CLIActionCatalogProjection.groups(pluginHost.actionRegistry.catalogEntries)
     }
 
-    private func actionRecord(_ entry: ActionCatalogEntry) -> CLIActionRecord {
-        guard case let .success(action) = pluginHost.actionRegistry.registeredAction(
-            for: entry.reference
-        ) else {
-            let definition = pluginHost.actionRegistry.definition(for: entry.reference.key)
+    private func actionRecord(_ group: CLIActionCatalogProjection.Group) -> CLIActionRecord {
+        guard let definition = pluginHost.actionRegistry.definition(for: group.key) else {
+            let entry = group.entries[0]
             let unavailable = CLIAvailabilityRecord(
                 isAvailable: false,
                 reason: "The action provider is not registered."
@@ -306,38 +317,71 @@ final class CLIHostRequestRouter {
                 ),
                 title: entry.title,
                 subtitle: entry.subtitle,
-                description: definition?.description ?? "Action provider is unavailable.",
-                systemImage: definition?.systemImage ?? "questionmark.circle",
-                parameters: definition?.parameters.map(parameterRecord) ?? [],
+                description: "Action provider is unavailable.",
+                systemImage: "questionmark.circle",
+                parameters: [],
                 availability: unavailable,
                 cliEligibility: unavailable,
-                capabilities: definition.map { capabilityNames($0.capabilities) } ?? [],
-                externalInvocationPolicy: definition?.externalInvocationPolicy.rawValue
-                    ?? "unavailable"
+                capabilities: [],
+                externalInvocationPolicy: "unavailable"
             )
         }
-        let availability = pluginHost.actionRegistry.availability(for: entry.reference)
-        let eligibility = cliEligibility(action: action, availability: availability)
+
+        let evaluations = group.entries.compactMap { entry -> (
+            availability: CLIAvailabilityRecord,
+            eligibility: CLIAvailabilityRecord
+        )? in
+            guard case let .success(action) = pluginHost.actionRegistry.registeredAction(
+                for: entry.reference
+            ) else { return nil }
+            let availability = pluginHost.actionRegistry.availability(for: entry.reference)
+            return (
+                CLIAvailabilityRecord(
+                    isAvailable: availability.isAvailable,
+                    reason: availability.reason
+                ),
+                cliEligibility(action: action, availability: availability)
+            )
+        }
+        let availability = aggregateAvailability(
+            evaluations.map(\.availability),
+            fallbackReason: "No published preset is currently available."
+        )
+        let eligibility = aggregateAvailability(
+            evaluations.map(\.eligibility),
+            fallbackReason: "No published preset is currently runnable from the CLI."
+        )
+        let subtitles = Set(group.entries.map(\.subtitle))
         return CLIActionRecord(
             reference: CLIActionReference(
                 key: CLIActionKey(
-                    providerID: entry.reference.key.providerID,
-                    actionID: entry.reference.key.actionID
+                    providerID: group.key.providerID,
+                    actionID: group.key.actionID
                 ),
-                schemaVersion: action.definition.parameterSchemaVersion
+                schemaVersion: definition.parameterSchemaVersion
             ),
-            title: entry.title,
-            subtitle: entry.subtitle,
-            description: action.definition.description,
-            systemImage: action.definition.systemImage,
-            parameters: action.definition.parameters.map(parameterRecord),
-            availability: CLIAvailabilityRecord(
-                isAvailable: availability.isAvailable,
-                reason: availability.reason
-            ),
+            title: definition.title,
+            subtitle: subtitles.count == 1 ? group.entries[0].subtitle : nil,
+            description: definition.description,
+            systemImage: definition.systemImage,
+            parameters: definition.parameters.map(parameterRecord),
+            availability: availability,
             cliEligibility: eligibility,
-            capabilities: capabilityNames(action.definition.capabilities),
-            externalInvocationPolicy: action.definition.externalInvocationPolicy.rawValue
+            capabilities: capabilityNames(definition.capabilities),
+            externalInvocationPolicy: definition.externalInvocationPolicy.rawValue
+        )
+    }
+
+    private func aggregateAvailability(
+        _ records: [CLIAvailabilityRecord],
+        fallbackReason: String
+    ) -> CLIAvailabilityRecord {
+        if records.contains(where: \.isAvailable) {
+            return CLIAvailabilityRecord(isAvailable: true, reason: nil)
+        }
+        return CLIAvailabilityRecord(
+            isAvailable: false,
+            reason: records.compactMap(\.reason).first ?? fallbackReason
         )
     }
 
@@ -520,6 +564,23 @@ final class CLIHostRequestRouter {
         }
     }
 
+    private func withCLIInvocationContext<T: Sendable>(
+        _ request: CLIRequestEnvelope,
+        operation: () async -> T
+    ) async -> T {
+        guard let context = request.invocationContext else {
+            return await operation()
+        }
+        return await PluginActionExecutionContext.$cliInvocation.withValue(
+            PluginCLIInvocationContext(
+                chainID: context.chainID,
+                depth: context.depth
+            )
+        ) {
+            await operation()
+        }
+    }
+
     private func terminal(
         _ request: CLIRequestEnvelope,
         startedAt: Date,
@@ -643,8 +704,8 @@ final class CLIHostRequestRouter {
                         status: $0.statusText
                     )
                 },
-            publishedActionCount: cliCatalogEntries.filter {
-                $0.reference.key.providerID == item.id
+            publishedActionCount: cliCatalogGroups.filter {
+                $0.key.providerID == item.id
             }.count
         )
     }

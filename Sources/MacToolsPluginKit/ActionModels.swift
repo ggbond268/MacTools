@@ -14,6 +14,26 @@ public struct ActionKey: Hashable, Codable, Sendable, Identifiable {
     }
 }
 
+/// Opaque context attached by the trusted CLI broker while an external request is active.
+/// Command-running plugins propagate the child environment values, but do not interpret or
+/// generate the chain identifier themselves.
+public struct PluginCLIInvocationContext: Equatable, Sendable {
+    public static let chainEnvironmentKey = "MACTOOLS_CLI_CHAIN_ID"
+    public static let depthEnvironmentKey = "MACTOOLS_CLI_CHAIN_DEPTH"
+
+    public let chainID: UUID
+    public let depth: Int
+
+    public init(chainID: UUID, depth: Int) {
+        self.chainID = chainID
+        self.depth = depth
+    }
+}
+
+public enum PluginActionExecutionContext {
+    @TaskLocal public static var cliInvocation: PluginCLIInvocationContext?
+}
+
 public enum ActionParameterValue: Hashable, Codable, Sendable {
     case string(String)
     case integer(Int64)
@@ -555,6 +575,15 @@ public protocol PluginActionProviding: AnyObject {
     /// Accepts an already validated invocation and returns promptly with an execution handle.
     /// Expensive work belongs in the handle's asynchronous operation, not in this method.
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle
+}
+
+/// Optional initial preparation for providers whose published action definitions or catalog
+/// entries depend on asynchronous discovery. The host awaits every conforming provider before
+/// exposing its action registry to external processes, then rebuilds the registry synchronously.
+/// Later catalog changes continue to use `onStateChange` like any other plugin state update.
+@MainActor
+public protocol PluginActionCatalogPreparing: AnyObject {
+    func prepareActionCatalogForExternalDiscovery() async
 }
 
 /// Describes a host-rendered shortcut section for a subset of a plugin's canonical actions.

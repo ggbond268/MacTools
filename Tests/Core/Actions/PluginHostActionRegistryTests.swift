@@ -7,6 +7,272 @@ import XCTest
 
 @MainActor
 final class PluginHostActionRegistryTests: XCTestCase {
+    func testExternalDiscoveryPreparationAwaitsProviderAndPublishesFinalCatalog() async {
+        let plugin = PreparingActionTestPlugin()
+        let host = makePluginHostForTests(plugins: [plugin])
+        XCTAssertNil(host.actionRegistry.definition(for: plugin.actionKey))
+
+        let preparation = Task { @MainActor in
+            await host.prepareActionCatalogForExternalDiscovery()
+        }
+        for _ in 0 ..< 100 where !plugin.isPreparing {
+            await Task.yield()
+        }
+
+        XCTAssertTrue(plugin.isPreparing)
+        XCTAssertNil(host.actionRegistry.definition(for: plugin.actionKey))
+
+        plugin.finishPreparation()
+        await preparation.value
+
+        XCTAssertEqual(host.actionRegistry.definition(for: plugin.actionKey), plugin.definition)
+        XCTAssertEqual(
+            host.actionRegistry.catalogEntries.map(\.reference.key).filter {
+                $0 == plugin.actionKey
+            },
+            [plugin.actionKey]
+        )
+    }
+
+    func testExternalDiscoveryPreparationTimesOutStalledProviderAndContinues() async {
+        let stalledPlugin = PreparingActionTestPlugin(
+            id: "stalled-provider",
+            initiallyPrepared: true
+        )
+        let readyPlugin = PreparingActionTestPlugin(id: "ready-provider")
+        let host = makePluginHostForTests(plugins: [stalledPlugin, readyPlugin])
+        XCTAssertEqual(host.actionRegistry.definition(for: stalledPlugin.actionKey), stalledPlugin.definition)
+
+        let preparation = Task { @MainActor in
+            await host.prepareActionCatalogForExternalDiscovery(
+                providerTimeout: .milliseconds(50)
+            )
+        }
+        for _ in 0 ..< 100 where !stalledPlugin.isPreparing {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertTrue(stalledPlugin.isPreparing)
+
+        for _ in 0 ..< 100 where !readyPlugin.isPreparing {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertTrue(readyPlugin.isPreparing)
+        readyPlugin.finishPreparation()
+        await preparation.value
+
+        XCTAssertNil(host.actionRegistry.definition(for: stalledPlugin.actionKey))
+        XCTAssertEqual(host.actionRegistry.definition(for: readyPlugin.actionKey), readyPlugin.definition)
+        stalledPlugin.finishPreparation()
+        for _ in 0 ..< 100
+        where host.actionRegistry.definition(for: stalledPlugin.actionKey) == nil {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertEqual(host.actionRegistry.definition(for: stalledPlugin.actionKey), stalledPlugin.definition)
+    }
+
+    func testMultipleStalledProvidersShareOneOverallTimeoutWindow() async {
+        let firstPlugin = PreparingActionTestPlugin(id: "first-stalled-provider")
+        let secondPlugin = PreparingActionTestPlugin(id: "second-stalled-provider")
+        let host = makePluginHostForTests(plugins: [firstPlugin, secondPlugin])
+        let clock = ContinuousClock()
+        let start = clock.now
+
+        await host.prepareActionCatalogForExternalDiscovery(
+            providerTimeout: .milliseconds(50)
+        )
+
+        XCTAssertLessThan(start.duration(to: clock.now), .milliseconds(150))
+        XCTAssertEqual(firstPlugin.preparationCount, 1)
+        XCTAssertEqual(secondPlugin.preparationCount, 1)
+        firstPlugin.finishPreparation()
+        secondPlugin.finishPreparation()
+    }
+
+    func testStalePreparationCompletionCannotClearNewerTimeoutForSameProvider() async {
+        let plugin = PreparingActionTestPlugin(
+            id: "reprepared-provider",
+            initiallyPrepared: true
+        )
+        let host = makePluginHostForTests(plugins: [plugin])
+
+        await host.prepareActionCatalogForExternalDiscovery(
+            providerTimeout: .milliseconds(20)
+        )
+        await host.prepareActionCatalogForExternalDiscovery(
+            providerTimeout: .milliseconds(20)
+        )
+        XCTAssertEqual(plugin.preparationCount, 2)
+        XCTAssertNil(host.actionRegistry.definition(for: plugin.actionKey))
+
+        plugin.finishPreparation()
+        for _ in 0 ..< 20 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertNil(host.actionRegistry.definition(for: plugin.actionKey))
+
+        plugin.finishPreparation()
+        for _ in 0 ..< 100
+        where host.actionRegistry.definition(for: plugin.actionKey) == nil {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertEqual(host.actionRegistry.definition(for: plugin.actionKey), plugin.definition)
+    }
+
+    func testSupersededPreparationCancelsEveryObsoleteProviderRace() async {
+        let firstPlugin = PreparingActionTestPlugin(id: "first-overlap-provider")
+        let secondPlugin = PreparingActionTestPlugin(id: "second-overlap-provider")
+        let host = makePluginHostForTests(plugins: [firstPlugin, secondPlugin])
+
+        let firstPass = Task { @MainActor in
+            await host.prepareActionCatalogForExternalDiscovery(providerTimeout: .seconds(1))
+        }
+        for _ in 0 ..< 100
+        where firstPlugin.preparationCount < 1 || secondPlugin.preparationCount < 1 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        let secondPass = Task { @MainActor in
+            await host.prepareActionCatalogForExternalDiscovery(providerTimeout: .seconds(1))
+        }
+        for _ in 0 ..< 100
+        where firstPlugin.preparationCount < 2 || secondPlugin.preparationCount < 2 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+
+        await firstPass.value
+        for _ in 0 ..< 100
+        where firstPlugin.cancellationCount < 1 || secondPlugin.cancellationCount < 1 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertEqual(firstPlugin.cancellationCount, 1)
+        XCTAssertEqual(secondPlugin.cancellationCount, 1)
+
+        firstPlugin.finishPreparation()
+        secondPlugin.finishPreparation()
+        firstPlugin.finishPreparation()
+        secondPlugin.finishPreparation()
+        await secondPass.value
+    }
+
+    func testDirectPreparationCancellationStopsProviderWithoutLatePublication() async {
+        let plugin = PreparingActionTestPlugin(id: "direct-cancellation-provider")
+        let host = makePluginHostForTests(plugins: [plugin])
+        let preparation = Task { @MainActor in
+            await host.prepareActionCatalogForExternalDiscovery(providerTimeout: .seconds(1))
+        }
+        for _ in 0 ..< 100 where plugin.preparationCount == 0 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        let clock = ContinuousClock()
+        let cancellationStarted = clock.now
+
+        preparation.cancel()
+        await preparation.value
+
+        XCTAssertLessThan(
+            cancellationStarted.duration(to: clock.now),
+            .milliseconds(150)
+        )
+        for _ in 0 ..< 100 where plugin.cancellationCount == 0 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertEqual(plugin.cancellationCount, 1)
+        XCTAssertNil(host.actionRegistry.definition(for: plugin.actionKey))
+
+        plugin.finishPreparation()
+        for _ in 0 ..< 20 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertNil(host.actionRegistry.definition(for: plugin.actionKey))
+    }
+
+    func testDynamicReplacementDoesNotReprepareUnrelatedProvider() async {
+        let unrelatedPlugin = PreparingActionTestPlugin(id: "unrelated-provider")
+        let firstDynamicPlugin = PreparingActionTestPlugin(id: "changed-dynamic-provider")
+        let replacementPlugin = PreparingActionTestPlugin(id: "changed-dynamic-provider")
+        let host = makePluginHostForTests(plugins: [unrelatedPlugin])
+
+        host.replaceDynamicPluginsForTests([firstDynamicPlugin], providerTimeout: .seconds(1))
+        for _ in 0 ..< 100 where firstDynamicPlugin.preparationCount == 0 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        host.replaceDynamicPluginsForTests([replacementPlugin], providerTimeout: .seconds(1))
+        for _ in 0 ..< 100 where replacementPlugin.preparationCount == 0 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+
+        XCTAssertEqual(unrelatedPlugin.preparationCount, 0)
+        firstDynamicPlugin.finishPreparation()
+        replacementPlugin.finishPreparation()
+        await host.waitForDynamicPluginActionCatalogPreparationForTests()
+    }
+
+    func testDynamicReplacementBeforeOldPreparationCompletesPublishesOnlyReplacement() async {
+        let oldPlugin = PreparingActionTestPlugin(
+            id: "replaceable-provider",
+            initiallyPrepared: true,
+            definitionTitle: "Old Action"
+        )
+        let newPlugin = PreparingActionTestPlugin(
+            id: "replaceable-provider",
+            definitionTitle: "New Action"
+        )
+        let host = makePluginHostForTests(plugins: [])
+
+        host.replaceDynamicPluginsForTests([oldPlugin], providerTimeout: .seconds(1))
+        for _ in 0 ..< 100 where oldPlugin.preparationCount == 0 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        host.replaceDynamicPluginsForTests([newPlugin], providerTimeout: .seconds(1))
+        for _ in 0 ..< 100 where newPlugin.preparationCount == 0 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+
+        oldPlugin.finishPreparation()
+        for _ in 0 ..< 20 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertNil(host.actionRegistry.definition(for: newPlugin.actionKey))
+
+        newPlugin.finishPreparation()
+        await host.waitForDynamicPluginActionCatalogPreparationForTests()
+        XCTAssertEqual(
+            host.actionRegistry.definition(for: newPlugin.actionKey)?.title,
+            "New Action"
+        )
+    }
+
+    func testDynamicReplacementBeforeOldTimeoutDoesNotQuarantineReplacement() async {
+        let oldPlugin = PreparingActionTestPlugin(
+            id: "timeout-replacement-provider",
+            initiallyPrepared: true,
+            definitionTitle: "Old Action"
+        )
+        let newPlugin = PreparingActionTestPlugin(
+            id: "timeout-replacement-provider",
+            definitionTitle: "New Action"
+        )
+        let host = makePluginHostForTests(plugins: [])
+
+        host.replaceDynamicPluginsForTests([oldPlugin], providerTimeout: .milliseconds(30))
+        for _ in 0 ..< 100 where oldPlugin.preparationCount == 0 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        host.replaceDynamicPluginsForTests([newPlugin], providerTimeout: .seconds(1))
+        for _ in 0 ..< 100 where newPlugin.preparationCount == 0 {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertNil(host.actionRegistry.definition(for: newPlugin.actionKey))
+        newPlugin.finishPreparation()
+        await host.waitForDynamicPluginActionCatalogPreparationForTests()
+        XCTAssertEqual(
+            host.actionRegistry.definition(for: newPlugin.actionKey)?.title,
+            "New Action"
+        )
+        oldPlugin.finishPreparation()
+    }
+
     func testHostDistributesInputGestureClaimsOnlyToOtherPlugins() {
         let owner = InputGestureClaimTestPlugin(id: "gesture-owner", claims: [
             PluginInputGestureClaim(id: "trackpad.tap.3", title: "Three-Finger Tap"),
@@ -1051,6 +1317,79 @@ final class PluginHostActionRegistryTests: XCTestCase {
         return manager.debugRegistrationsForTests.filter {
             $0.binding == binding
         }
+    }
+}
+
+@MainActor
+private final class PreparingActionTestPlugin:
+    MacToolsPlugin,
+    PluginActionProviding,
+    PluginActionCatalogPreparing
+{
+    let metadata: PluginMetadata
+    let actionKey: ActionKey
+    let definition: ActionDefinition
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    private(set) var isPreparing = false
+    private(set) var preparationCount = 0
+    private(set) var cancellationCount = 0
+    private var isPrepared: Bool
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    init(
+        id: String = "preparing-action-provider",
+        initiallyPrepared: Bool = false,
+        definitionTitle: String = "Prepared Action"
+    ) {
+        metadata = PluginMetadata(
+            id: id,
+            title: "Preparing Actions",
+            iconName: "clock",
+            iconTint: .blue,
+            order: 0,
+            defaultDescription: "Tests external discovery preparation"
+        )
+        actionKey = ActionKey(providerID: id, actionID: "prepared")
+        definition = ActionDefinition(
+            key: actionKey,
+            title: definitionTitle,
+            description: "Appears after asynchronous preparation.",
+            systemImage: "clock",
+            externalInvocationPolicy: .allowed,
+            capabilities: [.background]
+        )
+        isPrepared = initiallyPrepared
+    }
+
+    var actionDefinitions: [ActionDefinition] { isPrepared ? [definition] : [] }
+    var actionCatalogEntries: [ActionCatalogEntry] {
+        isPrepared
+            ? [ActionCatalogEntry(reference: ActionReference(key: actionKey), title: definition.title)]
+            : []
+    }
+
+    func prepareActionCatalogForExternalDiscovery() async {
+        isPreparing = true
+        preparationCount += 1
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuations.append($0) }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancellationCount += 1
+            }
+        }
+    }
+
+    func finishPreparation() {
+        isPrepared = true
+        guard !continuations.isEmpty else { return }
+        continuations.removeFirst().resume()
+    }
+
+    func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
+        ActionExecutionHandle { .succeeded() }
     }
 }
 

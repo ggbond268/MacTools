@@ -22,6 +22,7 @@ private struct AppleShortcutsPluginProvider: PluginProvider {
 final class AppleShortcutsPlugin:
     MacToolsPlugin,
     PluginActionProviding,
+    PluginActionCatalogPreparing,
     PluginPortablePreferencesProviding,
     PluginPersistentPreferencesChangeSignaling,
     PluginPortablePreferencesRestorationReporting,
@@ -229,6 +230,10 @@ final class AppleShortcutsPlugin:
 
     func activate(context _: PluginRuntimeContext) { controller.activate() }
     func refresh() { controller.refreshIfNeeded() }
+    func prepareActionCatalogForExternalDiscovery() async {
+        controller.refreshIfNeeded()
+        await controller.waitForLibraryRefresh()
+    }
     func deactivate(reason _: PluginDeactivationReason) { controller.deactivate() }
 
     func makePortablePreferencesBackup() -> Data? { store.portableBackup() }

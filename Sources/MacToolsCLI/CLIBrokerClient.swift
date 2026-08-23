@@ -19,6 +19,12 @@ final class CLIBrokerClient: @unchecked Sendable {
 
     func prepareHost(launchIfNeeded: Bool = true) async throws -> CLIHandshakeResponse {
         let deadline = Date().addingTimeInterval(10)
+#if DEBUG
+        let launchIfNeeded = launchIfNeeded
+            && ProcessInfo.processInfo.environment[
+                CLIServiceConfiguration.testDisableHostLaunchEnvironmentKey
+            ] != "1"
+#endif
         var didLaunch = false
         var lastMessage = "The MacTools broker is unavailable."
         repeat {
@@ -32,6 +38,8 @@ final class CLIBrokerClient: @unchecked Sendable {
                 lastMessage = response.message ?? "MacTools is starting."
             } catch CLIBrokerClientError.protocolIncompatible {
                 throw CLIBrokerClientError.protocolIncompatible
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 lastMessage = "The MacTools broker is unavailable."
             }
@@ -39,7 +47,7 @@ final class CLIBrokerClient: @unchecked Sendable {
                 try launchHost()
                 didLaunch = true
             }
-            try? await Task.sleep(for: .milliseconds(200))
+            try await Task.sleep(for: .milliseconds(200))
         } while Date() < deadline
         throw CLIBrokerClientError.unavailable(lastMessage)
     }
@@ -53,6 +61,7 @@ final class CLIBrokerClient: @unchecked Sendable {
         payload: Data?,
         requestID: UUID = UUID()
     ) async throws -> CLIResponseEnvelope {
+        let sendState = CLIRequestSendState()
         if connection == nil || negotiatedProtocolVersion == nil {
             _ = try await prepareHost()
         }
@@ -61,21 +70,45 @@ final class CLIBrokerClient: @unchecked Sendable {
             requestID: requestID,
             operation: operation,
             sentAt: .now,
+            invocationContext: try CLIInvocationContext.inherited(),
             payload: payload
         )
         let data = try CLIProtocolCodec.encodeRequest(request)
-        let responseData: Data = try await awaitReply(timeout: 86_460) { completion in
-            guard let broker = brokerProxy(errorHandler: { _ in
-                completion(.failure(CLIBrokerClientError.unavailable(
-                    "The broker or host connection was interrupted."
-                )))
-            }) else {
-                completion(.failure(CLIBrokerClientError.unavailable(
-                    "The broker interface is unavailable."
-                )))
-                return
+        let responseData: Data
+        do {
+            responseData = try await withTaskCancellationHandler {
+                try Task.checkCancellation()
+                return try await awaitReply(timeout: 86_460) { completion in
+                    guard sendState.beginSending() else {
+                        completion(.failure(CancellationError()))
+                        return
+                    }
+                    guard let broker = brokerProxy(errorHandler: { _ in
+                        completion(.failure(CLIBrokerClientError.unavailable(
+                            "The broker or host connection was interrupted."
+                        )))
+                    }) else {
+                        completion(.failure(CLIBrokerClientError.unavailable(
+                            "The broker interface is unavailable."
+                        )))
+                        return
+                    }
+                    broker.send(data) { completion(.success($0)) }
+                }
+            } onCancel: {
+                sendState.cancel()
             }
-            broker.send(data) { completion(.success($0)) }
+        } catch is CancellationError {
+            // Make the state transition explicit before observing it. The cancellation
+            // handlers can resume this task from different executor hops.
+            sendState.cancel()
+            if sendState.takeCancellationToForward() {
+                let cancellationTask = Task.detached { [weak self] in
+                    await self?.cancel(requestID: requestID) ?? false
+                }
+                _ = await cancellationTask.value
+            }
+            throw CancellationError()
         }
         guard !responseData.isEmpty else { throw CLIBrokerClientError.invalidResponse }
         let response = try CLIProtocolCodec.decodeResponse(
@@ -168,6 +201,7 @@ final class CLIBrokerClient: @unchecked Sendable {
         timeout: TimeInterval,
         start: (@escaping @Sendable (Result<T, Error>) -> Void) -> Void
     ) async throws -> T {
+        try Task.checkCancellation()
         let (stream, continuation) = AsyncStream.makeStream(of: Result<T, Error>.self)
         start { result in
             continuation.yield(result)
@@ -178,11 +212,17 @@ final class CLIBrokerClient: @unchecked Sendable {
             continuation.yield(.failure(CLIBrokerClientError.timedOut))
             continuation.finish()
         }
-        for await result in stream {
-            timeoutTask.cancel()
-            return try result.get()
+        return try await withTaskCancellationHandler {
+            for await result in stream {
+                timeoutTask.cancel()
+                try Task.checkCancellation()
+                return try result.get()
+            }
+            throw CLIBrokerClientError.invalidResponse
+        } onCancel: {
+            continuation.yield(.failure(CancellationError()))
+            continuation.finish()
         }
-        throw CLIBrokerClientError.invalidResponse
     }
 
     private func launchHost() throws {

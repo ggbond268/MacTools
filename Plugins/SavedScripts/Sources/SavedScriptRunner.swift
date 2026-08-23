@@ -107,6 +107,12 @@ struct ProcessSavedScriptRunner: SavedScriptRunning {
         for key in ["LANG", "LC_ALL", "USER", "LOGNAME"] {
             if let value = inherited[key] { environment[key] = value }
         }
+        if let context = PluginActionExecutionContext.cliInvocation {
+            environment[PluginCLIInvocationContext.chainEnvironmentKey] =
+                context.chainID.uuidString
+            environment[PluginCLIInvocationContext.depthEnvironmentKey] =
+                String(context.depth + 1)
+        }
         return environment
     }
 

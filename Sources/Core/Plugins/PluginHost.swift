@@ -3,6 +3,34 @@ import Foundation
 import SwiftUI
 import MacToolsPluginKit
 
+private actor PluginActionCatalogPreparationRace {
+    private var result: Bool?
+    private var continuation: CheckedContinuation<Bool, Never>?
+
+    func wait() async -> Bool {
+        if let result { return result }
+        return await withCheckedContinuation { continuation = $0 }
+    }
+
+    func finish(with result: Bool) {
+        guard self.result == nil else { return }
+        self.result = result
+        continuation?.resume(returning: result)
+        continuation = nil
+    }
+}
+
+private struct ExternalActionCatalogPreparationMarker: Equatable {
+    let generation: UUID
+    let providerIdentity: ObjectIdentifier
+}
+
+@MainActor
+private struct ExternalActionCatalogPreparationOperation {
+    let marker: ExternalActionCatalogPreparationMarker
+    let cancel: () -> Void
+}
+
 enum FeatureSettingsPane: Hashable {
     case actionsAndShortcuts
     case automation
@@ -436,10 +464,17 @@ final class PluginHost: ObservableObject {
     private var visiblePanelSurfaces: Set<PluginPanelSurface> = []
     private var visiblePanelSurfacePluginIDs: [PluginPanelSurface: Set<String>] = [:]
     private var isolatedPluginFailures: [String: String] = [:]
+    private var externalActionCatalogPreparationMarkers: [
+        String: ExternalActionCatalogPreparationMarker
+    ] = [:]
+    private var externalActionCatalogPreparationOperations: [
+        String: ExternalActionCatalogPreparationOperation
+    ] = [:]
     private var isHandlingPluginAction = false
     private var didLoadDynamicPlugins = false
     private var displayTopologyRefreshTask: Task<Void, Never>?
     private var pluginStateChangeRebuildTask: Task<Void, Never>?
+    private var dynamicPluginActionCatalogPreparationTask: Task<Void, Never>?
     private var runtimeLocaleCancellable: AnyCancellable?
     private var applicationActivityState: PluginApplicationActivityState
     private var dirtyPluginIDs: Set<String> = []
@@ -2129,6 +2164,183 @@ final class PluginHost: ObservableObject {
         refreshAll()
     }
 
+    /// Awaits providers whose first externally discoverable actions require asynchronous state,
+    /// then publishes one synchronous registry snapshot before external transports start.
+    func prepareActionCatalogForExternalDiscovery(
+        providerTimeout: Duration = .seconds(5)
+    ) async {
+        await prepareActionCatalogForExternalDiscovery(
+            plugins: activePlugins,
+            providerTimeout: providerTimeout
+        )
+    }
+
+    private func prepareActionCatalogForExternalDiscovery(
+        plugins: [any MacToolsPlugin],
+        providerTimeout: Duration
+    ) async {
+        var pending: [(
+            plugin: any MacToolsPlugin,
+            marker: ExternalActionCatalogPreparationMarker,
+            resultTask: Task<(completed: Bool, task: Task<Void, Never>), Never>
+        )] = []
+
+        for plugin in plugins {
+            let pluginID = plugin.metadata.id
+            guard let preparer = plugin as? any PluginActionCatalogPreparing else {
+                supersedeExternalActionCatalogPreparation(for: pluginID)
+                continue
+            }
+            supersedeExternalActionCatalogPreparation(for: pluginID)
+            let marker = ExternalActionCatalogPreparationMarker(
+                generation: UUID(),
+                providerIdentity: ObjectIdentifier(plugin)
+            )
+            externalActionCatalogPreparationMarkers[pluginID] = marker
+            let resultTask = Task { @MainActor [weak self] in
+                guard let self else {
+                    return (completed: false, task: Task<Void, Never> {})
+                }
+                return await prepareExternalActionCatalog(preparer, timeout: providerTimeout)
+            }
+            externalActionCatalogPreparationOperations[pluginID] =
+                ExternalActionCatalogPreparationOperation(
+                    marker: marker,
+                    cancel: { resultTask.cancel() }
+                )
+            pending.append((plugin, marker, resultTask))
+        }
+
+        let batch = pending
+        let batchResultTasks = batch.map(\.resultTask)
+        await withTaskCancellationHandler {
+            // All provider races are started before awaiting any one of them, so the batch is
+            // bounded by one provider timeout rather than timeout * provider count.
+            for item in batch {
+                let preparation = await item.resultTask.value
+                if Task.isCancelled {
+                    preparation.task.cancel()
+                    cancelExternalActionCatalogPreparationBatch(batch)
+                    return
+                }
+                let pluginID = item.plugin.metadata.id
+                guard externalActionCatalogPreparationOperations[pluginID]?.marker == item.marker,
+                      externalActionCatalogPreparationMarkers[pluginID] == item.marker,
+                      activePlugins.contains(where: {
+                          ObjectIdentifier($0) == item.marker.providerIdentity
+                      }) else {
+                    preparation.task.cancel()
+                    continue
+                }
+                if preparation.completed {
+                    externalActionCatalogPreparationOperations.removeValue(forKey: pluginID)
+                    externalActionCatalogPreparationMarkers.removeValue(forKey: pluginID)
+                } else {
+                    externalActionCatalogPreparationOperations[pluginID] =
+                        ExternalActionCatalogPreparationOperation(
+                            marker: item.marker,
+                            cancel: { preparation.task.cancel() }
+                        )
+                    AppLog.pluginHost.error(
+                        "External action catalog preparation timed out for \(pluginID, privacy: .public)"
+                    )
+                    observeLateExternalActionCatalogPreparation(
+                        preparation.task,
+                        pluginID: pluginID,
+                        marker: item.marker
+                    )
+                }
+            }
+
+            guard !Task.isCancelled else {
+                cancelExternalActionCatalogPreparationBatch(batch)
+                return
+            }
+            cancelScheduledPluginStateRebuild()
+            actionRegistry.invalidateAvailability()
+            rebuildDerivedState()
+            syncGlobalShortcuts()
+        } onCancel: {
+            for resultTask in batchResultTasks {
+                resultTask.cancel()
+            }
+        }
+    }
+
+    private func prepareExternalActionCatalog(
+        _ preparer: any PluginActionCatalogPreparing,
+        timeout: Duration
+    ) async -> (completed: Bool, task: Task<Void, Never>) {
+        let race = PluginActionCatalogPreparationRace()
+        let preparationTask = Task { @MainActor in
+            await preparer.prepareActionCatalogForExternalDiscovery()
+            await race.finish(with: true)
+        }
+        let timeoutTask = Task {
+            do {
+                try await Task.sleep(for: timeout)
+            } catch {
+                return
+            }
+            await race.finish(with: false)
+        }
+        let completed = await withTaskCancellationHandler {
+            await race.wait()
+        } onCancel: {
+            preparationTask.cancel()
+            timeoutTask.cancel()
+            Task { await race.finish(with: false) }
+        }
+        timeoutTask.cancel()
+        return (completed, preparationTask)
+    }
+
+    private func supersedeExternalActionCatalogPreparation(for pluginID: String) {
+        externalActionCatalogPreparationOperations.removeValue(forKey: pluginID)?.cancel()
+        externalActionCatalogPreparationMarkers.removeValue(forKey: pluginID)
+    }
+
+    private func cancelExternalActionCatalogPreparationBatch(
+        _ batch: [(
+            plugin: any MacToolsPlugin,
+            marker: ExternalActionCatalogPreparationMarker,
+            resultTask: Task<(completed: Bool, task: Task<Void, Never>), Never>
+        )]
+    ) {
+        for item in batch {
+            let pluginID = item.plugin.metadata.id
+            guard externalActionCatalogPreparationOperations[pluginID]?.marker == item.marker else {
+                continue
+            }
+            supersedeExternalActionCatalogPreparation(for: pluginID)
+        }
+    }
+
+    private func observeLateExternalActionCatalogPreparation(
+        _ preparationTask: Task<Void, Never>,
+        pluginID: String,
+        marker: ExternalActionCatalogPreparationMarker
+    ) {
+        Task { @MainActor [weak self] in
+            await preparationTask.value
+            guard let self,
+                  externalActionCatalogPreparationMarkers[pluginID] == marker,
+                  activePlugins.contains(where: {
+                      ObjectIdentifier($0) == marker.providerIdentity
+                  }) else {
+                return
+            }
+            externalActionCatalogPreparationMarkers.removeValue(forKey: pluginID)
+            externalActionCatalogPreparationOperations.removeValue(forKey: pluginID)
+            AppLog.pluginHost.info(
+                "Late external action catalog preparation completed for \(pluginID, privacy: .public)"
+            )
+            actionRegistry.invalidateAvailability()
+            rebuildDerivedState(dirtyPluginIDs: [pluginID])
+            syncGlobalShortcuts()
+        }
+    }
+
     var hasInstalledDynamicPlugins: Bool {
         guard let dynamicPluginManager else {
             return false
@@ -2802,7 +3014,17 @@ final class PluginHost: ObservableObject {
         }
     }
 
-    private func replaceDynamicPlugins(_ plugins: [any MacToolsPlugin]) {
+    private func replaceDynamicPlugins(
+        _ plugins: [any MacToolsPlugin],
+        actionCatalogProviderTimeout: Duration = .seconds(5)
+    ) {
+        dynamicPluginActionCatalogPreparationTask?.cancel()
+        dynamicPluginActionCatalogPreparationTask = nil
+        let previousDynamicPluginsByID = dynamicPlugins.reduce(
+            into: [String: any MacToolsPlugin]()
+        ) { result, plugin in
+            result[plugin.metadata.id] = plugin
+        }
         let previouslyVisibleSurfaces = visiblePanelSurfaces
         hideAllPanelSurfaces()
         visiblePanelSurfaces = previouslyVisibleSurfaces
@@ -2818,10 +3040,53 @@ final class PluginHost: ObservableObject {
 
             return $0.metadata.order < $1.metadata.order
         }
+        let newDynamicPluginIDs = Set(dynamicPlugins.map(\.metadata.id))
+        let removedPluginIDs = Set(previousDynamicPluginsByID.keys).subtracting(newDynamicPluginIDs)
+        let changedPlugins = dynamicPlugins.filter { plugin in
+            guard let previous = previousDynamicPluginsByID[plugin.metadata.id] else { return true }
+            return ObjectIdentifier(previous) != ObjectIdentifier(plugin)
+        }
+        for pluginID in removedPluginIDs.union(changedPlugins.map(\.metadata.id)) {
+            supersedeExternalActionCatalogPreparation(for: pluginID)
+        }
+        let replacementGeneration = UUID()
+        for plugin in changedPlugins where plugin is any PluginActionCatalogPreparing {
+            externalActionCatalogPreparationMarkers[plugin.metadata.id] =
+                ExternalActionCatalogPreparationMarker(
+                    generation: replacementGeneration,
+                    providerIdentity: ObjectIdentifier(plugin)
+                )
+        }
         configureCallbacks(for: dynamicPlugins)
         rebuildDerivedState()
         syncGlobalShortcuts()
+        guard !changedPlugins.isEmpty else { return }
+        dynamicPluginActionCatalogPreparationTask = Task { @MainActor [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            await prepareActionCatalogForExternalDiscovery(
+                plugins: changedPlugins,
+                providerTimeout: actionCatalogProviderTimeout
+            )
+            guard !Task.isCancelled else { return }
+            dynamicPluginActionCatalogPreparationTask = nil
+        }
     }
+
+    #if DEBUG
+    func replaceDynamicPluginsForTests(
+        _ plugins: [any MacToolsPlugin],
+        providerTimeout: Duration
+    ) {
+        replaceDynamicPlugins(
+            plugins,
+            actionCatalogProviderTimeout: providerTimeout
+        )
+    }
+
+    func waitForDynamicPluginActionCatalogPreparationForTests() async {
+        await dynamicPluginActionCatalogPreparationTask?.value
+    }
+    #endif
 
     private func syncPluginManagementState() {
         dynamicPluginCapabilitiesByID = dynamicPluginManager?.installedCapabilitiesByID() ?? [:]
@@ -3403,7 +3668,8 @@ final class PluginHost: ObservableObject {
     private func synchronizeActionRegistry() {
         var registrations = [hostActionRegistration()]
 
-        for plugin in orderedCorePlugins() {
+        for plugin in orderedCorePlugins()
+        where externalActionCatalogPreparationMarkers[plugin.metadata.id] == nil {
             if let provider = plugin as? any PluginActionProviding {
                 let definitions = guardedValue(
                     for: plugin,

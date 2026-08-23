@@ -273,6 +273,7 @@ final class AutomationStartupCoordinator {
         isPreparing = true
         await prepare()
         isPreparing = false
+        guard !Task.isCancelled else { return }
         actionRegistryDidBecomeReady()
     }
 }

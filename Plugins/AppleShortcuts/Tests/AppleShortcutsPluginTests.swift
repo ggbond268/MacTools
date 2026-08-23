@@ -5,6 +5,31 @@ import XCTest
 
 @MainActor
 final class AppleShortcutsPluginTests: XCTestCase {
+    func testExternalDiscoveryPreparationWaitsForInitialLibraryRefresh() async {
+        let shortcut = AppleShortcutItem(id: UUID(), name: "Prepared")
+        let runner = AppleShortcutsRunnerStub(
+            shortcuts: [shortcut],
+            delay: .milliseconds(100)
+        )
+        let plugin = makePlugin(runner: runner)
+        plugin.activate(context: PluginRuntimeContext(
+            pluginID: "apple-shortcuts",
+            storage: AppleShortcutsTestStorage()
+        ))
+
+        let preparation = Task { @MainActor in
+            await plugin.prepareActionCatalogForExternalDiscovery()
+        }
+        await Task.yield()
+        XCTAssertTrue(plugin.actionDefinitions.isEmpty)
+
+        await preparation.value
+
+        XCTAssertEqual(plugin.actionDefinitions.map(\.title), ["Prepared"])
+        let listCallCount = await runner.listCallCount
+        XCTAssertEqual(listCallCount, 1)
+    }
+
     func testPublishesEveryDiscoveredShortcutAcrossRename() async throws {
         let id = UUID()
         let runner = AppleShortcutsRunnerStub(shortcuts: [AppleShortcutItem(id: id, name: "Old")])
