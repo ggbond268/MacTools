@@ -1,5 +1,56 @@
 import Foundation
 
+struct CLIStartupDeadline: Sendable {
+    typealias Now = @Sendable () -> ContinuousClock.Instant
+    typealias Sleep = @Sendable (Duration) async throws -> Void
+
+    private let instant: ContinuousClock.Instant
+    private let now: Now
+    private let sleep: Sleep
+
+    init(duration: Duration) {
+        let clock = ContinuousClock()
+        self.init(
+            duration: duration,
+            now: { clock.now },
+            sleep: { try await clock.sleep(for: $0) }
+        )
+    }
+
+    init(
+        duration: Duration,
+        now: @escaping Now,
+        sleep: @escaping Sleep
+    ) {
+        instant = now().advanced(by: duration)
+        self.now = now
+        self.sleep = sleep
+    }
+
+    var isExpired: Bool { now() >= instant }
+
+    var remaining: Duration {
+        let value = now().duration(to: instant)
+        return value > .zero ? value : .zero
+    }
+
+    var remainingTimeInterval: TimeInterval {
+        let components = remaining.components
+        return TimeInterval(components.seconds)
+            + TimeInterval(components.attoseconds) / 1_000_000_000_000_000_000
+    }
+
+    func sleepUntilExpired() async throws {
+        let delay = remaining
+        if delay > .zero { try await sleep(delay) }
+    }
+
+    func sleep(upTo maximum: Duration) async throws {
+        let delay = min(maximum, remaining)
+        if delay > .zero { try await sleep(delay) }
+    }
+}
+
 enum CLIHostDiscoveryError: Error, Equatable, LocalizedError {
     case timedOut
 
@@ -53,9 +104,9 @@ struct CLIHostDiscovery: Sendable {
         bundleIdentifier: String,
         version: String,
         build: String,
-        deadline: Date
+        deadline: CLIStartupDeadline
     ) async throws -> URL {
-        guard deadline.timeIntervalSinceNow > 0 else {
+        guard !deadline.isExpired else {
             throw CLIHostDiscoveryError.timedOut
         }
         let (stream, continuation) = AsyncStream.makeStream(of: Result<URL, Error>.self)
@@ -67,9 +118,7 @@ struct CLIHostDiscovery: Sendable {
             continuation.finish()
         }
         let timeout = Task {
-            try? await Task.sleep(
-                for: .seconds(max(0, deadline.timeIntervalSinceNow))
-            )
+            try? await deadline.sleepUntilExpired()
             guard !Task.isCancelled else { return }
             continuation.yield(.failure(CLIHostDiscoveryError.timedOut))
             continuation.finish()

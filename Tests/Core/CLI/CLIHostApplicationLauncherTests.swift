@@ -15,7 +15,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
 
         try await launcher.launch(
             applicationURL: applicationURL,
-            deadline: Date().addingTimeInterval(1)
+            deadline: CLIStartupDeadline(duration: .seconds(1))
         )
 
         await fulfillment(of: [callback], timeout: 1)
@@ -28,7 +28,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
         do {
             try await launcher.launch(
                 applicationURL: applicationURL,
-                deadline: Date().addingTimeInterval(0.05)
+                deadline: CLIStartupDeadline(duration: .milliseconds(50))
             )
             XCTFail("Expected launch timeout")
         } catch {
@@ -46,7 +46,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
         do {
             try await launcher.launch(
                 applicationURL: applicationURL,
-                deadline: Date().addingTimeInterval(1)
+                deadline: CLIStartupDeadline(duration: .seconds(1))
             )
             XCTFail("Expected launch failure")
         } catch {
@@ -62,7 +62,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
         let task = Task {
             try await launcher.launch(
                 applicationURL: applicationURL,
-                deadline: Date().addingTimeInterval(10)
+                deadline: CLIStartupDeadline(duration: .seconds(10))
             )
         }
         try? await Task.sleep(for: .milliseconds(20))
@@ -92,7 +92,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
 
         try await launcher.launch(
             applicationURL: applicationURL,
-            deadline: Date().addingTimeInterval(1)
+            deadline: CLIStartupDeadline(duration: .seconds(1))
         )
 
         XCTAssertEqual(receivedURL, applicationURL)

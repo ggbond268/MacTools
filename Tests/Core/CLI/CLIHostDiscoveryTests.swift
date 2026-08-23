@@ -45,7 +45,7 @@ final class CLIHostDiscoveryTests: XCTestCase {
                 bundleIdentifier: hostIdentifier,
                 version: "1.2.0",
                 build: "69",
-                deadline: Date().addingTimeInterval(10)
+                deadline: CLIStartupDeadline(duration: .seconds(10))
             )
         }
         try? await Task.sleep(for: .milliseconds(20))
@@ -118,6 +118,27 @@ final class CLIHostDiscoveryTests: XCTestCase {
         )
     }
 
+    func testStartupDeadlineUsesOnlyInjectedMonotonicTime() {
+        let time = CLIManualMonotonicTime()
+        var wallTime = Date(timeIntervalSince1970: 1_000)
+        let deadline = CLIStartupDeadline(
+            duration: .seconds(10),
+            now: { time.now },
+            sleep: { _ in }
+        )
+
+        wallTime = wallTime.addingTimeInterval(-3_600)
+        XCTAssertEqual(deadline.remaining, .seconds(10))
+
+        time.advance(by: .seconds(4))
+        wallTime = wallTime.addingTimeInterval(7_200)
+        XCTAssertEqual(deadline.remaining, .seconds(6))
+
+        time.advance(by: .seconds(6))
+        XCTAssertTrue(deadline.isExpired)
+        XCTAssertEqual(wallTime, Date(timeIntervalSince1970: 4_600))
+    }
+
     private func assertTimesOutPromptly(
         _ discovery: CLIHostDiscovery,
         file: StaticString = #filePath,
@@ -129,7 +150,7 @@ final class CLIHostDiscoveryTests: XCTestCase {
                 bundleIdentifier: hostIdentifier,
                 version: "1.2.0",
                 build: "69",
-                deadline: Date().addingTimeInterval(0.05)
+                deadline: CLIStartupDeadline(duration: .milliseconds(50))
             )
             XCTFail("Expected discovery timeout", file: file, line: line)
         } catch {
@@ -146,5 +167,22 @@ final class CLIHostDiscoveryTests: XCTestCase {
             file: file,
             line: line
         )
+    }
+}
+
+private final class CLIManualMonotonicTime: @unchecked Sendable {
+    private let lock = NSLock()
+    private var instant = ContinuousClock().now
+
+    var now: ContinuousClock.Instant {
+        lock.lock()
+        defer { lock.unlock() }
+        return instant
+    }
+
+    func advance(by duration: Duration) {
+        lock.lock()
+        instant = instant.advanced(by: duration)
+        lock.unlock()
     }
 }

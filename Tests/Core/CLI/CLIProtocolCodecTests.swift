@@ -61,6 +61,23 @@ final class CLIProtocolCodecTests: XCTestCase {
         }
     }
 
+    func testRecursiveDuplicateFieldValidationRejectsNestedObjectsAndArrays() throws {
+        for payload in [
+            #"{"outer":{"value":1,"value":2}}"#,
+            #"{"records":[{"id":"first","id":"second"}]}"#,
+        ] {
+            XCTAssertThrowsError(
+                try CLIProtocolCodec.rejectDuplicateFieldsRecursively(in: Data(payload.utf8))
+            ) { error in
+                XCTAssertTrue(error is CLIProtocolCodecError)
+            }
+        }
+
+        XCTAssertNoThrow(try CLIProtocolCodec.rejectDuplicateFieldsRecursively(
+            in: Data(#"{"outer":{"value":1},"records":[{"id":"first"}]}"#.utf8)
+        ))
+    }
+
     func testInvocationContextEnvironmentRequiresCompleteBoundedValues() throws {
         let chainID = UUID()
         XCTAssertEqual(

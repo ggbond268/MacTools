@@ -116,7 +116,7 @@ final class CLIBrokerClient: @unchecked Sendable {
             )
         }
 #endif
-        let deadline = Date().addingTimeInterval(10)
+        let deadline = CLIStartupDeadline(duration: .seconds(10))
 #if DEBUG
         let launchIfNeeded = launchIfNeeded
             && ProcessInfo.processInfo.environment[
@@ -127,10 +127,12 @@ final class CLIBrokerClient: @unchecked Sendable {
         var didContactBroker = false
         var lastVersionMismatch: CLIBrokerClientError?
         var lastMessage = "The MacTools broker is unavailable."
-        while Date() < deadline {
+        while !deadline.isExpired {
             do {
+                let remaining = deadline.remainingTimeInterval
+                guard remaining > 0 else { break }
                 let response = try await connectAndHandshake(
-                    timeout: min(1.5, max(0.01, deadline.timeIntervalSinceNow))
+                    timeout: min(1.5, remaining)
                 )
                 didContactBroker = true
                 let version = cliVersion()
@@ -269,6 +271,7 @@ final class CLIBrokerClient: @unchecked Sendable {
         guard !responseData.isEmpty else { throw CLIBrokerClientError.peerContractInvalid }
         let response: CLIResponseEnvelope
         do {
+            try CLIResponsePayloadValidator.validateEnvelope(responseData)
             response = try CLIProtocolCodec.decodeResponse(
                 CLIResponseEnvelope.self,
                 from: responseData,
@@ -504,15 +507,132 @@ final class CLIBrokerClient: @unchecked Sendable {
                 rejection: nil,
                 payload: Data("{}".utf8)
             ))
+        case "nestedUnknownPayload":
+            return try testResponseData(
+                request: request,
+                payload: testNestedPayload(operation: request.operation, duplicate: false)
+            )
+        case "nestedDuplicatePayload":
+            return try testResponseData(
+                request: request,
+                payload: testNestedPayload(operation: request.operation, duplicate: true)
+            )
         case "timeout":
             throw CLIBrokerClientError.timedOut
         default:
             return nil
         }
     }
+
+    private func testResponseData(
+        request: CLIRequestEnvelope,
+        payload: Data
+    ) throws -> Data {
+        try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope(
+            schemaVersion: 1,
+            protocolVersion: request.protocolVersion,
+            requestID: request.requestID,
+            operation: request.operation,
+            actionReference: nil,
+            startedAt: .now,
+            finishedAt: .now,
+            outcome: .completed,
+            message: nil,
+            rejection: nil,
+            payload: payload
+        ))
+    }
+
+    private func testNestedPayload(
+        operation: CLIOperation,
+        duplicate: Bool
+    ) throws -> Data {
+        let payload: Data
+        let duplicateField: String
+        switch operation {
+        case .actionsList:
+            payload = try CLIProtocolCodec.encodeResponse(CLIPage(
+                records: [CLIActionRecord(
+                    reference: CLIActionReference(
+                        key: CLIActionKey(providerID: "fixture", actionID: "action"),
+                        schemaVersion: 1
+                    ),
+                    title: "Fixture action",
+                    subtitle: nil,
+                    description: "Fixture",
+                    systemImage: "hammer",
+                    parameters: [],
+                    availability: CLIAvailabilityRecord(isAvailable: true, reason: nil),
+                    cliEligibility: CLIAvailabilityRecord(isAvailable: true, reason: nil),
+                    capabilities: [],
+                    externalInvocationPolicy: "automatic"
+                )],
+                continuationToken: nil
+            ))
+            duplicateField = #""title":"Fixture action""#
+        case .workflowsList:
+            payload = try CLIProtocolCodec.encodeResponse(CLIPage(
+                records: [CLIWorkflowRecord(
+                    id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+                    name: "Fixture workflow",
+                    isEnabled: true,
+                    stepCount: 1,
+                    actionReference: CLIActionReference(
+                        key: CLIActionKey(providerID: "fixture", actionID: "action"),
+                        schemaVersion: 1
+                    ),
+                    availability: CLIAvailabilityRecord(isAvailable: true, reason: nil)
+                )],
+                continuationToken: nil
+            ))
+            duplicateField = #""name":"Fixture workflow""#
+        case .pluginsList:
+            payload = try CLIProtocolCodec.encodeResponse(CLIPage(
+                records: [CLIPluginRecord(
+                    id: "fixture",
+                    title: "Fixture plugin",
+                    summary: nil,
+                    version: "1.0.0",
+                    state: "active",
+                    diagnostic: nil,
+                    requiresRestart: false,
+                    permissions: [CLIPluginPermissionRecord(
+                        id: "fixture.permission",
+                        title: "Fixture permission",
+                        isGranted: true,
+                        status: "granted"
+                    )],
+                    publishedActionCount: 1
+                )],
+                continuationToken: nil
+            ))
+            duplicateField = #""title":"Fixture plugin""#
+        default:
+            return Data("{}".utf8)
+        }
+
+        if duplicate {
+            guard var string = String(data: payload, encoding: .utf8),
+                  let range = string.range(of: duplicateField) else {
+                throw CLIProtocolCodecError.encodingFailed
+            }
+            let key = duplicateField.prefix { $0 != ":" }
+            string.replaceSubrange(range, with: "\(key):\"duplicate\",\(duplicateField)")
+            return Data(string.utf8)
+        }
+
+        guard var object = try JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              var records = object["records"] as? [[String: Any]],
+              !records.isEmpty else {
+            throw CLIProtocolCodecError.encodingFailed
+        }
+        records[0]["injected"] = true
+        object["records"] = records
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    }
 #endif
 
-    private func launchHost(deadline: Date) async throws -> URL {
+    private func launchHost(deadline: CLIStartupDeadline) async throws -> URL {
         let applicationURL: URL
         do {
             let version = cliVersion()
@@ -545,11 +665,8 @@ final class CLIBrokerClient: @unchecked Sendable {
         return applicationURL
     }
 
-    private func waitBeforeRetry(deadline: Date) async throws {
-        let delay = min(0.2, max(0, deadline.timeIntervalSinceNow))
-        if delay > 0 {
-            try await Task.sleep(for: .seconds(delay))
-        }
+    private func waitBeforeRetry(deadline: CLIStartupDeadline) async throws {
+        try await deadline.sleep(upTo: .milliseconds(200))
     }
 
     private func versionMismatchError(
@@ -609,9 +726,9 @@ private enum CLIResponsePayloadValidator {
             }
             let value = try CLIProtocolCodec.decodeResponse(
                 StartedPayload.self,
-                from: payload,
-                allowedKeys: ["accepted"]
+                from: payload
             )
+            try CLIResponseJSONSchema.started.validate(payload)
             guard value.accepted else { throw CLIProtocolCodecError.invalidObject }
             return
         }
@@ -628,62 +745,49 @@ private enum CLIResponsePayloadValidator {
             try decode(
                 CLIDoctorRecord.self,
                 response.payload,
-                allowedKeys: [
-                    "hostVersion", "hostBuild", "protocolVersion", "actionCount",
-                    "workflowCount", "pluginCount", "brokerServiceStatus",
-                ]
+                schema: .doctor
             )
         case .actionsList:
             try decode(
                 CLIPage<CLIActionRecord>.self,
                 response.payload,
-                allowedKeys: ["records", "continuationToken"]
+                schema: .page(record: .action)
             )
         case .actionsDescribe:
             try decode(
                 CLIActionRecord.self,
                 response.payload,
-                allowedKeys: [
-                    "reference", "title", "subtitle", "description", "systemImage",
-                    "parameters", "availability", "cliEligibility", "capabilities",
-                    "externalInvocationPolicy",
-                ]
+                schema: .action
             )
         case .actionsAvailability:
             try decode(
                 CLIAvailabilityRecord.self,
                 response.payload,
-                allowedKeys: ["isAvailable", "reason"]
+                schema: .availability
             )
         case .workflowsList:
             try decode(
                 CLIPage<CLIWorkflowRecord>.self,
                 response.payload,
-                allowedKeys: ["records", "continuationToken"]
+                schema: .page(record: .workflow)
             )
         case .workflowsDescribe:
             try decode(
                 CLIWorkflowRecord.self,
                 response.payload,
-                allowedKeys: [
-                    "id", "name", "isEnabled", "stepCount", "actionReference",
-                    "availability",
-                ]
+                schema: .workflow
             )
         case .pluginsList:
             try decode(
                 CLIPage<CLIPluginRecord>.self,
                 response.payload,
-                allowedKeys: ["records", "continuationToken"]
+                schema: .page(record: .plugin)
             )
         case .pluginsDescribe, .pluginsDoctor:
             try decode(
                 CLIPluginRecord.self,
                 response.payload,
-                allowedKeys: [
-                    "id", "title", "summary", "version", "state", "diagnostic",
-                    "requiresRestart", "permissions", "publishedActionCount",
-                ]
+                schema: .plugin
             )
         case .actionsRun, .workflowsRun:
             guard response.payload == nil else {
@@ -692,16 +796,153 @@ private enum CLIResponsePayloadValidator {
         }
     }
 
+    static func validateEnvelope(_ data: Data) throws {
+        try CLIResponseJSONSchema.envelope.validate(data)
+    }
+
     private static func decode<T: Decodable>(
         _ type: T.Type,
         _ payload: Data?,
-        allowedKeys: Set<String>
+        schema: CLIResponseJSONSchema
     ) throws {
         guard let payload else { throw CLIProtocolCodecError.invalidObject }
-        _ = try CLIProtocolCodec.decodeResponse(
-            type,
-            from: payload,
-            allowedKeys: allowedKeys
-        )
+        try schema.validate(payload)
+        _ = try CLIProtocolCodec.decodeResponse(type, from: payload)
+    }
+}
+
+private indirect enum CLIResponseJSONSchema: Sendable {
+    case scalar
+    case array(CLIResponseJSONSchema)
+    case object([String: CLIResponseJSONSchema])
+
+    static let envelope: Self = .object([
+        "schemaVersion": .scalar,
+        "protocolVersion": .scalar,
+        "requestID": .scalar,
+        "operation": .scalar,
+        "actionReference": .actionReference,
+        "startedAt": .scalar,
+        "finishedAt": .scalar,
+        "outcome": .scalar,
+        "message": .scalar,
+        "rejection": .object([
+            "category": .scalar,
+            "message": .scalar,
+        ]),
+        "payload": .scalar,
+    ])
+
+    static let started: Self = .object(["accepted": .scalar])
+
+    static let doctor: Self = .object([
+        "hostVersion": .scalar,
+        "hostBuild": .scalar,
+        "protocolVersion": .scalar,
+        "actionCount": .scalar,
+        "workflowCount": .scalar,
+        "pluginCount": .scalar,
+        "brokerServiceStatus": .scalar,
+    ])
+
+    static let action: Self = .object([
+        "reference": .actionReference,
+        "title": .scalar,
+        "subtitle": .scalar,
+        "description": .scalar,
+        "systemImage": .scalar,
+        "parameters": .array(.object([
+            "id": .scalar,
+            "title": .scalar,
+            "kind": .scalar,
+            "isRequired": .scalar,
+            "privacy": .scalar,
+            "portability": .scalar,
+        ])),
+        "availability": .availability,
+        "cliEligibility": .availability,
+        "capabilities": .array(.scalar),
+        "externalInvocationPolicy": .scalar,
+    ])
+
+    static let availability: Self = .object([
+        "isAvailable": .scalar,
+        "reason": .scalar,
+    ])
+
+    static let workflow: Self = .object([
+        "id": .scalar,
+        "name": .scalar,
+        "isEnabled": .scalar,
+        "stepCount": .scalar,
+        "actionReference": .actionReference,
+        "availability": .availability,
+    ])
+
+    static let plugin: Self = .object([
+        "id": .scalar,
+        "title": .scalar,
+        "summary": .scalar,
+        "version": .scalar,
+        "state": .scalar,
+        "diagnostic": .scalar,
+        "requiresRestart": .scalar,
+        "permissions": .array(.object([
+            "id": .scalar,
+            "title": .scalar,
+            "isGranted": .scalar,
+            "status": .scalar,
+        ])),
+        "publishedActionCount": .scalar,
+    ])
+
+    static func page(record: Self) -> Self {
+        .object([
+            "records": .array(record),
+            "continuationToken": .scalar,
+        ])
+    }
+
+    private static let actionReference: Self = .object([
+        "key": .object([
+            "providerID": .scalar,
+            "actionID": .scalar,
+        ]),
+        "schemaVersion": .scalar,
+    ])
+
+    func validate(_ data: Data) throws {
+        try CLIProtocolCodec.rejectDuplicateFieldsRecursively(in: data)
+        let value = try JSONSerialization.jsonObject(with: data)
+        try validate(value, path: "data")
+    }
+
+    private func validate(_ value: Any, path: String) throws {
+        switch self {
+        case .scalar:
+            return
+        case let .array(element):
+            guard let values = value as? [Any] else {
+                throw CLIProtocolCodecError.invalidObject
+            }
+            for (index, value) in values.enumerated() {
+                try element.validate(value, path: "\(path)[\(index)]")
+            }
+        case let .object(fields):
+            if value is NSNull { return }
+            guard let object = value as? [String: Any] else {
+                throw CLIProtocolCodecError.invalidObject
+            }
+            let unknown = Set(object.keys).subtracting(fields.keys).sorted()
+            guard unknown.isEmpty else {
+                throw CLIProtocolCodecError.unknownFields(
+                    unknown.map { "\(path).\($0)" }
+                )
+            }
+            for (key, value) in object {
+                guard let schema = fields[key] else { continue }
+                try schema.validate(value, path: "\(path).\(key)")
+            }
+        }
     }
 }

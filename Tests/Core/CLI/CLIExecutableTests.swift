@@ -151,6 +151,39 @@ final class CLIExecutableTests: XCTestCase {
         }
     }
 
+    func testDiscoveryCommandsRejectNestedSchemaMutationsForTextAndJSON() throws {
+        for fixture in ["nestedUnknownPayload", "nestedDuplicatePayload"] {
+            let environment = [
+                CLIServiceConfiguration.testPeerResponseEnvironmentKey: fixture,
+            ]
+            for arguments in [
+                ["actions", "list"],
+                ["workflows", "list"],
+                ["plugins", "list"],
+            ] {
+                let command = arguments.joined(separator: " ")
+                let text = try runCLI(arguments, environment: environment)
+                XCTAssertEqual(text.status, CLIExitCode.protocolIncompatible.rawValue, command)
+                XCTAssertTrue(text.output.isEmpty, command)
+                XCTAssertTrue(text.error.contains("invalid response"), command)
+
+                let json = try runCLI(arguments + ["--json"], environment: environment)
+                XCTAssertEqual(json.status, CLIExitCode.protocolIncompatible.rawValue, command)
+                XCTAssertTrue(json.error.isEmpty, command)
+                let object = try XCTUnwrap(
+                    JSONSerialization.jsonObject(with: Data(json.output.utf8))
+                        as? [String: Any]
+                )
+                XCTAssertEqual(object["outcome"] as? String, "protocolIncompatible", command)
+                XCTAssertEqual(
+                    (object["rejection"] as? [String: Any])?["category"] as? String,
+                    "invalidPeerResponse",
+                    command
+                )
+            }
+        }
+    }
+
     func testUncertainPeerTimeoutUsesTransportExitCodeForTextAndJSON() throws {
         let environment = [
             CLIServiceConfiguration.testPeerResponseEnvironmentKey: "timeout",

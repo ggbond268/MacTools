@@ -96,6 +96,11 @@ enum CLIProtocolCodec {
         }
     }
 
+    static func rejectDuplicateFieldsRecursively(in data: Data) throws {
+        var scanner = CLIJSONDuplicateFieldScanner(data: data)
+        try scanner.scan()
+    }
+
     private static func rejectUnknownFields(in data: Data, allowedKeys: Set<String>) throws {
         try rejectDuplicateTopLevelFields(in: data)
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -165,5 +170,112 @@ enum CLIProtocolCodec {
             }
         }
         return keys
+    }
+}
+
+private struct CLIJSONDuplicateFieldScanner {
+    private let bytes: [UInt8]
+    private var index = 0
+
+    init(data: Data) {
+        bytes = Array(data)
+    }
+
+    mutating func scan() throws {
+        skipWhitespace()
+        try scanValue()
+        skipWhitespace()
+        guard index == bytes.count else { throw CLIProtocolCodecError.invalidObject }
+    }
+
+    private mutating func scanValue() throws {
+        skipWhitespace()
+        guard index < bytes.count else { throw CLIProtocolCodecError.invalidObject }
+        switch bytes[index] {
+        case 0x7B: try scanObject() // {
+        case 0x5B: try scanArray() // [
+        case 0x22: _ = try scanString() // "
+        default: try scanPrimitive()
+        }
+    }
+
+    private mutating func scanObject() throws {
+        index += 1
+        skipWhitespace()
+        if consume(0x7D) { return }
+        var keys = Set<String>()
+        while true {
+            skipWhitespace()
+            guard index < bytes.count, bytes[index] == 0x22 else {
+                throw CLIProtocolCodecError.invalidObject
+            }
+            let key = try scanString()
+            guard keys.insert(key).inserted else {
+                throw CLIProtocolCodecError.duplicateFields([key])
+            }
+            skipWhitespace()
+            guard consume(0x3A) else { throw CLIProtocolCodecError.invalidObject } // :
+            try scanValue()
+            skipWhitespace()
+            if consume(0x7D) { return }
+            guard consume(0x2C) else { throw CLIProtocolCodecError.invalidObject } // ,
+        }
+    }
+
+    private mutating func scanArray() throws {
+        index += 1
+        skipWhitespace()
+        if consume(0x5D) { return }
+        while true {
+            try scanValue()
+            skipWhitespace()
+            if consume(0x5D) { return }
+            guard consume(0x2C) else { throw CLIProtocolCodecError.invalidObject }
+        }
+    }
+
+    private mutating func scanString() throws -> String {
+        let start = index
+        index += 1
+        var escaped = false
+        while index < bytes.count {
+            let byte = bytes[index]
+            if escaped {
+                escaped = false
+            } else if byte == 0x5C {
+                escaped = true
+            } else if byte == 0x22 {
+                let quoted = Data(bytes[start...index])
+                index += 1
+                guard let value = try? JSONDecoder().decode(String.self, from: quoted) else {
+                    throw CLIProtocolCodecError.invalidObject
+                }
+                return value
+            }
+            index += 1
+        }
+        throw CLIProtocolCodecError.invalidObject
+    }
+
+    private mutating func scanPrimitive() throws {
+        let start = index
+        while index < bytes.count,
+              ![0x20, 0x09, 0x0A, 0x0D, 0x2C, 0x5D, 0x7D].contains(bytes[index]) {
+            index += 1
+        }
+        guard index > start else { throw CLIProtocolCodecError.invalidObject }
+    }
+
+    private mutating func skipWhitespace() {
+        while index < bytes.count,
+              [0x20, 0x09, 0x0A, 0x0D].contains(bytes[index]) {
+            index += 1
+        }
+    }
+
+    private mutating func consume(_ byte: UInt8) -> Bool {
+        guard index < bytes.count, bytes[index] == byte else { return false }
+        index += 1
+        return true
     }
 }

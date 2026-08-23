@@ -51,16 +51,15 @@ struct CLIHostApplicationLauncher {
         self.openApplication = openApplication
     }
 
-    func launch(applicationURL: URL, deadline: Date) async throws {
-        let timeout = deadline.timeIntervalSinceNow
-        guard timeout > 0 else { throw CLIHostApplicationLaunchError.timedOut }
+    func launch(applicationURL: URL, deadline: CLIStartupDeadline) async throws {
+        guard !deadline.isExpired else { throw CLIHostApplicationLaunchError.timedOut }
         let (stream, continuation) = AsyncStream.makeStream(of: Result<Void, Error>.self)
         openApplication(applicationURL, Self.makeOpenConfiguration()) { result in
             continuation.yield(result)
             continuation.finish()
         }
         let timeoutTask = Task {
-            try? await Task.sleep(for: .seconds(timeout))
+            try? await deadline.sleepUntilExpired()
             guard !Task.isCancelled else { return }
             continuation.yield(.failure(CLIHostApplicationLaunchError.timedOut))
             continuation.finish()
