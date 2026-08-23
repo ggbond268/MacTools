@@ -58,6 +58,16 @@ struct CLIApplication {
                 json: jsonRequested
             )
             return CLIExitCode.protocolIncompatible.rawValue
+        } catch let error as CLIBrokerClientError where error.hostFailureDiagnostic != nil {
+            let diagnostic = error.hostFailureDiagnostic!
+            emitLocalFailure(
+                command: commandName(arguments),
+                outcome: .hostUnavailable,
+                category: diagnostic.category,
+                message: diagnostic.message,
+                json: jsonRequested
+            )
+            return CLIExitCode.transportFailure.rawValue
         } catch let CLIBrokerClientError.unavailable(message) {
             emitLocalFailure(
                 command: commandName(arguments),
@@ -132,6 +142,26 @@ struct CLIApplication {
         do {
             _ = try await client.prepareHost()
             return try await execute(operation: .doctor, payload: payload, json: json)
+        } catch let error as CLIBrokerClientError where error.hostFailureDiagnostic != nil {
+            let diagnostic = error.hostFailureDiagnostic!
+            if json {
+                write(try output.renderLocal(
+                    command: "doctor",
+                    outcome: .hostUnavailable,
+                    message: diagnostic.message,
+                    rejectionCategory: diagnostic.category,
+                    data: [
+                        "hostAppPath": diagnostic.applicationURL?.path as Any? ?? NSNull(),
+                        "hostAppSignatureAccepted": diagnostic.signatureAccepted,
+                        "brokerServiceName": CLIServiceConfiguration.runtimeCLIServiceName,
+                        "brokerStatus": diagnostic.category,
+                        "guidance": diagnostic.guidance,
+                    ]
+                ))
+            } else {
+                writeError([diagnostic.message, diagnostic.guidance].joined(separator: "\n"))
+            }
+            return CLIExitCode.transportFailure.rawValue
         } catch let CLIBrokerClientError.unavailable(message) {
             let applicationURL = client.installedHostApplicationURL()
             let signatureAccepted = applicationURL.map {

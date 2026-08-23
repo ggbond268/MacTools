@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="${0:A:h}"
+
 CLI_ARCHIVE=""
 DMG_PATH=""
 EXPECTED_VERSION=""
@@ -62,11 +64,11 @@ CLI_PATH="$STAGE_DIR/cli/mactools"
 function validate_universal_binary() {
   local path="$1"
   local role="$2"
-  local architectures sorted_architectures
+  local architectures
   architectures="$(/usr/bin/lipo -archs "$path")"
-  sorted_architectures="$(printf '%s\n' ${=architectures} | /usr/bin/sort | /usr/bin/paste -sd ' ' -)"
-  [[ "$sorted_architectures" == "arm64 x86_64" ]] \
-    || fail "$role must contain exactly arm64 and x86_64 slices; found: $architectures"
+  /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" architectures \
+    --value "$architectures" \
+    --role "$role"
 }
 
 validate_universal_binary "$CLI_PATH" "CLI"
@@ -81,46 +83,33 @@ function validate_embedded_info() {
   local architecture="$2"
   local expected_identifier="$3"
   local plist_path="$STAGE_DIR/$(/usr/bin/basename "$path").$architecture.plist"
-  local identifier version build
   /usr/bin/otool -arch "$architecture" -s __TEXT __info_plist "$path" \
-    | /usr/bin/python3 -c '
-import re
-import sys
-
-output = bytearray()
-for line in sys.stdin:
-    fields = line.split()
-    if fields and re.fullmatch(r"[0-9a-fA-F]+", fields[0]):
-        for word in fields[1:]:
-            output.extend(bytes.fromhex(word)[::-1])
-sys.stdout.buffer.write(bytes(output).rstrip(b"\0"))
-' > "$plist_path"
-  /usr/bin/plutil -lint "$plist_path" >/dev/null 2>&1 \
-    || fail "Missing or invalid embedded Info.plist for $path ($architecture)."
-  identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist_path")"
-  version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist_path")"
-  build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist_path")"
-  [[ "$identifier" == "$expected_identifier" ]] \
-    || fail "Embedded identifier mismatch for $path ($architecture)."
-  [[ "$version" == "$EXPECTED_VERSION" && "$build" == "$EXPECTED_BUILD" ]] \
-    || fail "Embedded version/build mismatch for $path ($architecture)."
+    | /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" extract-info \
+    > "$plist_path"
+  /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" info \
+    --plist "$plist_path" \
+    --identifier "$expected_identifier" \
+    --version "$EXPECTED_VERSION" \
+    --build "$EXPECTED_BUILD" \
+    --role "$path ($architecture)"
 }
 
 function validate_signed_role() {
   local path="$1"
   local expected_identifier="$2"
   local expected_team="$3"
-  local details identifier team
-  /usr/bin/codesign --verify --strict --verbose=2 "$path" >/dev/null 2>&1 \
-    || fail "Invalid code signature: $path"
-  details="$(/usr/bin/codesign -dvvv "$path" 2>&1)"
-  identifier="$(signing_detail "$path" Identifier)"
-  team="$(signing_detail "$path" TeamIdentifier)"
-  [[ "$identifier" == "$expected_identifier" ]] \
-    || fail "Identifier mismatch for $path: expected $expected_identifier, found $identifier"
-  [[ -n "$expected_team" && "$team" == "$expected_team" ]] \
-    || fail "Team Identifier mismatch for $path"
-  [[ "$details" == *"runtime"* ]] || fail "Hardened runtime is missing: $path"
+  local status=0
+  local details_path="$STAGE_DIR/$(/usr/bin/basename "$path").signing.txt"
+  /usr/bin/codesign --verify --strict --verbose=2 "$path" >/dev/null 2>&1 || status=$?
+  /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" status \
+    --value "$status" \
+    --operation "Signature verification for $path"
+  /usr/bin/codesign -dvvv "$path" > /dev/null 2> "$details_path"
+  /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" signing \
+    --details "$details_path" \
+    --identifier "$expected_identifier" \
+    --team "$expected_team" \
+    --role "$path"
 }
 
 ATTACH_PLIST="$STAGE_DIR/attach.plist"
@@ -152,7 +141,7 @@ APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Cont
 
 HOST_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
 HOST_EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
-/usr/bin/python3 "${0:A:h}/validate-release-layout.py" \
+/usr/bin/python3 "$SCRIPT_DIR/validate-release-layout.py" \
   --app "$APP_PATH" \
   --host-executable "$HOST_EXECUTABLE" \
   --host-identifier "$HOST_IDENTIFIER"
@@ -168,8 +157,12 @@ for architecture in arm64 x86_64; do
 done
 
 if [[ "$ALLOW_UNSIGNED" -eq 0 ]]; then
+  APP_SIGNATURE_STATUS=0
   /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH" >/dev/null 2>&1 \
-    || fail "Invalid app signature."
+    || APP_SIGNATURE_STATUS=$?
+  /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" status \
+    --value "$APP_SIGNATURE_STATUS" \
+    --operation "App signature verification"
   HOST_TEAM="$(signing_detail "$APP_PATH" TeamIdentifier)"
   [[ -n "$HOST_TEAM" ]] || fail "App signature has no Team Identifier."
   validate_signed_role "$APP_PATH" "$HOST_IDENTIFIER" "$HOST_TEAM"
@@ -178,8 +171,17 @@ if [[ "$ALLOW_UNSIGNED" -eq 0 ]]; then
 fi
 
 if [[ "$CHECK_GATEKEEPER" -eq 1 ]]; then
-  /usr/sbin/spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
-  /usr/sbin/spctl -a -t exec -v "$CLI_PATH"
+  DMG_GATEKEEPER_STATUS=0
+  CLI_GATEKEEPER_STATUS=0
+  /usr/sbin/spctl -a -t open --context context:primary-signature -v "$DMG_PATH" \
+    || DMG_GATEKEEPER_STATUS=$?
+  /usr/sbin/spctl -a -t exec -v "$CLI_PATH" || CLI_GATEKEEPER_STATUS=$?
+  /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" status \
+    --value "$DMG_GATEKEEPER_STATUS" \
+    --operation "DMG Gatekeeper assessment"
+  /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" status \
+    --value "$CLI_GATEKEEPER_STATUS" \
+    --operation "CLI Gatekeeper assessment"
 fi
 
 printf '[artifact-validation] app, broker, and standalone CLI passed\n'

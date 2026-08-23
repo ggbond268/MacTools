@@ -14,6 +14,13 @@ enum CLIPeerRole {
     case broker
 }
 
+enum CLIHostIdentityAssessment: Equatable {
+    case accepted
+    case invalidSignature
+    case wrongTeam
+    case wrongRole
+}
+
 struct CLIPeerIdentityValidator {
     private let allowsUnverifiedPeersForTesting: Bool
 
@@ -43,8 +50,20 @@ struct CLIPeerIdentityValidator {
         as role: CLIPeerRole,
         relativeTo currentIdentity: CLIPeerIdentity? = nil
     ) -> Bool {
+        applicationIdentityAssessment(
+            at: applicationURL,
+            as: role,
+            relativeTo: currentIdentity
+        ) == .accepted
+    }
+
+    func applicationIdentityAssessment(
+        at applicationURL: URL,
+        as role: CLIPeerRole,
+        relativeTo currentIdentity: CLIPeerIdentity? = nil
+    ) -> CLIHostIdentityAssessment {
         guard let currentIdentity = currentIdentity ?? self.currentIdentity() else {
-            return allowsUnverifiedPeersForTesting
+            return allowsUnverifiedPeersForTesting ? .accepted : .invalidSignature
         }
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(applicationURL as CFURL, [], &staticCode) == errSecSuccess,
@@ -56,13 +75,14 @@ struct CLIPeerIdentityValidator {
               ) == errSecSuccess,
               let metadata = signingMetadata(for: staticCode)
         else {
-            return allowsUnverifiedPeersForTesting
+            return allowsUnverifiedPeersForTesting ? .accepted : .invalidSignature
         }
-        return metadata.teamIdentifier == currentIdentity.teamIdentifier
-            && metadata.signingIdentifier == expectedSigningIdentifier(
-                for: role,
-                brokerIdentifier: currentIdentity.signingIdentifier
-            )
+        guard metadata.teamIdentifier == currentIdentity.teamIdentifier else { return .wrongTeam }
+        guard metadata.signingIdentifier == expectedSigningIdentifier(
+            for: role,
+            brokerIdentifier: currentIdentity.signingIdentifier
+        ) else { return .wrongRole }
+        return .accepted
     }
 
     func accepts(

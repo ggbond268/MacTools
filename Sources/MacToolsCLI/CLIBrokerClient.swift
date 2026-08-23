@@ -6,12 +6,64 @@ enum CLIBrokerClientError: Error {
     case invalidResponse
     case timedOut
     case protocolIncompatible
+    case hostDiscovery(CLIHostLocationError)
+    case hostLaunchFailed(message: String, applicationURL: URL)
+    case backgroundItemApprovalRequired(applicationURL: URL)
+}
+
+struct CLIHostFailureDiagnostic {
+    let category: String
+    let message: String
+    let applicationURL: URL?
+    let signatureAccepted: Bool
+    let guidance: String
+}
+
+extension CLIBrokerClientError {
+    var hostFailureDiagnostic: CLIHostFailureDiagnostic? {
+        switch self {
+        case let .hostDiscovery(error):
+            let signatureAccepted: Bool
+            switch error {
+            case .versionIncompatible: signatureAccepted = true
+            case .notFound, .teamMismatch, .roleMismatch, .invalidSignature:
+                signatureAccepted = false
+            }
+            return CLIHostFailureDiagnostic(
+                category: error.category,
+                message: error.message,
+                applicationURL: error.candidateURL,
+                signatureAccepted: signatureAccepted,
+                guidance: "Install the matching MacTools app release, then retry."
+            )
+        case let .hostLaunchFailed(message, applicationURL):
+            return CLIHostFailureDiagnostic(
+                category: "hostLaunchFailed",
+                message: message,
+                applicationURL: applicationURL,
+                signatureAccepted: true,
+                guidance: "Open MacTools manually, then retry."
+            )
+        case let .backgroundItemApprovalRequired(applicationURL):
+            return CLIHostFailureDiagnostic(
+                category: "brokerApprovalRequired",
+                message: "The MacTools broker did not become available.",
+                applicationURL: applicationURL,
+                signatureAccepted: true,
+                guidance: "Open System Settings > General > Login Items & Extensions and allow the MacTools background item, then retry."
+            )
+        case .unavailable, .invalidResponse, .timedOut, .protocolIncompatible:
+            return nil
+        }
+    }
 }
 
 final class CLIBrokerClient: @unchecked Sendable {
     private let identityValidator = CLIPeerIdentityValidator()
+    private let hostLocator = CLIHostLocator()
     private var connection: NSXPCConnection?
     private var negotiatedProtocolVersion: Int?
+    private var selectedHostApplicationURL: URL?
 
     deinit {
         connection?.invalidate()
@@ -26,10 +78,34 @@ final class CLIBrokerClient: @unchecked Sendable {
             ] != "1"
 #endif
         var didLaunch = false
+        var didContactBroker = false
         var lastMessage = "The MacTools broker is unavailable."
         repeat {
             do {
                 let response = try await connectAndHandshake(timeout: 1.5)
+                didContactBroker = true
+                let version = cliVersion()
+                let brokerMatches = response.brokerVersion == version.version
+                    && response.brokerBuild == version.build
+                let hostMatches: Bool
+                if let hostVersion = response.hostVersion, let hostBuild = response.hostBuild {
+                    hostMatches = hostVersion == version.version && hostBuild == version.build
+                } else {
+                    hostMatches = !response.hostReady
+                }
+                guard brokerMatches, hostMatches else {
+                    let found = [
+                        "broker \(response.brokerVersion) (\(response.brokerBuild))",
+                        response.hostVersion.map {
+                            "host \($0) (\(response.hostBuild ?? "unknown"))"
+                        },
+                    ].compactMap { $0 }
+                    throw CLIBrokerClientError.hostDiscovery(.versionIncompatible(
+                        expected: "\(version.version) (\(version.build))",
+                        found: found,
+                        candidate: selectedHostApplicationURL
+                    ))
+                }
                 guard let selectedVersion = response.selectedProtocolVersion else {
                     throw CLIBrokerClientError.protocolIncompatible
                 }
@@ -38,17 +114,24 @@ final class CLIBrokerClient: @unchecked Sendable {
                 lastMessage = response.message ?? "MacTools is starting."
             } catch CLIBrokerClientError.protocolIncompatible {
                 throw CLIBrokerClientError.protocolIncompatible
+            } catch let error as CLIBrokerClientError where error.hostFailureDiagnostic != nil {
+                throw error
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
                 lastMessage = "The MacTools broker is unavailable."
             }
             if launchIfNeeded, !didLaunch {
-                try launchHost()
+                selectedHostApplicationURL = try await launchHost()
                 didLaunch = true
             }
             try await Task.sleep(for: .milliseconds(200))
         } while Date() < deadline
+        if let selectedHostApplicationURL, !didContactBroker {
+            throw CLIBrokerClientError.backgroundItemApprovalRequired(
+                applicationURL: selectedHostApplicationURL
+            )
+        }
         throw CLIBrokerClientError.unavailable(lastMessage)
     }
 
@@ -225,23 +308,48 @@ final class CLIBrokerClient: @unchecked Sendable {
         }
     }
 
-    private func launchHost() throws {
-        guard let applicationURL = installedHostApplicationURL() else {
-            throw CLIBrokerClientError.unavailable("MacTools is not installed.")
-        }
-        guard identityValidator.acceptsApplication(at: applicationURL, as: .host) else {
-            throw CLIBrokerClientError.unavailable(
-                "The MacTools application signature does not match this CLI."
+    private func launchHost() async throws -> URL {
+        let applicationURL: URL
+        do {
+            let version = cliVersion()
+            applicationURL = try hostLocator.locate(
+                bundleIdentifier: hostBundleIdentifier(),
+                version: version.version,
+                build: version.build
             )
+        } catch let error as CLIHostLocationError {
+            throw CLIBrokerClientError.hostDiscovery(error)
         }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
-        NSWorkspace.shared.openApplication(
-            at: applicationURL,
-            configuration: configuration
-        ) { _, error in
-            _ = error
+        do {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
+                NSWorkspace.shared.openApplication(
+                    at: applicationURL,
+                    configuration: configuration
+                ) { application, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if application == nil {
+                        continuation.resume(throwing: CLIBrokerClientError.hostLaunchFailed(
+                            message: "Launch Services did not return a running MacTools application.",
+                            applicationURL: applicationURL
+                        ))
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        } catch let error as CLIBrokerClientError {
+            throw error
+        } catch {
+            throw CLIBrokerClientError.hostLaunchFailed(
+                message: "MacTools could not be launched: \(error.localizedDescription)",
+                applicationURL: applicationURL
+            )
         }
+        return applicationURL
     }
 
     func cliVersion() -> (version: String, build: String) {
@@ -253,7 +361,13 @@ final class CLIBrokerClient: @unchecked Sendable {
     }
 
     func installedHostApplicationURL() -> URL? {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: hostBundleIdentifier())
+        if let selectedHostApplicationURL { return selectedHostApplicationURL }
+        let version = cliVersion()
+        return try? hostLocator.locate(
+            bundleIdentifier: hostBundleIdentifier(),
+            version: version.version,
+            build: version.build
+        )
     }
 
     private func hostBundleIdentifier() -> String {

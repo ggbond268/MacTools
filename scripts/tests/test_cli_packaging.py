@@ -17,6 +17,7 @@ PACKAGE_SCRIPT = SCRIPTS_DIR / "package-cli.sh"
 VALIDATE_SCRIPT = SCRIPTS_DIR / "validate-release-artifacts.sh"
 VALIDATE_LAYOUT_SCRIPT = SCRIPTS_DIR / "validate-release-layout.py"
 CHECKSUM_SCRIPT = SCRIPTS_DIR / "write-sha256.sh"
+BINARY_VALIDATION_SCRIPT = SCRIPTS_DIR / "release_binary_validation.py"
 RELEASE_SCRIPT = SCRIPTS_DIR / "release-local.sh"
 
 
@@ -40,6 +41,14 @@ class CLIPackagingTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
+        )
+
+    def run_binary_validator(self, *arguments: str, stdin: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            [str(BINARY_VALIDATION_SCRIPT), *arguments],
+            input=stdin,
+            check=False,
+            capture_output=True,
         )
 
     def test_archive_contains_one_root_level_executable(self) -> None:
@@ -127,6 +136,133 @@ class CLIPackagingTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
 
+    def test_binary_policy_rejects_missing_extra_and_duplicate_architectures(self) -> None:
+        valid = self.run_binary_validator(
+            "architectures", "--value", "x86_64 arm64", "--role", "CLI"
+        )
+        self.assertEqual(valid.returncode, 0, valid.stderr.decode())
+        for architectures in ("arm64", "arm64 x86_64 i386", "arm64 arm64"):
+            with self.subTest(architectures=architectures):
+                result = self.run_binary_validator(
+                    "architectures", "--value", architectures, "--role", "Broker"
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"exactly arm64 and x86_64", result.stderr)
+
+    def test_otool_info_plist_parser_round_trips_every_word(self) -> None:
+        value = {
+            "CFBundleIdentifier": "app.ggbond.MacTools.cli",
+            "CFBundleShortVersionString": "1.2.0",
+            "CFBundleVersion": "69",
+        }
+        payload = plistlib.dumps(value, fmt=plistlib.FMT_XML)
+        padded = payload + b"\0" * (-len(payload) % 4)
+        words = [padded[index : index + 4][::-1].hex() for index in range(0, len(padded), 4)]
+        lines = ["Contents of (__TEXT,__info_plist) section"]
+        for index in range(0, len(words), 4):
+            lines.append(f"{index * 4:016x} " + " ".join(words[index : index + 4]))
+
+        result = self.run_binary_validator(
+            "extract-info",
+            stdin=("\n".join(lines) + "\n").encode(),
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(plistlib.loads(result.stdout), value)
+
+    def test_embedded_metadata_policy_rejects_each_role_slice_mutation(self) -> None:
+        roles = {
+            "CLI arm64": "app.ggbond.MacTools.cli",
+            "CLI x86_64": "app.ggbond.MacTools.cli",
+            "Broker arm64": "app.ggbond.MacTools.cli-broker",
+            "Broker x86_64": "app.ggbond.MacTools.cli-broker",
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            plist_path = Path(temporary_directory) / "Info.plist"
+            for role, identifier in roles.items():
+                expected = {
+                    "CFBundleIdentifier": identifier,
+                    "CFBundleShortVersionString": "1.2.0",
+                    "CFBundleVersion": "69",
+                }
+                for key, replacement in (
+                    ("CFBundleIdentifier", "example.WrongRole"),
+                    ("CFBundleShortVersionString", "9.9.9"),
+                    ("CFBundleVersion", "999"),
+                ):
+                    with self.subTest(role=role, key=key):
+                        mutated = expected | {key: replacement}
+                        with plist_path.open("wb") as stream:
+                            plistlib.dump(mutated, stream)
+                        result = self.run_binary_validator(
+                            "info",
+                            "--plist",
+                            str(plist_path),
+                            "--identifier",
+                            identifier,
+                            "--version",
+                            "1.2.0",
+                            "--build",
+                            "69",
+                            "--role",
+                            role,
+                        )
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(b"identity/version mismatch", result.stderr)
+
+    def test_signing_policy_rejects_role_team_runtime_and_command_failures(self) -> None:
+        roles = {
+            "Host": "app.ggbond.MacTools",
+            "CLI": "app.ggbond.MacTools.cli",
+            "Broker": "app.ggbond.MacTools.cli-broker",
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            details = Path(temporary_directory) / "signing.txt"
+            for role, identifier in roles.items():
+                valid_details = (
+                    f"Identifier={identifier}\n"
+                    "TeamIdentifier=JENNYTEAM\n"
+                    "CodeDirectory v=20500 size=1 flags=0x10000(runtime)\n"
+                )
+                cases = {
+                    "valid": valid_details,
+                    "identifier": valid_details.replace(identifier, "example.WrongRole"),
+                    "team": valid_details.replace("JENNYTEAM", "OTHERTEAM"),
+                    "runtime": valid_details.replace("runtime", "adhoc"),
+                }
+                for mutation, value in cases.items():
+                    with self.subTest(role=role, mutation=mutation):
+                        details.write_text(value)
+                        result = self.run_binary_validator(
+                            "signing",
+                            "--details",
+                            str(details),
+                            "--identifier",
+                            identifier,
+                            "--team",
+                            "JENNYTEAM",
+                            "--role",
+                            role,
+                        )
+                        if mutation == "valid":
+                            self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        else:
+                            self.assertNotEqual(result.returncode, 0)
+
+        for operation in (
+            "App signature verification",
+            "CLI signature verification",
+            "Broker signature verification",
+            "DMG Gatekeeper assessment",
+            "CLI Gatekeeper assessment",
+        ):
+            with self.subTest(operation=operation):
+                result = self.run_binary_validator(
+                    "status", "--value", "1", "--operation", operation
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(operation.encode(), result.stderr)
+
     def test_validator_rejects_non_exact_executable_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -148,6 +284,7 @@ class CLIPackagingTests(unittest.TestCase):
         local_release = RELEASE_SCRIPT.read_text()
         release_workflow = (SCRIPTS_DIR.parent / ".github/workflows/release.yml").read_text()
         validator = VALIDATE_SCRIPT.read_text()
+        binary_policy = BINARY_VALIDATION_SCRIPT.read_text()
 
         main_flow = local_release.index('info "Signing standalone CLI before the outer app"')
         self.assertLess(
@@ -165,7 +302,7 @@ class CLIPackagingTests(unittest.TestCase):
             "MacToolsCLIBroker",
             "CFBundleIdentifier",
         ):
-            self.assertIn(invariant, validator)
+            self.assertIn(invariant, validator + binary_policy)
         self.assertNotIn("$CLI_PATH version", validator)
 
     def make_app_layout(self, root: Path) -> Path:
