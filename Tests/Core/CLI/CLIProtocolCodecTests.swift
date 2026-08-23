@@ -80,4 +80,28 @@ final class CLIProtocolCodecTests: XCTestCase {
         XCTAssertEqual(ActionExecutionSource.cli.rawValue, "cli")
         XCTAssertEqual(ActionExposureSurface.cli.rawValue, "cli")
     }
+
+    func testReplacingOperationPreservesFailureDetails() {
+        let request = CLIRequestEnvelope(
+            protocolVersion: 1,
+            requestID: UUID(),
+            operation: .actionsDescribe,
+            sentAt: .now,
+            payload: nil
+        )
+        let response = CLIResponseEnvelope.failure(
+            request: request,
+            outcome: .unknownTarget,
+            category: "unknownAction",
+            message: "The requested action was not found."
+        )
+
+        let replaced = response.replacingOperation(.actionsRun)
+
+        XCTAssertEqual(replaced.operation, .actionsRun)
+        XCTAssertEqual(replaced.requestID, response.requestID)
+        XCTAssertEqual(replaced.outcome, response.outcome)
+        XCTAssertEqual(replaced.rejection, response.rejection)
+        XCTAssertEqual(replaced.message, response.message)
+    }
 }

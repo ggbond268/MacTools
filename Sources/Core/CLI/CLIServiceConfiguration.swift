@@ -8,7 +8,7 @@ enum CLIServiceConfiguration {
     }
 
     static func containingApplicationURL(
-        executableURL: URL = URL(fileURLWithPath: CommandLine.arguments[0])
+        executableURL: URL = resolvedExecutableURL()
     ) -> URL? {
         var candidate = executableURL.resolvingSymlinksInPath().deletingLastPathComponent()
         while candidate.path != "/" {
@@ -21,9 +21,32 @@ enum CLIServiceConfiguration {
     }
 
     static func containingApplicationBundle(
-        executableURL: URL = URL(fileURLWithPath: CommandLine.arguments[0])
+        executableURL: URL = resolvedExecutableURL()
     ) -> Bundle? {
         containingApplicationURL(executableURL: executableURL).flatMap(Bundle.init(url:))
+    }
+
+    static func resolvedExecutableURL(
+        executablePath: String = CommandLine.arguments[0],
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default
+    ) -> URL {
+        guard !executablePath.contains("/") else {
+            return URL(fileURLWithPath: executablePath)
+        }
+        for directory in (environment["PATH"] ?? "").split(
+            separator: ":",
+            omittingEmptySubsequences: false
+        ) {
+            let baseURL = directory.isEmpty
+                ? URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
+                : URL(fileURLWithPath: String(directory), isDirectory: true)
+            let candidate = baseURL.appendingPathComponent(executablePath)
+            if fileManager.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return URL(fileURLWithPath: executablePath)
     }
 
     static var runtimeServiceName: String {

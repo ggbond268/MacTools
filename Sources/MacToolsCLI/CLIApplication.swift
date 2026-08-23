@@ -166,7 +166,10 @@ struct CLIApplication {
             let describePayload = try CLIProtocolCodec.encodeRequest(CLIActionTargetRequest(key: key))
             let describe = try await client.send(operation: .actionsDescribe, payload: describePayload)
             guard describe.outcome == .completed, let payload = describe.payload else {
-                return try emit(describe, json: arguments.json)
+                return try emit(
+                    describe.replacingOperation(.actionsRun),
+                    json: arguments.json
+                )
             }
             let action = try CLIProtocolCodec.decodeResponse(CLIActionRecord.self, from: payload)
             values = try CLIParameterInput().arguments(

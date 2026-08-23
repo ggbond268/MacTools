@@ -24,4 +24,34 @@ final class CLIServiceConfigurationTests: XCTestCase {
             root.appendingPathComponent("MacTools.app")
         )
     }
+
+    func testResolvesBareExecutableNameThroughPath() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let executable = root.appendingPathComponent("MacTools.app/Contents/MacOS/mactools")
+        let link = root.appendingPathComponent("bin/mactools")
+        try FileManager.default.createDirectory(
+            at: executable.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: link.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: executable.path,
+            contents: Data(),
+            attributes: [.posixPermissions: 0o755]
+        ))
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: executable)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let resolved = CLIServiceConfiguration.resolvedExecutableURL(
+            executablePath: "mactools",
+            environment: ["PATH": link.deletingLastPathComponent().path]
+        )
+        XCTAssertEqual(
+            CLIServiceConfiguration.containingApplicationURL(executableURL: resolved),
+            root.appendingPathComponent("MacTools.app")
+        )
+    }
 }

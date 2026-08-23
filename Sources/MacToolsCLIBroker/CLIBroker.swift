@@ -261,8 +261,12 @@ final class CLIBroker: NSObject, CLIBrokerXPCProtocol, NSXPCListenerDelegate {
         let bundle = CLIServiceConfiguration.containingApplicationBundle()
         let response = CLIHandshakeResponse(
             selectedProtocolVersion: selectedVersion,
-            brokerVersion: bundle?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
-            brokerBuild: bundle?.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
+            brokerVersion: bundle?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                ?? hostRegistration?.hostVersion
+                ?? "unknown",
+            brokerBuild: bundle?.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+                ?? hostRegistration?.hostBuild
+                ?? "unknown",
             hostVersion: hostRegistration?.hostVersion,
             hostBuild: hostRegistration?.hostBuild,
             hostReady: hostReady,

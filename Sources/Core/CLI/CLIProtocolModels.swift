@@ -143,6 +143,22 @@ struct CLIResponseEnvelope: Codable, Equatable, Sendable {
             payload: nil
         )
     }
+
+    func replacingOperation(_ operation: CLIOperation) -> Self {
+        Self(
+            schemaVersion: schemaVersion,
+            protocolVersion: protocolVersion,
+            requestID: requestID,
+            operation: operation,
+            actionReference: actionReference,
+            startedAt: startedAt,
+            finishedAt: finishedAt,
+            outcome: outcome,
+            message: message,
+            rejection: rejection,
+            payload: payload
+        )
+    }
 }
 
 struct CLIActionKey: Codable, Hashable, Sendable {
