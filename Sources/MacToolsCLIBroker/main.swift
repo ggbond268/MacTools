@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 
 let broker = CLIBroker()
@@ -10,3 +11,7 @@ listener.setConnectionCodeSigningRequirement(requirement)
 #endif
 listener.delegate = broker
 listener.resume()
+
+// A standalone LaunchAgent does not get the implicit process lifetime of an XPC service bundle.
+// Keep its dispatch-backed XPC listener alive after the top-level entry point finishes setup.
+dispatchMain()
