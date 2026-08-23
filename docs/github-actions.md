@@ -4,7 +4,7 @@
 
 - `Build`：在 `main` push、Pull Request 和手动触发时运行。执行 XcodeGen、Debug 测试，并在非 PR 场景额外编译 unsigned Release app 做配置校验；不上传不可分发的未签名产物。
 - `Prepare Release`：在 GitHub Actions 页面手动触发。输入发布类型、目标版本和是否继续发布；它会检查、bump、提交版本变更、创建 tag，并在需要时显式触发 `Release` 或 `Plugin Release`。
-- `Release`：在推送 `v*.*.*` 或 `v*.*.*-*` tag，或手动输入 tag 时运行。构建 Release 版本，使用 Developer ID 签名、公证、打包 DMG，创建或更新 GitHub Release；稳定版会明确标记为 GitHub Latest，并更新官网使用的 `docs/app-release.json`，预发布不会覆盖稳定版下载元数据。
+- `Release`：在推送 `v*.*.*` 或 `v*.*.*-*` tag，或手动输入 tag 时运行。构建 Release 版本，分别签名并公证 App DMG 与独立的 universal `mactools-cli` ZIP，为两者生成可随文件移动的 SHA-256 校验文件，再创建或更新 GitHub Release；稳定版会明确标记为 GitHub Latest，并更新官网使用的 `docs/app-release.json`，预发布不会覆盖稳定版下载元数据。
 - `Homebrew Cask Update`：手动输入版本时运行；未输入版本则从稳定 `v*` App Release 中查找同时包含 `MacTools.dmg` 与 `MacTools.sha256` 的最新版，通过 `brew bump-cask-pr` 向官方 `Homebrew/homebrew-cask` 提交 cask bump PR。
 - `Plugin Release` runs for a pushed `plugins-*` tag or a manually selected plugin batch tag. PluginKit v2 keeps `docs/plugins/catalog.json`, PluginKit v3 and later use `docs/plugins/vN/catalog.json`, the v4 catalog remains immutable for MacTools through 1.1.6, and MacTools 1.2 uses the new `docs/plugins/v5/catalog.json`. The first release of an ABI line rebuilds and signs every plugin. Plugin batches use `--latest=false` and never replace the latest App release.
 - `Deploy Pages`：在 `site/**` 或 `docs/app-release.json` 合入 `main`、`Release` / `Plugin Release` 成功完成，或手动触发时运行。它先构建 `site/` 下的 Astro 官网，再合并 `docs/` 中的 App 发布元数据、appcast、插件 catalog、图标库等静态发布资源并发布到 GitHub Pages；PR 不会触发这条流水线。
@@ -104,7 +104,7 @@ PY
 make release
 ```
 
-命令会交互选择发布类型、分析当前版本和最新 tag、选择 `patch`/`minor`/`major`，并先展示 bump 预览；确认后才自动 `git pull --rebase`、运行轻量检查、更新版本文件、提交版本 bump、创建并推送 tag。App 发布会推送 `v*.*.*` tag，后续构建、签名、公证、上传 GitHub Release、更新 Sparkle appcast 由 `Release` workflow 完成。`Release` 不更新 Homebrew；需要更新官方 cask 时，手动运行独立的 `Homebrew Cask Update` workflow。
+命令会交互选择发布类型、分析当前版本和最新 tag、选择 `patch`/`minor`/`major`，并先展示 bump 预览；确认后才自动 `git pull --rebase`、运行轻量检查、更新版本文件、提交版本 bump、创建并推送 tag。App 发布会推送 `v*.*.*` tag，后续构建、签名、公证、上传 GitHub Release、更新 Sparkle appcast 由 `Release` workflow 完成。同一 Release 会上传 `MacTools.dmg`、`MacTools.sha256`、`mactools-cli-<version>-macos-universal.zip` 和对应 `.sha256`；CLI ZIP 独立公证，DMG 与 CLI 都必须通过共享产物验证器。`Release` 不更新 Homebrew；需要更新官方 cask 时，手动运行独立的 `Homebrew Cask Update` workflow。
 
 在选择 App 或插件发布之前，`make release` 会比较最新 App tag 与当前 `Sources/MacToolsPluginKit/`。没有代码变化时直接继续；检测到变化时会列出文件，并要求发布者通过 `y/N` 明确确认是否已经检查 `pluginKitVersion`。这项兼容性确认不会被 `--yes` 跳过；非交互发布遇到 PluginKit 变化时会停止，要求改用交互终端完成检查。
 
@@ -138,7 +138,7 @@ git tag v0.9.3
 git push origin v0.9.3
 ```
 
-Release 工作流会校验 `v0.9.3` 与 `Configs/AppVersion.xcconfig` 的 `MARKETING_VERSION = 0.9.3` 一致，并使用 `CURRENT_PROJECT_VERSION` 作为 Sparkle appcast 和 App 包里的 build 号。版本不一致时会直接失败，避免产物、tag 和 appcast 不一致。
+Release 工作流会校验 `v0.9.3` 与 `Configs/AppVersion.xcconfig` 的 `MARKETING_VERSION = 0.9.3` 一致，并使用 `CURRENT_PROJECT_VERSION` 作为 Sparkle appcast、App、broker 和独立 CLI 的 build 号。验证器不会执行待验证的 CLI；它从 Mach-O 内嵌 Info.plist 读取身份与版本，并在上传前检查 App/CLI 版本一致、精确 bundle 布局、双架构、LaunchAgent 配置、同 Team 签名、hardened runtime 与 Gatekeeper。任一检查失败都会终止发布。
 
 也可以在 GitHub Actions 页面手动运行 `Release`，输入已存在的 tag，例如 `v0.9.3`；该 tag 指向的提交里仍必须已经更新 `Configs/AppVersion.xcconfig`。
 

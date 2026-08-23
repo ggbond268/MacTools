@@ -59,23 +59,17 @@ PY
 CLI_PATH="$STAGE_DIR/cli/mactools"
 [[ -x "$CLI_PATH" && ! -L "$CLI_PATH" ]] || fail "Extracted CLI is not a regular executable."
 
-ARCHS="$(/usr/bin/lipo -archs "$CLI_PATH")"
-[[ " $ARCHS " == *" arm64 "* && " $ARCHS " == *" x86_64 "* ]] \
-  || fail "CLI must contain arm64 and x86_64 slices; found: $ARCHS"
+function validate_universal_binary() {
+  local path="$1"
+  local role="$2"
+  local architectures sorted_architectures
+  architectures="$(/usr/bin/lipo -archs "$path")"
+  sorted_architectures="$(printf '%s\n' ${=architectures} | /usr/bin/sort | /usr/bin/paste -sd ' ' -)"
+  [[ "$sorted_architectures" == "arm64 x86_64" ]] \
+    || fail "$role must contain exactly arm64 and x86_64 slices; found: $architectures"
+}
 
-VERSION_JSON="$($CLI_PATH version --json)" || fail "CLI could not report its embedded version."
-VERSION_JSON="$VERSION_JSON" EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_BUILD="$EXPECTED_BUILD" \
-  /usr/bin/python3 - <<'PY'
-import json
-import os
-
-value = json.loads(os.environ["VERSION_JSON"])
-data = value.get("data") or {}
-actual = (str(data.get("cliVersion", "")), str(data.get("cliBuild", "")))
-expected = (os.environ["EXPECTED_VERSION"], os.environ["EXPECTED_BUILD"])
-if actual != expected:
-    raise SystemExit(f"CLI version/build mismatch: expected {expected}, found {actual}")
-PY
+validate_universal_binary "$CLI_PATH" "CLI"
 
 function signing_detail() {
   /usr/bin/codesign -dvvv "$1" 2>&1 \
@@ -150,14 +144,6 @@ APP_PATH="$MOUNT_POINT/MacTools.app"
 [[ -d "$APP_PATH" ]] || fail "DMG must contain MacTools.app at its root."
 APP_COUNT="$(/usr/bin/find "$MOUNT_POINT" -maxdepth 1 -type d -name '*.app' | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
 [[ "$APP_COUNT" == "1" ]] || fail "DMG must contain exactly one root-level app."
-/usr/bin/python3 - "$APP_PATH/Contents/MacOS" <<'PY' \
-  || fail "DMG app must not contain an embedded mactools CLI."
-import os
-import sys
-
-if "mactools" in os.listdir(sys.argv[1]):
-    raise SystemExit(1)
-PY
 
 APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
 APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")"
@@ -165,27 +151,21 @@ APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Cont
   || fail "App version/build does not match the CLI release."
 
 HOST_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
+HOST_EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+/usr/bin/python3 "${0:A:h}/validate-release-layout.py" \
+  --app "$APP_PATH" \
+  --host-executable "$HOST_EXECUTABLE" \
+  --host-identifier "$HOST_IDENTIFIER"
 BROKER_PATH="$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
 [[ -x "$BROKER_PATH" ]] || fail "DMG app is missing MacToolsCLIBroker."
+validate_universal_binary "$BROKER_PATH" "Broker"
 
 for architecture in arm64 x86_64; do
   validate_embedded_info "$CLI_PATH" "$architecture" "$HOST_IDENTIFIER.cli"
 done
-for architecture in $(/usr/bin/lipo -archs "$BROKER_PATH"); do
+for architecture in arm64 x86_64; do
   validate_embedded_info "$BROKER_PATH" "$architecture" "$HOST_IDENTIFIER.cli-broker"
 done
-
-LAUNCH_AGENT_PATH="$APP_PATH/Contents/Library/LaunchAgents/app.ggbond.MacTools.cli-broker.plist"
-[[ -f "$LAUNCH_AGENT_PATH" ]] || fail "DMG app is missing the broker LaunchAgent plist."
-LAUNCH_AGENT_LABEL="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$LAUNCH_AGENT_PATH")"
-LAUNCH_AGENT_PROGRAM="$(/usr/libexec/PlistBuddy -c 'Print :BundleProgram' "$LAUNCH_AGENT_PATH")"
-LAUNCH_AGENT_SERVICE="$(/usr/libexec/PlistBuddy -c "Print :MachServices:$HOST_IDENTIFIER.cli-broker" "$LAUNCH_AGENT_PATH")"
-[[ "$LAUNCH_AGENT_LABEL" == "$HOST_IDENTIFIER.cli-broker" ]] \
-  || fail "Broker LaunchAgent label does not match the host identity."
-[[ "$LAUNCH_AGENT_PROGRAM" == "Contents/MacOS/MacToolsCLIBroker" ]] \
-  || fail "Broker LaunchAgent BundleProgram is invalid."
-[[ "$LAUNCH_AGENT_SERVICE" == "true" ]] \
-  || fail "Broker LaunchAgent MachServices entry is invalid."
 
 if [[ "$ALLOW_UNSIGNED" -eq 0 ]]; then
   /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH" >/dev/null 2>&1 \

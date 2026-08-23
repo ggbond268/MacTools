@@ -821,13 +821,10 @@ else
   validate_release_artifacts
 fi
 
-DMG_SHA256="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
-CLI_SHA256="$(shasum -a 256 "$CLI_ARCHIVE_PATH" | awk '{print $1}')"
-(
-  cd "$ARTIFACT_DIR"
-  shasum -a 256 "$(basename "$DMG_PATH")" > "$DMG_SHA256_PATH"
-  shasum -a 256 "$(basename "$CLI_ARCHIVE_PATH")" > "$CLI_SHA256_PATH"
-)
+"$ROOT_DIR/scripts/write-sha256.sh" --artifact "$DMG_PATH" --output "$DMG_SHA256_PATH"
+"$ROOT_DIR/scripts/write-sha256.sh" --artifact "$CLI_ARCHIVE_PATH" --output "$CLI_SHA256_PATH"
+DMG_SHA256="$(awk '{print $1}' "$DMG_SHA256_PATH")"
+CLI_SHA256="$(awk '{print $1}' "$CLI_SHA256_PATH")"
 info "DMG ready: $DMG_PATH"
 info "SHA256: $DMG_SHA256"
 info "CLI ready: $CLI_ARCHIVE_PATH"

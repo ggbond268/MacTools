@@ -426,11 +426,10 @@ jobs:
 
       - name: Compute SHA256
         run: |
-          shasum -a 256 "$DMG_PATH" | tee "$SHA256_PATH"
-          (
-            cd "$(dirname "$CLI_ARCHIVE_PATH")"
-            shasum -a 256 "$(basename "$CLI_ARCHIVE_PATH")"
-          ) | tee "$CLI_SHA256_PATH"
+          scripts/write-sha256.sh --artifact "$DMG_PATH" --output "$SHA256_PATH"
+          scripts/write-sha256.sh --artifact "$CLI_ARCHIVE_PATH" --output "$CLI_SHA256_PATH"
+          cat "$SHA256_PATH"
+          cat "$CLI_SHA256_PATH"
 
       - name: Extract release notes from CHANGELOG
         run: |
