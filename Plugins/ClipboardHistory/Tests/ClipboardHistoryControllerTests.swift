@@ -132,6 +132,28 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testPinnedItemsAtCapacityBlockCaptureBeforeReadingClipboardPayload() async {
+        let pins = (0..<100).map { index in
+            item(text: "pin-\(index)", pinned: true)
+        }
+        let fixture = makeFixture(initialItems: pins)
+        fixture.settings.maximumItemCount = 100
+        var rejection: ClipboardCaptureIgnoreReason?
+        fixture.controller.onCaptureRejection = { reason, _ in rejection = reason }
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        XCTAssertTrue(fixture.controller.isCaptureBlockedByPinnedItems)
+        fixture.pasteboard.simulateCopy("not retained")
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertEqual(rejection, .pinnedItemsFillCapacity)
+        XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
+        XCTAssertEqual(fixture.controller.items.count, 100)
+        fixture.controller.stop()
+    }
+
     func testCapturedImageIsIndexedForSearchAndPersisted() async throws {
         let recognizer = FakeClipboardImageTextRecognizer(text: "Invoice total 42 dollars")
         let fixture = makeFixture(imageTextRecognizer: recognizer)

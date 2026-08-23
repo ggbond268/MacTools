@@ -140,6 +140,53 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertTrue(restoredStore.hasCompletedInitialSetup)
     }
 
+    func testLegacyUnlimitedItemCountMigratesToTenThousand() {
+        let suiteName = "ClipboardHistoryItemLimitMigrationTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        let storage = UserDefaultsPluginStorage(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            userDefaults: defaults
+        )
+        storage.set(ClipboardHistorySettings.noItemCountLimit, forKey: "maximum-item-count")
+
+        let settings = ClipboardHistorySettingsStore(storage: storage)
+
+        XCTAssertEqual(
+            settings.maximumItemCount,
+            ClipboardHistorySettings.maximumSupportedItemCount
+        )
+        XCTAssertFalse(ClipboardHistorySettingsStore.allowedItemCounts.contains(
+            ClipboardHistorySettings.noItemCountLimit
+        ))
+    }
+
+    func testStorageLimitPersistsFiveGigabytePreset() {
+        let suiteName = "ClipboardHistoryStorageLimitTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        let storage = UserDefaultsPluginStorage(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            userDefaults: defaults
+        )
+        let settings = ClipboardHistorySettingsStore(storage: storage)
+
+        settings.maximumTotalPayloadByteCount = ClipboardHistorySettings.maximumSupportedTotalPayloadByteCount
+        let restored = ClipboardHistorySettingsStore(storage: storage)
+
+        XCTAssertEqual(
+            restored.maximumTotalPayloadByteCount,
+            ClipboardHistorySettings.maximumSupportedTotalPayloadByteCount
+        )
+        XCTAssertEqual(ClipboardHistorySettingsStore.allowedTotalPayloadByteCounts.last, 5 * 1_024 * 1_024 * 1_024)
+    }
+
     func testPrivateCopyShortcutSuppressesSynthesizedCopyBeforePayloadRead() async throws {
         let pasteboard = PluginTestClipboardPasteboard()
         let sender = FakeClipboardCopyCommandSender()

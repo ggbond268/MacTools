@@ -157,17 +157,72 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertNil(command(keyCode: 29, modifiers: .control, isEditingText: true))
     }
 
-    func testVisibleOrderPlacesPinnedItemsFirstForNumberedPaste() {
+    func testVisibleOrderPlacesPinnedItemsFirstForNumberedPaste() async {
         let recent = item(text: "recent", pinned: false)
         let pin = item(text: "pin", pinned: true)
         let model = ClipboardHistoryPanelModel()
 
         model.updateItems([recent, pin])
+        await model.waitForSearchForTesting()
 
         XCTAssertEqual(model.visibleItems.map(\.id), [pin.id, recent.id])
     }
 
-    func testContentFilterShowsOnlyMatchingTypesAndGroupsRichTextWithText() {
+    func testLargeResultSetStartsAtOneHundredAndLoadsTheNextPage() async {
+        let items = (0..<250).map { index in
+            item(text: "result \(index)", pinned: false)
+        }
+        let model = ClipboardHistoryPanelModel()
+
+        model.prepareForPresentation(items: items)
+        await model.waitForSearchForTesting()
+
+        XCTAssertEqual(model.visibleItems.count, 100)
+        XCTAssertTrue(model.hasMoreResults)
+
+        model.loadMoreResults()
+        await model.waitForSearchForTesting()
+
+        XCTAssertEqual(model.visibleItems.count, 200)
+        XCTAssertTrue(model.hasMoreResults)
+    }
+
+    func testTenThousandItemPresentationSchedulesWithinInteractiveBudget() async {
+        let now = Date()
+        let items = (0..<ClipboardHistorySettings.maximumSupportedItemCount).map { index in
+            item(
+                text: "result \(index)",
+                pinned: false,
+                capturedAt: now.addingTimeInterval(TimeInterval(-index)),
+                lastUsedAt: nil
+            )
+        }
+        let model = ClipboardHistoryPanelModel()
+        let startedAt = Date()
+
+        model.prepareForPresentation(items: items)
+
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 1)
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.visibleItems.count, ClipboardHistoryPanelModel.resultPageSize)
+        XCTAssertTrue(model.hasMoreResults)
+    }
+
+    func testLatestDebouncedQueryWins() async {
+        let foo = item(text: "foo", pinned: false)
+        let bar = item(text: "bar", pinned: false)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [foo, bar])
+        await model.waitForSearchForTesting()
+
+        model.query = "foo"
+        model.query = "bar"
+        await model.waitForSearchForTesting()
+
+        XCTAssertEqual(model.visibleItems.map(\.id), [bar.id])
+    }
+
+    func testContentFilterShowsOnlyMatchingTypesAndGroupsRichTextWithText() async {
         let plainText = item(text: "plain", pinned: false)
         let richText = item(
             payload: payload(typeIdentifier: ClipboardRepresentationType.rtf),
@@ -181,13 +236,15 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.updateItems([plainText, richText, image])
 
         model.contentFilter = .text
+        await model.waitForSearchForTesting()
         XCTAssertEqual(Set(model.visibleItems.map(\.id)), Set([plainText.id, richText.id]))
 
         model.contentFilter = .image
+        await model.waitForSearchForTesting()
         XCTAssertEqual(model.visibleItems.map(\.id), [image.id])
     }
 
-    func testFinderFilesMatchBothFilesAndTheirSemanticTypeFilters() {
+    func testFinderFilesMatchBothFilesAndTheirSemanticTypeFilters() async {
         let pdf = item(payload: filePayload(named: "Guide.PDF"), pinned: false)
         let image = item(payload: filePayload(named: "Screenshot.png"), pinned: false)
         let audio = item(payload: filePayload(named: "Recording.m4a"), pinned: false)
@@ -200,18 +257,22 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(audio.kind, .files)
 
         model.contentFilter = .files
+        await model.waitForSearchForTesting()
         XCTAssertEqual(
             Set(model.visibleItems.map(\.id)),
             Set([pdf.id, image.id, audio.id, video.id, ordinaryFile.id])
         )
 
         model.contentFilter = .pdf
+        await model.waitForSearchForTesting()
         XCTAssertEqual(model.visibleItems.map(\.id), [pdf.id])
 
         model.contentFilter = .image
+        await model.waitForSearchForTesting()
         XCTAssertEqual(model.visibleItems.map(\.id), [image.id])
 
         model.contentFilter = .media
+        await model.waitForSearchForTesting()
         XCTAssertEqual(Set(model.visibleItems.map(\.id)), Set([audio.id, video.id]))
     }
 
@@ -234,7 +295,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertFalse(ClipboardHistoryContentFilter.files.matches(payload))
     }
 
-    func testPanelPresentationResetsTheTypeFilter() {
+    func testPanelPresentationResetsTheTypeFilter() async {
         let text = item(text: "plain", pinned: false)
         let image = item(
             payload: payload(typeIdentifier: ClipboardRepresentationType.png),
@@ -245,12 +306,13 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.contentFilter = .image
 
         model.prepareForPresentation(items: [text, image])
+        await model.waitForSearchForTesting()
 
         XCTAssertEqual(model.contentFilter, .all)
         XCTAssertEqual(Set(model.visibleItems.map(\.id)), Set([text.id, image.id]))
     }
 
-    func testPanelPresentationOrdersUsedItemsByRecentActivityWithinPinGroups() {
+    func testPanelPresentationOrdersUsedItemsByRecentActivityWithinPinGroups() async {
         let now = Date()
         let recentlyCaptured = item(
             text: "new capture",
@@ -273,11 +335,12 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         let model = ClipboardHistoryPanelModel()
 
         model.prepareForPresentation(items: [recentlyCaptured, recentlyUsed, pinned])
+        await model.waitForSearchForTesting()
 
         XCTAssertEqual(model.visibleItems.map(\.id), [pinned.id, recentlyUsed.id, recentlyCaptured.id])
     }
 
-    func testUsageUpdateDoesNotReorderAnAlreadyOpenPanel() {
+    func testUsageUpdateDoesNotReorderAnAlreadyOpenPanel() async {
         let now = Date()
         let first = item(text: "first", pinned: false, capturedAt: now, lastUsedAt: nil)
         let second = item(
@@ -288,17 +351,20 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         )
         let model = ClipboardHistoryPanelModel()
         model.prepareForPresentation(items: [first, second])
+        await model.waitForSearchForTesting()
 
         var usedSecond = second
         usedSecond.lastUsedAt = now.addingTimeInterval(30)
         model.updateItems([first, usedSecond])
+        await model.waitForSearchForTesting()
 
         XCTAssertEqual(model.visibleItems.map(\.id), [first.id, second.id])
         model.prepareForPresentation(items: [first, usedSecond])
+        await model.waitForSearchForTesting()
         XCTAssertEqual(model.visibleItems.map(\.id), [second.id, first.id])
     }
 
-    func testDeletingSelectedMiddleItemKeepsSelectionAtItsPosition() {
+    func testDeletingSelectedMiddleItemKeepsSelectionAtItsPosition() async {
         let now = Date()
         let first = item(text: "first", pinned: false, capturedAt: now, lastUsedAt: nil)
         let middle = item(
@@ -315,20 +381,23 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         )
         let model = ClipboardHistoryPanelModel()
         model.prepareForPresentation(items: [first, middle, last])
+        await model.waitForSearchForTesting()
         model.selectedItemID = middle.id
 
         model.selectNeighborBeforeRemoving(itemID: middle.id)
         model.updateItems([first, last])
+        await model.waitForSearchForTesting()
 
         XCTAssertEqual(model.selectedItemID, last.id)
     }
 
-    func testDeletingLastSelectedItemSelectsPreviousAndNonselectedDeletePreservesSelection() {
+    func testDeletingLastSelectedItemSelectsPreviousAndNonselectedDeletePreservesSelection() async {
         let first = item(text: "first", pinned: false)
         let middle = item(text: "middle", pinned: false)
         let last = item(text: "last", pinned: false)
         let model = ClipboardHistoryPanelModel()
         model.prepareForPresentation(items: [first, middle, last])
+        await model.waitForSearchForTesting()
         model.selectedItemID = last.id
 
         model.selectNeighborBeforeRemoving(itemID: last.id)
@@ -350,10 +419,10 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(ClipboardImageTextAvailability(item: image), .pending)
 
         image.hasCompletedImageTextIndexing = true
-        image.imageSearchText = "Recognized"
+        image.setImageSearchText("Recognized")
         XCTAssertEqual(ClipboardImageTextAvailability(item: image), .available)
 
-        image.imageSearchText = "  "
+        image.setImageSearchText("  ")
         XCTAssertEqual(ClipboardImageTextAvailability(item: image), .unavailable)
     }
 
@@ -444,12 +513,13 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
             ]),
             pinned: false
         )
-        let attributedString = try XCTUnwrap(ClipboardRichText.attributedString(for: richItem.payload))
+        let richPayload = try XCTUnwrap(richItem.payload)
+        let attributedString = try XCTUnwrap(ClipboardRichText.attributedString(for: richPayload))
 
         XCTAssertEqual(attributedString.string, "Formatted note")
         XCTAssertEqual(ClipboardPlainTextConversion.text(for: richItem), "Formatted note")
         guard case let .formatted(preview) = ClipboardRichTextPreviewPolicy.makePreview(
-            payload: richItem.payload,
+            payload: richPayload,
             fallbackText: richItem.text
         ) else {
             return XCTFail("Expected a formatted rich-text preview")
@@ -499,6 +569,24 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(preview.dropLast().count, ClipboardRichTextPreviewPolicy.maximumFormattedCharacterCount)
         let item = item(payload: payload, pinned: false)
         XCTAssertFalse(ClipboardPlainTextConversion.isAvailable(for: item))
+    }
+
+    func testLargePlainTextBoundsSearchPreviewButPreservesFullPlainTextPaste() {
+        let fullText = String(repeating: "large clipboard line\n", count: 2_000)
+        let item = ClipboardHistoryItem(
+            id: UUID(),
+            text: fullText,
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+
+        XCTAssertEqual(item.text.count, ClipboardHistoryItem.maximumSearchableCharacterCount)
+        XCTAssertTrue(item.isSearchTextTruncated)
+        XCTAssertEqual(item.textCharacterCount, fullText.count)
+        XCTAssertEqual(item.textLineCount, 2_001)
+        XCTAssertEqual(ClipboardPlainTextConversion.text(for: item), fullText)
     }
 
     private func command(

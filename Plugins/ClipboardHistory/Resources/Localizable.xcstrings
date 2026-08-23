@@ -1,6 +1,96 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "hud.capture.pinnedCapacity": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لم يتم الحفظ: العناصر المثبتة تملأ سعة السجل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nicht gespeichert: Angeheftete Einträge belegen die Verlaufskapazität" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Not saved: pinned items fill history capacity" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se guardó: los elementos fijados ocupan la capacidad del historial" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Non enregistré : les éléments épinglés occupent toute la capacité" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "保存されませんでした：固定項目が履歴容量を使い切っています" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "저장하지 않음: 고정 항목이 기록 용량을 모두 사용함" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não guardado: os itens fixados ocupam a capacidade do histórico" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не сохранено: закреплённые элементы заполнили хранилище истории" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未保存：固定项目已占满历史容量" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "未儲存：固定項目已佔滿歷史記錄容量" } }
+      }
+    },
+    "panel.results.showingFirst": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يتم عرض أول %d نتيجة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die ersten %d Ergebnisse werden angezeigt" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Showing the first %d results" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mostrando los primeros %d resultados" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Affichage des %d premiers résultats" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "最初の%d件の結果を表示中" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "처음 %d개의 결과 표시 중" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "A mostrar os primeiros %d resultados" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Показаны первые %d результатов" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在显示前 %d 条结果" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "正在顯示前 %d 筆結果" } }
+      }
+    },
+    "panel.results.showMore": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إظهار %d نتيجة أخرى" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Weitere %d Ergebnisse anzeigen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Show %d more" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mostrar %d más" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Afficher %d résultats de plus" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "さらに%d件を表示" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%d개 더 보기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mostrar mais %d" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Показать ещё %d" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "再显示 %d 条" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "再顯示 %d 筆" } }
+      }
+    },
+    "panel.search.searching": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "جارٍ البحث…" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Suchen…" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Searching…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Buscando…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Recherche…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "検索中…" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "검색 중…" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "A pesquisar…" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Поиск…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在搜索…" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "正在搜尋…" } }
+      }
+    },
+    "panel.status.pinnedCapacity": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "العناصر المثبتة تملأ سعة السجل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Angeheftete Einträge belegen die Verlaufskapazität" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Pinned items fill history capacity" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Los elementos fijados ocupan la capacidad del historial" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les éléments épinglés occupent toute la capacité" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "固定項目が履歴容量を使い切っています" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "고정 항목이 기록 용량을 모두 사용함" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Os itens fixados ocupam a capacidade do histórico" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Закреплённые элементы заполнили хранилище истории" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "固定项目已占满历史容量" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "固定項目已佔滿歷史記錄容量" } }
+      }
+    },
+    "settings.data.pinnedCapacityWarning": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تملأ العناصر المثبتة سعة السجل. ألغِ تثبيت عناصر أو احذفها قبل حفظ سجل جديد." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Angeheftete Einträge belegen die Verlaufskapazität. Löse oder lösche Einträge, bevor neuer Verlauf gespeichert wird." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Pinned items fill history capacity. Unpin or delete items before saving new history." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Los elementos fijados ocupan la capacidad del historial. Desfija o elimina elementos antes de guardar historial nuevo." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les éléments épinglés occupent toute la capacité. Désépinglez ou supprimez des éléments avant d’enregistrer un nouvel historique." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "固定項目が履歴容量を使い切っています。新しい履歴を保存する前に、固定を解除するか項目を削除してください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "고정 항목이 기록 용량을 모두 사용합니다. 새 기록을 저장하기 전에 고정을 해제하거나 항목을 삭제하세요." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Os itens fixados ocupam a capacidade do histórico. Desafixe ou elimine itens antes de guardar novo histórico." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Закреплённые элементы заполнили хранилище истории. Открепите или удалите элементы перед сохранением новых." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "固定项目已占满历史容量。请取消固定或删除项目后再保存新的历史记录。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "固定項目已佔滿歷史記錄容量。請取消固定或刪除項目後再儲存新的歷史記錄。" } }
+      }
+    },
     "settings.collection.toggleTitle": {
       "localizations": {
         "ar": {
@@ -1546,67 +1636,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الجمع قيد التشغيل. يُحفظ السجل في ملف محلي مشفّر، وتحتفظ سلسلة المفاتيح بمفتاح التشفير فقط."
+            "value": "الجمع قيد التشغيل. يُحفظ السجل في قاعدة بيانات محلية مشفّرة، وتحتفظ سلسلة المفاتيح بمفتاح التشفير فقط."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erfassung ist aktiviert. Der Verlauf liegt in einer lokal verschlüsselten Datei; nur der Schlüssel wird im Schlüsselbund gespeichert."
+            "value": "Erfassung ist aktiviert. Der Verlauf liegt in einer lokal verschlüsselten Datenbank; nur der Schlüssel wird im Schlüsselbund gespeichert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collection is on. History is stored in an encrypted local file; Keychain stores only the encryption key."
+            "value": "Collection is on. History is stored in an encrypted local database; Keychain stores only the encryption key."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La recopilación está activada. El historial se guarda en un archivo local cifrado; el Llavero solo contiene la clave."
+            "value": "La recopilación está activada. El historial se guarda en una base de datos local cifrada; el Llavero solo contiene la clave."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La collecte est activée. L’historique est conservé dans un fichier local chiffré ; seule la clé est dans le trousseau."
+            "value": "La collecte est activée. L’historique est conservé dans une base de données locale chiffrée ; seule la clé est dans le trousseau."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "収集はオンです。履歴は暗号化されたローカルファイルに保存され、キーチェーンには暗号化キーのみ保存されます。"
+            "value": "収集はオンです。履歴は暗号化されたローカルデータベースに保存され、キーチェーンには暗号化キーのみ保存されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "수집이 켜져 있습니다. 기록은 암호화된 로컬 파일에 저장되고 키체인에는 암호화 키만 저장됩니다."
+            "value": "수집이 켜져 있습니다. 기록은 암호화된 로컬 데이터베이스에 저장되고 키체인에는 암호화 키만 저장됩니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "A coleta está ativada. O histórico fica em um arquivo local criptografado; as Chaves guardam apenas a chave."
+            "value": "A coleta está ativada. O histórico fica em uma base de dados local criptografada; as Chaves guardam apenas a chave."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сбор включён. История хранится в локальном зашифрованном файле; в Связке ключей находится только ключ."
+            "value": "Сбор включён. История хранится в локальной зашифрованной базе данных; в Связке ключей находится только ключ."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集已开启。历史保存在本机加密文件中，钥匙串只保存加密密钥。"
+            "value": "收集已开启。历史保存在本机加密数据库中，钥匙串只保存加密密钥。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集已開啟。記錄儲存在本機加密檔案中，鑰匙圈只儲存加密金鑰。"
+            "value": "收集已開啟。記錄儲存在本機加密資料庫中，鑰匙圈只儲存加密金鑰。"
           }
         }
       }
@@ -2521,6 +2611,76 @@
         }
       }
     },
+    "settings.retention.byteCount.gigabytes": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d غ.ب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d GB"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d GB"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d GB"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Go"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d GB"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%dGB"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d GB"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d ГБ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d GB"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d GB"
+          }
+        }
+      }
+    },
     "settings.retention.byteCount.megabytes": {
       "localizations": {
         "ar": {
@@ -2666,67 +2826,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بلا حد لعدد العناصر"
+            "value": "10,000 عنصر"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keine Anzahlbegrenzung"
+            "value": "10.000 Einträge"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No item-count limit"
+            "value": "10,000 items"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sin límite de elementos"
+            "value": "10.000 elementos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune limite d’éléments"
+            "value": "10 000 éléments"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "件数制限なし"
+            "value": "10,000件"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "항목 수 제한 없음"
+            "value": "10,000개"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sem limite de itens"
+            "value": "10.000 itens"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Без ограничения количества"
+            "value": "10 000 элементов"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "不限条数"
+            "value": "10,000 条"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "不限筆數"
+            "value": "10,000 筆"
           }
         }
       }
@@ -6091,6 +6251,76 @@
         }
       }
     },
+    "error.insufficientDiskSpace": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد مساحة قرص كافية لحفظ عنصر جديد في سجل الحافظة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es ist nicht genügend Speicherplatz verfügbar, um einen neuen Zwischenablageeintrag zu sichern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is not enough available disk space to save a new clipboard history item."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay suficiente espacio disponible para guardar un nuevo elemento del historial."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’espace disque disponible est insuffisant pour enregistrer un nouvel élément de l’historique."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいクリップボード履歴項目を保存するための空き容量が不足しています。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 클립보드 기록 항목을 저장할 디스크 여유 공간이 부족합니다."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não há espaço disponível suficiente para guardar um novo item do histórico."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Недостаточно свободного места для сохранения нового элемента истории буфера обмена."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可用磁盘空间不足，无法保存新的剪贴板历史项目。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可用磁碟空間不足，無法儲存新的剪貼簿記錄項目。"
+          }
+        }
+      }
+    },
     "error.unavailableStorage": {
       "localizations": {
         "ar": {
@@ -8371,67 +8601,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "منها %d مثبتة. يُحذف المحتوى المنتهي من التخزين المشفر."
+            "value": "منها %d مثبتة؛ لا تُحذف العناصر المثبتة تلقائيًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Davon sind %d angeheftet. Abgelaufene Inhalte werden aus dem verschlüsselten Speicher gelöscht."
+            "value": "Davon sind %d angeheftet; angeheftete Einträge werden nie automatisch entfernt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d are pinned. Expired content is deleted from encrypted storage."
+            "value": "%d are pinned; pinned items are never removed automatically."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d están fijados. El contenido caducado se elimina del almacenamiento cifrado."
+            "value": "%d están fijados; los elementos fijados nunca se eliminan automáticamente."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d sont épinglés. Le contenu expiré est supprimé du stockage chiffré."
+            "value": "%d sont épinglés ; les éléments épinglés ne sont jamais supprimés automatiquement."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "うち%d件が固定されています。期限切れの内容は暗号化ストレージから削除されます。"
+            "value": "うち%d件が固定されています。固定項目は自動的に削除されません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 중 %d개가 고정되었습니다. 만료된 콘텐츠는 암호화 저장 공간에서 삭제됩니다."
+            "value": "이 중 %d개가 고정되었습니다. 고정 항목은 자동으로 삭제되지 않습니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d estão fixados. Conteúdo expirado é excluído do armazenamento criptografado."
+            "value": "%d estão fixados; os itens fixados nunca são removidos automaticamente."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Закреплено: %d. Просроченные данные удаляются из зашифрованного хранилища."
+            "value": "Закреплено: %d; закреплённые элементы никогда не удаляются автоматически."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "其中 %d 条已固定。过期内容会从加密存储中删除。"
+            "value": "其中 %d 条已固定；固定项目不会自动删除。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "其中 %d 筆已固定。過期內容會從加密儲存空間中刪除。"
+            "value": "其中 %d 筆已固定；固定項目不會自動刪除。"
           }
         }
       }
@@ -8441,67 +8671,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم حفظ %d عنصرًا"
+            "value": "%d / %d عنصر · %@ / %@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d Einträge gespeichert"
+            "value": "%d / %d Einträge · %@ / %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d items saved"
+            "value": "%d / %d items · %@ / %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d elementos guardados"
+            "value": "%d / %d elementos · %@ / %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d éléments enregistrés"
+            "value": "%d / %d éléments · %@ / %@"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d 件保存済み"
+            "value": "%d / %d件 · %@ / %@"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d개 항목 저장됨"
+            "value": "%d / %d개 · %@ / %@"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d itens salvos"
+            "value": "%d / %d itens · %@ / %@"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сохранено записей: %d"
+            "value": "%d из %d элементов · %@ / %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已保存 %d 条"
+            "value": "%d / %d 条 · %@ / %@"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已儲存 %d 筆"
+            "value": "%d / %d 筆 · %@ / %@"
           }
         }
       }
@@ -9071,67 +9301,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا تنتهي صلاحية المقتطفات المثبتة بمرور الوقت."
+            "value": "يعطّل «أبدًا» انتهاء الصلاحية حسب العمر فقط؛ وتظل قواعد السعة تزيل أقدم العناصر غير المثبتة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Angeheftete Ausschnitte laufen nicht nach Zeit ab."
+            "value": "„Nie“ deaktiviert nur den zeitbasierten Ablauf; Kapazitätsregeln entfernen weiterhin die ältesten nicht angehefteten Einträge."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pinned snippets don’t expire by age."
+            "value": "Never disables age-based expiration only; capacity rules still remove the oldest unpinned items."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los fragmentos fijados no caducan por antigüedad."
+            "value": "Nunca solo desactiva la caducidad por antigüedad; las reglas de capacidad siguen eliminando los elementos no fijados más antiguos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les extraits épinglés n’expirent pas avec le temps."
+            "value": "Jamais désactive uniquement l’expiration selon l’âge ; les règles de capacité suppriment toujours les plus anciens éléments non épinglés."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定スニペットは時間が経っても期限切れになりません。"
+            "value": "「しない」は期間による期限切れのみを無効にします。容量ルールでは最も古い未固定項目が引き続き削除されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "고정된 스니펫은 시간이 지나도 만료되지 않습니다."
+            "value": "안 함은 기간에 따른 만료만 끕니다. 용량 규칙에 따라 가장 오래된 고정되지 않은 항목은 계속 삭제됩니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trechos fixados não expiram com o tempo."
+            "value": "Nunca desativa apenas a expiração por idade; as regras de capacidade continuam a remover os itens não fixados mais antigos."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Закреплённые фрагменты не удаляются по сроку."
+            "value": "«Никогда» отключает только удаление по возрасту; правила ёмкости по-прежнему удаляют самые старые незакреплённые элементы."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定片段不会按时间过期。"
+            "value": "“永不”仅关闭按时间过期；容量规则仍会移除最早的未固定项目。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定片段不會依時間過期。"
+            "value": "「永不」僅關閉按時間到期；容量規則仍會移除最早的未固定項目。"
           }
         }
       }
@@ -9561,67 +9791,207 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُحتسب المقتطفات المثبتة ضمن الإجمالي."
+            "value": "عند بلوغ حد العناصر، تُزال أقدم العناصر غير المثبتة تلقائيًا؛ ولا تُزال العناصر المثبتة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Angeheftete Ausschnitte zählen zur Gesamtzahl."
+            "value": "Beim Erreichen der Eintragsgrenze werden die ältesten nicht angehefteten Einträge automatisch entfernt; angeheftete Einträge nie."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pinned snippets count toward the total."
+            "value": "When the item limit is reached, the oldest unpinned items are removed automatically; pinned items are never removed."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los fragmentos fijados cuentan en el total."
+            "value": "Al alcanzar el límite de elementos, se eliminan automáticamente los elementos no fijados más antiguos; los fijados nunca se eliminan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les extraits épinglés sont inclus dans le total."
+            "value": "Lorsque la limite d’éléments est atteinte, les plus anciens éléments non épinglés sont supprimés automatiquement ; les éléments épinglés ne le sont jamais."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定スニペットも合計に含まれます。"
+            "value": "項目数の上限に達すると、最も古い未固定項目が自動的に削除されます。固定項目は削除されません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "고정된 스니펫도 전체 수에 포함됩니다."
+            "value": "항목 수 한도에 도달하면 가장 오래된 고정되지 않은 항목이 자동으로 삭제됩니다. 고정 항목은 삭제되지 않습니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trechos fixados contam no total."
+            "value": "Ao atingir o limite de itens, os itens não fixados mais antigos são removidos automaticamente; os itens fixados nunca são removidos."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Закреплённые фрагменты входят в общее число."
+            "value": "При достижении лимита элементов самые старые незакреплённые элементы удаляются автоматически; закреплённые не удаляются."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定片段也计入总数。"
+            "value": "达到条数上限时，会自动移除最早的未固定项目；固定项目不会自动删除。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定片段也計入總數。"
+            "value": "達到筆數上限時，會自動移除最早的未固定項目；固定項目不會自動刪除。"
+          }
+        }
+      }
+    },
+    "settings.retention.storageLimit.description": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عند بلوغ حد السعة، تُزال أقدم العناصر غير المثبتة. ويظل التخزين الفعلي مقيدًا بمساحة القرص المتاحة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beim Erreichen des Speicherlimits werden die ältesten nicht angehefteten Einträge entfernt. Der tatsächlich nutzbare Speicher hängt vom freien Speicherplatz ab."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When the storage limit is reached, the oldest unpinned items are removed. Actual storage remains subject to available disk space."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al alcanzar el límite de almacenamiento, se eliminan los elementos no fijados más antiguos. El almacenamiento real depende del espacio disponible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lorsque la limite de stockage est atteinte, les plus anciens éléments non épinglés sont supprimés. Le stockage réel dépend de l’espace disque disponible."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存容量の上限に達すると、最も古い未固定項目が削除されます。実際の保存容量は空きディスク容量にも左右されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장 용량 한도에 도달하면 가장 오래된 고정되지 않은 항목이 삭제됩니다. 실제 저장 공간은 사용 가능한 디스크 공간의 제한을 받습니다."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ao atingir o limite de armazenamento, os itens não fixados mais antigos são removidos. O armazenamento real depende do espaço disponível em disco."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "При достижении лимита хранилища удаляются самые старые незакреплённые элементы. Фактический объём зависит от свободного места на диске."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "达到容量上限时移除最早的未固定项目。实际保存仍受可用磁盘空间限制。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "達到容量上限時移除最早的未固定項目。實際儲存仍受可用磁碟空間限制。"
+          }
+        }
+      }
+    },
+    "settings.retention.storageLimit.title": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سعة السجل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlaufsspeicher"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History Storage"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Almacenamiento del historial"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stockage de l’historique"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "履歴の保存容量"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록 저장 용량"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Armazenamento do histórico"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Объём истории"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史容量"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄容量"
           }
         }
       }

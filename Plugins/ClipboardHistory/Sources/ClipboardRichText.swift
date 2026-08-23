@@ -95,33 +95,34 @@ enum ClipboardPlainTextConversion {
         switch item.kind {
         case .richText:
             !item.text.isEmpty
-                || ClipboardRichTextPreviewPolicy.allowsFormattedImport(item.payload)
+                || item.allowsRichTextImport
         case .image:
             !(item.imageSearchText ?? "").isEmpty
         case .files:
-            !item.payload.fileURLs.isEmpty
+            !item.fileURLs.isEmpty
         case .plainText, .link, .pdf, .color, .media:
             !item.text.isEmpty
         }
     }
 
     static func text(for item: ClipboardHistoryItem) -> String? {
+        let payload = try? item.loadPayload()
         let candidate: String
         switch item.kind {
         case .richText:
-            if !item.text.isEmpty {
-                candidate = item.text
-            } else if ClipboardRichTextPreviewPolicy.allowsFormattedImport(item.payload) {
-                candidate = ClipboardRichText.attributedString(for: item.payload)?.string ?? ""
+            if let nativeText = payload?.plainText, !nativeText.isEmpty {
+                candidate = nativeText
+            } else if let payload, ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload) {
+                candidate = ClipboardRichText.attributedString(for: payload)?.string ?? ""
             } else {
-                candidate = ""
+                candidate = item.text
             }
         case .image:
             candidate = item.imageSearchText ?? ""
         case .files:
-            candidate = item.payload.fileURLs.map(\.path).joined(separator: "\n")
+            candidate = item.fileURLs.map(\.path).joined(separator: "\n")
         case .plainText, .link, .pdf, .color, .media:
-            candidate = item.text
+            candidate = payload?.plainText ?? item.text
         }
         let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : candidate

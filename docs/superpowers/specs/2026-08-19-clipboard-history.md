@@ -62,7 +62,7 @@ Sources:
 | Keyboard navigation | Yes | Essential for a clipboard tool invoked while typing. |
 | Copy selected item back to the pasteboard | Yes | Meets the issue without Accessibility permission or synthesized input. |
 | Pin/unpin | Yes | Covers the durable-snippet use case with a small privacy surface. |
-| Optional count and age limits plus byte-size bounds | Yes | Users can choose no item-count limit and no expiration while the aggregate encrypted-store budget keeps storage and latency predictable. |
+| Optional count, age, and storage limits plus per-item byte bounds | Yes | Users can retain up to 10,000 items, disable age expiration, and choose a 64 MB, 256 MB, 1 GB, or 5 GB encrypted-storage budget. |
 | Pause with a visible state | Yes | Common privacy control and an explicit acceptance criterion. |
 | Application exclusions | Yes | Common competitor safeguard; described as best-effort frontmost-app attribution. |
 | Ignore transient/concealed producer markers | Yes | A low-cost, privacy-preserving safeguard demonstrated by Paste and Maccy. It is not secret detection. |
@@ -84,10 +84,10 @@ Sources:
 
 ## Defaults
 
-- Maximum stored items: 500 total, including pins; users may choose 100, 250, 500, 1,000, or no item-count limit.
+- Maximum stored items: 500 total by default; users may choose 100, 250, 500, 1,000, 2,500, 5,000, or 10,000.
 - Expiration: 30 days for unpinned history; users may choose 1, 7, 30, or 90 days, or no expiration.
 - Maximum embedded payload: 5 MiB per item by default; users may choose 1, 5, 20, or 50 MiB. Oversized items are skipped and reported through the HUD.
-- Maximum retained payload data: 64 MiB across all items, including pins, even when count and expiration are unlimited.
+- Maximum retained payload data: 64 MiB by default; users may choose 64 MiB, 256 MiB, 1 GiB, or 5 GiB, subject to available disk space.
 - File clipboard items store encrypted URL/path references and metadata, not copies of the referenced files.
 - Pinned items do not expire by age, but still count toward configured count and aggregate byte limits.
 - Collection starts enabled after the plugin is installed.
@@ -113,7 +113,7 @@ Snapshots `NSWorkspace.shared.frontmostApplication` at capture time. The UI desc
 
 ### `EncryptedClipboardHistoryStore`
 
-Encodes the bounded representation-based item array as a versioned JSON envelope, seals it with AES-GCM, and atomically writes one plugin-private file. A random 256-bit key is stored as a device-only Keychain generic password. Pending snapshot saves coalesce to the newest revision and flush when the plugin stops. An existing encrypted file with a missing key or failed authentication produces a blocking error; there is no plaintext fallback. The initial rich-content schema intentionally does not migrate unreleased development-only text stores.
+Stores each item's searchable metadata and pasteboard payload in separate AES-GCM-encrypted SQLite blobs. Metadata loads at startup, while payloads decrypt lazily for preview, OCR, copy, or paste; ordinary captures, pin changes, and deletions update only affected rows rather than rewriting the complete history. A random 256-bit key is stored as a device-only Keychain generic password. Pending snapshots still coalesce to the newest revision and flush when the plugin stops. The first launch migrates the previous encrypted `history.mth` envelope into the incremental database and removes the legacy file only after the transaction succeeds. Missing keys, failed authentication, or corrupt rows stop collection with no plaintext fallback.
 
 ### `ClipboardHistoryController`
 
@@ -131,7 +131,7 @@ Owns a click-through, non-activating panel on the pointer's active display. Igno
 
 ### `ClipboardHistoryPlugin`
 
-Publishes the primary panel, form-based settings page, and the six canonical actions from issue #306. The settings page starts with a persistent, dismissible setup checklist that confirms encrypted storage is ready, points users to the Open Clipboard History action shortcut, and explains the optional sensitive-copy workflows. Shortcut settings use three groups: Open Clipboard History and the plugin-private Paste Current Clipboard as Plain Text command together as the primary group, the two sensitive-copy workflows, and optional advanced controls that combine collection state with confirmed clearing operations. Collection status states explicitly that history lives in an encrypted local file and only the encryption key lives in Keychain; blocking storage errors expose a confirmed reset path instead of leaving an unexplained disabled switch.
+Publishes the primary panel, form-based settings page, and the six canonical actions from issue #306. The settings page starts with a persistent, dismissible setup checklist that confirms encrypted storage is ready, points users to the Open Clipboard History action shortcut, and explains the optional sensitive-copy workflows. Shortcut settings use three groups: Open Clipboard History and the plugin-private Paste Current Clipboard as Plain Text command together as the primary group, the two sensitive-copy workflows, and optional advanced controls that combine collection state with confirmed clearing operations. Collection status states explicitly that history lives in an encrypted local database and only the encryption key lives in Keychain; storage settings expose item and byte usage plus presets through 5 GB, while blocking storage errors expose a confirmed reset path instead of leaving an unexplained disabled switch.
 
 The host-owned action shortcuts remain visible alongside a privacy-shortcut group whose controls are individually labeled Private Copy Now and Ignore Next Copy. The former sends Command-C immediately, while the latter arms a 15-second window for a later context-menu or keyboard copy. The Open Clipboard History global shortcut is source-aware: it dismisses a visible key history panel, brings an inactive visible panel forward, and otherwise opens it. A separate optional Paste Current Clipboard as Plain Text shortcut rewrites the clipboard from its existing plain-text representation or completed recognition from the image captured at the same still-current pasteboard change, then sends Command-V without opening history. Pending recognition and completed recognition without text produce distinct HUD feedback; a later clipboard change invalidates the image association so stale recognized text cannot be pasted. Native plain-text conversion remains available while collection is paused. These focus-dependent shortcuts remain plugin-specific, keeping input synthesis out of Unified Search, Automation, Action Grid, Run Links, and unattended invocation. The plugin never creates actions or Unified Search entries for clipboard payloads.
 

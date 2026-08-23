@@ -212,7 +212,7 @@ final class EncryptedClipboardHistoryStoreTests: XCTestCase {
     }
 }
 
-private final class InMemoryClipboardHistoryKeyStore: ClipboardHistoryKeyStoring, @unchecked Sendable {
+final class InMemoryClipboardHistoryKeyStore: ClipboardHistoryKeyStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var key: Data?
     private(set) var didDelete = false

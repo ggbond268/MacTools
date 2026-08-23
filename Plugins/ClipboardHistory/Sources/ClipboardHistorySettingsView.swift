@@ -193,7 +193,7 @@ struct ClipboardHistorySettingsView: View {
         }
         return localization.string(
             "settings.collection.activeDescription",
-            defaultValue: "收集已开启。历史保存在本机加密文件中，钥匙串只保存加密密钥。"
+            defaultValue: "收集已开启。历史保存在本机加密数据库中，钥匙串只保存加密密钥。"
         )
     }
 
@@ -275,15 +275,18 @@ struct ClipboardHistorySettingsView: View {
             VStack(spacing: 0) {
                 settingPickerRow(
                     title: localization.string("settings.retention.maximum.title", defaultValue: "最多保留"),
-                    description: localization.string("settings.retention.maximum.description", defaultValue: "固定片段也计入总数。"),
+                    description: localization.string(
+                        "settings.retention.maximum.description",
+                        defaultValue: "达到条数上限时，会自动移除最早的未固定项目；固定项目不会自动删除。"
+                    ),
                     selection: $settings.maximumItemCount
                 ) {
                     ForEach(ClipboardHistorySettingsStore.allowedItemCounts, id: \.self) { count in
                         Text(
-                            count == ClipboardHistorySettings.noItemCountLimit
+                            count == ClipboardHistorySettings.maximumSupportedItemCount
                                 ? localization.string(
                                     "settings.retention.itemCount.noLimit",
-                                    defaultValue: "不限制条数"
+                                    defaultValue: "10,000 条"
                                 )
                                 : localization.format(
                                     "settings.retention.itemCount",
@@ -296,8 +299,27 @@ struct ClipboardHistorySettingsView: View {
                 }
                 PluginSettingsListDivider()
                 settingPickerRow(
+                    title: localization.string(
+                        "settings.retention.storageLimit.title",
+                        defaultValue: "历史容量"
+                    ),
+                    description: localization.string(
+                        "settings.retention.storageLimit.description",
+                        defaultValue: "达到容量上限时移除最早的未固定项目。实际保存仍受可用磁盘空间限制。"
+                    ),
+                    selection: $settings.maximumTotalPayloadByteCount
+                ) {
+                    ForEach(ClipboardHistorySettingsStore.allowedTotalPayloadByteCounts, id: \.self) { count in
+                        Text(byteCountTitle(count)).tag(count)
+                    }
+                }
+                PluginSettingsListDivider()
+                settingPickerRow(
                     title: localization.string("settings.retention.expiration.title", defaultValue: "自动过期"),
-                    description: localization.string("settings.retention.expiration.description", defaultValue: "固定片段不会按时间过期。"),
+                    description: localization.string(
+                        "settings.retention.expiration.description",
+                        defaultValue: "“永不”仅关闭按时间过期；容量规则仍会移除最早的未固定项目。"
+                    ),
                     selection: $settings.expiration
                 ) {
                     ForEach(ClipboardHistoryExpiration.allCases) { expiration in
@@ -390,21 +412,25 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var dataSection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+        let historyUsage = controller.usage
+        return VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
             sectionHeader(localization.string("settings.data.section", defaultValue: "本机数据"), systemImage: "externaldrive")
             VStack(spacing: 0) {
                 HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                     VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
                         Text(localization.format(
                             "settings.data.savedCount",
-                            defaultValue: "已保存 %d 条",
-                            controller.items.count
+                            defaultValue: "%d / %d 条 · %@ / %@",
+                            historyUsage.itemCount,
+                            settings.maximumItemCount,
+                            byteCountTitle(historyUsage.payloadByteCount),
+                            byteCountTitle(settings.maximumTotalPayloadByteCount)
                         ))
                             .font(PluginSettingsTheme.Typography.rowTitle)
                         Text(localization.format(
                             "settings.data.pinnedCount",
-                            defaultValue: "其中 %d 条已固定。过期内容会从加密存储中删除。",
-                            controller.pinnedItems.count
+                            defaultValue: "其中 %d 条已固定；固定项目不会自动删除。",
+                            historyUsage.pinnedItemCount
                         ))
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.secondary)
@@ -433,6 +459,21 @@ struct ClipboardHistorySettingsView: View {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(PluginSettingsTheme.Typography.rowDescription)
                         .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .pluginSettingsListRowPadding()
+                }
+
+                if controller.isCaptureBlockedByPinnedItems {
+                    PluginSettingsListDivider()
+                    Label(
+                        localization.string(
+                            "settings.data.pinnedCapacityWarning",
+                            defaultValue: "固定项目已占满历史容量。请取消固定或删除项目后再保存新的历史记录。"
+                        ),
+                        systemImage: "pin.slash"
+                    )
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.orange)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .pluginSettingsListRowPadding()
                 }
@@ -530,7 +571,14 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private func byteCountTitle(_ byteCount: Int) -> String {
-        byteCount >= 1_024 * 1_024
+        if byteCount >= 1_024 * 1_024 * 1_024 {
+            return localization.format(
+                "settings.retention.byteCount.gigabytes",
+                defaultValue: "%d GB",
+                byteCount / (1_024 * 1_024 * 1_024)
+            )
+        }
+        return byteCount >= 1_024 * 1_024
             ? localization.format(
                 "settings.retention.byteCount.megabytes",
                 defaultValue: "%d MB",

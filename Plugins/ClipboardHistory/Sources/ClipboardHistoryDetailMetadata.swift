@@ -24,43 +24,41 @@ enum ClipboardHistoryDetailMetadataLoader {
     static func load(for item: ClipboardHistoryItem) async -> ClipboardHistoryDetailMetadata {
         switch item.kind {
         case .plainText, .richText:
-            return await textMetadata(item.text)
+            return textMetadata(item)
         case .image:
-            return await embeddedImageMetadata(item.payload)
+            return await loadPayload(item).map(embeddedImageMetadata) ?? .init(values: [])
         case .pdf:
-            return await embeddedPDFMetadata(item.payload)
+            return await loadPayload(item).map(embeddedPDFMetadata) ?? .init(values: [])
         case .files:
-            return await fileMetadata(item.payload.fileURLs)
+            return await fileMetadata(item.fileURLs)
         case .link:
             return linkMetadata(item)
         case .media:
-            return embeddedMediaMetadata(item.payload)
+            return await loadPayload(item).map(embeddedMediaMetadata) ?? .init(values: [])
         case .color:
             return ClipboardHistoryDetailMetadata(values: [])
         }
     }
 
-    private static func textMetadata(_ text: String) async -> ClipboardHistoryDetailMetadata {
+    private static func loadPayload(_ item: ClipboardHistoryItem) async -> ClipboardHistoryPayload? {
         await Task.detached(priority: .utility) {
-            var values: [ClipboardHistoryDetailMetadataValue] = [
-                .characterCount(text.count),
-            ]
-            let lineCount = text.isEmpty ? 0 : text.reduce(into: 1) { count, character in
-                if character == "\n" {
-                    count += 1
-                }
-            }
-            if lineCount > 1 {
-                values.append(.lineCount(lineCount))
-            }
-            return ClipboardHistoryDetailMetadata(values: values)
+            try? item.loadPayload()
         }.value
+    }
+
+    private static func textMetadata(_ item: ClipboardHistoryItem) -> ClipboardHistoryDetailMetadata {
+        var values: [ClipboardHistoryDetailMetadataValue] = [
+            .characterCount(item.textCharacterCount),
+        ]
+        if item.textLineCount > 1 {
+            values.append(.lineCount(item.textLineCount))
+        }
+        return ClipboardHistoryDetailMetadata(values: values)
     }
 
     private static func embeddedImageMetadata(
         _ payload: ClipboardHistoryPayload
-    ) async -> ClipboardHistoryDetailMetadata {
-        await Task.detached(priority: .utility) {
+    ) -> ClipboardHistoryDetailMetadata {
             guard let representation = payload.representations.first(where: {
                 ClipboardRepresentationType.isImage($0.typeIdentifier)
             }) else {
@@ -75,13 +73,11 @@ enum ClipboardHistoryDetailMetadataLoader {
             }
             values.append(.byteCount(Int64(payload.byteCount)))
             return ClipboardHistoryDetailMetadata(values: values)
-        }.value
     }
 
     private static func embeddedPDFMetadata(
         _ payload: ClipboardHistoryPayload
-    ) async -> ClipboardHistoryDetailMetadata {
-        await Task.detached(priority: .utility) {
+    ) -> ClipboardHistoryDetailMetadata {
             var values: [ClipboardHistoryDetailMetadataValue] = []
             if let representation = payload.representations.first(where: {
                 $0.typeIdentifier == ClipboardRepresentationType.pdf
@@ -92,7 +88,6 @@ enum ClipboardHistoryDetailMetadataLoader {
             }
             values.append(.byteCount(Int64(payload.byteCount)))
             return ClipboardHistoryDetailMetadata(values: values)
-        }.value
     }
 
     private static func fileMetadata(_ urls: [URL]) async -> ClipboardHistoryDetailMetadata {
@@ -173,10 +168,11 @@ enum ClipboardHistoryDetailMetadataLoader {
     }
 
     private static func linkMetadata(_ item: ClipboardHistoryItem) -> ClipboardHistoryDetailMetadata {
-        let candidates = item.payload.representations.compactMap { representation -> String? in
+        let payloadCandidates = item.payload?.representations.compactMap { representation -> String? in
             guard representation.typeIdentifier == ClipboardRepresentationType.url else { return nil }
             return String(data: representation.data, encoding: .utf8)
-        } + [item.text]
+        } ?? []
+        let candidates = payloadCandidates + [item.text]
         let host = candidates.lazy.compactMap { URL(string: $0)?.host() }.first
         return ClipboardHistoryDetailMetadata(values: host.map { [.host($0)] } ?? [])
     }

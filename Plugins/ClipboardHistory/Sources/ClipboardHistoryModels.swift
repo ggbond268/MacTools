@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import UniformTypeIdentifiers
 
@@ -268,16 +269,97 @@ struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
     }
 }
 
+struct ClipboardHistorySearchIndex: Equatable, Sendable {
+    let normalizedText: String
+    let tokens: [String]
+}
+
+enum ClipboardHistoryPayloadAccessError: Error, Sendable {
+    case unavailable
+}
+
+private final class ClipboardHistoryPayloadReference: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cachedPayload: ClipboardHistoryPayload?
+    private var loader: (@Sendable () throws -> ClipboardHistoryPayload)?
+
+    init(payload: ClipboardHistoryPayload) {
+        cachedPayload = payload
+        loader = nil
+    }
+
+    init(loader: @escaping @Sendable () throws -> ClipboardHistoryPayload) {
+        cachedPayload = nil
+        self.loader = loader
+    }
+
+    var cached: ClipboardHistoryPayload? {
+        lock.withLock { cachedPayload }
+    }
+
+    func load() throws -> ClipboardHistoryPayload {
+        let resolvedLoader: @Sendable () throws -> ClipboardHistoryPayload = try lock.withLock {
+            if let cachedPayload {
+                return { cachedPayload }
+            }
+            guard let loader else {
+                throw ClipboardHistoryPayloadAccessError.unavailable
+            }
+            return loader
+        }
+        let loadedPayload = try resolvedLoader()
+        return lock.withLock {
+            if let cachedPayload {
+                return cachedPayload
+            }
+            cachedPayload = loadedPayload
+            return loadedPayload
+        }
+    }
+
+    func configureLoader(
+        _ loader: @escaping @Sendable () throws -> ClipboardHistoryPayload,
+        discardCachedPayload: Bool
+    ) {
+        lock.withLock {
+            self.loader = loader
+            if discardCachedPayload {
+                cachedPayload = nil
+            }
+        }
+    }
+
+    func discardCachedPayloadIfReloadable() {
+        lock.withLock {
+            guard loader != nil else { return }
+            cachedPayload = nil
+        }
+    }
+}
+
 struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
+    static let maximumSearchableCharacterCount = 16_000
+
     let id: UUID
-    let payload: ClipboardHistoryPayload
+    private let payloadReference: ClipboardHistoryPayloadReference
     let text: String
     let capturedAt: Date
     let sourceApplication: ClipboardSourceApplication?
+    let kind: ClipboardHistoryContentKind
+    let payloadByteCount: Int
+    let filterContentKinds: Set<ClipboardHistoryContentKind>
+    let fileURLs: [URL]
+    let representationTypeIdentifiers: [String]
+    let payloadDigest: Data
+    let allowsRichTextImport: Bool
+    let textCharacterCount: Int
+    let textLineCount: Int
+    let isSearchTextTruncated: Bool
     var isPinned: Bool
     var lastUsedAt: Date?
-    var imageSearchText: String?
+    private(set) var imageSearchText: String?
     var hasCompletedImageTextIndexing: Bool
+    private(set) var searchIndex: ClipboardHistorySearchIndex
 
     init(
         id: UUID,
@@ -290,14 +372,34 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         hasCompletedImageTextIndexing: Bool = false
     ) {
         self.id = id
-        self.payload = payload
-        text = payload.searchableText
+        payloadReference = ClipboardHistoryPayloadReference(payload: payload)
+        let searchableText = payload.searchableText
+        text = String(searchableText.prefix(Self.maximumSearchableCharacterCount))
         self.capturedAt = capturedAt
         self.sourceApplication = sourceApplication
+        kind = payload.kind
+        payloadByteCount = payload.byteCount
+        filterContentKinds = payload.filterContentKinds
+        fileURLs = payload.fileURLs
+        representationTypeIdentifiers = payload.representations.map(\.typeIdentifier)
+        payloadDigest = Self.digest(payload)
+        allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
+        textCharacterCount = searchableText.count
+        textLineCount = Self.lineCount(searchableText)
+        isSearchTextTruncated = searchableText.count > Self.maximumSearchableCharacterCount
         self.isPinned = isPinned
         self.lastUsedAt = lastUsedAt
-        self.imageSearchText = imageSearchText
+        let boundedImageSearchText = imageSearchText.map {
+            String($0.prefix(Self.maximumSearchableCharacterCount))
+        }
+        self.imageSearchText = boundedImageSearchText
         self.hasCompletedImageTextIndexing = hasCompletedImageTextIndexing
+        searchIndex = ClipboardHistorySearch.makeIndex(
+            text: text,
+            sourceApplication: sourceApplication,
+            fileURLs: payload.fileURLs,
+            imageSearchText: boundedImageSearchText
+        )
     }
 
     init(
@@ -318,8 +420,87 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         )
     }
 
-    var kind: ClipboardHistoryContentKind { payload.kind }
-    var payloadByteCount: Int { payload.byteCount }
+    var payload: ClipboardHistoryPayload? { payloadReference.cached }
+
+    var fileContentKinds: Set<ClipboardFileContentKind> {
+        Set(fileURLs.compactMap(ClipboardFileContentKind.init(url:)))
+    }
+
+    func loadPayload() throws -> ClipboardHistoryPayload {
+        try payloadReference.load()
+    }
+
+    func configurePayloadLoader(
+        _ loader: @escaping @Sendable () throws -> ClipboardHistoryPayload,
+        discardCachedPayload: Bool
+    ) {
+        payloadReference.configureLoader(loader, discardCachedPayload: discardCachedPayload)
+    }
+
+    func discardCachedPayloadIfReloadable() {
+        payloadReference.discardCachedPayloadIfReloadable()
+    }
+
+    init(
+        id: UUID,
+        text: String,
+        capturedAt: Date,
+        sourceApplication: ClipboardSourceApplication?,
+        kind: ClipboardHistoryContentKind,
+        payloadByteCount: Int,
+        filterContentKinds: Set<ClipboardHistoryContentKind>,
+        fileURLs: [URL],
+        representationTypeIdentifiers: [String],
+        payloadDigest: Data,
+        allowsRichTextImport: Bool,
+        textCharacterCount: Int,
+        textLineCount: Int,
+        isSearchTextTruncated: Bool,
+        isPinned: Bool,
+        lastUsedAt: Date?,
+        imageSearchText: String?,
+        hasCompletedImageTextIndexing: Bool,
+        payloadLoader: @escaping @Sendable () throws -> ClipboardHistoryPayload
+    ) {
+        self.id = id
+        payloadReference = ClipboardHistoryPayloadReference(loader: payloadLoader)
+        self.text = text
+        self.capturedAt = capturedAt
+        self.sourceApplication = sourceApplication
+        self.kind = kind
+        self.payloadByteCount = payloadByteCount
+        self.filterContentKinds = filterContentKinds
+        self.fileURLs = fileURLs
+        self.representationTypeIdentifiers = representationTypeIdentifiers
+        self.payloadDigest = payloadDigest
+        self.allowsRichTextImport = allowsRichTextImport
+        self.textCharacterCount = textCharacterCount
+        self.textLineCount = textLineCount
+        self.isSearchTextTruncated = isSearchTextTruncated
+        self.isPinned = isPinned
+        self.lastUsedAt = lastUsedAt
+        self.imageSearchText = imageSearchText
+        self.hasCompletedImageTextIndexing = hasCompletedImageTextIndexing
+        searchIndex = ClipboardHistorySearch.makeIndex(
+            text: text,
+            sourceApplication: sourceApplication,
+            fileURLs: fileURLs,
+            imageSearchText: imageSearchText
+        )
+    }
+
+    mutating func setImageSearchText(_ recognizedText: String?) {
+        let boundedText = recognizedText.map {
+            String($0.prefix(Self.maximumSearchableCharacterCount))
+        }
+        imageSearchText = boundedText
+        searchIndex = ClipboardHistorySearch.makeIndex(
+            text: text,
+            sourceApplication: sourceApplication,
+            fileURLs: fileURLs,
+            imageSearchText: boundedText
+        )
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -335,26 +516,46 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
-        payload = try container.decode(ClipboardHistoryPayload.self, forKey: .payload)
-        text = payload.searchableText
+        let payload = try container.decode(ClipboardHistoryPayload.self, forKey: .payload)
+        payloadReference = ClipboardHistoryPayloadReference(payload: payload)
+        let searchableText = payload.searchableText
+        text = String(searchableText.prefix(Self.maximumSearchableCharacterCount))
         capturedAt = try container.decode(Date.self, forKey: .capturedAt)
         sourceApplication = try container.decodeIfPresent(
             ClipboardSourceApplication.self,
             forKey: .sourceApplication
         )
         isPinned = try container.decode(Bool.self, forKey: .isPinned)
+        kind = payload.kind
+        payloadByteCount = payload.byteCount
+        filterContentKinds = payload.filterContentKinds
+        fileURLs = payload.fileURLs
+        representationTypeIdentifiers = payload.representations.map(\.typeIdentifier)
+        payloadDigest = Self.digest(payload)
+        allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
+        textCharacterCount = searchableText.count
+        textLineCount = Self.lineCount(searchableText)
+        isSearchTextTruncated = searchableText.count > Self.maximumSearchableCharacterCount
         lastUsedAt = try container.decodeIfPresent(Date.self, forKey: .lastUsedAt)
-        imageSearchText = try container.decodeIfPresent(String.self, forKey: .imageSearchText)
+        imageSearchText = try container.decodeIfPresent(String.self, forKey: .imageSearchText).map {
+            String($0.prefix(Self.maximumSearchableCharacterCount))
+        }
         hasCompletedImageTextIndexing = try container.decodeIfPresent(
             Bool.self,
             forKey: .hasCompletedImageTextIndexing
         ) ?? false
+        searchIndex = ClipboardHistorySearch.makeIndex(
+            text: text,
+            sourceApplication: sourceApplication,
+            fileURLs: payload.fileURLs,
+            imageSearchText: imageSearchText
+        )
     }
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
-        try container.encode(payload, forKey: .payload)
+        try container.encode(loadPayload(), forKey: .payload)
         try container.encode(capturedAt, forKey: .capturedAt)
         try container.encodeIfPresent(sourceApplication, forKey: .sourceApplication)
         try container.encode(isPinned, forKey: .isPinned)
@@ -362,6 +563,43 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         try container.encodeIfPresent(imageSearchText, forKey: .imageSearchText)
         if hasCompletedImageTextIndexing {
             try container.encode(true, forKey: .hasCompletedImageTextIndexing)
+        }
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id
+            && lhs.text == rhs.text
+            && lhs.capturedAt == rhs.capturedAt
+            && lhs.sourceApplication == rhs.sourceApplication
+            && lhs.kind == rhs.kind
+            && lhs.payloadByteCount == rhs.payloadByteCount
+            && lhs.filterContentKinds == rhs.filterContentKinds
+            && lhs.fileURLs == rhs.fileURLs
+            && lhs.representationTypeIdentifiers == rhs.representationTypeIdentifiers
+            && lhs.payloadDigest == rhs.payloadDigest
+            && lhs.allowsRichTextImport == rhs.allowsRichTextImport
+            && lhs.textCharacterCount == rhs.textCharacterCount
+            && lhs.textLineCount == rhs.textLineCount
+            && lhs.isSearchTextTruncated == rhs.isSearchTextTruncated
+            && lhs.isPinned == rhs.isPinned
+            && lhs.lastUsedAt == rhs.lastUsedAt
+            && lhs.imageSearchText == rhs.imageSearchText
+            && lhs.hasCompletedImageTextIndexing == rhs.hasCompletedImageTextIndexing
+    }
+
+    fileprivate static func digest(_ payload: ClipboardHistoryPayload) -> Data {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        let encoded = (try? encoder.encode(payload)) ?? Data()
+        return Data(SHA256.hash(data: encoded))
+    }
+
+    private static func lineCount(_ text: String) -> Int {
+        guard !text.isEmpty else { return 0 }
+        return text.reduce(into: 1) { count, character in
+            if character == "\n" {
+                count += 1
+            }
         }
     }
 }
@@ -382,14 +620,19 @@ enum ClipboardHistoryExpiration: Int, CaseIterable, Identifiable, Sendable {
 }
 
 struct ClipboardHistorySettings: Equatable, Sendable {
+    static let maximumSupportedItemCount = 10_000
+    // Kept only to migrate the previously exposed unlimited setting.
     static let noItemCountLimit = -1
     static let defaultMaximumItemCount = 500
     static let defaultMaximumItemByteCount = 5 * 1_024 * 1_024
+    static let defaultMaximumTotalPayloadByteCount = 64 * 1_024 * 1_024
+    static let maximumSupportedTotalPayloadByteCount = 5 * 1_024 * 1_024 * 1_024
 
     var isPaused: Bool
     var maximumItemCount: Int
     var expiration: ClipboardHistoryExpiration
     var maximumItemByteCount: Int
+    var maximumTotalPayloadByteCount: Int = defaultMaximumTotalPayloadByteCount
     var excludedApplications: [ClipboardExcludedApplication]
 
     static let defaults = ClipboardHistorySettings(
@@ -397,6 +640,7 @@ struct ClipboardHistorySettings: Equatable, Sendable {
         maximumItemCount: defaultMaximumItemCount,
         expiration: .thirtyDays,
         maximumItemByteCount: defaultMaximumItemByteCount,
+        maximumTotalPayloadByteCount: defaultMaximumTotalPayloadByteCount,
         excludedApplications: [
             ClipboardExcludedApplication(
                 bundleIdentifier: "com.apple.Passwords",
@@ -425,6 +669,7 @@ enum ClipboardCaptureIgnoreReason: Equatable, Sendable {
     case excludedApplication
     case empty
     case oversized
+    case pinnedItemsFillCapacity
     case duplicateNewestItem
 }
 
@@ -488,7 +733,7 @@ enum ClipboardCapturePolicy {
                 return .ignore(.empty)
             }
         }
-        if let newestItem, payloadsAreDuplicates(payload, newestItem.payload) {
+        if let newestItem, payloadsAreDuplicates(payload, newestItem) {
             return .ignore(.duplicateNewestItem)
         }
         return .capture(ClipboardHistoryItem(
@@ -530,19 +775,38 @@ enum ClipboardCapturePolicy {
 
     private static func payloadsAreDuplicates(
         _ lhs: ClipboardHistoryPayload,
-        _ rhs: ClipboardHistoryPayload
+        _ rhs: ClipboardHistoryItem
     ) -> Bool {
         if lhs.kind == .plainText,
            rhs.kind == .plainText,
            !lhs.plainTexts.isEmpty,
-           !rhs.plainTexts.isEmpty {
-            return normalizedText(lhs.searchableText) == normalizedText(rhs.searchableText)
+           !rhs.text.isEmpty {
+            return normalizedText(lhs.searchableText) == normalizedText(rhs.text)
         }
-        return lhs == rhs
+        return ClipboardHistoryItem.digest(lhs) == rhs.payloadDigest
     }
 }
 
+struct ClipboardHistoryUsage: Equatable, Sendable {
+    let itemCount: Int
+    let pinnedItemCount: Int
+    let payloadByteCount: Int
+
+    init(items: [ClipboardHistoryItem]) {
+        itemCount = items.count
+        pinnedItemCount = items.lazy.filter(\.isPinned).count
+        payloadByteCount = items.reduce(0) { $0 + $1.payloadByteCount }
+    }
+}
+
+struct ClipboardRetentionResult: Equatable, Sendable {
+    let items: [ClipboardHistoryItem]
+    let evictedUnpinnedItemCount: Int
+    let isCaptureBlockedByPinnedItems: Bool
+}
+
 enum ClipboardRetentionPolicy {
+    // Kept as the default and legacy single-file migration ceiling.
     static let maximumTotalPayloadByteCount = 64 * 1_024 * 1_024
 
     static func prune(
@@ -550,34 +814,60 @@ enum ClipboardRetentionPolicy {
         settings: ClipboardHistorySettings,
         now: Date = Date()
     ) -> [ClipboardHistoryItem] {
+        evaluate(items, settings: settings, now: now).items
+    }
+
+    static func evaluate(
+        _ items: [ClipboardHistoryItem],
+        settings: ClipboardHistorySettings,
+        now: Date = Date()
+    ) -> ClipboardRetentionResult {
+        let newestFirstItems: [ClipboardHistoryItem]
+        if zip(items, items.dropFirst()).allSatisfy({ pair in
+            pair.0.capturedAt >= pair.1.capturedAt
+        }) {
+            newestFirstItems = items
+        } else {
+            newestFirstItems = items.sorted(by: newestFirst)
+        }
         let unexpired: [ClipboardHistoryItem]
         if let interval = settings.expiration.interval {
             let cutoff = now.addingTimeInterval(-interval)
-            unexpired = items.filter { $0.isPinned || $0.capturedAt >= cutoff }
+            unexpired = newestFirstItems.filter { $0.isPinned || $0.capturedAt >= cutoff }
         } else {
-            unexpired = items
+            unexpired = newestFirstItems
         }
-        let pinned = unexpired.filter(\.isPinned).sorted(by: newestFirst)
-        let recent = unexpired.filter { !$0.isPinned }.sorted(by: newestFirst)
+        let pinned = unexpired.filter(\.isPinned)
+        let recent = unexpired.filter { !$0.isPinned }
+        let maximumItemCount = settings.maximumItemCount == ClipboardHistorySettings.noItemCountLimit
+            ? ClipboardHistorySettings.maximumSupportedItemCount
+            : min(settings.maximumItemCount, ClipboardHistorySettings.maximumSupportedItemCount)
 
-        let countBounded: [ClipboardHistoryItem]
-        if settings.maximumItemCount == ClipboardHistorySettings.noItemCountLimit {
-            countBounded = pinned + recent
-        } else {
-            let retainedPins = Array(pinned.prefix(settings.maximumItemCount))
-            let availableRecentCount = max(0, settings.maximumItemCount - retainedPins.count)
-            countBounded = retainedPins + recent.prefix(availableRecentCount)
-        }
-
-        var retained: [ClipboardHistoryItem] = []
-        var retainedPayloadBytes = 0
-        for item in countBounded {
+        // Pins are user-owned snippets and are never removed automatically. The count and
+        // payload budgets therefore apply only to the remaining unpinned capacity.
+        var retained = pinned
+        let pinnedPayloadBytes = pinned.reduce(0) { $0 + $1.payloadByteCount }
+        var retainedPayloadBytes = pinnedPayloadBytes
+        let availableRecentCount = max(0, maximumItemCount - pinned.count)
+        for item in recent.prefix(availableRecentCount) {
             let byteCount = item.payloadByteCount
-            guard retainedPayloadBytes + byteCount <= maximumTotalPayloadByteCount else { continue }
+            guard retainedPayloadBytes + byteCount <= settings.maximumTotalPayloadByteCount else {
+                break
+            }
             retained.append(item)
             retainedPayloadBytes += byteCount
         }
-        return retained.sorted(by: newestFirst)
+        let retainedIDs = Set(retained.map(\.id))
+        let evictedUnpinnedItemCount = items.lazy.filter {
+            !$0.isPinned && !retainedIDs.contains($0.id)
+        }.count
+        return ClipboardRetentionResult(
+            items: unexpired.filter { retainedIDs.contains($0.id) },
+            evictedUnpinnedItemCount: evictedUnpinnedItemCount,
+            isCaptureBlockedByPinnedItems:
+                pinned.count >= maximumItemCount
+                || pinnedPayloadBytes >= settings.maximumTotalPayloadByteCount
+        )
     }
 
     private static func newestFirst(_ lhs: ClipboardHistoryItem, _ rhs: ClipboardHistoryItem) -> Bool {
@@ -586,6 +876,11 @@ enum ClipboardRetentionPolicy {
 }
 
 enum ClipboardHistorySearch {
+    struct Result: Equatable, Sendable {
+        let items: [ClipboardHistoryItem]
+        let hasMore: Bool
+    }
+
     private struct WordFragmentSearchState: Hashable {
         let queryOffset: Int
         let wordIndex: Int
@@ -594,40 +889,71 @@ enum ClipboardHistorySearch {
     }
 
     static func filter(_ items: [ClipboardHistoryItem], query: String) -> [ClipboardHistoryItem] {
+        result(items, query: query, limit: nil).items
+    }
+
+    static func result(
+        _ items: [ClipboardHistoryItem],
+        query: String,
+        limit: Int?
+    ) -> Result {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else { return items }
+        guard !trimmedQuery.isEmpty else {
+            guard let limit, items.count > limit else {
+                return Result(items: items, hasMore: false)
+            }
+            return Result(items: Array(items.prefix(limit)), hasMore: true)
+        }
         let normalizedQuery = normalized(trimmedQuery)
         let queryTokens = tokens(in: normalizedQuery)
         let compactQuery = compactTokens(queryTokens)
-        return items.filter { item in
-            let searchableText = [
-                item.text,
-                item.sourceApplication?.name,
-                item.sourceApplication?.bundleIdentifier,
-                item.payload.fileURLs.map(\.path).joined(separator: " "),
-                item.imageSearchText,
-            ]
-                .compactMap { $0 }
-                .joined(separator: " ")
-            let normalizedText = normalized(searchableText)
+        var matches: [ClipboardHistoryItem] = []
+        for item in items {
+            guard !Task.isCancelled else { return Result(items: [], hasMore: false) }
+            let normalizedText = item.searchIndex.normalizedText
+            let searchableTokens = item.searchIndex.tokens
             if allowsExactSubstringMatch(
                 normalizedQuery,
                 compactQuery: compactQuery
             ) && normalizedText.contains(normalizedQuery) {
-                return true
-            }
-            guard !queryTokens.isEmpty else { return false }
-            let searchableTokens = tokens(in: normalizedText)
-            if queryTokens.allSatisfy({ queryToken in
+                matches.append(item)
+            } else if !queryTokens.isEmpty, queryTokens.allSatisfy({ queryToken in
                 searchableTokens.contains { $0.hasPrefix(queryToken) }
             }) {
-                return true
-            }
-            return compactQueryMatchesWordFragments(
+                matches.append(item)
+            } else if compactQueryMatchesWordFragments(
                 compactQuery,
                 words: searchableTokens
-            )
+            ) {
+                matches.append(item)
+            }
+            if let limit, matches.count > limit {
+                return Result(items: Array(matches.prefix(limit)), hasMore: true)
+            }
         }
+        return Result(items: matches, hasMore: false)
+    }
+
+    static func makeIndex(
+        text: String,
+        sourceApplication: ClipboardSourceApplication?,
+        fileURLs: [URL],
+        imageSearchText: String?
+    ) -> ClipboardHistorySearchIndex {
+        let searchableText = [
+            text,
+            sourceApplication?.name,
+            sourceApplication?.bundleIdentifier,
+            fileURLs.map(\.path).joined(separator: " "),
+            imageSearchText,
+        ]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        let normalizedText = normalized(searchableText)
+        return ClipboardHistorySearchIndex(
+            normalizedText: normalizedText,
+            tokens: tokens(in: normalizedText)
+        )
     }
 
     private static func compactTokens(_ tokens: [String]) -> String {

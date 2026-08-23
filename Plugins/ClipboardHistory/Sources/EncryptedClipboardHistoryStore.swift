@@ -23,6 +23,7 @@ enum ClipboardHistoryStoreError: Error, Equatable, Sendable {
     case invalidEnvelope
     case authenticationFailed
     case historyTooLarge
+    case insufficientDiskSpace
     case unavailableStorage
     case keychain(OSStatus)
 }
@@ -40,6 +41,8 @@ extension ClipboardHistoryStoreError: LocalizedError {
             "无法验证剪贴板历史。原始加密数据已保留。"
         case .historyTooLarge:
             "剪贴板历史超过安全存储上限。请清除现有历史记录。"
+        case .insufficientDiskSpace:
+            "可用磁盘空间不足，无法保存新的剪贴板历史。"
         case .unavailableStorage:
             "无法使用剪贴板历史的专用存储空间。"
         case .keychain:

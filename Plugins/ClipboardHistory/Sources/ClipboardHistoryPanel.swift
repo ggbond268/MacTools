@@ -4,7 +4,7 @@ import MacToolsPluginKit
 import QuickLookThumbnailing
 import SwiftUI
 
-enum ClipboardHistoryContentFilter: String, CaseIterable, Identifiable {
+enum ClipboardHistoryContentFilter: String, CaseIterable, Identifiable, Sendable {
     case all
     case text
     case image
@@ -20,8 +20,18 @@ enum ClipboardHistoryContentFilter: String, CaseIterable, Identifiable {
         Self.allCases.firstIndex(of: self).map { $0 + 1 } ?? 1
     }
 
+    func matches(_ item: ClipboardHistoryItem) -> Bool {
+        if self == .all {
+            return true
+        }
+        return matches(kinds: item.filterContentKinds)
+    }
+
     func matches(_ payload: ClipboardHistoryPayload) -> Bool {
-        let kinds = payload.filterContentKinds
+        matches(kinds: payload.filterContentKinds)
+    }
+
+    private func matches(kinds: Set<ClipboardHistoryContentKind>) -> Bool {
         return switch self {
         case .all:
             true
@@ -124,17 +134,33 @@ struct ClipboardHistoryPreviousApplicationState<Application> {
 
 @MainActor
 final class ClipboardHistoryPanelModel: ObservableObject {
+    nonisolated static let resultPageSize = 100
+    nonisolated static let searchDebounceNanoseconds: UInt64 = 120_000_000
+
     @Published var query = "" {
-        didSet { rebuildVisibleItems() }
+        didSet {
+            guard query != oldValue else { return }
+            visibleResultLimit = Self.resultPageSize
+            scheduleSearch(debounced: true)
+        }
     }
     @Published var contentFilter: ClipboardHistoryContentFilter = .all {
-        didSet { rebuildVisibleItems() }
+        didSet {
+            guard contentFilter != oldValue else { return }
+            visibleResultLimit = Self.resultPageSize
+            scheduleSearch(debounced: false)
+        }
     }
     @Published var selectedItemID: UUID?
     @Published private(set) var visibleItems: [ClipboardHistoryItem] = []
+    @Published private(set) var hasMoreResults = false
+    @Published private(set) var isSearching = false
     @Published private(set) var focusRequestID: UInt = 0
 
     private var allItems: [ClipboardHistoryItem] = []
+    private var visibleResultLimit = ClipboardHistoryPanelModel.resultPageSize
+    private var searchGeneration: UInt64 = 0
+    private var searchTask: Task<Void, Never>?
 
     func updateItems(_ items: [ClipboardHistoryItem]) {
         guard items != allItems else { return }
@@ -142,16 +168,30 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let existingIDs = Set(allItems.map(\.id))
         let newItems = items.filter { !existingIDs.contains($0.id) }
         allItems = newItems + allItems.compactMap { updatedByID[$0.id] }
-        rebuildVisibleItems()
+        scheduleSearch(debounced: false)
     }
 
     func prepareForPresentation(items: [ClipboardHistoryItem]) {
+        searchTask?.cancel()
         query = ""
         contentFilter = .all
         allItems = items.sorted(by: Self.activityOrder)
-        rebuildVisibleItems()
-        selectedItemID = visibleItems.first?.id
+        visibleResultLimit = Self.resultPageSize
+        visibleItems = []
+        hasMoreResults = false
+        selectedItemID = nil
         focusRequestID &+= 1
+        scheduleSearch(debounced: false)
+    }
+
+    func loadMoreResults() {
+        guard hasMoreResults, !isSearching else { return }
+        visibleResultLimit += Self.resultPageSize
+        scheduleSearch(debounced: false)
+    }
+
+    func waitForSearchForTesting() async {
+        await searchTask?.value
     }
 
     func moveSelection(by offset: Int) {
@@ -179,10 +219,52 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         return selectedItemID
     }
 
-    private func rebuildVisibleItems() {
-        let matches = ClipboardHistorySearch.filter(allItems, query: query)
-            .filter { contentFilter.matches($0.payload) }
-        visibleItems = matches.filter(\.isPinned) + matches.filter { !$0.isPinned }
+    private func scheduleSearch(debounced: Bool) {
+        searchGeneration &+= 1
+        let generation = searchGeneration
+        let items = allItems
+        let query = query
+        let contentFilter = contentFilter
+        let limit = visibleResultLimit
+        searchTask?.cancel()
+        isSearching = true
+
+        searchTask = Task { [weak self] in
+            if debounced {
+                do {
+                    try await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+                } catch {
+                    return
+                }
+            }
+            guard !Task.isCancelled else { return }
+
+            let worker = Task.detached(priority: .userInitiated) {
+                let typeMatches = items.filter { contentFilter.matches($0) }
+                guard !Task.isCancelled else {
+                    return ClipboardHistorySearch.Result(items: [], hasMore: false)
+                }
+                let orderedItems = typeMatches.filter(\.isPinned)
+                    + typeMatches.filter { !$0.isPinned }
+                return ClipboardHistorySearch.result(
+                    orderedItems,
+                    query: query,
+                    limit: limit
+                )
+            }
+            let result = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: {
+                worker.cancel()
+            }
+            guard !Task.isCancelled, let self, generation == self.searchGeneration else { return }
+            visibleItems = result.items
+            hasMoreResults = result.hasMore
+            isSearching = false
+            if selectedItemID == nil || !visibleItems.contains(where: { $0.id == selectedItemID }) {
+                selectedItemID = visibleItems.first?.id
+            }
+        }
     }
 
     private static func activityOrder(_ lhs: ClipboardHistoryItem, _ rhs: ClipboardHistoryItem) -> Bool {
@@ -271,6 +353,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
 
     func close(restorePreviousApplication: Bool = true) {
         let previousApplication = previousApplicationState.consume()
+        historyController.releasePayloadIfReloadable(id: model.selectedItemID)
         panel?.orderOut(nil)
         removeKeyMonitor()
         if restorePreviousApplication {
@@ -279,6 +362,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        historyController.releasePayloadIfReloadable(id: model.selectedItemID)
         removeKeyMonitor()
         previousApplicationState.consume()?.activate(options: [])
     }
@@ -308,8 +392,12 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 model: model,
                 localization: localization,
                 onCopyAndClose: { [weak self] itemID in
-                    guard self?.historyController.copyItem(id: itemID) == true else { return }
-                    self?.close()
+                    Task { @MainActor [weak self] in
+                        guard let self,
+                              await self.historyController.preparePayloadForUse(id: itemID),
+                              self.historyController.copyItem(id: itemID) else { return }
+                        self.close()
+                    }
                 },
                 onPasteAndClose: { [weak self] itemID, asPlainText in
                     self?.pasteItem(id: itemID, asPlainText: asPlainText)
@@ -496,21 +584,25 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     private func pasteItem(id: UUID, asPlainText: Bool) {
-        let copied = asPlainText
-            ? historyController.copyItemAsPlainText(id: id)
-            : historyController.copyItem(id: id)
-        guard copied else {
-            NSSound.beep()
-            return
-        }
-
-        let previousApplication = previousApplicationState.consume()
-        panel?.orderOut(nil)
-        removeKeyMonitor()
-        guard let previousApplication else { return }
-        previousApplication.activate(options: [])
-        let pasteCommandSender = pasteCommandSender
         Task { @MainActor in
+            guard await historyController.preparePayloadForUse(id: id) else {
+                NSSound.beep()
+                return
+            }
+            let copied = asPlainText
+                ? historyController.copyItemAsPlainText(id: id)
+                : historyController.copyItem(id: id)
+            guard copied else {
+                NSSound.beep()
+                return
+            }
+
+            let previousApplication = previousApplicationState.consume()
+            panel?.orderOut(nil)
+            removeKeyMonitor()
+            guard let previousApplication else { return }
+            previousApplication.activate(options: [])
+            let pasteCommandSender = pasteCommandSender
             let activationDeadline = ProcessInfo.processInfo.systemUptime + 0.4
             while !previousApplication.isActive,
                   ProcessInfo.processInfo.systemUptime < activationDeadline {
@@ -638,10 +730,12 @@ private struct ClipboardRichTextPreviewView: View {
         }
         .task(id: item.id) {
             preview = nil
-            let payload = item.payload
             let fallbackText = item.text
             let loadingTask = Task.detached(priority: .userInitiated) {
-                ClipboardRichTextPreviewPolicy.makePreview(
+                guard let payload = try? item.loadPayload() else {
+                    return ClipboardRichTextPreviewResult.unavailable
+                }
+                return ClipboardRichTextPreviewPolicy.makePreview(
                     payload: payload,
                     fallbackText: fallbackText
                 )
@@ -947,6 +1041,11 @@ private struct ClipboardHistoryPanelView: View {
                 )
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.isSearching, visibleItems.isEmpty {
+            ProgressView(
+                localization.string("panel.search.searching", defaultValue: "正在搜索…")
+            )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if presentation.showsSearchEmptyState {
             if model.query.isEmpty, model.contentFilter != .all {
                 ContentUnavailableView(
@@ -1150,11 +1249,44 @@ private struct ClipboardHistoryPanelView: View {
                         }
                         .id(item.id)
                     }
+                    if model.hasMoreResults || model.isSearching {
+                        VStack(spacing: 5) {
+                            if model.hasMoreResults {
+                                Text(localization.format(
+                                    "panel.results.showingFirst",
+                                    defaultValue: "正在显示前 %d 条结果",
+                                    visibleItems.count
+                                ))
+                                    .font(PluginSettingsTheme.Typography.rowDescription)
+                                    .foregroundStyle(.secondary)
+                                Button {
+                                    model.loadMoreResults()
+                                } label: {
+                                    Label(
+                                        localization.format(
+                                            "panel.results.showMore",
+                                            defaultValue: "再显示 %d 条",
+                                            ClipboardHistoryPanelModel.resultPageSize
+                                        ),
+                                        systemImage: "chevron.down"
+                                    )
+                                }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                            } else {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
                 }
                 .padding(.trailing, 6)
                 .padding(.bottom, 8)
             }
-            .onChange(of: model.selectedItemID) { _, itemID in
+            .onChange(of: model.selectedItemID) { previousItemID, itemID in
+                controller.releasePayloadIfReloadable(id: previousItemID)
                 guard let itemID else { return }
                 withAnimation(.easeOut(duration: 0.12)) {
                     proxy.scrollTo(itemID, anchor: .center)
@@ -1513,7 +1645,7 @@ private struct ClipboardHistoryPanelView: View {
             }
         case .files:
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(Array(item.payload.fileURLs.enumerated()), id: \.offset) { _, url in
+                ForEach(Array(item.fileURLs.enumerated()), id: \.offset) { _, url in
                     HStack(spacing: 10) {
                         Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
                             .resizable()
@@ -1562,7 +1694,7 @@ private struct ClipboardHistoryPanelView: View {
     }
 
     private func previewImage(_ item: ClipboardHistoryItem) -> NSImage? {
-        let preferred = item.payload.representations.first {
+        let preferred = item.payload?.representations.first {
             ClipboardRepresentationType.isImage($0.typeIdentifier)
                 || $0.typeIdentifier == ClipboardRepresentationType.pdf
         }
@@ -1593,8 +1725,8 @@ private struct ClipboardHistoryPanelView: View {
         _ item: ClipboardHistoryItem
     ) -> (url: URL, kind: ClipboardFileContentKind)? {
         guard item.kind == .files,
-              item.payload.fileURLs.count == 1,
-              let url = item.payload.fileURLs.first,
+              item.fileURLs.count == 1,
+              let url = item.fileURLs.first,
               let kind = ClipboardFileContentKind(url: url) else {
             return nil
         }
@@ -1604,7 +1736,7 @@ private struct ClipboardHistoryPanelView: View {
     private func fileSubtypeTitles(_ item: ClipboardHistoryItem) -> [String] {
         guard item.kind == .files else { return [] }
         return ClipboardFileContentKind.allCases.compactMap { kind in
-            item.payload.fileContentKinds.contains(kind) ? fileKindTitle(kind) : nil
+            item.fileContentKinds.contains(kind) ? fileKindTitle(kind) : nil
         }
     }
 
@@ -1645,7 +1777,7 @@ private struct ClipboardHistoryPanelView: View {
 
     private func detailMetadataBaseTitle(_ item: ClipboardHistoryItem) -> String {
         let subtypes = fileSubtypeTitles(item)
-        if item.payload.fileURLs.count == 1, subtypes.count == 1, let subtype = subtypes.first {
+        if item.fileURLs.count == 1, subtypes.count == 1, let subtype = subtypes.first {
             return subtype
         }
         return kindTitle(item.kind)
@@ -1703,8 +1835,8 @@ private struct ClipboardHistoryPanelView: View {
 
     private func itemSystemImage(_ item: ClipboardHistoryItem) -> String {
         guard item.kind == .files,
-              item.payload.fileContentKinds.count == 1,
-              let fileKind = item.payload.fileContentKinds.first else {
+              item.fileContentKinds.count == 1,
+              let fileKind = item.fileContentKinds.first else {
             return kindSystemImage(item.kind)
         }
         return switch fileKind {

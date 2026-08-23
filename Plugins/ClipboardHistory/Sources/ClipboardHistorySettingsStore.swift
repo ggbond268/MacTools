@@ -8,6 +8,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         static let maximumItemCount = "maximum-item-count"
         static let expirationDays = "expiration-days"
         static let maximumItemByteCount = "maximum-item-byte-count"
+        static let maximumTotalPayloadByteCount = "maximum-total-payload-byte-count"
         static let excludedApplications = "excluded-applications"
         static let didCompleteInitialSetup = "did-complete-initial-setup"
     }
@@ -17,13 +18,21 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         250,
         500,
         1_000,
-        ClipboardHistorySettings.noItemCountLimit,
+        2_500,
+        5_000,
+        ClipboardHistorySettings.maximumSupportedItemCount,
     ]
     static let allowedItemByteCounts = [
         1 * 1_024 * 1_024,
         5 * 1_024 * 1_024,
         20 * 1_024 * 1_024,
         50 * 1_024 * 1_024,
+    ]
+    static let allowedTotalPayloadByteCounts = [
+        64 * 1_024 * 1_024,
+        256 * 1_024 * 1_024,
+        1 * 1_024 * 1_024 * 1_024,
+        ClipboardHistorySettings.maximumSupportedTotalPayloadByteCount,
     ]
 
     @Published var isPaused: Bool {
@@ -50,6 +59,16 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     @Published var maximumItemByteCount: Int {
         didSet {
             storage.set(Self.validItemByteCount(maximumItemByteCount), forKey: Key.maximumItemByteCount)
+            onChange?()
+        }
+    }
+
+    @Published var maximumTotalPayloadByteCount: Int {
+        didSet {
+            storage.set(
+                Self.validTotalPayloadByteCount(maximumTotalPayloadByteCount),
+                forKey: Key.maximumTotalPayloadByteCount
+            )
             onChange?()
         }
     }
@@ -93,6 +112,13 @@ final class ClipboardHistorySettingsStore: ObservableObject {
             storedItemByteCount == 0 ? defaults.maximumItemByteCount : storedItemByteCount
         )
 
+        let storedTotalPayloadByteCount = storage.integer(forKey: Key.maximumTotalPayloadByteCount)
+        maximumTotalPayloadByteCount = Self.validTotalPayloadByteCount(
+            storedTotalPayloadByteCount == 0
+                ? defaults.maximumTotalPayloadByteCount
+                : storedTotalPayloadByteCount
+        )
+
         if let data = storage.data(forKey: Key.excludedApplications),
            let decoded = try? JSONDecoder().decode([ClipboardExcludedApplication].self, from: data) {
             excludedApplications = Self.normalizedApplications(decoded)
@@ -108,6 +134,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
             maximumItemCount: maximumItemCount,
             expiration: expiration,
             maximumItemByteCount: maximumItemByteCount,
+            maximumTotalPayloadByteCount: maximumTotalPayloadByteCount,
             excludedApplications: excludedApplications
         )
     }
@@ -135,11 +162,22 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     }
 
     private static func validItemCount(_ value: Int) -> Int {
-        allowedItemCounts.contains(value) ? value : ClipboardHistorySettings.defaultMaximumItemCount
+        if value == ClipboardHistorySettings.noItemCountLimit {
+            return ClipboardHistorySettings.maximumSupportedItemCount
+        }
+        return allowedItemCounts.contains(value)
+            ? value
+            : ClipboardHistorySettings.defaultMaximumItemCount
     }
 
     private static func validItemByteCount(_ value: Int) -> Int {
         allowedItemByteCounts.contains(value) ? value : ClipboardHistorySettings.defaultMaximumItemByteCount
+    }
+
+    private static func validTotalPayloadByteCount(_ value: Int) -> Int {
+        allowedTotalPayloadByteCounts.contains(value)
+            ? value
+            : ClipboardHistorySettings.defaultMaximumTotalPayloadByteCount
     }
 
     private static func normalizedApplications(

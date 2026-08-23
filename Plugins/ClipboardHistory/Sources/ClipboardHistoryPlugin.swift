@@ -102,8 +102,9 @@ final class ClipboardHistoryPlugin:
         if let persistence {
             resolvedPersistence = persistence
         } else if let supportDirectory = context.supportDirectory {
-            resolvedPersistence = EncryptedClipboardHistoryStore(
-                fileURL: supportDirectory.appendingPathComponent("history.mth", isDirectory: false),
+            resolvedPersistence = IncrementalEncryptedClipboardHistoryStore(
+                databaseURL: supportDirectory.appendingPathComponent("history.sqlite3", isDirectory: false),
+                legacyFileURL: supportDirectory.appendingPathComponent("history.mth", isDirectory: false),
                 keyStore: ClipboardHistoryKeychainStore(
                     service: PluginPrivateDataKeychainIdentity.service(pluginID: Self.pluginID)
                 )
@@ -161,12 +162,21 @@ final class ClipboardHistoryPlugin:
             [weak privacyHUDPresenter = self.privacyHUDPresenter, localization = self.localization]
             reason,
             limit in
-            guard reason == .oversized else { return }
-            privacyHUDPresenter?.showFailure(localization.format(
-                "hud.capture.oversized",
-                defaultValue: "未保存：内容超过 %d MB",
-                max(1, limit / (1_024 * 1_024))
-            ))
+            switch reason {
+            case .oversized:
+                privacyHUDPresenter?.showFailure(localization.format(
+                    "hud.capture.oversized",
+                    defaultValue: "未保存：内容超过 %d MB",
+                    max(1, limit / (1_024 * 1_024))
+                ))
+            case .pinnedItemsFillCapacity:
+                privacyHUDPresenter?.showFailure(localization.string(
+                    "hud.capture.pinnedCapacity",
+                    defaultValue: "未保存：固定项目已占满历史容量"
+                ))
+            default:
+                break
+            }
         }
     }
 
@@ -205,6 +215,11 @@ final class ClipboardHistoryPlugin:
             subtitle = localization.string("panel.status.loading", defaultValue: "正在读取加密历史…")
         } else if settingsStore.isPaused {
             subtitle = localization.string("panel.status.paused", defaultValue: "收集已暂停")
+        } else if controller.isCaptureBlockedByPinnedItems {
+            subtitle = localization.string(
+                "panel.status.pinnedCapacity",
+                defaultValue: "固定项目已占满历史容量"
+            )
         } else if controller.isIgnoringNextCopy {
             subtitle = localization.string("panel.status.ignoreNext", defaultValue: "下次复制不会保存")
         } else {
@@ -792,6 +807,11 @@ final class ClipboardHistoryPlugin:
             return localization.string(
                 "error.historyTooLarge",
                 defaultValue: "剪贴板历史超过安全存储上限。请清除现有历史记录。"
+            )
+        case .insufficientDiskSpace:
+            return localization.string(
+                "error.insufficientDiskSpace",
+                defaultValue: "可用磁盘空间不足，无法保存新的剪贴板历史。"
             )
         case .unavailableStorage:
             return localization.string(
