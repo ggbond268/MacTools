@@ -48,7 +48,10 @@ final class CLIBrokerServiceControllerTests: XCTestCase {
 
     func testReconcileCyclesRegisteredServiceAfterAppUpgrade() {
         let service = FakeCLIBrokerService(status: .enabled)
-        let store = FakeCLIBrokerRegistrationStore(registeredFingerprint: "old")
+        let store = FakeCLIBrokerRegistrationStore(
+            registeredFingerprint: "old",
+            enabledIntent: true
+        )
         let controller = makeController(service: service, store: store)
 
         XCTAssertTrue(controller.reconcileRegisteredService())
@@ -71,19 +74,27 @@ final class CLIBrokerServiceControllerTests: XCTestCase {
 
     func testReconcileDoesNotEnableAnUnregisteredService() {
         let service = FakeCLIBrokerService(status: .notRegistered)
-        let controller = makeController(service: service, registeredFingerprint: "old")
+        let store = FakeCLIBrokerRegistrationStore(
+            registeredFingerprint: "old",
+            enabledIntent: false
+        )
+        let controller = makeController(service: service, store: store)
 
         XCTAssertTrue(controller.reconcileRegisteredService())
 
         XCTAssertEqual(service.unregisterCallCount, 0)
         XCTAssertEqual(service.registerCallCount, 0)
         XCTAssertEqual(controller.status, .notRegistered)
+        XCTAssertEqual(store.enabledIntent, false)
     }
 
     func testReconcileReportsReregistrationFailure() {
         let service = FakeCLIBrokerService(status: .enabled)
         service.registerError = FakeCLIBrokerServiceError.refused
-        let store = FakeCLIBrokerRegistrationStore(registeredFingerprint: "old")
+        let store = FakeCLIBrokerRegistrationStore(
+            registeredFingerprint: "old",
+            enabledIntent: true
+        )
         let controller = makeController(service: service, store: store)
 
         XCTAssertFalse(controller.reconcileRegisteredService())
@@ -98,7 +109,10 @@ final class CLIBrokerServiceControllerTests: XCTestCase {
     func testReconcilePreservesOldFingerprintWhenUnregisterFails() {
         let service = FakeCLIBrokerService(status: .enabled)
         service.unregisterError = FakeCLIBrokerServiceError.refused
-        let store = FakeCLIBrokerRegistrationStore(registeredFingerprint: "old")
+        let store = FakeCLIBrokerRegistrationStore(
+            registeredFingerprint: "old",
+            enabledIntent: true
+        )
         let controller = makeController(service: service, store: store)
 
         XCTAssertFalse(controller.reconcileRegisteredService())
@@ -110,6 +124,82 @@ final class CLIBrokerServiceControllerTests: XCTestCase {
         XCTAssertNotNil(controller.lastError)
     }
 
+    func testReconcileRetriesRegistrationAfterReplacementFailure() {
+        let service = FakeCLIBrokerService(status: .enabled)
+        service.registerError = FakeCLIBrokerServiceError.refused
+        let store = FakeCLIBrokerRegistrationStore(
+            registeredFingerprint: "old",
+            enabledIntent: true
+        )
+        var controller = makeController(service: service, store: store)
+
+        XCTAssertFalse(controller.reconcileRegisteredService())
+        XCTAssertEqual(service.status, .notRegistered)
+        XCTAssertEqual(store.enabledIntent, true)
+
+        service.registerError = nil
+        controller = makeController(service: service, store: store)
+        XCTAssertTrue(controller.reconcileRegisteredService())
+
+        XCTAssertEqual(service.registerCallCount, 2)
+        XCTAssertEqual(store.registeredFingerprint, "current")
+        XCTAssertEqual(store.enabledIntent, true)
+        XCTAssertEqual(controller.status, .enabled)
+    }
+
+    func testLegacyRegisteredServiceMigratesToEnabledIntent() {
+        let service = FakeCLIBrokerService(status: .enabled)
+        let store = FakeCLIBrokerRegistrationStore(
+            registeredFingerprint: "current",
+            enabledIntent: nil
+        )
+        let controller = makeController(service: service, store: store)
+
+        XCTAssertTrue(controller.reconcileRegisteredService())
+
+        XCTAssertEqual(store.enabledIntent, true)
+        XCTAssertEqual(service.registerCallCount, 0)
+        XCTAssertEqual(service.unregisterCallCount, 0)
+    }
+
+    func testLegacyUnregisteredServiceRemainsDisabledWithoutIntent() {
+        let service = FakeCLIBrokerService(status: .notRegistered)
+        let store = FakeCLIBrokerRegistrationStore(
+            registeredFingerprint: nil,
+            enabledIntent: nil
+        )
+        let controller = makeController(service: service, store: store)
+
+        XCTAssertTrue(controller.reconcileRegisteredService())
+
+        XCTAssertNil(store.enabledIntent)
+        XCTAssertEqual(service.registerCallCount, 0)
+        XCTAssertEqual(service.unregisterCallCount, 0)
+        XCTAssertEqual(controller.status, .notRegistered)
+    }
+
+    func testReconcileRetriesExplicitDisableAfterUnregisterFailure() {
+        let service = FakeCLIBrokerService(status: .enabled)
+        service.unregisterError = FakeCLIBrokerServiceError.refused
+        let store = FakeCLIBrokerRegistrationStore(
+            registeredFingerprint: "current",
+            enabledIntent: true
+        )
+        var controller = makeController(service: service, store: store)
+
+        XCTAssertFalse(controller.unregister())
+        XCTAssertEqual(store.enabledIntent, false)
+
+        service.unregisterError = nil
+        controller = makeController(service: service, store: store)
+        XCTAssertTrue(controller.reconcileRegisteredService())
+
+        XCTAssertEqual(service.unregisterCallCount, 2)
+        XCTAssertEqual(store.registeredFingerprint, nil)
+        XCTAssertEqual(store.enabledIntent, false)
+        XCTAssertEqual(controller.status, .notRegistered)
+    }
+
     private func makeController(
         service: FakeCLIBrokerService,
         registeredFingerprint: String? = nil
@@ -117,7 +207,9 @@ final class CLIBrokerServiceControllerTests: XCTestCase {
         makeController(
             service: service,
             store: FakeCLIBrokerRegistrationStore(
-                registeredFingerprint: registeredFingerprint
+                registeredFingerprint: registeredFingerprint,
+                enabledIntent: service.status == .enabled
+                    || service.status == .requiresApproval
             )
         )
     }
@@ -162,9 +254,11 @@ private final class FakeCLIBrokerService: CLIBrokerServicing {
 @MainActor
 private final class FakeCLIBrokerRegistrationStore: CLIBrokerRegistrationStoring {
     var registeredFingerprint: String?
+    var enabledIntent: Bool?
 
-    init(registeredFingerprint: String?) {
+    init(registeredFingerprint: String?, enabledIntent: Bool? = nil) {
         self.registeredFingerprint = registeredFingerprint
+        self.enabledIntent = enabledIntent
     }
 }
 

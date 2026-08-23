@@ -11,21 +11,36 @@ protocol CLIBrokerServicing: AnyObject {
 @MainActor
 protocol CLIBrokerRegistrationStoring: AnyObject {
     var registeredFingerprint: String? { get set }
+    var enabledIntent: Bool? { get set }
 }
 
 @MainActor
 private final class UserDefaultsCLIBrokerRegistrationStore: CLIBrokerRegistrationStoring {
     private let defaults: UserDefaults
-    private let key: String
+    private let fingerprintKey: String
+    private let enabledIntentKey: String
 
     init(defaults: UserDefaults = .standard, bundleIdentifier: String?) {
         self.defaults = defaults
-        key = "cli.broker.registered-fingerprint.\(bundleIdentifier ?? "unknown")"
+        let suffix = bundleIdentifier ?? "unknown"
+        fingerprintKey = "cli.broker.registered-fingerprint.\(suffix)"
+        enabledIntentKey = "cli.broker.enabled-intent.\(suffix)"
     }
 
     var registeredFingerprint: String? {
-        get { defaults.string(forKey: key) }
-        set { defaults.set(newValue, forKey: key) }
+        get { defaults.string(forKey: fingerprintKey) }
+        set { defaults.set(newValue, forKey: fingerprintKey) }
+    }
+
+    var enabledIntent: Bool? {
+        get { defaults.object(forKey: enabledIntentKey) as? Bool }
+        set {
+            if let newValue {
+                defaults.set(newValue, forKey: enabledIntentKey)
+            } else {
+                defaults.removeObject(forKey: enabledIntentKey)
+            }
+        }
     }
 }
 
@@ -94,31 +109,29 @@ final class CLIBrokerServiceController: ObservableObject {
 
     @discardableResult
     func ensureRegistered() -> Bool {
-        refresh()
-        if isRegistered {
-            return reconcileRegisteredService()
-        }
-        guard service.status == .notRegistered || service.status == .notFound else {
-            return false
-        }
-        do {
-            try service.register()
-            lastError = nil
-        } catch {
-            lastError = error.localizedDescription
-        }
-        refresh()
-        if isRegistered {
-            registrationStore.registeredFingerprint = currentRegistrationFingerprint()
-            return true
-        }
-        return false
+        registrationStore.enabledIntent = true
+        return reconcileRegisteredService()
     }
 
     @discardableResult
     func reconcileRegisteredService() -> Bool {
         refresh()
-        guard isRegistered else { return true }
+        let enabledIntent: Bool
+        if let storedIntent = registrationStore.enabledIntent {
+            enabledIntent = storedIntent
+        } else if isRegistered {
+            registrationStore.enabledIntent = true
+            enabledIntent = true
+        } else {
+            return true
+        }
+
+        guard enabledIntent else {
+            return unregisterDesiredService()
+        }
+        guard isRegistered else {
+            return registerDesiredService()
+        }
         let fingerprint = currentRegistrationFingerprint()
         guard registrationStore.registeredFingerprint != fingerprint else { return true }
         do {
@@ -139,6 +152,29 @@ final class CLIBrokerServiceController: ObservableObject {
 
     @discardableResult
     func unregister() -> Bool {
+        registrationStore.enabledIntent = false
+        return unregisterDesiredService()
+    }
+
+    private func registerDesiredService() -> Bool {
+        guard service.status == .notRegistered || service.status == .notFound else {
+            return false
+        }
+        do {
+            try service.register()
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+        refresh()
+        if isRegistered {
+            registrationStore.registeredFingerprint = currentRegistrationFingerprint()
+            return true
+        }
+        return false
+    }
+
+    private func unregisterDesiredService() -> Bool {
         if service.status == .notRegistered || service.status == .notFound {
             registrationStore.registeredFingerprint = nil
             lastError = nil
