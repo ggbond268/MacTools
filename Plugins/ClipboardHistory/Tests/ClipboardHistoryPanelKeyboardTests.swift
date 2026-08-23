@@ -168,7 +168,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(model.visibleItems.map(\.id), [pin.id, recent.id])
     }
 
-    func testLargeResultSetStartsAtOneHundredAndLoadsTheNextPage() async {
+    func testLargeResultSetStartsAtOnePageAndLoadsTheNextPage() async {
         let items = (0..<250).map { index in
             item(text: "result \(index)", pinned: false)
         }
@@ -177,13 +177,13 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.prepareForPresentation(items: items)
         await model.waitForSearchForTesting()
 
-        XCTAssertEqual(model.visibleItems.count, 100)
+        XCTAssertEqual(model.visibleItems.count, ClipboardHistoryPanelModel.resultPageSize)
         XCTAssertTrue(model.hasMoreResults)
 
         model.loadMoreResults()
         await model.waitForSearchForTesting()
 
-        XCTAssertEqual(model.visibleItems.count, 200)
+        XCTAssertEqual(model.visibleItems.count, ClipboardHistoryPanelModel.resultPageSize * 2)
         XCTAssertTrue(model.hasMoreResults)
     }
 

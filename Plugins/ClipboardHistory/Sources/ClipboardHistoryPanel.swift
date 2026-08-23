@@ -257,7 +257,7 @@ struct ClipboardHistoryPreviousApplicationState<Application> {
 
 @MainActor
 final class ClipboardHistoryPanelModel: ObservableObject {
-    nonisolated static let resultPageSize = 100
+    nonisolated static let resultPageSize = 50
     nonisolated static let searchDebounceNanoseconds: UInt64 = 120_000_000
 
     @Published var query = "" {
