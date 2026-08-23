@@ -55,6 +55,42 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
         XCTAssertTrue(result.isCaptureBlockedByPinnedItems)
     }
 
+    func testOversizedNewestItemDoesNotPreventOlderItemsFromUsingRemainingCapacity() {
+        var settings = ClipboardHistorySettings.defaults
+        settings.expiration = .never
+        settings.maximumItemCount = 21
+        settings.maximumTotalPayloadByteCount = 64 * 1_024 * 1_024
+        let now = Date()
+        let pin = logicalItem(
+            text: "pin",
+            date: now.addingTimeInterval(-30),
+            payloadByteCount: 30 * 1_024 * 1_024,
+            pinned: true
+        )
+        let newestThatDoesNotFit = logicalItem(
+            text: "new capture",
+            date: now,
+            payloadByteCount: 40 * 1_024 * 1_024
+        )
+        let existingRecent = (0..<20).map { offset in
+            logicalItem(
+                text: "existing-\(offset)",
+                date: now.addingTimeInterval(TimeInterval(-offset - 1)),
+                payloadByteCount: 1 * 1_024 * 1_024
+            )
+        }
+
+        let retained = ClipboardRetentionPolicy.prune(
+            [newestThatDoesNotFit, pin] + existingRecent,
+            settings: settings,
+            now: now
+        )
+
+        XCTAssertFalse(retained.contains(where: { $0.id == newestThatDoesNotFit.id }))
+        XCTAssertTrue(retained.contains(where: { $0.id == pin.id }))
+        XCTAssertEqual(retained.filter { !$0.isPinned }.count, existingRecent.count)
+    }
+
     func testTotalPayloadBudgetBoundsMaximumConfiguredHistory() {
         var settings = ClipboardHistorySettings.defaults
         settings.maximumItemCount = ClipboardHistorySettings.noItemCountLimit
@@ -128,7 +164,8 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
     private func logicalItem(
         text: String,
         date: Date,
-        payloadByteCount: Int
+        payloadByteCount: Int,
+        pinned: Bool = false
     ) -> ClipboardHistoryItem {
         ClipboardHistoryItem(
             id: UUID(),
@@ -145,7 +182,7 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
             textCharacterCount: text.count,
             textLineCount: 1,
             isSearchTextTruncated: false,
-            isPinned: false,
+            isPinned: pinned,
             lastUsedAt: nil,
             imageSearchText: nil,
             hasCompletedImageTextIndexing: false,
@@ -189,6 +226,104 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
         XCTAssertTrue(result.items.isEmpty)
         XCTAssertFalse(result.hasMore)
         XCTAssertLessThan(Date().timeIntervalSince(startedAt), 2)
+    }
+
+    func testWorstCaseSearchIndexesStayBoundedAcrossTenThousandItems() {
+        let longText = Array(repeating: "search-token-with-a-long-suffix", count: 300)
+            .joined(separator: " ")
+        let items = (0..<ClipboardHistorySettings.maximumSupportedItemCount).map { offset in
+            item(text: "\(offset) \(longText)", date: Date(), pinned: false)
+        }
+
+        XCTAssertTrue(items.allSatisfy {
+            $0.searchIndex.normalizedText.count <= ClipboardHistorySearch.maximumNormalizedCharacterCount
+                && $0.searchIndex.tokens.count <= ClipboardHistorySearch.maximumTokenCount
+                && $0.searchIndex.tokens.allSatisfy {
+                    $0.count <= ClipboardHistorySearch.maximumTokenCharacterCount
+                }
+        })
+        let startedAt = Date()
+        let result = ClipboardHistorySearch.result(
+            items,
+            query: "definitely-not-present",
+            limit: ClipboardHistoryPanelModel.resultPageSize
+        )
+        XCTAssertTrue(result.items.isEmpty)
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 5)
+    }
+
+    func testLongPrimaryTextDoesNotStarveSecondarySearchFields() {
+        let source = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.source-token",
+            name: "Unique Source Token"
+        )
+        let fileURL = URL(fileURLWithPath: "/tmp/unique-file-token.pdf")
+        let linkURL = URL(string: "https://example.com/unique-link-token")!
+        let item = ClipboardHistoryItem(
+            id: UUID(),
+            text: String(repeating: "x", count: ClipboardHistoryItem.maximumSearchableCharacterCount),
+            capturedAt: Date(),
+            sourceApplication: source,
+            kind: .image,
+            payloadByteCount: 1,
+            filterContentKinds: [.image],
+            fileURLs: [fileURL],
+            linkURLs: [linkURL],
+            representationTypeIdentifiers: [ClipboardRepresentationType.png],
+            payloadDigest: Data("search-fields".utf8),
+            allowsRichTextImport: false,
+            textCharacterCount: ClipboardHistoryItem.maximumSearchableCharacterCount,
+            textLineCount: 1,
+            isSearchTextTruncated: false,
+            isPinned: false,
+            lastUsedAt: nil,
+            imageSearchText: "Unique OCR Token",
+            hasCompletedImageTextIndexing: true,
+            payloadLoader: { .plainText("payload") }
+        )
+
+        for query in [
+            "source-token",
+            "unique source",
+            "unique-file-token",
+            "unique-link-token",
+            "unique ocr",
+        ] {
+            XCTAssertEqual(ClipboardHistorySearch.filter([item], query: query), [item], query)
+        }
+        XCTAssertLessThanOrEqual(
+            item.searchIndex.normalizedText.count,
+            ClipboardHistorySearch.maximumNormalizedCharacterCount
+        )
+        XCTAssertLessThanOrEqual(
+            item.searchIndex.tokens.count,
+            ClipboardHistorySearch.maximumTokenCount
+        )
+    }
+
+    func testURLOnlyLinkIsSearchableAndConvertibleToPlainText() {
+        let url = "https://github.com/ggbond268/MacTools/issues/306"
+        let payload = ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.url,
+                    data: Data(url.utf8)
+                ),
+            ]),
+        ])
+        let item = ClipboardHistoryItem(
+            id: UUID(),
+            payload: payload,
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+
+        XCTAssertEqual(item.text, url)
+        XCTAssertEqual(item.linkURLs.map(\.absoluteString), [url])
+        XCTAssertEqual(ClipboardHistorySearch.filter([item], query: "github issues 306"), [item])
+        XCTAssertEqual(ClipboardPlainTextConversion.text(for: item), url)
     }
 
     func testSearchMatchesEachQueryTokenByWordPrefix() {

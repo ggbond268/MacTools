@@ -10,18 +10,21 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         let sourceApplication: ClipboardSourceApplication?
         let kind: ClipboardHistoryContentKind
         let payloadByteCount: Int
-        let filterContentKinds: [ClipboardHistoryContentKind]
-        let fileURLs: [String]
-        let representationTypeIdentifiers: [String]
+        let filterContentKinds: [ClipboardHistoryContentKind]?
+        let fileURLs: [String]?
+        let linkURLs: [String]?
+        let representationTypeIdentifiers: [String]?
         let payloadDigest: Data
-        let allowsRichTextImport: Bool
-        let textCharacterCount: Int
-        let textLineCount: Int
-        let isSearchTextTruncated: Bool
+        // These summary fields were added while the incremental store was already in use by
+        // development builds. Keep them optional so older encrypted rows remain decodable.
+        let allowsRichTextImport: Bool?
+        let textCharacterCount: Int?
+        let textLineCount: Int?
+        let isSearchTextTruncated: Bool?
         let isPinned: Bool
         let lastUsedAt: Date?
         let imageSearchText: String?
-        let hasCompletedImageTextIndexing: Bool
+        let hasCompletedImageTextIndexing: Bool?
 
         init(item: ClipboardHistoryItem) {
             id = item.id
@@ -32,6 +35,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             payloadByteCount = item.payloadByteCount
             filterContentKinds = item.filterContentKinds.sorted { $0.rawValue < $1.rawValue }
             fileURLs = item.fileURLs.map(\.absoluteString)
+            linkURLs = item.linkURLs.map(\.absoluteString)
             representationTypeIdentifiers = item.representationTypeIdentifiers
             payloadDigest = item.payloadDigest
             allowsRichTextImport = item.allowsRichTextImport
@@ -56,6 +60,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
 
     private let keyStore: any ClipboardHistoryKeyStoring
     private let fileManager: FileManager
+    private let postCommitMaintenance: (@Sendable () throws -> Void)?
     private let lock = NSLock()
     private var cachedItems: [UUID: ClipboardHistoryItem] = [:]
     private var isInvalidated = false
@@ -64,12 +69,14 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         databaseURL: URL,
         legacyFileURL: URL? = nil,
         keyStore: any ClipboardHistoryKeyStoring = ClipboardHistoryKeychainStore(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        postCommitMaintenance: (@Sendable () throws -> Void)? = nil
     ) {
         self.databaseURL = databaseURL
         self.legacyFileURL = legacyFileURL
         self.keyStore = keyStore
         self.fileManager = fileManager
+        self.postCommitMaintenance = postCommitMaintenance
     }
 
     func prepare() throws {
@@ -213,7 +220,10 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             }
             try execute("COMMIT", database: database)
             if !removedIDs.isEmpty {
-                try execute("PRAGMA incremental_vacuum", database: database)
+                // The durable transaction has already committed. Housekeeping failures must not
+                // make callers restore an older snapshot or report that the save failed.
+                try? execute("PRAGMA incremental_vacuum", database: database)
+                try? postCommitMaintenance?()
             }
             for item in items where writtenPayloadIDs.contains(item.id) {
                 let id = item.id
@@ -271,18 +281,19 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             sourceApplication: metadata.sourceApplication,
             kind: metadata.kind,
             payloadByteCount: metadata.payloadByteCount,
-            filterContentKinds: Set(metadata.filterContentKinds),
-            fileURLs: metadata.fileURLs.compactMap(URL.init(string:)),
-            representationTypeIdentifiers: metadata.representationTypeIdentifiers,
+            filterContentKinds: Set(metadata.filterContentKinds ?? [metadata.kind]),
+            fileURLs: metadata.fileURLs?.compactMap(URL.init(string:)) ?? [],
+            linkURLs: metadata.linkURLs?.compactMap(URL.init(string:)) ?? [],
+            representationTypeIdentifiers: metadata.representationTypeIdentifiers ?? [],
             payloadDigest: metadata.payloadDigest,
-            allowsRichTextImport: metadata.allowsRichTextImport,
-            textCharacterCount: metadata.textCharacterCount,
-            textLineCount: metadata.textLineCount,
-            isSearchTextTruncated: metadata.isSearchTextTruncated,
+            allowsRichTextImport: metadata.allowsRichTextImport ?? false,
+            textCharacterCount: metadata.textCharacterCount ?? metadata.text.count,
+            textLineCount: metadata.textLineCount ?? Self.lineCount(metadata.text),
+            isSearchTextTruncated: metadata.isSearchTextTruncated ?? false,
             isPinned: metadata.isPinned,
             lastUsedAt: metadata.lastUsedAt,
             imageSearchText: metadata.imageSearchText,
-            hasCompletedImageTextIndexing: metadata.hasCompletedImageTextIndexing,
+            hasCompletedImageTextIndexing: metadata.hasCompletedImageTextIndexing ?? false,
             payloadLoader: { [weak self] in
                 guard let self else {
                     throw ClipboardHistoryPayloadAccessError.unavailable
@@ -290,6 +301,15 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
                 return try self.loadPayload(id: metadata.id)
             }
         )
+    }
+
+    private static func lineCount(_ text: String) -> Int {
+        guard !text.isEmpty else { return 0 }
+        return text.reduce(into: 1) { count, character in
+            if character == "\n" {
+                count += 1
+            }
+        }
     }
 
     private func loadPayload(id: UUID) throws -> ClipboardHistoryPayload {
@@ -636,6 +656,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
     private func removeDatabaseFilesLocked() throws {
         for url in [
             databaseURL,
+            URL(fileURLWithPath: databaseURL.path + "-journal"),
             URL(fileURLWithPath: databaseURL.path + "-wal"),
             URL(fileURLWithPath: databaseURL.path + "-shm"),
         ] where fileManager.fileExists(atPath: url.path) {

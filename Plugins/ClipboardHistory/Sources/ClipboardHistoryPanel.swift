@@ -95,6 +95,129 @@ enum ClipboardImagePreviewLayout {
     }
 }
 
+private struct ClipboardEmbeddedPreviewResult: @unchecked Sendable {
+    let image: NSImage?
+}
+
+enum ClipboardEmbeddedPreviewPolicy {
+    static let maximumThumbnailDimension = 1_600
+    static let maximumPDFPageCount = 1_000
+
+    static func allowsImageSourceDimensions(width: Int, height: Int) -> Bool {
+        VisionClipboardImageTextRecognizer.allowsSourceDimensions(width: width, height: height)
+    }
+
+    static func allowsPDF(pageCount: Int, mediaBox: CGRect) -> Bool {
+        guard pageCount > 0, pageCount <= maximumPDFPageCount,
+              mediaBox.width.isFinite, mediaBox.height.isFinite,
+              mediaBox.width <= CGFloat(VisionClipboardImageTextRecognizer.maximumSourceDimension),
+              mediaBox.height <= CGFloat(VisionClipboardImageTextRecognizer.maximumSourceDimension) else {
+            return false
+        }
+        return VisionClipboardImageTextRecognizer.allowsSourceDimensions(
+            width: Int(mediaBox.width.rounded(.up)),
+            height: Int(mediaBox.height.rounded(.up))
+        )
+    }
+
+    static func imageThumbnail(from data: Data) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(
+            data as CFData,
+            [kCGImageSourceShouldCache: false] as CFDictionary
+        ),
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+            as? [CFString: Any],
+        let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
+        let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
+        allowsImageSourceDimensions(width: width.intValue, height: height.intValue),
+        !Task.isCancelled,
+        let image = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: maximumThumbnailDimension,
+            ] as CFDictionary
+        ) else {
+            return nil
+        }
+        return NSImage(cgImage: image, size: .zero)
+    }
+
+    static func pdfThumbnail(from data: Data) -> NSImage? {
+        guard let provider = CGDataProvider(data: data as CFData),
+              let document = CGPDFDocument(provider),
+              let page = document.page(at: 1) else {
+            return nil
+        }
+        let mediaBox = page.getBoxRect(.mediaBox).standardized
+        guard allowsPDF(pageCount: document.numberOfPages, mediaBox: mediaBox) else {
+            return nil
+        }
+        let scale = min(
+            1,
+            CGFloat(maximumThumbnailDimension) / max(mediaBox.width, mediaBox.height)
+        )
+        let width = max(1, Int((mediaBox.width * scale).rounded(.up)))
+        let height = max(1, Int((mediaBox.height * scale).rounded(.up)))
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+        context.setFillColor(NSColor.white.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.concatenate(page.getDrawingTransform(
+            .mediaBox,
+            rect: CGRect(x: 0, y: 0, width: width, height: height),
+            rotate: 0,
+            preserveAspectRatio: true
+        ))
+        context.drawPDFPage(page)
+        guard !Task.isCancelled, let image = context.makeImage() else { return nil }
+        return NSImage(cgImage: image, size: .zero)
+    }
+}
+
+private actor ClipboardEmbeddedPreviewDecodeGate {
+    static let shared = ClipboardEmbeddedPreviewDecodeGate()
+
+    func load(for item: ClipboardHistoryItem) -> ClipboardEmbeddedPreviewResult {
+        defer { item.discardCachedPayloadIfReloadable() }
+        guard !Task.isCancelled,
+              let payload = try? item.loadPayload(),
+              !Task.isCancelled,
+              let representation = payload.representations.first(where: {
+                  ClipboardRepresentationType.isImage($0.typeIdentifier)
+                      || $0.typeIdentifier == ClipboardRepresentationType.pdf
+              }) else {
+            return ClipboardEmbeddedPreviewResult(image: nil)
+        }
+        let image: NSImage?
+        if representation.typeIdentifier == ClipboardRepresentationType.pdf {
+            image = ClipboardEmbeddedPreviewPolicy.pdfThumbnail(from: representation.data)
+        } else {
+            image = ClipboardEmbeddedPreviewPolicy.imageThumbnail(from: representation.data)
+        }
+        return ClipboardEmbeddedPreviewResult(image: Task.isCancelled ? nil : image)
+    }
+}
+
+enum ClipboardEmbeddedPreviewLoader {
+    static func load(for item: ClipboardHistoryItem) async -> NSImage? {
+        let result = await ClipboardEmbeddedPreviewDecodeGate.shared.load(for: item)
+        return result.image
+    }
+}
+
 enum ClipboardHistoryTimestampFormatting {
     static func exactString(for date: Date, locale: Locale) -> String {
         date.formatted(
@@ -395,7 +518,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                     Task { @MainActor [weak self] in
                         guard let self,
                               await self.historyController.preparePayloadForUse(id: itemID),
-                              self.historyController.copyItem(id: itemID) else { return }
+                              await self.historyController.copyItem(id: itemID) else { return }
                         self.close()
                     }
                 },
@@ -589,9 +712,12 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 NSSound.beep()
                 return
             }
-            let copied = asPlainText
-                ? historyController.copyItemAsPlainText(id: id)
-                : historyController.copyItem(id: id)
+            let copied: Bool
+            if asPlainText {
+                copied = historyController.copyItemAsPlainText(id: id)
+            } else {
+                copied = await historyController.copyItem(id: id)
+            }
             guard copied else {
                 NSSound.beep()
                 return
@@ -731,20 +857,11 @@ private struct ClipboardRichTextPreviewView: View {
         .task(id: item.id) {
             preview = nil
             let fallbackText = item.text
-            let loadingTask = Task.detached(priority: .userInitiated) {
-                guard let payload = try? item.loadPayload() else {
-                    return ClipboardRichTextPreviewResult.unavailable
-                }
-                return ClipboardRichTextPreviewPolicy.makePreview(
-                    payload: payload,
-                    fallbackText: fallbackText
-                )
-            }
-            let loadedPreview = await loadingTask.value
-            guard !Task.isCancelled else {
-                loadingTask.cancel()
-                return
-            }
+            let loadedPreview = await ClipboardRichTextPreviewLoader.load(
+                for: item,
+                fallbackText: fallbackText
+            )
+            guard !Task.isCancelled else { return }
             preview = loadedPreview
         }
     }
@@ -797,6 +914,51 @@ private struct ClipboardRelativeTimestamp: View {
                 relativeTo: context.date,
                 locale: locale
             ))
+        }
+    }
+}
+
+@MainActor
+private struct ClipboardFileReferenceRow: View {
+    let url: URL
+    let unavailableTitle: String
+
+    @State private var isAvailable: Bool?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 24, weight: .regular))
+                .foregroundStyle(.secondary)
+                .frame(width: 32, height: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(url.lastPathComponent)
+                    .font(.body)
+                    .lineLimit(2)
+                Text(url.deletingLastPathComponent().path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if isAvailable == false {
+                    Label(unavailableTitle, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+        .task(id: url) {
+            isAvailable = await ClipboardFileAvailabilityCache.shared.isAvailable(url)
+        }
+    }
+
+    private var systemImage: String {
+        switch ClipboardFileContentKind(url: url) {
+        case .pdf: "doc.richtext"
+        case .image: "photo"
+        case .audio: "waveform"
+        case .video: "play.rectangle"
+        case nil: "doc"
         }
     }
 }
@@ -908,6 +1070,9 @@ private struct ClipboardHistoryPanelView: View {
     @Environment(\.locale) private var locale
     @State private var clearRequest: ClipboardHistoryClearRequest?
     @State private var detailMetadataByItemID: [UUID: ClipboardHistoryDetailMetadata] = [:]
+    @State private var embeddedPreviewItemID: UUID?
+    @State private var embeddedPreviewImage: NSImage?
+    @State private var isEmbeddedPreviewLoading = false
 
     init(
         controller: ClipboardHistoryController,
@@ -989,6 +1154,9 @@ private struct ClipboardHistoryPanelView: View {
         }
         .onChange(of: controller.items) { _, items in model.updateItems(items) }
         .onChange(of: visibleItems.map(\.id)) { _, _ in repairSelection() }
+        .task(id: selectedItem?.id) {
+            await loadEmbeddedPreview()
+        }
         .alert(item: $clearRequest) { request in
             switch request {
             case .unpinned:
@@ -1123,12 +1291,23 @@ private struct ClipboardHistoryPanelView: View {
                     .foregroundStyle(.orange)
                 }
                 if controller.isIgnoringNextCopy {
-                    Label(
-                        localization.string("panel.status.ignoreNext", defaultValue: "下次复制不会保存"),
-                        systemImage: "eye.slash.fill"
-                    )
+                    Button {
+                        controller.cancelNextCaptureSuppression()
+                    } label: {
+                        Label(
+                            localization.string("panel.status.ignoreNext", defaultValue: "下次复制不会保存"),
+                            systemImage: "eye.slash.fill"
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .font(PluginSettingsTheme.Typography.statusBadge)
                     .foregroundStyle(.secondary)
+                    .help(
+                        localization.string(
+                            "panel.action.cancelIgnore",
+                            defaultValue: "取消忽略下一次复制"
+                        )
+                    )
                 }
 
                 Button {
@@ -1145,10 +1324,21 @@ private struct ClipboardHistoryPanelView: View {
                 )
 
                 Menu {
-                    Button(localization.string("shortcut.ignoreNext.title", defaultValue: "忽略下一次复制")) {
-                        onIgnoreNextCopy()
+                    if controller.isIgnoringNextCopy {
+                        Button(
+                            localization.string(
+                                "panel.action.cancelIgnore",
+                                defaultValue: "取消忽略下一次复制"
+                            )
+                        ) {
+                            controller.cancelNextCaptureSuppression()
+                        }
+                    } else {
+                        Button(localization.string("shortcut.ignoreNext.title", defaultValue: "忽略下一次复制")) {
+                            onIgnoreNextCopy()
+                        }
+                        .disabled(!controller.canSuppressNextCapture)
                     }
-                    .disabled(controller.isIgnoringNextCopy || !controller.canSuppressNextCapture)
                     Divider()
                     Button(localization.string("clear.unpinned.menu", defaultValue: "清除未固定的历史记录"), role: .destructive) {
                         clearRequest = .unpinned
@@ -1285,9 +1475,10 @@ private struct ClipboardHistoryPanelView: View {
                 .padding(.trailing, 6)
                 .padding(.bottom, 8)
             }
-            .onChange(of: model.selectedItemID) { previousItemID, itemID in
+            .onChange(of: model.selectedItemID, initial: true) { previousItemID, itemID in
                 controller.releasePayloadIfReloadable(id: previousItemID)
                 guard let itemID else { return }
+                controller.requestImageTextIndexing(id: itemID)
                 withAnimation(.easeOut(duration: 0.12)) {
                     proxy.scrollTo(itemID, anchor: .center)
                 }
@@ -1568,8 +1759,12 @@ private struct ClipboardHistoryPanelView: View {
     private func detailPreviewSurface(_ item: ClipboardHistoryItem) -> some View {
         switch item.kind {
         case .image, .pdf:
-            if let image = previewImage(item) {
+            if embeddedPreviewItemID == item.id, let image = embeddedPreviewImage {
                 imagePreviewCanvas(image, showsTransparencyGrid: item.kind == .image)
+            } else if embeddedPreviewItemID == item.id, isEmbeddedPreviewLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, minHeight: 160)
             } else {
                 unavailablePreview(item)
             }
@@ -1634,7 +1829,7 @@ private struct ClipboardHistoryPanelView: View {
     private func detailPreview(_ item: ClipboardHistoryItem) -> some View {
         switch item.kind {
         case .image, .pdf:
-            if let image = previewImage(item) {
+            if embeddedPreviewItemID == item.id, let image = embeddedPreviewImage {
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)
@@ -1645,34 +1840,25 @@ private struct ClipboardHistoryPanelView: View {
             }
         case .files:
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(Array(item.fileURLs.enumerated()), id: \.offset) { _, url in
-                    HStack(spacing: 10) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 32, height: 32)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(url.lastPathComponent)
-                                .font(.body)
-                                .lineLimit(2)
-                            Text(url.deletingLastPathComponent().path)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            if !FileManager.default.fileExists(atPath: url.path) {
-                                Label(
-                                    localization.string(
-                                        "content.file.unavailable",
-                                        defaultValue: "文件不可用"
-                                    ),
-                                    systemImage: "exclamationmark.triangle.fill"
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                            }
-                        }
-                    }
+                ForEach(
+                    Array(ClipboardFileReferencePresentation.visibleURLs(from: item.fileURLs).enumerated()),
+                    id: \.offset
+                ) { _, url in
+                    ClipboardFileReferenceRow(
+                        url: url,
+                        unavailableTitle: localization.string(
+                            "content.file.unavailable",
+                            defaultValue: "文件不可用"
+                        )
+                    )
+                }
+                let remainingCount = ClipboardFileReferencePresentation.remainingCount(
+                    for: item.fileURLs
+                )
+                if remainingCount > 0 {
+                    Label("+\(remainingCount)", systemImage: "ellipsis")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         case .richText:
@@ -1693,28 +1879,19 @@ private struct ClipboardHistoryPanelView: View {
             .frame(maxWidth: .infinity, minHeight: 160)
     }
 
-    private func previewImage(_ item: ClipboardHistoryItem) -> NSImage? {
-        let preferred = item.payload?.representations.first {
-            ClipboardRepresentationType.isImage($0.typeIdentifier)
-                || $0.typeIdentifier == ClipboardRepresentationType.pdf
+    private func loadEmbeddedPreview() async {
+        embeddedPreviewImage = nil
+        guard let item = selectedItem, item.kind == .image || item.kind == .pdf else {
+            embeddedPreviewItemID = nil
+            isEmbeddedPreviewLoading = false
+            return
         }
-        guard let preferred else { return nil }
-        if preferred.typeIdentifier == ClipboardRepresentationType.pdf {
-            return NSImage(data: preferred.data)
-        }
-        guard let source = CGImageSourceCreateWithData(preferred.data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(
-                source,
-                0,
-                [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: 1_600,
-                ] as CFDictionary
-              ) else {
-            return nil
-        }
-        return NSImage(cgImage: image, size: .zero)
+        embeddedPreviewItemID = item.id
+        isEmbeddedPreviewLoading = true
+        let image = await ClipboardEmbeddedPreviewLoader.load(for: item)
+        guard !Task.isCancelled, model.selectedItemID == item.id else { return }
+        embeddedPreviewImage = image
+        isEmbeddedPreviewLoading = false
     }
 
     private func displayTitle(_ item: ClipboardHistoryItem) -> String {

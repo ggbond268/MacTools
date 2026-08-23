@@ -74,6 +74,54 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(nativeURLs, fileURLs)
     }
 
+    func testGeneralPasteboardCapturesMixedFileItemsAsPathReferencesOnly() throws {
+        let namedPasteboard = NSPasteboard(
+            name: NSPasteboard.Name("ClipboardHistoryMixedFilePasteTests.\(UUID().uuidString)")
+        )
+        let pasteboard = GeneralClipboardPasteboard(pasteboard: namedPasteboard)
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-document.pdf")
+        let sourceItem = NSPasteboardItem()
+        sourceItem.setString(fileURL.absoluteString, forType: .fileURL)
+        sourceItem.setData(Data(repeating: 0x41, count: 1_024), forType: .pdf)
+        sourceItem.setData(Data(repeating: 0x42, count: 1_024), forType: .png)
+        namedPasteboard.clearContents()
+        XCTAssertTrue(namedPasteboard.writeObjects([sourceItem]))
+        addTeardownBlock { namedPasteboard.clearContents() }
+
+        guard case let .payload(payload) = pasteboard.readPayload(maximumByteCount: 1_024 * 1_024)
+        else {
+            return XCTFail("Expected a file-reference payload")
+        }
+        XCTAssertEqual(payload.pasteboardItems.count, 1)
+        XCTAssertEqual(
+            payload.pasteboardItems[0].representations.map(\.typeIdentifier),
+            [ClipboardRepresentationType.fileURL]
+        )
+        XCTAssertEqual(payload.fileURLs, [fileURL])
+        XCTAssertEqual(payload.byteCount, Data(fileURL.absoluteString.utf8).count)
+    }
+
+    func testGeneralPasteboardRejectsExcessiveItemAndRepresentationCounts() {
+        let excessiveItems = (0...GeneralClipboardPasteboard.maximumPasteboardItemCount).map { index in
+            let item = NSPasteboardItem()
+            item.setString("item-\(index)", forType: .string)
+            return item
+        }
+        XCTAssertFalse(GeneralClipboardPasteboard.captureComplexityIsWithinLimits(excessiveItems))
+
+        let excessiveRepresentations = NSPasteboardItem()
+        for index in 0...GeneralClipboardPasteboard.maximumRepresentationCountPerItem {
+            excessiveRepresentations.setString(
+                "value",
+                forType: NSPasteboard.PasteboardType("com.example.clipboard.\(index)")
+            )
+        }
+        XCTAssertFalse(GeneralClipboardPasteboard.captureComplexityIsWithinLimits([
+            excessiveRepresentations,
+        ]))
+    }
+
     func testClipboardOwnershipChangingDuringReadKeepsObservedSourceSnapshot() async throws {
         let fixture = makeFixture()
         fixture.source.application = ClipboardSourceApplication(
@@ -97,6 +145,39 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             fixture.controller.items.first?.sourceApplication?.bundleIdentifier,
             "com.example.SourceA"
         )
+        fixture.controller.stop()
+    }
+
+    func testPasteboardChangeAfterPreflightDiscardsReplacementPayload() async {
+        let fixture = makeFixture()
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.simulateCopy("ordinary")
+        fixture.source.onRead = {
+            fixture.pasteboard.simulatedTypeNames = ["org.nspasteboard.ConcealedType"]
+            fixture.pasteboard.simulateCopy("private replacement")
+        }
+
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
+        fixture.controller.stop()
+    }
+
+    func testPasteboardChangeDuringPayloadReadDiscardsCapturedRevision() async {
+        let fixture = makeFixture()
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.simulateCopy("first revision")
+        fixture.pasteboard.onRead = {
+            fixture.pasteboard.simulateCopy("second revision")
+        }
+
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 1)
         fixture.controller.stop()
     }
 
@@ -154,6 +235,39 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testRejectedCaptureDoesNotEvictExistingHistoryWhenPinnedBytesUseCapacity() async {
+        let pin = logicalItem(
+            text: "pin",
+            payloadByteCount: 30 * 1_024 * 1_024,
+            pinned: true
+        )
+        let existing = logicalItem(
+            text: "existing",
+            payloadByteCount: 1 * 1_024 * 1_024,
+            pinned: false
+        )
+        let fixture = makeFixture(initialItems: [pin, existing])
+        fixture.settings.maximumItemByteCount = 50 * 1_024 * 1_024
+        fixture.settings.maximumTotalPayloadByteCount = 64 * 1_024 * 1_024
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        let originalIDs = fixture.controller.items.map(\.id)
+        let baselineSaveCount = fixture.persistence.saveCount
+        var rejection: ClipboardCaptureIgnoreReason?
+        fixture.controller.onCaptureRejection = { reason, _ in rejection = reason }
+
+        fixture.pasteboard.simulateCopy(imagePayload(
+            data: Data(repeating: 0x01, count: 40 * 1_024 * 1_024)
+        ))
+        fixture.controller.processPasteboardChange()
+        await fixture.controller.waitForCaptureProcessingForTesting()
+
+        XCTAssertEqual(rejection, .pinnedItemsFillCapacity)
+        XCTAssertEqual(fixture.controller.items.map(\.id), originalIDs)
+        XCTAssertEqual(fixture.persistence.saveCount, baselineSaveCount)
+        fixture.controller.stop()
+    }
+
     func testCapturedImageIsIndexedForSearchAndPersisted() async throws {
         let recognizer = FakeClipboardImageTextRecognizer(text: "Invoice total 42 dollars")
         let fixture = makeFixture(imageTextRecognizer: recognizer)
@@ -170,8 +284,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
 
         fixture.pasteboard.simulateCopy(payload)
         fixture.controller.processPasteboardChange()
-        for _ in 0..<100 where fixture.controller.items.first?.hasCompletedImageTextIndexing != true {
-            await Task.yield()
+        for _ in 0..<5_000 where fixture.controller.items.first?.hasCompletedImageTextIndexing != true {
+            try? await Task.sleep(nanoseconds: 1_000_000)
         }
 
         XCTAssertEqual(fixture.controller.matchingItems(query: "inv tot").count, 1)
@@ -185,6 +299,176 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(fixture.persistence.savedItems.first?.imageSearchText, "Invoice total 42 dollars")
     }
 
+    func testImageIndexingContinuesAfterPayloadLoadFailureAndBatchesPersistence() async {
+        let failing = lazyImageItem(payloadLoader: {
+            throw ClipboardHistoryPayloadAccessError.unavailable
+        })
+        let successful = (0..<3).map { byte in
+            let payload = imagePayload(data: Data([UInt8(byte)]))
+            return lazyImageItem(payloadLoader: { payload })
+        }
+        let fixture = makeFixture(
+            initialItems: [failing] + successful,
+            imageTextRecognizer: FakeClipboardImageTextRecognizer(text: "recognized")
+        )
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        for _ in 0..<5_000 where fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count < 3 {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+
+        XCTAssertFalse(fixture.controller.items.first(where: { $0.id == failing.id })!.hasCompletedImageTextIndexing)
+        XCTAssertEqual(fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count, 3)
+        XCTAssertTrue(successful.allSatisfy { item in
+            fixture.controller.items.first(where: { $0.id == item.id })?.payload == nil
+        })
+        fixture.controller.stop()
+        XCTAssertLessThanOrEqual(fixture.persistence.saveCount, 2)
+        XCTAssertEqual(fixture.persistence.savedItems.filter(\.hasCompletedImageTextIndexing).count, 3)
+    }
+
+    func testStartupImageIndexingIsBounded() async {
+        let images = (0...ClipboardHistoryController.maximumStartupImageIndexItemCount).map { byte in
+            let payload = imagePayload(data: Data([UInt8(byte % 255)]))
+            return lazyImageItem(payloadLoader: { payload })
+        }
+        let fixture = makeFixture(
+            initialItems: images,
+            imageTextRecognizer: FakeClipboardImageTextRecognizer(text: "recognized")
+        )
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        for _ in 0..<10_000 where fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count
+            < ClipboardHistoryController.maximumStartupImageIndexItemCount {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+
+        XCTAssertEqual(
+            fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count,
+            ClipboardHistoryController.maximumStartupImageIndexItemCount
+        )
+        let deferredItem = try! XCTUnwrap(fixture.controller.items.first(where: {
+            !$0.hasCompletedImageTextIndexing
+        }))
+        fixture.controller.requestImageTextIndexing(id: deferredItem.id)
+        for _ in 0..<5_000 where fixture.controller.items.first(where: {
+            $0.id == deferredItem.id
+        })?.hasCompletedImageTextIndexing != true {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+        XCTAssertTrue(fixture.controller.items.first(where: {
+            $0.id == deferredItem.id
+        })?.hasCompletedImageTextIndexing == true)
+        fixture.controller.stop()
+    }
+
+    func testDeletingAnItemDoesNotQueueImagesDeferredByTheStartupLimit() async throws {
+        let recognizer = BlockingCountingClipboardImageTextRecognizer()
+        let deferredImageCount = ClipboardHistoryController.maximumStartupImageIndexItemCount + 1
+        let images = (0..<deferredImageCount).map { byte in
+            let payload = imagePayload(data: Data([UInt8(byte % 255)]))
+            return lazyImageItem(payloadLoader: { payload })
+        }
+        let unrelatedText = item(text: "delete me", pinned: false)
+        let fixture = makeFixture(
+            initialItems: [unrelatedText] + images,
+            imageTextRecognizer: recognizer
+        )
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        for _ in 0..<5_000 {
+            if await recognizer.callCount > 0 { break }
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+
+        let deleted = await fixture.controller.deleteItem(id: unrelatedText.id)
+        XCTAssertTrue(deleted)
+        await recognizer.releaseAll()
+        for _ in 0..<10_000 where fixture.controller.items.filter({
+            $0.hasCompletedImageTextIndexing
+        }).count
+            < ClipboardHistoryController.maximumStartupImageIndexItemCount {
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        let recognitionCallCount = await recognizer.callCount
+        XCTAssertEqual(
+            recognitionCallCount,
+            ClipboardHistoryController.maximumStartupImageIndexItemCount
+        )
+        XCTAssertEqual(
+            fixture.controller.items.filter { !$0.hasCompletedImageTextIndexing }.count,
+            1
+        )
+        fixture.controller.stop()
+    }
+
+    func testFirstSuppressedWriteNearArmDeadlineGetsACompleteSettlingInterval() async throws {
+        let fixture = makeFixture(captureSuppressionSettlingInterval: 0.2)
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        XCTAssertTrue(fixture.controller.ignoreNextCopy(expiringAfter: 0.1))
+        try await Task.sleep(nanoseconds: 80_000_000)
+        fixture.pasteboard.simulateCopy("private first write")
+        fixture.controller.processPasteboardChange()
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+        XCTAssertTrue(fixture.controller.isIgnoringNextCopy)
+        fixture.pasteboard.simulateCopy("private delayed representation")
+        fixture.controller.processPasteboardChange()
+
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertTrue(fixture.controller.isIgnoringNextCopy)
+        fixture.pasteboard.simulateCopy("private final delayed representation")
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
+        XCTAssertEqual(fixture.source.readCount, 0)
+
+        try await Task.sleep(nanoseconds: 220_000_000)
+        for _ in 0..<100 where fixture.controller.isIgnoringNextCopy {
+            try await Task.sleep(nanoseconds: 2_000_000)
+        }
+        XCTAssertFalse(fixture.controller.isIgnoringNextCopy)
+        fixture.controller.stop()
+    }
+
+    func testLargeCapturesArePreparedOffMainActorAndAppliedInCaptureOrder() async {
+        let fixture = makeFixture()
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        let first = String(
+            repeating: "a",
+            count: ClipboardHistoryController.maximumSynchronousCaptureByteCount + 1
+        )
+        let second = String(
+            repeating: "b",
+            count: ClipboardHistoryController.maximumSynchronousCaptureByteCount + 1
+        )
+
+        fixture.pasteboard.simulateCopy(first)
+        fixture.controller.processPasteboardChange()
+        fixture.pasteboard.simulateCopy(second)
+        fixture.controller.processPasteboardChange()
+
+        // Applying the prepared item requires a later MainActor turn, so capture preprocessing did
+        // not synchronously monopolize this turn.
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        await fixture.controller.waitForCaptureProcessingForTesting()
+        XCTAssertEqual(
+            fixture.controller.items.map(\.text),
+            [
+                String(second.prefix(ClipboardHistoryItem.maximumSearchableCharacterCount)),
+                String(first.prefix(ClipboardHistoryItem.maximumSearchableCharacterCount)),
+            ]
+        )
+        fixture.controller.stop()
+    }
+
     func testPlainTextRewriteDoesNotUseOCRAfterThePasteboardChanges() async {
         let recognizer = FakeClipboardImageTextRecognizer(text: "Stale recognized text")
         let fixture = makeFixture(imageTextRecognizer: recognizer)
@@ -192,8 +476,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         await waitUntilLoaded(fixture.controller)
         fixture.pasteboard.simulateCopy(imagePayload(data: Data([0x01])))
         fixture.controller.processPasteboardChange()
-        for _ in 0..<100 where fixture.controller.items.first?.hasCompletedImageTextIndexing != true {
-            await Task.yield()
+        for _ in 0..<5_000 where fixture.controller.items.first?.hasCompletedImageTextIndexing != true {
+            try? await Task.sleep(nanoseconds: 1_000_000)
         }
 
         fixture.pasteboard.simulateCopy(imagePayload(data: Data([0x02])))
@@ -230,7 +514,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
 
-        XCTAssertTrue(fixture.controller.copyItem(id: existing.id))
+        let didCopy = await fixture.controller.copyItem(id: existing.id)
+        XCTAssertTrue(didCopy)
         fixture.controller.processPasteboardChange()
 
         XCTAssertEqual(fixture.controller.items.count, 1)
@@ -263,7 +548,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(item.payload, payload)
         XCTAssertEqual(item.text, "Formatted note")
         XCTAssertEqual(item.kind, .richText)
-        XCTAssertTrue(fixture.controller.copyItem(id: item.id))
+        let didCopy = await fixture.controller.copyItem(id: item.id)
+        XCTAssertTrue(didCopy)
         XCTAssertEqual(fixture.pasteboard.lastWrittenPayload, payload)
         fixture.controller.stop()
     }
@@ -343,7 +629,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
 
-        XCTAssertFalse(fixture.controller.copyItem(id: item.id))
+        let didCopy = await fixture.controller.copyItem(id: item.id)
+        XCTAssertFalse(didCopy)
         XCTAssertNil(fixture.pasteboard.lastWrittenPayload)
         fixture.controller.stop()
     }
@@ -370,6 +657,26 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(fixture.controller.items.isEmpty)
         XCTAssertEqual(rejection?.0, .oversized)
         XCTAssertEqual(rejection?.1, 1_024 * 1_024)
+        fixture.controller.stop()
+    }
+
+    func testQueuedCaptureReevaluatesChangedItemSizeLimit() async {
+        let fixture = makeFixture()
+        let payload = imagePayload(data: Data(repeating: 0xA5, count: 2 * 1_024 * 1_024))
+        var rejection: (ClipboardCaptureIgnoreReason, Int)?
+        fixture.controller.onCaptureRejection = { rejection = ($0, $1) }
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        fixture.pasteboard.simulateCopy(payload)
+        fixture.controller.processPasteboardChange()
+        fixture.settings.maximumItemByteCount = 1 * 1_024 * 1_024
+        fixture.controller.settingsDidChange()
+        await fixture.controller.waitForCaptureProcessingForTesting()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(rejection?.0, .oversized)
+        XCTAssertEqual(rejection?.1, 1 * 1_024 * 1_024)
         fixture.controller.stop()
     }
 
@@ -465,7 +772,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
-    func testSuppressionChurnCannotExtendPastHardDeadlineWithoutReadingPayload() async throws {
+    func testSuppressionChurnSettlesAfterLastObservedWriteWithoutReadingPayload() async throws {
         let fixture = makeFixture(captureSuppressionSettlingInterval: 0.2)
         var suppressionEvents: [ClipboardCaptureSuppressionEvent] = []
         fixture.controller.onCaptureSuppressionEvent = { suppressionEvents.append($0) }
@@ -476,7 +783,6 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.pasteboard.simulateCopy("private first write")
         fixture.controller.processPasteboardChange()
         for index in 1...4 {
-            try await Task.sleep(nanoseconds: 100_000_000)
             XCTAssertTrue(fixture.controller.isIgnoringNextCopy)
             fixture.pasteboard.simulateCopy("private transition \(index)")
             fixture.controller.processPasteboardChange()
@@ -486,7 +792,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             .consumed(mode: .ignoreNextCopy),
         ])
 
-        try await Task.sleep(nanoseconds: 200_000_000)
+        try await Task.sleep(nanoseconds: 550_000_000)
         for _ in 0..<100 where fixture.controller.isIgnoringNextCopy {
             try await Task.sleep(nanoseconds: 2_000_000)
         }
@@ -968,6 +1274,60 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             ]),
         ])
     }
+
+    private func logicalItem(
+        text: String,
+        payloadByteCount: Int,
+        pinned: Bool
+    ) -> ClipboardHistoryItem {
+        ClipboardHistoryItem(
+            id: UUID(),
+            text: text,
+            capturedAt: Date(),
+            sourceApplication: nil,
+            kind: .plainText,
+            payloadByteCount: payloadByteCount,
+            filterContentKinds: [.plainText],
+            fileURLs: [],
+            representationTypeIdentifiers: [ClipboardRepresentationType.plainText],
+            payloadDigest: Data(text.utf8),
+            allowsRichTextImport: false,
+            textCharacterCount: text.count,
+            textLineCount: 1,
+            isSearchTextTruncated: false,
+            isPinned: pinned,
+            lastUsedAt: nil,
+            imageSearchText: nil,
+            hasCompletedImageTextIndexing: false,
+            payloadLoader: { .plainText(text) }
+        )
+    }
+
+    private func lazyImageItem(
+        payloadLoader: @escaping @Sendable () throws -> ClipboardHistoryPayload
+    ) -> ClipboardHistoryItem {
+        ClipboardHistoryItem(
+            id: UUID(),
+            text: "",
+            capturedAt: Date(),
+            sourceApplication: nil,
+            kind: .image,
+            payloadByteCount: 1,
+            filterContentKinds: [.image],
+            fileURLs: [],
+            representationTypeIdentifiers: [ClipboardRepresentationType.png],
+            payloadDigest: Data(UUID().uuidString.utf8),
+            allowsRichTextImport: false,
+            textCharacterCount: 0,
+            textLineCount: 0,
+            isSearchTextTruncated: false,
+            isPinned: false,
+            lastUsedAt: nil,
+            imageSearchText: nil,
+            hasCompletedImageTextIndexing: false,
+            payloadLoader: payloadLoader
+        )
+    }
 }
 
 private struct FakeClipboardImageTextRecognizer: ClipboardImageTextRecognizing {
@@ -982,6 +1342,29 @@ private struct SlowClipboardImageTextRecognizer: ClipboardImageTextRecognizing {
     func recognizeText(in payload: ClipboardHistoryPayload) async -> String? {
         try? await Task.sleep(nanoseconds: 60_000_000_000)
         return nil
+    }
+}
+
+private actor BlockingCountingClipboardImageTextRecognizer: ClipboardImageTextRecognizing {
+    private(set) var callCount = 0
+    private var isReleased = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func recognizeText(in payload: ClipboardHistoryPayload) async -> String? {
+        callCount += 1
+        if !isReleased {
+            await withCheckedContinuation { continuation in
+                continuations.append(continuation)
+            }
+        }
+        return "recognized"
+    }
+
+    func releaseAll() {
+        isReleased = true
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume() }
     }
 }
 
@@ -1040,10 +1423,12 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
 @MainActor
 private final class FakeClipboardSourceContext: ClipboardSourceContextProviding {
     var application: ClipboardSourceApplication?
+    var onRead: (() -> Void)?
     private(set) var readCount = 0
 
     func frontmostApplication() -> ClipboardSourceApplication? {
         readCount += 1
+        onRead?()
         return application
     }
 }
@@ -1052,6 +1437,7 @@ private final class InMemoryClipboardHistoryPersistence: ClipboardHistoryPersist
     private let lock = NSLock()
     private var items: [ClipboardHistoryItem]
     private var removed = false
+    private var saves = 0
 
     init(items: [ClipboardHistoryItem]) {
         self.items = items
@@ -1067,12 +1453,19 @@ private final class InMemoryClipboardHistoryPersistence: ClipboardHistoryPersist
         lock.withLock { removed }
     }
 
+    var saveCount: Int {
+        lock.withLock { saves }
+    }
+
     func load() throws -> [ClipboardHistoryItem] {
         lock.withLock { items }
     }
 
     func save(_ items: [ClipboardHistoryItem]) throws {
-        lock.withLock { self.items = items }
+        lock.withLock {
+            self.items = items
+            saves += 1
+        }
     }
 
     func reset() throws {

@@ -174,6 +174,12 @@ final class ClipboardHistoryPlugin:
                     "hud.capture.pinnedCapacity",
                     defaultValue: "未保存：固定项目已占满历史容量"
                 ))
+            case .tooManyObjects:
+                privacyHUDPresenter?.showFailure(localization.format(
+                    "hud.capture.tooManyObjects",
+                    defaultValue: "未保存：剪贴板项目超过 %d 个",
+                    limit
+                ))
             default:
                 break
             }

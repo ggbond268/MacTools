@@ -2611,6 +2611,76 @@
         }
       }
     },
+    "hud.capture.tooManyObjects": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يتم الحفظ: تحتوي الحافظة على أكثر من %d عنصر"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gespeichert: Zwischenablage enthält mehr als %d Objekte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not saved: clipboard contains more than %d items"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se guardó: el portapapeles contiene más de %d elementos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non enregistré : le presse-papiers contient plus de %d éléments"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存されませんでした：クリップボードの項目数が%d個を超えています"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장하지 않음: 클립보드 항목이 %d개를 초과함"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não salvo: a área de transferência contém mais de %d itens"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не сохранено: в буфере обмена больше %d объектов"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未保存：剪贴板项目超过 %d 个"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未儲存：剪貼簿項目超過 %d 個"
+          }
+        }
+      }
+    },
     "settings.retention.byteCount.gigabytes": {
       "localizations": {
         "ar": {
@@ -10344,6 +10414,21 @@
             "value": "接下來一次剪貼簿變更不會被讀取或儲存，15 秒後自動取消。"
           }
         }
+      }
+    },
+    "panel.action.cancelIgnore": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إلغاء تجاهل عملية النسخ التالية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ignorieren der nächsten Kopie abbrechen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Cancel Ignore Next Copy" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Dejar de ignorar la próxima copia" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Annuler Ignorer la prochaine copie" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "次のコピーの無視をキャンセル" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "다음 복사 무시 취소" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Cancelar ignorar próxima cópia" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Отменить пропуск следующего копирования" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "取消忽略下一次复制" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "取消忽略下一次複製" } }
       }
     },
     "shortcut.ignoreNext.title": {

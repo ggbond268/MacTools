@@ -89,6 +89,23 @@ final class ClipboardCapturePolicyTests: XCTestCase {
         XCTAssertEqual(captured.text, original)
     }
 
+    func testConsecutiveLongDuplicateUsesTheCompleteReloadablePayload() {
+        let longText = String(repeating: "long normalized text ", count: 400)
+        let existing = item(text: longText + "\r\n")
+        existing.configurePayloadLoader({ .plainText(longText + "\r\n") }, discardCachedPayload: true)
+
+        XCTAssertEqual(
+            ClipboardCapturePolicy.evaluateText(
+                longText + "\n",
+                sourceApplication: source,
+                settings: .defaults,
+                newestItem: existing
+            ),
+            .ignore(.duplicateNewestItem)
+        )
+        XCTAssertNil(existing.payload)
+    }
+
     func testOversizedTextIsIgnoredByUTF8ByteCount() {
         var settings = ClipboardHistorySettings.defaults
         settings.maximumItemByteCount = 3

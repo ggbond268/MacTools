@@ -542,6 +542,33 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         )
     }
 
+    func testHTMLRichTextImporterRejectsSubsidiaryResourceRequests() throws {
+        let delegate = ClipboardHTMLResourceLoadDenyDelegate()
+        let selector = NSSelectorFromString(
+            "webView:resource:willSendRequest:redirectResponse:fromDataSource:"
+        )
+        XCTAssertTrue(delegate.responds(to: selector))
+        XCTAssertNil(delegate.denyResourceLoad(
+            NSObject(),
+            resource: NSObject(),
+            willSendRequest: NSURLRequest(url: URL(string: "https://tracker.invalid/pixel.png")!),
+            redirectResponse: nil,
+            fromDataSource: NSObject()
+        ))
+
+        let html = "<html><body><b>Local preview</b><img src='https://tracker.invalid/pixel.png'></body></html>"
+        let payload = ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.html,
+                    data: Data(html.utf8)
+                ),
+            ]),
+        ])
+        let imported = try XCTUnwrap(ClipboardRichText.attributedString(for: payload))
+        XCTAssertTrue(imported.string.contains("Local preview"))
+    }
+
     func testOversizedRichTextUsesBoundedPlainTextWithoutImportingFormatting() {
         let fallbackText = String(repeating: "a", count: 20_000)
         let payload = ClipboardHistoryPayload(pasteboardItems: [

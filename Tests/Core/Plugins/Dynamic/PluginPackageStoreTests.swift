@@ -217,7 +217,168 @@ final class PluginPackageStoreTests: XCTestCase {
         }
 
         XCTAssertEqual(removedKeyPluginIDs, ["com.example.private"])
+        XCTAssertTrue(store.installedRecords().isEmpty)
+    }
+
+    func testPackageStagingFailureLeavesPrivateDataAndKeyUntouched() throws {
+        var removedKeyPluginIDs: [String] = []
+        let sourceURL = try makePackage(
+            id: "com.example.private",
+            uninstallDataPolicy: .removePrivateData
+        )
+        let store = makeStore(
+            packageFileMover: { _, _ in throw CocoaError(.fileWriteNoPermission) },
+            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
+        )
+        _ = try store.installPackage(from: sourceURL)
+        let supportDirectory = store.dataDirectory.appendingPathComponent(
+            "com.example.private",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+        let historyURL = supportDirectory.appendingPathComponent("history.sqlite3")
+        try Data("private".utf8).write(to: historyURL)
+
+        XCTAssertThrowsError(try store.uninstall(pluginID: "com.example.private", removeData: false)) {
+            guard case .removeFailed = $0 as? PluginPackageStoreError else {
+                return XCTFail("Expected removeFailed, got \($0)")
+            }
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: historyURL.path))
+        XCTAssertTrue(removedKeyPluginIDs.isEmpty)
         XCTAssertEqual(store.installedRecords().map(\.id), ["com.example.private"])
+    }
+
+    func testPrivateUninstallJournalRecoversCrashBoundariesIdempotently() throws {
+        let pluginIDs = [
+            "com.example.private-before-stage",
+            "com.example.private-after-stage",
+            "com.example.private-after-directories",
+        ]
+        let store = makeStore(privateDataKeyRemover: { _ in })
+        for pluginID in pluginIDs {
+            let sourceURL = try makePackage(
+                id: pluginID,
+                uninstallDataPolicy: .removePrivateData
+            )
+            _ = try store.installPackage(from: sourceURL)
+            let supportDirectory = store.dataDirectory.appendingPathComponent(
+                pluginID,
+                isDirectory: true
+            )
+            try FileManager.default.createDirectory(
+                at: supportDirectory,
+                withIntermediateDirectories: true
+            )
+            try Data("private".utf8).write(
+                to: supportDirectory.appendingPathComponent("history.sqlite3")
+            )
+        }
+
+        var intents: [String: String] = [:]
+        for pluginID in pluginIDs {
+            let stagedName = "uninstall-\(pluginID)-crash.mactoolsplugin"
+            intents[pluginID] = stagedName
+            guard pluginID != pluginIDs[0] else { continue }
+            let installedURL = store.installedDirectory
+                .appendingPathComponent(pluginID, isDirectory: true)
+                .appendingPathExtension("mactoolsplugin")
+            try FileManager.default.moveItem(
+                at: installedURL,
+                to: store.stagingDirectory.appendingPathComponent(stagedName)
+            )
+        }
+        try FileManager.default.removeItem(
+            at: store.dataDirectory.appendingPathComponent(pluginIDs[2], isDirectory: true)
+        )
+        defaults.set(intents, forKey: "plugins.dynamic.privateUninstallIntents")
+        XCTAssertTrue(defaults.synchronize())
+
+        var removedKeyPluginIDs: [String] = []
+        let recoveredStore = makeStore(
+            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
+        )
+
+        XCTAssertTrue(recoveredStore.installedRecords().isEmpty)
+        XCTAssertEqual(Set(removedKeyPluginIDs), Set(pluginIDs))
+        for pluginID in pluginIDs {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: recoveredStore.dataDirectory
+                .appendingPathComponent(pluginID, isDirectory: true).path))
+        }
+        let stagedResidue = try FileManager.default.contentsOfDirectory(
+            at: recoveredStore.stagingDirectory,
+            includingPropertiesForKeys: nil
+        ).filter { $0.lastPathComponent.contains("com.example.private-") }
+        XCTAssertTrue(stagedResidue.isEmpty)
+        XCTAssertEqual(
+            defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?.count,
+            0
+        )
+
+        let secondRecovery = makeStore(
+            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
+        )
+        XCTAssertTrue(secondRecovery.installedRecords().isEmpty)
+        XCTAssertEqual(removedKeyPluginIDs.count, pluginIDs.count)
+    }
+
+    func testPrivateUninstallJournalRejectsUnsafePathsWithoutDeletingThem() throws {
+        let protectedURL = temporaryRoot.appendingPathComponent("protected.mactoolsplugin")
+        try FileManager.default.createDirectory(
+            at: protectedURL,
+            withIntermediateDirectories: true
+        )
+        defaults.set(
+            ["../protected": "../protected.mactoolsplugin"],
+            forKey: "plugins.dynamic.privateUninstallIntents"
+        )
+        XCTAssertTrue(defaults.synchronize())
+
+        _ = makeStore(privateDataKeyRemover: { _ in
+            XCTFail("Invalid journal must not remove a private key")
+        })
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: protectedURL.path))
+        XCTAssertEqual(
+            defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?.count,
+            0
+        )
+    }
+
+    func testCompletedPrivateUninstallJournalDoesNotRemoveFreshReinstall() throws {
+        let pluginID = "com.example.private-reinstall"
+        let sourceURL = try makePackage(
+            id: pluginID,
+            uninstallDataPolicy: .removePrivateData
+        )
+        var synchronizationCount = 0
+        var removedKeyPluginIDs: [String] = []
+        let store = makeStore(
+            synchronizeUserDefaults: { defaults in
+                synchronizationCount += 1
+                if synchronizationCount == 3 {
+                    return false
+                }
+                return defaults.synchronize()
+            },
+            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
+        )
+        _ = try store.installPackage(from: sourceURL)
+
+        try store.uninstall(pluginID: pluginID, removeData: false)
+        XCTAssertEqual(removedKeyPluginIDs, [pluginID])
+
+        let reinstalled = try store.installPackage(from: sourceURL)
+
+        XCTAssertEqual(reinstalled.id, pluginID)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: reinstalled.packageURL.path))
+        XCTAssertEqual(store.installedRecords().map(\.id), [pluginID])
+        XCTAssertEqual(removedKeyPluginIDs, [pluginID])
+        XCTAssertEqual(
+            defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?.count,
+            0
+        )
     }
 
     func testFailedUpdateRestoresExistingPackage() throws {
@@ -296,6 +457,8 @@ final class PluginPackageStoreTests: XCTestCase {
     }
 
     private func makeStore(
+        synchronizeUserDefaults: @escaping (UserDefaults) -> Bool = { $0.synchronize() },
+        packageFileMover: ((URL, URL) throws -> Void)? = nil,
         privateDataDirectoryRemover: ((URL) throws -> Void)? = nil,
         privateDataKeyRemover: ((String) throws -> Void)? = nil,
         now: @escaping () -> Date = { Date() }
@@ -303,6 +466,8 @@ final class PluginPackageStoreTests: XCTestCase {
         PluginPackageStore(
             rootDirectory: temporaryRoot,
             userDefaults: defaults,
+            synchronizeUserDefaults: synchronizeUserDefaults,
+            packageFileMover: packageFileMover,
             privateDataDirectoryRemover: privateDataDirectoryRemover,
             privateDataKeyRemover: privateDataKeyRemover,
             now: now,

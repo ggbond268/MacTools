@@ -419,7 +419,8 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             .consumed(mode: .ignoreNextCopy),
         ])
 
-        XCTAssertFalse(plugin.controller.copyItem(id: originalItem.id))
+        let didCopy = await plugin.controller.copyItem(id: originalItem.id)
+        XCTAssertFalse(didCopy)
         plugin.controller.togglePin(id: originalItem.id)
         _ = await plugin.controller.deleteItem(id: originalItem.id)
         plugin.controller.settings.maximumItemCount = 100

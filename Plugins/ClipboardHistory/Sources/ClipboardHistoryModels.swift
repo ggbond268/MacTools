@@ -142,6 +142,8 @@ enum ClipboardFileContentKind: String, CaseIterable, Equatable, Hashable, Sendab
 }
 
 struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
+    static let maximumMetadataURLByteCount = 4_096
+
     let pasteboardItems: [ClipboardStoredPasteboardItem]
 
     init(pasteboardItems: [ClipboardStoredPasteboardItem]) {
@@ -181,6 +183,29 @@ struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
                   let value = String(data: representation.data, encoding: .utf8) else {
                 return nil
             }
+            return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
+    var linkURLs: [URL] {
+        representations.compactMap { representation in
+            guard representation.typeIdentifier == ClipboardRepresentationType.url,
+                  let value = String(data: representation.data, encoding: .utf8) else {
+                return nil
+            }
+            return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
+    /// Link metadata is loaded eagerly for every history row. Keep it bounded; the complete URL
+    /// remains in the encrypted payload and is decoded only when the item is used.
+    var metadataLinkURLs: [URL] {
+        representations.compactMap { representation in
+            guard representation.typeIdentifier == ClipboardRepresentationType.url else {
+                return nil
+            }
+            let boundedData = representation.data.prefix(Self.maximumMetadataURLByteCount)
+            guard let value = String(data: boundedData, encoding: .utf8) else { return nil }
             return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
         }
     }
@@ -226,14 +251,12 @@ struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
         return kinds
     }
 
-    var hasUnavailableFileReferences: Bool {
-        fileURLs.contains { !FileManager.default.fileExists(atPath: $0.path) }
-    }
-
     var searchableText: String {
         let textValues = plainTexts.filter { !$0.isEmpty }
+            + metadataLinkURLs.map(\.absoluteString).filter { !$0.isEmpty }
         if !textValues.isEmpty {
-            return textValues.joined(separator: "\n")
+            return Array(NSOrderedSet(array: textValues)).compactMap { $0 as? String }
+                .joined(separator: "\n")
         }
         let fileNames = fileURLs.map(\.lastPathComponent).filter { !$0.isEmpty }
         return fileNames.joined(separator: "\n")
@@ -338,7 +361,7 @@ private final class ClipboardHistoryPayloadReference: @unchecked Sendable {
 }
 
 struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
-    static let maximumSearchableCharacterCount = 16_000
+    static let maximumSearchableCharacterCount = 4_096
 
     let id: UUID
     private let payloadReference: ClipboardHistoryPayloadReference
@@ -349,6 +372,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     let payloadByteCount: Int
     let filterContentKinds: Set<ClipboardHistoryContentKind>
     let fileURLs: [URL]
+    let linkURLs: [URL]
     let representationTypeIdentifiers: [String]
     let payloadDigest: Data
     let allowsRichTextImport: Bool
@@ -381,6 +405,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         payloadByteCount = payload.byteCount
         filterContentKinds = payload.filterContentKinds
         fileURLs = payload.fileURLs
+        linkURLs = payload.metadataLinkURLs
         representationTypeIdentifiers = payload.representations.map(\.typeIdentifier)
         payloadDigest = Self.digest(payload)
         allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
@@ -398,6 +423,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             text: text,
             sourceApplication: sourceApplication,
             fileURLs: payload.fileURLs,
+            linkURLs: payload.metadataLinkURLs,
             imageSearchText: boundedImageSearchText
         )
     }
@@ -450,6 +476,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         payloadByteCount: Int,
         filterContentKinds: Set<ClipboardHistoryContentKind>,
         fileURLs: [URL],
+        linkURLs: [URL] = [],
         representationTypeIdentifiers: [String],
         payloadDigest: Data,
         allowsRichTextImport: Bool,
@@ -464,28 +491,35 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     ) {
         self.id = id
         payloadReference = ClipboardHistoryPayloadReference(loader: payloadLoader)
-        self.text = text
+        let boundedText = String(text.prefix(Self.maximumSearchableCharacterCount))
+        self.text = boundedText
         self.capturedAt = capturedAt
         self.sourceApplication = sourceApplication
         self.kind = kind
         self.payloadByteCount = payloadByteCount
         self.filterContentKinds = filterContentKinds
         self.fileURLs = fileURLs
+        self.linkURLs = linkURLs
         self.representationTypeIdentifiers = representationTypeIdentifiers
         self.payloadDigest = payloadDigest
         self.allowsRichTextImport = allowsRichTextImport
         self.textCharacterCount = textCharacterCount
         self.textLineCount = textLineCount
         self.isSearchTextTruncated = isSearchTextTruncated
+            || text.count > Self.maximumSearchableCharacterCount
         self.isPinned = isPinned
         self.lastUsedAt = lastUsedAt
-        self.imageSearchText = imageSearchText
+        let boundedImageSearchText = imageSearchText.map {
+            String($0.prefix(Self.maximumSearchableCharacterCount))
+        }
+        self.imageSearchText = boundedImageSearchText
         self.hasCompletedImageTextIndexing = hasCompletedImageTextIndexing
         searchIndex = ClipboardHistorySearch.makeIndex(
-            text: text,
+            text: boundedText,
             sourceApplication: sourceApplication,
             fileURLs: fileURLs,
-            imageSearchText: imageSearchText
+            linkURLs: linkURLs,
+            imageSearchText: boundedImageSearchText
         )
     }
 
@@ -498,6 +532,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             text: text,
             sourceApplication: sourceApplication,
             fileURLs: fileURLs,
+            linkURLs: linkURLs,
             imageSearchText: boundedText
         )
     }
@@ -530,6 +565,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         payloadByteCount = payload.byteCount
         filterContentKinds = payload.filterContentKinds
         fileURLs = payload.fileURLs
+        linkURLs = payload.metadataLinkURLs
         representationTypeIdentifiers = payload.representations.map(\.typeIdentifier)
         payloadDigest = Self.digest(payload)
         allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
@@ -548,6 +584,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             text: text,
             sourceApplication: sourceApplication,
             fileURLs: payload.fileURLs,
+            linkURLs: payload.metadataLinkURLs,
             imageSearchText: imageSearchText
         )
     }
@@ -575,6 +612,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             && lhs.payloadByteCount == rhs.payloadByteCount
             && lhs.filterContentKinds == rhs.filterContentKinds
             && lhs.fileURLs == rhs.fileURLs
+            && lhs.linkURLs == rhs.linkURLs
             && lhs.representationTypeIdentifiers == rhs.representationTypeIdentifiers
             && lhs.payloadDigest == rhs.payloadDigest
             && lhs.allowsRichTextImport == rhs.allowsRichTextImport
@@ -669,6 +707,7 @@ enum ClipboardCaptureIgnoreReason: Equatable, Sendable {
     case excludedApplication
     case empty
     case oversized
+    case tooManyObjects
     case pinnedItemsFillCapacity
     case duplicateNewestItem
 }
@@ -781,7 +820,15 @@ enum ClipboardCapturePolicy {
            rhs.kind == .plainText,
            !lhs.plainTexts.isEmpty,
            !rhs.text.isEmpty {
-            return normalizedText(lhs.searchableText) == normalizedText(rhs.text)
+            let rhsText: String
+            if rhs.isSearchTextTruncated,
+               let rhsPayload = try? rhs.loadPayload() {
+                defer { rhs.discardCachedPayloadIfReloadable() }
+                rhsText = rhsPayload.searchableText
+            } else {
+                rhsText = rhs.text
+            }
+            return normalizedText(lhs.searchableText) == normalizedText(rhsText)
         }
         return ClipboardHistoryItem.digest(lhs) == rhs.payloadDigest
     }
@@ -849,13 +896,16 @@ enum ClipboardRetentionPolicy {
         let pinnedPayloadBytes = pinned.reduce(0) { $0 + $1.payloadByteCount }
         var retainedPayloadBytes = pinnedPayloadBytes
         let availableRecentCount = max(0, maximumItemCount - pinned.count)
-        for item in recent.prefix(availableRecentCount) {
+        var retainedRecentCount = 0
+        for item in recent {
+            guard retainedRecentCount < availableRecentCount else { break }
             let byteCount = item.payloadByteCount
             guard retainedPayloadBytes + byteCount <= settings.maximumTotalPayloadByteCount else {
-                break
+                continue
             }
             retained.append(item)
             retainedPayloadBytes += byteCount
+            retainedRecentCount += 1
         }
         let retainedIDs = Set(retained.map(\.id))
         let evictedUnpinnedItemCount = items.lazy.filter {
@@ -876,6 +926,11 @@ enum ClipboardRetentionPolicy {
 }
 
 enum ClipboardHistorySearch {
+    static let maximumNormalizedCharacterCount = 4_096
+    static let maximumTokenCount = 128
+    static let maximumTokenCharacterCount = 128
+    static let maximumWordFragmentStateCount = 512
+
     struct Result: Equatable, Sendable {
         let items: [ClipboardHistoryItem]
         let hasMore: Bool
@@ -904,7 +959,10 @@ enum ClipboardHistorySearch {
             }
             return Result(items: Array(items.prefix(limit)), hasMore: true)
         }
-        let normalizedQuery = normalized(trimmedQuery)
+        let normalizedQuery = String(
+            normalized(String(trimmedQuery.prefix(maximumNormalizedCharacterCount)))
+                .prefix(maximumNormalizedCharacterCount)
+        )
         let queryTokens = tokens(in: normalizedQuery)
         let compactQuery = compactTokens(queryTokens)
         var matches: [ClipboardHistoryItem] = []
@@ -938,21 +996,35 @@ enum ClipboardHistorySearch {
         text: String,
         sourceApplication: ClipboardSourceApplication?,
         fileURLs: [URL],
+        linkURLs: [URL] = [],
         imageSearchText: String?
     ) -> ClipboardHistorySearchIndex {
-        let searchableText = [
-            text,
-            sourceApplication?.name,
-            sourceApplication?.bundleIdentifier,
-            fileURLs.map(\.path).joined(separator: " "),
-            imageSearchText,
+        let fields: [(value: String?, characterLimit: Int, tokenLimit: Int)] = [
+            (text, 2_048, 48),
+            (sourceApplication?.name, 256, 16),
+            (sourceApplication?.bundleIdentifier, 256, 16),
+            (fileURLs.map(\.path).joined(separator: " "), 508, 16),
+            (linkURLs.map(\.absoluteString).joined(separator: " "), 508, 16),
+            (imageSearchText, 508, 16),
         ]
-            .compactMap { $0 }
-            .joined(separator: " ")
-        let normalizedText = normalized(searchableText)
+        let boundedFields = fields.compactMap { field -> (value: String, tokenLimit: Int)? in
+            guard let value = field.value, !value.isEmpty else { return nil }
+            let normalizedValue = normalized(String(value.prefix(field.characterLimit)))
+            guard !normalizedValue.isEmpty else { return nil }
+            return (
+                String(normalizedValue.prefix(field.characterLimit)),
+                field.tokenLimit
+            )
+        }
+        let normalizedText = String(
+            boundedFields.map(\.value).joined(separator: " ").prefix(maximumNormalizedCharacterCount)
+        )
+        let indexedTokens = boundedFields.flatMap { field in
+            tokens(in: field.value, maximumCount: field.tokenLimit)
+        }
         return ClipboardHistorySearchIndex(
             normalizedText: normalizedText,
-            tokens: tokens(in: normalizedText)
+            tokens: Array(indexedTokens.prefix(maximumTokenCount))
         )
     }
 
@@ -977,13 +1049,17 @@ enum ClipboardHistorySearch {
         let queryCharacters = Array(query)
         guard queryCharacters.count >= 2, words.count >= 2 else { return false }
         let wordCharacters = words.map(Array.init)
+        guard let firstQueryCharacter = queryCharacters.first,
+              wordCharacters.contains(where: { $0.contains(firstQueryCharacter) }) else {
+            return false
+        }
         var memoizedResults: [WordFragmentSearchState: Bool] = [:]
 
         func contains(_ fragment: [Character], in word: [Character]) -> Bool {
             guard !fragment.isEmpty, fragment.count <= word.count else { return false }
             for startIndex in 0...(word.count - fragment.count) {
                 let endIndex = startIndex + fragment.count
-                if Array(word[startIndex..<endIndex]) == fragment {
+                if word[startIndex..<endIndex].elementsEqual(fragment) {
                     return true
                 }
             }
@@ -1009,6 +1085,9 @@ enum ClipboardHistorySearch {
             if let memoizedResult = memoizedResults[state] {
                 return memoizedResult
             }
+            guard memoizedResults.count < maximumWordFragmentStateCount else {
+                return false
+            }
             let word = wordCharacters[wordIndex]
             let remainingCount = queryCharacters.count - queryOffset
             let maximumPrefixLength = min(word.count, remainingCount)
@@ -1019,7 +1098,7 @@ enum ClipboardHistorySearch {
 
             for prefixLength in minimumFragmentLength...maximumPrefixLength {
                 let queryRange = queryOffset..<(queryOffset + prefixLength)
-                guard Array(queryCharacters[queryRange]) == Array(word.prefix(prefixLength)) else {
+                guard queryCharacters[queryRange].elementsEqual(word.prefix(prefixLength)) else {
                     break
                 }
                 if matchesWordFragment(
@@ -1095,9 +1174,14 @@ enum ClipboardHistorySearch {
             .lowercased()
     }
 
-    private static func tokens(in value: String) -> [String] {
-        value
+    private static func tokens(
+        in value: String,
+        maximumCount: Int = maximumTokenCount
+    ) -> [String] {
+        Array(value
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
+            .prefix(maximumCount))
+            .map { String($0.prefix(maximumTokenCharacterCount)) }
     }
 }

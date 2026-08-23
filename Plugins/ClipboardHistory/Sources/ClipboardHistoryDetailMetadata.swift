@@ -4,6 +4,49 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
+enum ClipboardFileReferencePresentation {
+    static let maximumVisibleFileCount = 100
+
+    static func visibleURLs(from urls: [URL]) -> ArraySlice<URL> {
+        urls.prefix(maximumVisibleFileCount)
+    }
+
+    static func remainingCount(for urls: [URL]) -> Int {
+        max(0, urls.count - maximumVisibleFileCount)
+    }
+}
+
+actor ClipboardFileAvailabilityCache {
+    static let shared = ClipboardFileAvailabilityCache()
+
+    private static let maximumEntryCount = 512
+    private static let freshnessInterval: TimeInterval = 2
+    private struct Entry {
+        let isAvailable: Bool
+        let checkedAt: TimeInterval
+    }
+    private var availabilityByURL: [URL: Entry] = [:]
+    private var insertionOrder: [URL] = []
+
+    func isAvailable(_ url: URL) -> Bool {
+        let now = ProcessInfo.processInfo.systemUptime
+        if let cached = availabilityByURL[url],
+           now - cached.checkedAt < Self.freshnessInterval {
+            return cached.isAvailable
+        }
+        let isAvailable = FileManager.default.fileExists(atPath: url.path)
+        availabilityByURL[url] = Entry(isAvailable: isAvailable, checkedAt: now)
+        if !insertionOrder.contains(url) {
+            insertionOrder.append(url)
+        }
+        if insertionOrder.count > Self.maximumEntryCount {
+            let expiredURL = insertionOrder.removeFirst()
+            availabilityByURL.removeValue(forKey: expiredURL)
+        }
+        return isAvailable
+    }
+}
+
 enum ClipboardHistoryDetailMetadataValue: Equatable, Sendable {
     case format(String)
     case characterCount(Int)
@@ -42,7 +85,8 @@ enum ClipboardHistoryDetailMetadataLoader {
 
     private static func loadPayload(_ item: ClipboardHistoryItem) async -> ClipboardHistoryPayload? {
         await Task.detached(priority: .utility) {
-            try? item.loadPayload()
+            defer { item.discardCachedPayloadIfReloadable() }
+            return try? item.loadPayload()
         }.value
     }
 
@@ -168,11 +212,7 @@ enum ClipboardHistoryDetailMetadataLoader {
     }
 
     private static func linkMetadata(_ item: ClipboardHistoryItem) -> ClipboardHistoryDetailMetadata {
-        let payloadCandidates = item.payload?.representations.compactMap { representation -> String? in
-            guard representation.typeIdentifier == ClipboardRepresentationType.url else { return nil }
-            return String(data: representation.data, encoding: .utf8)
-        } ?? []
-        let candidates = payloadCandidates + [item.text]
+        let candidates = item.linkURLs.map(\.absoluteString) + [item.text]
         let host = candidates.lazy.compactMap { URL(string: $0)?.host() }.first
         return ClipboardHistoryDetailMetadata(values: host.map { [.host($0)] } ?? [])
     }

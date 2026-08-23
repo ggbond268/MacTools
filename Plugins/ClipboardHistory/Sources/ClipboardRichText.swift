@@ -1,7 +1,24 @@
 import AppKit
 import Foundation
 
+final class ClipboardHTMLResourceLoadDenyDelegate: NSObject {
+    @objc(webView:resource:willSendRequest:redirectResponse:fromDataSource:)
+    func denyResourceLoad(
+        _ webView: AnyObject,
+        resource identifier: AnyObject,
+        willSendRequest request: NSURLRequest,
+        redirectResponse: URLResponse?,
+        fromDataSource dataSource: AnyObject
+    ) -> NSURLRequest? {
+        nil
+    }
+}
+
 enum ClipboardRichText {
+    static let webResourceLoadDelegateOption = NSAttributedString.DocumentReadingOptionKey(
+        rawValue: "WebResourceLoadDelegate"
+    )
+
     static func attributedString(for payload: ClipboardHistoryPayload) -> NSAttributedString? {
         for representation in payload.representations {
             let documentType: NSAttributedString.DocumentType
@@ -15,9 +32,17 @@ enum ClipboardRichText {
             default:
                 continue
             }
+            var options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+                .documentType: documentType,
+            ]
+            // AppKit's default HTML importer permits subsidiary resource loads. Clipboard HTML is
+            // untrusted and must remain local, so install a delegate that rejects every request.
+            if documentType == .html {
+                options[webResourceLoadDelegateOption] = ClipboardHTMLResourceLoadDenyDelegate()
+            }
             if let attributedString = try? NSAttributedString(
                 data: representation.data,
-                options: [.documentType: documentType],
+                options: options,
                 documentAttributes: nil
             ) {
                 return attributedString
@@ -31,6 +56,31 @@ enum ClipboardRichTextPreviewResult: Sendable {
     case formatted(AttributedString)
     case plainText(String, isSimplified: Bool)
     case unavailable
+}
+
+enum ClipboardRichTextPreviewLoader {
+    static func load(
+        for item: ClipboardHistoryItem,
+        fallbackText: String
+    ) async -> ClipboardRichTextPreviewResult {
+        let worker = Task.detached(priority: .userInitiated) {
+            defer { item.discardCachedPayloadIfReloadable() }
+            guard !Task.isCancelled,
+                  let payload = try? item.loadPayload(),
+                  !Task.isCancelled else {
+                return ClipboardRichTextPreviewResult.unavailable
+            }
+            return ClipboardRichTextPreviewPolicy.makePreview(
+                payload: payload,
+                fallbackText: fallbackText
+            )
+        }
+        return await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+    }
 }
 
 enum ClipboardRichTextPreviewPolicy {
@@ -100,7 +150,9 @@ enum ClipboardPlainTextConversion {
             !(item.imageSearchText ?? "").isEmpty
         case .files:
             !item.fileURLs.isEmpty
-        case .plainText, .link, .pdf, .color, .media:
+        case .link:
+            !item.linkURLs.isEmpty || !item.text.isEmpty
+        case .plainText, .pdf, .color, .media:
             !item.text.isEmpty
         }
     }
@@ -121,7 +173,12 @@ enum ClipboardPlainTextConversion {
             candidate = item.imageSearchText ?? ""
         case .files:
             candidate = item.fileURLs.map(\.path).joined(separator: "\n")
-        case .plainText, .link, .pdf, .color, .media:
+        case .link:
+            candidate = payload?.plainText
+                ?? payload?.linkURLs.first?.absoluteString
+                ?? item.linkURLs.first?.absoluteString
+                ?? item.text
+        case .plainText, .pdf, .color, .media:
             candidate = payload?.plainText ?? item.text
         }
         let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
