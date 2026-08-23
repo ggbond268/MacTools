@@ -126,8 +126,6 @@ struct AutoInputSettingsView: View {
                 PluginSettingsListDivider()
                 hudSizePicker
                 PluginSettingsListDivider()
-                hudPositionPicker
-                PluginSettingsListDivider()
                 reducedHUDFrequencyToggle
                 if store.reducesFrequentHUDPresentations {
                     PluginSettingsListDivider()
@@ -137,6 +135,8 @@ struct AutoInputSettingsView: View {
                 }
                 PluginSettingsListDivider()
                 interactiveHUDToggle
+                PluginSettingsListDivider()
+                hudPositionPicker
             }
         }
     }
@@ -485,37 +485,105 @@ struct AutoInputSettingsView: View {
     }
 
     private var hudPositionPicker: some View {
-        settingPickerRow(
-            icon: "rectangle.and.hand.point.up.left",
-            title: localization.string("settings.hud.position.title", defaultValue: "提示位置"),
-            description: localization.string(
-                "settings.hud.position.description",
-                defaultValue: "选择提示显示在当前输入区域附近或所在显示器中央。"
-            )
-        ) {
-            Picker("", selection: Binding(
-                get: { store.inputHUDPosition },
-                set: { value in
-                    store.setInputHUDPosition(value)
-                    onChange()
+        VStack(alignment: .leading, spacing: 0) {
+            settingPickerRow(
+                icon: "rectangle.and.hand.point.up.left",
+                title: localization.string("settings.hud.position.title", defaultValue: "提示位置"),
+                description: localization.string(
+                    "settings.hud.position.description",
+                    defaultValue: "选择提示显示在当前输入区域、指针附近或所在显示器中央。"
+                )
+            ) {
+                Picker("", selection: Binding(
+                    get: { store.inputHUDPosition },
+                    set: { value in
+                        store.setInputHUDPosition(value)
+                        onChange()
+                    }
+                )) {
+                    ForEach(AutoInputHUDPosition.allCases) { position in
+                        hudPositionOption(position)
+                    }
                 }
-            )) {
-                ForEach(AutoInputHUDPosition.allCases) { position in
-                    Text(localizedHUDPosition(position)).tag(position)
-                }
+                .labelsHidden()
+                .fixedSize(horizontal: true, vertical: false)
+                .help(hudPositionAccessibilityHint)
+                .accessibilityLabel(Text(localization.string(
+                    "settings.hud.position.title",
+                    defaultValue: "提示位置"
+                )))
+                .accessibilityHint(Text(hudPositionAccessibilityHint))
+                .accessibilityIdentifier("auto-input.hud-position")
             }
-            .labelsHidden()
-            .fixedSize(horizontal: true, vertical: false)
-            .accessibilityLabel(Text(localization.string(
-                "settings.hud.position.title",
-                defaultValue: "提示位置"
-            )))
-            .accessibilityHint(Text(localization.string(
-                "settings.hud.position.description",
-                defaultValue: "选择提示显示在当前输入区域附近或所在显示器中央。"
-            )))
-            .accessibilityIdentifier("auto-input.hud-position")
+
+            if store.inputHUDPosition == .atPointer {
+                Label {
+                    Text(store.isInteractiveHUDEnabled
+                        ? atPointerSelectedHelp
+                        : atPointerRequiresInteractiveHelp)
+                } icon: {
+                    Image(systemName: "info.circle")
+                }
+                .font(PluginSettingsTheme.Typography.rowDescription)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+                .padding(.bottom, PluginSettingsTheme.Spacing.rowVertical)
+                .accessibilityElement(children: .combine)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func hudPositionOption(_ position: AutoInputHUDPosition) -> some View {
+        if position == .atPointer {
+            Text(localizedHUDPosition(position))
+                .tag(position)
+                .disabled(!position.isAvailable(isInteractive: store.isInteractiveHUDEnabled))
+                .help(atPointerPlacementHelp)
+                .accessibilityHint(Text(
+                    store.isInteractiveHUDEnabled
+                        ? atPointerPlacementHelp
+                        : atPointerRequiresInteractiveHelp
+                ))
+        } else {
+            Text(localizedHUDPosition(position)).tag(position)
+        }
+    }
+
+    private var hudPositionAccessibilityHint: String {
+        if store.inputHUDPosition == .atPointer {
+            return store.isInteractiveHUDEnabled
+                ? atPointerSelectedHelp
+                : atPointerRequiresInteractiveHelp
+        }
+        let positionDescription = localization.string(
+            "settings.hud.position.description",
+            defaultValue: "选择提示显示在当前输入区域、指针附近或所在显示器中央。"
+        )
+        guard !store.isInteractiveHUDEnabled else { return positionDescription }
+        return "\(positionDescription) \(atPointerRequiresInteractiveHelp)"
+    }
+
+    private var atPointerPlacementHelp: String {
+        localization.string(
+            "settings.hud.position.at-pointer.help",
+            defaultValue: "将提示直接放在指针下方，便于立即点击切换。"
+        )
+    }
+
+    private var atPointerSelectedHelp: String {
+        localization.string(
+            "settings.hud.position.at-pointer.selected-help",
+            defaultValue: "提示显示时，下次点击会切换输入法，而不会点击下方内容。"
+        )
+    }
+
+    private var atPointerRequiresInteractiveHelp: String {
+        localization.string(
+            "settings.hud.position.at-pointer.requires-interactive",
+            defaultValue: "开启“交互式提示”后才能使用“指针处”。"
+        )
     }
 
     @ViewBuilder
@@ -685,6 +753,8 @@ struct AutoInputSettingsView: View {
             localization.string("settings.hud.position.below", defaultValue: "优先显示在下方")
         case .screenCenter:
             localization.string("settings.hud.position.screen-center", defaultValue: "屏幕中央")
+        case .atPointer:
+            localization.string("settings.hud.position.at-pointer", defaultValue: "指针处")
         }
     }
 

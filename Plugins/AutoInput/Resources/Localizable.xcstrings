@@ -596,17 +596,17 @@
     "settings.hud.position.description" : {
       "extractionState" : "manual",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اختر ظهور المؤشر قرب منطقة الإدخال أو في وسط شاشتها." } },
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wählen, ob das HUD nahe am Eingabebereich oder in der Mitte des zugehörigen Bildschirms erscheint." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose whether the HUD appears near the input area or in the center of its display." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elige si el indicador aparece cerca del área de entrada o en el centro de su pantalla." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Choisissez si l’indicateur apparaît près de la zone de saisie ou au centre de son écran." } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "入力領域の近くまたはその画面の中央に表示するかを選択します。" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 영역 근처 또는 해당 화면 중앙에 표시할지 선택합니다." } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Escolha se o indicador aparece perto da área de entrada ou no centro da tela correspondente." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите, показывать индикатор рядом с областью ввода или по центру её экрана." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "选择提示显示在当前输入区域附近或所在显示器中央。" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "選擇提示顯示在目前輸入區域附近或所在顯示器中央。" } }
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اختر ظهور المؤشر قرب منطقة الإدخال أو عند مؤشر الماوس أو في وسط الشاشة." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wählen, ob das HUD nahe am Eingabebereich, am Zeiger oder in der Mitte des Bildschirms erscheint." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose whether the HUD appears near the input area, at the pointer, or in the center of the display." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elige si el indicador aparece cerca del área de entrada, en el puntero o en el centro de la pantalla." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Choisissez si l’indicateur apparaît près de la zone de saisie, au pointeur ou au centre de l’écran." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "入力領域の近く、ポインタの位置、または画面中央のどこに表示するかを選択します。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 영역 근처, 포인터 위치 또는 화면 중앙에 표시할지 선택합니다." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Escolha se o indicador aparece perto da área de entrada, no cursor ou no centro da tela." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите, показывать индикатор рядом с областью ввода, у указателя или по центру экрана." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "选择提示显示在当前输入区域、指针附近或所在显示器中央。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "選擇提示顯示在目前輸入區域、指標附近或所在顯示器中央。" } }
       }
     },
     "settings.hud.position.automatic" : {
@@ -671,6 +671,70 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "По центру экрана" } },
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "屏幕中央" } },
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "螢幕中央" } }
+      }
+    },
+    "settings.hud.position.at-pointer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "عند مؤشر الماوس" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Am Zeiger" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "At Pointer" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "En el puntero" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Au pointeur" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ポインタの位置" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "포인터 위치" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "No cursor" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "У указателя" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "指针处" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "指標處" } }
+      }
+    },
+    "settings.hud.position.at-pointer.help" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "يضع شاشة العرض مباشرةً تحت مؤشر الماوس للنقر والتبديل فورًا." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Platziert das HUD direkt unter dem Zeiger, um sofort per Klick zu wechseln." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Places the HUD directly beneath the pointer for immediate click-to-switch." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Coloca el indicador justo debajo del puntero para cambiar con un clic inmediato." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Place l’indicateur directement sous le pointeur pour changer immédiatement d’un clic." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "すぐクリックして切り替えられるよう、ポインタの直下に表示します。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "바로 클릭해 전환할 수 있도록 포인터 바로 아래에 표시합니다." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Posiciona o indicador diretamente sob o cursor para alternar imediatamente com um clique." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Размещает индикатор прямо под указателем для мгновенного переключения нажатием." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "将提示直接放在指针下方，便于立即点击切换。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "將提示直接放在指標下方，便於立即按一下切換。" } }
+      }
+    },
+    "settings.hud.position.at-pointer.selected-help" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "أثناء ظهور شاشة العرض، تؤدي نقرتك التالية إلى تبديل مصدر الإدخال بدلاً من النقر على المحتوى تحته." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Solange das HUD sichtbar ist, wechselt der nächste Klick die Eingabequelle, statt den darunterliegenden Inhalt anzuklicken." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "While the HUD is visible, your next click switches the input source instead of clicking the content underneath." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mientras el indicador esté visible, el siguiente clic cambiará la fuente de entrada en lugar de pulsar el contenido que hay debajo." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tant que l’indicateur est visible, votre prochain clic change la source de saisie au lieu de cliquer sur le contenu dessous." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "表示中は、次のクリックで下のコンテンツを操作せずに入力ソースを切り替えます。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "표시가 보이는 동안 다음 클릭은 아래 콘텐츠를 클릭하는 대신 입력 소스를 전환합니다." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Enquanto o indicador estiver visível, o próximo clique alternará a fonte de entrada em vez de clicar no conteúdo abaixo." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пока индикатор виден, следующее нажатие переключит источник ввода вместо нажатия на содержимое под ним." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "提示显示时，下次点击会切换输入法，而不会点击下方内容。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "提示顯示時，下次按一下會切換輸入法，而不會按一下下方內容。" } }
+      }
+    },
+    "settings.hud.position.at-pointer.requires-interactive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "شغّل شاشة العرض التفاعلية لاستخدام «عند مؤشر الماوس»." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aktiviere das interaktive HUD, um „Am Zeiger“ zu verwenden." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Turn on Interactive HUD to use At Pointer." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Activa el indicador interactivo para usar «En el puntero»." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Activez l’indicateur interactif pour utiliser « Au pointeur »." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "「ポインタの位置」を使用するには、操作可能な表示をオンにします。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "‘포인터 위치’를 사용하려면 대화형 표시를 켜십시오." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Ative o indicador interativo para usar “No cursor”." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Включите интерактивный индикатор, чтобы использовать вариант «У указателя»." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "开启“交互式提示”后才能使用“指针处”。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開啟「互動式提示」後才能使用「指標處」。" } }
       }
     },
     "permission.accessibility.title" : {

@@ -1465,6 +1465,40 @@ private struct PreferencesImportPreviewSheet: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                previewContent
+                    .padding(24)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                if isImporting {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Spacer()
+                Button(AppL10n.settings("common.cancel", defaultValue: "取消"), action: onCancel)
+                    .buttonStyle(.bordered)
+                    .disabled(isImporting)
+                Button(confirmTitle) {
+                    onImport(selectedInstallablePluginIDs, selection)
+                }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isImporting || selection.isEmpty || previewErrorMessage != nil)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+        }
+        .frame(width: 500, height: 640)
+        .onChange(of: selection) { _, selection in
+            refreshPreview(for: selection)
+        }
+    }
+
+    private var previewContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(AppL10n.preferencesBackup("preferencesBackup.preview.title", defaultValue: "导入偏好设置"))
                 .font(PluginSettingsTheme.Typography.pageTitle)
@@ -1549,29 +1583,8 @@ private struct PreferencesImportPreviewSheet: View {
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
             }
-
-            HStack {
-                Spacer()
-                Button(AppL10n.settings("common.cancel", defaultValue: "取消"), action: onCancel)
-                    .buttonStyle(.bordered)
-                    .disabled(isImporting)
-                Button(confirmTitle) {
-                    onImport(selectedInstallablePluginIDs, selection)
-                }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isImporting || selection.isEmpty || previewErrorMessage != nil)
-            }
-
-            if isImporting {
-                ProgressView()
-                    .controlSize(.small)
-            }
         }
-        .padding(24)
-        .frame(width: 500)
-        .onChange(of: selection) { _, selection in
-            refreshPreview(for: selection)
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var confirmTitle: String {

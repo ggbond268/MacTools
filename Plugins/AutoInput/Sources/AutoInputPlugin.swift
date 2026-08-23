@@ -205,6 +205,10 @@ final class AutoInputPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginApplicati
                         defaultValue: "提示位置"
                     ),
                     localization.string(
+                        "settings.hud.position.at-pointer",
+                        defaultValue: "指针处"
+                    ),
+                    localization.string(
                         "settings.hud.interactive.title",
                         defaultValue: "交互式提示"
                     ),

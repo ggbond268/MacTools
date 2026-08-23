@@ -18,8 +18,13 @@ enum AutoInputHUDPosition: String, Codable, CaseIterable, Identifiable, Sendable
     case above
     case below
     case screenCenter
+    case atPointer
 
     var id: String { rawValue }
+
+    func isAvailable(isInteractive: Bool) -> Bool {
+        self != .atPointer || isInteractive
+    }
 }
 
 enum AutoInputHUDReminderLimits {
@@ -58,6 +63,10 @@ struct AutoInputHUDConfiguration: Equatable, Sendable {
         self.size = size
         self.position = position
         self.isInteractive = isInteractive
+    }
+
+    var effectivePosition: AutoInputHUDPosition {
+        position.isAvailable(isInteractive: isInteractive) ? position : .automatic
     }
 }
 
