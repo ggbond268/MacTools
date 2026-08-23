@@ -1,14 +1,27 @@
 import Foundation
 import MacToolsPluginKit
 
+enum CLIActionCatalogProjection {
+    static func uniqueEntries(_ entries: [ActionCatalogEntry]) -> [ActionCatalogEntry] {
+        var seenKeys = Set<ActionKey>()
+        return entries.filter { seenKeys.insert($0.reference.key).inserted }
+    }
+}
+
 @MainActor
 final class CLIHostRequestRouter {
     private let pluginHost: PluginHost
     private let serviceStatus: () -> String
+    private let initialRegistryReadyAt: ContinuousClock.Instant
 
     init(pluginHost: PluginHost, serviceStatus: @escaping () -> String) {
         self.pluginHost = pluginHost
         self.serviceStatus = serviceStatus
+        // Dynamic providers can publish their first hardware-backed catalog entries on the
+        // main actor immediately after PluginHost's synchronous bootstrap. Keep the local
+        // transport responsive while allowing that initial publication wave to settle, so
+        // the first cold-start discovery response is not a partial registry snapshot.
+        initialRegistryReadyAt = .now.advanced(by: .milliseconds(500))
     }
 
     func handle(_ request: CLIRequestEnvelope) async -> CLIResponseEnvelope {
@@ -24,6 +37,8 @@ final class CLIHostRequestRouter {
             )
         }
 
+        try? await Task.sleep(until: initialRegistryReadyAt, clock: .continuous)
+
         do {
             switch request.operation {
             case .doctor:
@@ -34,7 +49,7 @@ final class CLIHostRequestRouter {
                         hostVersion: AppMetadata.shortVersion ?? "unknown",
                         hostBuild: AppMetadata.buildNumber ?? "unknown",
                         protocolVersion: CLIProtocolVersion.current,
-                        actionCount: pluginHost.actionRegistry.catalogEntries.count,
+                        actionCount: cliCatalogEntries.count,
                         workflowCount: pluginHost.automationController.workflows.count,
                         pluginCount: pluginHost.pluginManagementItems.count,
                         brokerServiceStatus: serviceStatus()
@@ -46,7 +61,7 @@ final class CLIHostRequestRouter {
                     request: request,
                     allowedKeys: ["runnableOnly", "continuationToken"]
                 )
-                let actions = pluginHost.actionRegistry.catalogEntries.map(actionRecord)
+                let actions = cliCatalogEntries.map(actionRecord)
                     .filter { !payload.runnableOnly || $0.cliEligibility.isAvailable }
                     .sorted { lhs, rhs in
                         if lhs.title == rhs.title { return lhs.reference.key.id < rhs.reference.key.id }
@@ -260,12 +275,16 @@ final class CLIHostRequestRouter {
     }
 
     private func actionRecord(for key: CLIActionKey) -> CLIActionRecord? {
-        pluginHost.actionRegistry.catalogEntries
+        cliCatalogEntries
             .first(where: { entry in
                 entry.reference.key.providerID == key.providerID
                     && entry.reference.key.actionID == key.actionID
             })
             .map(actionRecord)
+    }
+
+    private var cliCatalogEntries: [ActionCatalogEntry] {
+        CLIActionCatalogProjection.uniqueEntries(pluginHost.actionRegistry.catalogEntries)
     }
 
     private func actionRecord(_ entry: ActionCatalogEntry) -> CLIActionRecord {
@@ -624,7 +643,7 @@ final class CLIHostRequestRouter {
                         status: $0.statusText
                     )
                 },
-            publishedActionCount: pluginHost.actionRegistry.catalogEntries.filter {
+            publishedActionCount: cliCatalogEntries.filter {
                 $0.reference.key.providerID == item.id
             }.count
         )
