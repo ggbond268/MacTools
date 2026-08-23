@@ -158,10 +158,10 @@ enum ClipboardPlainTextConversion {
     }
 
     static func text(for item: ClipboardHistoryItem) -> String? {
-        let payload = try? item.loadPayload()
         let candidate: String
         switch item.kind {
         case .richText:
+            let payload = try? item.loadPayload()
             if let nativeText = payload?.plainText, !nativeText.isEmpty {
                 candidate = nativeText
             } else if let payload, ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload) {
@@ -172,13 +172,16 @@ enum ClipboardPlainTextConversion {
         case .image:
             candidate = item.imageSearchText ?? ""
         case .files:
-            candidate = item.fileURLs.map(\.path).joined(separator: "\n")
+            let fileURLs = (try? item.loadPayload())?.fileURLs ?? item.fileURLs
+            candidate = fileURLs.map(\.path).joined(separator: "\n")
         case .link:
+            let payload = try? item.loadPayload()
             candidate = payload?.plainText
                 ?? payload?.linkURLs.first?.absoluteString
                 ?? item.linkURLs.first?.absoluteString
                 ?? item.text
         case .plainText, .pdf, .color, .media:
+            let payload = try? item.loadPayload()
             candidate = payload?.plainText ?? item.text
         }
         let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)

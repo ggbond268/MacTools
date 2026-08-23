@@ -5,12 +5,12 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
-    func testGlobalShortcutDismissesOnlyTheVisibleKeyHistoryPanel() {
+    func testGlobalShortcutDismissesAnyVisibleHistoryPanel() {
         XCTAssertTrue(ClipboardHistoryPanelController.shouldDismissForGlobalShortcut(
             isVisible: true,
             isKeyWindow: true
         ))
-        XCTAssertFalse(ClipboardHistoryPanelController.shouldDismissForGlobalShortcut(
+        XCTAssertTrue(ClipboardHistoryPanelController.shouldDismissForGlobalShortcut(
             isVisible: true,
             isKeyWindow: false
         ))
@@ -542,6 +542,40 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         )
     }
 
+    func testImagePlainTextConversionUsesCompletedOCRWithoutLoadingPayload() {
+        let loadCounter = ClipboardPayloadLoadCounter()
+        let item = ClipboardHistoryItem(
+            id: UUID(),
+            text: "",
+            capturedAt: Date(),
+            sourceApplication: nil,
+            kind: .image,
+            payloadByteCount: 1,
+            filterContentKinds: [.image],
+            fileURLs: [],
+            representationTypeIdentifiers: [ClipboardRepresentationType.png],
+            payloadDigest: Data("ocr-only".utf8),
+            allowsRichTextImport: false,
+            textCharacterCount: 0,
+            textLineCount: 0,
+            isSearchTextTruncated: false,
+            isPinned: false,
+            lastUsedAt: nil,
+            imageSearchText: "Recognized without payload",
+            hasCompletedImageTextIndexing: true,
+            payloadLoader: {
+                loadCounter.increment()
+                return ClipboardHistoryPayload(pasteboardItems: [])
+            }
+        )
+
+        XCTAssertEqual(
+            ClipboardPlainTextConversion.text(for: item),
+            "Recognized without payload"
+        )
+        XCTAssertEqual(loadCounter.value, 0)
+    }
+
     func testHTMLRichTextImporterRejectsSubsidiaryResourceRequests() throws {
         let delegate = ClipboardHTMLResourceLoadDenyDelegate()
         let selector = NSSelectorFromString(
@@ -688,5 +722,16 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
                 ),
             ]),
         ])
+    }
+}
+
+private final class ClipboardPayloadLoadCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int { lock.withLock { count } }
+
+    func increment() {
+        lock.withLock { count += 1 }
     }
 }

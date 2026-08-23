@@ -207,9 +207,46 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(fixture.controller.items.isEmpty)
 
         fixture.source.application = nil
+        // One stable poll establishes that focus has left the excluded producer. The first
+        // ambiguous pasteboard change after an app switch is intentionally suppressed.
+        fixture.controller.processPasteboardChange()
         fixture.pasteboard.simulateCopy("allowed")
         fixture.controller.processPasteboardChange()
         XCTAssertEqual(fixture.controller.items.map(\.text), ["allowed"])
+        fixture.controller.stop()
+    }
+
+    func testCopyCommittedAfterLeavingExcludedApplicationIsNotRead() async throws {
+        let fixture = makeFixture()
+        fixture.settings.addExcludedApplications([
+            ClipboardExcludedApplication(
+                bundleIdentifier: "com.example.Secret",
+                name: "Secret"
+            ),
+        ])
+        fixture.source.application = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Secret",
+            name: "Secret"
+        )
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        fixture.controller.processPasteboardChange()
+        fixture.source.application = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Editor",
+            name: "Editor"
+        )
+        fixture.pasteboard.simulateCopy("delayed secret")
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
+
+        fixture.controller.processPasteboardChange()
+        fixture.pasteboard.simulateCopy("ordinary value")
+        fixture.controller.processPasteboardChange()
+        XCTAssertEqual(fixture.controller.items.map(\.text), ["ordinary value"])
         fixture.controller.stop()
     }
 
@@ -327,8 +364,9 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(fixture.persistence.savedItems.filter(\.hasCompletedImageTextIndexing).count, 3)
     }
 
-    func testStartupImageIndexingIsBounded() async {
-        let images = (0...ClipboardHistoryController.maximumStartupImageIndexItemCount).map { byte in
+    func testStartupImageIndexingEventuallyProcessesMoreThanOneHundredItems() async {
+        let imageCount = 105
+        let images = (0..<imageCount).map { byte in
             let payload = imagePayload(data: Data([UInt8(byte % 255)]))
             return lazyImageItem(payloadLoader: { payload })
         }
@@ -339,33 +377,21 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
         for _ in 0..<10_000 where fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count
-            < ClipboardHistoryController.maximumStartupImageIndexItemCount {
+            < imageCount {
             try? await Task.sleep(nanoseconds: 1_000_000)
         }
 
         XCTAssertEqual(
             fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count,
-            ClipboardHistoryController.maximumStartupImageIndexItemCount
+            imageCount
         )
-        let deferredItem = try! XCTUnwrap(fixture.controller.items.first(where: {
-            !$0.hasCompletedImageTextIndexing
-        }))
-        fixture.controller.requestImageTextIndexing(id: deferredItem.id)
-        for _ in 0..<5_000 where fixture.controller.items.first(where: {
-            $0.id == deferredItem.id
-        })?.hasCompletedImageTextIndexing != true {
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        XCTAssertTrue(fixture.controller.items.first(where: {
-            $0.id == deferredItem.id
-        })?.hasCompletedImageTextIndexing == true)
         fixture.controller.stop()
     }
 
-    func testDeletingAnItemDoesNotQueueImagesDeferredByTheStartupLimit() async throws {
+    func testDeletingAnItemDoesNotDuplicateContinuouslyQueuedImageIndexing() async throws {
         let recognizer = BlockingCountingClipboardImageTextRecognizer()
-        let deferredImageCount = ClipboardHistoryController.maximumStartupImageIndexItemCount + 1
-        let images = (0..<deferredImageCount).map { byte in
+        let imageCount = 101
+        let images = (0..<imageCount).map { byte in
             let payload = imagePayload(data: Data([UInt8(byte % 255)]))
             return lazyImageItem(payloadLoader: { payload })
         }
@@ -387,7 +413,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         for _ in 0..<10_000 where fixture.controller.items.filter({
             $0.hasCompletedImageTextIndexing
         }).count
-            < ClipboardHistoryController.maximumStartupImageIndexItemCount {
+            < imageCount {
             try await Task.sleep(nanoseconds: 1_000_000)
         }
         try await Task.sleep(nanoseconds: 20_000_000)
@@ -395,11 +421,11 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let recognitionCallCount = await recognizer.callCount
         XCTAssertEqual(
             recognitionCallCount,
-            ClipboardHistoryController.maximumStartupImageIndexItemCount
+            imageCount
         )
         XCTAssertEqual(
             fixture.controller.items.filter { !$0.hasCompletedImageTextIndexing }.count,
-            1
+            0
         )
         fixture.controller.stop()
     }
@@ -886,6 +912,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
                 userDefaults: defaults
             )
         )
+        settings.setPaused(false)
         settings.excludedApplications = []
         let pasteboard = FakeClipboardPasteboard()
         let persistence = SaveFailingClipboardHistoryPersistence()
@@ -1056,6 +1083,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let settings = ClipboardHistorySettingsStore(
             storage: UserDefaultsPluginStorage(pluginID: "clipboard-history-coalescing-tests", userDefaults: defaults)
         )
+        settings.setPaused(false)
         settings.excludedApplications = []
         let pasteboard = FakeClipboardPasteboard()
         let persistence = BlockingFirstSaveClipboardHistoryPersistence()
@@ -1180,6 +1208,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let settings = ClipboardHistorySettingsStore(
             storage: UserDefaultsPluginStorage(pluginID: "clipboard-history-tests", userDefaults: defaults)
         )
+        settings.setPaused(false)
         settings.excludedApplications = []
         let pasteboard = FakeClipboardPasteboard()
         let source = FakeClipboardSourceContext()

@@ -14,6 +14,10 @@ enum ClipboardFileReferencePresentation {
     static func remainingCount(for urls: [URL]) -> Int {
         max(0, urls.count - maximumVisibleFileCount)
     }
+
+    static func remainingCount(totalCount: Int, visibleCount: Int) -> Int {
+        max(0, totalCount - min(visibleCount, maximumVisibleFileCount))
+    }
 }
 
 actor ClipboardFileAvailabilityCache {
@@ -73,7 +77,13 @@ enum ClipboardHistoryDetailMetadataLoader {
         case .pdf:
             return await loadPayload(item).map(embeddedPDFMetadata) ?? .init(values: [])
         case .files:
-            return await fileMetadata(item.fileURLs)
+            if let payload = await loadPayload(item) {
+                return await fileMetadata(
+                    payload.fileURLs,
+                    totalCount: payload.fileURLs.count
+                )
+            }
+            return await fileMetadata(item.fileURLs, totalCount: item.fileReferenceCount)
         case .link:
             return linkMetadata(item)
         case .media:
@@ -134,31 +144,41 @@ enum ClipboardHistoryDetailMetadataLoader {
             return ClipboardHistoryDetailMetadata(values: values)
     }
 
-    private static func fileMetadata(_ urls: [URL]) async -> ClipboardHistoryDetailMetadata {
-        guard !urls.isEmpty else {
+    private static func fileMetadata(
+        _ urls: [URL],
+        totalCount: Int
+    ) async -> ClipboardHistoryDetailMetadata {
+        guard totalCount > 0, !urls.isEmpty else {
             return ClipboardHistoryDetailMetadata(values: [])
         }
 
-        let basicValues = await Task.detached(priority: .utility) {
+        let scannedURLs = Array(urls.prefix(ClipboardFileReferencePresentation.maximumVisibleFileCount))
+        let worker = Task.detached(priority: .utility) {
             var values: [ClipboardHistoryDetailMetadataValue] = []
-            if urls.count > 1 {
-                values.append(.fileCount(urls.count))
+            if totalCount > 1 {
+                values.append(.fileCount(totalCount))
             }
-            let byteCounts = urls.compactMap { url -> Int64? in
+            var byteCounts: [Int64] = []
+            for url in scannedURLs {
+                guard !Task.isCancelled else {
+                    return ClipboardHistoryDetailMetadata(values: [])
+                }
                 guard let resourceValues = try? url.resourceValues(forKeys: [
                     .fileSizeKey,
                     .isRegularFileKey,
                 ]), resourceValues.isRegularFile == true,
                       let fileSize = resourceValues.fileSize else {
-                    return nil
+                    continue
                 }
-                return Int64(fileSize)
+                byteCounts.append(Int64(fileSize))
             }
-            if !byteCounts.isEmpty {
+            if !byteCounts.isEmpty, scannedURLs.count == totalCount {
                 values.append(.byteCount(byteCounts.reduce(0, +)))
             }
 
-            guard urls.count == 1, let url = urls.first else { return values }
+            guard totalCount == 1, let url = scannedURLs.first else {
+                return ClipboardHistoryDetailMetadata(values: values)
+            }
             let fileKind = ClipboardFileContentKind(url: url)
             let fileExtension = url.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
             if !fileExtension.isEmpty, fileKind != .pdf {
@@ -179,17 +199,25 @@ enum ClipboardHistoryDetailMetadataLoader {
             case .audio, .video, .none:
                 break
             }
-            return values
-        }.value
-
-        guard urls.count == 1,
-              let url = urls.first,
-              let kind = ClipboardFileContentKind(url: url),
-              kind == .audio || kind == .video else {
-            return ClipboardHistoryDetailMetadata(values: basicValues)
+            return ClipboardHistoryDetailMetadata(values: values)
+        }
+        let basicMetadata = await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+        guard !Task.isCancelled else {
+            return ClipboardHistoryDetailMetadata(values: [])
         }
 
-        var values = basicValues
+        guard totalCount == 1,
+              let url = scannedURLs.first,
+              let kind = ClipboardFileContentKind(url: url),
+              kind == .audio || kind == .video else {
+            return basicMetadata
+        }
+
+        var values = basicMetadata.values
         let asset = AVURLAsset(url: url)
         if let duration = try? await asset.load(.duration) {
             let seconds = CMTimeGetSeconds(duration)

@@ -17,6 +17,15 @@ private struct PluginShortcutRecorderV5Layout {
     @State private var isHovered = false
 }
 
+private struct PluginSettingsContextV5Layout {
+    let pluginID: String
+    let shortcutItems: [ShortcutSettingsItem]
+    let recordShortcutHandler: (String, ShortcutBinding) -> String?
+    let beginShortcutRecordingHandler: (String) -> Void
+    let clearShortcutHandler: (String) -> Void
+    let resetShortcutHandler: (String) -> Void
+}
+
 final class PluginPanelControlLayoutTests: XCTestCase {
     func testControlKindTagsMatchDynamicPluginABI() {
         XCTAssertEqual(tag(of: PluginPanelControlKind.segmented), 0)
@@ -105,6 +114,25 @@ final class PluginPanelControlLayoutTests: XCTestCase {
         XCTAssertEqual(
             MemoryLayout<PluginShortcutRecorder>.alignment,
             MemoryLayout<PluginShortcutRecorderV5Layout>.alignment
+        )
+    }
+
+    func testSettingsContextStoredPropertyLayoutMatchesPluginKitV5ABI() {
+        let context = PluginSettingsContext(pluginID: "test")
+        XCTAssertEqual(
+            Mirror(reflecting: context).children.compactMap(\.label),
+            [
+                "pluginID",
+                "shortcutItems",
+                "recordShortcutHandler",
+                "beginShortcutRecordingHandler",
+                "clearShortcutHandler",
+                "resetShortcutHandler",
+            ]
+        )
+        XCTAssertEqual(
+            MemoryLayout<PluginSettingsContext>.size,
+            MemoryLayout<PluginSettingsContextV5Layout>.size
         )
     }
 

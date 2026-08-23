@@ -12174,6 +12174,26 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "繼續設定" } }
       }
     },
+    "settings.shortcut.commonConflictWarning.cancel": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إلغاء" } }, "de": { "stringUnit": { "state": "translated", "value": "Abbrechen" } }, "en": { "stringUnit": { "state": "translated", "value": "Cancel" } }, "es": { "stringUnit": { "state": "translated", "value": "Cancelar" } }, "fr": { "stringUnit": { "state": "translated", "value": "Annuler" } }, "ja": { "stringUnit": { "state": "translated", "value": "キャンセル" } }, "ko": { "stringUnit": { "state": "translated", "value": "취소" } }, "pt": { "stringUnit": { "state": "translated", "value": "Cancelar" } }, "ru": { "stringUnit": { "state": "translated", "value": "Отмена" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "取消" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "取消" } }
+      }
+    },
+    "settings.shortcut.commonConflictWarning.confirm": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "استخدام على أي حال" } }, "de": { "stringUnit": { "state": "translated", "value": "Trotzdem verwenden" } }, "en": { "stringUnit": { "state": "translated", "value": "Use Anyway" } }, "es": { "stringUnit": { "state": "translated", "value": "Usar de todos modos" } }, "fr": { "stringUnit": { "state": "translated", "value": "Utiliser quand même" } }, "ja": { "stringUnit": { "state": "translated", "value": "このまま使用" } }, "ko": { "stringUnit": { "state": "translated", "value": "그래도 사용" } }, "pt": { "stringUnit": { "state": "translated", "value": "Usar mesmo assim" } }, "ru": { "stringUnit": { "state": "translated", "value": "Всё равно использовать" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "仍要使用" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "仍要使用" } }
+      }
+    },
+    "settings.shortcut.commonConflictWarning.message": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "هذا اختصار عام وقد يتجاوز العمليات الشائعة في التطبيقات الأخرى." } }, "de": { "stringUnit": { "state": "translated", "value": "Dies ist ein globaler Kurzbefehl und kann häufige Aktionen in anderen Apps überschreiben." } }, "en": { "stringUnit": { "state": "translated", "value": "This is a global shortcut and may override common actions in other apps." } }, "es": { "stringUnit": { "state": "translated", "value": "Este es un atajo global y puede anular acciones habituales en otras apps." } }, "fr": { "stringUnit": { "state": "translated", "value": "Ce raccourci global peut remplacer des actions courantes dans d’autres apps." } }, "ja": { "stringUnit": { "state": "translated", "value": "これはグローバルショートカットで、ほかのアプリのよく使う操作を上書きする場合があります。" } }, "ko": { "stringUnit": { "state": "translated", "value": "이 전역 단축키는 다른 앱의 일반적인 동작을 덮어쓸 수 있습니다." } }, "pt": { "stringUnit": { "state": "translated", "value": "Este é um atalho global e pode substituir ações comuns em outros apps." } }, "ru": { "stringUnit": { "state": "translated", "value": "Это глобальное сочетание клавиш может переопределять обычные действия в других приложениях." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "这是全局快捷键，可能覆盖其他应用的常用操作。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "這是全域快速鍵，可能覆蓋其他 App 的常用操作。" } }
+      }
+    },
+    "settings.shortcut.commonConflictWarning.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "هل تريد استخدام «%@» على أي حال؟" } }, "de": { "stringUnit": { "state": "translated", "value": "„%@“ trotzdem verwenden?" } }, "en": { "stringUnit": { "state": "translated", "value": "Use “%@” Anyway?" } }, "es": { "stringUnit": { "state": "translated", "value": "¿Usar «%@» de todos modos?" } }, "fr": { "stringUnit": { "state": "translated", "value": "Utiliser « %@ » quand même ?" } }, "ja": { "stringUnit": { "state": "translated", "value": "「%@」をこのまま使用しますか？" } }, "ko": { "stringUnit": { "state": "translated", "value": "“%@”을(를) 그래도 사용하시겠습니까?" } }, "pt": { "stringUnit": { "state": "translated", "value": "Usar “%@” mesmo assim?" } }, "ru": { "stringUnit": { "state": "translated", "value": "Всё равно использовать «%@»?" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "仍要使用“%@”？" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "仍要使用「%@」？" } }
+      }
+    },
     "setup.optional": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "اختياري" } },

@@ -217,6 +217,10 @@ final class ClipboardHistoryDetailMetadataTests: XCTestCase {
         XCTAssertEqual(visible.first, urls.first)
         XCTAssertEqual(visible.last, urls[99])
         XCTAssertEqual(ClipboardFileReferencePresentation.remainingCount(for: urls), 50)
+        XCTAssertEqual(
+            ClipboardFileReferencePresentation.remainingCount(totalCount: 150, visibleCount: 32),
+            118
+        )
     }
 
     func testFileAvailabilityLoadsOutsidePanelRendering() async throws {

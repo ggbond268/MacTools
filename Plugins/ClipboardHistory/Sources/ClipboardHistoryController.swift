@@ -385,7 +385,6 @@ private final class ClipboardHistoryPersistenceWorker: @unchecked Sendable {
 
 @MainActor
 final class ClipboardHistoryController: NSObject, ObservableObject {
-    static let maximumStartupImageIndexItemCount = 100
     static let maximumSynchronousCaptureByteCount = 256 * 1_024
 
     @Published private(set) var items: [ClipboardHistoryItem] = []
@@ -431,6 +430,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private var persistenceRevision: UInt64 = 0
     private var needsSettingsReconciliation = false
     private var lastSeenChangeCount: Int
+    private var lastObservedFrontmostApplication: ClipboardSourceApplication?
     private var currentHistoryItemPasteboardState: (itemID: UUID, changeCount: Int)?
 
     init(
@@ -568,7 +568,13 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             pruneExpiredItemsIfNeeded(now: now)
         }
         let currentChangeCount = pasteboard.changeCount
-        guard currentChangeCount != lastSeenChangeCount else { return }
+        guard currentChangeCount != lastSeenChangeCount else {
+            // Track the stable foreground owner between clipboard changes. If focus moves while a
+            // copy is still being committed, the next delta is conservatively attributed to both
+            // the previous and current applications.
+            lastObservedFrontmostApplication = sourceContext.frontmostApplication()
+            return
+        }
         lastSeenChangeCount = currentChangeCount
         currentHistoryItemPasteboardState = nil
 
@@ -585,6 +591,16 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return
         }
 
+        let previousSourceApplication = lastObservedFrontmostApplication
+        let sourceApplication = sourceContext.frontmostApplication()
+        lastObservedFrontmostApplication = sourceApplication
+        guard !Self.isExcluded(
+            previousSourceApplication,
+            settings: currentSettings
+        ), !Self.isExcluded(sourceApplication, settings: currentSettings) else {
+            return
+        }
+
         let typeNames: Set<String>
         switch pasteboard.readTypeNames(expectedChangeCount: currentChangeCount) {
         case let .types(names):
@@ -595,8 +611,6 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         case .changed:
             return
         }
-
-        let sourceApplication = sourceContext.frontmostApplication()
         guard ClipboardCapturePolicy.preflight(
             types: typeNames,
             sourceApplication: sourceApplication,
@@ -647,6 +661,16 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             settings: currentSettings,
             changeCount: currentChangeCount
         )
+    }
+
+    private static func isExcluded(
+        _ sourceApplication: ClipboardSourceApplication?,
+        settings: ClipboardHistorySettings
+    ) -> Bool {
+        guard let bundleIdentifier = sourceApplication?.bundleIdentifier else { return false }
+        return settings.excludedApplications.contains {
+            $0.bundleIdentifier.caseInsensitiveCompare(bundleIdentifier) == .orderedSame
+        }
     }
 
     func waitForCaptureProcessingForTesting() async {
@@ -985,10 +1009,9 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         }
         notifyChanged()
         startMonitoringIfPossible()
-        enqueueImageTextIndexing(
-            for: pruned,
-            limit: Self.maximumStartupImageIndexItemCount
-        )
+        // Queue only lightweight identifiers, then process one image at a time. This keeps
+        // startup work bounded without permanently leaving older images unsearchable.
+        enqueueImageTextIndexing(for: pruned)
     }
 
     private func finishLoading(with error: Error) {
@@ -1203,15 +1226,11 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         objectWillChange.send()
     }
 
-    private func enqueueImageTextIndexing(
-        for candidates: [ClipboardHistoryItem],
-        limit: Int? = nil
-    ) {
+    private func enqueueImageTextIndexing(for candidates: [ClipboardHistoryItem]) {
         let eligible = candidates.lazy.filter {
             $0.kind == .image && !$0.hasCompletedImageTextIndexing
         }
-        let boundedCandidates = limit.map { AnySequence(eligible.prefix($0)) } ?? AnySequence(eligible)
-        for item in boundedCandidates {
+        for item in eligible {
             guard pendingImageIndexItemIDSet.insert(item.id).inserted else { continue }
             pendingImageIndexItemIDs.append(item.id)
         }

@@ -143,6 +143,10 @@ enum ClipboardFileContentKind: String, CaseIterable, Equatable, Hashable, Sendab
 
 struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
     static let maximumMetadataURLByteCount = 4_096
+    static let maximumMetadataFileURLCount = 32
+    static let maximumMetadataLinkURLCount = 32
+    static let maximumMetadataRepresentationTypeCount = 64
+    static let maximumMetadataRepresentationTypeCharacterCount = 256
 
     let pasteboardItems: [ClipboardStoredPasteboardItem]
 
@@ -187,6 +191,19 @@ struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
         }
     }
 
+    /// File-reference metadata is loaded for every history row. Keep both the URL count and each
+    /// encoded URL bounded; complete references remain available in the lazy encrypted payload.
+    var metadataFileURLs: [URL] {
+        representations.lazy
+            .filter { $0.typeIdentifier == ClipboardRepresentationType.fileURL }
+            .prefix(Self.maximumMetadataFileURLCount)
+            .compactMap { representation in
+                let boundedData = representation.data.prefix(Self.maximumMetadataURLByteCount)
+                guard let value = String(data: boundedData, encoding: .utf8) else { return nil }
+                return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+    }
+
     var linkURLs: [URL] {
         representations.compactMap { representation in
             guard representation.typeIdentifier == ClipboardRepresentationType.url,
@@ -200,14 +217,28 @@ struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
     /// Link metadata is loaded eagerly for every history row. Keep it bounded; the complete URL
     /// remains in the encrypted payload and is decoded only when the item is used.
     var metadataLinkURLs: [URL] {
-        representations.compactMap { representation in
-            guard representation.typeIdentifier == ClipboardRepresentationType.url else {
-                return nil
+        representations.lazy
+            .filter { $0.typeIdentifier == ClipboardRepresentationType.url }
+            .prefix(Self.maximumMetadataLinkURLCount)
+            .compactMap { representation in
+                let boundedData = representation.data.prefix(Self.maximumMetadataURLByteCount)
+                guard let value = String(data: boundedData, encoding: .utf8) else { return nil }
+                return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
             }
-            let boundedData = representation.data.prefix(Self.maximumMetadataURLByteCount)
-            guard let value = String(data: boundedData, encoding: .utf8) else { return nil }
-            return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    var metadataRepresentationTypeIdentifiers: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for representation in representations {
+            let typeIdentifier = String(representation.typeIdentifier.prefix(
+                Self.maximumMetadataRepresentationTypeCharacterCount
+            ))
+            guard !typeIdentifier.isEmpty, seen.insert(typeIdentifier).inserted else { continue }
+            result.append(typeIdentifier)
+            if result.count == Self.maximumMetadataRepresentationTypeCount { break }
         }
+        return result
     }
 
     var fileContentKinds: Set<ClipboardFileContentKind> {
@@ -372,6 +403,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     let payloadByteCount: Int
     let filterContentKinds: Set<ClipboardHistoryContentKind>
     let fileURLs: [URL]
+    let fileReferenceCount: Int
     let linkURLs: [URL]
     let representationTypeIdentifiers: [String]
     let payloadDigest: Data
@@ -404,9 +436,11 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         kind = payload.kind
         payloadByteCount = payload.byteCount
         filterContentKinds = payload.filterContentKinds
-        fileURLs = payload.fileURLs
+        let completeFileURLs = payload.fileURLs
+        fileURLs = payload.metadataFileURLs
+        fileReferenceCount = completeFileURLs.count
         linkURLs = payload.metadataLinkURLs
-        representationTypeIdentifiers = payload.representations.map(\.typeIdentifier)
+        representationTypeIdentifiers = payload.metadataRepresentationTypeIdentifiers
         payloadDigest = Self.digest(payload)
         allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
         textCharacterCount = searchableText.count
@@ -422,7 +456,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         searchIndex = ClipboardHistorySearch.makeIndex(
             text: text,
             sourceApplication: sourceApplication,
-            fileURLs: payload.fileURLs,
+            fileURLs: payload.metadataFileURLs,
             linkURLs: payload.metadataLinkURLs,
             imageSearchText: boundedImageSearchText
         )
@@ -476,6 +510,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         payloadByteCount: Int,
         filterContentKinds: Set<ClipboardHistoryContentKind>,
         fileURLs: [URL],
+        fileReferenceCount: Int? = nil,
         linkURLs: [URL] = [],
         representationTypeIdentifiers: [String],
         payloadDigest: Data,
@@ -499,6 +534,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         self.payloadByteCount = payloadByteCount
         self.filterContentKinds = filterContentKinds
         self.fileURLs = fileURLs
+        self.fileReferenceCount = max(fileURLs.count, fileReferenceCount ?? fileURLs.count)
         self.linkURLs = linkURLs
         self.representationTypeIdentifiers = representationTypeIdentifiers
         self.payloadDigest = payloadDigest
@@ -564,9 +600,11 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         kind = payload.kind
         payloadByteCount = payload.byteCount
         filterContentKinds = payload.filterContentKinds
-        fileURLs = payload.fileURLs
+        let completeFileURLs = payload.fileURLs
+        fileURLs = payload.metadataFileURLs
+        fileReferenceCount = completeFileURLs.count
         linkURLs = payload.metadataLinkURLs
-        representationTypeIdentifiers = payload.representations.map(\.typeIdentifier)
+        representationTypeIdentifiers = payload.metadataRepresentationTypeIdentifiers
         payloadDigest = Self.digest(payload)
         allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
         textCharacterCount = searchableText.count
@@ -583,7 +621,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         searchIndex = ClipboardHistorySearch.makeIndex(
             text: text,
             sourceApplication: sourceApplication,
-            fileURLs: payload.fileURLs,
+            fileURLs: payload.metadataFileURLs,
             linkURLs: payload.metadataLinkURLs,
             imageSearchText: imageSearchText
         )
@@ -612,6 +650,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             && lhs.payloadByteCount == rhs.payloadByteCount
             && lhs.filterContentKinds == rhs.filterContentKinds
             && lhs.fileURLs == rhs.fileURLs
+            && lhs.fileReferenceCount == rhs.fileReferenceCount
             && lhs.linkURLs == rhs.linkURLs
             && lhs.representationTypeIdentifiers == rhs.representationTypeIdentifiers
             && lhs.payloadDigest == rhs.payloadDigest
@@ -1005,7 +1044,7 @@ enum ClipboardHistorySearch {
             (sourceApplication?.bundleIdentifier, 256, 16),
             (fileURLs.map(\.path).joined(separator: " "), 508, 16),
             (linkURLs.map(\.absoluteString).joined(separator: " "), 508, 16),
-            (imageSearchText, 508, 16),
+            (imageSearchText, ClipboardHistoryItem.maximumSearchableCharacterCount, 64),
         ]
         let boundedFields = fields.compactMap { field -> (value: String, tokenLimit: Int)? in
             guard let value = field.value, !value.isEmpty else { return nil }

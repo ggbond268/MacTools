@@ -152,6 +152,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         )
 
         let firstStore = ClipboardHistorySettingsStore(storage: storage)
+        XCTAssertTrue(firstStore.isPaused)
         XCTAssertFalse(firstStore.hasCompletedInitialSetup)
         XCTAssertFalse(firstStore.hasPresentedInitialSetup)
         XCTAssertTrue(firstStore.shouldAutomaticallyPresentInitialSetup())
@@ -166,9 +167,25 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertTrue(restoredStore.hasCompletedInitialSetup)
 
         let reopenedStore = ClipboardHistorySettingsStore(storage: storage)
+        XCTAssertFalse(reopenedStore.isPaused)
         XCTAssertTrue(reopenedStore.hasCompletedInitialSetup)
         XCTAssertTrue(reopenedStore.hasPresentedInitialSetup)
         XCTAssertFalse(reopenedStore.shouldAutomaticallyPresentInitialSetup())
+    }
+
+    func testFreshSettingsPauseCollectionButPreserveAnExplicitStoredChoice() {
+        let suiteName = "ClipboardHistoryFreshPauseTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        let storage = UserDefaultsPluginStorage(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            userDefaults: defaults
+        )
+
+        XCTAssertTrue(ClipboardHistorySettingsStore(storage: storage).isPaused)
+        storage.set(false, forKey: "collection-paused")
+        XCTAssertFalse(ClipboardHistorySettingsStore(storage: storage).isPaused)
     }
 
     func testSetupProgressRequiresCollectionBeforeRevealingShortcutSteps() {
@@ -343,7 +360,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(pasteboard.plainTextReadCount, 0)
         XCTAssertTrue(plugin.controller.items.isEmpty)
         XCTAssertEqual(hud.events, [
-            .armed(mode: .privateCopy, timeout: 2),
+            .armed(mode: .privateCopy, timeout: 15),
             .consumed(mode: .privateCopy),
         ])
 
@@ -684,12 +701,14 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         addTeardownBlock {
             defaults.removePersistentDomain(forName: suiteName)
         }
+        let storage = UserDefaultsPluginStorage(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            userDefaults: defaults
+        )
+        storage.set(false, forKey: "collection-paused")
         let context = PluginRuntimeContext(
             pluginID: ClipboardHistoryPlugin.pluginID,
-            storage: UserDefaultsPluginStorage(
-                pluginID: ClipboardHistoryPlugin.pluginID,
-                userDefaults: defaults
-            )
+            storage: storage
         )
         return ClipboardHistoryPlugin(
             context: context,

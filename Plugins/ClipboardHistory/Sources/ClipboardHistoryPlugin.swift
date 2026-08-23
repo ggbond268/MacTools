@@ -692,7 +692,7 @@ final class ClipboardHistoryPlugin:
         let sent = await copyCommandSender.sendCopyCommand { [weak controller] in
             // A direct private copy should not leave a stale one-shot suppression behind when the
             // target application has no selection or refuses Command-C.
-            controller?.ignoreNextCopy(expiringAfter: 2, mode: .privateCopy) == true
+            controller?.ignoreNextCopy(expiringAfter: 15, mode: .privateCopy) == true
         }
         if !sent {
             let hadPendingSuppression = controller.isIgnoringNextCopy

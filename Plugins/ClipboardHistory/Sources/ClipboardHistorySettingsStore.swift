@@ -95,8 +95,11 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     init(storage: PluginStorage) {
         self.storage = storage
         let defaults = ClipboardHistorySettings.defaults
+        let completedInitialSetup = storage.bool(forKey: Key.didCompleteInitialSetup)
+        // Collection is privacy-sensitive on a new installation. Existing installations retain
+        // their persisted pause value, while a completed setup without that legacy key remains on.
         isPaused = storage.object(forKey: Key.isPaused) == nil
-            ? defaults.isPaused
+            ? !completedInitialSetup
             : storage.bool(forKey: Key.isPaused)
 
         let storedItemCount = storage.integer(forKey: Key.maximumItemCount)
@@ -127,7 +130,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         } else {
             excludedApplications = defaults.excludedApplications
         }
-        hasCompletedInitialSetup = storage.bool(forKey: Key.didCompleteInitialSetup)
+        hasCompletedInitialSetup = completedInitialSetup
         hasPresentedInitialSetup = storage.bool(forKey: Key.didPresentInitialSetup)
     }
 

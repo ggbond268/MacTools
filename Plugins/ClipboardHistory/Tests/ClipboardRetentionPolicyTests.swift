@@ -259,6 +259,9 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
         )
         let fileURL = URL(fileURLWithPath: "/tmp/unique-file-token.pdf")
         let linkURL = URL(string: "https://example.com/unique-link-token")!
+        let longOCRText = Array(repeating: "fillerword", count: 50)
+            .joined(separator: " ") + " Unique OCR Token"
+        XCTAssertGreaterThan(longOCRText.range(of: "Unique")!.lowerBound.utf16Offset(in: longOCRText), 508)
         let item = ClipboardHistoryItem(
             id: UUID(),
             text: String(repeating: "x", count: ClipboardHistoryItem.maximumSearchableCharacterCount),
@@ -277,7 +280,7 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
             isSearchTextTruncated: false,
             isPinned: false,
             lastUsedAt: nil,
-            imageSearchText: "Unique OCR Token",
+            imageSearchText: longOCRText,
             hasCompletedImageTextIndexing: true,
             payloadLoader: { .plainText("payload") }
         )

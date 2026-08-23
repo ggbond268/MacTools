@@ -99,6 +99,76 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(ClipboardHistorySearch.filter([loaded], query: "example docs"), [loaded])
     }
 
+    func testLargeFileSelectionKeepsBoundedEagerMetadataAndCompleteLazyPayload() throws {
+        let fixture = try makeFixture()
+        let urls = (0..<100).map {
+            URL(fileURLWithPath: "/tmp/clipboard-history-file-\($0).txt")
+        }
+        let payload = ClipboardHistoryPayload(pasteboardItems: urls.map { url in
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.fileURL,
+                    data: Data(url.absoluteString.utf8)
+                ),
+            ])
+        })
+        let item = ClipboardHistoryItem(
+            id: UUID(),
+            payload: payload,
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+
+        XCTAssertEqual(item.fileURLs.count, ClipboardHistoryPayload.maximumMetadataFileURLCount)
+        XCTAssertEqual(item.fileReferenceCount, urls.count)
+        try fixture.store.save([item])
+
+        let reopened = IncrementalEncryptedClipboardHistoryStore(
+            databaseURL: fixture.databaseURL,
+            keyStore: fixture.keyStore
+        )
+        let loaded = try XCTUnwrap(reopened.load().first)
+        XCTAssertNil(loaded.payload)
+        XCTAssertEqual(loaded.fileURLs.count, ClipboardHistoryPayload.maximumMetadataFileURLCount)
+        XCTAssertEqual(loaded.fileReferenceCount, urls.count)
+        XCTAssertEqual(try loaded.loadPayload().fileURLs, urls)
+    }
+
+    func testLinkAndRepresentationTypeMetadataAreCountBounded() {
+        let linkRepresentations = (0..<100).map { index in
+            ClipboardStoredRepresentation(
+                typeIdentifier: ClipboardRepresentationType.url,
+                data: Data("https://example.com/\(index)".utf8)
+            )
+        }
+        let distinctTypes = (0..<100).map { index in
+            ClipboardStoredRepresentation(
+                typeIdentifier: "com.example.clipboard-type-\(index)",
+                data: Data([0x01])
+            )
+        }
+        let payload = ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: linkRepresentations + distinctTypes),
+        ])
+        let item = ClipboardHistoryItem(
+            id: UUID(),
+            payload: payload,
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+
+        XCTAssertEqual(item.linkURLs.count, ClipboardHistoryPayload.maximumMetadataLinkURLCount)
+        XCTAssertEqual(
+            item.representationTypeIdentifiers.count,
+            ClipboardHistoryPayload.maximumMetadataRepresentationTypeCount
+        )
+        XCTAssertEqual(item.payload?.linkURLs.count, 100)
+    }
+
     func testMetadataWrittenBeforeSummaryFieldsStillLoads() throws {
         let fixture = try makeFixture()
         let item = sampleItem(index: 1)

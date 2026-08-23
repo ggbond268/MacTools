@@ -445,7 +445,11 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         isVisible: Bool,
         isKeyWindow: Bool
     ) -> Bool {
-        isVisible && isKeyWindow
+        // A global shortcut is a visibility toggle. The panel may have yielded key status to
+        // another application while remaining visible, but invoking the shortcut again should
+        // still dismiss it.
+        _ = isKeyWindow
+        return isVisible
     }
 
     func handleGlobalShortcut() {
@@ -1853,7 +1857,8 @@ private struct ClipboardHistoryPanelView: View {
                     )
                 }
                 let remainingCount = ClipboardFileReferencePresentation.remainingCount(
-                    for: item.fileURLs
+                    totalCount: item.fileReferenceCount,
+                    visibleCount: item.fileURLs.count
                 )
                 if remainingCount > 0 {
                     Label("+\(remainingCount)", systemImage: "ellipsis")
@@ -1902,7 +1907,7 @@ private struct ClipboardHistoryPanelView: View {
         _ item: ClipboardHistoryItem
     ) -> (url: URL, kind: ClipboardFileContentKind)? {
         guard item.kind == .files,
-              item.fileURLs.count == 1,
+              item.fileReferenceCount == 1,
               let url = item.fileURLs.first,
               let kind = ClipboardFileContentKind(url: url) else {
             return nil
@@ -1954,7 +1959,7 @@ private struct ClipboardHistoryPanelView: View {
 
     private func detailMetadataBaseTitle(_ item: ClipboardHistoryItem) -> String {
         let subtypes = fileSubtypeTitles(item)
-        if item.fileURLs.count == 1, subtypes.count == 1, let subtype = subtypes.first {
+        if item.fileReferenceCount == 1, subtypes.count == 1, let subtype = subtypes.first {
             return subtype
         }
         return kindTitle(item.kind)

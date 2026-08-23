@@ -12,6 +12,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         let payloadByteCount: Int
         let filterContentKinds: [ClipboardHistoryContentKind]?
         let fileURLs: [String]?
+        let fileReferenceCount: Int?
         let linkURLs: [String]?
         let representationTypeIdentifiers: [String]?
         let payloadDigest: Data
@@ -35,6 +36,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             payloadByteCount = item.payloadByteCount
             filterContentKinds = item.filterContentKinds.sorted { $0.rawValue < $1.rawValue }
             fileURLs = item.fileURLs.map(\.absoluteString)
+            fileReferenceCount = item.fileReferenceCount
             linkURLs = item.linkURLs.map(\.absoluteString)
             representationTypeIdentifiers = item.representationTypeIdentifiers
             payloadDigest = item.payloadDigest
@@ -274,7 +276,25 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
     }
 
     private func makeItem(metadata: StoredMetadata) -> ClipboardHistoryItem {
-        ClipboardHistoryItem(
+        let decodedFileURLs = metadata.fileURLs?.compactMap(URL.init(string:)) ?? []
+        let boundedFileURLs = Array(decodedFileURLs.prefix(
+            ClipboardHistoryPayload.maximumMetadataFileURLCount
+        ))
+        let boundedLinkURLs = Array(
+            (metadata.linkURLs?.compactMap(URL.init(string:)) ?? []).prefix(
+                ClipboardHistoryPayload.maximumMetadataLinkURLCount
+            )
+        )
+        let boundedRepresentationTypes = Array(
+            (metadata.representationTypeIdentifiers ?? [])
+                .prefix(ClipboardHistoryPayload.maximumMetadataRepresentationTypeCount)
+                .map {
+                    String($0.prefix(
+                        ClipboardHistoryPayload.maximumMetadataRepresentationTypeCharacterCount
+                    ))
+                }
+        )
+        return ClipboardHistoryItem(
             id: metadata.id,
             text: metadata.text,
             capturedAt: metadata.capturedAt,
@@ -282,9 +302,10 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             kind: metadata.kind,
             payloadByteCount: metadata.payloadByteCount,
             filterContentKinds: Set(metadata.filterContentKinds ?? [metadata.kind]),
-            fileURLs: metadata.fileURLs?.compactMap(URL.init(string:)) ?? [],
-            linkURLs: metadata.linkURLs?.compactMap(URL.init(string:)) ?? [],
-            representationTypeIdentifiers: metadata.representationTypeIdentifiers ?? [],
+            fileURLs: boundedFileURLs,
+            fileReferenceCount: metadata.fileReferenceCount ?? decodedFileURLs.count,
+            linkURLs: boundedLinkURLs,
+            representationTypeIdentifiers: boundedRepresentationTypes,
             payloadDigest: metadata.payloadDigest,
             allowsRichTextImport: metadata.allowsRichTextImport ?? false,
             textCharacterCount: metadata.textCharacterCount ?? metadata.text.count,

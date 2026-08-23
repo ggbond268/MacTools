@@ -16,6 +16,18 @@ enum ClipboardHistorySetupStep: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
 }
 
+private struct ClipboardHistorySetupShortcutWarning: Identifiable {
+    enum Target {
+        case plugin(itemID: String)
+        case action(actionID: String)
+    }
+
+    let id = UUID()
+    let target: Target
+    let shortcutKey: String
+    let binding: ShortcutBinding
+}
+
 struct ClipboardHistorySetupProgress: Equatable {
     let storageReady: Bool
     let collectionEnabled: Bool
@@ -67,6 +79,7 @@ struct ClipboardHistorySetupSheet: View {
     @State private var shortcutBindingTexts: [String: String]
     @State private var assignedShortcutIDs: Set<String>
     @State private var hasRevealedShortcutSections: Bool
+    @State private var pendingShortcutWarning: ClipboardHistorySetupShortcutWarning?
 
     init(
         controller: ClipboardHistoryController,
@@ -143,6 +156,30 @@ struct ClipboardHistorySetupSheet: View {
             if isEnabled {
                 hasRevealedShortcutSections = true
             }
+        }
+        .alert(item: $pendingShortcutWarning) { warning in
+            Alert(
+                title: Text(localization.format(
+                    "settings.shortcut.commonConflictWarning.title",
+                    defaultValue: "仍要使用“%@”？",
+                    ShortcutFormatter.displayString(for: warning.binding)
+                )),
+                message: Text(localization.string(
+                    "settings.shortcut.commonConflictWarning.message",
+                    defaultValue: "这是全局快捷键，可能覆盖其他应用的常用操作。"
+                )),
+                primaryButton: .default(
+                    Text(localization.string(
+                        "settings.shortcut.commonConflictWarning.confirm",
+                        defaultValue: "仍要使用"
+                    )),
+                    action: { saveShortcut(warning) }
+                ),
+                secondaryButton: .cancel(Text(localization.string(
+                    "settings.shortcut.commonConflictWarning.cancel",
+                    defaultValue: "取消"
+                )))
+            )
         }
     }
 
@@ -292,6 +329,10 @@ struct ClipboardHistorySetupSheet: View {
                 }
             ))
             .labelsHidden()
+            .accessibilityLabel(Text(localization.string(
+                "settings.collection.toggleTitle",
+                defaultValue: "收集剪贴板历史"
+            )))
             .toggleStyle(.switch)
             .disabled(!controller.isCollectionOperational)
         }
@@ -369,12 +410,11 @@ struct ClipboardHistorySetupSheet: View {
                 canClear: assignedShortcutIDs.contains(shortcutKey),
                 isOptional: false,
                 onRecord: { binding in
-                    let result = settingsContext.recordActionShortcut(binding, for: item.actionID)
-                    if result == .accepted {
-                        shortcutBindingTexts[shortcutKey] = ShortcutFormatter.displayString(for: binding)
-                        assignedShortcutIDs.insert(shortcutKey)
-                    }
-                    return result
+                    recordShortcut(
+                        target: .action(actionID: item.actionID),
+                        shortcutKey: shortcutKey,
+                        binding: binding
+                    )
                 },
                 onBeginRecording: nil,
                 onClear: {
@@ -398,12 +438,11 @@ struct ClipboardHistorySetupSheet: View {
                 canClear: assignedShortcutIDs.contains(item.id),
                 isOptional: isOptional,
                 onRecord: { binding in
-                    let result = settingsContext.recordShortcut(binding, for: item.id)
-                    if result == .accepted {
-                        shortcutBindingTexts[item.id] = ShortcutFormatter.displayString(for: binding)
-                        assignedShortcutIDs.insert(item.id)
-                    }
-                    return result
+                    recordShortcut(
+                        target: .plugin(itemID: item.id),
+                        shortcutKey: item.id,
+                        binding: binding
+                    )
                 },
                 onBeginRecording: { settingsContext.beginShortcutRecording(for: item.id) },
                 onClear: {
@@ -413,6 +452,49 @@ struct ClipboardHistorySetupSheet: View {
                 }
             )
         }
+    }
+
+    private func recordShortcut(
+        target: ClipboardHistorySetupShortcutWarning.Target,
+        shortcutKey: String,
+        binding: ShortcutBinding
+    ) -> PluginShortcutRecordingResult {
+        if CommonApplicationShortcutBindings.requiresConflictWarning(for: binding) {
+            pendingShortcutWarning = ClipboardHistorySetupShortcutWarning(
+                target: target,
+                shortcutKey: shortcutKey,
+                binding: binding
+            )
+            return .accepted
+        }
+        return saveShortcut(target: target, shortcutKey: shortcutKey, binding: binding)
+    }
+
+    private func saveShortcut(_ warning: ClipboardHistorySetupShortcutWarning) {
+        _ = saveShortcut(
+            target: warning.target,
+            shortcutKey: warning.shortcutKey,
+            binding: warning.binding
+        )
+    }
+
+    private func saveShortcut(
+        target: ClipboardHistorySetupShortcutWarning.Target,
+        shortcutKey: String,
+        binding: ShortcutBinding
+    ) -> PluginShortcutRecordingResult {
+        let result: PluginShortcutRecordingResult
+        switch target {
+        case let .plugin(itemID):
+            result = settingsContext.recordShortcut(binding, for: itemID)
+        case let .action(actionID):
+            result = settingsContext.recordActionShortcut(binding, for: actionID)
+        }
+        if result == .accepted {
+            shortcutBindingTexts[shortcutKey] = ShortcutFormatter.displayString(for: binding)
+            assignedShortcutIDs.insert(shortcutKey)
+        }
+        return result
     }
 
     private func shortcutRow(
