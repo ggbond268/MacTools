@@ -438,14 +438,18 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         await waitUntilLoaded(plugin.controller)
         pasteboard.simulateCopy(imagePayload())
         plugin.controller.processPasteboardChange()
-        for _ in 0..<100 where plugin.controller.items.first?.hasCompletedImageTextIndexing != true {
-            await Task.yield()
+        let didFinishIndexing = await waitUntil {
+            plugin.controller.items.first?.hasCompletedImageTextIndexing == true
+        }
+        XCTAssertTrue(didFinishIndexing, "Expected image text indexing to finish")
+        guard didFinishIndexing else {
+            plugin.controller.stop()
+            return
         }
 
         plugin.handleShortcutAction(id: "paste-clipboard-as-plain-text")
-        for _ in 0..<100 where sender.sendCount == 0 {
-            await Task.yield()
-        }
+        let didSendPaste = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(didSendPaste, "Expected the plain-text paste command to be sent")
 
         XCTAssertEqual(sender.sendCount, 1)
         XCTAssertEqual(pasteboard.plainTextWriteCount, 1)
@@ -551,10 +555,10 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             result = await handle.result()
         }
 
-        for _ in 0..<100 where !persistence.saveStarted {
+        for _ in 0..<100 where !persistence.resetStarted {
             await Task.yield()
         }
-        XCTAssertTrue(persistence.saveStarted)
+        XCTAssertTrue(persistence.resetStarted)
         XCTAssertNil(result)
         XCTAssertTrue(plugin.controller.isClearingHistory)
 
@@ -579,7 +583,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(sender.sendCount, 0)
         XCTAssertEqual(hud.failures, ["剪贴板历史尚未准备好"])
 
-        persistence.allowSaveToFinish()
+        persistence.allowResetToFinish()
         await resultTask.value
         XCTAssertEqual(result, .succeeded())
         XCTAssertFalse(plugin.controller.isClearingHistory)
@@ -613,7 +617,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         guard case .failed = retryResult else {
             return XCTFail("Expected clear-all to remain unavailable while storage is blocked")
         }
-        XCTAssertEqual(persistence.resetCount, 0)
+        XCTAssertEqual(persistence.resetCount, 1)
         XCTAssertEqual(plugin.controller.items, persistence.items)
         XCTAssertNotNil(plugin.controller.errorMessage)
         plugin.controller.stop()
@@ -730,6 +734,18 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertTrue(controller.isLoaded)
     }
 
+    private func waitUntil(
+        timeout: Duration = .seconds(2),
+        condition: () -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return condition()
+    }
+
     private func reference(_ plugin: ClipboardHistoryPlugin, actionID: String) -> ActionReference {
         plugin.actionCatalogEntries.first { $0.reference.key.actionID == actionID }!.reference
     }
@@ -817,7 +833,7 @@ private final class BlockingClipboardHistoryPersistence: ClipboardHistoryPersist
         storedItems = items
     }
 
-    var saveStarted: Bool {
+    var resetStarted: Bool {
         condition.withLock { started }
     }
 
@@ -832,21 +848,23 @@ private final class BlockingClipboardHistoryPersistence: ClipboardHistoryPersist
     }
 
     func save(_ items: [ClipboardHistoryItem]) throws {
+        condition.withLock { storedItems = items }
+    }
+
+    func reset() throws {
         condition.lock()
         started = true
         condition.broadcast()
         while !mayFinish {
             condition.wait()
         }
-        storedItems = items
+        storedItems = []
         condition.unlock()
     }
 
-    func reset() throws {}
-
     func removeAll() throws {}
 
-    func allowSaveToFinish() {
+    func allowResetToFinish() {
         condition.withLock {
             mayFinish = true
             condition.broadcast()
@@ -872,6 +890,7 @@ private final class FailingClipboardHistoryPersistence: ClipboardHistoryPersisti
 
     func reset() throws {
         resetCount += 1
+        throw ClipboardHistoryStoreError.unavailableStorage
     }
 
     func removeAll() throws {}

@@ -5,6 +5,7 @@ import Foundation
 protocol ClipboardPasteboardAccess: AnyObject {
     var changeCount: Int { get }
     var captureComplexityIsWithinLimits: Bool { get }
+    var requiresAsynchronousPayloadRead: Bool { get }
     var typeNames: Set<String> { get }
     func readPlainText() -> String?
     func readPayload(maximumByteCount: Int) -> ClipboardPasteboardReadResult
@@ -13,6 +14,10 @@ protocol ClipboardPasteboardAccess: AnyObject {
         maximumByteCount: Int,
         expectedChangeCount: Int
     ) -> ClipboardPasteboardReadResult
+    func readPayloadAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardReadResult
     @discardableResult func writePlainText(_ text: String) -> Bool
     @discardableResult func writePayload(_ payload: ClipboardHistoryPayload) -> Bool
 }
@@ -33,6 +38,7 @@ enum ClipboardPasteboardTypeReadResult: Equatable, Sendable {
 
 extension ClipboardPasteboardAccess {
     var captureComplexityIsWithinLimits: Bool { true }
+    var requiresAsynchronousPayloadRead: Bool { false }
 
     func readTypeNames(expectedChangeCount: Int) -> ClipboardPasteboardTypeReadResult {
         guard changeCount == expectedChangeCount else { return .changed }
@@ -51,6 +57,16 @@ extension ClipboardPasteboardAccess {
         guard changeCount == expectedChangeCount else { return .changed }
         return result
     }
+
+    func readPayloadAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardReadResult {
+        readPayload(
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: expectedChangeCount
+        )
+    }
 }
 
 enum ClipboardPlainTextRewriteResult: Equatable, Sendable {
@@ -62,17 +78,20 @@ enum ClipboardPlainTextRewriteResult: Equatable, Sendable {
 
 @MainActor
 final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
-    static let maximumPasteboardItemCount = 1_024
-    static let maximumRepresentationCountPerItem = 64
-    static let maximumTotalRepresentationCount = 4_096
+    nonisolated static let maximumPasteboardItemCount = 1_024
+    nonisolated static let maximumRepresentationCountPerItem = 64
+    nonisolated static let maximumTotalRepresentationCount = 4_096
 
     private let pasteboard: NSPasteboard
+    private nonisolated let pasteboardName: NSPasteboard.Name
 
     init(pasteboard: NSPasteboard = .general) {
         self.pasteboard = pasteboard
+        self.pasteboardName = pasteboard.name
     }
 
     var changeCount: Int { pasteboard.changeCount }
+    var requiresAsynchronousPayloadRead: Bool { true }
 
     var captureComplexityIsWithinLimits: Bool {
         Self.captureComplexityIsWithinLimits(pasteboard.pasteboardItems ?? [])
@@ -104,10 +123,53 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
     }
 
     func readPayload(maximumByteCount: Int) -> ClipboardPasteboardReadResult {
+        Self.readPayload(from: pasteboard, maximumByteCount: maximumByteCount)
+    }
+
+    func readPayload(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) -> ClipboardPasteboardReadResult {
+        guard pasteboard.changeCount == expectedChangeCount else { return .changed }
+        let result = readPayload(maximumByteCount: maximumByteCount)
+        guard pasteboard.changeCount == expectedChangeCount else { return .changed }
+        return result
+    }
+
+    nonisolated func readPayloadAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardReadResult {
+        let pasteboardName = pasteboardName
+        let worker = Task<ClipboardPasteboardReadResult, Never>.detached(priority: .userInitiated) {
+            guard !Task.isCancelled else { return .changed }
+            let pasteboard = NSPasteboard(name: pasteboardName)
+            guard pasteboard.changeCount == expectedChangeCount else { return .changed }
+            let result = Self.readPayload(
+                from: pasteboard,
+                maximumByteCount: maximumByteCount
+            )
+            guard !Task.isCancelled,
+                  pasteboard.changeCount == expectedChangeCount else {
+                return .changed
+            }
+            return result
+        }
+        return await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+    }
+
+    private nonisolated static func readPayload(
+        from pasteboard: NSPasteboard,
+        maximumByteCount: Int
+    ) -> ClipboardPasteboardReadResult {
         guard let sourceItems = pasteboard.pasteboardItems, !sourceItems.isEmpty else {
             return .empty
         }
-        guard Self.captureComplexityIsWithinLimits(sourceItems) else {
+        guard captureComplexityIsWithinLimits(sourceItems) else {
             return .tooManyObjects
         }
 
@@ -159,17 +221,7 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
         return .payload(ClipboardHistoryPayload(pasteboardItems: storedItems))
     }
 
-    func readPayload(
-        maximumByteCount: Int,
-        expectedChangeCount: Int
-    ) -> ClipboardPasteboardReadResult {
-        guard pasteboard.changeCount == expectedChangeCount else { return .changed }
-        let result = readPayload(maximumByteCount: maximumByteCount)
-        guard pasteboard.changeCount == expectedChangeCount else { return .changed }
-        return result
-    }
-
-    static func captureComplexityIsWithinLimits(
+    nonisolated static func captureComplexityIsWithinLimits(
         _ sourceItems: [NSPasteboardItem]
     ) -> Bool {
         guard sourceItems.count <= maximumPasteboardItemCount else { return false }
@@ -182,7 +234,7 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
         return true
     }
 
-    private func fileURLRepresentation(
+    private nonisolated static func fileURLRepresentation(
         from sourceItem: NSPasteboardItem
     ) -> ClipboardStoredRepresentation? {
         let type = NSPasteboard.PasteboardType(ClipboardRepresentationType.fileURL)
@@ -244,12 +296,60 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
 @MainActor
 protocol ClipboardSourceContextProviding: AnyObject {
     func frontmostApplication() -> ClipboardSourceApplication?
+    func takeRecentlyActivatedApplications() -> [ClipboardSourceApplication]
+    func discardRecentlyActivatedApplications()
+}
+
+extension ClipboardSourceContextProviding {
+    func takeRecentlyActivatedApplications() -> [ClipboardSourceApplication] { [] }
+    func discardRecentlyActivatedApplications() {}
 }
 
 @MainActor
-final class WorkspaceClipboardSourceContextProvider: ClipboardSourceContextProviding {
+final class WorkspaceClipboardSourceContextProvider: NSObject, ClipboardSourceContextProviding {
+    private var recentlyActivatedApplicationsByBundleID: [String: ClipboardSourceApplication] = [:]
+
+    override init() {
+        super.init()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(applicationDidActivate(_:)),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
+
     func frontmostApplication() -> ClipboardSourceApplication? {
-        guard let application = NSWorkspace.shared.frontmostApplication,
+        Self.sourceApplication(from: NSWorkspace.shared.frontmostApplication)
+    }
+
+    func takeRecentlyActivatedApplications() -> [ClipboardSourceApplication] {
+        defer { recentlyActivatedApplicationsByBundleID.removeAll(keepingCapacity: true) }
+        return Array(recentlyActivatedApplicationsByBundleID.values)
+    }
+
+    func discardRecentlyActivatedApplications() {
+        recentlyActivatedApplicationsByBundleID.removeAll(keepingCapacity: true)
+    }
+
+    @objc private func applicationDidActivate(_ notification: Notification) {
+        guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                as? NSRunningApplication,
+              let sourceApplication = Self.sourceApplication(from: application) else {
+            return
+        }
+        recentlyActivatedApplicationsByBundleID[sourceApplication.bundleIdentifier.lowercased()] =
+            sourceApplication
+    }
+
+    private static func sourceApplication(
+        from application: NSRunningApplication?
+    ) -> ClipboardSourceApplication? {
+        guard let application,
               let bundleIdentifier = application.bundleIdentifier,
               !bundleIdentifier.isEmpty else {
             return nil
@@ -386,6 +486,7 @@ private final class ClipboardHistoryPersistenceWorker: @unchecked Sendable {
 @MainActor
 final class ClipboardHistoryController: NSObject, ObservableObject {
     static let maximumSynchronousCaptureByteCount = 256 * 1_024
+    static let imageTextIndexBatchSize = 25
 
     @Published private(set) var items: [ClipboardHistoryItem] = []
     @Published private(set) var errorMessage: String?
@@ -407,18 +508,23 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private let persistenceWorker: ClipboardHistoryPersistenceWorker
     private let monitoringInterval: TimeInterval
     private let captureSuppressionSettlingInterval: TimeInterval
+    private let imageIndexBatchPauseNanoseconds: UInt64
     private let imageTextRecognizer: any ClipboardImageTextRecognizing
     private let errorMessageProvider: (Error) -> String
 
     private var timer: Timer?
     private var loadTask: Task<Void, Never>?
     private var imageIndexingTask: Task<Void, Never>?
+    private var imageIndexBatchContinuationTask: Task<Void, Never>?
+    private var continuesBackgroundImageIndexing = false
     private var imageIndexPersistenceTask: Task<Void, Never>?
     private var hasPendingImageIndexPersistence = false
     private var pendingImageIndexPersistenceCount = 0
     private var pendingImageIndexItemIDs: [UUID] = []
     private var pendingImageIndexItemIDSet = Set<UUID>()
+    private var imageIndexAttemptedItemIDs = Set<UUID>()
     private var captureProcessingTask: Task<Void, Never>?
+    private var pasteboardPayloadReadTask: Task<Void, Never>?
     private var captureProcessingGeneration: UInt64 = 0
     private var captureProcessingSequence: UInt64 = 0
     private var capturePolicyRevision: UInt64 = 0
@@ -440,6 +546,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         persistence: any ClipboardHistoryPersisting,
         monitoringInterval: TimeInterval = 0.5,
         captureSuppressionSettlingInterval: TimeInterval = 0.75,
+        imageIndexBatchPauseNanoseconds: UInt64 = 2_000_000_000,
         imageTextRecognizer: any ClipboardImageTextRecognizing = VisionClipboardImageTextRecognizer(),
         errorMessageProvider: @escaping (Error) -> String = { $0.localizedDescription }
     ) {
@@ -450,6 +557,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         self.persistenceWorker = ClipboardHistoryPersistenceWorker(persistence: persistence)
         self.monitoringInterval = monitoringInterval
         self.captureSuppressionSettlingInterval = captureSuppressionSettlingInterval
+        self.imageIndexBatchPauseNanoseconds = imageIndexBatchPauseNanoseconds
         self.imageTextRecognizer = imageTextRecognizer
         self.errorMessageProvider = errorMessageProvider
         self.lastSeenChangeCount = pasteboard.changeCount
@@ -512,6 +620,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         loadTask?.cancel()
         loadTask = nil
         cancelPendingCaptureProcessing()
+        pasteboardPayloadReadTask?.cancel()
+        pasteboardPayloadReadTask = nil
         cancelImageIndexing()
         flushPendingImageIndexPersistence()
         currentHistoryItemPasteboardState = nil
@@ -567,6 +677,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         if !isClearingHistory {
             pruneExpiredItemsIfNeeded(now: now)
         }
+        guard pasteboardPayloadReadTask == nil else { return }
         let currentChangeCount = pasteboard.changeCount
         guard currentChangeCount != lastSeenChangeCount else {
             // Track the stable foreground owner between clipboard changes. If focus moves while a
@@ -591,13 +702,15 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return
         }
 
+        let recentlyActivatedApplications = sourceContext.takeRecentlyActivatedApplications()
         let previousSourceApplication = lastObservedFrontmostApplication
         let sourceApplication = sourceContext.frontmostApplication()
         lastObservedFrontmostApplication = sourceApplication
-        guard !Self.isExcluded(
-            previousSourceApplication,
-            settings: currentSettings
-        ), !Self.isExcluded(sourceApplication, settings: currentSettings) else {
+        let possibleSourceApplications = recentlyActivatedApplications
+            + [previousSourceApplication, sourceApplication].compactMap { $0 }
+        guard !possibleSourceApplications.contains(where: {
+            Self.isExcluded($0, settings: currentSettings)
+        }) else {
             return
         }
 
@@ -619,11 +732,62 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return
         }
 
+        if pasteboard.requiresAsynchronousPayloadRead {
+            beginAsynchronousPasteboardPayloadRead(
+                maximumByteCount: currentSettings.maximumItemByteCount,
+                expectedChangeCount: currentChangeCount,
+                sourceApplication: sourceApplication,
+                capturedAt: now
+            )
+            return
+        }
+        handlePasteboardPayloadReadResult(
+            pasteboard.readPayload(
+                maximumByteCount: currentSettings.maximumItemByteCount,
+                expectedChangeCount: currentChangeCount
+            ),
+            sourceApplication: sourceApplication,
+            changeCount: currentChangeCount,
+            capturedAt: now
+        )
+    }
+
+    private func beginAsynchronousPasteboardPayloadRead(
+        maximumByteCount: Int,
+        expectedChangeCount: Int,
+        sourceApplication: ClipboardSourceApplication?,
+        capturedAt: Date
+    ) {
+        let pasteboard = pasteboard
+        pasteboardPayloadReadTask = Task { @MainActor [weak self] in
+            let result = await pasteboard.readPayloadAsynchronously(
+                maximumByteCount: maximumByteCount,
+                expectedChangeCount: expectedChangeCount
+            )
+            guard !Task.isCancelled, let self else { return }
+            self.pasteboardPayloadReadTask = nil
+            guard self.pasteboard.changeCount == expectedChangeCount else {
+                return
+            }
+            self.handlePasteboardPayloadReadResult(
+                result,
+                sourceApplication: sourceApplication,
+                changeCount: expectedChangeCount,
+                capturedAt: capturedAt
+            )
+        }
+    }
+
+    private func handlePasteboardPayloadReadResult(
+        _ result: ClipboardPasteboardReadResult,
+        sourceApplication: ClipboardSourceApplication?,
+        changeCount currentChangeCount: Int,
+        capturedAt: Date
+    ) {
+        guard !isClearingHistory, errorMessage == nil else { return }
+        let currentSettings = settings.snapshot
         let payload: ClipboardHistoryPayload
-        switch pasteboard.readPayload(
-            maximumByteCount: currentSettings.maximumItemByteCount,
-            expectedChangeCount: currentChangeCount
-        ) {
+        switch result {
         case let .payload(capturedPayload):
             payload = capturedPayload
         case .empty:
@@ -638,6 +802,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return
         }
 
+        guard ClipboardCapturePolicy.preflight(
+            types: Set(payload.representations.map(\.typeIdentifier)),
+            sourceApplication: sourceApplication,
+            settings: currentSettings
+        ) == nil else {
+            return
+        }
+
         if captureProcessingTask != nil
             || payload.byteCount > Self.maximumSynchronousCaptureByteCount
             || items.first?.isSearchTextTruncated == true {
@@ -645,7 +817,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 payload: payload,
                 sourceApplication: sourceApplication,
                 changeCount: currentChangeCount,
-                capturedAt: now
+                capturedAt: capturedAt
             )
             return
         }
@@ -654,7 +826,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             sourceApplication: sourceApplication,
             settings: currentSettings,
             newestItem: items.first,
-            now: now
+            now: capturedAt
         )
         applyCaptureDecision(
             decision,
@@ -836,6 +1008,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         hasObservedSuppressedChange = false
         captureSuppressionMode = nil
         isIgnoringNextCopy = false
+        sourceContext.discardRecentlyActivatedApplications()
         notifyChanged()
         if notifyCancellation,
            !hadObservedSuppressedChange,
@@ -903,6 +1076,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
               }) else {
             return
         }
+        imageIndexAttemptedItemIDs.remove(item.id)
         enqueueImageTextIndexing(for: [item])
     }
 
@@ -983,7 +1157,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     @discardableResult
     func clearAllHistory() async -> Bool {
         guard errorMessage == nil else { return false }
-        return await replaceItemsDurably(with: [])
+        return await resetPersistentHistory()
     }
 
     @discardableResult
@@ -1011,7 +1185,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         startMonitoringIfPossible()
         // Queue only lightweight identifiers, then process one image at a time. This keeps
         // startup work bounded without permanently leaving older images unsearchable.
-        enqueueImageTextIndexing(for: pruned)
+        continuesBackgroundImageIndexing = true
+        enqueueNextBackgroundImageTextIndexBatch()
     }
 
     private func finishLoading(with error: Error) {
@@ -1102,6 +1277,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             self.hasObservedSuppressedChange = false
             self.captureSuppressionMode = nil
             self.isIgnoringNextCopy = false
+            self.sourceContext.discardRecentlyActivatedApplications()
             self.notifyChanged()
             if !hadObservedSuppressedChange, let mode {
                 self.onCaptureSuppressionEvent?(.expired(mode: mode))
@@ -1166,6 +1342,9 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private func resetPersistentHistory() async -> Bool {
         guard !isClearingHistory else { return false }
         cancelPendingCaptureProcessing()
+        pasteboardPayloadReadTask?.cancel()
+        pasteboardPayloadReadTask = nil
+        cancelImageIndexing()
         cancelScheduledImageIndexPersistence()
         isClearingHistory = true
         notifyChanged()
@@ -1237,6 +1416,24 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         startNextImageTextIndexingIfNeeded()
     }
 
+    private func enqueueNextBackgroundImageTextIndexBatch() {
+        guard continuesBackgroundImageIndexing,
+              imageIndexingTask == nil,
+              pendingImageIndexItemIDs.isEmpty,
+              isLoaded,
+              errorMessage == nil,
+              !isClearingHistory else {
+            return
+        }
+        let candidates = items.lazy.filter {
+            $0.kind == .image
+                && !$0.hasCompletedImageTextIndexing
+                && !self.pendingImageIndexItemIDSet.contains($0.id)
+                && !self.imageIndexAttemptedItemIDs.contains($0.id)
+        }
+        enqueueImageTextIndexing(for: Array(candidates.prefix(Self.imageTextIndexBatchSize)))
+    }
+
     private func startNextImageTextIndexingIfNeeded() {
         guard imageIndexingTask == nil,
               isLoaded,
@@ -1248,6 +1445,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         while let itemID = pendingImageIndexItemIDs.first {
             pendingImageIndexItemIDs.removeFirst()
             pendingImageIndexItemIDSet.remove(itemID)
+            imageIndexAttemptedItemIDs.insert(itemID)
             guard let item = items.first(where: {
                 $0.id == itemID && $0.kind == .image && !$0.hasCompletedImageTextIndexing
             }) else {
@@ -1256,9 +1454,15 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
             let recognizer = imageTextRecognizer
             imageIndexingTask = Task { [weak self] in
-                let payload = await Task.detached(priority: .utility) {
-                    try? item.loadPayload()
-                }.value
+                let worker = Task<ClipboardHistoryPayload?, Never>.detached(priority: .utility) {
+                    guard !Task.isCancelled else { return nil }
+                    return try? item.loadPayload()
+                }
+                let payload = await withTaskCancellationHandler {
+                    await worker.value
+                } onCancel: {
+                    worker.cancel()
+                }
                 guard let payload else {
                     guard !Task.isCancelled else { return }
                     self?.finishImageTextIndexingAttempt(
@@ -1280,6 +1484,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             }
             return
         }
+        scheduleNextBackgroundImageTextIndexBatchIfNeeded()
     }
 
     private func finishImageTextIndexingAttempt(
@@ -1301,6 +1506,31 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         refreshCapacityState()
         scheduleImageIndexPersistence()
         notifyChanged()
+    }
+
+    private func scheduleNextBackgroundImageTextIndexBatchIfNeeded() {
+        guard continuesBackgroundImageIndexing,
+              imageIndexBatchContinuationTask == nil,
+              imageIndexingTask == nil,
+              pendingImageIndexItemIDs.isEmpty,
+              items.contains(where: {
+                  $0.kind == .image
+                      && !$0.hasCompletedImageTextIndexing
+                      && !imageIndexAttemptedItemIDs.contains($0.id)
+              }) else {
+            return
+        }
+        let pause = imageIndexBatchPauseNanoseconds
+        imageIndexBatchContinuationTask = Task { @MainActor [weak self] in
+            if pause > 0 {
+                try? await Task.sleep(nanoseconds: pause)
+            } else {
+                await Task.yield()
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.imageIndexBatchContinuationTask = nil
+            self.enqueueNextBackgroundImageTextIndexBatch()
+        }
     }
 
     private func scheduleImageIndexPersistence() {
@@ -1337,8 +1567,16 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private func cancelImageIndexing() {
         imageIndexingTask?.cancel()
         imageIndexingTask = nil
+        imageIndexBatchContinuationTask?.cancel()
+        imageIndexBatchContinuationTask = nil
+        continuesBackgroundImageIndexing = false
         pendingImageIndexItemIDs.removeAll()
         pendingImageIndexItemIDSet.removeAll()
+        imageIndexAttemptedItemIDs.removeAll()
+    }
+
+    var pendingImageIndexItemCountForTesting: Int {
+        pendingImageIndexItemIDs.count
     }
 
     private func refreshCapacityState() {

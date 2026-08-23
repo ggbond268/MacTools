@@ -258,6 +258,19 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertNil(fixture.keyStore.currentKey)
     }
 
+    func testResetRotatesEncryptionKeyBeforeNewHistoryIsWritten() throws {
+        let fixture = try makeFixture()
+        try fixture.store.save([sampleItem(index: 1)])
+        let previousKey = try XCTUnwrap(fixture.keyStore.currentKey)
+
+        try fixture.store.reset()
+        try fixture.store.prepare()
+
+        let replacementKey = try XCTUnwrap(fixture.keyStore.currentKey)
+        XCTAssertNotEqual(replacementKey, previousKey)
+        XCTAssertTrue(try fixture.store.load().isEmpty)
+    }
+
     func testRemoveAllRemovesRollbackJournalAndInvalidatesStore() throws {
         let fixture = try makeFixture()
         try fixture.store.save([sampleItem(index: 1)])

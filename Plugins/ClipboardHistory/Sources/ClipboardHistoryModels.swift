@@ -333,9 +333,12 @@ enum ClipboardHistoryPayloadAccessError: Error, Sendable {
 }
 
 private final class ClipboardHistoryPayloadReference: @unchecked Sendable {
-    private let lock = NSLock()
+    private let condition = NSCondition()
     private var cachedPayload: ClipboardHistoryPayload?
     private var loader: (@Sendable () throws -> ClipboardHistoryPayload)?
+    private var isLoading = false
+    private var loadGeneration: UInt64 = 0
+    private var lastLoadFailure: (generation: UInt64, error: any Error)?
 
     init(payload: ClipboardHistoryPayload) {
         cachedPayload = payload
@@ -348,34 +351,66 @@ private final class ClipboardHistoryPayloadReference: @unchecked Sendable {
     }
 
     var cached: ClipboardHistoryPayload? {
-        lock.withLock { cachedPayload }
+        condition.withLock { cachedPayload }
     }
 
     func load() throws -> ClipboardHistoryPayload {
-        let resolvedLoader: @Sendable () throws -> ClipboardHistoryPayload = try lock.withLock {
-            if let cachedPayload {
-                return { cachedPayload }
-            }
-            guard let loader else {
-                throw ClipboardHistoryPayloadAccessError.unavailable
-            }
-            return loader
+        guard !Task.isCancelled else { throw CancellationError() }
+
+        condition.lock()
+        if let cachedPayload {
+            condition.unlock()
+            return cachedPayload
         }
-        let loadedPayload = try resolvedLoader()
-        return lock.withLock {
+        guard let loader else {
+            condition.unlock()
+            throw ClipboardHistoryPayloadAccessError.unavailable
+        }
+
+        if isLoading {
+            let observedGeneration = loadGeneration
+            repeat {
+                condition.wait()
+            } while isLoading && loadGeneration == observedGeneration
+
+            defer { condition.unlock() }
+            guard !Task.isCancelled else { throw CancellationError() }
             if let cachedPayload {
                 return cachedPayload
             }
-            cachedPayload = loadedPayload
-            return loadedPayload
+            if let lastLoadFailure,
+               lastLoadFailure.generation == loadGeneration {
+                throw lastLoadFailure.error
+            }
+            throw ClipboardHistoryPayloadAccessError.unavailable
         }
+
+        isLoading = true
+        condition.unlock()
+
+        let result = Result { try loader() }
+        condition.lock()
+        isLoading = false
+        loadGeneration &+= 1
+        switch result {
+        case let .success(payload):
+            cachedPayload = payload
+            lastLoadFailure = nil
+        case let .failure(error):
+            lastLoadFailure = (generation: loadGeneration, error: error)
+        }
+        condition.broadcast()
+        condition.unlock()
+
+        guard !Task.isCancelled else { throw CancellationError() }
+        return try result.get()
     }
 
     func configureLoader(
         _ loader: @escaping @Sendable () throws -> ClipboardHistoryPayload,
         discardCachedPayload: Bool
     ) {
-        lock.withLock {
+        condition.withLock {
             self.loader = loader
             if discardCachedPayload {
                 cachedPayload = nil
@@ -384,7 +419,7 @@ private final class ClipboardHistoryPayloadReference: @unchecked Sendable {
     }
 
     func discardCachedPayloadIfReloadable() {
-        lock.withLock {
+        condition.withLock {
             guard loader != nil else { return }
             cachedPayload = nil
         }

@@ -94,10 +94,18 @@ enum ClipboardHistoryDetailMetadataLoader {
     }
 
     private static func loadPayload(_ item: ClipboardHistoryItem) async -> ClipboardHistoryPayload? {
-        await Task.detached(priority: .utility) {
+        let worker = Task<ClipboardHistoryPayload?, Never>.detached(priority: .utility) {
+            guard !Task.isCancelled else { return nil }
             defer { item.discardCachedPayloadIfReloadable() }
-            return try? item.loadPayload()
-        }.value
+            let payload = try? item.loadPayload()
+            guard !Task.isCancelled else { return nil }
+            return payload
+        }
+        return await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
     }
 
     private static func textMetadata(_ item: ClipboardHistoryItem) -> ClipboardHistoryDetailMetadata {

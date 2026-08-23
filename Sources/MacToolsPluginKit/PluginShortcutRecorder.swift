@@ -218,6 +218,7 @@ public struct PluginSettingsShortcutRecorderControl: View {
             .buttonStyle(.plain)
             .foregroundStyle(Color.secondary)
             .help(clearTitle)
+            .accessibilityLabel(clearTitle)
             .opacity(canClear ? 1 : 0)
             .disabled(!canClear)
             .accessibilityHidden(!canClear)

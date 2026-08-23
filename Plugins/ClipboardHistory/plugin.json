@@ -49,7 +49,7 @@
     }
   },
   "version": "1.0.0",
-  "minHostVersion": "1.2.0",
+  "minHostVersion": "1.3.0",
   "pluginKitVersion": 5,
   "bundleRelativePath": "ClipboardHistory.bundle",
   "factoryClass": "ClipboardHistoryPlugin.ClipboardHistoryPluginFactory",

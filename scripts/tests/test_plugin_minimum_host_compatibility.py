@@ -36,8 +36,8 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginActionProviding": "1.2.0",
     "PluginActionShortcutSettingsConfiguration": "1.2.0",
     "PluginActionShortcutSettingsProviding": "1.2.0",
-    "PluginShortcutSettingsGroupConfiguration": "1.2.0",
-    "PluginGroupedShortcutSettingsProviding": "1.2.0",
+    "PluginShortcutSettingsGroupConfiguration": "1.3.0",
+    "PluginGroupedShortcutSettingsProviding": "1.3.0",
     "PluginRetiredActionShortcutProviding": "1.2.0",
     "PluginActionShortcutPresetPreviewItem": "1.2.0",
     "PluginActionShortcutPresetPreview": "1.2.0",
@@ -74,6 +74,20 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginComponentTheme": "1.2.0",
     "PluginComponentCardBackground": "1.2.0",
     "PluginActionSafetyStateChangeProviding": "1.2.0",
+    # Shared palette, shortcut-recorder, and private-data APIs introduced after v1.2.0.
+    "PluginPaletteMetrics": "1.3.0",
+    "PluginPaletteSearchCommand": "1.3.0",
+    "PluginPaletteSearchField": "1.3.0",
+    "PluginPaletteSearchBar": "1.3.0",
+    "PluginPaletteSearchToolbar": "1.3.0",
+    "PluginPaletteSurface": "1.3.0",
+    "PluginPaletteSelectableRowModifier": "1.3.0",
+    "PluginPaletteToolbarControlStyle": "1.3.0",
+    "PluginPaletteKeyboardHint": "1.3.0",
+    "PluginPaletteFooter": "1.3.0",
+    "PluginPrivateDataKeychainIdentity": "1.3.0",
+    "PluginSettingsActionShortcutItem": "1.3.0",
+    "PluginSettingsShortcutRecorderControl": "1.3.0",
 }
 
 
@@ -128,11 +142,14 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             makefile,
         )
 
-    def test_every_current_plugin_targets_plugin_kit5_and_mac_tools_1_2(self) -> None:
+    def test_every_current_plugin_targets_plugin_kit5_and_a_supported_host(self) -> None:
         incompatible = []
         for manifest_path in sorted(PLUGINS_ROOT.glob("*/plugin.json")):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest["pluginKitVersion"] != 5 or manifest["minHostVersion"] != "1.2.0":
+            if (
+                manifest["pluginKitVersion"] != 5
+                or version_tuple(manifest["minHostVersion"]) < version_tuple("1.2.0")
+            ):
                 incompatible.append(manifest["id"])
         self.assertEqual(incompatible, [])
 

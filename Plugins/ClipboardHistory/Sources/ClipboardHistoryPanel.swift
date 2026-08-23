@@ -1188,11 +1188,19 @@ private struct ClipboardHistoryPanelView: View {
     @ViewBuilder
     private var panelContent: some View {
         if presentation.showsErrorOnly, let errorMessage = controller.errorMessage {
-            ContentUnavailableView(
-                localization.string("panel.error.title", defaultValue: "无法读取剪贴板历史"),
-                systemImage: "lock.trianglebadge.exclamationmark",
-                description: Text(errorMessage)
-            )
+            ContentUnavailableView {
+                Label(
+                    localization.string("panel.error.title", defaultValue: "无法读取剪贴板历史"),
+                    systemImage: "lock.trianglebadge.exclamationmark"
+                )
+            } description: {
+                Text(errorMessage)
+            } actions: {
+                Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
+                    controller.retryStorageAccess()
+                }
+                .buttonStyle(.borderedProminent)
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if presentation.showsEmptyState {
             ContentUnavailableView(
@@ -1259,6 +1267,11 @@ private struct ClipboardHistoryPanelView: View {
                     .textSelection(.enabled)
             }
             Spacer(minLength: 0)
+            Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
+                controller.retryStorageAccess()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -1412,6 +1425,9 @@ private struct ClipboardHistoryPanelView: View {
                 .buttonStyle(.plain)
                 .help("\(filterTitle(filter)) (⌃\(filter.shortcutNumber))")
                 .accessibilityLabel("\(filterTitle(filter)) (⌃\(filter.shortcutNumber))")
+                .accessibilityAddTraits(
+                    model.contentFilter == filter ? .isSelected : []
+                )
             }
         }
     }

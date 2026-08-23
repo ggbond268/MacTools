@@ -181,6 +181,30 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testAsynchronousPayloadReadDoesNotBlockAndAppliesCompletedCapture() async {
+        let fixture = makeFixture()
+        fixture.pasteboard.requiresAsynchronousPayloadRead = true
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.simulateCopy("large payload")
+
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        for _ in 0..<100 where !fixture.pasteboard.asyncReadStarted {
+            await Task.yield()
+        }
+        XCTAssertTrue(fixture.pasteboard.asyncReadStarted)
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+
+        fixture.pasteboard.completeAsynchronousRead()
+        for _ in 0..<100 where fixture.controller.items.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(fixture.controller.items.map(\.text), ["large payload"])
+        fixture.controller.stop()
+    }
+
     func testPauseResumeAndExcludedApplicationFiltering() async throws {
         let fixture = makeFixture()
         fixture.controller.start()
@@ -247,6 +271,38 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.pasteboard.simulateCopy("ordinary value")
         fixture.controller.processPasteboardChange()
         XCTAssertEqual(fixture.controller.items.map(\.text), ["ordinary value"])
+        fixture.controller.stop()
+    }
+
+    func testExcludedApplicationRoundTripBetweenPollsIsNotRead() async throws {
+        let fixture = makeFixture()
+        let editor = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Editor",
+            name: "Editor"
+        )
+        let secret = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Secret",
+            name: "Secret"
+        )
+        fixture.settings.addExcludedApplications([
+            ClipboardExcludedApplication(
+                bundleIdentifier: secret.bundleIdentifier,
+                name: secret.name
+            ),
+        ])
+        fixture.source.application = editor
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.controller.processPasteboardChange()
+
+        fixture.source.recordActivation(secret)
+        fixture.source.recordActivation(editor)
+        fixture.pasteboard.simulateCopy("rapid secret")
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
         fixture.controller.stop()
     }
 
@@ -386,6 +442,57 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             imageCount
         )
         fixture.controller.stop()
+    }
+
+    func testStartupImageIndexingQueuesOnlyOneBoundedBatchAtATime() async throws {
+        let recognizer = BlockingCountingClipboardImageTextRecognizer()
+        let images = (0..<105).map { byte in
+            let payload = imagePayload(data: Data([UInt8(byte % 255)]))
+            return lazyImageItem(payloadLoader: { payload })
+        }
+        let fixture = makeFixture(
+            initialItems: images,
+            imageIndexBatchPauseNanoseconds: 60_000_000_000,
+            imageTextRecognizer: recognizer
+        )
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        for _ in 0..<5_000 {
+            if await recognizer.callCount > 0 { break }
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+
+        let recognitionCallCount = await recognizer.callCount
+        XCTAssertEqual(recognitionCallCount, 1)
+        XCTAssertEqual(
+            fixture.controller.pendingImageIndexItemCountForTesting,
+            ClipboardHistoryController.imageTextIndexBatchSize - 1
+        )
+
+        fixture.controller.stop()
+        await recognizer.releaseAll()
+    }
+
+    func testConcurrentLazyPayloadLoadsAreSingleFlightAndCancellationDoesNotReload() async throws {
+        let loader = BlockingCountingClipboardPayloadLoader(payload: .plainText("secret"))
+        let item = lazyImageItem(payloadLoader: { try loader.load() })
+        let first = Task.detached { try item.loadPayload() }
+        XCTAssertEqual(loader.started.wait(timeout: .now() + 2), .success)
+        let cancelledWaiter = Task.detached { try item.loadPayload() }
+        cancelledWaiter.cancel()
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        loader.release.signal()
+
+        let firstPayload = try await first.value
+        XCTAssertEqual(firstPayload, .plainText("secret"))
+        do {
+            _ = try await cancelledWaiter.value
+            XCTFail("A cancelled waiter must not receive or reload the payload")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertEqual(loader.loadCount, 1)
     }
 
     func testDeletingAnItemDoesNotDuplicateContinuouslyQueuedImageIndexing() async throws {
@@ -850,6 +957,35 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let clearedAll = await fixture.controller.clearAllHistory()
         XCTAssertTrue(clearedAll)
         XCTAssertTrue(fixture.persistence.savedItems.isEmpty)
+        XCTAssertEqual(fixture.persistence.resetCount, 1)
+        fixture.controller.stop()
+    }
+
+    func testClearAllCancelsInFlightImageIndexingBeforeReset() async throws {
+        let recognizer = BlockingCountingClipboardImageTextRecognizer()
+        let payload = imagePayload(data: Data([0x01]))
+        let image = lazyImageItem(payloadLoader: { payload })
+        let fixture = makeFixture(
+            initialItems: [image],
+            imageIndexBatchPauseNanoseconds: 60_000_000_000,
+            imageTextRecognizer: recognizer
+        )
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        for _ in 0..<5_000 {
+            if await recognizer.callCount > 0 { break }
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+
+        let cleared = await fixture.controller.clearAllHistory()
+        XCTAssertTrue(cleared)
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.persistence.resetCount, 1)
+        XCTAssertEqual(fixture.controller.pendingImageIndexItemCountForTesting, 0)
+
+        await recognizer.releaseAll()
+        await Task.yield()
+        XCTAssertTrue(fixture.controller.items.isEmpty)
         fixture.controller.stop()
     }
 
@@ -1147,7 +1283,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         persistence.allowFirstSaveToFinish()
         await clearTask.value
         XCTAssertEqual(result, true)
-        XCTAssertTrue(persistence.savedSnapshots.last?.isEmpty == true)
+        XCTAssertEqual(persistence.resetCount, 1)
+        XCTAssertTrue(persistence.savedSnapshots.isEmpty)
         controller.stop()
     }
 
@@ -1191,6 +1328,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
     private func makeFixture(
         initialItems: [ClipboardHistoryItem] = [],
         captureSuppressionSettlingInterval: TimeInterval = 0.75,
+        imageIndexBatchPauseNanoseconds: UInt64 = 0,
         imageTextRecognizer: any ClipboardImageTextRecognizing = VisionClipboardImageTextRecognizer()
     ) -> (
         controller: ClipboardHistoryController,
@@ -1220,6 +1358,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             persistence: persistence,
             monitoringInterval: 60,
             captureSuppressionSettlingInterval: captureSuppressionSettlingInterval,
+            imageIndexBatchPauseNanoseconds: imageIndexBatchPauseNanoseconds,
             imageTextRecognizer: imageTextRecognizer
         )
         settings.onChange = { [weak controller] in
@@ -1397,9 +1536,33 @@ private actor BlockingCountingClipboardImageTextRecognizer: ClipboardImageTextRe
     }
 }
 
+private final class BlockingCountingClipboardPayloadLoader: @unchecked Sendable {
+    let started = DispatchSemaphore(value: 0)
+    let release = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private let payload: ClipboardHistoryPayload
+    private var count = 0
+
+    init(payload: ClipboardHistoryPayload) {
+        self.payload = payload
+    }
+
+    var loadCount: Int {
+        lock.withLock { count }
+    }
+
+    func load() throws -> ClipboardHistoryPayload {
+        lock.withLock { count += 1 }
+        started.signal()
+        release.wait()
+        return payload
+    }
+}
+
 @MainActor
 private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
     var changeCount = 0
+    var requiresAsynchronousPayloadRead = false
     var simulatedTypeNames: Set<String> = [ClipboardRepresentationType.plainText]
     var text: String?
     var payload: ClipboardHistoryPayload?
@@ -1407,6 +1570,10 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
     private(set) var lastWrittenPayload: ClipboardHistoryPayload?
     private(set) var typeNamesReadCount = 0
     private(set) var plainTextReadCount = 0
+    private(set) var asyncReadStarted = false
+    private var asyncReadContinuation: CheckedContinuation<ClipboardPasteboardReadResult, Never>?
+    private var asyncReadMaximumByteCount = 0
+    private var asyncReadExpectedChangeCount = 0
 
     var typeNames: Set<String> {
         typeNamesReadCount += 1
@@ -1422,6 +1589,28 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
         onRead?()
         guard let payload else { return .empty }
         return payload.byteCount <= maximumByteCount ? .payload(payload) : .oversized
+    }
+
+    func readPayloadAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardReadResult {
+        asyncReadStarted = true
+        asyncReadMaximumByteCount = maximumByteCount
+        asyncReadExpectedChangeCount = expectedChangeCount
+        return await withCheckedContinuation { continuation in
+            asyncReadContinuation = continuation
+        }
+    }
+
+    func completeAsynchronousRead() {
+        guard let continuation = asyncReadContinuation else { return }
+        asyncReadContinuation = nil
+        let result = readPayload(
+            maximumByteCount: asyncReadMaximumByteCount,
+            expectedChangeCount: asyncReadExpectedChangeCount
+        )
+        continuation.resume(returning: result)
     }
 
     func writePlainText(_ text: String) -> Bool {
@@ -1454,11 +1643,26 @@ private final class FakeClipboardSourceContext: ClipboardSourceContextProviding 
     var application: ClipboardSourceApplication?
     var onRead: (() -> Void)?
     private(set) var readCount = 0
+    private var recentlyActivatedApplications: [ClipboardSourceApplication] = []
 
     func frontmostApplication() -> ClipboardSourceApplication? {
         readCount += 1
         onRead?()
         return application
+    }
+
+    func recordActivation(_ application: ClipboardSourceApplication) {
+        self.application = application
+        recentlyActivatedApplications.append(application)
+    }
+
+    func takeRecentlyActivatedApplications() -> [ClipboardSourceApplication] {
+        defer { recentlyActivatedApplications.removeAll() }
+        return recentlyActivatedApplications
+    }
+
+    func discardRecentlyActivatedApplications() {
+        recentlyActivatedApplications.removeAll()
     }
 }
 
@@ -1467,6 +1671,7 @@ private final class InMemoryClipboardHistoryPersistence: ClipboardHistoryPersist
     private var items: [ClipboardHistoryItem]
     private var removed = false
     private var saves = 0
+    private var resets = 0
 
     init(items: [ClipboardHistoryItem]) {
         self.items = items
@@ -1486,6 +1691,10 @@ private final class InMemoryClipboardHistoryPersistence: ClipboardHistoryPersist
         lock.withLock { saves }
     }
 
+    var resetCount: Int {
+        lock.withLock { resets }
+    }
+
     func load() throws -> [ClipboardHistoryItem] {
         lock.withLock { items }
     }
@@ -1498,7 +1707,10 @@ private final class InMemoryClipboardHistoryPersistence: ClipboardHistoryPersist
     }
 
     func reset() throws {
-        lock.withLock { items = [] }
+        lock.withLock {
+            items = []
+            resets += 1
+        }
     }
 
     func removeAll() throws {
@@ -1536,6 +1748,7 @@ private final class BlockingFirstSaveClipboardHistoryPersistence: ClipboardHisto
     private var started = false
     private var mayFinish = false
     private var snapshots: [[ClipboardHistoryItem]] = []
+    private var resets = 0
     private let initialItems: [ClipboardHistoryItem]
 
     init(initialItems: [ClipboardHistoryItem] = []) {
@@ -1546,6 +1759,7 @@ private final class BlockingFirstSaveClipboardHistoryPersistence: ClipboardHisto
 
     var saveStarted: Bool { condition.withLock { started } }
     var savedSnapshots: [[ClipboardHistoryItem]] { condition.withLock { snapshots } }
+    var resetCount: Int { condition.withLock { resets } }
 
     func load() throws -> [ClipboardHistoryItem] { initialItems }
 
@@ -1563,7 +1777,10 @@ private final class BlockingFirstSaveClipboardHistoryPersistence: ClipboardHisto
     }
 
     func reset() throws {
-        condition.withLock { snapshots = [] }
+        condition.withLock {
+            snapshots = []
+            resets += 1
+        }
     }
 
     func removeAll() throws {}
