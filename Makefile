@@ -37,7 +37,7 @@ PLUGIN_RELEASE_ASSETS_DIR ?= $(PLUGIN_RELEASE_DIST_DIR)/Assets
 PLUGIN_RELEASE_CATALOG ?= $(PLUGIN_RELEASE_DIST_DIR)/catalog.json
 PLUGIN_KIT_VERSION ?= $(shell $(PYTHON3) -c 'import glob,json; versions={json.load(open(path, encoding="utf-8"))["pluginKitVersion"] for path in glob.glob("Plugins/*/plugin.json")}; print(next(iter(versions)) if len(versions) == 1 else "")')
 PLUGIN_RELEASE_SIGNED_CATALOG ?= $(if $(filter 2,$(PLUGIN_KIT_VERSION)),docs/plugins/catalog.json,docs/plugins/v$(PLUGIN_KIT_VERSION)/catalog.json)
-PLUGIN_CATALOG_MINIMUM_HOST_VERSION ?= $(if $(filter 5,$(PLUGIN_KIT_VERSION)),1.2.0,1.1.6)
+PLUGIN_CATALOG_MINIMUM_HOST_VERSION ?= $(if $(filter 5 6,$(PLUGIN_KIT_VERSION)),1.2.0,1.1.6)
 PLUGIN_RELEASE_BASE_URL ?= https://github.com/$(PLUGIN_RELEASE_REPO)/releases/download/$(PLUGIN_RELEASE_TAG)
 E2E_SCRIPT := scripts/e2e/mactools-e2e.sh
 E2E_SESSION ?=

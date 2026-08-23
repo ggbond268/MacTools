@@ -48,9 +48,9 @@
       "summary": "開啟幕前調度，集中顯示當前窗口並把其他窗口收納到側邊"
     }
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "StageManager.bundle",
   "factoryClass": "StageManagerPlugin.StageManagerPluginFactory",
   "build": {
@@ -62,6 +62,8 @@
     "componentPanel": false,
     "settings": "none"
   },
-  "permissions": [],
+  "permissions": [
+
+  ],
   "category": "display"
 }

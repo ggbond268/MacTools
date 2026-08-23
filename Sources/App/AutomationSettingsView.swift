@@ -2066,8 +2066,10 @@ enum WorkflowRunPresentation {
             case .workflow: FeatureL10n.string("工作流")
             case .automaticRule: FeatureL10n.string("自动规则")
             case .appIntent: FeatureL10n.string("App Intent")
+            case .cli: FeatureL10n.string("命令行")
             case .manual: FeatureL10n.string("手动")
             case .test: FeatureL10n.string("测试")
+            default: actionSource.rawValue
             }
         case .automatic:
             FeatureL10n.string("自动规则")

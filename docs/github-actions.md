@@ -172,7 +172,7 @@ make release ARGS="--type plugin --version 1.1.0 --plugin-mode all --yes"
 
 应用内是否显示“可更新”只比较插件版本，不比较 batch tag 或 asset URL。因此只有实际变化的插件需要递增各自 `plugin.json.version`；未变化插件不会因为新批次 tag 而显示可更新或无效。
 
-`pluginKitVersion` is the plugin ABI boundary. Raising it requires rebuilding every plugin package and incrementing each plugin's own `plugin.json.version`. The release helper automatically switches an ABI migration to `plugin_mode=all` and writes a complete catalog for the new ABI. PluginKit v5 writes `docs/plugins/v5/catalog.json` and does not modify the v4 catalog used by MacTools through 1.1.6. Catalog validation rejects mixed PluginKit versions so the host never loads a binary from an incompatible ABI.
+`pluginKitVersion` is the plugin ABI boundary. Raising it requires rebuilding every plugin package and incrementing each plugin's own `plugin.json.version`. The release helper automatically switches an ABI migration to `plugin_mode=all` and writes a complete catalog for the new ABI. PluginKit v6 writes `docs/plugins/v6/catalog.json` and does not modify the immutable v4/v5 catalogs. Catalog validation rejects mixed PluginKit versions so the host never loads a binary from an incompatible ABI.
 
 推送插件批次 tag：
 

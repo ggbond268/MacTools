@@ -358,6 +358,42 @@ function sign_path() {
     "$path"
 }
 
+function sign_path_with_identifier() {
+  local path="$1"
+  local identifier="$2"
+  /usr/bin/codesign \
+    --force \
+    --sign "$DEVELOPER_ID_APPLICATION" \
+    --options runtime \
+    --timestamp \
+    --identifier "$identifier" \
+    "$path"
+}
+
+function signing_detail() {
+  local path="$1"
+  local key="$2"
+  /usr/bin/codesign -dvvv "$path" 2>&1 \
+    | awk -F= -v key="$key" '$1 == key { print substr($0, length(key) + 2); exit }'
+}
+
+function validate_cli_role_signature() {
+  local path="$1"
+  local expected_identifier="$2"
+  local expected_team="$3"
+  local details
+  local actual_identifier
+  local actual_team
+  details="$(/usr/bin/codesign -dvvv "$path" 2>&1)"
+  actual_identifier="$(signing_detail "$path" Identifier)"
+  actual_team="$(signing_detail "$path" TeamIdentifier)"
+  [[ "$actual_identifier" == "$expected_identifier" ]] \
+    || fail "签名标识不匹配：$path（期望 $expected_identifier，实际 $actual_identifier）"
+  [[ -n "$expected_team" && "$actual_team" == "$expected_team" ]] \
+    || fail "签名 Team Identifier 不匹配：$path"
+  [[ "$details" == *"runtime"* ]] || fail "签名未启用 hardened runtime：$path"
+}
+
 function sign_path_preserving_entitlements() {
   local path="$1"
   /usr/bin/codesign \
@@ -472,6 +508,15 @@ function dmg_signing_identifier() {
 
 function sign_app_bundle() {
   local app_path="$1"
+  local cli_path="$app_path/Contents/MacOS/mactools"
+  local broker_path="$app_path/Contents/MacOS/MacToolsCLIBroker"
+
+  [[ -x "$cli_path" ]] || fail "未找到内置命令行工具：$cli_path"
+  [[ -x "$broker_path" ]] || fail "未找到命令行代理：$broker_path"
+  local host_identifier
+  host_identifier="$(app_bundle_identifier "$app_path")"
+  sign_path_with_identifier "$cli_path" "$host_identifier.cli"
+  sign_path_with_identifier "$broker_path" "$host_identifier.cli-broker"
 
   if [[ -d "$app_path/Contents" ]]; then
     while IFS= read -r binary; do
@@ -496,7 +541,13 @@ function sign_app_bundle() {
 
   sign_app_path "$app_path"
   validate_finder_sync_extension "$app_path"
+  /usr/bin/codesign --verify --strict --verbose=2 "$cli_path"
+  /usr/bin/codesign --verify --strict --verbose=2 "$broker_path"
   /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
+  local host_team
+  host_team="$(signing_detail "$app_path" TeamIdentifier)"
+  validate_cli_role_signature "$cli_path" "$host_identifier.cli" "$host_team"
+  validate_cli_role_signature "$broker_path" "$host_identifier.cli-broker" "$host_team"
 }
 
 function sign_disk_image() {

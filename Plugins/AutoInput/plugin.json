@@ -48,9 +48,9 @@
       "summary": "按應用程式記住並自動切換輸入法"
     }
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "AutoInput.bundle",
   "factoryClass": "AutoInputPlugin.AutoInputPluginFactory",
   "build": {

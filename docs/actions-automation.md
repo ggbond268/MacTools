@@ -2,6 +2,11 @@
 
 MacTools exposes one host-owned action platform to every invocation surface. Plugins publish stable action definitions and catalog entries; the host owns lookup, migration, availability, shortcut registration, confirmation, and execution.
 
+The bundled local [`mactools` CLI](cli.md) is another host-owned surface. It
+discovers published actions, workflows, and plugin diagnostics through a signed
+XPC broker and invokes only `ActionExecutor`; CLI eligibility never grants an
+action broader permissions or skips confirmation and availability checks.
+
 ## Ownership
 
 - `ActionRegistry` owns revisioned in-memory definition/catalog indexes and live availability invalidation.
@@ -21,7 +26,7 @@ Workflows can be created, renamed, duplicated, enabled or disabled, reordered, p
 
 The workflow editor keeps action identity and parameters together: changing an action uses the shared action picker and replaces its parameters with a valid reference. Step names, waits, and failure policy live under Advanced Options. Text and numeric drafts are debounced before persistence, while structural changes such as adding, replacing, moving, or deleting steps are saved immediately and rebuild the published catalog only when action identity changes.
 
-Workflow actions publish durable progress through Automation. Action Grid and Unified Search complete validation, availability checks, provider-generation revalidation, and any confirmation before handing the run to Automation and closing; the menu-bar running indicator, Automation run history, and Stop control then own its lifecycle. Ordinary actions still keep the invoking surface open until they return a terminal result, and nested workflow steps always await their child action so ordering, failure policy, recursion limits, and cancellation remain deterministic.
+Workflow actions publish durable progress through Automation. Action Grid, Unified Search, and the CLI complete validation, availability checks, provider-generation revalidation, and any confirmation before handing the run to Automation and closing; the menu-bar running indicator, Automation run history, and Stop control then own its lifecycle. Ordinary actions still keep the invoking surface open until they return a terminal result, and nested workflow steps always await their child action so ordering, failure policy, recursion limits, and cancellation remain deterministic.
 
 Automatic rules use one trigger and zero or more conditions:
 

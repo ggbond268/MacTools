@@ -429,6 +429,7 @@ public struct ActionExposureSurface: RawRepresentable, Hashable, Codable, Sendab
     public let rawValue: String
 
     public static let appIntents = ActionExposureSurface(rawValue: "app-intents")
+    public static let cli = ActionExposureSurface(rawValue: "cli")
 
     public init(rawValue: String) {
         self.rawValue = rawValue
@@ -443,17 +444,34 @@ public enum ActionExposurePolicy: String, Hashable, Codable, Sendable {
     case excluded
 }
 
-public enum ActionExecutionSource: String, Hashable, Codable, Sendable {
-    case unifiedSearch
-    case globalShortcut
-    case runLink
-    case workflow
-    case automaticRule
-    case actionGrid
-    case trackpadGesture
-    case appIntent
-    case manual
-    case test
+public struct ActionExecutionSource: RawRepresentable, Hashable, Codable, Sendable {
+    public let rawValue: String
+
+    public static let unifiedSearch = ActionExecutionSource(rawValue: "unifiedSearch")
+    public static let globalShortcut = ActionExecutionSource(rawValue: "globalShortcut")
+    public static let runLink = ActionExecutionSource(rawValue: "runLink")
+    public static let workflow = ActionExecutionSource(rawValue: "workflow")
+    public static let automaticRule = ActionExecutionSource(rawValue: "automaticRule")
+    public static let actionGrid = ActionExecutionSource(rawValue: "actionGrid")
+    public static let trackpadGesture = ActionExecutionSource(rawValue: "trackpadGesture")
+    public static let appIntent = ActionExecutionSource(rawValue: "appIntent")
+    public static let cli = ActionExecutionSource(rawValue: "cli")
+    public static let manual = ActionExecutionSource(rawValue: "manual")
+    public static let test = ActionExecutionSource(rawValue: "test")
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 public enum ActionExecutionMode: String, Hashable, Codable, Sendable {

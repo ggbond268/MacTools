@@ -444,7 +444,7 @@ final class ActionExecutor {
         }
 
         let needsConfirmation = initial.definition.risk == .confirmationRequired
-            || (invocation.source == .runLink
+            || ((invocation.source == .runLink || invocation.source == .cli)
                 && initial.definition.externalInvocationPolicy == .confirmAlways)
         if needsConfirmation {
             guard let confirmation = initial.definition.confirmation else {
@@ -613,9 +613,14 @@ final class ActionExecutor {
             }
         }
 
+        if invocation.source == .runLink || invocation.source == .cli {
+            guard definition.externalInvocationPolicy != .unavailable else {
+                return .externalInvocationUnavailable
+            }
+        }
+
         if invocation.source == .runLink {
-            guard definition.externalInvocationPolicy != .unavailable,
-                  !ActionRegistry.containsSensitiveParameters(
+            guard !ActionRegistry.containsSensitiveParameters(
                       invocation.reference,
                       for: definition
                   ) else {
@@ -632,6 +637,8 @@ final class ActionExecutor {
         switch invocation.source {
         case .appIntent:
             surface = .appIntents
+        case .cli:
+            surface = .cli
         default:
             return nil
         }

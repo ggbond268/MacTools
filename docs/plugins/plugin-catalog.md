@@ -2,7 +2,7 @@
 
 MacTools dynamic plugins use one catalog-driven flow for both production distribution and local development.
 
-- PluginKit 2 production builds read the legacy `catalog.json` URL. PluginKit 3 and later builds read versioned URLs. MacTools through 1.1.6 remains on the immutable PluginKit v4 catalog at `v4/catalog.json`; MacTools 1.2 and later use the new PluginKit v5 catalog at `v5/catalog.json`.
+- PluginKit 2 production builds read the legacy `catalog.json` URL. PluginKit 3 and later builds read versioned URLs. MacTools through 1.1.6 remains on immutable PluginKit v4, MacTools 1.2 uses immutable PluginKit v5, and the CLI-capable host uses PluginKit v6 at `v6/catalog.json`.
 - Each catalog contains packages for one PluginKit ABI line. The legacy v2 catalog is kept unchanged when a new ABI is released, so older app builds continue to work.
 - `minimumHostVersion` at the catalog root is the oldest host that can parse that catalog schema. Each entry declares its own install requirement; older hosts keep the catalog available and show newer entries as incompatible instead of rejecting the whole marketplace.
 - Local development reads a Debug-only `file://` catalog, usually configured with `MACTOOLS_PLUGIN_CATALOG_URL`.
@@ -16,7 +16,7 @@ MacTools dynamic plugins use one catalog-driven flow for both production distrib
   "catalogID": "com.ggbond.mactools.plugins",
   "generatedAt": "2026-05-16T12:00:00Z",
   "minimumHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "plugins": [
     {
       "id": "com.ggbond.mactools.demo",
@@ -34,7 +34,7 @@ MacTools dynamic plugins use one catalog-driven flow for both production distrib
       },
       "version": "1.0.0",
       "minimumHostVersion": "1.2.0",
-      "pluginKitVersion": 5,
+      "pluginKitVersion": 6,
       "capabilities": {
         "primaryPanel": true,
         "componentPanel": false,
@@ -76,6 +76,7 @@ PluginKit 2 -> https://mactools.ggbond.app/plugins/catalog.json
 PluginKit 3 -> https://mactools.ggbond.app/plugins/v3/catalog.json
 PluginKit 4 -> https://mactools.ggbond.app/plugins/v4/catalog.json
 PluginKit 5 -> https://mactools.ggbond.app/plugins/v5/catalog.json
+PluginKit 6 -> https://mactools.ggbond.app/plugins/v6/catalog.json
 PluginKit N -> https://mactools.ggbond.app/plugins/vN/catalog.json
 ```
 
@@ -165,7 +166,7 @@ Recommended production flow is an incremental batch plugin release:
 7. If package-relevant files changed inside a plugin or shared PluginKit code changed but that plugin version did not increase, the workflow fails before signing or uploading. A `pluginKitVersion` change automatically becomes a full `mode=all` rebuild and replaces the catalog for that ABI line; other exceptional shared paths can still be supplied explicitly with `--shared-path`.
 8. The workflow builds, signs, zips, and uploads only the selected plugin packages.
 9. For an ABI migration, the workflow generates a complete catalog from all rebuilt packages. For later releases within an ABI line, it generates a delta catalog and merges it into that line's catalog, keeping unchanged entries pointing at their existing assets.
-10. The signed catalog is committed to `docs/plugins/catalog.json` for v2 or `docs/plugins/vN/catalog.json` for PluginKit N >= 3. The current PluginKit v5 catalog is `docs/plugins/v5/catalog.json`.
+10. The signed catalog is committed to `docs/plugins/catalog.json` for v2 or `docs/plugins/vN/catalog.json` for PluginKit N >= 3. PluginKit v6 writes `docs/plugins/v6/catalog.json` and never mutates the v5 compatibility catalog.
 11. `Deploy Pages` publishes the signed catalog to GitHub Pages.
 
 The batch tag is stored per plugin entry through `package.url` and `releaseNotesURL`, so one catalog can point different plugins to different release tags without changing host code.
@@ -219,7 +220,7 @@ Generated local output:
 build/PluginRelease/
   Assets/*.mactoolsplugin.zip
   catalog.json
-docs/plugins/v5/catalog.json
+docs/plugins/v6/catalog.json
 ```
 
 The lower-level scripts are still useful for external plugin repositories. `build-plugin-release-assets.sh` can build all plugins or a subset with repeated `--plugin` arguments:

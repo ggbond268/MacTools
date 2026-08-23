@@ -203,6 +203,43 @@ jobs:
               "$1"
           }
 
+          sign_path_with_identifier() {
+            /usr/bin/codesign \
+              --force \
+              --sign "$SIGNING_IDENTITY" \
+              --keychain "$KEYCHAIN_PATH" \
+              --options runtime \
+              --timestamp \
+              --identifier "$2" \
+              "$1"
+          }
+
+          signing_detail() {
+            /usr/bin/codesign -dvvv "$1" 2>&1 \
+              | awk -F= -v key="$2" '$1 == key { print substr($0, length(key) + 2); exit }'
+          }
+
+          validate_cli_role_signature() {
+            local details
+            local actual_identifier
+            local actual_team
+            details="$(/usr/bin/codesign -dvvv "$1" 2>&1)"
+            actual_identifier="$(signing_detail "$1" Identifier)"
+            actual_team="$(signing_detail "$1" TeamIdentifier)"
+            [[ "$actual_identifier" == "$2" ]] || {
+              echo "Signing identifier mismatch for $1: expected $2, got $actual_identifier" >&2
+              exit 1
+            }
+            [[ -n "$3" && "$actual_team" == "$3" ]] || {
+              echo "Team Identifier mismatch for $1" >&2
+              exit 1
+            }
+            [[ "$details" == *"runtime"* ]] || {
+              echo "Hardened runtime is missing for $1" >&2
+              exit 1
+            }
+          }
+
           sign_path_with_entitlements() {
             /usr/bin/codesign \
               --force \
@@ -224,6 +261,14 @@ jobs:
               --preserve-metadata=entitlements \
               "$1"
           }
+
+          CLI_PATH="$APP_PATH/Contents/MacOS/mactools"
+          BROKER_PATH="$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
+          HOST_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
+          [[ -x "$CLI_PATH" ]] || { echo "Bundled CLI is missing" >&2; exit 1; }
+          [[ -x "$BROKER_PATH" ]] || { echo "CLI broker is missing" >&2; exit 1; }
+          sign_path_with_identifier "$CLI_PATH" "$HOST_IDENTIFIER.cli"
+          sign_path_with_identifier "$BROKER_PATH" "$HOST_IDENTIFIER.cli-broker"
 
           if [[ -d "$SPARKLE_FRAMEWORK" ]]; then
             if [[ -d "$SPARKLE_CURRENT/XPCServices/Installer.xpc" ]]; then
@@ -287,6 +332,11 @@ jobs:
           fi
 
           /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          /usr/bin/codesign --verify --strict --verbose=2 "$CLI_PATH"
+          /usr/bin/codesign --verify --strict --verbose=2 "$BROKER_PATH"
+          HOST_TEAM="$(signing_detail "$APP_PATH" TeamIdentifier)"
+          validate_cli_role_signature "$CLI_PATH" "$HOST_IDENTIFIER.cli" "$HOST_TEAM"
+          validate_cli_role_signature "$BROKER_PATH" "$HOST_IDENTIFIER.cli-broker" "$HOST_TEAM"
 
       - name: Create and sign DMG
         env:

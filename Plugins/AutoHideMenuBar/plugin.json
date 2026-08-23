@@ -48,9 +48,9 @@
       "summary": "自動隱藏選單列，提供更完整的螢幕顯示空間"
     }
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "AutoHideMenuBar.bundle",
   "factoryClass": "AutoHideMenuBarPlugin.AutoHideMenuBarPluginFactory",
   "build": {
@@ -62,6 +62,8 @@
     "componentPanel": false,
     "settings": "none"
   },
-  "permissions": [],
+  "permissions": [
+
+  ],
   "category": "display"
 }

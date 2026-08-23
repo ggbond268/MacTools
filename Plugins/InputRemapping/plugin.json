@@ -3,25 +3,68 @@
   "displayName": "自定义快捷操作：键盘、触控板、鼠标",
   "summary": "将输入映射为操作",
   "localizedMetadata": {
-    "ar": { "displayName": "اختصارات مخصصة: لوحة المفاتيح، لوحة التتبع، الماوس", "summary": "اربط الإدخالات بالإجراءات." },
-    "de": { "displayName": "Eigene Kurzbefehle: Tastatur, Trackpad, Maus", "summary": "Eingaben Aktionen zuordnen." },
-    "en": { "displayName": "Custom Shortcuts: Keyboard, Trackpad, Mouse", "summary": "Map inputs to actions" },
-    "es": { "displayName": "Atajos personalizados: Teclado, Panel táctil, Ratón", "summary": "Asigna entradas a acciones." },
-    "fr": { "displayName": "Raccourcis personnalisés : Clavier, Pavé tactile, Souris", "summary": "Associer les entrées aux actions." },
-    "ja": { "displayName": "カスタムショートカット：キーボード、トラックパッド、マウス", "summary": "入力をアクションに割り当てます。" },
-    "ko": { "displayName": "사용자화 단축키: 키보드, 트랙패드, 마우스", "summary": "입력을 동작에 연결합니다." },
-    "pt": { "displayName": "Atalhos personalizados: Teclado, Trackpad, Rato", "summary": "Associe entradas a ações." },
-    "ru": { "displayName": "Пользовательские сочетания: Клавиатура, Трекпад, Мышь", "summary": "Сопоставляйте ввод с действиями." },
-    "zh-Hans": { "displayName": "自定义快捷操作：键盘、触控板、鼠标", "summary": "将输入映射为操作" },
-    "zh-Hant": { "displayName": "自訂快速操作：鍵盤、觸控板、滑鼠", "summary": "將輸入對應至操作。" }
+    "ar": {
+      "displayName": "اختصارات مخصصة: لوحة المفاتيح، لوحة التتبع، الماوس",
+      "summary": "اربط الإدخالات بالإجراءات."
+    },
+    "de": {
+      "displayName": "Eigene Kurzbefehle: Tastatur, Trackpad, Maus",
+      "summary": "Eingaben Aktionen zuordnen."
+    },
+    "en": {
+      "displayName": "Custom Shortcuts: Keyboard, Trackpad, Mouse",
+      "summary": "Map inputs to actions"
+    },
+    "es": {
+      "displayName": "Atajos personalizados: Teclado, Panel táctil, Ratón",
+      "summary": "Asigna entradas a acciones."
+    },
+    "fr": {
+      "displayName": "Raccourcis personnalisés : Clavier, Pavé tactile, Souris",
+      "summary": "Associer les entrées aux actions."
+    },
+    "ja": {
+      "displayName": "カスタムショートカット：キーボード、トラックパッド、マウス",
+      "summary": "入力をアクションに割り当てます。"
+    },
+    "ko": {
+      "displayName": "사용자화 단축키: 키보드, 트랙패드, 마우스",
+      "summary": "입력을 동작에 연결합니다."
+    },
+    "pt": {
+      "displayName": "Atalhos personalizados: Teclado, Trackpad, Rato",
+      "summary": "Associe entradas a ações."
+    },
+    "ru": {
+      "displayName": "Пользовательские сочетания: Клавиатура, Трекпад, Мышь",
+      "summary": "Сопоставляйте ввод с действиями."
+    },
+    "zh-Hans": {
+      "displayName": "自定义快捷操作：键盘、触控板、鼠标",
+      "summary": "将输入映射为操作"
+    },
+    "zh-Hant": {
+      "displayName": "自訂快速操作：鍵盤、觸控板、滑鼠",
+      "summary": "將輸入對應至操作。"
+    }
   },
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "InputRemapping.bundle",
   "factoryClass": "InputRemappingPlugin.InputRemappingPluginFactory",
-  "build": { "project": "../../MacTools.xcodeproj", "scheme": "InputRemappingPlugin" },
-  "capabilities": { "primaryPanel": true, "componentPanel": false, "settings": "workspace" },
-  "permissions": ["accessibility", "inputMonitoring"],
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "InputRemappingPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "workspace"
+  },
+  "permissions": [
+    "accessibility",
+    "inputMonitoring"
+  ],
   "category": "productivity"
 }

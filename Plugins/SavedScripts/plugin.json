@@ -48,9 +48,9 @@
       "summary": "儲存並執行 AppleScript 和 Shell 腳本。"
     }
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "SavedScripts.bundle",
   "factoryClass": "SavedScriptsPlugin.SavedScriptsPluginFactory",
   "build": {
@@ -62,6 +62,8 @@
     "componentPanel": false,
     "settings": "workspace"
   },
-  "permissions": [],
+  "permissions": [
+
+  ],
   "category": "productivity"
 }

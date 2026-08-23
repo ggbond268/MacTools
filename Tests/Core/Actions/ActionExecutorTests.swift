@@ -145,6 +145,25 @@ final class ActionExecutorTests: XCTestCase {
         XCTAssertEqual(provider.beginCount, 0)
     }
 
+    func testCLIExecutionEnforcesProviderExposurePolicy() async {
+        let registry = ActionRegistry()
+        let provider = ActionExecutorTestProvider()
+        provider.exposurePolicy = .excluded
+        let definition = makeActionDefinition()
+        registry.synchronize([provider.registration(definition: definition)])
+
+        let outcome = await ActionExecutor(registry: registry).execute(
+            ActionInvocation(
+                reference: ActionReference(key: definition.key),
+                source: .cli,
+                mode: .foreground
+            )
+        )
+
+        XCTAssertEqual(outcome, .rejected(.systemExposureUnavailable))
+        XCTAssertEqual(provider.beginCount, 0)
+    }
+
     func testAppIntentExecutionRechecksExposurePolicyAfterConfirmation() async {
         let registry = ActionRegistry()
         let provider = ActionExecutorTestProvider()

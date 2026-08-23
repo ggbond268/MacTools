@@ -48,9 +48,9 @@
       "summary": "用全域快速鍵或選單列打開 App 網格，搜尋並啟動。"
     }
   },
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "Launchpad.bundle",
   "factoryClass": "LaunchpadPlugin.LaunchpadPluginFactory",
   "build": {
@@ -62,6 +62,8 @@
     "componentPanel": false,
     "settings": "form"
   },
-  "permissions": [],
+  "permissions": [
+
+  ],
   "category": "system"
 }

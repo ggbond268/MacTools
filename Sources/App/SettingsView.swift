@@ -296,6 +296,8 @@ struct GeneralSettingsView: View {
     @ObservedObject var menuBarIconGallery: MenuBarIconGalleryLibrary
     @ObservedObject var launchAtLoginController: LaunchAtLoginController
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
+    @ObservedObject private var cliService = CLIBrokerServiceController.shared
+    @ObservedObject private var cliInstallation = CLIInstallationController.shared
     @AppStorage(AppAppearancePreference.userDefaultsKey) private var appearancePreferenceRawValue = AppAppearancePreference.system.rawValue
     @AppStorage(AppLanguagePreference.userDefaultsKey) private var languagePreferenceRawValue = AppLanguagePreference.system.rawValue
     @AppStorage(MenuBarClickBehaviorPreference.userDefaultsKey) private var clickBehaviorRawValue = MenuBarClickBehaviorPreference.standard.rawValue
@@ -347,6 +349,18 @@ struct GeneralSettingsView: View {
                 } header: {
                     SettingsGroupedFormSectionHeader(
                         title: AppL10n.settings("general.section.startup", defaultValue: "启动"),
+                        layoutWidth: widths.readableContent
+                    )
+                }
+                Section {
+                    CLISettingsRow(
+                        service: cliService,
+                        installation: cliInstallation
+                    )
+                    .settingsGroupedFormRowWidth(widths.sectionLayout)
+                } header: {
+                    SettingsGroupedFormSectionHeader(
+                        title: AppL10n.settings("general.section.commandLine", defaultValue: "命令行"),
                         layoutWidth: widths.readableContent
                     )
                 }
@@ -518,6 +532,87 @@ struct GeneralSettingsView: View {
                 clickBehaviorRawValue = rawValue
             }
         )
+    }
+}
+
+private struct CLISettingsRow: View {
+    @ObservedObject var service: CLIBrokerServiceController
+    @ObservedObject var installation: CLIInstallationController
+
+    var body: some View {
+        HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
+            ZStack {
+                RoundedRectangle(cornerRadius: GeneralSettingsCardLayout.iconCornerRadius, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.12))
+                Image(systemName: "terminal")
+                    .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .frame(width: GeneralSettingsCardLayout.iconSize, height: GeneralSettingsCardLayout.iconSize)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(AppL10n.settings("commandLine.title", defaultValue: "MacTools 命令行"))
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                Text(subtitle)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle((service.lastError == nil && installation.lastError == nil) ? .secondary : Color.orange)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let bundledCLIURL = installation.bundledCLIURL {
+                    Text(bundledCLIURL.path)
+                        .font(PluginSettingsTheme.Typography.monospacedValue)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Text(#"export PATH="$HOME/.local/bin:$PATH""#)
+                    .font(PluginSettingsTheme.Typography.monospacedValue)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if service.status == .requiresApproval {
+                Button(AppL10n.settings("commandLine.approve", defaultValue: "允许后台运行")) {
+                    service.openApprovalSettings()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            Button(installation.status == .installed
+                   ? AppL10n.settings("commandLine.uninstall", defaultValue: "移除命令")
+                   : AppL10n.settings("commandLine.install", defaultValue: "安装命令")) {
+                if installation.status == .installed {
+                    installation.uninstall()
+                } else {
+                    service.ensureRegistered()
+                    installation.install()
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(installation.status == .conflict || installation.status == .unavailable)
+        }
+        .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
+        .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+        .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
+        .onAppear {
+            service.refresh()
+            installation.refresh()
+        }
+    }
+
+    private var subtitle: String {
+        if let error = installation.lastError ?? service.lastError { return error }
+        if installation.status == .conflict {
+            return AppL10n.settings("commandLine.conflict", defaultValue: "~/.local/bin/mactools 已被其他文件占用。")
+        }
+        if installation.status == .installed {
+            return AppL10n.settings("commandLine.installed", defaultValue: "已安装到 ~/.local/bin/mactools，可运行 mactools help 开始使用。")
+        }
+        return AppL10n.settings("commandLine.description", defaultValue: "安装本机命令，调用 MacTools 的操作、工作流与插件诊断。")
     }
 }
 

@@ -115,7 +115,7 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
         )
         self.assertIn('PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.2.0"', workflow)
         self.assertIn(
-            "PLUGIN_CATALOG_MINIMUM_HOST_VERSION ?= $(if $(filter 5,$(PLUGIN_KIT_VERSION)),1.2.0,1.1.6)",
+            "PLUGIN_CATALOG_MINIMUM_HOST_VERSION ?= $(if $(filter 5 6,$(PLUGIN_KIT_VERSION)),1.2.0,1.1.6)",
             makefile,
         )
 
@@ -123,7 +123,7 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
         incompatible = []
         for manifest_path in sorted(PLUGINS_ROOT.glob("*/plugin.json")):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest["pluginKitVersion"] != 5 or manifest["minHostVersion"] != "1.2.0":
+            if manifest["pluginKitVersion"] != 6 or manifest["minHostVersion"] != "1.2.0":
                 incompatible.append(manifest["id"])
         self.assertEqual(incompatible, [])
 

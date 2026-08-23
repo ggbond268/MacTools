@@ -22,6 +22,7 @@ final class MacToolsAppRuntime {
     private var statusItemController: MenuBarStatusItemController?
     private var actionGridOverlayController: ActionGridOverlayController?
     private var appIntentCatalogCancellable: AnyCancellable?
+    private lazy var cliHostBridge = CLIHostBridge(pluginHost: pluginHost)
     private lazy var settingsRecoveryScheduler = SettingsRecoveryScheduler { [weak self] in
         self?.windowRouter?.showSettings()
     }
@@ -108,6 +109,7 @@ final class MacToolsAppRuntime {
 
     func terminate() {
         settingsRecoveryScheduler.cancel()
+        cliHostBridge.stop()
         pluginHost.flushAutomaticPreferencesBackupBeforeTermination()
         pluginHost.automationController.stopAutomaticRules()
         actionGridOverlayController?.close(restoringFocus: false)
@@ -150,6 +152,7 @@ final class MacToolsAppRuntime {
             }
             appIntentCoordinator.actionRegistryDidBecomeReady()
             activateAppURLRouter()
+            startCLIHostIfAvailable()
         }
     }
 
@@ -157,6 +160,14 @@ final class MacToolsAppRuntime {
         automationStartupCoordinator.actionRegistryDidBecomeReady()
         appIntentCoordinator.actionRegistryDidBecomeReady()
         activateAppURLRouter()
+        startCLIHostIfAvailable()
+    }
+
+    private func startCLIHostIfAvailable() {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+            return
+        }
+        cliHostBridge.start()
     }
 
     private func activateAppURLRouter() {

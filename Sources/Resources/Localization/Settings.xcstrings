@@ -1,6 +1,46 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "general.section.commandLine": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Command Line" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "命令行" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "命令列" } }
+    } },
+    "commandLine.title": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "MacTools Command Line" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "MacTools 命令行" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "MacTools 命令列" } }
+    } },
+    "commandLine.approve": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Allow in Background" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "允许后台运行" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "允許背景執行" } }
+    } },
+    "commandLine.uninstall": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Remove Command" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "移除命令" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "移除命令" } }
+    } },
+    "commandLine.install": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Install Command" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "安装命令" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "安裝命令" } }
+    } },
+    "commandLine.conflict": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Another file already uses ~/.local/bin/mactools." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "~/.local/bin/mactools 已被其他文件占用。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "~/.local/bin/mactools 已被其他檔案佔用。" } }
+    } },
+    "commandLine.installed": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Installed at ~/.local/bin/mactools. Run mactools help to begin." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "已安装到 ~/.local/bin/mactools，可运行 mactools help 开始使用。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "已安裝到 ~/.local/bin/mactools，可執行 mactools help 開始使用。" } }
+    } },
+    "commandLine.description": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Install the local command for MacTools actions, workflows, and plugin diagnostics." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "安装本机命令，调用 MacTools 的操作、工作流与插件诊断。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "安裝本機命令，呼叫 MacTools 的操作、工作流程與外掛診斷。" } }
+    } },
     "appIntents.title": { "extractionState": "manual", "localizations": {
       "ar": { "stringUnit": { "state": "translated", "value": "اختصارات Apple وSiri وSpotlight" } },
       "de": { "stringUnit": { "state": "translated", "value": "Apple-Kurzbefehle, Siri und Spotlight" } },

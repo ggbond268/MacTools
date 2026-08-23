@@ -379,7 +379,9 @@ targets["MacToolsTests"] = {
     { "target" => "MacToolsPluginKit" },
     { "target" => "MacToolsAppIntents" },
     { "target" => "AppInstanceProbe" },
-    { "target" => "AppIntentCircuitBreakerProbe" }
+    { "target" => "AppIntentCircuitBreakerProbe" },
+    { "target" => "MacToolsCLI" },
+    { "target" => "MacToolsCLIBroker" }
   ] + plugin_core_targets.map { |target| { "target" => target } },
   "settings" => test_settings
 }
@@ -391,7 +393,9 @@ schemes = {
         "MacToolsPluginKit" => "all",
         "MacToolsAppIntents" => "all",
         "AppInstanceProbe" => ["test"],
-        "AppIntentCircuitBreakerProbe" => ["test"]
+        "AppIntentCircuitBreakerProbe" => ["test"],
+        "MacToolsCLI" => "all",
+        "MacToolsCLIBroker" => "all"
       }.merge(plugin_bundle_targets.to_h { |target| [target, "all"] })
         .merge(
           "MacTools" => "all",

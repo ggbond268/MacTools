@@ -91,6 +91,10 @@ jobs:
             done
           fi
 
+          HOST_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
+          codesign --force --sign - --identifier "$HOST_IDENTIFIER.cli" "$APP_PATH/Contents/MacOS/mactools"
+          codesign --force --sign - --identifier "$HOST_IDENTIFIER.cli-broker" "$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
+
           codesign --force --deep --sign - --entitlements Configs/MacTools.entitlements "$APP_PATH"
           codesign --verify --deep --strict "$APP_PATH"
 

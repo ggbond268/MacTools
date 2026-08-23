@@ -48,9 +48,9 @@
       "summary": "查看 Mac、Apple 行動裝置、藍牙外設和雷柏滑鼠電量"
     }
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "DeviceBattery.bundle",
   "factoryClass": "DeviceBatteryPlugin.DeviceBatteryPluginFactory",
   "build": {
@@ -62,5 +62,7 @@
     "componentPanel": true,
     "settings": "form"
   },
-  "permissions": []
+  "permissions": [
+
+  ]
 }

@@ -48,9 +48,9 @@
       "summary": "統計輸入、前臺應用使用時長和 AI 編程活動"
     }
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "ActivityBar.bundle",
   "factoryClass": "ActivityBarPlugin.ActivityBarPluginFactory",
   "build": {
@@ -62,6 +62,8 @@
     "componentPanel": true,
     "settings": "form"
   },
-  "permissions": [],
+  "permissions": [
+
+  ],
   "category": "monitoring"
 }

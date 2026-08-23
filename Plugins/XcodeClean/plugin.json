@@ -48,9 +48,9 @@
       "summary": "分類清理 Xcode DerivedData、裝置支援、封存與快取"
     }
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "XcodeClean.bundle",
   "factoryClass": "XcodeCleanPlugin.XcodeCleanPluginFactory",
   "build": {
@@ -62,6 +62,8 @@
     "componentPanel": false,
     "settings": "workspace"
   },
-  "permissions": [],
+  "permissions": [
+
+  ],
   "category": "storage"
 }

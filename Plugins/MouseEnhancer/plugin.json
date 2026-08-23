@@ -48,9 +48,9 @@
       "summary": "分別調整滑鼠與觸控板的捲動方向"
     }
   },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "MouseEnhancer.bundle",
   "factoryClass": "MouseEnhancerPlugin.MouseEnhancerPluginFactory",
   "build": {

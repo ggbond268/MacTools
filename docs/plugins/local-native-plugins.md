@@ -39,7 +39,7 @@ Example.mactoolsplugin/
   },
   "version": "1.0.0",
   "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "pluginKitVersion": 6,
   "bundleRelativePath": "Example.bundle",
   "factoryClass": "Example.ExamplePluginFactory",
   "capabilities": {
@@ -127,7 +127,7 @@ When a change touches `Sources/MacToolsPluginKit/`, it is package-relevant for e
 
 ## Settings UI
 
-Plugin settings are hosted by MacTools. PluginKit 5 exposes one `settingsPage` entry point with two explicit layouts:
+Plugin settings are hosted by MacTools. PluginKit 6 exposes one `settingsPage` entry point with two explicit layouts:
 
 - `PluginSettingsPage.form` is the default. Describe standard controls with `PluginSettingsSection`, `PluginSettingsRow`, and `PluginSettingsControl`; the host renders the native grouped form, search entries, validation, permissions, and shortcuts.
 - Reserve segmented pickers for a few short labels; use `.menu` when options are longer or localization can make the row overflow. Declarative sliders should provide `valueFormat` for a live host-rendered readout. Custom settings use `PluginSettingsSlider` to keep stepped values without drawing dense tick marks.
@@ -211,7 +211,7 @@ Install and update are staged before moving into `Installed`. Per-plugin runtime
 - The manifest ID, versions, and bundle relative path are validated before loading code.
 - Host version and plugin kit version are checked before loading code.
 - Installed packages built for an older PluginKit are kept on disk but marked incompatible and are never passed to the native bundle loader.
-- Public value types within one PluginKit version must preserve their stored binary layout. CI compiles the frozen v5 `PluginShortcutRecorder` client declaration and links that client against the current framework so source-only tests cannot hide an incompatible in-place layout change.
+- Public value types within one PluginKit version must preserve their stored binary layout. CI keeps the frozen v5 `PluginShortcutRecorder` client check for unchanged legacy value types; PluginKit 6 intentionally changes `ActionExecutionSource` to a forward-compatible string-backed value and requires every plugin to be rebuilt.
 - The plugin bundle signature is validated before loading code.
 - When the host has a Team ID, the plugin bundle must have the same Team ID.
 - Untrusted third-party native plugins should use a future isolated process or XPC model instead of in-process bundle loading.
