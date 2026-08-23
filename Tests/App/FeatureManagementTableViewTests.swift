@@ -388,6 +388,7 @@ final class FeatureManagementTableViewTests: XCTestCase {
             isVisible: isVisible,
             isActive: isActive,
             canUninstall: canUninstall,
+            removesDataOnUninstall: false,
             category: nil,
             releaseChannel: releaseChannel
         )

@@ -1,0 +1,70 @@
+{
+  "id": "clipboard-history",
+  "displayName": "剪贴板历史",
+  "summary": "搜索本机加密保存的剪贴板历史和固定项目。",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "سجل الحافظة",
+      "summary": "ابحث في سجل الحافظة والعناصر المثبتة المشفرة محليًا."
+    },
+    "de": {
+      "displayName": "Zwischenablageverlauf",
+      "summary": "Lokal verschlüsselten Zwischenablageverlauf und angeheftete Einträge durchsuchen."
+    },
+    "en": {
+      "displayName": "Clipboard History",
+      "summary": "Search locally encrypted clipboard history and pinned items."
+    },
+    "es": {
+      "displayName": "Historial del portapapeles",
+      "summary": "Busca en el historial del portapapeles cifrado localmente y en elementos fijados."
+    },
+    "fr": {
+      "displayName": "Historique du presse-papiers",
+      "summary": "Recherchez dans l’historique du presse-papiers chiffré localement et les éléments épinglés."
+    },
+    "ja": {
+      "displayName": "クリップボード履歴",
+      "summary": "ローカルで暗号化されたクリップボード履歴と固定項目を検索します。"
+    },
+    "ko": {
+      "displayName": "클립보드 기록",
+      "summary": "로컬에서 암호화된 클립보드 기록과 고정된 항목을 검색합니다."
+    },
+    "pt": {
+      "displayName": "Histórico da área de transferência",
+      "summary": "Pesquise o histórico da área de transferência criptografado localmente e itens fixados."
+    },
+    "ru": {
+      "displayName": "История буфера обмена",
+      "summary": "Поиск в локально зашифрованной истории буфера обмена и закреплённых элементах."
+    },
+    "zh-Hans": {
+      "displayName": "剪贴板历史",
+      "summary": "搜索本机加密保存的剪贴板历史和固定项目。"
+    },
+    "zh-Hant": {
+      "displayName": "剪貼簿記錄",
+      "summary": "搜尋在本機加密儲存的剪貼簿記錄和固定項目。"
+    }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "ClipboardHistory.bundle",
+  "factoryClass": "ClipboardHistoryPlugin.ClipboardHistoryPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "ClipboardHistoryPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": [
+    "accessibility"
+  ],
+  "uninstallDataPolicy": "removePrivateData",
+  "category": "productivity"
+}

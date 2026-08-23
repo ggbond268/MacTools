@@ -6,6 +6,40 @@ import MacToolsPluginKit
 
 @MainActor
 final class MacToolsSearchTests: XCTestCase {
+    func testPaletteKeyboardHintsCoverEverySupportedLanguage() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let data = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Sources/Resources/Localization/Search.xcstrings"
+        ))
+        let catalog = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        let supportedLanguages = Set(
+            AppLanguagePreference.allCases
+                .filter { $0 != .system }
+                .map(\.rawValue)
+        )
+
+        for key in [
+            "search.footer.actions",
+            "search.footer.open",
+            "search.footer.quickOpen",
+            "search.footer.select",
+            "search.footer.settings",
+        ] {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], key)
+            let localizations = try XCTUnwrap(
+                entry["localizations"] as? [String: Any],
+                key
+            )
+            XCTAssertEqual(Set(localizations.keys), supportedLanguages, key)
+        }
+    }
+
     func testIndexIncludesNavigationDeclarativeSettingsCustomSettingsAndCommands() throws {
         let plugin = SearchableTestPlugin()
         let host = makePluginHostForTests(plugins: [plugin, SurfaceOnlySearchTestPlugin()])
@@ -461,46 +495,52 @@ final class MacToolsSearchTests: XCTestCase {
 
     func testUnifiedSearchFieldLeavesTabForInlineControlNavigation() {
         XCTAssertNil(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertTab(_:)),
                 hasMarkedText: false
             )
         )
         XCTAssertNil(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertBacktab(_:)),
                 hasMarkedText: false
             )
         )
         XCTAssertEqual(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertNewline(_:)),
                 hasMarkedText: false,
-                modifierFlags: .command
+                modifierFlags: .command,
+                alternateSubmitModifier: .command
             ),
-            .openOwner
+            .alternateSubmit
         )
         XCTAssertEqual(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)),
-                hasMarkedText: false
+                hasMarkedText: false,
+                modifierFlags: .command,
+                alternateSubmitModifier: .command
             ),
-            .openOwner
+            .alternateSubmit
         )
-        XCTAssertTrue(UnifiedSearchTextField.isOpenOwnerKeyEquivalent(
+        XCTAssertTrue(PluginPaletteSearchField.isAlternateSubmitKeyEquivalent(
             keyCode: 36,
-            modifierFlags: .command
+            modifierFlags: .command,
+            alternateSubmitModifier: .command
         ))
-        XCTAssertTrue(UnifiedSearchTextField.isOpenOwnerKeyEquivalent(
+        XCTAssertTrue(PluginPaletteSearchField.isAlternateSubmitKeyEquivalent(
             keyCode: 76,
-            modifierFlags: [.command, .shift]
+            modifierFlags: [.command, .shift],
+            alternateSubmitModifier: .command
         ))
-        XCTAssertFalse(UnifiedSearchTextField.isOpenOwnerKeyEquivalent(
+        XCTAssertFalse(PluginPaletteSearchField.isAlternateSubmitKeyEquivalent(
             keyCode: 36,
-            modifierFlags: []
+            modifierFlags: [],
+            alternateSubmitModifier: .command
         ))
         XCTAssertNil(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertTab(_:)),
                 hasMarkedText: true
             )
@@ -527,6 +567,11 @@ final class MacToolsSearchTests: XCTestCase {
         ))
         XCTAssertEqual(UnifiedSearchResultRowLayout.quickSelectionColumnWidth, 32)
         XCTAssertEqual(UnifiedSearchResultRowLayout.primaryActionColumnWidth, 56)
+        XCTAssertEqual(PluginPaletteMetrics.rowCornerRadius, 8)
+        XCTAssertEqual(PluginPaletteMetrics.rowHorizontalPadding, 10)
+        XCTAssertEqual(PluginPaletteMetrics.rowVerticalPadding, 9)
+        XCTAssertEqual(PluginPaletteMetrics.rowIconWidth, 18)
+        XCTAssertEqual(PluginPaletteMetrics.rowContentSpacing, 12)
     }
 
     func testPluginHostPerformsOnlyDeclaredCommands() {

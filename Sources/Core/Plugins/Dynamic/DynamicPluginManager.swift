@@ -68,6 +68,7 @@ struct PluginManagementItem: Identifiable, Equatable {
     let category: String?
     let releaseChannel: String?
     let capabilities: PluginPackageManifest.Capabilities?
+    let uninstallDataPolicy: PluginPackageManifest.UninstallDataPolicy
 
     init(
         id: String,
@@ -80,7 +81,8 @@ struct PluginManagementItem: Identifiable, Equatable {
         releaseNotesURL: URL?,
         category: String? = nil,
         releaseChannel: String? = nil,
-        capabilities: PluginPackageManifest.Capabilities? = nil
+        capabilities: PluginPackageManifest.Capabilities? = nil,
+        uninstallDataPolicy: PluginPackageManifest.UninstallDataPolicy = .preserve
     ) {
         self.id = id
         self.title = title
@@ -93,6 +95,7 @@ struct PluginManagementItem: Identifiable, Equatable {
         self.category = category
         self.releaseChannel = releaseChannel
         self.capabilities = capabilities
+        self.uninstallDataPolicy = uninstallDataPolicy
     }
 
     var statusText: String {
@@ -971,7 +974,8 @@ final class DynamicPluginManager: ObservableObject {
                         releaseNotesURL: entry.releaseNotesURL,
                         category: entry.category,
                         releaseChannel: entry.releaseChannel,
-                        capabilities: entry.capabilities
+                        capabilities: entry.capabilities,
+                        uninstallDataPolicy: .preserve
                     )
                 )
             }
@@ -1035,7 +1039,8 @@ final class DynamicPluginManager: ObservableObject {
             releaseNotesURL: catalogEntry?.releaseNotesURL,
             category: catalogEntry?.category ?? record.manifest.category,
             releaseChannel: catalogEntry?.releaseChannel ?? record.manifest.releaseChannel,
-            capabilities: catalogEntry?.capabilities ?? record.manifest.capabilities
+            capabilities: catalogEntry?.capabilities ?? record.manifest.capabilities,
+            uninstallDataPolicy: record.manifest.effectiveUninstallDataPolicy
         )
     }
 

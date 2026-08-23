@@ -197,6 +197,7 @@ struct PluginSurfaceLayoutItem: Identifiable {
     let isVisible: Bool
     let isActive: Bool
     let canUninstall: Bool
+    let removesDataOnUninstall: Bool
     let category: String?
     let releaseChannel: String?
 }
@@ -4051,9 +4052,38 @@ final class PluginHost: ObservableObject {
             } else {
                 actionShortcutSettingsConfiguration = nil
             }
+            let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
+            if descriptor.hasSettings,
+               let provider = descriptor.plugin as? any PluginGroupedShortcutSettingsProviding,
+               let configurations = guardedValue(
+                   for: descriptor.plugin,
+                   operation: "read grouped shortcut settings configuration",
+                   provider.shortcutSettingsGroups
+               ) {
+                var seenIDs: Set<String> = []
+                shortcutSettingsGroups = configurations.filter { configuration in
+                    let id = configuration.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let title = configuration.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let systemImage = configuration.systemImage.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let isValid = !id.isEmpty
+                        && !title.isEmpty
+                        && !systemImage.isEmpty
+                        && (!configuration.actionIDs.isEmpty || !configuration.shortcutDefinitionIDs.isEmpty)
+                        && seenIDs.insert(id).inserted
+                    if !isValid {
+                        AppLog.pluginHost.error(
+                            "Plugin \(pluginID, privacy: .public) returned an invalid grouped shortcut settings configuration"
+                        )
+                    }
+                    return isValid
+                }
+            } else {
+                shortcutSettingsGroups = []
+            }
             let hasSettingsSurface = !matchingPermissionCards.isEmpty
                 || !matchingShortcutItems.isEmpty
                 || actionShortcutSettingsConfiguration != nil
+                || !shortcutSettingsGroups.isEmpty
                 || page != nil
 
             guard hasSettingsSurface else {
@@ -4071,7 +4101,10 @@ final class PluginHost: ObservableObject {
                 page: page,
                 permissionCards: matchingPermissionCards,
                 shortcutItems: matchingShortcutItems,
-                actionShortcutSettingsConfiguration: actionShortcutSettingsConfiguration
+                actionShortcutSettingsConfiguration: shortcutSettingsGroups.isEmpty
+                    ? actionShortcutSettingsConfiguration
+                    : nil,
+                shortcutSettingsGroups: shortcutSettingsGroups
             )
         }
     }
@@ -4101,6 +4134,8 @@ final class PluginHost: ObservableObject {
             isVisible: isVisible,
             isActive: isActive,
             canUninstall: dynamicPluginManifestsByID[metadata.id] != nil,
+            removesDataOnUninstall: dynamicPluginManifestsByID[metadata.id]?
+                .effectiveUninstallDataPolicy == .removePrivateData,
             category: dynamicPluginCategoriesByID[metadata.id] ?? nil,
             releaseChannel: dynamicPluginReleaseChannelsByID[metadata.id] ?? nil
         )
@@ -5127,8 +5162,7 @@ final class PluginHost: ObservableObject {
                     systemImage: action.definition.systemImage,
                     bindingText: assignmentItem?.bindingText ?? "",
                     status: status,
-                    canAssign: availability.isAvailable
-                        && action.definition.capabilities.contains(.foregroundInteractive)
+                    canAssign: action.definition.capabilities.contains(.foregroundInteractive)
                 )
             }
         }

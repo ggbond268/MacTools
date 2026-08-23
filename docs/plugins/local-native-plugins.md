@@ -48,6 +48,7 @@ Example.mactoolsplugin/
     "settings": "form"
   },
   "permissions": [],
+  "uninstallDataPolicy": "preserve",
   "category": "productivity"
 }
 ```
@@ -55,6 +56,8 @@ Example.mactoolsplugin/
 `displayName` and `summary` are fallback marketplace metadata. Add `localizedMetadata` for every user-facing marketplace language the plugin supports. The host chooses the best match from the user's language preferences before the plugin bundle is loaded, but it does not own plugin translations.
 
 `category` is optional and is used by the marketplace and "已安装" list to group plugins. Supported values: `display`, `audio`, `system`, `storage`, `productivity`, `monitoring`. Unknown or omitted values fall back to "其他".
+
+`uninstallDataPolicy` defaults to `preserve`. Use `removePrivateData` only when uninstall must crypto-shred sensitive plugin data. The host then always shows a destructive-data warning, removes the plugin's host-owned support/cache/temporary directories and preferences, and deletes the standardized Keychain item identified by `PluginPrivateDataKeychainIdentity`; cleanup does not depend on loading plugin executable code.
 
 The plugin bundle must expose a factory that conforms to `MacToolsPluginBundleFactory`. The factory returns a `PluginProvider`, and the provider returns exactly one `MacToolsPlugin` instance for the package.
 

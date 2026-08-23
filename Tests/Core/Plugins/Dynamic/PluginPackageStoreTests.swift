@@ -167,6 +167,59 @@ final class PluginPackageStoreTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: "plugin.com.example.demo.setting"))
     }
 
+    func testManifestPolicyRemovesPrivateDataAndKeyWithoutLoadedPlugin() throws {
+        var removedKeyPluginIDs: [String] = []
+        let sourceURL = try makePackage(
+            id: "com.example.private",
+            uninstallDataPolicy: .removePrivateData
+        )
+        let store = makeStore(privateDataKeyRemover: { removedKeyPluginIDs.append($0) })
+        _ = try store.installPackage(from: sourceURL)
+        let supportDirectory = store.dataDirectory.appendingPathComponent(
+            "com.example.private",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+        try Data("secret".utf8).write(to: supportDirectory.appendingPathComponent("history.mth"))
+        UserDefaultsPluginStorage(pluginID: "com.example.private", userDefaults: defaults)
+            .set(true, forKey: "enabled")
+
+        try store.uninstall(pluginID: "com.example.private", removeData: false)
+
+        XCTAssertEqual(removedKeyPluginIDs, ["com.example.private"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: supportDirectory.path))
+        XCTAssertNil(defaults.object(forKey: "plugin.com.example.private.enabled"))
+        XCTAssertTrue(store.installedRecords().isEmpty)
+    }
+
+    func testPrivateDataCleanupAttemptsKeyDeletionAfterDirectoryFailure() throws {
+        var removedKeyPluginIDs: [String] = []
+        let sourceURL = try makePackage(
+            id: "com.example.private",
+            uninstallDataPolicy: .removePrivateData
+        )
+        let store = makeStore(
+            privateDataDirectoryRemover: { _ in throw CocoaError(.fileWriteNoPermission) },
+            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
+        )
+        _ = try store.installPackage(from: sourceURL)
+        let supportDirectory = store.dataDirectory.appendingPathComponent(
+            "com.example.private",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try store.uninstall(pluginID: "com.example.private", removeData: false)) {
+            guard let storeError = $0 as? PluginPackageStoreError,
+                  case .privateDataRemovalFailed = storeError else {
+                return XCTFail("Expected privateDataRemovalFailed, got \($0)")
+            }
+        }
+
+        XCTAssertEqual(removedKeyPluginIDs, ["com.example.private"])
+        XCTAssertEqual(store.installedRecords().map(\.id), ["com.example.private"])
+    }
+
     func testFailedUpdateRestoresExistingPackage() throws {
         let sourceURL = try makePackage(id: "com.example.demo", version: "1.0.0")
         let invalidUpdateURL = try makePackage(id: "com.example.demo", version: "2.0.0", bundleRelativePath: "Missing.bundle")
@@ -243,11 +296,15 @@ final class PluginPackageStoreTests: XCTestCase {
     }
 
     private func makeStore(
+        privateDataDirectoryRemover: ((URL) throws -> Void)? = nil,
+        privateDataKeyRemover: ((String) throws -> Void)? = nil,
         now: @escaping () -> Date = { Date() }
     ) -> PluginPackageStore {
         PluginPackageStore(
             rootDirectory: temporaryRoot,
             userDefaults: defaults,
+            privateDataDirectoryRemover: privateDataDirectoryRemover,
+            privateDataKeyRemover: privateDataKeyRemover,
             now: now,
             hostVersion: "1.0.0"
         )
@@ -261,7 +318,8 @@ final class PluginPackageStoreTests: XCTestCase {
         id: String,
         version: String = "1.0.0",
         bundleRelativePath: String = "Demo.bundle",
-        pluginKitVersion: Int = PluginPackageManifestLoader.supportedPluginKitVersion
+        pluginKitVersion: Int = PluginPackageManifestLoader.supportedPluginKitVersion,
+        uninstallDataPolicy: PluginPackageManifest.UninstallDataPolicy? = nil
     ) throws -> URL {
         let packageURL = temporaryRoot
             .appendingPathComponent("Source", isDirectory: true)
@@ -281,7 +339,8 @@ final class PluginPackageStoreTests: XCTestCase {
             version: version,
             minHostVersion: "0.1.0",
             pluginKitVersion: pluginKitVersion,
-            bundleRelativePath: bundleRelativePath
+            bundleRelativePath: bundleRelativePath,
+            uninstallDataPolicy: uninstallDataPolicy
         )
         let data = try JSONEncoder().encode(manifest)
         try data.write(to: packageURL.appendingPathComponent("plugin.json"))

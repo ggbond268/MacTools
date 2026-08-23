@@ -2,6 +2,11 @@ import Foundation
 import MacToolsPluginKit
 
 struct PluginPackageManifest: Codable, Equatable {
+    enum UninstallDataPolicy: String, Codable, Equatable {
+        case preserve
+        case removePrivateData
+    }
+
     struct Capabilities: Codable, Equatable {
         enum Settings: String, Codable, CaseIterable {
             case none
@@ -79,6 +84,7 @@ struct PluginPackageManifest: Codable, Equatable {
     let category: String?
     let releaseChannel: String?
     let localizedMetadata: [String: PluginLocalizedMetadata]?
+    let uninstallDataPolicy: UninstallDataPolicy?
 
     init(
         id: String,
@@ -92,7 +98,8 @@ struct PluginPackageManifest: Codable, Equatable {
         permissions: [String] = [],
         category: String? = nil,
         releaseChannel: String? = nil,
-        localizedMetadata: [String: PluginLocalizedMetadata]? = nil
+        localizedMetadata: [String: PluginLocalizedMetadata]? = nil,
+        uninstallDataPolicy: UninstallDataPolicy? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -106,6 +113,11 @@ struct PluginPackageManifest: Codable, Equatable {
         self.category = category
         self.releaseChannel = releaseChannel
         self.localizedMetadata = localizedMetadata
+        self.uninstallDataPolicy = uninstallDataPolicy
+    }
+
+    var effectiveUninstallDataPolicy: UninstallDataPolicy {
+        uninstallDataPolicy ?? .preserve
     }
 
     var localizedDisplayName: String {

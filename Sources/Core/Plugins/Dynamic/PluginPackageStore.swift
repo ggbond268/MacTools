@@ -1,5 +1,6 @@
 import Foundation
 import MacToolsPluginKit
+import Security
 
 struct PluginPackageRecord: Identifiable, Equatable {
     enum State: Equatable {
@@ -23,6 +24,7 @@ enum PluginPackageStoreError: LocalizedError {
     case invalidPackage(URL)
     case installFailed(String)
     case removeFailed(String)
+    case privateDataRemovalFailed(String)
     case migrationStatePersistenceFailed
 
     var errorDescription: String? {
@@ -37,6 +39,12 @@ enum PluginPackageStoreError: LocalizedError {
             return AppL10n.pluginsFormat("plugin.error.store.installFailedFormat", defaultValue: "插件安装失败：%@", reason)
         case let .removeFailed(reason):
             return AppL10n.pluginsFormat("plugin.error.store.removeFailedFormat", defaultValue: "插件移除失败：%@", reason)
+        case let .privateDataRemovalFailed(reason):
+            return AppL10n.pluginsFormat(
+                "plugin.error.store.privateDataRemovalFailedFormat",
+                defaultValue: "无法移除插件私密数据：%@",
+                reason
+            )
         case .migrationStatePersistenceFailed:
             return AppL10n.plugins(
                 "plugin.error.store.migrationStatePersistenceFailed",
@@ -65,6 +73,8 @@ final class PluginPackageStore {
     private let fileManager: FileManager
     private let userDefaults: UserDefaults
     private let synchronizeUserDefaults: (UserDefaults) -> Bool
+    private let privateDataDirectoryRemover: (URL) throws -> Void
+    private let privateDataKeyRemover: (String) throws -> Void
     private let now: () -> Date
     let hostVersion: String
     private var pendingRestartPluginIDs: Set<String> = []
@@ -74,12 +84,18 @@ final class PluginPackageStore {
         fileManager: FileManager = .default,
         userDefaults: UserDefaults = .standard,
         synchronizeUserDefaults: @escaping (UserDefaults) -> Bool = { $0.synchronize() },
+        privateDataDirectoryRemover: ((URL) throws -> Void)? = nil,
+        privateDataKeyRemover: ((String) throws -> Void)? = nil,
         now: @escaping () -> Date = { Date() },
         hostVersion: String = AppMetadata.shortVersion ?? "0"
     ) {
         self.fileManager = fileManager
         self.userDefaults = userDefaults
         self.synchronizeUserDefaults = synchronizeUserDefaults
+        self.privateDataDirectoryRemover = privateDataDirectoryRemover ?? { url in
+            try fileManager.removeItem(at: url)
+        }
+        self.privateDataKeyRemover = privateDataKeyRemover ?? Self.removePrivateDataKey
         self.now = now
         self.hostVersion = hostVersion
 
@@ -375,6 +391,9 @@ final class PluginPackageStore {
     }
 
     func uninstall(pluginID: String, removeData: Bool) throws {
+        guard let record = installedRecords().first(where: { $0.id == pluginID }) else {
+            throw PluginPackageStoreError.packageNotFound(pluginID)
+        }
         let extractionWasInProgress = featureExtractionMigrationIsInProgress()
         let extractionPolicy = PluginExtractionMigrationPolicy.mouseEnhancerMiddleClick
         let requiresDurableSourceUninstallIntent = pluginID == extractionPolicy.sourcePluginID
@@ -391,11 +410,15 @@ final class PluginPackageStore {
             }
         }
 
+        if record.manifest.effectiveUninstallDataPolicy == .removePrivateData {
+            try removePrivatePluginData(pluginID: pluginID)
+        }
+
         try removePackageFiles(pluginID: pluginID)
         removeInstalledAt(pluginID: pluginID)
         markPendingRestart(pluginID: pluginID)
 
-        if removeData {
+        if removeData && record.manifest.effectiveUninstallDataPolicy != .removePrivateData {
             removePluginData(pluginID: pluginID)
         }
 
@@ -498,6 +521,50 @@ final class PluginPackageStore {
         try? fileManager.removeItem(at: cacheDirectory.appendingPathComponent(pluginID, isDirectory: true))
         try? fileManager.removeItem(at: temporaryDirectory.appendingPathComponent(pluginID, isDirectory: true))
         UserDefaultsPluginStorage.removeAllValues(pluginID: pluginID, userDefaults: userDefaults)
+    }
+
+    private func removePrivatePluginData(pluginID: String) throws {
+        var firstError: Error?
+        let directories = [
+            dataDirectory.appendingPathComponent(pluginID, isDirectory: true),
+            cacheDirectory.appendingPathComponent(pluginID, isDirectory: true),
+            temporaryDirectory.appendingPathComponent(pluginID, isDirectory: true),
+        ]
+        for directory in directories {
+            do {
+                try privateDataDirectoryRemover(directory)
+            } catch {
+                let cocoaError = error as NSError
+                if cocoaError.domain != NSCocoaErrorDomain || cocoaError.code != NSFileNoSuchFileError {
+                    firstError = firstError ?? error
+                }
+            }
+        }
+        do {
+            try privateDataKeyRemover(pluginID)
+        } catch {
+            firstError = firstError ?? error
+        }
+        UserDefaultsPluginStorage.removeAllValues(pluginID: pluginID, userDefaults: userDefaults)
+        if let firstError {
+            throw PluginPackageStoreError.privateDataRemovalFailed(firstError.localizedDescription)
+        }
+    }
+
+    private static func removePrivateDataKey(pluginID: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: PluginPrivateDataKeychainIdentity.service(pluginID: pluginID),
+            kSecAttrAccount as String: PluginPrivateDataKeychainIdentity.encryptionKeyAccount,
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain,
+                code: Int(status),
+                userInfo: [NSLocalizedDescriptionKey: SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"]
+            )
+        }
     }
 
     private func installedAtTimestamps() -> [String: TimeInterval] {

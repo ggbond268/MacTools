@@ -670,7 +670,6 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertGreaterThan(state.focusRequestID, firstFocusRequestID)
         XCTAssertNil(state.quickSelectionRequest)
         XCTAssertEqual(state.presentationOrigin, .globalShortcut("⌃⌥P"))
-        XCTAssertEqual(state.shortcutHint, "⌃⌥P")
     }
 
     func testStandalonePaletteDismissalExplicitlyCancelsOnlyPendingSurfaceWork() {

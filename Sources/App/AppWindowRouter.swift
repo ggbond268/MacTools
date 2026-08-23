@@ -201,7 +201,6 @@ enum AppDockVisibilityController {
 @MainActor
 final class StandaloneCommandPaletteState: ObservableObject {
     @Published private(set) var presentationOrigin: UnifiedSearchPresentationOrigin?
-    @Published private(set) var shortcutHint: String?
     @Published private(set) var focusRequestID: UInt = 0
     @Published private(set) var resetRequestID: UInt = 0
     @Published private(set) var quickSelectionRequest: UnifiedSearchQuickSelectionRequest?
@@ -212,7 +211,6 @@ final class StandaloneCommandPaletteState: ObservableObject {
 
     func prepareForPresentation(shortcutLabel: String) {
         presentationOrigin = .globalShortcut(shortcutLabel)
-        shortcutHint = shortcutLabel
         quickSelectionRequest = nil
         resetRequestID &+= 1
         focusRequestID &+= 1
@@ -294,7 +292,6 @@ struct StandaloneCommandPaletteRootView: View {
                 appearanceUserDefaults: appearanceUserDefaults,
                 availableSize: geometry.size,
                 presentationOrigin: state.presentationOrigin,
-                shortcutHint: state.shortcutHint,
                 focusRequestID: state.focusRequestID,
                 resetRequestID: state.resetRequestID,
                 quickSelectionRequest: state.quickSelectionRequest,

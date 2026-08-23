@@ -177,6 +177,22 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "它將從%@移除，快捷鍵和設定入口也會移除，背景工作將停止。外掛資料會保留。" } }
       }
     },
+    "plugin.management.uninstall.confirmationMessageRemovesData": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "ستتم إزالته من %@. ستُحذف اختصاراته وإدخاله في الإعدادات وبيانات الإضافة الخاصة نهائيًا، وسيتوقف عمله في الخلفية. لا يمكن التراجع عن هذا الإجراء." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Es wird aus %@ entfernt. Seine Kurzbefehle, sein Eintrag in den Einstellungen und seine privaten Plug-in-Daten werden dauerhaft gelöscht, und die Hintergrundarbeit wird beendet. Dies kann nicht widerrufen werden." } },
+        "en": { "stringUnit": { "state": "translated", "value": "It will be removed from %@. Its shortcuts, settings entry, and private plugin data will be permanently deleted, and its background work will stop. This can’t be undone." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Se eliminará de %@. Sus atajos, su entrada en Ajustes y los datos privados del complemento se eliminarán permanentemente, y se detendrá su actividad en segundo plano. Esta acción no se puede deshacer." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Il sera supprimé de %@. Ses raccourcis, son entrée dans les réglages et les données privées du module seront définitivement supprimés, et son activité en arrière-plan s’arrêtera. Cette action est irréversible." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@ から削除されます。ショートカット、設定項目、プラグインの非公開データが完全に削除され、バックグラウンド処理も停止します。この操作は取り消せません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@에서 제거됩니다. 단축키, 설정 항목 및 플러그인의 비공개 데이터가 영구적으로 삭제되고 백그라운드 작업도 중단됩니다. 이 작업은 취소할 수 없습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Ele será removido de %@. Seus atalhos, a entrada nos Ajustes e os dados privados do plug-in serão excluídos permanentemente, e a atividade em segundo plano será interrompida. Esta ação não pode ser desfeita." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Плагин будет удалён из %@. Его сочетания клавиш, пункт настроек и конфиденциальные данные будут удалены безвозвратно, а фоновая работа остановится. Это действие нельзя отменить." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "它将从%@移除，快捷键、设置入口和插件私密数据也会永久删除，后台工作将停止。此操作无法撤销。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "它將從%@移除，快捷鍵、設定入口和外掛私密資料也會永久刪除，背景工作將停止。此操作無法還原。" } }
+      }
+    },
     "plugin.management.uninstall.confirmationTitle": {
       "extractionState": "manual",
       "localizations": {
@@ -7625,6 +7641,22 @@
             "value": "無法儲存外掛遷移狀態，未移除外掛。"
           }
         }
+      }
+    },
+    "plugin.error.store.privateDataRemovalFailedFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذرت إزالة بيانات الإضافة الخاصة: %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Private Plug-in-Daten konnten nicht entfernt werden: %@" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t remove private plugin data: %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudieron eliminar los datos privados del complemento: %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible de supprimer les données privées du module : %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "プラグインの非公開データを削除できませんでした：%@" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "플러그인의 비공개 데이터를 제거할 수 없음: %@" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não foi possível remover os dados privados do plug-in: %@" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось удалить конфиденциальные данные плагина: %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法移除插件私密数据：%@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法移除外掛私密資料：%@" } }
       }
     },
     "plugin.error.store.removeFailedFormat": {

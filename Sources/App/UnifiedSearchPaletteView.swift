@@ -30,7 +30,6 @@ enum UnifiedSearchPaletteLayout {
 enum UnifiedSearchResultRowLayout {
     static let quickSelectionColumnWidth: CGFloat = 32
     static let primaryActionColumnWidth: CGFloat = 56
-    static let rowVerticalPadding: CGFloat = 9
 
     static func showsInlineActions(
         for action: MacToolsSearchAction,
@@ -136,148 +135,6 @@ final class UnifiedSearchPaletteModel: ObservableObject {
     }
 }
 
-struct UnifiedSearchTextField: NSViewRepresentable {
-    enum Command: Equatable {
-        case moveSelection(Int)
-        case submit
-        case openOwner
-        case cancel
-    }
-
-    @Binding var text: String
-    let placeholder: String
-    let accessibilityLabel: String
-    let focusRequestID: UInt
-    let onCommand: (Command) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeNSView(context: Context) -> NSTextField {
-        let field = SearchTextField()
-        field.onOpenOwner = { [weak coordinator = context.coordinator] in
-            coordinator?.parent.onCommand(.openOwner)
-        }
-        field.delegate = context.coordinator
-        field.isBezeled = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        field.lineBreakMode = .byTruncatingTail
-        field.placeholderString = placeholder
-        field.setAccessibilityLabel(accessibilityLabel)
-        field.setAccessibilityIdentifier("mactools.unified-search.field")
-        context.coordinator.focus(field, for: focusRequestID)
-        return field
-    }
-
-    func updateNSView(_ field: NSTextField, context: Context) {
-        context.coordinator.parent = self
-        field.placeholderString = placeholder
-        field.setAccessibilityLabel(accessibilityLabel)
-        if field.stringValue != text {
-            field.stringValue = text
-        }
-        context.coordinator.focus(field, for: focusRequestID)
-    }
-
-    static func command(
-        for selector: Selector,
-        hasMarkedText: Bool,
-        modifierFlags: NSEvent.ModifierFlags = []
-    ) -> Command? {
-        guard !hasMarkedText else {
-            return nil
-        }
-
-        switch selector {
-        case #selector(NSResponder.moveDown(_:)):
-            return .moveSelection(1)
-        case #selector(NSResponder.moveUp(_:)):
-            return .moveSelection(-1)
-        case #selector(NSResponder.insertNewline(_:)):
-            return modifierFlags.contains(.command) ? .openOwner : .submit
-        case #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
-            return .openOwner
-        case #selector(NSResponder.cancelOperation(_:)):
-            return .cancel
-        default:
-            return nil
-        }
-    }
-
-    static func isOpenOwnerKeyEquivalent(
-        keyCode: UInt16,
-        modifierFlags: NSEvent.ModifierFlags
-    ) -> Bool {
-        let flags = modifierFlags.intersection(.deviceIndependentFlagsMask)
-        return flags.contains(.command) && (keyCode == 36 || keyCode == 76)
-    }
-
-    @MainActor
-    final class SearchTextField: NSTextField {
-        var onOpenOwner: (() -> Void)?
-
-        override func performKeyEquivalent(with event: NSEvent) -> Bool {
-            if UnifiedSearchTextField.isOpenOwnerKeyEquivalent(
-                keyCode: event.keyCode,
-                modifierFlags: event.modifierFlags
-            ) {
-                onOpenOwner?()
-                return true
-            }
-            return super.performKeyEquivalent(with: event)
-        }
-    }
-
-    @MainActor
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: UnifiedSearchTextField
-        private var lastFocusRequestID: UInt?
-
-        init(parent: UnifiedSearchTextField) {
-            self.parent = parent
-        }
-
-        func controlTextDidChange(_ notification: Notification) {
-            guard let field = notification.object as? NSTextField else {
-                return
-            }
-
-            parent.text = field.stringValue
-        }
-
-        func control(
-            _ control: NSControl,
-            textView: NSTextView,
-            doCommandBy selector: Selector
-        ) -> Bool {
-            guard let command = UnifiedSearchTextField.command(
-                for: selector,
-                hasMarkedText: textView.hasMarkedText(),
-                modifierFlags: NSApp.currentEvent?.modifierFlags ?? []
-            ) else {
-                return false
-            }
-
-            parent.onCommand(command)
-            return true
-        }
-
-        func focus(_ field: NSTextField, for requestID: UInt) {
-            guard lastFocusRequestID != requestID else {
-                return
-            }
-
-            lastFocusRequestID = requestID
-            DispatchQueue.main.async { [weak field] in
-                field?.window?.makeFirstResponder(field)
-            }
-        }
-    }
-}
-
 struct UnifiedSearchPresentationView: View {
     @Environment(\.accessibilityReduceTransparency) private var accessibilityReduceTransparency
     let pluginHost: PluginHost
@@ -302,7 +159,6 @@ struct UnifiedSearchPresentationView: View {
                     appearanceUserDefaults: appearanceUserDefaults,
                     availableSize: geometry.size,
                     presentationOrigin: navigationCoordinator.unifiedSearchPresentationOrigin,
-                    shortcutHint: "⌘K",
                     focusRequestID: navigationCoordinator.unifiedSearchFocusRequestID,
                     resetRequestID: nil,
                     quickSelectionRequest: navigationCoordinator.unifiedSearchQuickSelectionRequest,
@@ -343,10 +199,6 @@ private struct UnifiedSearchPaletteShadowModifier: ViewModifier {
 }
 
 struct UnifiedSearchPaletteView: View {
-    private enum Layout {
-        static let rowCornerRadius: CGFloat = 8
-    }
-
     private enum PendingAlert: Identifiable {
         case execute(MacToolsSearchResult)
         case replaceShortcut(
@@ -370,7 +222,6 @@ struct UnifiedSearchPaletteView: View {
     let commandContext: AppHostCommandContext
     let availableSize: CGSize
     let presentationOrigin: UnifiedSearchPresentationOrigin?
-    let shortcutHint: String?
     let focusRequestID: UInt
     let resetRequestID: UInt?
     let quickSelectionRequest: UnifiedSearchQuickSelectionRequest?
@@ -391,7 +242,6 @@ struct UnifiedSearchPaletteView: View {
         appearanceUserDefaults: UserDefaults,
         availableSize: CGSize,
         presentationOrigin: UnifiedSearchPresentationOrigin?,
-        shortcutHint: String?,
         focusRequestID: UInt,
         resetRequestID: UInt?,
         quickSelectionRequest: UnifiedSearchQuickSelectionRequest?,
@@ -407,7 +257,6 @@ struct UnifiedSearchPaletteView: View {
         self.commandContext = commandContext
         self.availableSize = availableSize
         self.presentationOrigin = presentationOrigin
-        self.shortcutHint = shortcutHint
         self.focusRequestID = focusRequestID
         self.resetRequestID = resetRequestID
         self.quickSelectionRequest = quickSelectionRequest
@@ -419,7 +268,7 @@ struct UnifiedSearchPaletteView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PluginPaletteMetrics.contentSpacing) {
             searchField
 
             metadataRow
@@ -436,15 +285,19 @@ struct UnifiedSearchPaletteView: View {
 
             footer
         }
-        .padding(16)
+        .padding(PluginPaletteMetrics.contentPadding)
         .frame(width: UnifiedSearchPaletteLayout.width(for: availableSize.width))
         .background {
-            UnifiedSearchPaletteSurface(
-                reducesTransparency: accessibilityReduceTransparency
+            PluginPaletteSurface(
+                reducesTransparency: accessibilityReduceTransparency,
+                backgroundColor: SettingsStyle.contentBackground
             )
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(
+                cornerRadius: PluginPaletteMetrics.surfaceCornerRadius,
+                style: .continuous
+            )
                 .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
                 .allowsHitTesting(false)
         }
@@ -519,73 +372,35 @@ struct UnifiedSearchPaletteView: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-
-            UnifiedSearchTextField(
-                text: $query,
-                placeholder: AppL10n.search(
-                    "search.prompt",
-                    defaultValue: "搜索插件、设置和命令"
-                ),
-                accessibilityLabel: AppL10n.search(
-                    "search.title",
-                    defaultValue: "搜索 MacTools"
-                ),
-                focusRequestID: focusRequestID,
-                onCommand: handleSearchFieldCommand
-            )
-            .frame(maxWidth: .infinity, minHeight: 22)
-
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help(AppL10n.search("search.clear", defaultValue: "清除搜索"))
-                .accessibilityLabel(
-                    AppL10n.search("search.clear", defaultValue: "清除搜索")
-                )
-            }
-
-            if let shortcutHint, !shortcutHint.isEmpty {
-                Text(shortcutHint)
-                    .font(PluginSettingsTheme.Typography.statusBadge)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.12))
-                    )
-                    .accessibilityHidden(true)
-            }
-
+        PluginPaletteSearchToolbar(
+            text: $query,
+            placeholder: AppL10n.search(
+                "search.prompt",
+                defaultValue: "搜索插件、设置和命令"
+            ),
+            accessibilityLabel: AppL10n.search(
+                "search.title",
+                defaultValue: "搜索 MacTools"
+            ),
+            accessibilityIdentifier: "mactools.unified-search.field",
+            clearAccessibilityLabel: AppL10n.search(
+                "search.clear",
+                defaultValue: "清除搜索"
+            ),
+            focusRequestID: focusRequestID,
+            alternateSubmitModifier: .command,
+            onCommand: handleSearchFieldCommand
+        ) {
             Button {
                 actions.dismiss()
             } label: {
-                Text("Esc")
+                Image(systemName: "xmark")
             }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
+            .buttonStyle(PluginPaletteToolbarControlStyle())
             .help(AppL10n.search("search.close", defaultValue: "关闭搜索"))
             .accessibilityLabel(
                 AppL10n.search("search.close", defaultValue: "关闭搜索")
             )
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(PluginSettingsTheme.Palette.fieldBackground)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
         }
     }
 
@@ -672,12 +487,15 @@ struct UnifiedSearchPaletteView: View {
                 selectedResultID = result.id
                 activate(result)
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: PluginPaletteMetrics.rowContentSpacing) {
                     Image(systemName: PluginSystemImage.resolvedName(result.systemImage))
-                        .frame(width: 18)
+                        .frame(width: PluginPaletteMetrics.rowIconWidth)
                         .foregroundStyle(isSelected ? Color.white : Color.accentColor)
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(
+                        alignment: .leading,
+                        spacing: PluginPaletteMetrics.rowTitleDescriptionSpacing
+                    ) {
                         Text(result.title)
                             .font(PluginSettingsTheme.Typography.rowTitle)
                             .foregroundStyle(isSelected ? Color.white : Color.primary)
@@ -728,12 +546,7 @@ struct UnifiedSearchPaletteView: View {
                 .tint(Color.white)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, UnifiedSearchResultRowLayout.rowVerticalPadding)
-        .background(
-            RoundedRectangle(cornerRadius: Layout.rowCornerRadius, style: .continuous)
-                .fill(isSelected ? Color.accentColor : Color.clear)
-        )
+        .pluginPaletteSelectableRow(isSelected: isSelected)
         .accessibilityLabel(result.accessibilityLabel)
         .accessibilityHint(accessibilityHint(for: result, number: quickSelectionNumber))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -808,7 +621,7 @@ struct UnifiedSearchPaletteView: View {
     }
 
     private var footer: some View {
-        HStack {
+        PluginPaletteFooter {
             if let selectedResult {
                 Text(
                     AppL10n.searchFormat(
@@ -827,22 +640,40 @@ struct UnifiedSearchPaletteView: View {
                     )
                 )
             }
+        } trailing: {
+            ViewThatFits(in: .horizontal) {
+                paletteKeyboardHints(includeSecondaryActions: true)
+                paletteKeyboardHints(includeSecondaryActions: false)
+            }
+        }
+    }
 
-            Spacer()
-
-            Text(
-                AppL10n.search(
-                    "search.footer.keyboard",
-                    defaultValue: "↑↓ 选择　↩ 打开　⌘↩ 设置　Tab 操作　⌘1–9 快速打开"
+    private func paletteKeyboardHints(includeSecondaryActions: Bool) -> some View {
+        HStack(spacing: 12) {
+            PluginPaletteKeyboardHint(
+                key: "↑↓",
+                action: AppL10n.search("search.footer.select", defaultValue: "选择")
+            )
+            PluginPaletteKeyboardHint(
+                key: "Return",
+                action: AppL10n.search("search.footer.open", defaultValue: "打开")
+            )
+            if includeSecondaryActions {
+                PluginPaletteKeyboardHint(
+                    key: "⌘Return",
+                    action: AppL10n.search("search.footer.settings", defaultValue: "设置")
                 )
+                PluginPaletteKeyboardHint(
+                    key: "Tab",
+                    action: AppL10n.search("search.footer.actions", defaultValue: "操作")
+                )
+            }
+            PluginPaletteKeyboardHint(
+                key: "⌘1–9",
+                action: AppL10n.search("search.footer.quickOpen", defaultValue: "快速打开")
             )
         }
-        .font(PluginSettingsTheme.Typography.secondaryLabel)
-        .foregroundStyle(.secondary)
-        .padding(.top, 8)
-        .overlay(alignment: .top) {
-            Divider()
-        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var results: [MacToolsSearchResult] {
@@ -960,14 +791,14 @@ struct UnifiedSearchPaletteView: View {
     }
 
     private func handleSearchFieldCommand(
-        _ command: UnifiedSearchTextField.Command
+        _ command: PluginPaletteSearchCommand
     ) {
         switch command {
         case let .moveSelection(offset):
             moveSelection(by: offset)
         case .submit:
             activateSelectedResult()
-        case .openOwner:
+        case .alternateSubmit:
             openSelectedResultOwner()
         case .cancel:
             actions.dismiss()
@@ -1162,23 +993,4 @@ struct UnifiedSearchPaletteView: View {
         executionTask = nil
     }
 
-}
-
-private struct UnifiedSearchPaletteSurface: View {
-    let reducesTransparency: Bool
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-        shape
-            .fill(
-                reducesTransparency
-                    ? AnyShapeStyle(SettingsStyle.contentBackground)
-                    : AnyShapeStyle(.regularMaterial)
-            )
-            .overlay {
-                if !reducesTransparency {
-                    shape.fill(SettingsStyle.contentBackground.opacity(0.88))
-                }
-            }
-    }
 }

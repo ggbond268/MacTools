@@ -517,9 +517,12 @@ struct PluginManagementSettingsView: View {
         let confirmation = PluginUninstallConfirmation(
             pluginID: item.id,
             pluginTitle: item.title,
-            surfaceCapabilitySummary: item.uninstallScopeSummary
+            surfaceCapabilitySummary: item.uninstallScopeSummary,
+            removesDataOnUninstall: item.uninstallDataPolicy == .removePrivateData
         )
-        if uninstallConfirmationSession.shouldConfirmUninstall {
+        if uninstallConfirmationSession.shouldConfirmUninstall(
+            removesData: confirmation.removesDataOnUninstall
+        ) {
             pendingUninstallItem = confirmation
         } else {
             uninstall(confirmation)

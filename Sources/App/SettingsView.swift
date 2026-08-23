@@ -2556,9 +2556,12 @@ private struct SurfaceLayoutSettingsView: View {
         let confirmation = PluginUninstallConfirmation(
             pluginID: item.id,
             pluginTitle: item.title,
-            surfaceCapabilitySummary: pluginCapabilitySummary(item.capabilities)
+            surfaceCapabilitySummary: pluginCapabilitySummary(item.capabilities),
+            removesDataOnUninstall: item.removesDataOnUninstall
         )
-        if uninstallConfirmationSession.shouldConfirmUninstall {
+        if uninstallConfirmationSession.shouldConfirmUninstall(
+            removesData: confirmation.removesDataOnUninstall
+        ) {
             pendingUninstallItem = confirmation
         } else {
             uninstall(confirmation)
@@ -2790,6 +2793,18 @@ private struct PluginFormPage: View {
                         layoutWidths: widths
                     )
                 }
+
+                ForEach(item.shortcutSettingsGroups.filter {
+                    $0.placementAfterSectionID == section.id
+                }) { configuration in
+                    PluginMixedShortcutFormSection(
+                        pluginHost: pluginHost,
+                        pluginID: item.pluginID,
+                        configuration: configuration,
+                        shortcutItems: item.shortcutItems,
+                        layoutWidths: widths
+                    )
+                }
             }
 
             if let configuration = item.actionShortcutSettingsConfiguration,
@@ -2801,6 +2816,21 @@ private struct PluginFormPage: View {
                     pluginHost: pluginHost,
                     pluginID: item.pluginID,
                     configuration: configuration,
+                    layoutWidths: widths
+                )
+            }
+
+            ForEach(item.shortcutSettingsGroups.filter { configuration in
+                configuration.placementAfterSectionID == nil
+                    || !item.sections.contains(where: {
+                        $0.isVisible && $0.id == configuration.placementAfterSectionID
+                    })
+            }) { configuration in
+                PluginMixedShortcutFormSection(
+                    pluginHost: pluginHost,
+                    pluginID: item.pluginID,
+                    configuration: configuration,
+                    shortcutItems: item.shortcutItems,
                     layoutWidths: widths
                 )
             }
@@ -2824,6 +2854,62 @@ private struct PluginFormPage: View {
                 }
             }
         }
+    }
+}
+
+private struct PluginMixedShortcutFormSection: View {
+    @ObservedObject var pluginHost: PluginHost
+    let pluginID: String
+    let configuration: PluginShortcutSettingsGroupConfiguration
+    let shortcutItems: [ShortcutSettingsItem]
+    let layoutWidths: SettingsGroupedFormWidths
+
+    private var matchingShortcutItems: [ShortcutSettingsItem] {
+        let itemIDs = Set(configuration.shortcutDefinitionIDs.map {
+            "\(pluginID).shortcut.\($0)"
+        })
+        return shortcutItems.filter { itemIDs.contains($0.id) }
+    }
+
+    var body: some View {
+        Section {
+            VStack(spacing: 0) {
+                if !configuration.actionIDs.isEmpty {
+                    PluginActionShortcutRowsContent(
+                        pluginHost: pluginHost,
+                        providerID: pluginID,
+                        actionIDs: configuration.actionIDs,
+                        hidesNeutralStatusBadges: true
+                    )
+                }
+                if !configuration.actionIDs.isEmpty, !matchingShortcutItems.isEmpty {
+                    PluginSettingsListDivider()
+                }
+                if !matchingShortcutItems.isEmpty {
+                    ShortcutSettingsRowsView(
+                        pluginHost: pluginHost,
+                        items: matchingShortcutItems,
+                        alignsWithActionRows: true
+                    )
+                }
+            }
+            .settingsGroupedFormRowWidth(layoutWidths.sectionLayout)
+        } header: {
+            SettingsGroupedFormSectionHeader(
+                title: configuration.title,
+                systemImage: configuration.systemImage,
+                layoutWidth: layoutWidths.readableContent
+            )
+        } footer: {
+            if let description = configuration.description {
+                Text(description)
+                    .frame(width: layoutWidths.sectionLayout, alignment: .leading)
+            }
+        }
+        .pluginSettingsSearchAnchor(
+            pluginID: pluginID,
+            entryID: "shortcut-group.\(configuration.id)"
+        )
     }
 }
 

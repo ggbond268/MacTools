@@ -240,6 +240,27 @@ final class PluginPackageManifestTests: XCTestCase {
         let manifest = try JSONDecoder().decode(PluginPackageManifest.self, from: json)
         XCTAssertNil(manifest.category)
         XCTAssertNil(manifest.releaseChannel)
+        XCTAssertEqual(manifest.effectiveUninstallDataPolicy, .preserve)
+    }
+
+    func testManifestDecodesPrivateDataRemovalPolicy() throws {
+        let json = """
+        {
+          "id": "demo",
+          "displayName": "Demo",
+          "version": "1.0.0",
+          "minHostVersion": "1.2.0",
+          "pluginKitVersion": 5,
+          "bundleRelativePath": "Demo.bundle",
+          "capabilities": { "primaryPanel": true, "componentPanel": false, "settings": "workspace" },
+          "permissions": [],
+          "uninstallDataPolicy": "removePrivateData"
+        }
+        """.data(using: .utf8)!
+
+        let manifest = try JSONDecoder().decode(PluginPackageManifest.self, from: json)
+
+        XCTAssertEqual(manifest.effectiveUninstallDataPolicy, .removePrivateData)
     }
 
     func testLocalizedMetadataMatchesPreferredLanguageAndFallbacks() {

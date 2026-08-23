@@ -13,6 +13,7 @@ struct PluginSettingsPageItem: Identifiable {
     let permissionCards: [PluginPermissionCard]
     let shortcutItems: [ShortcutSettingsItem]
     let actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration?
+    let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
 
     var layout: PluginSettingsLayout {
         page?.body.layout ?? .form
@@ -41,7 +42,13 @@ struct PluginSettingsPageItem: Identifiable {
     }
 
     var remainingShortcutItems: [ShortcutSettingsItem] {
-        shortcutItems.filter { item in
+        let configuredItemIDs = shortcutSettingsGroups.reduce(into: Set<String>()) { result, group in
+            result.formUnion(group.shortcutDefinitionIDs.map { "\(pluginID).shortcut.\($0)" })
+        }
+        return shortcutItems.filter { item in
+            if configuredItemIDs.contains(item.id) {
+                return false
+            }
             guard let groupID = item.settingsGroupID else {
                 return true
             }

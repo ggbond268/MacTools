@@ -1,0 +1,129 @@
+import AppKit
+import Foundation
+
+enum ClipboardRichText {
+    static func attributedString(for payload: ClipboardHistoryPayload) -> NSAttributedString? {
+        for representation in payload.representations {
+            let documentType: NSAttributedString.DocumentType
+            switch representation.typeIdentifier {
+            case ClipboardRepresentationType.rtfd:
+                documentType = .rtfd
+            case ClipboardRepresentationType.rtf:
+                documentType = .rtf
+            case ClipboardRepresentationType.html:
+                documentType = .html
+            default:
+                continue
+            }
+            if let attributedString = try? NSAttributedString(
+                data: representation.data,
+                options: [.documentType: documentType],
+                documentAttributes: nil
+            ) {
+                return attributedString
+            }
+        }
+        return nil
+    }
+}
+
+enum ClipboardRichTextPreviewResult: Sendable {
+    case formatted(AttributedString)
+    case plainText(String, isSimplified: Bool)
+    case unavailable
+}
+
+enum ClipboardRichTextPreviewPolicy {
+    /// Rich document import and SwiftUI text layout can both become expensive. Keep formatted
+    /// previews intentionally smaller than the storage limit and fall back to bounded plain text.
+    static let maximumFormattedByteCount = 128 * 1_024
+    static let maximumFormattedCharacterCount = 12_000
+
+    static func makePreview(
+        payload: ClipboardHistoryPayload,
+        fallbackText: String
+    ) -> ClipboardRichTextPreviewResult {
+        guard hasRichRepresentation(in: payload) else { return .unavailable }
+        guard allowsFormattedImport(payload) else {
+            return simplifiedPreview(for: fallbackText)
+        }
+        guard let imported = ClipboardRichText.attributedString(for: payload) else {
+            return simplifiedPreview(for: fallbackText)
+        }
+        guard imported.length <= maximumFormattedCharacterCount,
+              let formatted = try? AttributedString(imported, including: \.appKit) else {
+            return simplifiedPreview(for: fallbackText.isEmpty ? imported.string : fallbackText)
+        }
+        return .formatted(formatted)
+    }
+
+    static func boundedPlainText(_ text: String) -> (text: String, wasTruncated: Bool) {
+        let candidate = text.prefix(maximumFormattedCharacterCount + 1)
+        guard candidate.count > maximumFormattedCharacterCount else { return (text, false) }
+        return (String(candidate.prefix(maximumFormattedCharacterCount)) + "\u{2026}", true)
+    }
+
+    static func allowsFormattedImport(_ payload: ClipboardHistoryPayload) -> Bool {
+        let richRepresentations = payload.representations.filter {
+            isRichRepresentation($0.typeIdentifier)
+        }
+        return !richRepresentations.isEmpty
+            && richRepresentations.allSatisfy { $0.data.count <= maximumFormattedByteCount }
+    }
+
+    private static func hasRichRepresentation(in payload: ClipboardHistoryPayload) -> Bool {
+        payload.representations.contains { isRichRepresentation($0.typeIdentifier) }
+    }
+
+    private static func isRichRepresentation(_ typeIdentifier: String) -> Bool {
+        [
+            ClipboardRepresentationType.rtfd,
+            ClipboardRepresentationType.rtf,
+            ClipboardRepresentationType.html,
+        ].contains(typeIdentifier)
+    }
+
+    private static func simplifiedPreview(for text: String) -> ClipboardRichTextPreviewResult {
+        guard !text.isEmpty else { return .unavailable }
+        let bounded = boundedPlainText(text)
+        return .plainText(bounded.text, isSimplified: true)
+    }
+}
+
+enum ClipboardPlainTextConversion {
+    static func isAvailable(for item: ClipboardHistoryItem) -> Bool {
+        switch item.kind {
+        case .richText:
+            !item.text.isEmpty
+                || ClipboardRichTextPreviewPolicy.allowsFormattedImport(item.payload)
+        case .image:
+            !(item.imageSearchText ?? "").isEmpty
+        case .files:
+            !item.payload.fileURLs.isEmpty
+        case .plainText, .link, .pdf, .color, .media:
+            !item.text.isEmpty
+        }
+    }
+
+    static func text(for item: ClipboardHistoryItem) -> String? {
+        let candidate: String
+        switch item.kind {
+        case .richText:
+            if !item.text.isEmpty {
+                candidate = item.text
+            } else if ClipboardRichTextPreviewPolicy.allowsFormattedImport(item.payload) {
+                candidate = ClipboardRichText.attributedString(for: item.payload)?.string ?? ""
+            } else {
+                candidate = ""
+            }
+        case .image:
+            candidate = item.imageSearchText ?? ""
+        case .files:
+            candidate = item.payload.fileURLs.map(\.path).joined(separator: "\n")
+        case .plainText, .link, .pdf, .color, .media:
+            candidate = item.text
+        }
+        let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : candidate
+    }
+}

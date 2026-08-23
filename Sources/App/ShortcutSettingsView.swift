@@ -370,6 +370,7 @@ struct PluginActionShortcutRowsContent: View {
     @ObservedObject var pluginHost: PluginHost
     let providerID: String
     let actionIDs: Set<String>
+    var hidesNeutralStatusBadges = false
     @State private var pendingReplacement: PendingActionShortcutReplacement?
 
     private var items: [ActionShortcutCatalogItem] {
@@ -398,6 +399,7 @@ struct PluginActionShortcutRowsContent: View {
                         pluginHost: pluginHost,
                         item: item,
                         displaysRunLink: false,
+                        hidesNeutralStatusBadge: hidesNeutralStatusBadges,
                         onRecord: { binding in record(binding, for: item) },
                         onClear: {
                             pluginHost.clearActionShortcut(
@@ -471,6 +473,7 @@ private struct ActionShortcutCatalogRow: View {
     @ObservedObject var pluginHost: PluginHost
     let item: ActionShortcutCatalogItem
     var displaysRunLink = true
+    var hidesNeutralStatusBadge = false
     let onRecord: (ShortcutBinding) -> PluginShortcutRecordingResult
     let onClear: () -> Void
 
@@ -489,12 +492,17 @@ private struct ActionShortcutCatalogRow: View {
                         Text(item.title)
                             .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
                             .lineLimit(1)
-                        statusBadge
+                        if ActionShortcutStatusBadgePolicy.shouldShow(
+                            item.status,
+                            hidesNeutralStatus: hidesNeutralStatusBadge
+                        ) {
+                            statusBadge
+                        }
                     }
 
                     Text(supportingText)
                         .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(statusColor)
+                        .foregroundStyle(supportingColor)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -563,6 +571,17 @@ private struct ActionShortcutCatalogRow: View {
         }
     }
 
+    private var supportingColor: Color {
+        switch item.status {
+        case .assigned, .unassigned:
+            .secondary
+        case .conflicted:
+            .orange
+        case .unavailable:
+            .red
+        }
+    }
+
     private var supportingText: String {
         switch item.status {
         case .assigned, .unassigned:
@@ -577,9 +596,25 @@ private struct ActionShortcutCatalogRow: View {
     }
 }
 
+enum ActionShortcutStatusBadgePolicy {
+    static func shouldShow(
+        _ status: ActionShortcutCatalogStatus,
+        hidesNeutralStatus: Bool
+    ) -> Bool {
+        guard hidesNeutralStatus else { return true }
+        switch status {
+        case .assigned, .unassigned:
+            return false
+        case .conflicted, .unavailable:
+            return true
+        }
+    }
+}
+
 struct ShortcutSettingsRowsView: View {
     @ObservedObject var pluginHost: PluginHost
     let items: [ShortcutSettingsItem]
+    var alignsWithActionRows = false
     @State private var pendingWarning: CommonShortcutBindingWarning?
 
     var body: some View {
@@ -598,7 +633,8 @@ struct ShortcutSettingsRowsView: View {
                     },
                     onReset: {
                         reset(item)
-                    }
+                    },
+                    alignsWithActionRows: alignsWithActionRows
                 )
                 .pluginSettingsSearchAnchor(
                     pluginID: item.pluginID,
@@ -723,6 +759,7 @@ private struct ShortcutSettingsStandardRow: View {
     let onBeginRecording: () -> Void
     let onClear: () -> Void
     let onReset: () -> Void
+    let alignsWithActionRows: Bool
 
     private var supportingText: String {
         item.errorMessage ?? item.description
@@ -757,30 +794,46 @@ private struct ShortcutSettingsStandardRow: View {
     }
 
     private var summary: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-            HStack(spacing: 8) {
-                Text(item.title)
-                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(item.title)
+        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            if alignsWithActionRows, let systemImage = item.settingsControlSystemImage {
+                Image(systemName: PluginSystemImage.resolvedName(systemImage))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 24)
+            }
 
-                if item.isRequired {
-                    ShortcutStatusBadge(text: AppL10n.settings("shortcuts.required", defaultValue: "必填"))
+            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                HStack(spacing: 8) {
+                    Text(summaryTitle)
+                        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(summaryTitle)
+
+                    if item.isRequired {
+                        ShortcutStatusBadge(text: AppL10n.settings("shortcuts.required", defaultValue: "必填"))
+                    }
+                }
+
+                if !supportingText.isEmpty {
+                    Text(supportingText)
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(supportingColor)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .help(supportingText)
                 }
             }
-
-            if !supportingText.isEmpty {
-                Text(supportingText)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(supportingColor)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .help(supportingText)
-            }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .help(rowHelpText)
+    }
+
+    private var summaryTitle: String {
+        if alignsWithActionRows, let title = item.settingsControlTitle {
+            return title
+        }
+        return item.title
     }
 
     private var shortcutControl: some View {
@@ -794,8 +847,8 @@ private struct ShortcutSettingsStandardRow: View {
             onBeginRecording: onBeginRecording,
             onReset: onReset,
             onClear: onClear,
-            title: item.settingsControlTitle,
-            systemImage: item.settingsControlSystemImage
+            title: alignsWithActionRows ? nil : item.settingsControlTitle,
+            systemImage: alignsWithActionRows ? nil : item.settingsControlSystemImage
         )
     }
 }
