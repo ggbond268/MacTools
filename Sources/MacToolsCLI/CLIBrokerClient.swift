@@ -7,6 +7,8 @@ enum CLIBrokerClientError: Error {
     case timedOut
     case protocolIncompatible
     case hostDiscovery(CLIHostLocationError)
+    case hostDiscoveryTimedOut
+    case brokerVersionIncompatible(expected: String, found: String, applicationURL: URL?)
     case hostLaunchFailed(message: String, applicationURL: URL)
     case backgroundItemApprovalRequired(applicationURL: URL)
 }
@@ -36,6 +38,22 @@ extension CLIBrokerClientError {
                 signatureAccepted: signatureAccepted,
                 guidance: "Install the matching MacTools app release, then retry."
             )
+        case .hostDiscoveryTimedOut:
+            return CLIHostFailureDiagnostic(
+                category: "hostDiscoveryTimedOut",
+                message: CLIHostDiscoveryError.timedOut.localizedDescription,
+                applicationURL: nil,
+                signatureAccepted: false,
+                guidance: "Remove unavailable MacTools copies or volumes, then retry."
+            )
+        case let .brokerVersionIncompatible(expected, found, applicationURL):
+            return CLIHostFailureDiagnostic(
+                category: "brokerVersionIncompatible",
+                message: "The running broker is \(found); expected \(expected).",
+                applicationURL: applicationURL,
+                signatureAccepted: true,
+                guidance: "Open the matching MacTools app once to refresh its background item."
+            )
         case let .hostLaunchFailed(message, applicationURL):
             return CLIHostFailureDiagnostic(
                 category: "hostLaunchFailed",
@@ -60,7 +78,7 @@ extension CLIBrokerClientError {
 
 final class CLIBrokerClient: @unchecked Sendable {
     private let identityValidator = CLIPeerIdentityValidator()
-    private let hostLocator: CLIHostLocator
+    private let hostDiscovery: CLIHostDiscovery
     private let hostLauncher: CLIHostApplicationLauncher
     private var connection: NSXPCConnection?
     private var negotiatedProtocolVersion: Int?
@@ -68,9 +86,10 @@ final class CLIBrokerClient: @unchecked Sendable {
 
     init(
         hostLocator: CLIHostLocator = CLIHostLocator(),
+        hostDiscovery: CLIHostDiscovery? = nil,
         hostLauncher: CLIHostApplicationLauncher = CLIHostApplicationLauncher()
     ) {
-        self.hostLocator = hostLocator
+        self.hostDiscovery = hostDiscovery ?? CLIHostDiscovery(locator: hostLocator)
         self.hostLauncher = hostLauncher
     }
 
@@ -88,10 +107,13 @@ final class CLIBrokerClient: @unchecked Sendable {
 #endif
         var didLaunch = false
         var didContactBroker = false
+        var lastVersionMismatch: CLIBrokerClientError?
         var lastMessage = "The MacTools broker is unavailable."
-        repeat {
+        while Date() < deadline {
             do {
-                let response = try await connectAndHandshake(timeout: 1.5)
+                let response = try await connectAndHandshake(
+                    timeout: min(1.5, max(0.01, deadline.timeIntervalSinceNow))
+                )
                 didContactBroker = true
                 let version = cliVersion()
                 let brokerMatches = response.brokerVersion == version.version
@@ -102,13 +124,47 @@ final class CLIBrokerClient: @unchecked Sendable {
                 } else {
                     hostMatches = !response.hostReady
                 }
-                guard brokerMatches, hostMatches else {
-                    let found = [
-                        "broker \(response.brokerVersion) (\(response.brokerBuild))",
-                        response.hostVersion.map {
-                            "host \($0) (\(response.hostBuild ?? "unknown"))"
-                        },
-                    ].compactMap { $0 }
+                let recoveryDecision = CLIHostRecoveryPolicy.decision(
+                    brokerMatches: brokerMatches,
+                    hostMatches: hostMatches,
+                    launchAllowed: launchIfNeeded,
+                    didLaunch: didLaunch
+                )
+                switch recoveryDecision {
+                case .continueHandshake:
+                    break
+                case .launchExactHost:
+                    selectedHostApplicationURL = try await launchHost(deadline: deadline)
+                    lastVersionMismatch = versionMismatchError(
+                        response: response,
+                        expectedVersion: version
+                    )
+                    didLaunch = true
+                    connection?.invalidate()
+                    connection = nil
+                    negotiatedProtocolVersion = nil
+                    try await waitBeforeRetry(deadline: deadline)
+                    continue
+                case .waitForReplacement:
+                    lastVersionMismatch = versionMismatchError(
+                        response: response,
+                        expectedVersion: version
+                    )
+                    connection?.invalidate()
+                    connection = nil
+                    negotiatedProtocolVersion = nil
+                    try await waitBeforeRetry(deadline: deadline)
+                    continue
+                case .rejectBrokerVersion:
+                    throw CLIBrokerClientError.brokerVersionIncompatible(
+                        expected: "\(version.version) (\(version.build))",
+                        found: "\(response.brokerVersion) (\(response.brokerBuild))",
+                        applicationURL: selectedHostApplicationURL
+                    )
+                case .rejectHostVersion:
+                    let found = response.hostVersion.map {
+                        ["host \($0) (\(response.hostBuild ?? "unknown"))"]
+                    } ?? ["host unknown"]
                     throw CLIBrokerClientError.hostDiscovery(.versionIncompatible(
                         expected: "\(version.version) (\(version.build))",
                         found: found,
@@ -131,13 +187,14 @@ final class CLIBrokerClient: @unchecked Sendable {
                 lastMessage = "The MacTools broker is unavailable."
             }
             if launchIfNeeded, !didLaunch {
-                selectedHostApplicationURL = try await launchHost(
-                    timeout: deadline.timeIntervalSinceNow
-                )
+                selectedHostApplicationURL = try await launchHost(deadline: deadline)
                 didLaunch = true
             }
-            try await Task.sleep(for: .milliseconds(200))
-        } while Date() < deadline
+            try await waitBeforeRetry(deadline: deadline)
+        }
+        if let lastVersionMismatch {
+            throw lastVersionMismatch
+        }
         if let selectedHostApplicationURL, !didContactBroker {
             throw CLIBrokerClientError.backgroundItemApprovalRequired(
                 applicationURL: selectedHostApplicationURL
@@ -303,15 +360,17 @@ final class CLIBrokerClient: @unchecked Sendable {
         }
         let timeoutTask = Task {
             try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled else { return }
             continuation.yield(.failure(CLIBrokerClientError.timedOut))
             continuation.finish()
         }
+        defer { timeoutTask.cancel() }
         return try await withTaskCancellationHandler {
             for await result in stream {
-                timeoutTask.cancel()
                 try Task.checkCancellation()
                 return try result.get()
             }
+            try Task.checkCancellation()
             throw CLIBrokerClientError.invalidResponse
         } onCancel: {
             continuation.yield(.failure(CancellationError()))
@@ -319,22 +378,27 @@ final class CLIBrokerClient: @unchecked Sendable {
         }
     }
 
-    private func launchHost(timeout: TimeInterval) async throws -> URL {
+    private func launchHost(deadline: Date) async throws -> URL {
         let applicationURL: URL
         do {
             let version = cliVersion()
-            applicationURL = try hostLocator.locate(
+            applicationURL = try await hostDiscovery.locate(
                 bundleIdentifier: hostBundleIdentifier(),
                 version: version.version,
-                build: version.build
+                build: version.build,
+                deadline: deadline
             )
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch is CLIHostDiscoveryError {
+            throw CLIBrokerClientError.hostDiscoveryTimedOut
         } catch let error as CLIHostLocationError {
             throw CLIBrokerClientError.hostDiscovery(error)
         }
         do {
             try await hostLauncher.launch(
                 applicationURL: applicationURL,
-                timeout: timeout
+                deadline: deadline
             )
         } catch is CancellationError {
             throw CancellationError()
@@ -347,6 +411,37 @@ final class CLIBrokerClient: @unchecked Sendable {
         return applicationURL
     }
 
+    private func waitBeforeRetry(deadline: Date) async throws {
+        let delay = min(0.2, max(0, deadline.timeIntervalSinceNow))
+        if delay > 0 {
+            try await Task.sleep(for: .seconds(delay))
+        }
+    }
+
+    private func versionMismatchError(
+        response: CLIHandshakeResponse,
+        expectedVersion: (version: String, build: String)
+    ) -> CLIBrokerClientError {
+        let expected = "\(expectedVersion.version) (\(expectedVersion.build))"
+        let brokerMatches = response.brokerVersion == expectedVersion.version
+            && response.brokerBuild == expectedVersion.build
+        if !brokerMatches {
+            return .brokerVersionIncompatible(
+                expected: expected,
+                found: "\(response.brokerVersion) (\(response.brokerBuild))",
+                applicationURL: selectedHostApplicationURL
+            )
+        }
+        let found = response.hostVersion.map {
+            ["host \($0) (\(response.hostBuild ?? "unknown"))"]
+        } ?? ["host unknown"]
+        return .hostDiscovery(.versionIncompatible(
+            expected: expected,
+            found: found,
+            candidate: selectedHostApplicationURL
+        ))
+    }
+
     func cliVersion() -> (version: String, build: String) {
         let info = CLIServiceConfiguration.executableInfoDictionary()
         return (
@@ -356,13 +451,7 @@ final class CLIBrokerClient: @unchecked Sendable {
     }
 
     func installedHostApplicationURL() -> URL? {
-        if let selectedHostApplicationURL { return selectedHostApplicationURL }
-        let version = cliVersion()
-        return try? hostLocator.locate(
-            bundleIdentifier: hostBundleIdentifier(),
-            version: version.version,
-            build: version.build
-        )
+        selectedHostApplicationURL
     }
 
     private func hostBundleIdentifier() -> String {

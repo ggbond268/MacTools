@@ -54,9 +54,9 @@ enum CLIHostLocationError: Error, Equatable {
     }
 }
 
-struct CLIHostLocator {
-    typealias CandidateProvider = (String) -> [CLIHostCandidate]
-    typealias IdentityEvaluator = (URL) -> CLIHostIdentityAssessment
+struct CLIHostLocator: Sendable {
+    typealias CandidateProvider = @Sendable (String) -> [CLIHostCandidate]
+    typealias IdentityEvaluator = @Sendable (URL) -> CLIHostIdentityAssessment
 
     private let candidateProvider: CandidateProvider
     private let identityEvaluator: IdentityEvaluator

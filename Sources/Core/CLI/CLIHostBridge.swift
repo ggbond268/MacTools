@@ -37,7 +37,7 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
 
     func start() {
         isStarted = true
-        serviceController.refresh()
+        serviceController.reconcileRegisteredService()
         serviceStatusDidChange(serviceController.status)
     }
 

@@ -74,7 +74,7 @@ function validate_universal_binary() {
 validate_universal_binary "$CLI_PATH" "CLI"
 
 function signing_detail() {
-  /usr/bin/codesign -dvvv "$1" 2>&1 \
+  /usr/bin/codesign -dvvv --arch "$3" "$1" 2>&1 \
     | /usr/bin/awk -F= -v key="$2" '$1 == key { print substr($0, length(key) + 2); exit }'
 }
 
@@ -99,17 +99,25 @@ function validate_signed_role() {
   local expected_identifier="$2"
   local expected_team="$3"
   local status=0
-  local details_path="$STAGE_DIR/$(/usr/bin/basename "$path").signing.txt"
-  /usr/bin/codesign --verify --strict --verbose=2 "$path" >/dev/null 2>&1 || status=$?
+  /usr/bin/codesign --verify --strict --all-architectures --verbose=2 "$path" \
+    >/dev/null 2>&1 || status=$?
   /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" status \
     --value "$status" \
     --operation "Signature verification for $path"
-  /usr/bin/codesign -dvvv "$path" > /dev/null 2> "$details_path"
-  /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" signing \
-    --details "$details_path" \
-    --identifier "$expected_identifier" \
-    --team "$expected_team" \
-    --role "$path"
+  for architecture in arm64 x86_64; do
+    local details_status=0
+    local details_path="$STAGE_DIR/$(/usr/bin/basename "$path").$architecture.signing.txt"
+    /usr/bin/codesign -dvvv --arch "$architecture" "$path" \
+      > /dev/null 2> "$details_path" || details_status=$?
+    /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" status \
+      --value "$details_status" \
+      --operation "Signature inspection for $path ($architecture)"
+    /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" signing \
+      --details "$details_path" \
+      --identifier "$expected_identifier" \
+      --team "$expected_team" \
+      --role "$path ($architecture)"
+  done
 }
 
 ATTACH_PLIST="$STAGE_DIR/attach.plist"
@@ -141,10 +149,13 @@ APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Cont
 
 HOST_IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Contents/Info.plist")"
 HOST_EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+HOST_PATH="$APP_PATH/Contents/MacOS/$HOST_EXECUTABLE"
 /usr/bin/python3 "$SCRIPT_DIR/validate-release-layout.py" \
   --app "$APP_PATH" \
   --host-executable "$HOST_EXECUTABLE" \
   --host-identifier "$HOST_IDENTIFIER"
+[[ -x "$HOST_PATH" && ! -L "$HOST_PATH" ]] || fail "DMG app host is not a regular executable."
+validate_universal_binary "$HOST_PATH" "Host"
 BROKER_PATH="$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
 [[ -x "$BROKER_PATH" ]] || fail "DMG app is missing MacToolsCLIBroker."
 validate_universal_binary "$BROKER_PATH" "Broker"
@@ -158,12 +169,12 @@ done
 
 if [[ "$ALLOW_UNSIGNED" -eq 0 ]]; then
   APP_SIGNATURE_STATUS=0
-  /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH" >/dev/null 2>&1 \
-    || APP_SIGNATURE_STATUS=$?
+  /usr/bin/codesign --verify --deep --strict --all-architectures --verbose=2 "$APP_PATH" \
+    >/dev/null 2>&1 || APP_SIGNATURE_STATUS=$?
   /usr/bin/python3 "$SCRIPT_DIR/release_binary_validation.py" status \
     --value "$APP_SIGNATURE_STATUS" \
     --operation "App signature verification"
-  HOST_TEAM="$(signing_detail "$APP_PATH" TeamIdentifier)"
+  HOST_TEAM="$(signing_detail "$APP_PATH" TeamIdentifier arm64)"
   [[ -n "$HOST_TEAM" ]] || fail "App signature has no Team Identifier."
   validate_signed_role "$APP_PATH" "$HOST_IDENTIFIER" "$HOST_TEAM"
   validate_signed_role "$BROKER_PATH" "$HOST_IDENTIFIER.cli-broker" "$HOST_TEAM"

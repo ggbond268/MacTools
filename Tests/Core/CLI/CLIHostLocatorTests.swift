@@ -151,7 +151,7 @@ final class CLIHostLocatorTests: XCTestCase {
 
     private func locator(
         candidates: [CLIHostCandidate],
-        identityEvaluator: @escaping (URL) -> CLIHostIdentityAssessment
+        identityEvaluator: @escaping @Sendable (URL) -> CLIHostIdentityAssessment
     ) -> CLIHostLocator {
         CLIHostLocator(
             candidateProvider: { _ in candidates },

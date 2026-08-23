@@ -141,13 +141,14 @@ class CLIPackagingTests(unittest.TestCase):
             "architectures", "--value", "x86_64 arm64", "--role", "CLI"
         )
         self.assertEqual(valid.returncode, 0, valid.stderr.decode())
-        for architectures in ("arm64", "arm64 x86_64 i386", "arm64 arm64"):
-            with self.subTest(architectures=architectures):
-                result = self.run_binary_validator(
-                    "architectures", "--value", architectures, "--role", "Broker"
-                )
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(b"exactly arm64 and x86_64", result.stderr)
+        for role in ("Host", "Broker", "CLI"):
+            for architectures in ("arm64", "arm64 x86_64 i386", "arm64 arm64"):
+                with self.subTest(role=role, architectures=architectures):
+                    result = self.run_binary_validator(
+                        "architectures", "--value", architectures, "--role", role
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(b"exactly arm64 and x86_64", result.stderr)
 
     def test_otool_info_plist_parser_round_trips_every_word(self) -> None:
         value = {
@@ -212,9 +213,12 @@ class CLIPackagingTests(unittest.TestCase):
 
     def test_signing_policy_rejects_role_team_runtime_and_command_failures(self) -> None:
         roles = {
-            "Host": "app.ggbond.MacTools",
-            "CLI": "app.ggbond.MacTools.cli",
-            "Broker": "app.ggbond.MacTools.cli-broker",
+            "Host arm64": "app.ggbond.MacTools",
+            "Host x86_64": "app.ggbond.MacTools",
+            "CLI arm64": "app.ggbond.MacTools.cli",
+            "CLI x86_64": "app.ggbond.MacTools.cli",
+            "Broker arm64": "app.ggbond.MacTools.cli-broker",
+            "Broker x86_64": "app.ggbond.MacTools.cli-broker",
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
             details = Path(temporary_directory) / "signing.txt"
@@ -296,6 +300,9 @@ class CLIPackagingTests(unittest.TestCase):
         for invariant in (
             "arm64",
             "x86_64",
+            'validate_universal_binary "$HOST_PATH" "Host"',
+            "--all-architectures",
+            '--arch "$architecture"',
             "TeamIdentifier",
             "runtime",
             "validate-release-layout.py",

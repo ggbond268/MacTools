@@ -151,6 +151,7 @@ targets:
     - path: Sources/Core/CLI/CLIProtocolCodec.swift
     - path: Sources/Core/CLI/CLIServiceConfiguration.swift
     - path: Sources/Core/CLI/CLIHostLocator.swift
+    - path: Sources/Core/CLI/CLIHostDiscovery.swift
     - path: Sources/Core/CLI/CLIHostApplicationLauncher.swift
     - path: Sources/Core/CLI/CLIXPCProtocols.swift
     - path: Sources/Core/CLI/CLIPeerIdentityValidator.swift

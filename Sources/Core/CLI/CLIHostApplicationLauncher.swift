@@ -49,7 +49,8 @@ struct CLIHostApplicationLauncher {
         self.openApplication = openApplication
     }
 
-    func launch(applicationURL: URL, timeout: TimeInterval) async throws {
+    func launch(applicationURL: URL, deadline: Date) async throws {
+        let timeout = deadline.timeIntervalSinceNow
         guard timeout > 0 else { throw CLIHostApplicationLaunchError.timedOut }
         let (stream, continuation) = AsyncStream.makeStream(of: Result<Void, Error>.self)
         openApplication(applicationURL) { result in
@@ -69,6 +70,7 @@ struct CLIHostApplicationLauncher {
                 try Task.checkCancellation()
                 return try result.get()
             }
+            try Task.checkCancellation()
             throw CLIHostApplicationLaunchError.noRunningApplication
         } onCancel: {
             continuation.yield(.failure(CancellationError()))

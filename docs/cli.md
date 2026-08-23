@@ -26,14 +26,18 @@ then registers its bundled, user-scoped background broker. Merely installing the
 app or CLI does not register it. macOS may ask
 for approval in **System Settings > General > Login Items & Extensions**. The
 CLI starts the installed MacTools app without activation when the host is not
-running and waits up to ten seconds for its action registry.
+running and waits up to ten seconds for discovery, launch, broker replacement,
+and action-registry registration. Cancelling the CLI also stops waiting for host
+discovery immediately.
 
 If more than one MacTools copy is registered, the CLI checks every Launch
 Services candidate, requires the same release version and build plus the exact
 same-team host signature, and then chooses deterministically. `doctor --json`
 reports distinct categories for a missing or mismatched app, an invalid
 signature, a launch failure, and background-item approval instead of reducing
-all cold-start failures to one timeout.
+all cold-start failures to one timeout. When the enabled app path or release
+changes, MacTools refreshes its broker registration before reconnecting, so a
+previous broker cannot keep a newly installed matching CLI on the old release.
 
 The app and CLI use the same release version initially, but remain separate
 artifacts so either can be replaced independently. Their handshake selects the

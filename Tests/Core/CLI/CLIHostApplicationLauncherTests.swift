@@ -13,7 +13,10 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
             }
         }
 
-        try await launcher.launch(applicationURL: applicationURL, timeout: 1)
+        try await launcher.launch(
+            applicationURL: applicationURL,
+            deadline: Date().addingTimeInterval(1)
+        )
 
         await fulfillment(of: [callback], timeout: 1)
     }
@@ -23,7 +26,10 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
         let startedAt = Date()
 
         do {
-            try await launcher.launch(applicationURL: applicationURL, timeout: 0.05)
+            try await launcher.launch(
+                applicationURL: applicationURL,
+                deadline: Date().addingTimeInterval(0.05)
+            )
             XCTFail("Expected launch timeout")
         } catch {
             XCTAssertEqual(error as? CLIHostApplicationLaunchError, .timedOut)
@@ -38,7 +44,10 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
         }
 
         do {
-            try await launcher.launch(applicationURL: applicationURL, timeout: 1)
+            try await launcher.launch(
+                applicationURL: applicationURL,
+                deadline: Date().addingTimeInterval(1)
+            )
             XCTFail("Expected launch failure")
         } catch {
             XCTAssertEqual(
@@ -46,5 +55,26 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
                 .failed("denied")
             )
         }
+    }
+
+    func testCancellationReturnsWithoutAwaitingLaunchCallback() async {
+        let launcher = CLIHostApplicationLauncher { _, _ in }
+        let task = Task {
+            try await launcher.launch(
+                applicationURL: applicationURL,
+                deadline: Date().addingTimeInterval(10)
+            )
+        }
+        try? await Task.sleep(for: .milliseconds(20))
+        let cancelledAt = Date()
+        task.cancel()
+
+        do {
+            try await task.value
+            XCTFail("Expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(cancelledAt), 0.5)
     }
 }
