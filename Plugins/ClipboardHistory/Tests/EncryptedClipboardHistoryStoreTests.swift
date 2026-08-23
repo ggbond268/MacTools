@@ -215,6 +215,7 @@ final class EncryptedClipboardHistoryStoreTests: XCTestCase {
 final class InMemoryClipboardHistoryKeyStore: ClipboardHistoryKeyStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var key: Data?
+    private var shouldFailNextDelete = false
     private(set) var didDelete = false
 
     var currentKey: Data? {
@@ -230,9 +231,17 @@ final class InMemoryClipboardHistoryKeyStore: ClipboardHistoryKeyStoring, @unche
     }
 
     func deleteKey() throws {
-        lock.withLock {
+        try lock.withLock {
+            if shouldFailNextDelete {
+                shouldFailNextDelete = false
+                throw CocoaError(.fileWriteUnknown)
+            }
             key = nil
             didDelete = true
         }
+    }
+
+    func failNextDelete() {
+        lock.withLock { shouldFailNextDelete = true }
     }
 }

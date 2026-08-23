@@ -191,16 +191,14 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.processPasteboardChange()
 
         XCTAssertTrue(fixture.controller.items.isEmpty)
-        for _ in 0..<100 where !fixture.pasteboard.asyncReadStarted {
-            await Task.yield()
-        }
+        let didStartRead = await waitUntil { fixture.pasteboard.asyncReadStarted }
+        XCTAssertTrue(didStartRead)
         XCTAssertTrue(fixture.pasteboard.asyncReadStarted)
         XCTAssertTrue(fixture.controller.items.isEmpty)
 
         fixture.pasteboard.completeAsynchronousRead()
-        for _ in 0..<100 where fixture.controller.items.isEmpty {
-            await Task.yield()
-        }
+        let didCapturePayload = await waitUntil { !fixture.controller.items.isEmpty }
+        XCTAssertTrue(didCapturePayload)
         XCTAssertEqual(fixture.controller.items.map(\.text), ["large payload"])
         fixture.controller.stop()
     }
@@ -299,6 +297,78 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.source.recordActivation(editor)
         fixture.pasteboard.simulateCopy("rapid secret")
         fixture.controller.processPasteboardChange()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
+        fixture.controller.stop()
+    }
+
+    func testExcludedActivationWithoutCopyDoesNotDropLaterAllowedCopy() async throws {
+        let fixture = makeFixture()
+        let editor = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Editor",
+            name: "Editor"
+        )
+        let secret = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Secret",
+            name: "Secret"
+        )
+        fixture.settings.addExcludedApplications([
+            ClipboardExcludedApplication(
+                bundleIdentifier: secret.bundleIdentifier,
+                name: secret.name
+            ),
+        ])
+        fixture.source.application = editor
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        let activationTime = Date()
+        fixture.controller.processPasteboardChange(now: activationTime)
+
+        fixture.source.recordActivation(secret)
+        fixture.source.recordActivation(editor)
+        fixture.controller.processPasteboardChange(now: activationTime.addingTimeInterval(0.1))
+
+        fixture.pasteboard.simulateCopy("ordinary editor copy")
+        fixture.controller.processPasteboardChange(
+            now: activationTime.addingTimeInterval(
+                ClipboardHistoryController.sourceApplicationAttributionGraceInterval + 0.2
+            )
+        )
+
+        XCTAssertEqual(fixture.controller.items.map(\.text), ["ordinary editor copy"])
+        fixture.controller.stop()
+    }
+
+    func testDelayedExcludedCopyAfterStablePollIsNotRead() async throws {
+        let fixture = makeFixture()
+        let editor = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Editor",
+            name: "Editor"
+        )
+        let secret = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Secret",
+            name: "Secret"
+        )
+        fixture.settings.addExcludedApplications([
+            ClipboardExcludedApplication(
+                bundleIdentifier: secret.bundleIdentifier,
+                name: secret.name
+            ),
+        ])
+        fixture.source.application = editor
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        let activationTime = Date()
+        fixture.controller.processPasteboardChange(now: activationTime)
+
+        fixture.source.recordActivation(secret)
+        fixture.source.recordActivation(editor)
+        fixture.controller.processPasteboardChange(now: activationTime.addingTimeInterval(0.1))
+
+        fixture.pasteboard.simulateCopy("delayed secret")
+        fixture.controller.processPasteboardChange(now: activationTime.addingTimeInterval(0.5))
 
         XCTAssertTrue(fixture.controller.items.isEmpty)
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
@@ -420,27 +490,39 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(fixture.persistence.savedItems.filter(\.hasCompletedImageTextIndexing).count, 3)
     }
 
-    func testStartupImageIndexingEventuallyProcessesMoreThanOneHundredItems() async {
-        let imageCount = 105
+    func testStartupImageIndexingUsesBoundedBudgetAndStillIndexesOnDemand() async {
+        let imageCount = ClipboardHistoryController.maximumBackgroundImageTextIndexItemCount + 5
         let images = (0..<imageCount).map { byte in
             let payload = imagePayload(data: Data([UInt8(byte % 255)]))
             return lazyImageItem(payloadLoader: { payload })
         }
         let fixture = makeFixture(
             initialItems: images,
+            imageIndexBatchPauseNanoseconds: 0,
             imageTextRecognizer: FakeClipboardImageTextRecognizer(text: "recognized")
         )
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
-        for _ in 0..<10_000 where fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count
-            < imageCount {
-            try? await Task.sleep(nanoseconds: 1_000_000)
+        let didUseBudget = await waitUntil(timeout: .seconds(5)) {
+            fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count
+                == ClipboardHistoryController.maximumBackgroundImageTextIndexItemCount
         }
 
+        XCTAssertTrue(didUseBudget)
         XCTAssertEqual(
             fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count,
-            imageCount
+            ClipboardHistoryController.maximumBackgroundImageTextIndexItemCount
         )
+
+        let onDemandItem = fixture.controller.items[
+            ClipboardHistoryController.maximumBackgroundImageTextIndexItemCount
+        ]
+        fixture.controller.requestImageTextIndexing(id: onDemandItem.id)
+        let didIndexOnDemand = await waitUntil {
+            fixture.controller.items.first(where: { $0.id == onDemandItem.id })?
+                .hasCompletedImageTextIndexing == true
+        }
+        XCTAssertTrue(didIndexOnDemand)
         fixture.controller.stop()
     }
 
@@ -478,20 +560,37 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let item = lazyImageItem(payloadLoader: { try loader.load() })
         let first = Task.detached { try item.loadPayload() }
         XCTAssertEqual(loader.started.wait(timeout: .now() + 2), .success)
-        let cancelledWaiter = Task.detached { try item.loadPayload() }
+        let waiterStarted = DispatchSemaphore(value: 0)
+        let cancelledWaiter = Task.detached {
+            waiterStarted.signal()
+            return try item.loadPayload()
+        }
+        XCTAssertEqual(waiterStarted.wait(timeout: .now() + 2), .success)
+        let waiterEnteredSingleFlightPath = await waitUntil {
+            item.waitingPayloadLoaderCountForTesting == 1
+        }
+        XCTAssertTrue(waiterEnteredSingleFlightPath)
+        XCTAssertEqual(loader.loadCount, 1)
         cancelledWaiter.cancel()
-        try await Task.sleep(nanoseconds: 20_000_000)
+
+        let cancellationFinished = expectation(description: "Cancelled payload waiter finished")
+        Task {
+            defer { cancellationFinished.fulfill() }
+            do {
+                _ = try await cancelledWaiter.value
+                XCTFail("A cancelled waiter must not receive or reload the payload")
+            } catch is CancellationError {
+                // Expected.
+            } catch {
+                XCTFail("Expected cancellation, received \(error)")
+            }
+        }
+        await fulfillment(of: [cancellationFinished], timeout: 2)
 
         loader.release.signal()
 
         let firstPayload = try await first.value
         XCTAssertEqual(firstPayload, .plainText("secret"))
-        do {
-            _ = try await cancelledWaiter.value
-            XCTFail("A cancelled waiter must not receive or reload the payload")
-        } catch is CancellationError {
-            // Expected.
-        }
         XCTAssertEqual(loader.loadCount, 1)
     }
 
@@ -517,22 +616,20 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let deleted = await fixture.controller.deleteItem(id: unrelatedText.id)
         XCTAssertTrue(deleted)
         await recognizer.releaseAll()
-        for _ in 0..<10_000 where fixture.controller.items.filter({
-            $0.hasCompletedImageTextIndexing
-        }).count
-            < imageCount {
-            try await Task.sleep(nanoseconds: 1_000_000)
+        let didUseBudget = await waitUntil(timeout: .seconds(5)) {
+            fixture.controller.items.filter(\.hasCompletedImageTextIndexing).count
+                == ClipboardHistoryController.maximumBackgroundImageTextIndexItemCount
         }
-        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertTrue(didUseBudget)
 
         let recognitionCallCount = await recognizer.callCount
         XCTAssertEqual(
             recognitionCallCount,
-            imageCount
+            ClipboardHistoryController.maximumBackgroundImageTextIndexItemCount
         )
         XCTAssertEqual(
             fixture.controller.items.filter { !$0.hasCompletedImageTextIndexing }.count,
-            0
+            imageCount - ClipboardHistoryController.maximumBackgroundImageTextIndexItemCount
         )
         fixture.controller.stop()
     }
@@ -989,6 +1086,26 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testClearUnpinnedCancelsPendingAsynchronousCapture() async {
+        let fixture = makeFixture()
+        fixture.pasteboard.requiresAsynchronousPayloadRead = true
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.simulateCopy("pending capture")
+        fixture.controller.processPasteboardChange()
+        let didStartRead = await waitUntil { fixture.pasteboard.asyncReadStarted }
+        XCTAssertTrue(didStartRead)
+
+        let didClear = await fixture.controller.clearUnpinnedHistory()
+        XCTAssertTrue(didClear)
+        fixture.pasteboard.completeAsynchronousRead()
+        let didFinishRead = await waitUntil { fixture.pasteboard.asyncReadCompleted }
+        XCTAssertTrue(didFinishRead)
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        fixture.controller.stop()
+    }
+
     func testIdleMonitoringPrunesExpiredItemsWithoutAClipboardChange() async throws {
         let expiration = try XCTUnwrap(ClipboardHistorySettings.defaults.expiration.interval)
         let referenceDate = Date()
@@ -1368,10 +1485,20 @@ final class ClipboardHistoryControllerTests: XCTestCase {
     }
 
     private func waitUntilLoaded(_ controller: ClipboardHistoryController) async {
-        for _ in 0..<100 where !controller.isLoaded {
-            await Task.yield()
+        let didLoad = await waitUntil { controller.isLoaded }
+        XCTAssertTrue(didLoad)
+    }
+
+    private func waitUntil(
+        timeout: Duration = .seconds(2),
+        condition: () -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertTrue(controller.isLoaded)
+        return condition()
     }
 
     private func waitForPersistence() async {
@@ -1571,6 +1698,7 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
     private(set) var typeNamesReadCount = 0
     private(set) var plainTextReadCount = 0
     private(set) var asyncReadStarted = false
+    private(set) var asyncReadCompleted = false
     private var asyncReadContinuation: CheckedContinuation<ClipboardPasteboardReadResult, Never>?
     private var asyncReadMaximumByteCount = 0
     private var asyncReadExpectedChangeCount = 0
@@ -1598,9 +1726,11 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
         asyncReadStarted = true
         asyncReadMaximumByteCount = maximumByteCount
         asyncReadExpectedChangeCount = expectedChangeCount
-        return await withCheckedContinuation { continuation in
+        let result = await withCheckedContinuation { continuation in
             asyncReadContinuation = continuation
         }
+        asyncReadCompleted = true
+        return result
     }
 
     func completeAsynchronousRead() {

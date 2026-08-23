@@ -245,9 +245,11 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
 
     func reset() throws {
         try lock.withLock {
+            // Delete the key first so a partially completed reset can never leave an empty store
+            // that silently continues using the pre-reset encryption key.
+            try keyStore.deleteKey()
             try removeDatabaseFilesLocked()
             try removeLegacyFileLocked()
-            try keyStore.deleteKey()
             cachedItems = [:]
             isInvalidated = false
         }

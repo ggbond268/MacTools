@@ -753,6 +753,7 @@ private enum ClipboardHistoryClearRequest: String, Identifiable {
 }
 
 struct ClipboardHistoryPanelPresentation: Equatable {
+    let showsLoading: Bool
     let showsErrorOnly: Bool
     let showsEmptyState: Bool
     let showsSearchEmptyState: Bool
@@ -762,10 +763,22 @@ struct ClipboardHistoryPanelPresentation: Equatable {
     static func resolve(
         itemCount: Int,
         visibleItemCount: Int,
-        hasStorageError: Bool
+        hasStorageError: Bool,
+        isLoaded: Bool
     ) -> Self {
+        guard isLoaded else {
+            return Self(
+                showsLoading: true,
+                showsErrorOnly: false,
+                showsEmptyState: false,
+                showsSearchEmptyState: false,
+                showsHistory: false,
+                showsInlineStorageError: false
+            )
+        }
         if itemCount == 0 {
             return Self(
+                showsLoading: false,
                 showsErrorOnly: hasStorageError,
                 showsEmptyState: !hasStorageError,
                 showsSearchEmptyState: false,
@@ -774,6 +787,7 @@ struct ClipboardHistoryPanelPresentation: Equatable {
             )
         }
         return Self(
+            showsLoading: false,
             showsErrorOnly: false,
             showsEmptyState: false,
             showsSearchEmptyState: visibleItemCount == 0,
@@ -1112,7 +1126,8 @@ private struct ClipboardHistoryPanelView: View {
         .resolve(
             itemCount: controller.items.count,
             visibleItemCount: visibleItems.count,
-            hasStorageError: controller.errorMessage != nil
+            hasStorageError: controller.errorMessage != nil,
+            isLoaded: controller.isLoaded
         )
     }
 
@@ -1187,7 +1202,15 @@ private struct ClipboardHistoryPanelView: View {
 
     @ViewBuilder
     private var panelContent: some View {
-        if presentation.showsErrorOnly, let errorMessage = controller.errorMessage {
+        if presentation.showsLoading {
+            ProgressView(
+                localization.string(
+                    "panel.status.loading",
+                    defaultValue: "正在载入加密历史记录…"
+                )
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if presentation.showsErrorOnly, let errorMessage = controller.errorMessage {
             ContentUnavailableView {
                 Label(
                     localization.string("panel.error.title", defaultValue: "无法读取剪贴板历史"),
@@ -1583,7 +1606,31 @@ private struct ClipboardHistoryPanelView: View {
                 Task { await onDelete(item.id) }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rowAccessibilityLabel(item))
+        .accessibilityHint(
+            localization.string("panel.footer.paste", defaultValue: "粘贴")
+        )
+        .accessibilityIdentifier("mactools.clipboard-history.item.\(item.id.uuidString)")
+        .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction {
+            onPasteAndClose(item.id, false)
+        }
+    }
+
+    private func rowAccessibilityLabel(_ item: ClipboardHistoryItem) -> String {
+        var parts = [
+            displayTitle(item).replacingOccurrences(of: "\n", with: " "),
+            detailKindTitle(item),
+            item.sourceApplication?.name
+                ?? localization.string("common.unknownSource", defaultValue: "未知来源"),
+            ClipboardHistoryTimestampFormatting.exactString(for: item.capturedAt, locale: locale),
+        ]
+        if item.isPinned {
+            parts.append(localization.string("panel.section.pinned", defaultValue: "固定片段"))
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder

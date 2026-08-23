@@ -24,9 +24,11 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         let presentation = ClipboardHistoryPanelPresentation.resolve(
             itemCount: 2,
             visibleItemCount: 2,
-            hasStorageError: true
+            hasStorageError: true,
+            isLoaded: true
         )
 
+        XCTAssertFalse(presentation.showsLoading)
         XCTAssertFalse(presentation.showsErrorOnly)
         XCTAssertTrue(presentation.showsHistory)
         XCTAssertTrue(presentation.showsInlineStorageError)
@@ -36,12 +38,28 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         let presentation = ClipboardHistoryPanelPresentation.resolve(
             itemCount: 0,
             visibleItemCount: 0,
-            hasStorageError: true
+            hasStorageError: true,
+            isLoaded: true
         )
 
+        XCTAssertFalse(presentation.showsLoading)
         XCTAssertTrue(presentation.showsErrorOnly)
         XCTAssertFalse(presentation.showsHistory)
         XCTAssertFalse(presentation.showsInlineStorageError)
+    }
+
+    func testRetryLoadingDoesNotPresentEmptyHistory() {
+        let presentation = ClipboardHistoryPanelPresentation.resolve(
+            itemCount: 0,
+            visibleItemCount: 0,
+            hasStorageError: false,
+            isLoaded: false
+        )
+
+        XCTAssertTrue(presentation.showsLoading)
+        XCTAssertFalse(presentation.showsEmptyState)
+        XCTAssertFalse(presentation.showsErrorOnly)
+        XCTAssertFalse(presentation.showsHistory)
     }
 
     func testFocusRestorationTargetIsReplacedAndConsumedForEveryPresentation() {

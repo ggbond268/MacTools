@@ -337,6 +337,7 @@ private final class ClipboardHistoryPayloadReference: @unchecked Sendable {
     private var cachedPayload: ClipboardHistoryPayload?
     private var loader: (@Sendable () throws -> ClipboardHistoryPayload)?
     private var isLoading = false
+    private var waitingLoaderCount = 0
     private var loadGeneration: UInt64 = 0
     private var lastLoadFailure: (generation: UInt64, error: any Error)?
 
@@ -369,11 +370,18 @@ private final class ClipboardHistoryPayloadReference: @unchecked Sendable {
 
         if isLoading {
             let observedGeneration = loadGeneration
+            waitingLoaderCount += 1
+            defer {
+                waitingLoaderCount -= 1
+                condition.unlock()
+            }
             repeat {
-                condition.wait()
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
+                condition.wait(until: Date(timeIntervalSinceNow: 0.05))
             } while isLoading && loadGeneration == observedGeneration
 
-            defer { condition.unlock() }
             guard !Task.isCancelled else { throw CancellationError() }
             if let cachedPayload {
                 return cachedPayload
@@ -423,6 +431,10 @@ private final class ClipboardHistoryPayloadReference: @unchecked Sendable {
             guard loader != nil else { return }
             cachedPayload = nil
         }
+    }
+
+    var waitingLoaderCountForTesting: Int {
+        condition.withLock { waitingLoaderCount }
     }
 }
 
@@ -523,6 +535,10 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
 
     func loadPayload() throws -> ClipboardHistoryPayload {
         try payloadReference.load()
+    }
+
+    var waitingPayloadLoaderCountForTesting: Int {
+        payloadReference.waitingLoaderCountForTesting
     }
 
     func configurePayloadLoader(

@@ -487,6 +487,8 @@ private final class ClipboardHistoryPersistenceWorker: @unchecked Sendable {
 final class ClipboardHistoryController: NSObject, ObservableObject {
     static let maximumSynchronousCaptureByteCount = 256 * 1_024
     static let imageTextIndexBatchSize = 25
+    static let maximumBackgroundImageTextIndexItemCount = 100
+    static let sourceApplicationAttributionGraceInterval: TimeInterval = 1.5
 
     @Published private(set) var items: [ClipboardHistoryItem] = []
     @Published private(set) var errorMessage: String?
@@ -517,6 +519,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private var imageIndexingTask: Task<Void, Never>?
     private var imageIndexBatchContinuationTask: Task<Void, Never>?
     private var continuesBackgroundImageIndexing = false
+    private var remainingBackgroundImageTextIndexItemCount = 0
     private var imageIndexPersistenceTask: Task<Void, Never>?
     private var hasPendingImageIndexPersistence = false
     private var pendingImageIndexPersistenceCount = 0
@@ -537,6 +540,9 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private var needsSettingsReconciliation = false
     private var lastSeenChangeCount: Int
     private var lastObservedFrontmostApplication: ClipboardSourceApplication?
+    private var recentSourceApplicationAttribution: [
+        String: (application: ClipboardSourceApplication, expiresAt: Date)
+    ] = [:]
     private var currentHistoryItemPasteboardState: (itemID: UUID, changeCount: Int)?
 
     init(
@@ -620,12 +626,12 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         loadTask?.cancel()
         loadTask = nil
         cancelPendingCaptureProcessing()
-        pasteboardPayloadReadTask?.cancel()
-        pasteboardPayloadReadTask = nil
+        cancelPendingPasteboardPayloadRead()
         cancelImageIndexing()
         flushPendingImageIndexPersistence()
         currentHistoryItemPasteboardState = nil
         clearCaptureSuppression(notifyCancellation: false)
+        discardSourceApplicationAttribution()
         persistenceWorker.flush()
     }
 
@@ -684,6 +690,10 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             // copy is still being committed, the next delta is conservatively attributed to both
             // the previous and current applications.
             lastObservedFrontmostApplication = sourceContext.frontmostApplication()
+            retainSourceApplicationAttribution(
+                sourceContext.takeRecentlyActivatedApplications(),
+                now: now
+            )
             return
         }
         lastSeenChangeCount = currentChangeCount
@@ -692,6 +702,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         // Consume suppression before asking for types, source context, or text. Private copies must
         // never cross the payload-reading boundary, even briefly in memory.
         if suppressPasteboardChangeIfNeeded() {
+            discardSourceApplicationAttribution()
             return
         }
         guard !isClearingHistory else { return }
@@ -702,7 +713,11 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return
         }
 
-        let recentlyActivatedApplications = sourceContext.takeRecentlyActivatedApplications()
+        retainSourceApplicationAttribution(
+            sourceContext.takeRecentlyActivatedApplications(),
+            now: now
+        )
+        let recentlyActivatedApplications = takeSourceApplicationAttribution(now: now)
         let previousSourceApplication = lastObservedFrontmostApplication
         let sourceApplication = sourceContext.frontmostApplication()
         lastObservedFrontmostApplication = sourceApplication
@@ -1008,7 +1023,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         hasObservedSuppressedChange = false
         captureSuppressionMode = nil
         isIgnoringNextCopy = false
-        sourceContext.discardRecentlyActivatedApplications()
+        discardSourceApplicationAttribution()
         notifyChanged()
         if notifyCancellation,
            !hadObservedSuppressedChange,
@@ -1150,6 +1165,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @discardableResult
     func clearUnpinnedHistory() async -> Bool {
+        cancelPendingPasteboardPayloadRead()
         let retained = items.filter(\.isPinned)
         return await replaceItemsDurably(with: retained)
     }
@@ -1185,6 +1201,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         startMonitoringIfPossible()
         // Queue only lightweight identifiers, then process one image at a time. This keeps
         // startup work bounded without permanently leaving older images unsearchable.
+        remainingBackgroundImageTextIndexItemCount =
+            Self.maximumBackgroundImageTextIndexItemCount
         continuesBackgroundImageIndexing = true
         enqueueNextBackgroundImageTextIndexBatch()
     }
@@ -1277,7 +1295,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             self.hasObservedSuppressedChange = false
             self.captureSuppressionMode = nil
             self.isIgnoringNextCopy = false
-            self.sourceContext.discardRecentlyActivatedApplications()
+            self.discardSourceApplicationAttribution()
             self.notifyChanged()
             if !hadObservedSuppressedChange, let mode {
                 self.onCaptureSuppressionEvent?(.expired(mode: mode))
@@ -1287,6 +1305,34 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @objc private func checkPasteboardTimer() {
         processPasteboardChange()
+    }
+
+    private func retainSourceApplicationAttribution(
+        _ applications: [ClipboardSourceApplication],
+        now: Date
+    ) {
+        recentSourceApplicationAttribution = recentSourceApplicationAttribution.filter {
+            $0.value.expiresAt >= now
+        }
+        let expiresAt = now.addingTimeInterval(Self.sourceApplicationAttributionGraceInterval)
+        for application in applications {
+            recentSourceApplicationAttribution[application.bundleIdentifier.lowercased()] = (
+                application,
+                expiresAt
+            )
+        }
+    }
+
+    private func takeSourceApplicationAttribution(now: Date) -> [ClipboardSourceApplication] {
+        defer { recentSourceApplicationAttribution.removeAll(keepingCapacity: true) }
+        return recentSourceApplicationAttribution.values.compactMap { attribution in
+            attribution.expiresAt >= now ? attribution.application : nil
+        }
+    }
+
+    private func discardSourceApplicationAttribution() {
+        recentSourceApplicationAttribution.removeAll(keepingCapacity: true)
+        sourceContext.discardRecentlyActivatedApplications()
     }
 
     private func persistCurrentItems() {
@@ -1342,8 +1388,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private func resetPersistentHistory() async -> Bool {
         guard !isClearingHistory else { return false }
         cancelPendingCaptureProcessing()
-        pasteboardPayloadReadTask?.cancel()
-        pasteboardPayloadReadTask = nil
+        cancelPendingPasteboardPayloadRead()
         cancelImageIndexing()
         cancelScheduledImageIndexPersistence()
         isClearingHistory = true
@@ -1418,6 +1463,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     private func enqueueNextBackgroundImageTextIndexBatch() {
         guard continuesBackgroundImageIndexing,
+              remainingBackgroundImageTextIndexItemCount > 0,
               imageIndexingTask == nil,
               pendingImageIndexItemIDs.isEmpty,
               isLoaded,
@@ -1431,7 +1477,17 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 && !self.pendingImageIndexItemIDSet.contains($0.id)
                 && !self.imageIndexAttemptedItemIDs.contains($0.id)
         }
-        enqueueImageTextIndexing(for: Array(candidates.prefix(Self.imageTextIndexBatchSize)))
+        let batchSize = min(
+            Self.imageTextIndexBatchSize,
+            remainingBackgroundImageTextIndexItemCount
+        )
+        let batch = Array(candidates.prefix(batchSize))
+        guard !batch.isEmpty else {
+            continuesBackgroundImageIndexing = false
+            return
+        }
+        remainingBackgroundImageTextIndexItemCount -= batch.count
+        enqueueImageTextIndexing(for: batch)
     }
 
     private func startNextImageTextIndexingIfNeeded() {
@@ -1510,6 +1566,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     private func scheduleNextBackgroundImageTextIndexBatchIfNeeded() {
         guard continuesBackgroundImageIndexing,
+              remainingBackgroundImageTextIndexItemCount > 0,
               imageIndexBatchContinuationTask == nil,
               imageIndexingTask == nil,
               pendingImageIndexItemIDs.isEmpty,
@@ -1570,9 +1627,15 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         imageIndexBatchContinuationTask?.cancel()
         imageIndexBatchContinuationTask = nil
         continuesBackgroundImageIndexing = false
+        remainingBackgroundImageTextIndexItemCount = 0
         pendingImageIndexItemIDs.removeAll()
         pendingImageIndexItemIDSet.removeAll()
         imageIndexAttemptedItemIDs.removeAll()
+    }
+
+    private func cancelPendingPasteboardPayloadRead() {
+        pasteboardPayloadReadTask?.cancel()
+        pasteboardPayloadReadTask = nil
     }
 
     var pendingImageIndexItemCountForTesting: Int {

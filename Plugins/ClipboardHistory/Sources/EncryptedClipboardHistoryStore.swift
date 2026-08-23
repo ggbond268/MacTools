@@ -262,8 +262,10 @@ final class EncryptedClipboardHistoryStore: ClipboardHistoryPersisting, @uncheck
         lock.lock()
         defer { lock.unlock() }
 
-        try removePayloadFileIfPresent()
+        // Cryptographically erase first. If file cleanup subsequently fails, the old payload is
+        // still unreadable and a later reset can finish removing it without reusing the old key.
         try keyStore.deleteKey()
+        try removePayloadFileIfPresent()
     }
 
     func removeAll() throws {

@@ -271,6 +271,23 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertTrue(try fixture.store.load().isEmpty)
     }
 
+    func testResetKeyDeletionFailurePreservesHistoryUntilRotationCanSucceed() throws {
+        let fixture = try makeFixture()
+        try fixture.store.save([sampleItem(index: 1)])
+        let previousKey = try XCTUnwrap(fixture.keyStore.currentKey)
+        fixture.keyStore.failNextDelete()
+
+        XCTAssertThrowsError(try fixture.store.reset())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.databaseURL.path))
+        XCTAssertEqual(fixture.keyStore.currentKey, previousKey)
+        XCTAssertEqual(try fixture.store.load().map(\.text), ["clipboard item 1"])
+
+        try fixture.store.reset()
+        try fixture.store.prepare()
+        XCTAssertNotEqual(fixture.keyStore.currentKey, previousKey)
+        XCTAssertTrue(try fixture.store.load().isEmpty)
+    }
+
     func testRemoveAllRemovesRollbackJournalAndInvalidatesStore() throws {
         let fixture = try makeFixture()
         try fixture.store.save([sampleItem(index: 1)])

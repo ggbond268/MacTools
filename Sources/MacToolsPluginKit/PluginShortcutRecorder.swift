@@ -24,6 +24,22 @@ enum PluginShortcutRecorderValidation {
     }
 }
 
+enum PluginShortcutRecorderAccessibility {
+    static func value(
+        displayText: String,
+        placeholder: String,
+        isRecording: Bool
+    ) -> String {
+        if isRecording {
+            return PluginKitLocalization.shortcutRecorderPreviewPlaceholder
+        }
+        if displayText.isEmpty || displayText == "None" {
+            return placeholder
+        }
+        return displayText
+    }
+}
+
 @MainActor
 private final class PluginShortcutRecorderDisplayState: ObservableObject {
     @Published var previewText = PluginKitLocalization.shortcutRecorderPreviewPlaceholder
@@ -258,6 +274,14 @@ private struct PluginShortcutRecorderButton: View {
     let onBeginRecording: (() -> Void)?
     let onEndRecording: (() -> Void)?
 
+    private var accessibilityValue: String {
+        PluginShortcutRecorderAccessibility.value(
+            displayText: displayText,
+            placeholder: placeholder,
+            isRecording: isPresented
+        )
+    }
+
     var body: some View {
         Button {
             isPresented = true
@@ -284,6 +308,7 @@ private struct PluginShortcutRecorderButton: View {
         }
         .help(PluginKitLocalization.shortcutRecorderHelp(title: title))
         .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(accessibilityValue))
         .onHover { hovering in
             isHovered = hovering
             (hovering ? NSCursor.pointingHand : NSCursor.arrow).set()
