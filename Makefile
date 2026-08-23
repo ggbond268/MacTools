@@ -159,8 +159,15 @@ package-plugins-release: generate
 # sanitizer, and other DerivedData copies. Use ALLOW_MULTIPLE_DEBUG_APPS=1
 # only when a deliberately isolated bundle needs to coexist.
 stop-debug-app:
-	@if [[ "$(ALLOW_MULTIPLE_DEBUG_APPS)" == "1" ]]; then exit 0; fi
 	@PIDS=(); \
+	if [[ "$(ALLOW_MULTIPLE_DEBUG_APPS)" == "1" ]]; then exit 0; fi; \
+	INFO_PLIST="$(INSTALLED_APP_PATH)/Contents/Info.plist"; \
+	if [[ -f "$$INFO_PLIST" ]]; then \
+		BUNDLE_IDENTIFIER="$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$$INFO_PLIST" 2>/dev/null || true)"; \
+		if [[ -n "$$BUNDLE_IDENTIFIER" ]]; then \
+			/bin/launchctl kill TERM "gui/$$(/usr/bin/id -u)/$$BUNDLE_IDENTIFIER.cli-broker" >/dev/null 2>&1 || true; \
+		fi; \
+	fi; \
 	while read -r PID COMMAND; do \
 		if [[ "$$COMMAND" == "$(INSTALLED_APP_EXECUTABLE)" \
 			|| "$$COMMAND" == "$(INSTALLED_APP_EXECUTABLE) "* ]]; then \
