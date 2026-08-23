@@ -390,6 +390,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @Published private(set) var items: [ClipboardHistoryItem] = []
     @Published private(set) var errorMessage: String?
+    @Published private(set) var storageError: ClipboardHistoryStoreError?
     @Published private(set) var isLoaded = false
     @Published private(set) var isIgnoringNextCopy = false
     @Published private(set) var isClearingHistory = false
@@ -471,6 +472,16 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         isLoaded && errorMessage == nil && !isClearingHistory && timer != nil
     }
 
+    var canResetUnreadablePersistentHistory: Bool {
+        return switch storageError {
+        case .missingEncryptionKey, .invalidEncryptionKey, .invalidEnvelope,
+             .authenticationFailed, .historyTooLarge:
+            true
+        default:
+            false
+        }
+    }
+
     var canSuppressNextCapture: Bool {
         isCollectionOperational
     }
@@ -515,9 +526,11 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             items = []
             refreshCapacityState()
             errorMessage = nil
+            storageError = nil
             notifyChanged()
         } catch {
             errorMessage = errorMessageProvider(error)
+            storageError = error as? ClipboardHistoryStoreError
             notifyChanged()
         }
     }
@@ -536,6 +549,17 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         }
         refreshCapacityState()
         notifyChanged()
+    }
+
+    func retryStorageAccess() {
+        guard loadTask == nil, !isClearingHistory else { return }
+        timer?.invalidate()
+        timer = nil
+        errorMessage = nil
+        storageError = nil
+        isLoaded = false
+        notifyChanged()
+        start()
     }
 
     func processPasteboardChange(now: Date = Date()) {
@@ -934,10 +958,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @discardableResult
     func clearAllHistory() async -> Bool {
-        if errorMessage != nil {
-            return await resetPersistentHistory()
-        }
+        guard errorMessage == nil else { return false }
         return await replaceItemsDurably(with: [])
+    }
+
+    @discardableResult
+    func resetUnreadablePersistentHistory() async -> Bool {
+        guard canResetUnreadablePersistentHistory else { return false }
+        return await resetPersistentHistory()
     }
 
     func matchingItems(query: String) -> [ClipboardHistoryItem] {
@@ -949,6 +977,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         isLoaded = true
         let pruned = ClipboardRetentionPolicy.prune(loadedItems, settings: settings.snapshot)
         items = pruned
+        errorMessage = nil
+        storageError = nil
         refreshCapacityState()
         if pruned != loadedItems {
             persistCurrentItems()
@@ -965,6 +995,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         loadTask = nil
         isLoaded = true
         errorMessage = errorMessageProvider(error)
+        storageError = error as? ClipboardHistoryStoreError
         notifyChanged()
     }
 
@@ -1120,6 +1151,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             items = []
             refreshCapacityState()
             errorMessage = nil
+            storageError = nil
             isLoaded = true
             lastSeenChangeCount = pasteboard.changeCount
             isClearingHistory = false
@@ -1130,6 +1162,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         } catch {
             isClearingHistory = false
             errorMessage = errorMessageProvider(error)
+            storageError = error as? ClipboardHistoryStoreError
             notifyChanged()
             return false
         }
@@ -1159,6 +1192,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         items = durableItems
         refreshCapacityState()
         errorMessage = errorMessageProvider(error)
+        storageError = error as? ClipboardHistoryStoreError
         timer?.invalidate()
         timer = nil
         notifyChanged()

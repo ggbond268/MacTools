@@ -47,7 +47,7 @@ final class ClipboardHistoryPlugin:
         ]
     }
 
-    private enum ShortcutID {
+    enum ShortcutID {
         static let privateCopy = "private-copy"
         static let ignoreNextCopy = "ignore-next-copy"
         static let pastePlainText = "paste-clipboard-as-plain-text"
@@ -58,6 +58,13 @@ final class ClipboardHistoryPlugin:
 
     private enum PermissionID {
         static let accessibility = "accessibility"
+    }
+
+    private enum SettingsSectionID {
+        static let essentials = "clipboard-essential-settings"
+        static let retention = "clipboard-retention-settings"
+        static let exclusions = "clipboard-exclusion-settings"
+        static let data = "clipboard-data-settings"
     }
 
     let metadata: PluginMetadata
@@ -194,16 +201,57 @@ final class ClipboardHistoryPlugin:
             ),
             sections: [
                 PluginSettingsSection(
-                    id: "clipboard-settings",
+                    id: SettingsSectionID.essentials,
                     presentation: .edgeToEdge
                 ) { [weak self] context in
                     if let self {
                         ClipboardHistorySettingsView(
                             controller: self.controller,
                             localization: self.localization,
-                            privacyShortcutItems: context.shortcutItems.filter {
-                                $0.settingsGroupID == ShortcutID.privacyGroup
-                            }
+                            settingsContext: context,
+                            contentSections: [.essentials]
+                        )
+                    } else {
+                        EmptyView()
+                    }
+                },
+                PluginSettingsSection(
+                    id: SettingsSectionID.retention,
+                    presentation: .edgeToEdge
+                ) { [weak self] _ in
+                    if let self {
+                        ClipboardHistorySettingsView(
+                            controller: self.controller,
+                            localization: self.localization,
+                            contentSections: [.retention]
+                        )
+                    } else {
+                        EmptyView()
+                    }
+                },
+                PluginSettingsSection(
+                    id: SettingsSectionID.exclusions,
+                    presentation: .edgeToEdge
+                ) { [weak self] _ in
+                    if let self {
+                        ClipboardHistorySettingsView(
+                            controller: self.controller,
+                            localization: self.localization,
+                            contentSections: [.exclusions]
+                        )
+                    } else {
+                        EmptyView()
+                    }
+                },
+                PluginSettingsSection(
+                    id: SettingsSectionID.data,
+                    presentation: .edgeToEdge
+                ) { [weak self] _ in
+                    if let self {
+                        ClipboardHistorySettingsView(
+                            controller: self.controller,
+                            localization: self.localization,
+                            contentSections: [.data]
                         )
                     } else {
                         EmptyView()
@@ -362,7 +410,7 @@ final class ClipboardHistoryPlugin:
                 systemImage: "keyboard",
                 actionIDs: [ActionID.openHistory],
                 shortcutDefinitionIDs: [ShortcutID.pastePlainText],
-                placementAfterSectionID: "clipboard-settings"
+                placementAfterSectionID: SettingsSectionID.essentials
             ),
             PluginShortcutSettingsGroupConfiguration(
                 id: ShortcutID.privacyGroup,
@@ -376,7 +424,7 @@ final class ClipboardHistoryPlugin:
                 ),
                 systemImage: "eye.slash",
                 shortcutDefinitionIDs: [ShortcutID.privateCopy, ShortcutID.ignoreNextCopy],
-                placementAfterSectionID: "clipboard-settings"
+                placementAfterSectionID: SettingsSectionID.essentials
             ),
             PluginShortcutSettingsGroupConfiguration(
                 id: ShortcutID.collectionGroup,
@@ -396,7 +444,7 @@ final class ClipboardHistoryPlugin:
                     ActionID.clearUnpinnedHistory,
                     ActionID.clearAllHistory,
                 ],
-                placementAfterSectionID: "clipboard-settings"
+                placementAfterSectionID: SettingsSectionID.data
             ),
         ]
     }
@@ -507,7 +555,10 @@ final class ClipboardHistoryPlugin:
                     defaultValue: "正在清除剪贴板历史。"
                 ))
             }
-            return controller.items.isEmpty && controller.errorMessage == nil
+            if let errorMessage = controller.errorMessage {
+                return .unavailable(errorMessage)
+            }
+            return controller.items.isEmpty
                 ? .unavailable(localization.string("availability.noItems", defaultValue: "没有可清除的记录。"))
                 : .available
         default:

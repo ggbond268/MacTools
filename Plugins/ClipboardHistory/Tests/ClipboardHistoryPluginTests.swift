@@ -1,5 +1,6 @@
 import Foundation
 import MacToolsPluginKit
+import Security
 import XCTest
 @testable import ClipboardHistoryPlugin
 
@@ -68,6 +69,15 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         let page = try XCTUnwrap(plugin.settingsPage)
         XCTAssertEqual(page.body.layout, .form)
         XCTAssertTrue(page.body.integratedShortcutGroupIDs.isEmpty)
+        guard case let .form(sections) = page.body else {
+            return XCTFail("Expected form settings")
+        }
+        XCTAssertEqual(sections.map(\.id), [
+            "clipboard-essential-settings",
+            "clipboard-retention-settings",
+            "clipboard-exclusion-settings",
+            "clipboard-data-settings",
+        ])
         XCTAssertEqual(plugin.shortcutSettingsGroups.map(\.id), [
             "primary-shortcuts",
             "privacy-copy-shortcuts",
@@ -89,6 +99,14 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             ClipboardHistoryPlugin.ActionID.clearUnpinnedHistory,
             ClipboardHistoryPlugin.ActionID.clearAllHistory,
         ])
+        XCTAssertEqual(
+            plugin.shortcutSettingsGroups.map(\.placementAfterSectionID),
+            [
+                "clipboard-essential-settings",
+                "clipboard-essential-settings",
+                "clipboard-data-settings",
+            ]
+        )
         XCTAssertNotNil(plugin.primaryPanel)
         XCTAssertEqual(plugin.primaryPanelDescriptor.controlStyle, .button)
     }
@@ -118,7 +136,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility"])
     }
 
-    func testInitialSetupCompletionPersistsAcrossSettingsStoreInstances() {
+    func testInitialSetupPresentationAndCompletionPersistIndependently() {
         let suiteName = "ClipboardHistoryInitialSetupTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -132,12 +150,61 @@ final class ClipboardHistoryPluginTests: XCTestCase {
 
         let firstStore = ClipboardHistorySettingsStore(storage: storage)
         XCTAssertFalse(firstStore.hasCompletedInitialSetup)
-
-        firstStore.completeInitialSetup()
-        XCTAssertTrue(firstStore.hasCompletedInitialSetup)
+        XCTAssertFalse(firstStore.hasPresentedInitialSetup)
+        XCTAssertTrue(firstStore.shouldAutomaticallyPresentInitialSetup())
+        XCTAssertFalse(firstStore.shouldAutomaticallyPresentInitialSetup())
 
         let restoredStore = ClipboardHistorySettingsStore(storage: storage)
+        XCTAssertFalse(restoredStore.hasCompletedInitialSetup)
+        XCTAssertTrue(restoredStore.hasPresentedInitialSetup)
+        XCTAssertFalse(restoredStore.shouldAutomaticallyPresentInitialSetup())
+
+        restoredStore.completeInitialSetup()
         XCTAssertTrue(restoredStore.hasCompletedInitialSetup)
+
+        let reopenedStore = ClipboardHistorySettingsStore(storage: storage)
+        XCTAssertTrue(reopenedStore.hasCompletedInitialSetup)
+        XCTAssertTrue(reopenedStore.hasPresentedInitialSetup)
+        XCTAssertFalse(reopenedStore.shouldAutomaticallyPresentInitialSetup())
+    }
+
+    func testSettingsContextCanMutateActionBackedShortcutFromSetup() {
+        let item = PluginSettingsActionShortcutItem(
+            actionID: ClipboardHistoryPlugin.ActionID.openHistory,
+            title: "Open Clipboard History",
+            description: "Open or close the panel.",
+            bindingText: "⌥ + ⌘ + V",
+            canAssign: true,
+            canClear: true
+        )
+        var recordedActionID: String?
+        var clearedActionID: String?
+        let context = PluginSettingsContext(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            actionShortcutItems: [item],
+            recordActionShortcut: { actionID, _ in
+                recordedActionID = actionID
+                return nil
+            },
+            clearActionShortcut: { actionID in
+                clearedActionID = actionID
+            }
+        )
+
+        XCTAssertEqual(
+            context.actionShortcutItem(actionID: ClipboardHistoryPlugin.ActionID.openHistory)?.bindingText,
+            "⌥ + ⌘ + V"
+        )
+        XCTAssertEqual(
+            context.recordActionShortcut(
+                ShortcutBinding(keyCode: 9, modifiers: [.command, .option]),
+                for: ClipboardHistoryPlugin.ActionID.openHistory
+            ),
+            .accepted
+        )
+        context.clearActionShortcut(for: ClipboardHistoryPlugin.ActionID.openHistory)
+        XCTAssertEqual(recordedActionID, ClipboardHistoryPlugin.ActionID.openHistory)
+        XCTAssertEqual(clearedActionID, ClipboardHistoryPlugin.ActionID.openHistory)
     }
 
     func testLegacyUnlimitedItemCountMigratesToTenThousand() {
@@ -459,36 +526,56 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertNotNil(plugin.controller.errorMessage)
         XCTAssertFalse(plugin.controller.isClearingHistory)
         XCTAssertEqual(plugin.controller.items, persistence.items)
-        XCTAssertTrue(plugin.actionAvailability(for: clearAll).isAvailable)
+        XCTAssertFalse(plugin.actionAvailability(for: clearAll).isAvailable)
 
         let retryResult = try await plugin.beginAction(
             ActionInvocation(reference: clearAll, source: .test, mode: .background)
         ).result()
-        XCTAssertEqual(retryResult, .succeeded())
-        XCTAssertEqual(persistence.resetCount, 1)
-        XCTAssertTrue(plugin.controller.items.isEmpty)
-        XCTAssertNil(plugin.controller.errorMessage)
+        guard case .failed = retryResult else {
+            return XCTFail("Expected clear-all to remain unavailable while storage is blocked")
+        }
+        XCTAssertEqual(persistence.resetCount, 0)
+        XCTAssertEqual(plugin.controller.items, persistence.items)
+        XCTAssertNotNil(plugin.controller.errorMessage)
         plugin.controller.stop()
     }
 
-    func testClearAllResetsUnreadablePersistentHistory() async throws {
+    func testUnreadablePersistentHistoryRequiresExplicitReset() async throws {
         let persistence = LoadFailingResettableClipboardHistoryPersistence()
         let plugin = makePlugin(persistence: persistence)
         plugin.controller.start()
         await waitUntilLoaded(plugin.controller)
         XCTAssertNotNil(plugin.controller.errorMessage)
         let clearAll = reference(plugin, actionID: ClipboardHistoryPlugin.ActionID.clearAllHistory)
-        XCTAssertTrue(plugin.actionAvailability(for: clearAll).isAvailable)
+        XCTAssertFalse(plugin.actionAvailability(for: clearAll).isAvailable)
+        XCTAssertTrue(plugin.controller.canResetUnreadablePersistentHistory)
 
-        let result = try await plugin.beginAction(
-            ActionInvocation(reference: clearAll, source: .test, mode: .background)
-        ).result()
+        let result = await plugin.controller.resetUnreadablePersistentHistory()
 
-        XCTAssertEqual(result, .succeeded())
+        XCTAssertTrue(result)
         XCTAssertEqual(persistence.resetCount, 1)
         XCTAssertNil(plugin.controller.errorMessage)
         XCTAssertTrue(plugin.controller.items.isEmpty)
         XCTAssertTrue(plugin.controller.canSuppressNextCapture)
+        plugin.controller.stop()
+    }
+
+    func testTemporaryKeychainFailureCanRetryWithoutResettingHistory() async throws {
+        let item = historyItem()
+        let persistence = RetryableKeychainClipboardHistoryPersistence(items: [item])
+        let plugin = makePlugin(persistence: persistence)
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        XCTAssertEqual(plugin.controller.storageError, .keychain(errSecInteractionNotAllowed))
+        XCTAssertTrue(plugin.controller.items.isEmpty)
+
+        plugin.controller.retryStorageAccess()
+        await waitUntilLoaded(plugin.controller)
+
+        XCTAssertNil(plugin.controller.errorMessage)
+        XCTAssertNil(plugin.controller.storageError)
+        XCTAssertEqual(plugin.controller.items.map(\.id), [item.id])
+        XCTAssertEqual(persistence.resetCount, 0)
         plugin.controller.stop()
     }
 
@@ -719,6 +806,39 @@ private final class LoadFailingResettableClipboardHistoryPersistence: ClipboardH
 
     func load() throws -> [ClipboardHistoryItem] {
         throw ClipboardHistoryStoreError.authenticationFailed
+    }
+
+    func save(_ items: [ClipboardHistoryItem]) throws {}
+
+    func reset() throws {
+        lock.withLock { resets += 1 }
+    }
+
+    func removeAll() throws {}
+}
+
+private final class RetryableKeychainClipboardHistoryPersistence: ClipboardHistoryPersisting, @unchecked Sendable {
+    private let lock = NSLock()
+    private let items: [ClipboardHistoryItem]
+    private var loadCount = 0
+    private var resets = 0
+
+    init(items: [ClipboardHistoryItem]) {
+        self.items = items
+    }
+
+    var resetCount: Int { lock.withLock { resets } }
+
+    func prepare() throws {}
+
+    func load() throws -> [ClipboardHistoryItem] {
+        try lock.withLock {
+            loadCount += 1
+            if loadCount == 1 {
+                throw ClipboardHistoryStoreError.keychain(errSecInteractionNotAllowed)
+            }
+            return items
+        }
     }
 
     func save(_ items: [ClipboardHistoryItem]) throws {}

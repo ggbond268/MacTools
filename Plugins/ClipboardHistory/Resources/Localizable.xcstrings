@@ -76,6 +76,231 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "固定項目已佔滿歷史記錄容量" } }
       }
     },
+    "settings.storage.status.preparing": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "جارٍ الإعداد" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Wird vorbereitet" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Preparing" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Preparando" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Préparation" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "準備中" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "준비 중" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Preparando" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Подготовка" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "准备中" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "準備中" } }
+      }
+    },
+    "settings.storage.encrypted.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تخزين محلي مشفّر" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Verschlüsselter lokaler Speicher" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Encrypted Local Storage" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Almacenamiento local cifrado" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Stockage local chiffré" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "暗号化ローカルストレージ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "암호화된 로컬 저장 공간" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Armazenamento local criptografado" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Локальное зашифрованное хранилище" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "本机加密存储" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "本機加密儲存空間" } }
+      }
+    },
+    "settings.storage.status.ready": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "جاهز" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Bereit" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Ready" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Listo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Prêt" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "準備完了" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "준비됨" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Pronto" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Готово" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已就绪" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已就緒" } }
+      }
+    },
+    "settings.storage.encrypted.description": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يُحفظ السجل في قاعدة بيانات محلية مشفّرة؛ تحفظ سلسلة المفاتيح المفتاح المحلي فقط ولا تتطلب سلسلة مفاتيح iCloud." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Der Verlauf wird in einer lokalen verschlüsselten Datenbank gespeichert; der Schlüsselbund enthält nur den lokalen Schlüssel. iCloud-Schlüsselbund ist nicht erforderlich." } },
+        "en": { "stringUnit": { "state": "translated", "value": "History is stored in a local encrypted database; Keychain holds only the local key. iCloud Keychain is not required." } },
+        "es": { "stringUnit": { "state": "translated", "value": "El historial se guarda en una base de datos local cifrada; el Llavero solo contiene la clave local. No se requiere el Llavero de iCloud." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "L’historique est stocké dans une base locale chiffrée ; le trousseau ne contient que la clé locale. Le trousseau iCloud n’est pas requis." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "履歴はローカルの暗号化データベースに保存され、キーチェーンにはローカルキーのみ保持されます。iCloudキーチェーンは不要です。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기록은 로컬 암호화 데이터베이스에 저장되고 키체인에는 로컬 키만 보관됩니다. iCloud 키체인은 필요하지 않습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "O histórico é salvo em um banco de dados local criptografado; as Chaves guardam apenas a chave local. As Chaves do iCloud não são necessárias." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "История хранится в локальной зашифрованной базе; в Связке ключей находится только локальный ключ. Связка ключей iCloud не требуется." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "历史保存在本机加密数据库中；钥匙串只保存本机密钥，不需要 iCloud 钥匙串。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "記錄保存在本機加密資料庫中；鑰匙圈只儲存本機金鑰，不需要 iCloud 鑰匙圈。" } }
+      }
+    },
+    "setup.show": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "دليل الإعداد" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Einrichtungsanleitung" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Setup Guide" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Guía de configuración" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Guide de configuration" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "設定ガイド" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "설정 안내" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Guia de configuração" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Руководство по настройке" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "设置指南" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "設定指南" } }
+      }
+    },
+    "settings.storage.status.attention": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يتطلب الانتباه" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Aktion erforderlich" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Needs Attention" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Requiere atención" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Attention requise" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "要確認" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "확인 필요" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Requer atenção" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Требует внимания" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "需要处理" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "需要處理" } }
+      }
+    },
+    "settings.storage.retry": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إعادة المحاولة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Erneut versuchen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Retry" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Reintentar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réessayer" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再試行" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "다시 시도" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Tentar novamente" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Повторить" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "重试" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "重試" } }
+      }
+    },
+    "settings.storage.resetUnreadable": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "حذف السجل غير القابل للقراءة…" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nicht lesbaren Verlauf löschen …" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Delete Unreadable History…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Eliminar historial ilegible…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer l’historique illisible…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "読み取れない履歴を削除…" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "읽을 수 없는 기록 삭제…" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Apagar histórico ilegível…" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Удалить нечитаемую историю…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除无法读取的历史…" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除無法讀取的記錄…" } }
+      }
+    },
+    "settings.storage.reset.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "حذف السجل غير القابل للقراءة؟" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nicht lesbaren Verlauf löschen?" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Delete Unreadable History?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Eliminar el historial ilegible?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer l’historique illisible ?" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "読み取れない履歴を削除しますか？" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "읽을 수 없는 기록을 삭제할까요?" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Apagar o histórico ilegível?" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Удалить нечитаемую историю?" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除无法读取的历史记录？" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除無法讀取的記錄？" } }
+      }
+    },
+    "settings.storage.reset.message": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "سيؤدي هذا إلى حذف قاعدة البيانات المشفّرة ومفتاحها من سلسلة المفاتيح. لا يمكن استعادة سجل الحافظة الحالي." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Dadurch werden die verschlüsselte Datenbank und ihr Schlüsselbundschlüssel gelöscht. Der vorhandene Zwischenablageverlauf kann nicht wiederhergestellt werden." } },
+        "en": { "stringUnit": { "state": "translated", "value": "This deletes the encrypted database and its Keychain key. The existing clipboard history cannot be recovered." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Esto elimina la base de datos cifrada y su clave del Llavero. El historial actual no se podrá recuperar." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Cette opération supprime la base chiffrée et sa clé du trousseau. L’historique actuel ne pourra pas être récupéré." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "暗号化データベースとキーチェーン内のキーが削除されます。既存のクリップボード履歴は復元できません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "암호화된 데이터베이스와 키체인 키가 삭제됩니다. 기존 클립보드 기록은 복구할 수 없습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Isto apaga o banco de dados criptografado e a respectiva chave nas Chaves. O histórico atual não poderá ser recuperado." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Зашифрованная база и её ключ в Связке ключей будут удалены. Текущую историю буфера обмена восстановить нельзя." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "这会删除加密数据库及其钥匙串密钥。现有剪贴板历史将无法恢复。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "這會刪除加密資料庫及其鑰匙圈金鑰。現有剪貼簿記錄將無法復原。" } }
+      }
+    },
+    "settings.storage.reset.confirm": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "الحذف والبدء من جديد" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Löschen und neu beginnen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Delete and Start Over" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Eliminar y empezar de nuevo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer et recommencer" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "削除してやり直す" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "삭제하고 다시 시작" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Apagar e recomeçar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Удалить и начать заново" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除并重新开始" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除並重新開始" } }
+      }
+    },
+    "settings.storage.recovery.keychain": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إذا عرض macOS مطالبة، فاسمح لـ MacTools بالوصول إلى سلسلة المفاتيح المحلية ثم أعد المحاولة. لم يُحذف السجل الحالي." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Erlaube MacTools bei einer macOS-Abfrage den Zugriff auf den lokalen Schlüsselbund und versuche es erneut. Der vorhandene Verlauf wurde nicht gelöscht." } },
+        "en": { "stringUnit": { "state": "translated", "value": "If macOS prompts, allow MacTools to access the local Keychain, then retry. Existing history has not been deleted." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Si macOS lo solicita, permite que MacTools acceda al Llavero local y vuelve a intentarlo. El historial existente no se ha eliminado." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Si macOS vous le demande, autorisez MacTools à accéder au trousseau local, puis réessayez. L’historique existant n’a pas été supprimé." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "macOSに求められた場合はMacToolsによるローカルキーチェーンへのアクセスを許可してから再試行してください。既存の履歴は削除されていません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "macOS에 메시지가 표시되면 MacTools의 로컬 키체인 접근을 허용한 다음 다시 시도하세요. 기존 기록은 삭제되지 않았습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Se o macOS pedir, permita que o MacTools acesse as Chaves locais e tente novamente. O histórico existente não foi apagado." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Если macOS запросит доступ, разрешите MacTools использовать локальную Связку ключей и повторите попытку. Существующая история не удалена." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "如 macOS 显示提示，请允许 MacTools 访问本机钥匙串，然后重试。现有历史记录尚未删除。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "若 macOS 顯示提示，請允許 MacTools 存取本機鑰匙圈，然後重試。現有記錄尚未刪除。" } }
+      }
+    },
+    "settings.storage.recovery.missingKey": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لا يمكن قراءة قاعدة البيانات الحالية إلا بالمفتاح الأصلي. حاول استعادة المفتاح أولًا؛ ولا تحذف السجل غير القابل للقراءة وتبدأ من جديد إلا بعد التأكد من تعذر استعادته." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die vorhandene Datenbank kann nur mit dem ursprünglichen Schlüssel gelesen werden. Versuche zuerst, den Schlüssel wiederherzustellen; lösche den unlesbaren Verlauf erst, wenn das nicht möglich ist." } },
+        "en": { "stringUnit": { "state": "translated", "value": "The existing database can be read only with its original key. Try to restore that key first; delete the unreadable history and start over only after confirming it cannot be recovered." } },
+        "es": { "stringUnit": { "state": "translated", "value": "La base de datos existente solo se puede leer con su clave original. Intenta recuperarla primero; elimina el historial ilegible y empieza de nuevo solo si confirmas que no puede recuperarse." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "La base existante ne peut être lue qu’avec sa clé d’origine. Essayez d’abord de restaurer cette clé ; ne supprimez l’historique illisible qu’après avoir confirmé qu’elle est irrécupérable." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "既存のデータベースは元のキーでのみ読み取れます。まずキーの復元を試し、復元できないことを確認してから読み取れない履歴を削除してください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기존 데이터베이스는 원래 키로만 읽을 수 있습니다. 먼저 키 복원을 시도하고 복구할 수 없음을 확인한 후에만 읽을 수 없는 기록을 삭제하세요." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "O banco de dados existente só pode ser lido com a chave original. Tente recuperá-la primeiro; apague o histórico ilegível apenas depois de confirmar que ela não pode ser recuperada." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Существующую базу можно прочитать только с исходным ключом. Сначала попробуйте восстановить ключ; удаляйте нечитаемую историю только после подтверждения, что восстановление невозможно." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "现有数据库只有使用原来的加密密钥才能读取。请先尝试恢复该密钥；确认无法恢复后，才能删除无法读取的历史并重新开始。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "現有資料庫只有使用原來的加密金鑰才能讀取。請先嘗試復原該金鑰；確認無法復原後，才能刪除無法讀取的記錄並重新開始。" } }
+      }
+    },
+    "settings.storage.recovery.unreadable": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تم الاحتفاظ بالبيانات المشفّرة الأصلية. أعد المحاولة أولًا؛ ولا تحذفها إلا بعد التأكد من عدم الحاجة إلى استعادتها." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die ursprünglichen verschlüsselten Daten bleiben erhalten. Versuche es zuerst erneut; lösche sie erst, wenn keine Wiederherstellung mehr nötig ist." } },
+        "en": { "stringUnit": { "state": "translated", "value": "The original encrypted data is preserved. Retry first; delete it only after deciding recovery is no longer needed." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Los datos cifrados originales se conservan. Vuelve a intentarlo primero; elimínalos solo cuando ya no necesites recuperarlos." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les données chiffrées d’origine sont conservées. Réessayez d’abord ; supprimez-les seulement si aucune récupération n’est nécessaire." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "元の暗号化データは保持されています。まず再試行し、復元が不要と判断した場合にのみ削除してください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "원본 암호화 데이터는 보존됩니다. 먼저 다시 시도하고 더 이상 복구할 필요가 없을 때만 삭제하세요." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Os dados criptografados originais são preservados. Tente novamente primeiro; apague-os apenas quando a recuperação não for mais necessária." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Исходные зашифрованные данные сохранены. Сначала повторите попытку; удаляйте их только если восстановление больше не нужно." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "原始加密数据已保留。请先重试；确认不再需要恢复时再删除它。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "原始加密資料已保留。請先重試；確認不再需要復原時再刪除。" } }
+      }
+    },
+    "settings.storage.recovery.unavailable": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "عالج مشكلة التخزين المحلي ثم أعد المحاولة. لن يستمر جمع سجل الحافظة حتى تُحل المشكلة." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Behebe das lokale Speicherproblem und versuche es erneut. Bis dahin wird kein weiterer Zwischenablageverlauf erfasst." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Resolve the local storage issue and retry. Clipboard history collection remains paused until the issue is fixed." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Resuelve el problema de almacenamiento local y vuelve a intentarlo. La recopilación permanecerá en pausa hasta que se solucione." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Résolvez le problème de stockage local et réessayez. La collecte reste suspendue jusqu’à la résolution du problème." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ローカルストレージの問題を解決して再試行してください。問題が解決するまで履歴の収集は停止します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "로컬 저장 공간 문제를 해결한 후 다시 시도하세요. 문제가 해결될 때까지 클립보드 기록 수집이 중단됩니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Resolva o problema de armazenamento local e tente novamente. A coleta ficará pausada até o problema ser corrigido." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Устраните проблему локального хранилища и повторите попытку. Сбор истории будет приостановлен до её решения." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "解决本机存储问题后重试。问题解决前，剪贴板历史不会继续收集。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "解決本機儲存問題後重試。問題解決前，剪貼簿記錄不會繼續收集。" } }
+      }
+    },
     "settings.data.pinnedCapacityWarning": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "تملأ العناصر المثبتة سعة السجل. ألغِ تثبيت عناصر أو احذفها قبل حفظ سجل جديد." } },
@@ -301,76 +526,6 @@
         }
       }
     },
-    "settings.collection.resetAction": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إعادة تعيين السجل المشفّر…"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verschlüsselten Verlauf zurücksetzen …"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reset Encrypted History…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restablecer historial cifrado…"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réinitialiser l’historique chiffré…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暗号化された履歴をリセット…"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "암호화된 기록 재설정…"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Redefinir histórico criptografado…"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сбросить зашифрованную историю…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重置加密历史…"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重設加密記錄…"
-          }
-        }
-      }
-    },
     "setup.section": {
       "localizations": {
         "ar": {
@@ -516,67 +671,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تأكيد حالة الجمع"
+            "value": "إعداد التخزين الآمن"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erfassungsstatus prüfen"
+            "value": "Sicheren Speicher vorbereiten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirm Collection Status"
+            "value": "Prepare Secure Storage"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirmar el estado de recopilación"
+            "value": "Preparar el almacenamiento seguro"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirmer l’état de la collecte"
+            "value": "Préparer le stockage sécurisé"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "収集状態を確認"
+            "value": "安全なストレージを準備"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "수집 상태 확인"
+            "value": "안전한 저장 공간 준비"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirmar status da coleta"
+            "value": "Preparar armazenamento seguro"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Проверьте состояние сбора"
+            "value": "Подготовьте защищённое хранилище"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "确认收集状态"
+            "value": "准备安全存储"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "確認收集狀態"
+            "value": "準備安全儲存空間"
           }
         }
       }
@@ -649,6 +804,36 @@
             "value": "必須先解決下方的加密儲存問題，才能開始收集。"
           }
         }
+      }
+    },
+    "setup.collection.enabled": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مفعّل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Aktiviert" } },
+        "en": { "stringUnit": { "state": "translated", "value": "On" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Activada" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Activée" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "オン" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "켜짐" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Ativada" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Включено" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已开启" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已開啟" } }
+      }
+    },
+    "setup.collection.disabled": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "متوقف مؤقتًا" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Pausiert" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Paused" } },
+        "es": { "stringUnit": { "state": "translated", "value": "En pausa" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "En pause" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "一時停止中" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "일시 정지됨" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Pausada" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Приостановлено" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已暂停" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已暫停" } }
       }
     },
     "setup.collection.loadingDescription": {
@@ -796,67 +981,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جاهز. السجل مشفّر محليًا، وتحتفظ سلسلة المفاتيح بالمفتاح فقط."
+            "value": "التخزين الآمن جاهز. تحتفظ سلسلة المفاتيح بالمفتاح المحلي فقط، ولا يلزم استخدام سلسلة مفاتيح iCloud."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bereit. Der Verlauf ist lokal verschlüsselt; nur der Schlüssel liegt im Schlüsselbund."
+            "value": "Der sichere Speicher ist bereit. Der Schlüsselbund enthält nur den lokalen Schlüssel; iCloud-Schlüsselbund ist nicht erforderlich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ready. History is encrypted locally; Keychain stores only the key."
+            "value": "Secure storage is ready. Keychain stores only the local key; iCloud Keychain is not required."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Listo. El historial se cifra localmente; el Llavero solo guarda la clave."
+            "value": "El almacenamiento seguro está listo. El Llavero solo guarda la clave local; no se requiere el Llavero de iCloud."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prêt. L’historique est chiffré localement ; le trousseau ne contient que la clé."
+            "value": "Le stockage sécurisé est prêt. Le trousseau ne contient que la clé locale ; le trousseau iCloud n’est pas requis."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "準備完了。履歴はローカルで暗号化され、キーチェーンにはキーのみ保存されます。"
+            "value": "安全なストレージの準備が完了しました。キーチェーンにはローカルキーのみ保存され、iCloudキーチェーンは不要です。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "준비되었습니다. 기록은 로컬에서 암호화되며 키체인에는 키만 저장됩니다."
+            "value": "안전한 저장 공간이 준비되었습니다. 키체인에는 로컬 키만 저장되며 iCloud 키체인은 필요하지 않습니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pronto. O histórico é criptografado localmente; as Chaves guardam apenas a chave."
+            "value": "O armazenamento seguro está pronto. As Chaves guardam apenas a chave local; as Chaves do iCloud não são necessárias."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Готово. История зашифрована локально; в Связке ключей хранится только ключ."
+            "value": "Защищённое хранилище готово. В Связке ключей находится только локальный ключ; Связка ключей iCloud не требуется."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已就绪。历史在本机加密，钥匙串仅保存密钥。"
+            "value": "安全存储已就绪。钥匙串只保存本机密钥；不需要 iCloud 钥匙串。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已就緒。記錄在本機加密，鑰匙圈只儲存金鑰。"
+            "value": "安全儲存空間已就緒。鑰匙圈只儲存本機金鑰；不需要 iCloud 鑰匙圈。"
           }
         }
       }
@@ -8461,67 +8646,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الجمع"
+            "value": "الجمع والأمان"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sammlung"
+            "value": "Erfassung und Sicherheit"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collection"
+            "value": "Collection & Security"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recopilación"
+            "value": "Recopilación y seguridad"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collecte"
+            "value": "Collecte et sécurité"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "収集"
+            "value": "収集とセキュリティ"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "수집"
+            "value": "수집 및 보안"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coleta"
+            "value": "Coleta e segurança"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сбор"
+            "value": "Сбор и безопасность"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集"
+            "value": "收集与安全"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集"
+            "value": "收集與安全"
           }
         }
       }
@@ -9161,67 +9346,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يُحفظ محتوى السجل في ملف محلي مشفّر، وتحتفظ سلسلة المفاتيح بالمفتاح فقط؛ وتحفظ الملفات كمراجع للمسارات فقط."
+            "value": "تعذّر الوصول المؤقت إلى سلسلة المفاتيح لا يحذف السجل؛ حذف مفتاح التشفير يجعل السجل الحالي غير قابل للقراءة نهائيًا. تُحفظ الملفات كمراجع للمسارات فقط."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verlaufsinhalte liegen in einer lokal verschlüsselten Datei; der Schlüsselbund speichert nur den Schlüssel, Dateien nur Pfadreferenzen."
+            "value": "Ein vorübergehend nicht verfügbarer Schlüsselbund löscht den Verlauf nicht; wird der Schlüssel gelöscht, bleibt der vorhandene Verlauf dauerhaft unlesbar. Dateien werden nur als Pfadverweise gespeichert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "History content is kept in a locally encrypted file; Keychain stores only the key, and files are saved only as path references."
+            "value": "Temporary Keychain access failures do not delete history; deleting the encryption key makes existing history permanently unreadable. Files are stored only as path references."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El contenido del historial se guarda en un archivo local cifrado; el Llavero solo contiene la clave y los archivos se guardan como referencias de ruta."
+            "value": "Los fallos temporales de acceso al Llavero no eliminan el historial; borrar la clave de cifrado vuelve ilegible el historial existente de forma permanente. Los archivos se guardan solo como referencias de ruta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le contenu de l’historique est conservé dans un fichier local chiffré ; le trousseau ne contient que la clé et les fichiers seulement leur chemin."
+            "value": "Une indisponibilité temporaire du trousseau ne supprime pas l’historique ; supprimer la clé rend l’historique existant définitivement illisible. Les fichiers sont stockés uniquement comme références de chemin."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "履歴の内容は暗号化されたローカルファイルに保存され、キーチェーンにはキーのみ、ファイルはパス参照のみ保存されます。"
+            "value": "キーチェーンに一時的にアクセスできなくても履歴は削除されません。暗号化キーを削除すると既存の履歴は永久に読み取れなくなります。ファイルはパス参照のみ保存されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "기록 콘텐츠는 암호화된 로컬 파일에 저장되고 키체인에는 키만, 파일에는 경로 참조만 저장됩니다."
+            "value": "키체인에 일시적으로 접근할 수 없어도 기록은 삭제되지 않습니다. 암호화 키를 삭제하면 기존 기록을 영구적으로 읽을 수 없습니다. 파일은 경로 참조로만 저장됩니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "O conteúdo do histórico fica em um arquivo local criptografado; as Chaves guardam apenas a chave e os arquivos, somente referências de caminho."
+            "value": "Falhas temporárias de acesso às Chaves não apagam o histórico; apagar a chave de criptografia torna o histórico existente permanentemente ilegível. Os arquivos são guardados apenas como referências de caminho."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Содержимое истории хранится в локальном зашифрованном файле; в Связке ключей находится только ключ, а для файлов сохраняются лишь пути."
+            "value": "Временная недоступность Связки ключей не удаляет историю; удаление ключа шифрования навсегда делает существующую историю нечитаемой. Для файлов сохраняются только пути."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "历史内容保存在本机加密文件中，钥匙串只保存密钥；文件仅保存路径引用。"
+            "value": "暂时无法访问钥匙串不会删除历史；删除加密密钥会使现有历史永久无法读取。文件仅保存路径引用。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "記錄內容儲存在本機加密檔案中，鑰匙圈只儲存金鑰；檔案只儲存路徑參照。"
+            "value": "暫時無法存取鑰匙圈不會刪除記錄；刪除加密金鑰會使現有記錄永久無法讀取。檔案僅儲存路徑參照。"
           }
         }
       }
@@ -12187,6 +12372,126 @@
             "value": "可選：控制收集狀態或清除記錄；清除操作仍需確認。"
           }
         }
+      }
+    },
+    "setup.changesSaved": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يتم حفظ التغييرات تلقائيًا." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Änderungen werden automatisch gespeichert." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Changes are saved automatically." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Los cambios se guardan automáticamente." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les modifications sont enregistrées automatiquement." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "変更は自動的に保存されます。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "변경 사항은 자동으로 저장됩니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "As alterações são salvas automaticamente." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Изменения сохраняются автоматически." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "更改会自动保存。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "變更會自動儲存。" } }
+      }
+    },
+    "setup.continue": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "متابعة الإعداد" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Einrichtung fortsetzen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Continue Setup" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Continuar configuración" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Continuer la configuration" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "設定を続ける" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "설정 계속" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Continuar configuração" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Продолжить настройку" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "继续设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "繼續設定" } }
+      }
+    },
+    "setup.back": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "رجوع" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zurück" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Back" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Atrás" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Retour" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "戻る" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "뒤로" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Voltar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Назад" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "返回" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "返回" } }
+      }
+    },
+    "setup.next": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "متابعة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Weiter" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Continue" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Continuar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Continuer" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "続ける" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "계속" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Continuar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Продолжить" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "继续" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "繼續" } }
+      }
+    },
+    "setup.optional": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "اختياري" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Optional" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Optional" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Opcional" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Facultatif" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "任意" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "선택 사항" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Opcional" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Необязательно" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "可选" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "可選" } }
+      }
+    },
+    "setup.notAssigned": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "غير معيّن" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nicht festgelegt" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Not Assigned" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Sin asignar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Non attribué" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "未設定" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "설정 안 됨" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não atribuído" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не назначено" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "未設定" } }
+      }
+    },
+    "setup.ready.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "سجل الحافظة جاهز" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablageverlauf ist bereit" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard History Is Ready" } },
+        "es": { "stringUnit": { "state": "translated", "value": "El historial del portapapeles está listo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "L’historique du presse-papiers est prêt" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボード履歴の準備が完了しました" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록이 준비되었습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "O histórico da área de transferência está pronto" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "История буфера обмена готова" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板历史已准备就绪" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼簿記錄已準備就緒" } }
+      }
+    },
+    "setup.ready.description": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "راجع الإعدادات أدناه. يمكنك إعادة فتح دليل الإعداد في أي وقت." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Prüfe die Einstellungen unten. Die Einrichtungsanleitung kann jederzeit erneut geöffnet werden." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Review the settings below. You can reopen the Setup Guide at any time." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Revisa los ajustes siguientes. Puedes volver a abrir la guía de configuración cuando quieras." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Vérifiez les réglages ci-dessous. Vous pouvez rouvrir le guide de configuration à tout moment." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "以下の設定を確認してください。設定ガイドはいつでも再度開けます。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "아래 설정을 확인하세요. 설정 안내는 언제든지 다시 열 수 있습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Revise os ajustes abaixo. Você pode reabrir o guia de configuração a qualquer momento." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Проверьте настройки ниже. Руководство по настройке можно открыть снова в любое время." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "请检查下面的设置。以后可随时重新打开设置指南。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "請檢查下方設定。之後可隨時重新開啟設定指南。" } }
       }
     }
   },

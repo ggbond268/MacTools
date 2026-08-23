@@ -4063,6 +4063,18 @@ final class PluginHost: ObservableObject {
         PluginSettingsContext(
             pluginID: pluginID,
             shortcutItems: shortcutItems.filter { $0.pluginID == pluginID },
+            actionShortcutItems: actionShortcutCatalogItems
+                .filter { $0.reference.key.providerID == pluginID }
+                .map {
+                    PluginSettingsActionShortcutItem(
+                        actionID: $0.reference.key.actionID,
+                        title: $0.title,
+                        description: $0.description,
+                        bindingText: $0.bindingText,
+                        canAssign: $0.canAssign,
+                        canClear: $0.assignmentID != nil
+                    )
+                },
             recordShortcut: { [weak self] itemID, binding in
                 self?.clearShortcutError(for: itemID)
                 return self?.setShortcutBindingAndReturnError(binding, for: itemID)
@@ -4077,6 +4089,36 @@ final class PluginHost: ObservableObject {
             resetShortcut: { [weak self] itemID in
                 self?.clearShortcutError(for: itemID)
                 self?.resetShortcut(for: itemID)
+            },
+            recordActionShortcut: { [weak self] actionID, binding in
+                guard let self,
+                      let item = self.actionShortcutCatalogItems.first(where: {
+                          $0.reference.key.providerID == pluginID
+                              && $0.reference.key.actionID == actionID
+                      })
+                else {
+                    return FeatureL10n.string("操作不可用。")
+                }
+                return self.setActionShortcutBindingAndReturnError(
+                    binding,
+                    for: item.reference,
+                    assignmentID: item.assignmentID
+                )
+            },
+            clearActionShortcut: { [weak self] actionID in
+                guard let self,
+                      let item = self.actionShortcutCatalogItems.first(where: {
+                          $0.reference.key.providerID == pluginID
+                              && $0.reference.key.actionID == actionID
+                              && $0.assignmentID != nil
+                      })
+                else {
+                    return
+                }
+                self.clearActionShortcut(
+                    for: item.reference,
+                    assignmentID: item.assignmentID
+                )
             }
         )
     }

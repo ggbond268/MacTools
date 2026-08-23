@@ -3,34 +3,73 @@ import MacToolsPluginKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum ClipboardHistorySettingsContentSection: Hashable {
+    case essentials
+    case retention
+    case exclusions
+    case data
+}
+
 @MainActor
 struct ClipboardHistorySettingsView: View {
     @ObservedObject var controller: ClipboardHistoryController
     @ObservedObject private var settings: ClipboardHistorySettingsStore
     private let localization: PluginLocalization
-    private let privacyShortcutItems: [ShortcutSettingsItem]
+    private let settingsContext: PluginSettingsContext?
+    private let contentSections: Set<ClipboardHistorySettingsContentSection>
     @State private var clearRequest: ClipboardHistorySettingsClearRequest?
+    @State private var setupDestination: ClipboardHistorySetupDestination?
 
     init(
         controller: ClipboardHistoryController,
         localization: PluginLocalization,
-        privacyShortcutItems: [ShortcutSettingsItem] = []
+        settingsContext: PluginSettingsContext? = nil,
+        contentSections: Set<ClipboardHistorySettingsContentSection> = [
+            .essentials,
+            .retention,
+            .exclusions,
+            .data,
+        ]
     ) {
         self.controller = controller
         self.localization = localization
-        self.privacyShortcutItems = privacyShortcutItems
+        self.settingsContext = settingsContext
+        self.contentSections = contentSections
         _settings = ObservedObject(wrappedValue: controller.settings)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.section) {
-            if !settings.hasCompletedInitialSetup {
-                initialSetupSection
+            if contentSections.contains(.essentials) {
+                collectionSection
             }
-            collectionSection
-            retentionSection
-            exclusionsSection
-            dataSection
+            if contentSections.contains(.retention) {
+                retentionSection
+            }
+            if contentSections.contains(.exclusions) {
+                exclusionsSection
+            }
+            if contentSections.contains(.data) {
+                dataSection
+            }
+        }
+        .onAppear {
+            guard contentSections.contains(.essentials),
+                  settingsContext != nil,
+                  settings.shouldAutomaticallyPresentInitialSetup()
+            else {
+                return
+            }
+            setupDestination = .guide
+        }
+        .sheet(item: $setupDestination) { _ in
+            if let settingsContext {
+                ClipboardHistorySetupSheet(
+                    controller: controller,
+                    localization: localization,
+                    settingsContext: settingsContext
+                )
+            }
         }
         .alert(item: $clearRequest) { request in
             switch request {
@@ -52,61 +91,50 @@ struct ClipboardHistorySettingsView: View {
                     },
                     secondaryButton: .cancel(Text(localization.string("common.cancel", defaultValue: "取消")))
                 )
-            }
-        }
-    }
-
-    private var initialSetupSection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            HStack {
-                sectionHeader(
-                    localization.string("setup.section", defaultValue: "开始使用"),
-                    systemImage: "checklist"
-                )
-                Spacer()
-                Button(localization.string("setup.dismiss", defaultValue: "完成")) {
-                    settings.completeInitialSetup()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-
-            VStack(spacing: 0) {
-                setupRow(
-                    number: 1,
-                    title: localization.string("setup.collection.title", defaultValue: "确认收集状态"),
-                    description: setupCollectionDescription,
-                    tone: setupCollectionTone
-                )
-                PluginSettingsListDivider()
-                setupRow(
-                    number: 2,
-                    title: localization.string("setup.open.title", defaultValue: "设置打开历史快捷键"),
-                    description: localization.string(
-                        "setup.open.description",
-                        defaultValue: "在下方“主要快捷键”中设置常用快捷键；再次按下即可关闭历史面板。"
-                    ),
-                    tone: .neutral
-                )
-                PluginSettingsListDivider()
-                setupRow(
-                    number: 3,
-                    title: localization.string("setup.privacy.title", defaultValue: "选择私密复制方式"),
-                    description: localization.format(
-                        "setup.privacy.description",
-                        defaultValue: "“立即私密复制”一步完成；“忽略下一次复制”用于之后的右键复制。已设置 %d/2 个可选快捷键。",
-                        assignedPrivacyShortcutCount
-                    ),
-                    tone: assignedPrivacyShortcutCount > 0 ? .positive : .neutral
+            case .resetUnreadable:
+                Alert(
+                    title: Text(localization.string(
+                        "settings.storage.reset.title",
+                        defaultValue: "删除无法读取的历史记录？"
+                    )),
+                    message: Text(localization.string(
+                        "settings.storage.reset.message",
+                        defaultValue: "这会删除加密数据库及其钥匙串密钥。现有剪贴板历史将无法恢复。"
+                    )),
+                    primaryButton: .destructive(Text(localization.string(
+                        "settings.storage.reset.confirm",
+                        defaultValue: "删除并重新开始"
+                    ))) {
+                        Task { await controller.resetUnreadablePersistentHistory() }
+                    },
+                    secondaryButton: .cancel(Text(localization.string("common.cancel", defaultValue: "取消")))
                 )
             }
-            .pluginSettingsCardBackground(.standard)
         }
     }
 
     private var collectionSection: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            sectionHeader(localization.string("settings.collection.section", defaultValue: "收集"), systemImage: "clipboard")
+            HStack {
+                sectionHeader(
+                    localization.string("settings.collection.section", defaultValue: "收集与安全"),
+                    systemImage: "clipboard"
+                )
+                Spacer()
+                Button {
+                    setupDestination = .guide
+                } label: {
+                    Label(
+                        settings.hasCompletedInitialSetup
+                            ? localization.string("setup.show", defaultValue: "设置指南")
+                            : localization.string("setup.continue", defaultValue: "继续设置"),
+                        systemImage: "questionmark.circle"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(settingsContext == nil)
+            }
             VStack(spacing: 0) {
                 HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                     VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
@@ -120,17 +148,6 @@ struct ClipboardHistorySettingsView: View {
                             .foregroundStyle(
                                 controller.errorMessage == nil ? Color.secondary : Color.red
                             )
-
-                        if controller.errorMessage != nil {
-                            Button(localization.string(
-                                "settings.collection.resetAction",
-                                defaultValue: "重置加密历史…"
-                            )) {
-                                clearRequest = .all
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     Toggle(localization.string("settings.collection.toggle", defaultValue: "收集剪贴板历史"), isOn: Binding(
@@ -150,12 +167,36 @@ struct ClipboardHistorySettingsView: View {
 
                 HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                     VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Text(localization.string("settings.privacy.title", defaultValue: "隐私边界"))
+                        Text(localization.string(
+                            "settings.storage.encrypted.title",
+                            defaultValue: "本机加密存储"
+                        ))
                             .font(PluginSettingsTheme.Typography.rowTitle)
                         Text(localization.string(
-                            "settings.privacy.description",
-                            defaultValue: "历史内容保存在本机加密文件中，钥匙串只保存密钥；文件仅保存路径引用。"
+                            "settings.storage.encrypted.description",
+                            defaultValue: "历史保存在本机加密数据库中，钥匙串只保存这台 Mac 的加密密钥；不需要 iCloud 钥匙串。"
                         ))
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(encryptedStorageStatusTitle)
+                        .font(PluginSettingsTheme.Typography.statusBadge)
+                        .foregroundStyle(encryptedStorageStatusColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(encryptedStorageStatusColor.opacity(0.12), in: Capsule())
+                }
+                .pluginSettingsListRowPadding()
+
+                PluginSettingsListDivider()
+
+                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                        Text(localization.string("settings.privacy.title", defaultValue: "隐私边界"))
+                            .font(PluginSettingsTheme.Typography.rowTitle)
+                        Text(privacyDescription)
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.secondary)
                     }
@@ -197,75 +238,54 @@ struct ClipboardHistorySettingsView: View {
         )
     }
 
-    private var assignedPrivacyShortcutCount: Int {
-        privacyShortcutItems.filter(\.canClear).count
+    private var encryptedStorageStatusTitle: String {
+        if controller.errorMessage != nil {
+            return localization.string("settings.storage.status.attention", defaultValue: "需要处理")
+        }
+        if controller.isLoaded {
+            return localization.string("settings.storage.status.ready", defaultValue: "已就绪")
+        }
+        return localization.string("settings.storage.status.preparing", defaultValue: "准备中")
     }
 
-    private var setupCollectionDescription: String {
+    private var encryptedStorageStatusColor: Color {
         if controller.errorMessage != nil {
-            return localization.string(
-                "setup.collection.errorDescription",
-                defaultValue: "需要先解决下方的加密存储问题，才能开始收集。"
-            )
+            return .orange
         }
-        if !controller.isLoaded {
-            return localization.string(
-                "setup.collection.loadingDescription",
-                defaultValue: "正在准备加密存储。准备完成后即可开始使用。"
-            )
-        }
-        if settings.isPaused {
-            return localization.string(
-                "setup.collection.pausedDescription",
-                defaultValue: "当前已暂停；可在下方开启“收集剪贴板历史”。"
-            )
-        }
-        return localization.string(
-            "setup.collection.readyDescription",
-            defaultValue: "已就绪。历史在本机加密，钥匙串仅保存密钥。"
+        return controller.isLoaded ? .green : .secondary
+    }
+
+    private var privacyDescription: String {
+        localization.string(
+            "settings.privacy.description",
+            defaultValue: "暂时无法访问钥匙串不会删除历史；删除加密密钥会使现有历史永久无法读取。文件仅保存路径引用。"
         )
     }
 
-    private var setupCollectionTone: PluginStatusTone {
-        if controller.errorMessage != nil {
-            return .caution
-        }
-        if controller.isLoaded, !settings.isPaused {
-            return .positive
-        }
-        return .neutral
-    }
-
-    private func setupRow(
-        number: Int,
-        title: String,
-        description: String,
-        tone: PluginStatusTone
-    ) -> some View {
-        HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-            Text("\(number)")
-                .font(PluginSettingsTheme.Typography.statusBadge)
-                .foregroundStyle(statusColor(tone))
-                .frame(width: 22, height: 22)
-                .background(statusColor(tone).opacity(0.12), in: Circle())
-            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                Text(title)
-                    .font(PluginSettingsTheme.Typography.rowTitle)
-                Text(description)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(tone == .caution ? Color.orange : Color.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .pluginSettingsListRowPadding()
-    }
-
-    private func statusColor(_ tone: PluginStatusTone) -> Color {
-        switch tone {
-        case .neutral: .secondary
-        case .positive: .green
-        case .caution: .orange
+    private var storageRecoveryDescription: String? {
+        switch controller.storageError {
+        case .keychain:
+            localization.string(
+                "settings.storage.recovery.keychain",
+                defaultValue: "如 macOS 显示提示，请允许 MacTools 访问本机钥匙串，然后重试。现有历史记录尚未删除。"
+            )
+        case .missingEncryptionKey, .invalidEncryptionKey:
+            localization.string(
+                "settings.storage.recovery.missingKey",
+                defaultValue: "现有数据库只有使用原来的加密密钥才能读取。请先尝试恢复该密钥；确认无法恢复后，才能删除无法读取的历史并重新开始。"
+            )
+        case .invalidEnvelope, .authenticationFailed, .historyTooLarge:
+            localization.string(
+                "settings.storage.recovery.unreadable",
+                defaultValue: "原始加密数据已保留。请先重试；确认不再需要恢复时再删除它。"
+            )
+        case .insufficientDiskSpace, .unavailableStorage:
+            localization.string(
+                "settings.storage.recovery.unavailable",
+                defaultValue: "解决本机存储问题后重试。问题解决前，剪贴板历史不会继续收集。"
+            )
+        case nil:
+            nil
         }
     }
 
@@ -441,14 +461,19 @@ struct ClipboardHistorySettingsView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .disabled(controller.recentItems.isEmpty || controller.isClearingHistory)
+                    .disabled(
+                        controller.errorMessage != nil
+                            || controller.recentItems.isEmpty
+                            || controller.isClearingHistory
+                    )
                     Button(localization.string("common.clearAll", defaultValue: "全部清除"), role: .destructive) {
                         clearRequest = .all
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .disabled(
-                        (controller.items.isEmpty && controller.errorMessage == nil)
+                        controller.errorMessage != nil
+                            || controller.items.isEmpty
                             || controller.isClearingHistory
                     )
                 }
@@ -461,6 +486,37 @@ struct ClipboardHistorySettingsView: View {
                         .foregroundStyle(.red)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .pluginSettingsListRowPadding()
+
+                    if let recoveryDescription = storageRecoveryDescription {
+                        Text(recoveryDescription)
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .pluginSettingsListRowPadding()
+                    }
+
+                    HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                        Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
+                            controller.retryStorageAccess()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+
+                        if controller.canResetUnreadablePersistentHistory {
+                            Button(localization.string(
+                                "settings.storage.resetUnreadable",
+                                defaultValue: "删除无法读取的历史…"
+                            ), role: .destructive) {
+                                clearRequest = .resetUnreadable
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+
+                        Spacer()
+                    }
+                    .pluginSettingsListRowPadding(interactive: true)
                 }
 
                 if controller.isCaptureBlockedByPinnedItems {
@@ -596,6 +652,7 @@ struct ClipboardHistorySettingsView: View {
 private enum ClipboardHistorySettingsClearRequest: String, Identifiable {
     case unpinned
     case all
+    case resetUnreadable
 
     var id: String { rawValue }
 }

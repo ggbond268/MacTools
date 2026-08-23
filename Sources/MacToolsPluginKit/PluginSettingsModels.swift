@@ -443,29 +443,65 @@ public enum PluginSettingsAction: Equatable, Sendable {
     }
 }
 
+public struct PluginSettingsActionShortcutItem: Identifiable {
+    public let actionID: String
+    public let title: String
+    public let description: String
+    public let bindingText: String
+    public let canAssign: Bool
+    public let canClear: Bool
+
+    public var id: String { actionID }
+
+    public init(
+        actionID: String,
+        title: String,
+        description: String,
+        bindingText: String,
+        canAssign: Bool,
+        canClear: Bool
+    ) {
+        self.actionID = actionID
+        self.title = title
+        self.description = description
+        self.bindingText = bindingText
+        self.canAssign = canAssign
+        self.canClear = canClear
+    }
+}
+
 public struct PluginSettingsContext {
     public let pluginID: String
     public let shortcutItems: [ShortcutSettingsItem]
+    public let actionShortcutItems: [PluginSettingsActionShortcutItem]
 
     private let recordShortcutHandler: (String, ShortcutBinding) -> String?
     private let beginShortcutRecordingHandler: (String) -> Void
     private let clearShortcutHandler: (String) -> Void
     private let resetShortcutHandler: (String) -> Void
+    private let recordActionShortcutHandler: (String, ShortcutBinding) -> String?
+    private let clearActionShortcutHandler: (String) -> Void
 
     public init(
         pluginID: String,
         shortcutItems: [ShortcutSettingsItem] = [],
+        actionShortcutItems: [PluginSettingsActionShortcutItem] = [],
         recordShortcut: @escaping (String, ShortcutBinding) -> String? = { _, _ in nil },
         beginShortcutRecording: @escaping (String) -> Void = { _ in },
         clearShortcut: @escaping (String) -> Void = { _ in },
-        resetShortcut: @escaping (String) -> Void = { _ in }
+        resetShortcut: @escaping (String) -> Void = { _ in },
+        recordActionShortcut: @escaping (String, ShortcutBinding) -> String? = { _, _ in nil },
+        clearActionShortcut: @escaping (String) -> Void = { _ in }
     ) {
         self.pluginID = pluginID
         self.shortcutItems = shortcutItems
+        self.actionShortcutItems = actionShortcutItems
         self.recordShortcutHandler = recordShortcut
         self.beginShortcutRecordingHandler = beginShortcutRecording
         self.clearShortcutHandler = clearShortcut
         self.resetShortcutHandler = resetShortcut
+        self.recordActionShortcutHandler = recordActionShortcut
+        self.clearActionShortcutHandler = clearActionShortcut
     }
 
     public func shortcutItem(definitionID: String) -> ShortcutSettingsItem? {
@@ -491,6 +527,23 @@ public struct PluginSettingsContext {
 
     public func resetShortcut(for itemID: String) {
         resetShortcutHandler(itemID)
+    }
+
+    public func actionShortcutItem(actionID: String) -> PluginSettingsActionShortcutItem? {
+        actionShortcutItems.first { $0.actionID == actionID }
+    }
+
+    public func recordActionShortcut(
+        _ binding: ShortcutBinding,
+        for actionID: String
+    ) -> PluginShortcutRecordingResult {
+        PluginShortcutRecordingResult.from(
+            errorMessage: recordActionShortcutHandler(actionID, binding)
+        )
+    }
+
+    public func clearActionShortcut(for actionID: String) {
+        clearActionShortcutHandler(actionID)
     }
 }
 

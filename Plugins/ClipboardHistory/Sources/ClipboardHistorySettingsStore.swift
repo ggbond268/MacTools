@@ -11,6 +11,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         static let maximumTotalPayloadByteCount = "maximum-total-payload-byte-count"
         static let excludedApplications = "excluded-applications"
         static let didCompleteInitialSetup = "did-complete-initial-setup"
+        static let didPresentInitialSetup = "did-present-initial-setup"
     }
 
     static let allowedItemCounts = [
@@ -85,6 +86,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     }
 
     @Published private(set) var hasCompletedInitialSetup: Bool
+    private(set) var hasPresentedInitialSetup: Bool
 
     var onChange: (() -> Void)?
 
@@ -126,6 +128,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
             excludedApplications = defaults.excludedApplications
         }
         hasCompletedInitialSetup = storage.bool(forKey: Key.didCompleteInitialSetup)
+        hasPresentedInitialSetup = storage.bool(forKey: Key.didPresentInitialSetup)
     }
 
     var snapshot: ClipboardHistorySettings {
@@ -159,6 +162,15 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         hasCompletedInitialSetup = true
         storage.set(true, forKey: Key.didCompleteInitialSetup)
         onChange?()
+    }
+
+    func shouldAutomaticallyPresentInitialSetup() -> Bool {
+        guard !hasCompletedInitialSetup, !hasPresentedInitialSetup else {
+            return false
+        }
+        hasPresentedInitialSetup = true
+        storage.set(true, forKey: Key.didPresentInitialSetup)
+        return true
     }
 
     private static func validItemCount(_ value: Int) -> Int {
