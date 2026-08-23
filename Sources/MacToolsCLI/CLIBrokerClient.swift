@@ -60,10 +60,19 @@ extension CLIBrokerClientError {
 
 final class CLIBrokerClient: @unchecked Sendable {
     private let identityValidator = CLIPeerIdentityValidator()
-    private let hostLocator = CLIHostLocator()
+    private let hostLocator: CLIHostLocator
+    private let hostLauncher: CLIHostApplicationLauncher
     private var connection: NSXPCConnection?
     private var negotiatedProtocolVersion: Int?
     private var selectedHostApplicationURL: URL?
+
+    init(
+        hostLocator: CLIHostLocator = CLIHostLocator(),
+        hostLauncher: CLIHostApplicationLauncher = CLIHostApplicationLauncher()
+    ) {
+        self.hostLocator = hostLocator
+        self.hostLauncher = hostLauncher
+    }
 
     deinit {
         connection?.invalidate()
@@ -122,7 +131,9 @@ final class CLIBrokerClient: @unchecked Sendable {
                 lastMessage = "The MacTools broker is unavailable."
             }
             if launchIfNeeded, !didLaunch {
-                selectedHostApplicationURL = try await launchHost()
+                selectedHostApplicationURL = try await launchHost(
+                    timeout: deadline.timeIntervalSinceNow
+                )
                 didLaunch = true
             }
             try await Task.sleep(for: .milliseconds(200))
@@ -308,7 +319,7 @@ final class CLIBrokerClient: @unchecked Sendable {
         }
     }
 
-    private func launchHost() async throws -> URL {
+    private func launchHost(timeout: TimeInterval) async throws -> URL {
         let applicationURL: URL
         do {
             let version = cliVersion()
@@ -320,32 +331,16 @@ final class CLIBrokerClient: @unchecked Sendable {
         } catch let error as CLIHostLocationError {
             throw CLIBrokerClientError.hostDiscovery(error)
         }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
         do {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, Error>) in
-                NSWorkspace.shared.openApplication(
-                    at: applicationURL,
-                    configuration: configuration
-                ) { application, error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else if application == nil {
-                        continuation.resume(throwing: CLIBrokerClientError.hostLaunchFailed(
-                            message: "Launch Services did not return a running MacTools application.",
-                            applicationURL: applicationURL
-                        ))
-                    } else {
-                        continuation.resume()
-                    }
-                }
-            }
-        } catch let error as CLIBrokerClientError {
-            throw error
+            try await hostLauncher.launch(
+                applicationURL: applicationURL,
+                timeout: timeout
+            )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw CLIBrokerClientError.hostLaunchFailed(
-                message: "MacTools could not be launched: \(error.localizedDescription)",
+                message: error.localizedDescription,
                 applicationURL: applicationURL
             )
         }

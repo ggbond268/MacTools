@@ -73,6 +73,58 @@ final class CLIHostLocatorTests: XCTestCase {
         assertFailure(locator, category: "hostRoleMismatch")
     }
 
+    func testExactReleaseIdentityFailureWinsOverOlderTrustedCandidate() {
+        let old = candidate(
+            path: "/Applications/A-Old-MacTools.app",
+            version: "1.1.6",
+            build: "60"
+        )
+        let exactWrongTeam = candidate(
+            path: "/Applications/Z-Exact-MacTools.app",
+            version: "1.2.0",
+            build: "69"
+        )
+        let locator = locator(candidates: [old, exactWrongTeam]) {
+            $0 == old.url ? .accepted : .wrongTeam
+        }
+
+        XCTAssertThrowsError(
+            try locator.locate(
+                bundleIdentifier: hostIdentifier,
+                version: "1.2.0",
+                build: "69"
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? CLIHostLocationError,
+                .teamMismatch(candidate: exactWrongTeam.url)
+            )
+        }
+    }
+
+    func testVersionMismatchMessageInterpolatesExpectedAndInstalledReleases() {
+        let old = candidate(version: "1.1.6", build: "60")
+        let locator = locator(candidates: [old]) { _ in .accepted }
+
+        XCTAssertThrowsError(
+            try locator.locate(
+                bundleIdentifier: hostIdentifier,
+                version: "1.2.0",
+                build: "69"
+            )
+        ) { error in
+            guard let locationError = error as? CLIHostLocationError else {
+                return XCTFail("Expected CLIHostLocationError")
+            }
+            XCTAssertEqual(locationError.category, "hostVersionIncompatible")
+            XCTAssertEqual(
+                locationError.message,
+                "No installed MacTools app matches CLI version 1.2.0 (69). Found: 1.1.6 (60)."
+            )
+            XCTAssertEqual(locationError.candidateURL, old.url)
+        }
+    }
+
     private func assertFailure(
         _ locator: CLIHostLocator,
         category: String,

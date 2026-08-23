@@ -91,41 +91,56 @@ struct CLIHostLocator {
             throw CLIHostLocationError.notFound(bundleIdentifier: bundleIdentifier)
         }
 
-        var accepted: [CLIHostCandidate] = []
-        var failures: [(CLIHostIdentityAssessment, URL)] = []
-        for candidate in candidates {
-            guard candidate.bundleIdentifier == bundleIdentifier else {
-                failures.append((.wrongRole, candidate.url))
-                continue
-            }
-            let assessment = identityEvaluator(candidate.url)
-            if assessment == .accepted {
-                accepted.append(candidate)
-            } else {
-                failures.append((assessment, candidate.url))
-            }
+        let assessed = candidates.map { candidate in
+            let assessment = candidate.bundleIdentifier == bundleIdentifier
+                ? identityEvaluator(candidate.url)
+                : CLIHostIdentityAssessment.wrongRole
+            return (candidate: candidate, assessment: assessment)
         }
 
-        if let match = accepted.first(where: { $0.version == version && $0.build == build }) {
-            return match.url.standardizedFileURL
+        let exactRelease = assessed.filter {
+            $0.candidate.version == version && $0.candidate.build == build
         }
-        if !accepted.isEmpty {
-            let found = accepted.map {
+        if let match = exactRelease.first(where: { $0.assessment == .accepted }) {
+            return match.candidate.url.standardizedFileURL
+        }
+        if let rejectedExactRelease = exactRelease.first {
+            throw locationError(
+                assessment: rejectedExactRelease.assessment,
+                candidate: rejectedExactRelease.candidate.url
+            )
+        }
+
+        let trusted = assessed.filter { $0.assessment == .accepted }.map(\.candidate)
+        if !trusted.isEmpty {
+            let found = trusted.map {
                 "\($0.version ?? "unknown") (\($0.build ?? "unknown"))"
             }
             throw CLIHostLocationError.versionIncompatible(
-                expected: "(version) ((build))",
+                expected: "\(version) (\(build))",
                 found: found,
-                candidate: accepted.first?.url
+                candidate: trusted.first?.url
             )
         }
-        if let candidate = failures.first(where: { $0.0 == .wrongTeam })?.1 {
-            throw CLIHostLocationError.teamMismatch(candidate: candidate)
+
+        let rejected = assessed[0]
+        throw locationError(
+            assessment: rejected.assessment,
+            candidate: rejected.candidate.url
+        )
+    }
+
+    private func locationError(
+        assessment: CLIHostIdentityAssessment,
+        candidate: URL
+    ) -> CLIHostLocationError {
+        switch assessment {
+        case .wrongTeam: return .teamMismatch(candidate: candidate)
+        case .wrongRole: return .roleMismatch(candidate: candidate)
+        case .invalidSignature: return .invalidSignature(candidate: candidate)
+        case .accepted:
+            preconditionFailure("Accepted candidates are handled before rejection mapping.")
         }
-        if let candidate = failures.first(where: { $0.0 == .wrongRole })?.1 {
-            throw CLIHostLocationError.roleMismatch(candidate: candidate)
-        }
-        throw CLIHostLocationError.invalidSignature(candidate: failures.first?.1)
     }
 
     private static func launchServicesCandidates(bundleIdentifier: String) -> [CLIHostCandidate] {
