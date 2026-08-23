@@ -544,6 +544,7 @@ struct ClipboardHistorySettingsView: View {
         panel.canChooseFiles = true
         panel.allowedContentTypes = [.applicationBundle]
         panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        PluginPresentationSafety.prepareForWindowOrdering()
         guard panel.runModal() == .OK else { return }
 
         let applications = panel.urls.compactMap { url -> ClipboardExcludedApplication? in

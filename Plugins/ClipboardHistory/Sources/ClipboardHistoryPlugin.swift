@@ -388,7 +388,7 @@ final class ClipboardHistoryPlugin:
                     "settings.shortcuts.collection.description",
                     defaultValue: "可选：控制收集状态，或清除未固定记录和全部历史。"
                 ),
-                systemImage: "pause.play",
+                systemImage: "playpause",
                 actionIDs: [
                     ActionID.toggleCollection,
                     ActionID.pauseCollection,
@@ -430,7 +430,7 @@ final class ClipboardHistoryPlugin:
                 id: ActionID.toggleCollection,
                 title: localization.string("action.toggle.title", defaultValue: "切换剪贴板历史收集"),
                 description: localization.string("action.toggle.description", defaultValue: "在暂停和恢复之间切换。"),
-                systemImage: "pause.play",
+                systemImage: "playpause",
                 capabilities: [.automatic, .background, .foregroundInteractive]
             ),
             action(
