@@ -510,13 +510,39 @@ final class CLIBrokerClient: @unchecked Sendable {
         case "nestedUnknownPayload":
             return try testResponseData(
                 request: request,
-                payload: testNestedPayload(operation: request.operation, duplicate: false)
+                payload: testDiscoveryPayload(operation: request.operation, mutation: .unknown)
             )
         case "nestedDuplicatePayload":
             return try testResponseData(
                 request: request,
-                payload: testNestedPayload(operation: request.operation, duplicate: true)
+                payload: testDiscoveryPayload(operation: request.operation, mutation: .duplicate)
             )
+        case "validDiscoveryPayload":
+            return try testResponseData(
+                request: request,
+                payload: testDiscoveryPayload(operation: request.operation, mutation: .none)
+            )
+        case "validStartedPayload":
+            return try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope(
+                schemaVersion: 1,
+                protocolVersion: request.protocolVersion,
+                requestID: request.requestID,
+                operation: request.operation,
+                actionReference: nil,
+                startedAt: .now,
+                finishedAt: nil,
+                outcome: .started,
+                message: "Action started.",
+                rejection: nil,
+                payload: try CLIProtocolCodec.encodeResponse(["accepted": true])
+            ))
+        case "validFailure":
+            return try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope.failure(
+                request: request,
+                outcome: .failed,
+                category: "fixtureFailure",
+                message: "Fixture failed."
+            ))
         case "timeout":
             throw CLIBrokerClientError.timedOut
         default:
@@ -543,9 +569,15 @@ final class CLIBrokerClient: @unchecked Sendable {
         ))
     }
 
-    private func testNestedPayload(
+    private enum TestPayloadMutation: Equatable {
+        case none
+        case unknown
+        case duplicate
+    }
+
+    private func testDiscoveryPayload(
         operation: CLIOperation,
-        duplicate: Bool
+        mutation: TestPayloadMutation
     ) throws -> Data {
         let payload: Data
         let duplicateField: String
@@ -611,7 +643,7 @@ final class CLIBrokerClient: @unchecked Sendable {
             return Data("{}".utf8)
         }
 
-        if duplicate {
+        if mutation == .duplicate {
             guard var string = String(data: payload, encoding: .utf8),
                   let range = string.range(of: duplicateField) else {
                 throw CLIProtocolCodecError.encodingFailed
@@ -620,6 +652,8 @@ final class CLIBrokerClient: @unchecked Sendable {
             string.replaceSubrange(range, with: "\(key):\"duplicate\",\(duplicateField)")
             return Data(string.utf8)
         }
+
+        if mutation == .none { return payload }
 
         guard var object = try JSONSerialization.jsonObject(with: payload) as? [String: Any],
               var records = object["records"] as? [[String: Any]],

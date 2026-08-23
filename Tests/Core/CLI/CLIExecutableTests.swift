@@ -184,6 +184,62 @@ final class CLIExecutableTests: XCTestCase {
         }
     }
 
+    func testValidPayloadContractsRemainAcceptedForTextAndJSON() throws {
+        let discoveryEnvironment = [
+            CLIServiceConfiguration.testPeerResponseEnvironmentKey: "validDiscoveryPayload",
+        ]
+        for arguments in [
+            ["actions", "list"],
+            ["workflows", "list"],
+            ["plugins", "list"],
+        ] {
+            let command = arguments.joined(separator: " ")
+            let text = try runCLI(arguments, environment: discoveryEnvironment)
+            XCTAssertEqual(text.status, CLIExitCode.success.rawValue, command)
+            XCTAssertFalse(text.output.isEmpty, command)
+            XCTAssertTrue(text.error.isEmpty, command)
+
+            let json = try runCLI(arguments + ["--json"], environment: discoveryEnvironment)
+            XCTAssertEqual(json.status, CLIExitCode.success.rawValue, command)
+            XCTAssertTrue(json.error.isEmpty, command)
+            let object = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(json.output.utf8)) as? [String: Any]
+            )
+            XCTAssertEqual(object["outcome"] as? String, "completed", command)
+        }
+
+        for arguments in [
+            ["actions", "run", "fixture/action"],
+            ["workflows", "run", "fixture"],
+        ] {
+            let command = arguments.joined(separator: " ")
+            for (fixture, expectedOutcome, expectedExit) in [
+                ("missingPayload", "completed", CLIExitCode.success),
+                ("validStartedPayload", "started", CLIExitCode.success),
+                ("validFailure", "failed", CLIExitCode.actionFailure),
+            ] {
+                let environment = [
+                    CLIServiceConfiguration.testPeerResponseEnvironmentKey: fixture,
+                ]
+                let text = try runCLI(arguments, environment: environment)
+                XCTAssertEqual(text.status, expectedExit.rawValue, "\(command): \(fixture)")
+
+                let json = try runCLI(arguments + ["--json"], environment: environment)
+                XCTAssertEqual(json.status, expectedExit.rawValue, "\(command): \(fixture)")
+                XCTAssertTrue(json.error.isEmpty, "\(command): \(fixture)")
+                let object = try XCTUnwrap(
+                    JSONSerialization.jsonObject(with: Data(json.output.utf8))
+                        as? [String: Any]
+                )
+                XCTAssertEqual(
+                    object["outcome"] as? String,
+                    expectedOutcome,
+                    "\(command): \(fixture)"
+                )
+            }
+        }
+    }
+
     func testUncertainPeerTimeoutUsesTransportExitCodeForTextAndJSON() throws {
         let environment = [
             CLIServiceConfiguration.testPeerResponseEnvironmentKey: "timeout",
