@@ -8,6 +8,7 @@ enum CLIServiceConfiguration {
     static let testServiceNameEnvironmentKey = "MACTOOLS_CLI_TEST_SERVICE_NAME"
     static let testDisableHostLaunchEnvironmentKey = "MACTOOLS_CLI_TEST_DISABLE_HOST_LAUNCH"
     static let testSignalReadyEnvironmentKey = "MACTOOLS_CLI_TEST_SIGNAL_READY"
+    static let testPeerResponseEnvironmentKey = "MACTOOLS_CLI_TEST_PEER_RESPONSE"
 #endif
 
     static func serviceName(bundleIdentifier: String?) -> String {

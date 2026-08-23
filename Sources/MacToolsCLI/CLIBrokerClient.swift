@@ -3,9 +3,9 @@ import Foundation
 
 enum CLIBrokerClientError: Error {
     case unavailable(String)
-    case invalidResponse
     case timedOut
     case protocolIncompatible
+    case peerContractInvalid
     case hostDiscovery(CLIHostLocationError)
     case hostDiscoveryTimedOut
     case brokerVersionIncompatible(expected: String, found: String, applicationURL: URL?)
@@ -70,7 +70,7 @@ extension CLIBrokerClientError {
                 signatureAccepted: true,
                 guidance: "Open System Settings > General > Login Items & Extensions and allow the MacTools background item, then retry."
             )
-        case .unavailable, .invalidResponse, .timedOut, .protocolIncompatible:
+        case .unavailable, .timedOut, .protocolIncompatible, .peerContractInvalid:
             return nil
         }
     }
@@ -98,6 +98,22 @@ final class CLIBrokerClient: @unchecked Sendable {
     }
 
     func prepareHost(launchIfNeeded: Bool = true) async throws -> CLIHandshakeResponse {
+#if DEBUG
+        if ProcessInfo.processInfo.environment[
+            CLIServiceConfiguration.testPeerResponseEnvironmentKey
+        ] != nil {
+            negotiatedProtocolVersion = CLIProtocolVersion.current
+            return CLIHandshakeResponse(
+                selectedProtocolVersion: CLIProtocolVersion.current,
+                brokerVersion: cliVersion().version,
+                brokerBuild: cliVersion().build,
+                hostVersion: cliVersion().version,
+                hostBuild: cliVersion().build,
+                hostReady: true,
+                message: nil
+            )
+        }
+#endif
         let deadline = Date().addingTimeInterval(10)
 #if DEBUG
         let launchIfNeeded = launchIfNeeded
@@ -179,6 +195,8 @@ final class CLIBrokerClient: @unchecked Sendable {
                 lastMessage = response.message ?? "MacTools is starting."
             } catch CLIBrokerClientError.protocolIncompatible {
                 throw CLIBrokerClientError.protocolIncompatible
+            } catch CLIBrokerClientError.peerContractInvalid {
+                throw CLIBrokerClientError.peerContractInvalid
             } catch let error as CLIBrokerClientError where error.hostFailureDiagnostic != nil {
                 throw error
             } catch is CancellationError {
@@ -227,28 +245,11 @@ final class CLIBrokerClient: @unchecked Sendable {
         let data = try CLIProtocolCodec.encodeRequest(request)
         let responseData: Data
         do {
-            responseData = try await withTaskCancellationHandler {
-                try Task.checkCancellation()
-                return try await awaitReply(timeout: 86_460) { completion in
-                    guard sendState.beginSending() else {
-                        completion(.failure(CancellationError()))
-                        return
-                    }
-                    guard let broker = brokerProxy(errorHandler: { _ in
-                        completion(.failure(CLIBrokerClientError.unavailable(
-                            "The broker or host connection was interrupted."
-                        )))
-                    }) else {
-                        completion(.failure(CLIBrokerClientError.unavailable(
-                            "The broker interface is unavailable."
-                        )))
-                        return
-                    }
-                    broker.send(data) { completion(.success($0)) }
-                }
-            } onCancel: {
-                sendState.cancel()
-            }
+            responseData = try await receiveResponseData(
+                request: request,
+                encodedRequest: data,
+                sendState: sendState
+            )
         } catch is CancellationError {
             // Make the state transition explicit before observing it. The cancellation
             // handlers can resume this task from different executor hops.
@@ -260,22 +261,31 @@ final class CLIBrokerClient: @unchecked Sendable {
                 _ = await cancellationTask.value
             }
             throw CancellationError()
+        } catch CLIBrokerClientError.timedOut {
+            throw CLIBrokerClientError.unavailable(
+                "Timed out waiting for the broker reply; delivery state is unknown."
+            )
         }
-        guard !responseData.isEmpty else { throw CLIBrokerClientError.invalidResponse }
-        let response = try CLIProtocolCodec.decodeResponse(
-            CLIResponseEnvelope.self,
-            from: responseData,
-            allowedKeys: [
-                "schemaVersion", "protocolVersion", "requestID", "operation",
-                "actionReference", "startedAt", "finishedAt", "outcome", "message",
-                "rejection", "payload",
-            ]
-        )
+        guard !responseData.isEmpty else { throw CLIBrokerClientError.peerContractInvalid }
+        let response: CLIResponseEnvelope
+        do {
+            response = try CLIProtocolCodec.decodeResponse(
+                CLIResponseEnvelope.self,
+                from: responseData,
+                allowedKeys: [
+                    "schemaVersion", "protocolVersion", "requestID", "operation",
+                    "actionReference", "startedAt", "finishedAt", "outcome", "message",
+                    "rejection", "payload",
+                ]
+            )
+        } catch {
+            throw CLIBrokerClientError.peerContractInvalid
+        }
         guard response.schemaVersion == 1,
               response.protocolVersion == request.protocolVersion,
               response.requestID == request.requestID,
               response.operation == request.operation else {
-            throw CLIBrokerClientError.invalidResponse
+            throw CLIBrokerClientError.peerContractInvalid
         }
         return response
     }
@@ -327,15 +337,26 @@ final class CLIBrokerClient: @unchecked Sendable {
         guard identityValidator.accepts(connection, as: .broker) else {
             throw CLIBrokerClientError.unavailable("The broker identity could not be verified.")
         }
-        guard !responseData.isEmpty else { throw CLIBrokerClientError.invalidResponse }
-        let response = try CLIProtocolCodec.decodeResponse(
-            CLIHandshakeResponse.self,
-            from: responseData,
-            allowedKeys: [
-                "selectedProtocolVersion", "brokerVersion", "brokerBuild", "hostVersion",
-                "hostBuild", "hostReady", "message",
-            ]
-        )
+        guard !responseData.isEmpty else { throw CLIBrokerClientError.peerContractInvalid }
+        let response: CLIHandshakeResponse
+        do {
+            response = try CLIProtocolCodec.decodeResponse(
+                CLIHandshakeResponse.self,
+                from: responseData,
+                allowedKeys: [
+                    "selectedProtocolVersion", "brokerVersion", "brokerBuild", "hostVersion",
+                    "hostBuild", "hostReady", "message",
+                ]
+            )
+        } catch {
+            throw CLIBrokerClientError.peerContractInvalid
+        }
+        if let selectedProtocolVersion = response.selectedProtocolVersion,
+           !(CLIProtocolVersion.minimum...CLIProtocolVersion.current).contains(
+               selectedProtocolVersion
+           ) {
+            throw CLIBrokerClientError.peerContractInvalid
+        }
         negotiatedProtocolVersion = response.selectedProtocolVersion
         return response
     }
@@ -371,12 +392,92 @@ final class CLIBrokerClient: @unchecked Sendable {
                 return try result.get()
             }
             try Task.checkCancellation()
-            throw CLIBrokerClientError.invalidResponse
+            throw CLIBrokerClientError.unavailable("The broker reply ended unexpectedly.")
         } onCancel: {
             continuation.yield(.failure(CancellationError()))
             continuation.finish()
         }
     }
+
+    private func receiveResponseData(
+        request: CLIRequestEnvelope,
+        encodedRequest: Data,
+        sendState: CLIRequestSendState
+    ) async throws -> Data {
+#if DEBUG
+        if let fixture = try testPeerResponseData(request: request) {
+            return fixture
+        }
+#endif
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await awaitReply(timeout: 86_460) { completion in
+                guard sendState.beginSending() else {
+                    completion(.failure(CancellationError()))
+                    return
+                }
+                guard let broker = brokerProxy(errorHandler: { _ in
+                    completion(.failure(CLIBrokerClientError.unavailable(
+                        "The broker or host connection was interrupted."
+                    )))
+                }) else {
+                    completion(.failure(CLIBrokerClientError.unavailable(
+                        "The broker interface is unavailable."
+                    )))
+                    return
+                }
+                broker.send(encodedRequest) { completion(.success($0)) }
+            }
+        } onCancel: {
+            sendState.cancel()
+        }
+    }
+
+#if DEBUG
+    private func testPeerResponseData(request: CLIRequestEnvelope) throws -> Data? {
+        switch ProcessInfo.processInfo.environment[
+            CLIServiceConfiguration.testPeerResponseEnvironmentKey
+        ] {
+        case "empty":
+            return Data()
+        case "malformed":
+            return Data("{".utf8)
+        case "mismatched":
+            let mismatched = CLIRequestEnvelope(
+                protocolVersion: request.protocolVersion,
+                requestID: UUID(),
+                operation: request.operation,
+                sentAt: request.sentAt,
+                invocationContext: request.invocationContext,
+                payload: request.payload
+            )
+            return try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope.failure(
+                request: mismatched,
+                outcome: .failed,
+                category: "fixture",
+                message: "fixture"
+            ))
+        case "malformedPayload":
+            return try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope(
+                schemaVersion: 1,
+                protocolVersion: request.protocolVersion,
+                requestID: request.requestID,
+                operation: request.operation,
+                actionReference: nil,
+                startedAt: .now,
+                finishedAt: .now,
+                outcome: .completed,
+                message: nil,
+                rejection: nil,
+                payload: Data("{".utf8)
+            ))
+        case "timeout":
+            throw CLIBrokerClientError.timedOut
+        default:
+            return nil
+        }
+    }
+#endif
 
     private func launchHost(deadline: Date) async throws -> URL {
         let applicationURL: URL

@@ -58,6 +58,15 @@ struct CLIApplication {
                 json: jsonRequested
             )
             return CLIExitCode.protocolIncompatible.rawValue
+        } catch CLIBrokerClientError.peerContractInvalid {
+            emitLocalFailure(
+                command: commandName(arguments),
+                outcome: .protocolIncompatible,
+                category: "invalidPeerResponse",
+                message: "The MacTools broker or host returned an invalid response.",
+                json: jsonRequested
+            )
+            return CLIExitCode.protocolIncompatible.rawValue
         } catch let error as CLIBrokerClientError where error.hostFailureDiagnostic != nil {
             let diagnostic = error.hostFailureDiagnostic!
             emitLocalFailure(
@@ -212,10 +221,14 @@ struct CLIApplication {
                     json: arguments.json
                 )
             }
-            definitions = try CLIProtocolCodec.decodeResponse(
-                CLIActionRecord.self,
-                from: payload
-            ).parameters
+            do {
+                definitions = try CLIProtocolCodec.decodeResponse(
+                    CLIActionRecord.self,
+                    from: payload
+                ).parameters
+            } catch {
+                throw CLIBrokerClientError.peerContractInvalid
+            }
         } else {
             definitions = []
         }
@@ -269,7 +282,12 @@ struct CLIApplication {
     }
 
     private func emit(_ response: CLIResponseEnvelope, json: Bool) throws -> Int32 {
-        let rendered = try output.render(response, json: json)
+        let rendered: String
+        do {
+            rendered = try output.render(response, json: json)
+        } catch {
+            throw CLIBrokerClientError.peerContractInvalid
+        }
         if output.exitCode(for: response) == .success {
             write(rendered)
         } else {

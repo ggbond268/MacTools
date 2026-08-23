@@ -112,6 +112,9 @@ versa); integer and number parameters retain their declared schema types.
 `--json` writes exactly one versioned object. It includes `schemaVersion`,
 `protocolVersion`, `requestID`, `command`, timestamps, `invocationSource`,
 `outcome`, a structured `rejection`, and command-specific `data`.
+Malformed or mismatched responses from an authenticated peer are protocol
+failures (exit 10). If a broker reply never arrives after a request is sent,
+delivery is uncertain and the CLI reports a transport failure (exit 9).
 
 | Exit | Meaning |
 | ---: | --- |

@@ -83,6 +83,67 @@ final class CLIExecutableTests: XCTestCase {
         XCTAssertEqual(object["outcome"] as? String, "invalidInput")
     }
 
+    func testInvalidPeerResponsesUseProtocolExitCodeForTextAndJSON() throws {
+        for fixture in ["empty", "malformed", "mismatched", "malformedPayload"] {
+            let environment = [
+                CLIServiceConfiguration.testPeerResponseEnvironmentKey: fixture,
+            ]
+            let text = try runCLI(["actions", "list"], environment: environment)
+            XCTAssertEqual(
+                text.status,
+                CLIExitCode.protocolIncompatible.rawValue,
+                fixture
+            )
+            XCTAssertTrue(text.output.isEmpty, fixture)
+            XCTAssertTrue(text.error.contains("invalid response"), fixture)
+
+            let json = try runCLI(
+                ["actions", "list", "--json"],
+                environment: environment
+            )
+            XCTAssertEqual(
+                json.status,
+                CLIExitCode.protocolIncompatible.rawValue,
+                fixture
+            )
+            XCTAssertTrue(json.error.isEmpty, fixture)
+            let object = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(json.output.utf8)) as? [String: Any]
+            )
+            XCTAssertEqual(object["outcome"] as? String, "protocolIncompatible", fixture)
+            XCTAssertEqual(
+                (object["rejection"] as? [String: Any])?["category"] as? String,
+                "invalidPeerResponse",
+                fixture
+            )
+        }
+    }
+
+    func testUncertainPeerTimeoutUsesTransportExitCodeForTextAndJSON() throws {
+        let environment = [
+            CLIServiceConfiguration.testPeerResponseEnvironmentKey: "timeout",
+        ]
+        let text = try runCLI(["actions", "list"], environment: environment)
+        XCTAssertEqual(text.status, CLIExitCode.transportFailure.rawValue)
+        XCTAssertTrue(text.output.isEmpty)
+        XCTAssertTrue(text.error.contains("delivery state is unknown"))
+
+        let json = try runCLI(
+            ["actions", "list", "--json"],
+            environment: environment
+        )
+        XCTAssertEqual(json.status, CLIExitCode.transportFailure.rawValue)
+        XCTAssertTrue(json.error.isEmpty)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(json.output.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(object["outcome"] as? String, "hostUnavailable")
+        XCTAssertEqual(
+            (object["rejection"] as? [String: Any])?["category"] as? String,
+            "hostTransportFailure"
+        )
+    }
+
     func testRequestSendStatePersistsCancellationAcrossAdmissionRace() {
         let cancelledBeforeSending = CLIRequestSendState()
         cancelledBeforeSending.cancel()
@@ -198,11 +259,18 @@ final class CLIExecutableTests: XCTestCase {
 
     private func runCLI(
         _ arguments: [String],
-        executableURL: URL? = nil
+        executableURL: URL? = nil,
+        environment: [String: String] = [:]
     ) throws -> (status: Int32, output: String, error: String) {
         let process = Process()
         process.executableURL = executableURL ?? cliExecutableURL
         process.arguments = arguments
+        if !environment.isEmpty {
+            process.environment = ProcessInfo.processInfo.environment.merging(
+                environment,
+                uniquingKeysWith: { _, override in override }
+            )
+        }
         let output = Pipe()
         let error = Pipe()
         process.standardOutput = output

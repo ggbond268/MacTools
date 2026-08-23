@@ -6,7 +6,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
 
     func testAwaitsSuccessfulLaunchCompletion() async throws {
         let callback = expectation(description: "Launch callback completed")
-        let launcher = CLIHostApplicationLauncher { _, completion in
+        let launcher = CLIHostApplicationLauncher { _, _, completion in
             DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
                 completion(.success(()))
                 callback.fulfill()
@@ -22,7 +22,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
     }
 
     func testNonReturningLaunchCallbackIsBoundedByTimeout() async {
-        let launcher = CLIHostApplicationLauncher { _, _ in }
+        let launcher = CLIHostApplicationLauncher { _, _, _ in }
         let startedAt = Date()
 
         do {
@@ -39,7 +39,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
     }
 
     func testLaunchFailureIsPropagated() async {
-        let launcher = CLIHostApplicationLauncher { _, completion in
+        let launcher = CLIHostApplicationLauncher { _, _, completion in
             completion(.failure(CLIHostApplicationLaunchError.failed("denied")))
         }
 
@@ -58,7 +58,7 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
     }
 
     func testCancellationReturnsWithoutAwaitingLaunchCallback() async {
-        let launcher = CLIHostApplicationLauncher { _, _ in }
+        let launcher = CLIHostApplicationLauncher { _, _, _ in }
         let task = Task {
             try await launcher.launch(
                 applicationURL: applicationURL,
@@ -76,5 +76,27 @@ final class CLIHostApplicationLauncherTests: XCTestCase {
             XCTAssertTrue(error is CancellationError)
         }
         XCTAssertLessThan(Date().timeIntervalSince(cancelledAt), 0.5)
+    }
+
+    func testLaunchConfigurationPreventsRunningCopySubstitution() async throws {
+        var receivedURL: URL?
+        var activates = true
+        var allowsRunningApplicationSubstitution = true
+        let launcher = CLIHostApplicationLauncher { url, configuration, completion in
+            receivedURL = url
+            activates = configuration.activates
+            allowsRunningApplicationSubstitution =
+                configuration.allowsRunningApplicationSubstitution
+            completion(.success(()))
+        }
+
+        try await launcher.launch(
+            applicationURL: applicationURL,
+            deadline: Date().addingTimeInterval(1)
+        )
+
+        XCTAssertEqual(receivedURL, applicationURL)
+        XCTAssertFalse(activates)
+        XCTAssertFalse(allowsRunningApplicationSubstitution)
     }
 }

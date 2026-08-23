@@ -20,14 +20,16 @@ enum CLIHostApplicationLaunchError: Error, Equatable, LocalizedError {
 
 struct CLIHostApplicationLauncher {
     typealias Completion = @Sendable (Result<Void, Error>) -> Void
-    typealias OpenApplication = (URL, @escaping Completion) -> Void
+    typealias OpenApplication = (
+        URL,
+        NSWorkspace.OpenConfiguration,
+        @escaping Completion
+    ) -> Void
 
     private let openApplication: OpenApplication
 
     init(workspace: NSWorkspace = .shared) {
-        openApplication = { applicationURL, completion in
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = false
+        openApplication = { applicationURL, configuration, completion in
             workspace.openApplication(
                 at: applicationURL,
                 configuration: configuration
@@ -53,7 +55,7 @@ struct CLIHostApplicationLauncher {
         let timeout = deadline.timeIntervalSinceNow
         guard timeout > 0 else { throw CLIHostApplicationLaunchError.timedOut }
         let (stream, continuation) = AsyncStream.makeStream(of: Result<Void, Error>.self)
-        openApplication(applicationURL) { result in
+        openApplication(applicationURL, Self.makeOpenConfiguration()) { result in
             continuation.yield(result)
             continuation.finish()
         }
@@ -76,5 +78,12 @@ struct CLIHostApplicationLauncher {
             continuation.yield(.failure(CancellationError()))
             continuation.finish()
         }
+    }
+
+    static func makeOpenConfiguration() -> NSWorkspace.OpenConfiguration {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.allowsRunningApplicationSubstitution = false
+        return configuration
     }
 }
