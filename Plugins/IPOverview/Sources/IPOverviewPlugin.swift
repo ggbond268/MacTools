@@ -174,9 +174,7 @@ final class IPOverviewPlugin:
             await self.viewModel.refreshAddressesAndWait()
             guard !Task.isCancelled else { return .cancelled }
 
-            let value = actionID == ActionID.copyLocalIPv4
-                ? self.viewModel.snapshot.preferredLocalIPv4?.address
-                : self.viewModel.snapshot.preferredPublicIPv4?.ip
+            let value = self.copyValue(for: actionID)
             guard let value, !value.isEmpty else {
                 let fallbackMessage = actionID == ActionID.copyLocalIPv4
                     ? PluginKitLocalization.actionUnavailable
@@ -189,6 +187,12 @@ final class IPOverviewPlugin:
             self.viewModel.copy(value)
             return .succeeded()
         }
+    }
+
+    private func copyValue(for actionID: String) -> String? {
+        actionID == ActionID.copyLocalIPv4
+            ? viewModel.snapshot.preferredLocalIPv4?.address
+            : viewModel.snapshot.preferredPublicIPv4?.ip
     }
 
     var settingsPage: PluginSettingsPage? {

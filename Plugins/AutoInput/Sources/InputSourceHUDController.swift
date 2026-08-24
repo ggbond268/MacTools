@@ -178,7 +178,8 @@ final class InputSourceHUDController: InputSourceHUDPresenting {
             panelSize: panelSize,
             visibleFrames: placementFrames,
             position: effectivePosition,
-            pointerLocation: capturedPointerLocation
+            pointerLocation: capturedPointerLocation,
+            pointerInset: Self.pointerHitInset(for: configuration.size)
         )
         panel.setFrame(frame, display: true)
         panel.setAccessibilityLabel(
@@ -363,13 +364,15 @@ final class InputSourceHUDController: InputSourceHUDPresenting {
         panelSize: CGSize,
         visibleFrames: [CGRect],
         position: AutoInputHUDPosition = .automatic,
-        pointerLocation: CGPoint? = nil
+        pointerLocation: CGPoint? = nil,
+        pointerInset: CGFloat = 12
     ) -> CGRect {
         if position == .atPointer, let pointerLocation {
             return panelFrame(
                 at: pointerLocation,
                 panelSize: panelSize,
-                displayFrames: visibleFrames
+                displayFrames: visibleFrames,
+                pointerInset: pointerInset
             )
         }
 
@@ -468,15 +471,16 @@ final class InputSourceHUDController: InputSourceHUDPresenting {
     static func panelFrame(
         at pointerLocation: CGPoint,
         panelSize: CGSize,
-        displayFrames: [CGRect]
+        displayFrames: [CGRect],
+        pointerInset: CGFloat = 12
     ) -> CGRect {
         guard let displayFrame = matchingVisibleFrame(
             for: CGRect(origin: pointerLocation, size: CGSize(width: 1, height: 1)),
             visibleFrames: displayFrames
         ) else {
             return CGRect(
-                x: pointerLocation.x - panelSize.width / 2,
-                y: pointerLocation.y - panelSize.height + pointerHitInset,
+                x: pointerLocation.x - panelSize.width + pointerInset,
+                y: pointerLocation.y - pointerInset,
                 width: panelSize.width,
                 height: panelSize.height
             ).integral
@@ -484,14 +488,14 @@ final class InputSourceHUDController: InputSourceHUDPresenting {
 
         let minX = displayFrame.minX
         let maxX = displayFrame.maxX - panelSize.width
-        let preferredX = pointerLocation.x - panelSize.width / 2
+        let preferredX = pointerLocation.x - panelSize.width + pointerInset
         let x = maxX >= minX
             ? min(max(preferredX, minX), maxX)
             : displayFrame.midX - panelSize.width / 2
 
         let minY = displayFrame.minY
         let maxY = displayFrame.maxY - panelSize.height
-        let preferredY = pointerLocation.y - panelSize.height + pointerHitInset
+        let preferredY = pointerLocation.y - pointerInset
         let y = maxY >= minY
             ? min(max(preferredY, minY), maxY)
             : displayFrame.midY - panelSize.height / 2
@@ -579,7 +583,15 @@ final class InputSourceHUDController: InputSourceHUDPresenting {
     }
 
     private static let displayMargin: CGFloat = 10
-    private static let pointerHitInset: CGFloat = 8
+
+    private static func pointerHitInset(for size: AutoInputHUDSize) -> CGFloat {
+        switch size {
+        case .compact:
+            10
+        case .standard, .large:
+            12
+        }
+    }
 
     private static func matchingVisibleFrame(
         for focusedFrame: CGRect,

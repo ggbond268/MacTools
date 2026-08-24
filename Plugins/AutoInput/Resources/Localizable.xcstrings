@@ -692,17 +692,17 @@
     "settings.hud.position.at-pointer.help" : {
       "extractionState" : "manual",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "يضع شاشة العرض مباشرةً تحت مؤشر الماوس للنقر والتبديل فورًا." } },
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Platziert das HUD direkt unter dem Zeiger, um sofort per Klick zu wechseln." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Places the HUD directly beneath the pointer for immediate click-to-switch." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Coloca el indicador justo debajo del puntero para cambiar con un clic inmediato." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Place l’indicateur directement sous le pointeur pour changer immédiatement d’un clic." } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "すぐクリックして切り替えられるよう、ポインタの直下に表示します。" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "바로 클릭해 전환할 수 있도록 포인터 바로 아래에 표시합니다." } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Posiciona o indicador diretamente sob o cursor para alternar imediatamente com um clique." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Размещает индикатор прямо под указателем для мгновенного переключения нажатием." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "将提示直接放在指针下方，便于立即点击切换。" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "將提示直接放在指標下方，便於立即按一下切換。" } }
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "يضع شاشة العرض أعلى المؤشر وإلى يساره، بحيث يبقى المؤشر عند الزاوية السفلية اليمنى ويظل النص ظاهرًا." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Platziert das HUD oberhalb und links vom Zeiger, sodass der Zeiger an der unteren rechten Ecke liegt und der Text sichtbar bleibt." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Places the HUD above and to the left of the pointer, with the pointer at its bottom-right corner so the text remains visible." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Coloca el indicador arriba y a la izquierda del puntero, con el puntero en la esquina inferior derecha para que el texto siga visible." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Place l’indicateur au-dessus et à gauche du pointeur, avec le pointeur dans son coin inférieur droit pour que le texte reste visible." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ポインタの左上に表示し、ポインタが右下隅に来るようにしてテキストを見やすくします。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "포인터의 왼쪽 위에 표시하고 포인터가 오른쪽 아래 모서리에 오도록 하여 텍스트가 잘 보이게 합니다." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Posiciona o indicador acima e à esquerda do cursor, com o cursor no canto inferior direito para manter o texto visível." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Размещает индикатор выше и левее указателя, оставляя указатель в правом нижнем углу, чтобы текст был виден." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "将提示放在指针左上方，指针停在右下角，避免遮挡文字。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "將提示放在指標左上方，指標停在右下角，避免遮擋文字。" } }
       }
     },
     "settings.hud.position.at-pointer.selected-help" : {

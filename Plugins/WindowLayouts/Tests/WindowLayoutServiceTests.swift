@@ -94,6 +94,36 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
     }
 
+    func testNonResizableWindowMovesBetweenDifferentSizedDisplaysWithoutResizing() async {
+        let window = makeWindow(canResize: false)
+        let originalFrame = CGRect(x: 720, y: 462, width: 720, height: 438)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: originalFrame)
+        let screens = [
+            WindowScreen(
+                id: "main",
+                frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+                visibleFrame: CGRect(x: 0, y: 24, width: 1440, height: 876)
+            ),
+            WindowScreen(
+                id: "right",
+                frame: CGRect(x: 1440, y: -300, width: 2560, height: 1440),
+                visibleFrame: CGRect(x: 1440, y: -276, width: 2560, height: 1416)
+            ),
+        ]
+        let service = makeService(
+            window: window,
+            frameAdapter: frameAdapter,
+            screens: screens
+        )
+
+        assertSuccess(await service.execute(.moveToNextDisplay, options: options()))
+
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 3280, y: 702, width: 720, height: 438)
+        )
+    }
+
     func testNonResizableWindowCanCenterButCannotTile() async {
         let window = makeWindow(canResize: false)
         let frameAdapter = MockWindowFrameAdapter(
@@ -166,7 +196,106 @@ final class WindowLayoutServiceTests: XCTestCase {
 
         XCTAssertEqual(
             frameAdapter.frames[window.identity],
-            CGRect(x: 0, y: 24, width: 1440, height: 876)
+            CGRect(x: -360, y: 24, width: 1800, height: 1200)
+        )
+    }
+
+    func testRestoreKeepsOversizedOffTopFrameReachableWithoutResizing() async {
+        let window = makeWindow()
+        let frameAdapter = MockWindowFrameAdapter(
+            window: window,
+            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
+        )
+        let history = InMemoryWindowFrameHistory()
+        history.record(
+            CGRect(x: -300, y: -200, width: 2000, height: 1200),
+            for: window
+        )
+        let service = makeService(
+            window: window,
+            frameAdapter: frameAdapter,
+            history: history
+        )
+
+        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
+
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: -300, y: 24, width: 2000, height: 1200)
+        )
+    }
+
+    func testRestoreKeepsNonResizableOversizedWindowReachable() async {
+        let historicalFrame = CGRect(x: -300, y: -200, width: 2000, height: 1200)
+        let window = makeWindow(canResize: false)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: historicalFrame)
+        let history = InMemoryWindowFrameHistory()
+        history.record(historicalFrame, for: window)
+        let service = makeService(
+            window: window,
+            frameAdapter: frameAdapter,
+            history: history
+        )
+
+        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
+
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: -300, y: 24, width: 2000, height: 1200)
+        )
+    }
+
+    func testRestoreUsesStageManagerSafeVisibleFrame() async {
+        let window = makeWindow()
+        let frameAdapter = MockWindowFrameAdapter(
+            window: window,
+            frame: CGRect(x: 300, y: 100, width: 600, height: 400)
+        )
+        let history = InMemoryWindowFrameHistory()
+        history.record(CGRect(x: 0, y: 24, width: 600, height: 400), for: window)
+        let safeFrame = CGRect(x: 200, y: 24, width: 1240, height: 876)
+        let service = makeService(
+            window: window,
+            frameAdapter: frameAdapter,
+            history: history,
+            stageManagerSafeAreaProvider: FixedStageManagerSafeAreaProvider(
+                safeFrame: safeFrame
+            )
+        )
+
+        assertSuccess(await service.execute(
+            .restorePreviousFrame,
+            options: options(respectsStageManager: true)
+        ))
+
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 200, y: 24, width: 600, height: 400)
+        )
+    }
+
+    func testRestoreClampsFrameWithOnlySliverVisibleOnSurvivingDisplay() async {
+        let window = makeWindow()
+        let frameAdapter = MockWindowFrameAdapter(
+            window: window,
+            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
+        )
+        let history = InMemoryWindowFrameHistory()
+        history.record(
+            CGRect(x: 1439, y: 100, width: 600, height: 400),
+            for: window
+        )
+        let service = makeService(
+            window: window,
+            frameAdapter: frameAdapter,
+            history: history
+        )
+
+        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
+
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 840, y: 100, width: 600, height: 400)
         )
     }
 
@@ -606,6 +735,7 @@ final class WindowLayoutServiceTests: XCTestCase {
         history: WindowFrameHistory = InMemoryWindowFrameHistory(),
         fullScreenWriter: WindowFullScreenWriting? = nil,
         focusedWindowResolver: FocusedWindowResolving? = nil,
+        stageManagerSafeAreaProvider: StageManagerSafeAreaProviding? = nil,
         waitForFrameSettlement: @escaping @MainActor @Sendable (Duration) async throws -> Void = { _ in }
     ) -> WindowLayoutService {
         WindowLayoutService(
@@ -614,6 +744,8 @@ final class WindowLayoutServiceTests: XCTestCase {
             screenProvider: MockWindowScreenProvider(screens: screens),
             history: history,
             fullScreenWriter: fullScreenWriter,
+            stageManagerSafeAreaProvider: stageManagerSafeAreaProvider
+                ?? SystemStageManagerSafeAreaProvider(),
             waitForFrameSettlement: waitForFrameSettlement
         )
     }
@@ -640,12 +772,24 @@ final class WindowLayoutServiceTests: XCTestCase {
         XCTAssertEqual(error, expectedError, file: file, line: line)
     }
 
-    private func options(gap: CGFloat = 0) -> WindowLayoutExecutionOptions {
+    private func options(
+        gap: CGFloat = 0,
+        respectsStageManager: Bool = false
+    ) -> WindowLayoutExecutionOptions {
         WindowLayoutExecutionOptions(
             gap: gap,
             cyclesHalves: false,
-            respectsStageManager: false
+            respectsStageManager: respectsStageManager
         )
+    }
+}
+
+@MainActor
+private struct FixedStageManagerSafeAreaProvider: StageManagerSafeAreaProviding {
+    let safeFrame: CGRect
+
+    func safeVisibleFrame(for screen: WindowScreen) -> CGRect {
+        safeFrame
     }
 }
 

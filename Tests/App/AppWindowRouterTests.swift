@@ -104,6 +104,36 @@ final class AppWindowRouterTests: XCTestCase {
         window.close()
     }
 
+    func testSettingsAndStandalonePalettesShareRecentActionStore() throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let router = makeRouter(defaults: defaults)
+
+        router.showSettings()
+        let settingsHostingView = try XCTUnwrap(
+            router.settingsWindow?.contentView as? NSHostingView<SettingsView>
+        )
+
+        router.toggleCommandPalette()
+        let paletteHostingView = try XCTUnwrap(
+            router.commandPalettePanel?.contentView
+                as? NSHostingView<StandaloneCommandPaletteRootView>
+        )
+
+        XCTAssertTrue(
+            settingsHostingView.rootView.commandPaletteRecentStore
+                === router.commandPaletteRecentStore
+        )
+        XCTAssertTrue(
+            paletteHostingView.rootView.commandPaletteRecentStore
+                === router.commandPaletteRecentStore
+        )
+
+        router.commandPalettePanel?.close()
+        router.settingsWindow?.close()
+    }
+
     func testSettingsWindowUsesSidebarAsInitialFocus() async throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

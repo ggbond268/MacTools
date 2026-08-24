@@ -267,7 +267,7 @@ private struct WindowShortcutPresetEditorSheet: View {
                         "settings.preset.currentBinding",
                         "当前"
                     ),
-                    binding: item.currentBinding
+                    bindings: plugin.shortcutPresetCurrentBindings(for: item.actionID)
                 )
 
                 Image(systemName: "arrow.right")
@@ -330,7 +330,7 @@ private struct WindowShortcutPresetEditorSheet: View {
 
     private func currentBindingBlock(
         label: String,
-        binding: ShortcutBinding?
+        bindings: [ShortcutBinding]
     ) -> some View {
         VStack(
             alignment: .leading,
@@ -340,12 +340,23 @@ private struct WindowShortcutPresetEditorSheet: View {
                 .font(PluginSettingsTheme.Typography.statusBadge)
                 .foregroundStyle(.secondary)
 
-            PluginShortcutRecorderField(
-                displayText: plugin.shortcutBindingTitle(binding),
-                isRecording: false,
-                minWidth: 0
-            )
-            .frame(maxWidth: .infinity)
+            if bindings.isEmpty {
+                PluginShortcutRecorderField(
+                    displayText: plugin.shortcutBindingTitle(nil),
+                    isRecording: false,
+                    minWidth: 0
+                )
+                .frame(maxWidth: .infinity)
+            } else {
+                ForEach(Array(bindings.enumerated()), id: \.offset) { _, binding in
+                    PluginShortcutRecorderField(
+                        displayText: plugin.shortcutBindingTitle(binding),
+                        isRecording: false,
+                        minWidth: 0
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

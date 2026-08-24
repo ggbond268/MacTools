@@ -36,6 +36,7 @@ final class WindowLayoutsStore {
     private(set) var customCommands: [WindowCustomCommand] = []
     private(set) var revision: UInt64 = 0
     var onMutation: (() -> Void)?
+    var onSafetyPolicyMutation: (() -> Void)?
 
     init(storage: PluginStorage) {
         self.storage = storage
@@ -113,11 +114,16 @@ final class WindowLayoutsStore {
         guard let index = customCommands.firstIndex(where: { $0.id == command.id })
         else { return false }
         guard let normalized = normalizedCommand(command) else { return false }
+        let externalInvocationPolicyChanged =
+            customCommands[index].allowExternalInvocation != normalized.allowExternalInvocation
         var updated = customCommands
         updated[index] = normalized
         guard persist(customCommands: updated) else { return false }
         customCommands = updated
         recordMutation()
+        if externalInvocationPolicyChanged {
+            onSafetyPolicyMutation?()
+        }
         return true
     }
 

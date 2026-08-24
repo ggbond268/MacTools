@@ -196,9 +196,10 @@ private extension RunLinkExecutionFeedback.Tone {
 
 enum WindowLayoutActionFeedback {
     static func feedback(
-        actionTitle: String,
+        actionTitle: String?,
         outcome: ActionExecutionOutcome
     ) -> RunLinkExecutionFeedback? {
+        let actionTitle = actionTitle ?? FeatureL10n.string("窗口布局")
         switch outcome {
         case let .completed(.succeeded(message)):
             guard let message else { return nil }

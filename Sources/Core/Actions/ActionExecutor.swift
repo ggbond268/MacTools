@@ -363,10 +363,12 @@ final class ActionExecutor {
     /// Completes validation and confirmation in the caller's task, then transfers
     /// ownership to the executor once the provider has accepted the action.
     /// Cancelling a surface's completion observer never cancels the accepted action.
+    /// The executor-owned completion observer still receives the accepted action's final outcome.
     func startSurfaceIndependentTrackingCompletion(
         _ invocation: ActionInvocation,
         expectedDefinition: ActionDefinition,
-        confirmationService overrideConfirmationService: (any ActionConfirmationRequesting)? = nil
+        confirmationService overrideConfirmationService: (any ActionConfirmationRequesting)? = nil,
+        completionObserver: (@MainActor (ActionExecutionOutcome) -> Void)? = nil
     ) async -> SurfaceIndependentActionStartResult {
         switch await prepare(
             invocation,
@@ -388,6 +390,7 @@ final class ActionExecutor {
                     return
                 }
                 let outcome = await executionOutcome(for: execution)
+                completionObserver?(outcome)
                 continuation.yield(outcome)
                 continuation.finish()
                 surfaceIndependentExecutionTasks[executionID] = nil

@@ -103,22 +103,34 @@ final class ActionShortcutAssignmentStore {
     }
 
     @discardableResult
-    func replaceAll(_ assignments: [ActionShortcutAssignmentRecord]) -> ActionShortcutStoreWriteResult {
+    func replaceAll(
+        _ assignments: [ActionShortcutAssignmentRecord],
+        reportsCommittedChange: Bool = true
+    ) -> ActionShortcutStoreWriteResult {
         _ = self.assignments()
         guard loadError == nil else { return .rejected(rollbackSucceeded: true) }
-        return replaceAll(assignments, allowsRecovery: false)
+        return replaceAll(
+            assignments,
+            allowsRecovery: false,
+            reportsCommittedChange: reportsCommittedChange
+        )
     }
 
     @discardableResult
     func replaceAllForRecovery(
         _ assignments: [ActionShortcutAssignmentRecord]
     ) -> ActionShortcutStoreWriteResult {
-        replaceAll(assignments, allowsRecovery: true)
+        replaceAll(assignments, allowsRecovery: true, reportsCommittedChange: true)
+    }
+
+    func reportCommittedAssignmentsChange() {
+        preferencesBackupChangeReporter?.didPersist(.actionShortcutAssignments)
     }
 
     private func replaceAll(
         _ assignments: [ActionShortcutAssignmentRecord],
-        allowsRecovery: Bool
+        allowsRecovery: Bool,
+        reportsCommittedChange: Bool
     ) -> ActionShortcutStoreWriteResult {
         let previousAssignments = self.assignments()
         let previousPayloadWasValid = loadError == nil
@@ -141,7 +153,9 @@ final class ActionShortcutAssignmentStore {
             )
         }
         loadError = nil
-        preferencesBackupChangeReporter?.didPersist(.actionShortcutAssignments)
+        if reportsCommittedChange {
+            reportCommittedAssignmentsChange()
+        }
         return .committed
     }
 

@@ -281,6 +281,7 @@ struct StandaloneCommandPaletteRootView: View {
     let pluginHost: PluginHost
     let launchAtLoginController: LaunchAtLoginController
     let appearanceUserDefaults: UserDefaults
+    let commandPaletteRecentStore: CommandPaletteRecentStore
     @ObservedObject var state: StandaloneCommandPaletteState
     let actions: UnifiedSearchPaletteActions
 
@@ -290,6 +291,7 @@ struct StandaloneCommandPaletteRootView: View {
                 pluginHost: pluginHost,
                 launchAtLoginController: launchAtLoginController,
                 appearanceUserDefaults: appearanceUserDefaults,
+                recentStore: commandPaletteRecentStore,
                 availableSize: geometry.size,
                 presentationOrigin: state.presentationOrigin,
                 focusRequestID: state.focusRequestID,
@@ -393,6 +395,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     private let launchAtLoginController: LaunchAtLoginController
     private let menuBarPanelThemeStore: MenuBarPanelThemeStore
     private let appearanceUserDefaults: UserDefaults
+    let commandPaletteRecentStore: CommandPaletteRecentStore
     private let settingsSidebarPreferences: SettingsSidebarPreferencesStore
     private let commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration
     private(set) var settingsWindow: NSWindow?
@@ -451,6 +454,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         self.launchAtLoginController = launchAtLoginController
         self.menuBarPanelThemeStore = menuBarPanelThemeStore
         self.appearanceUserDefaults = appearanceUserDefaults
+        self.commandPaletteRecentStore = CommandPaletteRecentStore(
+            userDefaults: appearanceUserDefaults
+        )
         self.settingsSidebarPreferences = SettingsSidebarPreferencesStore(
             userDefaults: appearanceUserDefaults,
             preferencesBackupChangeReporter: pluginHost.preferencesBackupChangeReporter
@@ -689,6 +695,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 menuBarPanelThemeStore: menuBarPanelThemeStore,
                 sidebarPreferences: settingsSidebarPreferences,
                 appearanceUserDefaults: appearanceUserDefaults,
+                commandPaletteRecentStore: commandPaletteRecentStore,
                 showDashboard: { [weak self] in
                     self?.panelPresentationActions.present(.dashboard)
                 },
@@ -740,6 +747,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 pluginHost: pluginHost,
                 launchAtLoginController: launchAtLoginController,
                 appearanceUserDefaults: appearanceUserDefaults,
+                commandPaletteRecentStore: commandPaletteRecentStore,
                 state: state,
                 actions: actions
             )

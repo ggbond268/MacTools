@@ -83,6 +83,10 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
         context.coordinator.focus(field, for: focusRequestID)
     }
 
+    public static func dismantleNSView(_ field: NSTextField, coordinator: Coordinator) {
+        coordinator.cancelPendingFocus()
+    }
+
     private func configure(_ field: NSTextField) {
         field.placeholderString = placeholder
         field.setAccessibilityLabel(accessibilityLabel)
@@ -173,11 +177,21 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
 
     @MainActor
     public final class Coordinator: NSObject, NSTextFieldDelegate {
-        fileprivate var parent: PluginPaletteSearchField
-        private var lastFocusRequestID: UInt?
+        private static let maximumFocusAttemptCount = 25
+        private static let focusRetryDelay = Duration.milliseconds(20)
 
-        fileprivate init(parent: PluginPaletteSearchField) {
+        var parent: PluginPaletteSearchField
+        private var completedFocusRequestID: UInt?
+        private var pendingFocusRequestID: UInt?
+        private var focusTask: Task<Void, Never>?
+        private let focusClaim: @MainActor (NSTextField) -> Bool
+
+        init(
+            parent: PluginPaletteSearchField,
+            focusClaim: (@MainActor (NSTextField) -> Bool)? = nil
+        ) {
             self.parent = parent
+            self.focusClaim = focusClaim ?? Self.claimFocus
         }
 
         public func controlTextDidChange(_ notification: Notification) {
@@ -202,12 +216,61 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
             return true
         }
 
-        fileprivate func focus(_ field: NSTextField, for requestID: UInt) {
-            guard lastFocusRequestID != requestID else { return }
-            lastFocusRequestID = requestID
-            DispatchQueue.main.async { [weak field] in
-                field?.window?.makeFirstResponder(field)
+        func focus(_ field: NSTextField, for requestID: UInt) {
+            guard completedFocusRequestID != requestID,
+                  pendingFocusRequestID != requestID else {
+                return
             }
+
+            focusTask?.cancel()
+            pendingFocusRequestID = requestID
+            focusTask = Task { @MainActor [weak self, weak field] in
+                guard let self, let field else { return }
+
+                for attempt in 0 ..< Self.maximumFocusAttemptCount {
+                    guard !Task.isCancelled,
+                          pendingFocusRequestID == requestID else {
+                        return
+                    }
+
+                    if focusClaim(field) {
+                        completedFocusRequestID = requestID
+                        pendingFocusRequestID = nil
+                        focusTask = nil
+                        return
+                    }
+
+                    guard attempt + 1 < Self.maximumFocusAttemptCount else {
+                        break
+                    }
+                    if attempt == 0 {
+                        await Task.yield()
+                    } else {
+                        try? await Task.sleep(for: Self.focusRetryDelay)
+                    }
+                }
+
+                if pendingFocusRequestID == requestID {
+                    pendingFocusRequestID = nil
+                    focusTask = nil
+                }
+            }
+        }
+
+        func cancelPendingFocus() {
+            focusTask?.cancel()
+            focusTask = nil
+            pendingFocusRequestID = nil
+        }
+
+        private static func claimFocus(_ field: NSTextField) -> Bool {
+            guard let window = field.window,
+                  window.isVisible,
+                  window.isKeyWindow,
+                  window.makeFirstResponder(field) else {
+                return false
+            }
+            return field.currentEditor() != nil
         }
     }
 }

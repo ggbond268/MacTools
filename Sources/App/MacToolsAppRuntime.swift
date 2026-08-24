@@ -78,10 +78,11 @@ final class MacToolsAppRuntime {
         pluginHost.installFocusedHostWindowProvider { [weak windowRouter] in
             windowRouter?.focusedWindowLayoutTarget
         }
-        pluginHost.actionExecutionFeedbackHandler = { [weak self] source, reference, outcome in
+        pluginHost.actionExecutionFeedbackHandler = { [weak self] source, reference, actionTitle, outcome in
             self?.presentHeadlessActionFeedback(
                 source: source,
                 reference: reference,
+                actionTitle: actionTitle,
                 outcome: outcome
             )
         }
@@ -130,17 +131,17 @@ final class MacToolsAppRuntime {
     private func presentHeadlessActionFeedback(
         source: ActionExecutionSource,
         reference: ActionReference,
+        actionTitle: String?,
         outcome: ActionExecutionOutcome
     ) {
         guard reference.key.providerID == "window-layouts",
-              source == .globalShortcut || source == .trackpadGesture,
-              case let .success(action) = pluginHost.actionRegistry.registeredAction(for: reference)
+              source == .globalShortcut || source == .trackpadGesture
         else {
             return
         }
 
         if let feedback = WindowLayoutActionFeedback.feedback(
-            actionTitle: action.definition.title,
+            actionTitle: actionTitle,
             outcome: outcome
         ) {
             runLinkFeedbackPresenter.present(feedback)

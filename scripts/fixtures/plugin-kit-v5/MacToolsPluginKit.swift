@@ -103,6 +103,46 @@ public struct PluginPermissionState {
     }
 }
 
+public struct PluginActionShortcutPresetPreviewItem: Equatable, Sendable {
+    public let actionID: String
+    public let currentBinding: ShortcutBinding?
+    public let proposedBinding: ShortcutBinding?
+    public let conflictOwnerDescription: String?
+
+    public init(
+        actionID: String,
+        currentBinding: ShortcutBinding?,
+        proposedBinding: ShortcutBinding?,
+        conflictOwnerDescription: String? = nil
+    ) {
+        fatalError("The compatibility client must link this initializer from the current framework")
+    }
+}
+
+public struct PluginActionShortcutPresetPreview: Equatable, Sendable {
+    public let items: [PluginActionShortcutPresetPreviewItem]
+    public let errorMessage: String?
+
+    public init(
+        items: [PluginActionShortcutPresetPreviewItem],
+        errorMessage: String? = nil
+    ) {
+        fatalError("The compatibility client must link this initializer from the current framework")
+    }
+}
+
+@MainActor
+public protocol PluginActionShortcutPresetApplying: AnyObject {
+    var previewActionShortcutPreset: ((
+        _ managedActionIDs: Set<String>,
+        _ bindingsByActionID: [String: ShortcutBinding]
+    ) -> PluginActionShortcutPresetPreview)? { get set }
+    var applyActionShortcutPreset: ((
+        _ managedActionIDs: Set<String>,
+        _ bindingsByActionID: [String: ShortcutBinding]
+    ) -> String?)? { get set }
+}
+
 public enum PluginShortcutRecordingResult: Equatable {
     case accepted
     case rejected(String)

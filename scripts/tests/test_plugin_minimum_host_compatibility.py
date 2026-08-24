@@ -14,6 +14,7 @@ PLUGIN_RELEASE_WORKFLOW = REPO_ROOT / ".github/workflows/plugin-release.yml"
 MAKEFILE = REPO_ROOT / "Makefile"
 ACTION_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/ActionModels.swift"
 COMPONENT_THEME_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginComponentTheme.swift"
+APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
     # Canonical action registry, execution, discovery, and surface bridges.
     "ActionKey": "1.2.0",
@@ -42,6 +43,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginActionShortcutPresetPreviewItem": "1.2.0",
     "PluginActionShortcutPresetPreview": "1.2.0",
     "PluginActionShortcutPresetApplying": "1.2.0",
+    "PluginActionShortcutReplacementTransactionApplying": "1.2.1",
     "PluginActionShortcutAssignmentChangeHandling": "1.2.0",
     "PluginActionExecutionRevisionProviding": "1.2.0",
     "PluginActionExposureProviding": "1.2.0",
@@ -118,6 +120,16 @@ def version_tuple(value: str) -> tuple[int, ...]:
     return tuple(int(component) for component in value.split("."))
 
 
+def declared_app_version() -> str:
+    match = re.search(
+        r"(?m)^\s*MARKETING_VERSION\s*=\s*([^\s#]+)",
+        APP_VERSION_CONFIG.read_text(encoding="utf-8"),
+    )
+    if match is None:
+        raise AssertionError("MARKETING_VERSION is missing")
+    return match.group(1)
+
+
 class PluginMinimumHostCompatibilityTests(unittest.TestCase):
     def test_legacy_v4_catalog_remains_compatible_with_shipped_1_1_6_verifier(self) -> None:
         catalog = json.loads(LEGACY_V4_CATALOG.read_text(encoding="utf-8"))
@@ -142,16 +154,27 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             makefile,
         )
 
-    def test_every_current_plugin_targets_plugin_kit5_and_a_supported_host(self) -> None:
+    def test_every_current_plugin_targets_plugin_kit5_and_a_released_host_line(self) -> None:
         incompatible = []
         for manifest_path in sorted(PLUGINS_ROOT.glob("*/plugin.json")):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             if (
                 manifest["pluginKitVersion"] != 5
                 or version_tuple(manifest["minHostVersion"]) < version_tuple("1.2.0")
+                or version_tuple(manifest["minHostVersion"])
+                > version_tuple(declared_app_version())
             ):
                 incompatible.append(manifest["id"])
         self.assertEqual(incompatible, [])
+
+    def test_every_new_plugin_kit_api_is_exported_by_the_declared_app_version(self) -> None:
+        app_version = declared_app_version()
+        newer_symbols = {
+            symbol: required
+            for symbol, required in NEW_API_MINIMUM_HOSTS.items()
+            if version_tuple(required) > version_tuple(app_version)
+        }
+        self.assertEqual(newer_symbols, {})
 
     def test_new_plugin_kit_api_consumers_require_compatible_host(self) -> None:
         violations: list[str] = []

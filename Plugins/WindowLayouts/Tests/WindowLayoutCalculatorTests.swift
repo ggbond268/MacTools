@@ -167,6 +167,39 @@ final class WindowLayoutCalculatorTests: XCTestCase {
         XCTAssertEqual(moved, CGRect(x: -1280, y: 400, width: 1280, height: 700))
     }
 
+    func testMovePreservingSizeMapsOnlyPositionAcrossDifferentDisplays() {
+        let source = CGRect(x: 0, y: 24, width: 1440, height: 876)
+        let destination = CGRect(x: 1440, y: -276, width: 2560, height: 1416)
+        let window = CGRect(x: 720, y: 462, width: 720, height: 438)
+
+        let moved = calculator.movedFrame(
+            window,
+            from: source,
+            to: destination,
+            preservingSize: true
+        )
+
+        XCTAssertEqual(moved, CGRect(x: 3280, y: 702, width: 720, height: 438))
+    }
+
+    func testMovePreservingSizeDoesNotShrinkOversizedWindow() {
+        let source = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        let destination = CGRect(x: 1000, y: -400, width: 600, height: 400)
+        let oversized = CGRect(x: -500, y: -300, width: 2000, height: 1600)
+
+        let moved = calculator.movedFrame(
+            oversized,
+            from: source,
+            to: destination,
+            preservingSize: true
+        )
+
+        XCTAssertEqual(moved.size, oversized.size)
+        XCTAssertEqual(moved.minY, destination.minY)
+        XCTAssertGreaterThan(moved.intersection(destination).width, 0)
+        XCTAssertEqual(moved.intersection(destination).height, destination.height)
+    }
+
     func testMoveOversizedWindowClampsInsideDestination() {
         let source = CGRect(x: 0, y: 0, width: 1000, height: 800)
         let destination = CGRect(x: 1000, y: -400, width: 600, height: 400)

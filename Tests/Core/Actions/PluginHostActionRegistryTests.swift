@@ -630,7 +630,7 @@ final class PluginHostActionRegistryTests: XCTestCase {
                 $0.binding == binding
             })?.shortcutID
         )
-        plugin.operation = {
+        plugin.operation = { _ in
             shortcutManager.triggerForTests(shortcutID: shortcutID)
             await Task.yield()
             return .succeeded()
@@ -645,6 +645,198 @@ final class PluginHostActionRegistryTests: XCTestCase {
         }
 
         XCTAssertEqual(plugin.beginCount, 1)
+    }
+
+    func testActionShortcutAncestrySuppressesIndirectRecursiveRetrigger() async throws {
+        let registrar = FakeCarbonHotKeyRegistrar()
+        let shortcutManager = GlobalShortcutManager(registrar: registrar)
+        let plugin = NativeActionTestPlugin()
+        let secondDefinition = ActionDefinition(
+            key: ActionKey(providerID: plugin.metadata.id, actionID: "second"),
+            title: "Second",
+            description: "Second test action",
+            systemImage: "bolt",
+            capabilities: [.foregroundInteractive]
+        )
+        plugin.additionalDefinitions = [secondDefinition]
+        let host = makePluginHostForTests(
+            plugins: [plugin],
+            globalShortcutManager: shortcutManager
+        )
+        let firstReference = ActionReference(key: plugin.definition.key)
+        let secondReference = ActionReference(key: secondDefinition.key)
+        let firstBinding = ShortcutBinding(keyCode: 8, modifiers: [.command, .option])
+        let secondBinding = ShortcutBinding(keyCode: 9, modifiers: [.command, .option])
+        XCTAssertEqual(host.setActionShortcutBinding(firstBinding, to: firstReference), .success)
+        XCTAssertEqual(host.setActionShortcutBinding(secondBinding, to: secondReference), .success)
+        let firstShortcutID = try XCTUnwrap(
+            shortcutManager.debugRegistrationsForTests.first(where: {
+                $0.binding == firstBinding
+            })?.shortcutID
+        )
+        let secondShortcutID = try XCTUnwrap(
+            shortcutManager.debugRegistrationsForTests.first(where: {
+                $0.binding == secondBinding
+            })?.shortcutID
+        )
+        plugin.operation = { invocation in
+            if invocation.reference == firstReference {
+                shortcutManager.triggerForTests(shortcutID: secondShortcutID)
+            } else {
+                shortcutManager.triggerForTests(shortcutID: firstShortcutID)
+            }
+            await Task.yield()
+            return .succeeded()
+        }
+
+        shortcutManager.triggerForTests(shortcutID: firstShortcutID)
+        for _ in 0 ..< 50 where plugin.beginCount < 2 {
+            await Task.yield()
+        }
+        for _ in 0 ..< 20 { await Task.yield() }
+
+        XCTAssertEqual(plugin.beginCount, 2)
+    }
+
+    func testSerializedActionShortcutAllowsRepeatWhileFirstInvocationRuns() async throws {
+        let registrar = FakeCarbonHotKeyRegistrar()
+        let shortcutManager = GlobalShortcutManager(registrar: registrar)
+        let plugin = NativeActionTestPlugin()
+        plugin.actionConcurrencyPolicy = .serialize
+        let host = makePluginHostForTests(
+            plugins: [plugin],
+            globalShortcutManager: shortcutManager
+        )
+        let reference = ActionReference(key: plugin.definition.key)
+        let binding = ShortcutBinding(keyCode: 8, modifiers: [.command, .option])
+        XCTAssertEqual(host.setActionShortcutBinding(binding, to: reference), .success)
+        let shortcutID = try XCTUnwrap(
+            shortcutManager.debugRegistrationsForTests.first(where: {
+                $0.binding == binding
+            })?.shortcutID
+        )
+        var firstContinuation: CheckedContinuation<Void, Never>?
+        var executionOrder: [Int] = []
+        plugin.operation = { _ in
+            let invocationNumber = plugin.beginCount
+            executionOrder.append(invocationNumber)
+            if invocationNumber == 1 {
+                await withCheckedContinuation { continuation in
+                    firstContinuation = continuation
+                }
+            }
+            return .succeeded()
+        }
+
+        shortcutManager.triggerForTests(shortcutID: shortcutID)
+        for _ in 0 ..< 50 where plugin.beginCount < 1 { await Task.yield() }
+        shortcutManager.triggerForTests(shortcutID: shortcutID)
+        for _ in 0 ..< 20 { await Task.yield() }
+        XCTAssertEqual(plugin.beginCount, 1)
+        firstContinuation?.resume()
+        for _ in 0 ..< 100 where executionOrder.count < 2 { await Task.yield() }
+
+        XCTAssertEqual(plugin.beginCount, 2)
+        XCTAssertEqual(executionOrder, [1, 2])
+    }
+
+    func testActionShortcutBurstGuardStopsAsyncRecursiveRetriggerAndResets() async throws {
+        let registrar = FakeCarbonHotKeyRegistrar()
+        let shortcutManager = GlobalShortcutManager(registrar: registrar)
+        let plugin = NativeActionTestPlugin()
+        plugin.actionConcurrencyPolicy = .serialize
+        let host = makePluginHostForTests(
+            plugins: [plugin],
+            globalShortcutManager: shortcutManager
+        )
+        var uptime: TimeInterval = 100
+        host.actionShortcutBurstUptimeProviderForTests = { uptime }
+        let reference = ActionReference(key: plugin.definition.key)
+        let binding = ShortcutBinding(keyCode: 8, modifiers: [.command, .option])
+        XCTAssertEqual(host.setActionShortcutBinding(binding, to: reference), .success)
+        let shortcutID = try XCTUnwrap(
+            shortcutManager.debugRegistrationsForTests.first(where: {
+                $0.binding == binding
+            })?.shortcutID
+        )
+        plugin.operation = { _ in
+            DispatchQueue.main.async {
+                shortcutManager.triggerForTests(shortcutID: shortcutID)
+            }
+            await Task.yield()
+            return .succeeded()
+        }
+
+        shortcutManager.triggerForTests(shortcutID: shortcutID)
+        for _ in 0 ..< 500 where plugin.beginCount < 9 { await Task.yield() }
+        for _ in 0 ..< 100 { await Task.yield() }
+
+        XCTAssertEqual(plugin.beginCount, 9)
+
+        uptime += 1
+        plugin.operation = { _ in .succeeded() }
+        shortcutManager.triggerForTests(shortcutID: shortcutID)
+        for _ in 0 ..< 100 where plugin.beginCount < 10 { await Task.yield() }
+
+        XCTAssertEqual(plugin.beginCount, 10)
+    }
+
+    func testHeadlessFeedbackKeepsOriginalTitleAfterActionDisappears() async throws {
+        let registrar = FakeCarbonHotKeyRegistrar()
+        let shortcutManager = GlobalShortcutManager(registrar: registrar)
+        let plugin = NativeActionTestPlugin()
+        let disappearingDefinition = ActionDefinition(
+            key: ActionKey(providerID: plugin.metadata.id, actionID: "disappearing"),
+            title: "Original Title",
+            description: "Removed while running",
+            systemImage: "rectangle",
+            externalInvocationPolicy: .allowed,
+            capabilities: [.foregroundInteractive]
+        )
+        plugin.additionalDefinitions = [disappearingDefinition]
+        let host = makePluginHostForTests(
+            plugins: [plugin],
+            globalShortcutManager: shortcutManager
+        )
+        let reference = ActionReference(key: disappearingDefinition.key)
+        let binding = ShortcutBinding(keyCode: 9, modifiers: [.command, .option])
+        XCTAssertEqual(host.setActionShortcutBinding(binding, to: reference), .success)
+        let shortcutID = try XCTUnwrap(
+            shortcutManager.debugRegistrationsForTests.first(where: {
+                $0.binding == binding
+            })?.shortcutID
+        )
+        var executionContinuation: CheckedContinuation<Void, Never>?
+        plugin.operation = { _ in
+            await withCheckedContinuation { executionContinuation = $0 }
+            return .succeeded()
+        }
+        var feedbackTitle: String?
+        var feedbackOutcome: ActionExecutionOutcome?
+        host.actionExecutionFeedbackHandler = { _, receivedReference, title, outcome in
+            guard receivedReference == reference else { return }
+            feedbackTitle = title
+            feedbackOutcome = outcome
+        }
+
+        shortcutManager.triggerForTests(shortcutID: shortcutID)
+        for _ in 0 ..< 100 where executionContinuation == nil {
+            await Task.yield()
+        }
+        let continuation = try XCTUnwrap(executionContinuation)
+
+        plugin.additionalDefinitions = []
+        plugin.onStateChange?()
+        await host.waitForScheduledPluginStateRebuildForTests()
+        XCTAssertNil(try? host.actionRegistry.registeredAction(for: reference).get())
+
+        continuation.resume()
+        for _ in 0 ..< 100 where feedbackOutcome == nil {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(feedbackTitle, disappearingDefinition.title)
+        XCTAssertEqual(feedbackOutcome, .completed(.succeeded()))
     }
 
     func testHostAggregatesActionSurfaceAssignmentSummaries() {
@@ -1228,6 +1420,7 @@ private final class NativeActionTestPlugin:
     PluginActionPermissionProviding,
     PluginRetiredActionShortcutProviding,
     PluginActionShortcutPresetApplying,
+    PluginActionShortcutReplacementTransactionApplying,
     PluginActionShortcutAssignmentChangeHandling,
     ActionSurfaceAssignmentSummarizing
 {
@@ -1248,14 +1441,21 @@ private final class NativeActionTestPlugin:
     var summarizedReference: ActionReference?
     var permissionTitles = ["测试权限"]
     var additionalDefinitions: [ActionDefinition] = []
+    var actionConcurrencyPolicy: ActionConcurrencyPolicy = .rejectWhileRunning
     var retiredActionShortcutIDs: Set<String> = []
     var previewActionShortcutPreset: ((
         Set<String>,
         [String: ShortcutBinding]
     ) -> PluginActionShortcutPresetPreview)?
     var applyActionShortcutPreset: ((Set<String>, [String: ShortcutBinding]) -> String?)?
+    var currentActionShortcutBindings: ((Set<String>) -> [String: [ShortcutBinding]])?
+    var performActionShortcutReplacementTransaction: ((
+        Set<String>,
+        [String: ShortcutBinding],
+        () -> String?
+    ) -> String?)?
     private(set) var actionShortcutAssignmentChangeCount = 0
-    var operation: @MainActor @Sendable () async -> ActionExecutionResult = {
+    var operation: @MainActor @Sendable (ActionInvocation) async -> ActionExecutionResult = { _ in
         .succeeded(message: "native")
     }
 
@@ -1270,14 +1470,17 @@ private final class NativeActionTestPlugin:
         }
     }
 
-    let definition = ActionDefinition(
-        key: ActionKey(providerID: "action-provider", actionID: "toggle"),
-        title: "切换",
-        description: "切换测试状态",
-        systemImage: "bolt",
-        externalInvocationPolicy: .allowed,
-        capabilities: [.background, .foregroundInteractive]
-    )
+    var definition: ActionDefinition {
+        ActionDefinition(
+            key: ActionKey(providerID: "action-provider", actionID: "toggle"),
+            title: "切换",
+            description: "切换测试状态",
+            systemImage: "bolt",
+            externalInvocationPolicy: .allowed,
+            capabilities: [.background, .foregroundInteractive],
+            concurrencyPolicy: actionConcurrencyPolicy
+        )
+    }
 
     var actionDefinitions: [ActionDefinition] {
         [definition] + additionalDefinitions
@@ -1300,7 +1503,9 @@ private final class NativeActionTestPlugin:
 
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
         beginCount += 1
-        return ActionExecutionHandle(operation: operation)
+        return ActionExecutionHandle {
+            await self.operation(invocation)
+        }
     }
 
     func actionSurfaceAssignmentSummary(

@@ -568,7 +568,7 @@ struct AutoInputSettingsView: View {
     private var atPointerPlacementHelp: String {
         localization.string(
             "settings.hud.position.at-pointer.help",
-            defaultValue: "将提示直接放在指针下方，便于立即点击切换。"
+            defaultValue: "将提示放在指针左上方，指针停在右下角，避免遮挡文字。"
         )
     }
 

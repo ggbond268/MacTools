@@ -73,6 +73,22 @@ final class WindowLayoutsStoreTests: XCTestCase {
         XCTAssertEqual(copy.anchor, .top)
     }
 
+    func testCustomRunLinkPolicyNotifiesSafetyRegistryOnlyForPersistedChanges() throws {
+        let store = WindowLayoutsStore(storage: StoreMemoryStorage())
+        var command = try XCTUnwrap(store.addCustomCommand(name: "Safety"))
+        var safetyMutationCount = 0
+        store.onSafetyPolicyMutation = { safetyMutationCount += 1 }
+
+        command.name = "Renamed"
+        XCTAssertTrue(store.updateCustomCommand(command))
+        XCTAssertEqual(safetyMutationCount, 0)
+
+        command.allowExternalInvocation = false
+        XCTAssertTrue(store.updateCustomCommand(command))
+        XCTAssertTrue(store.updateCustomCommand(command))
+        XCTAssertEqual(safetyMutationCount, 1)
+    }
+
     func testDuplicateKeepsCopySuffixAtNameLengthBoundary() throws {
         let store = WindowLayoutsStore(storage: StoreMemoryStorage())
         let source = try XCTUnwrap(store.addCustomCommand(

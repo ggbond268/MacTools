@@ -56,6 +56,7 @@ struct SettingsView: View {
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
     @ObservedObject var sidebarPreferences: SettingsSidebarPreferencesStore
     let appearanceUserDefaults: UserDefaults
+    let commandPaletteRecentStore: CommandPaletteRecentStore
     @StateObject private var uninstallConfirmationSession = PluginUninstallConfirmationSession()
     var showDashboard: () -> Void = {}
     var showFeaturePanel: () -> Void = {}
@@ -169,6 +170,7 @@ struct SettingsView: View {
                         pluginHost: pluginHost,
                         launchAtLoginController: launchAtLoginController,
                         appearanceUserDefaults: appearanceUserDefaults,
+                        recentStore: commandPaletteRecentStore,
                         navigationCoordinator: navigationCoordinator
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))

@@ -294,7 +294,8 @@ final class WindowLayoutService: WindowLayoutExecuting {
             targetFrame = calculator.movedFrame(
                 currentFrame,
                 from: effectiveCurrentScreen.visibleFrame,
-                to: screen(destination, respectingStageManager: options.respectsStageManager).visibleFrame
+                to: screen(destination, respectingStageManager: options.respectsStageManager).visibleFrame,
+                preservingSize: !window.canResize
             )
         case .restorePreviousFrame:
             guard await frameReader.isValid(window) else {
@@ -304,22 +305,20 @@ final class WindowLayoutService: WindowLayoutExecuting {
             guard let previousFrame = history.previousFrame(for: window) else {
                 throw WindowLayoutError.noPreviousFrame
             }
-            let safePreviousFrame: CGRect
-            if screens.contains(where: {
-                $0.visibleFrame.intersection(previousFrame).area > 0
-            }) {
-                safePreviousFrame = previousFrame
-            } else if let nearestScreen = screenResolver.screen(
+            guard let nearestScreen = screenResolver.screen(
                 for: previousFrame,
                 among: screens
-            ) {
-                safePreviousFrame = calculator.clamp(
-                    previousFrame,
-                    inside: nearestScreen.visibleFrame
-                )
-            } else {
+            ) else {
                 throw WindowLayoutError.noDisplay
             }
+            let safeVisibleFrame = screen(
+                nearestScreen,
+                respectingStageManager: options.respectsStageManager
+            ).visibleFrame
+            let safePreviousFrame = calculator.restoreReachableFrame(
+                previousFrame,
+                inside: safeVisibleFrame
+            )
             if safePreviousFrame.size != currentFrame.size, !window.canResize {
                 throw WindowLayoutError.windowCannotResize
             }

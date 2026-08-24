@@ -186,6 +186,16 @@ final class RunLinkExecutionCoordinatorTests: XCTestCase {
                 message: "No adjacent Desktop."
             )
         )
+
+        let staleActionFeedback = WindowLayoutActionFeedback.feedback(
+            actionTitle: nil,
+            outcome: .rejected(.unknownAction(ActionKey(
+                providerID: "window-layouts",
+                actionID: "custom.removed"
+            )))
+        )
+        XCTAssertEqual(staleActionFeedback?.title, FeatureL10n.string("窗口布局"))
+        XCTAssertEqual(staleActionFeedback?.tone, .failure)
     }
 
     func testCancellingSystemConfirmationDismissesPresentationAndResumesOnce() async {

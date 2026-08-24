@@ -303,6 +303,14 @@ public enum ShortcutFormatter {
         return displayTokens(for: binding).joined(separator: " + ")
     }
 
+    public static func compactDisplayString(for binding: ShortcutBinding?) -> String {
+        guard let binding else {
+            return "None"
+        }
+
+        return displayTokens(for: binding).joined(separator: "\u{2009}")
+    }
+
     public static func displayTokens(for binding: ShortcutBinding) -> [String] {
         var tokens: [String] = []
 

@@ -147,7 +147,8 @@ struct WindowLayoutCalculator {
     func movedFrame(
         _ windowFrame: CGRect,
         from sourceVisibleFrame: CGRect,
-        to destinationVisibleFrame: CGRect
+        to destinationVisibleFrame: CGRect,
+        preservingSize: Bool = false
     ) -> CGRect {
         let source = sourceVisibleFrame.standardized
         let destination = destinationVisibleFrame.standardized
@@ -159,14 +160,16 @@ struct WindowLayoutCalculator {
 
         let widthRatio = max(0, windowFrame.width / source.width)
         let heightRatio = max(0, windowFrame.height / source.height)
-        let destinationSize = CGSize(
-            width: source.width == destination.width
-                ? min(destination.width, max(0, windowFrame.width))
-                : min(destination.width, destination.width * widthRatio),
-            height: source.height == destination.height
-                ? min(destination.height, max(0, windowFrame.height))
-                : min(destination.height, destination.height * heightRatio)
-        )
+        let destinationSize = preservingSize
+            ? windowFrame.size
+            : CGSize(
+                width: source.width == destination.width
+                    ? min(destination.width, max(0, windowFrame.width))
+                    : min(destination.width, destination.width * widthRatio),
+                height: source.height == destination.height
+                    ? min(destination.height, max(0, windowFrame.height))
+                    : min(destination.height, destination.height * heightRatio)
+            )
         let sourceTravelX = source.width - windowFrame.width
         let sourceTravelY = source.height - windowFrame.height
         let relativeX = relativePosition(
@@ -185,7 +188,9 @@ struct WindowLayoutCalculator {
             width: destinationSize.width,
             height: destinationSize.height
         )
-        return clamp(proposed, inside: destination)
+        return preservingSize
+            ? restoreReachableFrame(proposed, inside: destination)
+            : clamp(proposed, inside: destination)
     }
 
     func clamp(_ frame: CGRect, inside bounds: CGRect) -> CGRect {
@@ -199,6 +204,20 @@ struct WindowLayoutCalculator {
             y: min(max(frame.minY, bounds.minY), maximumY),
             width: width,
             height: height
+        )
+    }
+
+    /// Keeps the original size while ensuring the window's top edge remains reachable.
+    func restoreReachableFrame(_ frame: CGRect, inside bounds: CGRect) -> CGRect {
+        let bounds = bounds.standardized
+        let minimumX = min(bounds.minX, bounds.maxX - frame.width)
+        let maximumX = max(bounds.minX, bounds.maxX - frame.width)
+        let maximumY = max(bounds.minY, bounds.maxY - frame.height)
+        return CGRect(
+            x: min(max(frame.minX, minimumX), maximumX),
+            y: min(max(frame.minY, bounds.minY), maximumY),
+            width: frame.width,
+            height: frame.height
         )
     }
 

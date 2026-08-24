@@ -338,6 +338,15 @@ struct PluginAutomaticUpdateVersionStore {
 
 @MainActor
 final class PluginHost: ObservableObject {
+    private struct ActionShortcutBurstState {
+        var admittedCount = 0
+        var activeTaskCount = 0
+        var lastCompletionUptime: TimeInterval?
+    }
+
+    private static let maximumActionShortcutBurstCount = 9
+    private static let actionShortcutBurstResetInterval: TimeInterval = 0.75
+
     private struct SettingsViewCacheKey: Hashable {
         enum Content: Hashable {
             case workspace
@@ -421,7 +430,11 @@ final class PluginHost: ObservableObject {
         [ActionGridPresentationEntry],
         ActionExecutionSource
     ) -> Bool)?
-    private var activeActionShortcutReferences: Set<ActionReference> = []
+    @TaskLocal private static var actionShortcutAncestry: Set<ActionReference> = []
+    private var actionShortcutBursts: [ActionReference: ActionShortcutBurstState] = [:]
+#if DEBUG
+    var actionShortcutBurstUptimeProviderForTests: (() -> TimeInterval)?
+#endif
     private var preferencesBackupExportSelection: PreferencesBackupSelection?
     private var preferencesBackupRestoreContext: PreferencesActionRestoreContext?
 
@@ -500,6 +513,7 @@ final class PluginHost: ObservableObject {
     var actionExecutionFeedbackHandler: ((
         ActionExecutionSource,
         ActionReference,
+        String?,
         ActionExecutionOutcome
     ) -> Void)?
 
@@ -2782,6 +2796,35 @@ final class PluginHost: ObservableObject {
                     }
                 }
             }
+            if let transactionApplying = plugin as?
+                any PluginActionShortcutReplacementTransactionApplying {
+                transactionApplying.currentActionShortcutBindings = {
+                    [weak self] actionIDs in
+                    self?.shortcutAssignmentService.currentBindings(
+                        providerID: pluginID,
+                        managedActionIDs: actionIDs
+                    ) ?? [:]
+                }
+                transactionApplying.performActionShortcutReplacementTransaction = {
+                    [weak self] actionIDs, bindings, mutation in
+                    guard let self else {
+                        return FeatureL10n.string("无法应用快捷键预设。")
+                    }
+                    let previousBindings = self.actionBackedShortcutBindings()
+                    let error = self.shortcutAssignmentService.performReplacementTransaction(
+                        providerID: pluginID,
+                        managedActionIDs: actionIDs,
+                        bindingsByActionID: bindings,
+                        mutation: mutation
+                    )
+                    self.rebuildDerivedState()
+                    self.syncGlobalShortcuts()
+                    self.notifyChangedActionBackedShortcutBindings(
+                        previous: previousBindings
+                    )
+                    return error
+                }
+            }
             if let persistentPreferencesSignaling = plugin as? any PluginPersistentPreferencesChangeSignaling {
                 persistentPreferencesSignaling.onPersistentPreferencesChange = { [weak self] in
                     self?.preferencesBackupChangeReporter.didPersist(.plugin(pluginID))
@@ -4172,6 +4215,11 @@ final class PluginHost: ObservableObject {
             presetApplying.previewActionShortcutPreset = nil
             presetApplying.applyActionShortcutPreset = nil
         }
+        if let transactionApplying = plugin as?
+            any PluginActionShortcutReplacementTransactionApplying {
+            transactionApplying.currentActionShortcutBindings = nil
+            transactionApplying.performActionShortcutReplacementTransaction = nil
+        }
         (plugin as? any PluginSettingsPresenting)?.requestSettingsPresentation = nil
         (plugin as? any ActionGridHostContextConsuming)?.actionGridHostContext = nil
         (plugin as? any TrackpadActionHostContextConsuming)?.trackpadActionHostContext = nil
@@ -5495,16 +5543,18 @@ final class PluginHost: ObservableObject {
 
     private func handleShortcutTrigger(shortcutID: String) {
         if let reference = shortcutAssignmentService.reference(forShortcutID: shortcutID) {
-            guard activeActionShortcutReferences.insert(reference).inserted else {
-                return
-            }
+            let ancestry = Self.actionShortcutAncestry
+            guard !ancestry.contains(reference) else { return }
+            guard admitActionShortcutTrigger(for: reference) else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                defer { activeActionShortcutReferences.remove(reference) }
-                await executeHeadlessActionNow(
-                    reference: reference,
-                    source: .globalShortcut
-                )
+                defer { finishActionShortcutTrigger(for: reference) }
+                await Self.$actionShortcutAncestry.withValue(ancestry.union([reference])) {
+                    await executeHeadlessActionNow(
+                        reference: reference,
+                        source: .globalShortcut
+                    )
+                }
             }
             return
         }
@@ -5527,6 +5577,46 @@ final class PluginHost: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Bounds asynchronously delivered synthetic retriggers without dropping ordinary repeats.
+    /// Carbon re-enters through the main queue, outside task-local ancestry, so the burst remains
+    /// active briefly after the last invocation completes. A later physical shortcut starts fresh.
+    private func admitActionShortcutTrigger(for reference: ActionReference) -> Bool {
+        let now = actionShortcutBurstUptime
+        var burst = actionShortcutBursts[reference] ?? ActionShortcutBurstState()
+        if burst.activeTaskCount == 0,
+           let lastCompletionUptime = burst.lastCompletionUptime,
+           now - lastCompletionUptime >= Self.actionShortcutBurstResetInterval {
+            burst = ActionShortcutBurstState()
+        }
+        guard burst.admittedCount < Self.maximumActionShortcutBurstCount else {
+            actionShortcutBursts[reference] = burst
+            return false
+        }
+        burst.admittedCount += 1
+        burst.activeTaskCount += 1
+        burst.lastCompletionUptime = nil
+        actionShortcutBursts[reference] = burst
+        return true
+    }
+
+    private func finishActionShortcutTrigger(for reference: ActionReference) {
+        guard var burst = actionShortcutBursts[reference] else { return }
+        burst.activeTaskCount = max(0, burst.activeTaskCount - 1)
+        if burst.activeTaskCount == 0 {
+            burst.lastCompletionUptime = actionShortcutBurstUptime
+        }
+        actionShortcutBursts[reference] = burst
+    }
+
+    private var actionShortcutBurstUptime: TimeInterval {
+#if DEBUG
+        if let actionShortcutBurstUptimeProviderForTests {
+            return actionShortcutBurstUptimeProviderForTests()
+        }
+#endif
+        return ProcessInfo.processInfo.systemUptime
     }
 
     private func handleShortcutRelease(shortcutID: String) {
@@ -5556,6 +5646,8 @@ final class PluginHost: ObservableObject {
         reference: ActionReference,
         source: ActionExecutionSource
     ) async {
+        let actionTitle = try? actionRegistry.registeredAction(for: reference).get()
+            .definition.title
         let outcome = await actionExecutor.execute(
             ActionInvocation(
                 reference: reference,
@@ -5563,7 +5655,7 @@ final class PluginHost: ObservableObject {
                 mode: .foreground
             )
         )
-        actionExecutionFeedbackHandler?(source, reference, outcome)
+        actionExecutionFeedbackHandler?(source, reference, actionTitle, outcome)
     }
 
     private func requestPermissionGuidance(forPluginID pluginID: String, permissionID: String) {

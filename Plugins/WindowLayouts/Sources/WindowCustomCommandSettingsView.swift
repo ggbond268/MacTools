@@ -4,56 +4,33 @@ import MacToolsPluginKit
 
 struct WindowCustomCommandPreviewLayout {
     private static let referenceScreenSize = CGSize(width: 1_440, height: 900)
+    private static let referenceWindowFrame = CGRect(
+        x: 288,
+        y: 180,
+        width: 864,
+        height: 540
+    )
 
     let command: WindowCustomCommand
+    let gap: CGFloat
 
     func windowFrame(in screenSize: CGSize) -> CGRect {
         guard screenSize.width > 0, screenSize.height > 0 else { return .zero }
 
-        let windowSize = CGSize(
-            width: screenSize.width * fraction(
-                for: command.width,
-                referenceLength: Self.referenceScreenSize.width
-            ),
-            height: screenSize.height * fraction(
-                for: command.height,
-                referenceLength: Self.referenceScreenSize.height
-            )
+        let referenceFrame = WindowLayoutCalculator().customFrame(
+            for: command,
+            windowFrame: Self.referenceWindowFrame,
+            visibleFrame: CGRect(origin: .zero, size: Self.referenceScreenSize),
+            gap: gap
         )
-        let factors = anchorFactors(command.anchor)
-        let origin = CGPoint(
-            x: (screenSize.width - windowSize.width) * factors.x
-                + screenSize.width * command.offsetX / Self.referenceScreenSize.width,
-            y: (screenSize.height - windowSize.height) * factors.y
-                + screenSize.height * command.offsetY / Self.referenceScreenSize.height
+        let scaleX = screenSize.width / Self.referenceScreenSize.width
+        let scaleY = screenSize.height / Self.referenceScreenSize.height
+        return CGRect(
+            x: referenceFrame.minX * scaleX,
+            y: referenceFrame.minY * scaleY,
+            width: referenceFrame.width * scaleX,
+            height: referenceFrame.height * scaleY
         )
-        return CGRect(origin: origin, size: windowSize)
-    }
-
-    private func fraction(
-        for dimension: WindowLayoutDimension,
-        referenceLength: CGFloat
-    ) -> CGFloat {
-        let value: CGFloat = switch dimension {
-        case .current: 0.6
-        case let .points(points): points / referenceLength
-        case let .fraction(fraction): fraction
-        }
-        return min(max(value, 0.05), 1)
-    }
-
-    private func anchorFactors(_ anchor: WindowLayoutAnchor) -> CGPoint {
-        switch anchor {
-        case .topLeft: CGPoint(x: 0, y: 0)
-        case .top: CGPoint(x: 0.5, y: 0)
-        case .topRight: CGPoint(x: 1, y: 0)
-        case .left: CGPoint(x: 0, y: 0.5)
-        case .center: CGPoint(x: 0.5, y: 0.5)
-        case .right: CGPoint(x: 1, y: 0.5)
-        case .bottomLeft: CGPoint(x: 0, y: 1)
-        case .bottom: CGPoint(x: 0.5, y: 1)
-        case .bottomRight: CGPoint(x: 1, y: 1)
-        }
     }
 }
 
@@ -111,6 +88,7 @@ struct WindowCustomCommandSettingsView: View {
     let commandID: UUID
 
     @State private var draft: WindowCustomCommand
+    @State private var shortcutErrorMessage: String?
     @FocusState private var isNameFocused: Bool
 
     init(plugin: WindowLayoutsPlugin, command: WindowCustomCommand) {
@@ -161,7 +139,10 @@ struct WindowCustomCommandSettingsView: View {
                 )
                 .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
 
-                WindowCustomLayoutPreview(command: draft)
+                WindowCustomLayoutPreview(
+                    command: draft,
+                    gap: plugin.customCommandPreviewGap
+                )
                     .frame(width: 184, height: 112)
                     .accessibilityLabel(previewSummary)
             }
@@ -189,7 +170,9 @@ struct WindowCustomCommandSettingsView: View {
                         displayText: shortcutDisplayText,
                         minWidth: PluginSettingsTheme.Size.shortcutRecorderWidth,
                         onRecord: { binding in
-                            plugin.recordCustomCommandShortcut(binding, for: commandID)
+                            let result = plugin.recordCustomCommandShortcut(binding, for: commandID)
+                            updateShortcutError(from: result)
+                            return result
                         }
                     )
                     .frame(width: PluginSettingsTheme.Size.shortcutRecorderWidth)
@@ -199,7 +182,9 @@ struct WindowCustomCommandSettingsView: View {
 
                     if shortcutBinding != nil {
                         Button {
-                            plugin.clearCustomCommandShortcut(for: commandID)
+                            updateShortcutError(
+                                from: plugin.clearCustomCommandShortcut(for: commandID)
+                            )
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .pluginSettingsRowIconStyle(.secondary)
@@ -215,10 +200,29 @@ struct WindowCustomCommandSettingsView: View {
                         ))
                     }
                 }
+
+                if let shortcutErrorMessage {
+                    Label(
+                        shortcutErrorMessage,
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .pluginSettingsListRowPadding(interactive: true)
+    }
+
+    private func updateShortcutError(from result: PluginShortcutRecordingResult) {
+        switch result {
+        case .accepted:
+            shortcutErrorMessage = nil
+        case let .rejected(message):
+            shortcutErrorMessage = message
+        }
     }
 
     private var nameRow: some View {
@@ -518,9 +522,6 @@ struct WindowCustomCommandSettingsView: View {
     }
 
     private func commitDraft() {
-        guard !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
         guard plugin.updateCustomCommand(draft),
               let stored = plugin.customCommand(id: commandID)
         else {
@@ -543,10 +544,11 @@ struct WindowCustomCommandSettingsView: View {
 
 private struct WindowCustomLayoutPreview: View {
     let command: WindowCustomCommand
+    let gap: CGFloat
 
     var body: some View {
         GeometryReader { proxy in
-            let frame = WindowCustomCommandPreviewLayout(command: command)
+            let frame = WindowCustomCommandPreviewLayout(command: command, gap: gap)
                 .windowFrame(in: proxy.size)
 
             ZStack(alignment: .topLeading) {

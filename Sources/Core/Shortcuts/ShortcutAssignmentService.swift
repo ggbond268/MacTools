@@ -253,9 +253,12 @@ final class ShortcutAssignmentService {
                 key: ActionKey(providerID: providerID, actionID: actionID)
             )
             let proposedBinding = bindingsByActionID[actionID]
-            let currentBinding = records.first(where: {
-                $0.reference.key == reference.key
-            })?.binding
+            let currentBindings = records.compactMap { record in
+                record.reference.key == reference.key ? record.binding : nil
+            }
+            let representativeCurrentBinding = currentBindings.first(where: {
+                $0 != proposedBinding
+            }) ?? currentBindings.first
             guard case let .success(action) = registry.registeredAction(for: reference),
                   action.catalogEntry != nil,
                   action.definition.capabilities.contains(.foregroundInteractive)
@@ -263,7 +266,7 @@ final class ShortcutAssignmentService {
                 if proposedBinding == nil {
                     items.append(PluginActionShortcutPresetPreviewItem(
                         actionID: actionID,
-                        currentBinding: currentBinding,
+                        currentBinding: representativeCurrentBinding,
                         proposedBinding: nil
                     ))
                     continue
@@ -319,12 +322,25 @@ final class ShortcutAssignmentService {
 
             items.append(PluginActionShortcutPresetPreviewItem(
                 actionID: actionID,
-                currentBinding: currentBinding,
+                currentBinding: representativeCurrentBinding,
                 proposedBinding: proposedBinding,
                 conflictOwnerDescription: conflictOwnerDescription
             ))
         }
         return PluginActionShortcutPresetPreview(items: items)
+    }
+
+    func currentBindings(
+        providerID: String,
+        managedActionIDs: Set<String>
+    ) -> [String: [ShortcutBinding]] {
+        guard store.loadError == nil else { return [:] }
+        return store.assignments().reduce(into: [:]) { result, record in
+            let key = record.reference.key
+            guard key.providerID == providerID,
+                  managedActionIDs.contains(key.actionID) else { return }
+            result[key.actionID, default: []].append(record.binding)
+        }
     }
 
     /// Atomically replaces the assignments managed by a plugin shortcut preset.
@@ -333,6 +349,20 @@ final class ShortcutAssignmentService {
         providerID: String,
         managedActionIDs: Set<String>,
         bindingsByActionID: [String: ShortcutBinding]
+    ) -> ActionShortcutMutationResult {
+        replaceAssignments(
+            providerID: providerID,
+            managedActionIDs: managedActionIDs,
+            bindingsByActionID: bindingsByActionID,
+            reportsCommittedChange: true
+        )
+    }
+
+    private func replaceAssignments(
+        providerID: String,
+        managedActionIDs: Set<String>,
+        bindingsByActionID: [String: ShortcutBinding],
+        reportsCommittedChange: Bool
     ) -> ActionShortcutMutationResult {
         guard !providerID.isEmpty,
               !managedActionIDs.isEmpty,
@@ -399,7 +429,7 @@ final class ShortcutAssignmentService {
         }
         records.append(contentsOf: requestedRecords)
 
-        switch store.replaceAll(records) {
+        switch store.replaceAll(records, reportsCommittedChange: reportsCommittedChange) {
         case .committed:
             synchronize(
                 reservedRegistrations: reservedRegistrations,
@@ -414,6 +444,55 @@ final class ShortcutAssignmentService {
                 reservedOwnerDescriptions: reservedOwnerDescriptions
             )
             return .failure(.persistenceRollbackFailed)
+        }
+    }
+
+    /// Replaces managed assignments and rolls their exact records back if the paired mutation fails.
+    /// This keeps assignment IDs and converged records intact across a cross-store operation.
+    func performReplacementTransaction(
+        providerID: String,
+        managedActionIDs: Set<String>,
+        bindingsByActionID: [String: ShortcutBinding],
+        mutation: () -> String?
+    ) -> String? {
+        let previousRecords = store.assignments()
+        guard store.loadError == nil else {
+            return ActionShortcutAssignmentError.recoveryRequired.localizedDescription
+        }
+
+        switch replaceAssignments(
+            providerID: providerID,
+            managedActionIDs: managedActionIDs,
+            bindingsByActionID: bindingsByActionID,
+            reportsCommittedChange: false
+        ) {
+        case let .failure(error):
+            return error.localizedDescription
+        case .success:
+            break
+        }
+
+        let assignmentsChanged = store.assignments() != previousRecords
+        guard let mutationError = mutation() else {
+            if assignmentsChanged {
+                store.reportCommittedAssignmentsChange()
+            }
+            return nil
+        }
+        switch store.replaceAll(previousRecords, reportsCommittedChange: false) {
+        case .committed:
+            synchronize(
+                reservedRegistrations: reservedRegistrations,
+                reservedOwnerDescriptions: reservedOwnerDescriptions
+            )
+            return mutationError
+        case .rejected:
+            synchronize(
+                reservedRegistrations: reservedRegistrations,
+                reservedOwnerDescriptions: reservedOwnerDescriptions
+            )
+            return mutationError + " "
+                + ActionShortcutAssignmentError.persistenceRollbackFailed.localizedDescription
         }
     }
 

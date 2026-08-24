@@ -2067,21 +2067,31 @@ final class InputSourceHUDControllerTests: XCTestCase {
         defer { controller.dismiss() }
         let focusedFrame = CGRect(x: 100, y: 200, width: 300, height: 24)
 
-        controller.show(
-            label: InputSourceHUDLabel(title: "ABC", modeIndicator: nil),
-            near: focusedFrame,
-            avoiding: focusedFrame,
-            configuration: AutoInputHUDConfiguration(
-                size: .standard,
-                position: .atPointer,
-                isInteractive: true
-            ),
-            presentationID: AutoInputHUDPresentationID()
-        )
+        let sizeInsets: [(AutoInputHUDSize, CGFloat)] = [
+            (.compact, 10),
+            (.standard, 12),
+            (.large, 12),
+        ]
+        var presentedFrame = CGRect.zero
 
-        let presentedFrame = try XCTUnwrap(controller.presentedPanelForTests).frame
-        XCTAssertTrue(presentedFrame.contains(pointerLocation))
-        XCTAssertEqual(presentedFrame.maxY, pointerLocation.y + 8)
+        for (size, expectedInset) in sizeInsets {
+            controller.show(
+                label: InputSourceHUDLabel(title: "ABC", modeIndicator: nil),
+                near: focusedFrame,
+                avoiding: focusedFrame,
+                configuration: AutoInputHUDConfiguration(
+                    size: size,
+                    position: .atPointer,
+                    isInteractive: true
+                ),
+                presentationID: AutoInputHUDPresentationID()
+            )
+
+            presentedFrame = try XCTUnwrap(controller.presentedPanelForTests).frame
+            XCTAssertTrue(presentedFrame.contains(pointerLocation))
+            XCTAssertEqual(presentedFrame.maxX, pointerLocation.x + expectedInset)
+            XCTAssertEqual(presentedFrame.minY, pointerLocation.y - expectedInset)
+        }
 
         pointerLocation = CGPoint(x: 900, y: 200)
 

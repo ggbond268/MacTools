@@ -275,9 +275,26 @@ final class WindowLayoutsPluginTests: XCTestCase {
         )
         XCTAssertEqual(plugin.customCommandShortcutBinding(for: id), binding)
 
-        plugin.clearCustomCommandShortcut(for: id)
+        XCTAssertEqual(plugin.clearCustomCommandShortcut(for: id), .accepted)
 
         XCTAssertNil(plugin.customCommandShortcutBinding(for: id))
+    }
+
+    func testCustomCommandShortcutClearReportsHostFailure() throws {
+        let plugin = makePlugin()
+        plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
+        let definition = try XCTUnwrap(plugin.actionDefinitions.first(where: {
+            $0.key.actionID.hasPrefix("custom.")
+        }))
+        let id = try XCTUnwrap(UUID(uuidString: String(
+            definition.key.actionID.dropFirst("custom.".count)
+        )))
+        plugin.applyActionShortcutPreset = { _, _ in "Shortcut storage failed" }
+
+        XCTAssertEqual(
+            plugin.clearCustomCommandShortcut(for: id),
+            .rejected("Shortcut storage failed")
+        )
     }
 
     func testDeletingCustomCommandClearsItsShortcutBeforeRemovingAction() throws {
@@ -316,20 +333,9 @@ final class WindowLayoutsPluginTests: XCTestCase {
         let id = try XCTUnwrap(UUID(uuidString: String(
             definition.key.actionID.dropFirst("custom.".count)
         )))
-        let binding = ShortcutBinding(
-            keyCode: UInt16(kVK_ANSI_L),
-            modifiers: [.control, .option]
-        )
-        plugin.previewActionShortcutPreset = { actionIDs, proposedBindings in
-            PluginActionShortcutPresetPreview(items: actionIDs.map { actionID in
-                PluginActionShortcutPresetPreviewItem(
-                    actionID: actionID,
-                    currentBinding: binding,
-                    proposedBinding: proposedBindings[actionID]
-                )
-            })
+        plugin.performActionShortcutReplacementTransaction = { _, _, _ in
+            "Shortcut storage failed"
         }
-        plugin.applyActionShortcutPreset = { _, _ in "Shortcut storage failed" }
 
         XCTAssertFalse(plugin.deleteCustomCommand(id))
 
@@ -368,6 +374,46 @@ final class WindowLayoutsPluginTests: XCTestCase {
         XCTAssertNotNil(plugin.customCommandDeletionError)
     }
 
+    func testCustomCommandDeleteFailureUsesTransactionToRestoreEveryShortcut() throws {
+        let storage = WindowLayoutsMemoryStorage()
+        let plugin = makePlugin(storage: storage)
+        plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
+        let definition = try XCTUnwrap(plugin.actionDefinitions.first(where: {
+            $0.key.actionID.hasPrefix("custom.")
+        }))
+        let id = try XCTUnwrap(UUID(uuidString: String(
+            definition.key.actionID.dropFirst("custom.".count)
+        )))
+        let originalBindings = [
+            ShortcutBinding(
+                keyCode: UInt16(kVK_ANSI_L),
+                modifiers: [.control, .option]
+            ),
+            ShortcutBinding(
+                keyCode: UInt16(kVK_ANSI_M),
+                modifiers: [.control, .option]
+            ),
+        ]
+        var bindings = originalBindings
+        plugin.performActionShortcutReplacementTransaction = { _, _, mutation in
+            let snapshot = bindings
+            bindings = []
+            if let error = mutation() {
+                bindings = snapshot
+                return error
+            }
+            return nil
+        }
+        storage.rejectLibraryWrites = true
+
+        XCTAssertFalse(plugin.deleteCustomCommand(id))
+
+        XCTAssertEqual(bindings, originalBindings)
+        XCTAssertTrue(plugin.actionDefinitions.contains(where: {
+            $0.key.actionID == definition.key.actionID
+        }))
+    }
+
     func testCustomCommandShortcutReportsHostValidationConflict() throws {
         let plugin = makePlugin()
         plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
@@ -398,7 +444,7 @@ final class WindowLayoutsPluginTests: XCTestCase {
             anchor: .center
         )
         XCTAssertEqual(
-            WindowCustomCommandPreviewLayout(command: centered)
+            WindowCustomCommandPreviewLayout(command: centered, gap: 0)
                 .windowFrame(in: CGSize(width: 160, height: 100)),
             CGRect(x: 32, y: 25, width: 96, height: 50)
         )
@@ -412,10 +458,73 @@ final class WindowLayoutsPluginTests: XCTestCase {
             offsetY: 90
         )
         XCTAssertEqual(
-            WindowCustomCommandPreviewLayout(command: offsetTopRight)
+            WindowCustomCommandPreviewLayout(command: offsetTopRight, gap: 0)
                 .windowFrame(in: CGSize(width: 200, height: 100)),
             CGRect(x: 80, y: 10, width: 100, height: 40)
         )
+
+        var clampedBottomRight = offsetTopRight
+        clampedBottomRight.anchor = .bottomRight
+        clampedBottomRight.offsetX = 500
+        clampedBottomRight.offsetY = 500
+        XCTAssertEqual(
+            WindowCustomCommandPreviewLayout(command: clampedBottomRight, gap: 0)
+                .windowFrame(in: CGSize(width: 200, height: 100)),
+            CGRect(x: 100, y: 60, width: 100, height: 40)
+        )
+    }
+
+    func testCustomCommandPreviewLayoutMatchesExecutionGeometryWithGap() {
+        let command = WindowCustomCommand(
+            name: "Gap",
+            width: .fraction(0.5),
+            height: .fraction(0.4),
+            anchor: .topLeft,
+            offsetX: -50,
+            offsetY: -50
+        )
+        let referenceSize = CGSize(width: 1440, height: 900)
+        let expected = WindowLayoutCalculator().customFrame(
+            for: command,
+            windowFrame: CGRect(x: 288, y: 180, width: 864, height: 540),
+            visibleFrame: CGRect(origin: .zero, size: referenceSize),
+            gap: 17
+        )
+
+        let preview = WindowCustomCommandPreviewLayout(command: command, gap: 17)
+            .windowFrame(in: referenceSize)
+
+        XCTAssertEqual(preview, expected)
+        XCTAssertNotEqual(
+            preview,
+            WindowCustomCommandPreviewLayout(command: command, gap: 0)
+                .windowFrame(in: referenceSize)
+        )
+    }
+
+    func testUpdatingCustomCommandNormalizesBlankNameAndPersistsOtherEdits() throws {
+        let plugin = makePlugin()
+        plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
+        let definition = try XCTUnwrap(plugin.actionDefinitions.first(where: {
+            $0.key.actionID.hasPrefix("custom.")
+        }))
+        let id = try XCTUnwrap(UUID(uuidString: String(
+            definition.key.actionID.dropFirst("custom.".count)
+        )))
+        var command = try XCTUnwrap(plugin.customCommand(id: id))
+        command.name = "  \n "
+        command.width = .fraction(0.35)
+        command.anchor = .bottomRight
+
+        XCTAssertTrue(plugin.updateCustomCommand(command))
+
+        let stored = try XCTUnwrap(plugin.customCommand(id: command.id))
+        XCTAssertEqual(
+            stored.name,
+            plugin.localizedKey("settings.custom.defaultName", "自定义布局")
+        )
+        XCTAssertEqual(stored.width, .fraction(0.35))
+        XCTAssertEqual(stored.anchor, .bottomRight)
     }
 
     func testActionExecutionUsesCommittedGapAndReset() async throws {
@@ -583,6 +692,28 @@ final class WindowLayoutsPluginTests: XCTestCase {
         XCTAssertEqual(executor.customExecutions.map(\.name), [definition.title])
     }
 
+    func testCustomRunLinkPolicyChangeRequestsImmediateSafetyRebuild() throws {
+        let plugin = makePlugin()
+        plugin.handleSettingsAction(.invoke(controlID: "add-custom"))
+        let actionID = try XCTUnwrap(plugin.actionDefinitions.first(where: {
+            $0.key.actionID.hasPrefix("custom.")
+        })?.key.actionID)
+        let id = try XCTUnwrap(UUID(uuidString: String(actionID.dropFirst("custom.".count))))
+        var customCommand = try XCTUnwrap(plugin.customCommand(id: id))
+        var safetyChangeCount = 0
+        plugin.onActionSafetyStateChange = { safetyChangeCount += 1 }
+
+        customCommand.allowExternalInvocation = false
+        XCTAssertTrue(plugin.updateCustomCommand(customCommand))
+
+        XCTAssertEqual(safetyChangeCount, 1)
+        XCTAssertEqual(
+            plugin.actionDefinitions.first(where: { $0.key.actionID == actionID })?
+                .externalInvocationPolicy,
+            .unavailable
+        )
+    }
+
     private func makePlugin(
         executor: MockWindowLayoutExecutor? = nil,
         storage: PluginStorage? = nil,
@@ -615,6 +746,18 @@ final class WindowLayoutsPluginTests: XCTestCase {
         plugin.applyActionShortcutPreset = { actionIDs, bindings in
             for actionID in actionIDs {
                 state.bindings[actionID] = bindings[actionID]
+            }
+            return nil
+        }
+        plugin.performActionShortcutReplacementTransaction = {
+            actionIDs, bindings, mutation in
+            let snapshot = state.bindings
+            for actionID in actionIDs {
+                state.bindings[actionID] = bindings[actionID]
+            }
+            if let error = mutation() {
+                state.bindings = snapshot
+                return error
             }
             return nil
         }

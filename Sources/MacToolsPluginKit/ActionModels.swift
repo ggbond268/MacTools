@@ -683,6 +683,20 @@ public protocol PluginActionShortcutPresetApplying: AnyObject {
     ) -> String?)? { get set }
 }
 
+/// Optional host transaction used when a plugin mutation and its managed shortcut replacement
+/// must either both persist or restore the exact previous assignment records.
+@MainActor
+public protocol PluginActionShortcutReplacementTransactionApplying: AnyObject {
+    var currentActionShortcutBindings: ((
+        _ managedActionIDs: Set<String>
+    ) -> [String: [ShortcutBinding]])? { get set }
+    var performActionShortcutReplacementTransaction: ((
+        _ managedActionIDs: Set<String>,
+        _ bindingsByActionID: [String: ShortcutBinding],
+        _ mutation: () -> String?
+    ) -> String?)? { get set }
+}
+
 /// Optional hook for plugins whose custom settings UI summarizes action shortcut assignments.
 /// The host invokes it after the shared action-shortcut state changes so cached plugin views can
 /// publish fresh derived state without polling or owning a parallel shortcut store.
