@@ -400,6 +400,52 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     }
 }
 
+struct ClipboardHistoryPanelActionState {
+    struct Token: Equatable {
+        let presentation: UInt64
+        let action: UInt64
+    }
+
+    private(set) var presentation: UInt64 = 0
+    private var nextAction: UInt64 = 0
+    private(set) var activeToken: Token?
+
+    mutating func beginPresentation() {
+        presentation &+= 1
+        activeToken = nil
+    }
+
+    mutating func invalidatePresentation() {
+        presentation &+= 1
+        activeToken = nil
+    }
+
+    mutating func beginAction() -> Token? {
+        guard activeToken == nil else { return nil }
+        nextAction &+= 1
+        let token = Token(presentation: presentation, action: nextAction)
+        activeToken = token
+        return token
+    }
+
+    func isCurrent(_ token: Token, panelIsVisible: Bool) -> Bool {
+        panelIsVisible && activeToken == token && token.presentation == presentation
+    }
+
+    mutating func finish(_ token: Token) {
+        if activeToken == token {
+            activeToken = nil
+        }
+    }
+
+    mutating func commit(_ token: Token) -> Bool {
+        guard activeToken == token, token.presentation == presentation else { return false }
+        presentation &+= 1
+        activeToken = nil
+        return true
+    }
+}
+
 @MainActor
 final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     enum KeyboardCommand: Equatable {
@@ -425,6 +471,8 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private var panel: KeyablePanel?
     private var keyMonitor: Any?
     private var previousApplicationState = ClipboardHistoryPreviousApplicationState<NSRunningApplication>()
+    private var actionState = ClipboardHistoryPanelActionState()
+    private var itemActionTask: Task<Void, Never>?
 
     init(
         historyController: ClipboardHistoryController,
@@ -452,6 +500,10 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         return isVisible
     }
 
+    static func shouldCenterPanel(hasExistingPanel: Bool) -> Bool {
+        !hasExistingPanel
+    }
+
     func handleGlobalShortcut() {
         if Self.shouldDismissForGlobalShortcut(
             isVisible: panel?.isVisible == true,
@@ -464,6 +516,9 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func show() {
+        invalidatePendingItemAction()
+        actionState.beginPresentation()
+        let shouldCenterPanel = Self.shouldCenterPanel(hasExistingPanel: panel != nil)
         let panel = panel ?? makePanel()
         self.panel = panel
         previousApplicationState.beginPresentation(
@@ -474,11 +529,15 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         installKeyMonitor()
         PluginPresentationSafety.prepareForWindowOrdering(panel)
         NSApp.activate(ignoringOtherApps: true)
-        panel.center()
+        if shouldCenterPanel {
+            panel.center()
+        }
         panel.makeKeyAndOrderFront(nil)
     }
 
     func close(restorePreviousApplication: Bool = true) {
+        invalidatePendingItemAction()
+        actionState.invalidatePresentation()
         let previousApplication = previousApplicationState.consume()
         historyController.releasePayloadIfReloadable(id: model.selectedItemID)
         panel?.orderOut(nil)
@@ -489,6 +548,8 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        invalidatePendingItemAction()
+        actionState.invalidatePresentation()
         historyController.releasePayloadIfReloadable(id: model.selectedItemID)
         removeKeyMonitor()
         previousApplicationState.consume()?.activate(options: [])
@@ -519,12 +580,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 model: model,
                 localization: localization,
                 onCopyAndClose: { [weak self] itemID in
-                    Task { @MainActor [weak self] in
-                        guard let self,
-                              await self.historyController.preparePayloadForUse(id: itemID),
-                              await self.historyController.copyItem(id: itemID) else { return }
-                        self.close()
-                    }
+                    self?.copyItemAndClose(id: itemID)
                 },
                 onPasteAndClose: { [weak self] itemID, asPlainText in
                     self?.pasteItem(id: itemID, asPlainText: asPlainText)
@@ -711,37 +767,90 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     private func pasteItem(id: UUID, asPlainText: Bool) {
-        Task { @MainActor in
-            guard await historyController.preparePayloadForUse(id: id) else {
+        guard let token = actionState.beginAction() else { return }
+        let previousApplication = previousApplicationState.application
+        itemActionTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.finishItemAction(token) }
+            guard await self.historyController.preparePayloadForUse(id: id),
+                  !Task.isCancelled,
+                  self.actionState.isCurrent(token, panelIsVisible: self.isVisible) else {
                 NSSound.beep()
                 return
             }
             let copied: Bool
             if asPlainText {
-                copied = historyController.copyItemAsPlainText(id: id)
+                copied = self.historyController.copyItemAsPlainText(id: id)
             } else {
-                copied = await historyController.copyItem(id: id)
+                copied = await self.historyController.copyItem(id: id)
             }
-            guard copied else {
+            guard copied,
+                  !Task.isCancelled,
+                  self.actionState.isCurrent(token, panelIsVisible: self.isVisible) else {
                 NSSound.beep()
                 return
             }
 
-            let previousApplication = previousApplicationState.consume()
-            panel?.orderOut(nil)
-            removeKeyMonitor()
+            guard self.commitItemAction(token) else { return }
             guard let previousApplication else { return }
             previousApplication.activate(options: [])
-            let pasteCommandSender = pasteCommandSender
+            let pasteCommandSender = self.pasteCommandSender
             let activationDeadline = ProcessInfo.processInfo.systemUptime + 0.4
             while !previousApplication.isActive,
                   ProcessInfo.processInfo.systemUptime < activationDeadline {
                 try? await Task.sleep(nanoseconds: 20_000_000)
             }
-            if !(await pasteCommandSender.sendPasteCommand()) {
+            guard !Task.isCancelled,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier
+                    == previousApplication.processIdentifier,
+                  await pasteCommandSender.sendPasteCommand(
+                      to: previousApplication.processIdentifier
+                  ) else {
                 NSSound.beep()
+                return
             }
         }
+    }
+
+    private func copyItemAndClose(id: UUID) {
+        guard let token = actionState.beginAction() else { return }
+        let previousApplication = previousApplicationState.application
+        itemActionTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.finishItemAction(token) }
+            guard await self.historyController.preparePayloadForUse(id: id),
+                  !Task.isCancelled,
+                  self.actionState.isCurrent(token, panelIsVisible: self.isVisible),
+                  await self.historyController.copyItem(id: id),
+                  !Task.isCancelled,
+                  self.actionState.isCurrent(token, panelIsVisible: self.isVisible),
+                  self.commitItemAction(token) else {
+                return
+            }
+            previousApplication?.activate(options: [])
+        }
+    }
+
+    private func finishItemAction(_ token: ClipboardHistoryPanelActionState.Token) {
+        actionState.finish(token)
+        if actionState.activeToken == nil {
+            itemActionTask = nil
+        }
+    }
+
+    private func commitItemAction(_ token: ClipboardHistoryPanelActionState.Token) -> Bool {
+        guard actionState.commit(token) else { return false }
+        itemActionTask = nil
+        _ = previousApplicationState.consume()
+        historyController.releasePayloadIfReloadable(id: model.selectedItemID)
+        panel?.orderOut(nil)
+        removeKeyMonitor()
+        return true
+    }
+
+    private func invalidatePendingItemAction() {
+        itemActionTask?.cancel()
+        itemActionTask = nil
     }
 }
 

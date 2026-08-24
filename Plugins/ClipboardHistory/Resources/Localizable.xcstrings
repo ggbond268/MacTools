@@ -1,6 +1,36 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "setup.disclosure.expanded": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "موسّع" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Erweitert" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Expanded" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Expandido" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Développé" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "展開済み" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "펼쳐짐" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Expandido" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Развернуто" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已展开" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已展開" } }
+      }
+    },
+    "setup.disclosure.collapsed": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مطوي" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Reduziert" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Collapsed" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Contraído" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réduit" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "折りたたみ済み" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "접힘" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Recolhido" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Свернуто" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已折叠" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已收合" } }
+      }
+    },
     "setup.notConfigured": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "غير مُعدّ" } },

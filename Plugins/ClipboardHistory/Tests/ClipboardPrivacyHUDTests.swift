@@ -48,4 +48,31 @@ final class ClipboardPrivacyHUDTests: XCTestCase {
         XCTAssertTrue(panel.collectionBehavior.contains(.ignoresCycle))
         panel.close()
     }
+
+    func testHUDAnnouncesEachNewPresentationButNotDismissal() async {
+        var announcements: [String] = []
+        var uptime: TimeInterval = 100
+        let controller = ClipboardPrivacyHUDController(
+            transientDuration: .seconds(10),
+            systemUptime: { uptime },
+            screens: { [] },
+            announce: { announcements.append($0) }
+        )
+
+        controller.handleSuppressionEvent(.armed(mode: .ignoreNextCopy, timeout: 15))
+        XCTAssertEqual(announcements, ["下次复制不会保存 · 15 秒"])
+
+        uptime = 101
+        try? await Task.sleep(for: .milliseconds(250))
+        XCTAssertEqual(announcements, ["下次复制不会保存 · 15 秒"])
+
+        controller.handleSuppressionEvent(.consumed(mode: .privateCopy))
+        controller.showFailure("私密复制失败")
+        controller.dismiss()
+        XCTAssertEqual(announcements, [
+            "下次复制不会保存 · 15 秒",
+            "已私密复制",
+            "私密复制失败",
+        ])
+    }
 }

@@ -528,6 +528,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private var imageIndexAttemptedItemIDs = Set<UUID>()
     private var captureProcessingTask: Task<Void, Never>?
     private var pasteboardPayloadReadTask: Task<Void, Never>?
+    private var pasteboardPayloadReadGeneration: UInt64 = 0
     private var captureProcessingGeneration: UInt64 = 0
     private var captureProcessingSequence: UInt64 = 0
     private var capturePolicyRevision: UInt64 = 0
@@ -774,14 +775,18 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         capturedAt: Date
     ) {
         let pasteboard = pasteboard
+        pasteboardPayloadReadGeneration &+= 1
+        let generation = pasteboardPayloadReadGeneration
         pasteboardPayloadReadTask = Task { @MainActor [weak self] in
             let result = await pasteboard.readPayloadAsynchronously(
                 maximumByteCount: maximumByteCount,
                 expectedChangeCount: expectedChangeCount
             )
-            guard !Task.isCancelled, let self else { return }
+            guard let self else { return }
             self.pasteboardPayloadReadTask = nil
-            guard self.pasteboard.changeCount == expectedChangeCount else {
+            guard !Task.isCancelled,
+                  self.pasteboardPayloadReadGeneration == generation,
+                  self.pasteboard.changeCount == expectedChangeCount else {
                 return
             }
             self.handlePasteboardPayloadReadResult(
@@ -1042,12 +1047,13 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             let hasUnavailableReferences = await Task.detached(priority: .userInitiated) {
                 fileURLs.contains { !FileManager.default.fileExists(atPath: $0.path) }
             }.value
-            guard !hasUnavailableReferences else {
+            guard !Task.isCancelled, !hasUnavailableReferences else {
                 item.discardCachedPayloadIfReloadable()
                 return false
             }
         }
-        guard !isClearingHistory,
+        guard !Task.isCancelled,
+              !isClearingHistory,
               let index = items.firstIndex(where: { $0.id == id }) else {
             item.discardCachedPayloadIfReloadable()
             return false
@@ -1073,6 +1079,10 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         let isAvailable = await Task.detached(priority: .userInitiated) {
             (try? item.loadPayload()) != nil
         }.value
+        guard !Task.isCancelled else {
+            item.discardCachedPayloadIfReloadable()
+            return false
+        }
         if isAvailable, item.kind == .image, !item.hasCompletedImageTextIndexing {
             enqueueImageTextIndexing(for: [item])
         }
@@ -1634,8 +1644,10 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     private func cancelPendingPasteboardPayloadRead() {
+        pasteboardPayloadReadGeneration &+= 1
         pasteboardPayloadReadTask?.cancel()
-        pasteboardPayloadReadTask = nil
+        // Keep the physical read slot occupied until the provider returns. Cancellation only
+        // invalidates its result; it cannot interrupt an in-process synchronous pasteboard owner.
     }
 
     var pendingImageIndexItemCountForTesting: Int {

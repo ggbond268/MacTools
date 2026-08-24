@@ -16,6 +16,25 @@ enum ClipboardHistorySetupStep: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
 }
 
+enum ClipboardHistorySetupAccessibility {
+    static func disclosureValue(
+        isExpanded: Bool,
+        localization: PluginLocalization
+    ) -> String {
+        if isExpanded {
+            localization.string(
+                "setup.disclosure.expanded",
+                defaultValue: "已展开"
+            )
+        } else {
+            localization.string(
+                "setup.disclosure.collapsed",
+                defaultValue: "已折叠"
+            )
+        }
+    }
+}
+
 private struct ClipboardHistorySetupShortcutWarning: Identifiable {
     enum Target {
         case plugin(itemID: String)
@@ -258,6 +277,10 @@ struct ClipboardHistorySetupSheet: View {
                 .pluginSettingsListRowPadding(interactive: true)
             }
             .buttonStyle(.plain)
+            .accessibilityValue(Text(ClipboardHistorySetupAccessibility.disclosureValue(
+                isExpanded: expandedStep == step,
+                localization: localization
+            )))
 
             if expandedStep == step {
                 PluginSettingsListDivider()

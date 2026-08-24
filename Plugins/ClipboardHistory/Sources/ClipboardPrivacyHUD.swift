@@ -83,6 +83,7 @@ final class ClipboardPrivacyHUDController: ClipboardPrivacyHUDPresenting {
     private let systemUptime: () -> TimeInterval
     private let screens: () -> [NSScreen]
     private let mouseLocation: () -> NSPoint
+    private let announce: (String) -> Void
 
     private var panel: ClipboardPrivacyHUDPanel?
     private var hostingView: NSHostingView<ClipboardPrivacyHUDView>?
@@ -96,7 +97,17 @@ final class ClipboardPrivacyHUDController: ClipboardPrivacyHUDPresenting {
         failureDuration: Duration = .milliseconds(1_800),
         systemUptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         screens: @escaping () -> [NSScreen] = { NSScreen.screens },
-        mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }
+        mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation },
+        announce: @escaping (String) -> Void = { title in
+            NSAccessibility.post(
+                element: NSApplication.shared,
+                notification: .announcementRequested,
+                userInfo: [
+                    .announcement: title,
+                    .priority: NSAccessibilityPriorityLevel.high.rawValue,
+                ]
+            )
+        }
     ) {
         self.localization = localization
         self.transientDuration = transientDuration
@@ -104,6 +115,7 @@ final class ClipboardPrivacyHUDController: ClipboardPrivacyHUDPresenting {
         self.systemUptime = systemUptime
         self.screens = screens
         self.mouseLocation = mouseLocation
+        self.announce = announce
     }
 
     func handleSuppressionEvent(_ event: ClipboardCaptureSuppressionEvent) {
@@ -228,6 +240,7 @@ final class ClipboardPrivacyHUDController: ClipboardPrivacyHUDPresenting {
         )
         panel.orderFrontRegardless()
         restoration?.restore()
+        announce(content.title)
     }
 
     private func updateVisibleContent(_ content: ClipboardPrivacyHUDContent) {

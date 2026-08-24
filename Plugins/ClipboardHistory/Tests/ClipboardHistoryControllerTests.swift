@@ -594,6 +594,38 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(loader.loadCount, 1)
     }
 
+    func testCancelledPayloadPreparationDiscardsReloadablePayloadCache() async {
+        let loaders = (0..<2).map { index in
+            BlockingCountingClipboardPayloadLoader(payload: .plainText("secret-\(index)"))
+        }
+        let items = loaders.enumerated().map { index, loader in
+            let item = item(text: "secret-\(index)", pinned: false)
+            item.configurePayloadLoader({ try loader.load() }, discardCachedPayload: true)
+            return item
+        }
+        let fixture = makeFixture(initialItems: items)
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        for (item, loader) in zip(items, loaders) {
+            let preparation = Task { @MainActor in
+                await fixture.controller.preparePayloadForUse(id: item.id)
+            }
+            let didStart = await waitUntil { loader.loadCount == 1 }
+            XCTAssertTrue(didStart)
+
+            preparation.cancel()
+            loader.release.signal()
+
+            let didPrepare = await preparation.value
+            XCTAssertFalse(didPrepare)
+            XCTAssertNil(item.payload)
+        }
+
+        XCTAssertTrue(items.allSatisfy { $0.payload == nil })
+        fixture.controller.stop()
+    }
+
     func testDeletingAnItemDoesNotDuplicateContinuouslyQueuedImageIndexing() async throws {
         let recognizer = BlockingCountingClipboardImageTextRecognizer()
         let imageCount = 101
@@ -1103,6 +1135,38 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(didFinishRead)
 
         XCTAssertTrue(fixture.controller.items.isEmpty)
+        fixture.controller.stop()
+    }
+
+    func testRepeatedRestartDoesNotAccumulateBlockedPasteboardReaders() async {
+        let fixture = makeFixture()
+        fixture.pasteboard.requiresAsynchronousPayloadRead = true
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.simulateCopy("blocked first capture")
+        fixture.controller.processPasteboardChange()
+        let didStartRead = await waitUntil { fixture.pasteboard.asyncReadStartCount == 1 }
+        XCTAssertTrue(didStartRead)
+
+        for revision in 1...3 {
+            fixture.controller.stop()
+            fixture.controller.start()
+            fixture.pasteboard.simulateCopy("new revision \(revision)")
+            fixture.controller.processPasteboardChange()
+        }
+
+        XCTAssertEqual(fixture.pasteboard.asyncReadStartCount, 1)
+        fixture.pasteboard.completeAsynchronousRead()
+        let didFinishRead = await waitUntil { fixture.pasteboard.asyncReadCompleted }
+        XCTAssertTrue(didFinishRead)
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+
+        fixture.controller.processPasteboardChange()
+        let didStartLatestRead = await waitUntil { fixture.pasteboard.asyncReadStartCount == 2 }
+        XCTAssertTrue(didStartLatestRead)
+        fixture.pasteboard.completeAsynchronousRead()
+        let didCaptureLatest = await waitUntil { fixture.controller.items.first?.text == "new revision 3" }
+        XCTAssertTrue(didCaptureLatest)
         fixture.controller.stop()
     }
 
@@ -1698,6 +1762,7 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
     private(set) var typeNamesReadCount = 0
     private(set) var plainTextReadCount = 0
     private(set) var asyncReadStarted = false
+    private(set) var asyncReadStartCount = 0
     private(set) var asyncReadCompleted = false
     private var asyncReadContinuation: CheckedContinuation<ClipboardPasteboardReadResult, Never>?
     private var asyncReadMaximumByteCount = 0
@@ -1724,6 +1789,7 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
         expectedChangeCount: Int
     ) async -> ClipboardPasteboardReadResult {
         asyncReadStarted = true
+        asyncReadStartCount += 1
         asyncReadMaximumByteCount = maximumByteCount
         asyncReadExpectedChangeCount = expectedChangeCount
         let result = await withCheckedContinuation { continuation in

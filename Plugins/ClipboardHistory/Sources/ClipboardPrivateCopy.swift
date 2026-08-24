@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import Carbon
 import CoreGraphics
@@ -7,20 +8,28 @@ import Foundation
 protocol ClipboardCopyCommandSending {
     /// Calls `beforeSending` immediately before posting Command-C so capture suppression can be
     /// armed without covering the time spent waiting for the shortcut's modifiers to be released.
-    func sendCopyCommand(beforeSending: () -> Bool) async -> Bool
+    func sendCopyCommand(
+        to processIdentifier: pid_t,
+        beforeSending: () -> Bool
+    ) async -> Bool
 }
 
 @MainActor
 protocol ClipboardPasteCommandSending {
-    func sendPasteCommand() async -> Bool
+    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool
 }
 
 @MainActor
 struct SystemClipboardCopyCommandSender: ClipboardCopyCommandSending {
-    func sendCopyCommand(beforeSending: () -> Bool) async -> Bool {
+    func sendCopyCommand(
+        to processIdentifier: pid_t,
+        beforeSending: () -> Bool
+    ) async -> Bool {
         await waitForModifierKeysToClear()
 
-        guard AXIsProcessTrusted(),
+        guard !Task.isCancelled,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier,
+              AXIsProcessTrusted(),
               let source = CGEventSource(stateID: .combinedSessionState),
               let keyDown = CGEvent(
                   keyboardEventSource: source,
@@ -35,11 +44,14 @@ struct SystemClipboardCopyCommandSender: ClipboardCopyCommandSending {
             return false
         }
 
-        guard beforeSending() else { return false }
+        guard beforeSending(),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier else {
+            return false
+        }
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
+        keyDown.postToPid(processIdentifier)
+        keyUp.postToPid(processIdentifier)
         return true
     }
 
@@ -59,12 +71,14 @@ struct SystemClipboardCopyCommandSender: ClipboardCopyCommandSending {
 
 @MainActor
 struct SystemClipboardPasteCommandSender: ClipboardPasteCommandSending {
-    func sendPasteCommand() async -> Bool {
+    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
         await waitForModifierKeysToClear()
         // Give the previously active application one run-loop turn to regain key focus.
         try? await Task.sleep(nanoseconds: 80_000_000)
 
-        guard AXIsProcessTrusted(),
+        guard !Task.isCancelled,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier,
+              AXIsProcessTrusted(),
               let source = CGEventSource(stateID: .combinedSessionState),
               let keyDown = CGEvent(
                   keyboardEventSource: source,
@@ -81,8 +95,8 @@ struct SystemClipboardPasteCommandSender: ClipboardPasteCommandSending {
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
+        keyDown.postToPid(processIdentifier)
+        keyUp.postToPid(processIdentifier)
         return true
     }
 

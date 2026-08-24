@@ -81,6 +81,7 @@ final class ClipboardHistoryPlugin:
     private let pasteCommandSender: any ClipboardPasteCommandSending
     private let accessibilityTrusted: () -> Bool
     private let accessibilityRequester: (Bool) -> Bool
+    private let frontmostProcessIdentifier: () -> pid_t?
     private let privacyHUDPresenter: any ClipboardPrivacyHUDPresenting
     private lazy var panelController = ClipboardHistoryPanelController(
         historyController: controller,
@@ -101,7 +102,10 @@ final class ClipboardHistoryPlugin:
         privacyHUDPresenter: (any ClipboardPrivacyHUDPresenting)? = nil,
         imageTextRecognizer: (any ClipboardImageTextRecognizing)? = nil,
         accessibilityTrusted: @escaping () -> Bool = ClipboardHistoryAccessibilityCheck.isTrusted,
-        accessibilityRequester: @escaping (Bool) -> Bool = ClipboardHistoryAccessibilityCheck.requestTrust(prompt:)
+        accessibilityRequester: @escaping (Bool) -> Bool = ClipboardHistoryAccessibilityCheck.requestTrust(prompt:),
+        frontmostProcessIdentifier: @escaping () -> pid_t? = {
+            NSWorkspace.shared.frontmostApplication?.processIdentifier
+        }
     ) {
         let localization = PluginLocalization(bundle: context.resourceBundle)
         let settingsStore = ClipboardHistorySettingsStore(storage: context.storage)
@@ -127,6 +131,7 @@ final class ClipboardHistoryPlugin:
         self.privacyHUDPresenter = privacyHUDPresenter ?? ClipboardPrivacyHUDController(localization: localization)
         self.accessibilityTrusted = accessibilityTrusted
         self.accessibilityRequester = accessibilityRequester
+        self.frontmostProcessIdentifier = frontmostProcessIdentifier
         self.controller = ClipboardHistoryController(
             settings: settingsStore,
             pasteboard: pasteboard ?? GeneralClipboardPasteboard(),
@@ -617,14 +622,18 @@ final class ClipboardHistoryPlugin:
     func handleShortcutAction(id: String) {
         switch id {
         case ShortcutID.privateCopy:
+            let targetProcessIdentifier = frontmostProcessIdentifier()
             Task { @MainActor [weak self] in
-                await self?.performPrivateCopy()
+                await self?.performPrivateCopy(targetProcessIdentifier: targetProcessIdentifier)
             }
         case ShortcutID.ignoreNextCopy:
             armIgnoreNextCopy()
         case ShortcutID.pastePlainText:
+            let targetProcessIdentifier = frontmostProcessIdentifier()
             Task { @MainActor [weak self] in
-                await self?.performPasteClipboardAsPlainText()
+                await self?.performPasteClipboardAsPlainText(
+                    targetProcessIdentifier: targetProcessIdentifier
+                )
             }
         default:
             return
@@ -672,7 +681,7 @@ final class ClipboardHistoryPlugin:
         controller.start()
     }
 
-    private func performPrivateCopy() async {
+    private func performPrivateCopy(targetProcessIdentifier: pid_t?) async {
         guard controller.canSuppressNextCapture else {
             showClipboardUnavailableHUD()
             return
@@ -688,8 +697,17 @@ final class ClipboardHistoryPlugin:
             onStateChange?()
             return
         }
+        guard let targetProcessIdentifier else {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.privateCopy.failed",
+                defaultValue: "私密复制失败"
+            ))
+            return
+        }
 
-        let sent = await copyCommandSender.sendCopyCommand { [weak controller] in
+        let sent = await copyCommandSender.sendCopyCommand(
+            to: targetProcessIdentifier
+        ) { [weak controller] in
             // A direct private copy should not leave a stale one-shot suppression behind when the
             // target application has no selection or refuses Command-C.
             controller?.ignoreNextCopy(expiringAfter: 15, mode: .privateCopy) == true
@@ -711,7 +729,7 @@ final class ClipboardHistoryPlugin:
         }
     }
 
-    private func performPasteClipboardAsPlainText() async {
+    private func performPasteClipboardAsPlainText(targetProcessIdentifier: pid_t?) async {
         guard accessibilityTrusted() else {
             privacyHUDPresenter.showFailure(localization.string(
                 "hud.pastePlain.accessibilityRequired",
@@ -721,6 +739,14 @@ final class ClipboardHistoryPlugin:
                 requestPermissionGuidance?(PermissionID.accessibility)
             }
             onStateChange?()
+            return
+        }
+        guard let targetProcessIdentifier,
+              frontmostProcessIdentifier() == targetProcessIdentifier else {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.pastePlain.failed",
+                defaultValue: "无法粘贴纯文本"
+            ))
             return
         }
         switch controller.rewriteCurrentClipboardAsPlainText() {
@@ -745,7 +771,7 @@ final class ClipboardHistoryPlugin:
             ))
             return
         }
-        guard await pasteCommandSender.sendPasteCommand() else {
+        guard await pasteCommandSender.sendPasteCommand(to: targetProcessIdentifier) else {
             privacyHUDPresenter.showFailure(localization.string(
                 "hud.pastePlain.failed",
                 defaultValue: "无法粘贴纯文本"

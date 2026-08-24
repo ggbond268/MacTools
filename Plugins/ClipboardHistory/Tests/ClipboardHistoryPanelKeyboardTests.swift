@@ -20,6 +20,29 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         ))
     }
 
+    func testPanelActionStateRejectsDuplicateAndStaleOperations() throws {
+        var state = ClipboardHistoryPanelActionState()
+        state.beginPresentation()
+        let first = try XCTUnwrap(state.beginAction())
+
+        XCTAssertNil(state.beginAction())
+        XCTAssertTrue(state.isCurrent(first, panelIsVisible: true))
+        XCTAssertFalse(state.isCurrent(first, panelIsVisible: false))
+
+        state.invalidatePresentation()
+        XCTAssertFalse(state.isCurrent(first, panelIsVisible: true))
+        let second = try XCTUnwrap(state.beginAction())
+        XCTAssertNotEqual(first, second)
+        XCTAssertFalse(state.commit(first))
+        XCTAssertTrue(state.commit(second))
+        XCTAssertFalse(state.isCurrent(second, panelIsVisible: true))
+    }
+
+    func testHistoryPanelCentersOnlyBeforeItsFirstPresentation() {
+        XCTAssertTrue(ClipboardHistoryPanelController.shouldCenterPanel(hasExistingPanel: false))
+        XCTAssertFalse(ClipboardHistoryPanelController.shouldCenterPanel(hasExistingPanel: true))
+    }
+
     func testFailedClearKeepsPreservedHistoryVisibleWithInlineError() {
         let presentation = ClipboardHistoryPanelPresentation.resolve(
             itemCount: 2,

@@ -247,6 +247,25 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertTrue(progress.isConfigured(.sensitiveCopy))
     }
 
+    func testSetupDisclosureAccessibilityReportsExpandedState() {
+        let localization = PluginLocalization(bundle: .main)
+
+        XCTAssertEqual(
+            ClipboardHistorySetupAccessibility.disclosureValue(
+                isExpanded: true,
+                localization: localization
+            ),
+            "已展开"
+        )
+        XCTAssertEqual(
+            ClipboardHistorySetupAccessibility.disclosureValue(
+                isExpanded: false,
+                localization: localization
+            ),
+            "已折叠"
+        )
+    }
+
     func testSettingsContextCanMutateActionBackedShortcutFromSetup() {
         let item = PluginSettingsActionShortcutItem(
             actionID: ClipboardHistoryPlugin.ActionID.openHistory,
@@ -356,6 +375,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         plugin.controller.processPasteboardChange()
 
         XCTAssertEqual(sender.sendCount, 1)
+        XCTAssertEqual(sender.targetProcessIdentifiers, [1234])
         XCTAssertTrue(sender.didArmBeforeSending)
         XCTAssertEqual(pasteboard.plainTextReadCount, 0)
         XCTAssertTrue(plugin.controller.items.isEmpty)
@@ -402,6 +422,34 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         plugin.controller.stop()
     }
 
+    func testPrivateCopyRetainsInvocationTargetAndDoesNotArmAfterFocusChanges() async {
+        let sender = FakeClipboardCopyCommandSender()
+        let hud = FakeClipboardPrivacyHUDPresenter()
+        var frontmostProcessIdentifier: pid_t? = 1234
+        sender.shouldSend = { processIdentifier in
+            processIdentifier == frontmostProcessIdentifier
+        }
+        let plugin = makePlugin(
+            copyCommandSender: sender,
+            privacyHUDPresenter: hud,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { frontmostProcessIdentifier }
+        )
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+
+        plugin.handleShortcutAction(id: "private-copy")
+        frontmostProcessIdentifier = 5678
+        let didFailClosed = await waitUntil { !hud.failures.isEmpty }
+
+        XCTAssertTrue(didFailClosed)
+        XCTAssertEqual(sender.targetProcessIdentifiers, [1234])
+        XCTAssertFalse(sender.didArmBeforeSending)
+        XCTAssertFalse(plugin.controller.isIgnoringNextCopy)
+        XCTAssertEqual(hud.failures, ["私密复制失败"])
+        plugin.controller.stop()
+    }
+
     func testPastePlainTextShortcutRewritesCurrentClipboardAndPastesWithoutOpeningHistory() async {
         let pasteboard = PluginTestClipboardPasteboard()
         pasteboard.simulateCopy("Styled website text")
@@ -418,9 +466,34 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         }
 
         XCTAssertEqual(sender.sendCount, 1)
+        XCTAssertEqual(sender.targetProcessIdentifiers, [1234])
         XCTAssertEqual(pasteboard.plainTextWriteCount, 1)
         XCTAssertEqual(pasteboard.text, "Styled website text")
         XCTAssertTrue(plugin.controller.items.isEmpty)
+    }
+
+    func testPastePlainTextCapturesTargetBeforeAsynchronousWorkAndFailsClosedAfterFocusChanges() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        pasteboard.simulateCopy("Sensitive website text")
+        let sender = FakeClipboardPasteCommandSender()
+        let hud = FakeClipboardPrivacyHUDPresenter()
+        var frontmostProcessIdentifier: pid_t? = 1234
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            pasteCommandSender: sender,
+            privacyHUDPresenter: hud,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { frontmostProcessIdentifier }
+        )
+
+        plugin.handleShortcutAction(id: "paste-clipboard-as-plain-text")
+        frontmostProcessIdentifier = 5678
+        let didFailClosed = await waitUntil { !hud.failures.isEmpty }
+
+        XCTAssertTrue(didFailClosed)
+        XCTAssertEqual(sender.sendCount, 0)
+        XCTAssertEqual(pasteboard.plainTextWriteCount, 0)
+        XCTAssertEqual(hud.failures, ["无法粘贴纯文本"])
     }
 
     func testPastePlainTextShortcutUsesRecognizedTextFromTheStillCurrentImage() async {
@@ -697,7 +770,8 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         privacyHUDPresenter: (any ClipboardPrivacyHUDPresenting)? = nil,
         imageTextRecognizer: (any ClipboardImageTextRecognizing)? = nil,
         accessibilityTrusted: @escaping () -> Bool = { true },
-        accessibilityRequester: @escaping (Bool) -> Bool = { _ in true }
+        accessibilityRequester: @escaping (Bool) -> Bool = { _ in true },
+        frontmostProcessIdentifier: @escaping () -> pid_t? = { 1234 }
     ) -> ClipboardHistoryPlugin {
         let suiteName = "ClipboardHistoryPluginTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -723,7 +797,8 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             privacyHUDPresenter: privacyHUDPresenter ?? FakeClipboardPrivacyHUDPresenter(),
             imageTextRecognizer: imageTextRecognizer,
             accessibilityTrusted: accessibilityTrusted,
-            accessibilityRequester: accessibilityRequester
+            accessibilityRequester: accessibilityRequester,
+            frontmostProcessIdentifier: frontmostProcessIdentifier
         )
     }
 
@@ -1001,11 +1076,18 @@ private final class PluginTestClipboardPasteboard: ClipboardPasteboardAccess {
 @MainActor
 private final class FakeClipboardCopyCommandSender: ClipboardCopyCommandSending {
     var onSend: (() -> Void)?
+    var shouldSend: ((pid_t) -> Bool)?
     private(set) var sendCount = 0
     private(set) var didArmBeforeSending = false
+    private(set) var targetProcessIdentifiers: [pid_t] = []
 
-    func sendCopyCommand(beforeSending: () -> Bool) async -> Bool {
+    func sendCopyCommand(
+        to processIdentifier: pid_t,
+        beforeSending: () -> Bool
+    ) async -> Bool {
         sendCount += 1
+        targetProcessIdentifiers.append(processIdentifier)
+        guard shouldSend?(processIdentifier) ?? true else { return false }
         didArmBeforeSending = beforeSending()
         guard didArmBeforeSending else { return false }
         onSend?()
@@ -1016,9 +1098,11 @@ private final class FakeClipboardCopyCommandSender: ClipboardCopyCommandSending 
 @MainActor
 private final class FakeClipboardPasteCommandSender: ClipboardPasteCommandSending {
     private(set) var sendCount = 0
+    private(set) var targetProcessIdentifiers: [pid_t] = []
 
-    func sendPasteCommand() async -> Bool {
+    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
         sendCount += 1
+        targetProcessIdentifiers.append(processIdentifier)
         return true
     }
 }

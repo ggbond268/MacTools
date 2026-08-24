@@ -183,6 +183,7 @@ public struct PluginShortcutRecorder: View {
 /// Keeps the recorder and its trailing clear affordance in stable columns.
 /// Reset remains available from the recorder's context menu when a caller supports it.
 public struct PluginSettingsShortcutRecorderControl: View {
+    private static let shortcutActionButtonSize: CGFloat = 22
     public let title: String
     public let displayText: String
     public let canAssign: Bool
@@ -227,8 +228,8 @@ public struct PluginSettingsShortcutRecorderControl: View {
                     .font(PluginSettingsTheme.Typography.rowIcon)
                     .symbolRenderingMode(.monochrome)
                     .frame(
-                        width: PluginSettingsTheme.Size.shortcutActionButtonSize,
-                        height: PluginSettingsTheme.Size.shortcutActionButtonSize
+                        width: Self.shortcutActionButtonSize,
+                        height: Self.shortcutActionButtonSize
                     )
             }
             .buttonStyle(.plain)
