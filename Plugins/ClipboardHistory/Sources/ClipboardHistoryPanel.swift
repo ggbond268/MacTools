@@ -467,6 +467,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private let localization: PluginLocalization
     private let onIgnoreNextCopy: () -> Void
     private let pasteCommandSender: any ClipboardPasteCommandSending
+    private let exportCoordinator: ClipboardHistoryExportCoordinator
     private let model = ClipboardHistoryPanelModel()
     private var panel: KeyablePanel?
     private var keyMonitor: Any?
@@ -478,12 +479,18 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         historyController: ClipboardHistoryController,
         localization: PluginLocalization,
         onIgnoreNextCopy: @escaping () -> Void,
+        hudPresenter: any ClipboardPrivacyHUDPresenting,
         pasteCommandSender: any ClipboardPasteCommandSending = SystemClipboardPasteCommandSender()
     ) {
         self.historyController = historyController
         self.localization = localization
         self.onIgnoreNextCopy = onIgnoreNextCopy
         self.pasteCommandSender = pasteCommandSender
+        self.exportCoordinator = ClipboardHistoryExportCoordinator(
+            historyController: historyController,
+            localization: localization,
+            hudPresenter: hudPresenter
+        )
         super.init()
     }
 
@@ -555,6 +562,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func close(restorePreviousApplication: Bool = true) {
+        exportCoordinator.cancel()
         invalidatePendingItemAction()
         actionState.invalidatePresentation()
         let previousApplication = previousApplicationState.consume()
@@ -567,6 +575,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        exportCoordinator.cancel()
         invalidatePendingItemAction()
         actionState.invalidatePresentation()
         historyController.releasePayloadIfReloadable(id: model.selectedItemID)
@@ -611,6 +620,24 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 onDelete: { [weak self] itemID in
                     guard let self else { return }
                     await self.deleteItem(id: itemID)
+                },
+                onExport: { [weak self] itemID, format in
+                    guard let self else { return }
+                    self.exportCoordinator.export(
+                        itemID: itemID,
+                        format: format,
+                        parentWindow: self.panel
+                    )
+                },
+                onShowReferencedFiles: { [weak self] itemID in
+                    self?.exportCoordinator.showReferencedFiles(itemID: itemID)
+                },
+                onCopyReferencedFiles: { [weak self] itemID in
+                    guard let self else { return }
+                    self.exportCoordinator.copyReferencedFiles(
+                        itemID: itemID,
+                        parentWindow: self.panel
+                    )
                 },
                 onClose: { [weak self] in self?.close() }
             )
@@ -1208,6 +1235,9 @@ private struct ClipboardHistoryPanelView: View {
     let onPasteAndClose: (UUID, Bool) -> Void
     let onIgnoreNextCopy: () -> Void
     let onDelete: (UUID) async -> Void
+    let onExport: (UUID, ClipboardExportFormat) -> Void
+    let onShowReferencedFiles: (UUID) -> Void
+    let onCopyReferencedFiles: (UUID) -> Void
     let onClose: () -> Void
     let localization: PluginLocalization
 
@@ -1228,6 +1258,9 @@ private struct ClipboardHistoryPanelView: View {
         onPasteAndClose: @escaping (UUID, Bool) -> Void,
         onIgnoreNextCopy: @escaping () -> Void,
         onDelete: @escaping (UUID) async -> Void,
+        onExport: @escaping (UUID, ClipboardExportFormat) -> Void,
+        onShowReferencedFiles: @escaping (UUID) -> Void,
+        onCopyReferencedFiles: @escaping (UUID) -> Void,
         onClose: @escaping () -> Void
     ) {
         self.controller = controller
@@ -1237,6 +1270,9 @@ private struct ClipboardHistoryPanelView: View {
         self.onPasteAndClose = onPasteAndClose
         self.onIgnoreNextCopy = onIgnoreNextCopy
         self.onDelete = onDelete
+        self.onExport = onExport
+        self.onShowReferencedFiles = onShowReferencedFiles
+        self.onCopyReferencedFiles = onCopyReferencedFiles
         self.onClose = onClose
         _settings = ObservedObject(wrappedValue: controller.settings)
     }
@@ -1692,6 +1728,30 @@ private struct ClipboardHistoryPanelView: View {
                             .foregroundStyle(isSelected ? Color.white.opacity(0.78) : Color.secondary)
                             .fixedSize()
                     }
+                    if isSelected {
+                        ClipboardHistoryDragSource(
+                            item: item,
+                            localization: localization,
+                            onSuccess: {
+                                controller.recordSuccessfulUse(id: item.id)
+                            }
+                        )
+                        .frame(width: 18, height: 18)
+                        .overlay {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.caption)
+                                .foregroundStyle(Color.white.opacity(0.78))
+                                .allowsHitTesting(false)
+                        }
+                        .help(localization.string(
+                            "export.drag.help",
+                            defaultValue: "拖到访达或桌面以导出"
+                        ))
+                        .accessibilityLabel(localization.string(
+                            "export.drag.help",
+                            defaultValue: "拖到访达或桌面以导出"
+                        ))
+                    }
                 }
                 HStack(spacing: 5) {
                     if item.isPinned {
@@ -1722,6 +1782,7 @@ private struct ClipboardHistoryPanelView: View {
             }
             .disabled(!ClipboardPlainTextConversion.isAvailable(for: item))
             Button(localization.string("common.copy", defaultValue: "复制")) { onCopyAndClose(item.id) }
+            exportActions(for: item)
             Button(
                 item.isPinned
                     ? localization.string("common.unpin", defaultValue: "取消固定")
@@ -1810,6 +1871,7 @@ private struct ClipboardHistoryPanelView: View {
                         Button(localization.string("common.copy", defaultValue: "复制")) {
                             onCopyAndClose(item.id)
                         }
+                        exportActions(for: item)
                         Divider()
                         Button(localization.string("common.delete", defaultValue: "删除"), role: .destructive) {
                             Task { await onDelete(item.id) }
@@ -1832,6 +1894,37 @@ private struct ClipboardHistoryPanelView: View {
                 localization.string("panel.detail.selectItem", defaultValue: "选择一条记录"),
                 systemImage: "cursorarrow.click"
             )
+        }
+    }
+
+    @ViewBuilder
+    private func exportActions(for item: ClipboardHistoryItem) -> some View {
+        if item.kind == .files {
+            Divider()
+            Button(localization.string("export.showInFinder", defaultValue: "在访达中显示")) {
+                onShowReferencedFiles(item.id)
+            }
+            Button(localization.string("export.copyToFolder", defaultValue: "复制到文件夹…")) {
+                onCopyReferencedFiles(item.id)
+            }
+        } else {
+            let options = ClipboardHistoryExportPlanner.options(for: item)
+            if options.isEmpty {
+                Divider()
+                Button(localization.string("export.unavailable", defaultValue: "无法导出此格式")) {}
+                    .disabled(true)
+            } else {
+                Menu(localization.string("export.action", defaultValue: "导出为")) {
+                    ForEach(options) { option in
+                        Button(ClipboardHistoryExportTitles.format(
+                            option.format,
+                            localization: localization
+                        )) {
+                            onExport(item.id, option.format)
+                        }
+                    }
+                }
+            }
         }
     }
 

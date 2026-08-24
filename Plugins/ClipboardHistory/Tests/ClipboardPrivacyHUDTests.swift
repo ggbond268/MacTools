@@ -19,6 +19,7 @@ final class ClipboardPrivacyHUDTests: XCTestCase {
             )
         )
         XCTAssertEqual(ClipboardPrivacyHUDContent.ignored(localization: localization).tone, .success)
+        XCTAssertEqual(ClipboardPrivacyHUDContent.success("已导出").tone, .success)
         XCTAssertEqual(
             ClipboardPrivacyHUDContent.privateCopySucceeded(localization: localization).title,
             "已私密复制"
@@ -67,11 +68,13 @@ final class ClipboardPrivacyHUDTests: XCTestCase {
         XCTAssertEqual(announcements, ["下次复制不会保存 · 15 秒"])
 
         controller.handleSuppressionEvent(.consumed(mode: .privateCopy))
+        controller.showSuccess("已导出")
         controller.showFailure("私密复制失败")
         controller.dismiss()
         XCTAssertEqual(announcements, [
             "下次复制不会保存 · 15 秒",
             "已私密复制",
+            "已导出",
             "私密复制失败",
         ])
     }

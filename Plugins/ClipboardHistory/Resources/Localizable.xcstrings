@@ -1,6 +1,517 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "export.action": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تصدير باسم" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Exportieren als" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Export as" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Exportar como" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Exporter comme" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "書き出す" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "다음으로 내보내기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Exportar como" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Экспортировать как" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "导出为" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "輸出為" } }
+      }
+    },
+    "export.chooseFolder": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "اختيار مجلد" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ordner auswählen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Choose Folder" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir carpeta" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir un dossier" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "フォルダを選択" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "폴더 선택" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Escolher pasta" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выбрать папку" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择文件夹" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇檔案夾" } }
+      }
+    },
+    "export.copy.success": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تم نسخ %lld من الملفات" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%lld Dateien kopiert" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Copied %lld files" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Se copiaron %lld archivos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%lld fichiers copiés" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%lld個のファイルをコピーしました" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "파일 %lld개를 복사했습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "%lld arquivos copiados" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скопировано файлов: %lld" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已复制 %lld 个文件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已複製 %lld 個檔案" } }
+      }
+    },
+    "export.copyToFolder": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نسخ إلى مجلد…" } },
+        "de": { "stringUnit": { "state": "translated", "value": "In Ordner kopieren…" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Copy to Folder…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Copiar a carpeta…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Copier dans un dossier…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "フォルダにコピー…" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "폴더로 복사…" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Copiar para pasta…" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скопировать в папку…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "复制到文件夹…" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "複製到檔案夾…" } }
+      }
+    },
+    "export.drag.help": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "اسحب العنصر المحدد إلى Finder" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ausgewähltes Objekt in den Finder ziehen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Drag the selected item to Finder" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Arrastra el elemento seleccionado al Finder" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Faire glisser l’élément sélectionné dans le Finder" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "選択した項目をFinderにドラッグ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "선택한 항목을 Finder로 드래그" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Arraste o item selecionado para o Finder" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Перетащите выбранный объект в Finder" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "将所选项目拖到访达" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "將所選項目拖到 Finder" } }
+      }
+    },
+    "export.error.failed": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذر تصدير عنصر الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablageobjekt konnte nicht exportiert werden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t export the clipboard item" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo exportar el elemento del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible d’exporter l’élément du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボード項目を書き出せませんでした" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 항목을 내보낼 수 없습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não foi possível exportar o item da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось экспортировать объект буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法导出剪贴板项目" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法輸出剪貼板項目" } }
+      }
+    },
+    "export.error.missingFile": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "الملف الأصلي لم يعد متاحًا" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Originaldatei ist nicht mehr verfügbar" } },
+        "en": { "stringUnit": { "state": "translated", "value": "The original file is no longer available" } },
+        "es": { "stringUnit": { "state": "translated", "value": "El archivo original ya no está disponible" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Le fichier d’origine n’est plus disponible" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "元のファイルは利用できません" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "원본 파일을 더 이상 사용할 수 없습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "O arquivo original não está mais disponível" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Исходный файл больше недоступен" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "原始文件已不可用" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "原始檔案已無法使用" } }
+      }
+    },
+    "export.error.noRecognizedText": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لم يتم العثور على نص يمكن تصديره" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Kein exportierbarer Text erkannt" } },
+        "en": { "stringUnit": { "state": "translated", "value": "No exportable text was recognized" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se reconoció texto que se pueda exportar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aucun texte exportable n’a été reconnu" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "書き出せるテキストが認識されませんでした" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "내보낼 수 있는 텍스트가 인식되지 않았습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Nenhum texto exportável foi reconhecido" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Текст для экспорта не распознан" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未识别到可导出的文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "未辨識到可輸出的文字" } }
+      }
+    },
+    "export.error.unsupported": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يتعذر تصدير تنسيق الحافظة هذا" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Dieses Zwischenablageformat kann nicht exportiert werden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "This clipboard format can’t be exported" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Este formato del portapapeles no se puede exportar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ce format de presse-papiers ne peut pas être exporté" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "このクリップボード形式は書き出せません" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 클립보드 형식은 내보낼 수 없습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Este formato da área de transferência não pode ser exportado" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Этот формат буфера обмена нельзя экспортировать" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "此剪贴板格式无法导出" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此剪貼板格式無法輸出" } }
+      }
+    },
+    "export.filename.assets": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مرفقات" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Anhänge" } },
+        "en": { "stringUnit": { "state": "translated", "value": "assets" } },
+        "es": { "stringUnit": { "state": "translated", "value": "adjuntos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "pièces jointes" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "添付ファイル" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "첨부 파일" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "anexos" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "вложения" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "附件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "附件" } }
+      }
+    },
+    "export.filename.attachment": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مرفق" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Anhang" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Attachment" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Adjunto" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Pièce jointe" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "添付ファイル" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "첨부 파일" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Anexo" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Вложение" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "附件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "附件" } }
+      }
+    },
+    "export.filename.color": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لون الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablagefarbe" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard Color" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Color del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Couleur du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードのカラー" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 색상" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Cor da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Цвет из буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板颜色" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板顏色" } }
+      }
+    },
+    "export.filename.files": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "ملفات الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablagedateien" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard Files" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Archivos del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Fichiers du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードのファイル" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 파일" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Arquivos da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Файлы из буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板文件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板檔案" } }
+      }
+    },
+    "export.filename.image": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "صورة الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablagebild" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard Image" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Imagen del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Image du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードの画像" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 이미지" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Imagem da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Изображение из буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板图像" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板影像" } }
+      }
+    },
+    "export.filename.link": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "رابط الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablagelink" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard Link" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Enlace del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Lien du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードのリンク" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 링크" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Link da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Ссылка из буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板链接" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板連結" } }
+      }
+    },
+    "export.filename.media": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "وسائط الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablagemedien" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard Media" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Contenido multimedia del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Média du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードのメディア" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 미디어" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mídia da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Медиа из буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板媒体" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板媒體" } }
+      }
+    },
+    "export.filename.pdf": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "ملف PDF من الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablage-PDF" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard PDF" } },
+        "es": { "stringUnit": { "state": "translated", "value": "PDF del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "PDF du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードのPDF" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 PDF" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "PDF da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "PDF из буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板 PDF" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板 PDF" } }
+      }
+    },
+    "export.filename.richText": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نص منسق من الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Formatierter Zwischenablagetext" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard Rich Text" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Texto enriquecido del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Texte enrichi du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードのリッチテキスト" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 리치 텍스트" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Texto formatado da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Форматированный текст из буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板富文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板格式化文字" } }
+      }
+    },
+    "export.filename.text": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نص الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablagetext" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clipboard Text" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Texto del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Texte du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードのテキスト" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 텍스트" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Texto da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Текст из буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板文字" } }
+      }
+    },
+    "export.folder.message": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "اختر مجلدًا لحفظ الملفات المصدّرة." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Wähle einen Ordner für die exportierten Dateien." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Choose a folder for the exported files." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elige una carpeta para los archivos exportados." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisissez un dossier pour les fichiers exportés." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "書き出すファイルの保存先フォルダを選択します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "내보낸 파일을 저장할 폴더를 선택합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Escolha uma pasta para os arquivos exportados." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выберите папку для экспортированных файлов." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择保存导出文件的文件夹。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇儲存輸出檔案的檔案夾。" } }
+      }
+    },
+    "export.format.plainText": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نص عادي" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Plain Text" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Plain Text" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Texto sin formato" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Texte brut" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "標準テキスト" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "일반 텍스트" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Texto simples" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Обычный текст" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "纯文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "純文字" } }
+      }
+    },
+    "export.format.html": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "de": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "en": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "es": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "HTML" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "HTML" } }
+      }
+    },
+    "export.format.pdf": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "de": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "en": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "es": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "PDF" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "PDF" } }
+      }
+    },
+    "export.format.markdown": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "Markdown" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "Markdown" } }
+      }
+    },
+    "export.format.original": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "التنسيق الأصلي" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Originalformat" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Original Format" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Formato original" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Format d’origine" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "元の形式" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "원본 형식" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Formato original" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Исходный формат" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "原始格式" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "原始格式" } }
+      }
+    },
+    "export.format.png": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "de": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "en": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "es": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "PNG" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "PNG" } }
+      }
+    },
+    "export.format.jpeg": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "de": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "en": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "es": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "JPEG" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "JPEG" } }
+      }
+    },
+    "export.format.tiff": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "de": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "en": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "es": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "TIFF" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "TIFF" } }
+      }
+    },
+    "export.format.webLocation": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "موقع ويب" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Webadresse" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Web Location" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Ubicación web" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Emplacement web" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Webロケーション" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "웹 위치" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Local da Web" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Веб-адрес" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "网页位置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "網頁位置" } }
+      }
+    },
+    "export.format.recognizedText": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "النص الذي تم التعرف عليه" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Erkannter Text" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Recognized Text" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Texto reconocido" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Texte reconnu" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "認識されたテキスト" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "인식된 텍스트" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Texto reconhecido" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Распознанный текст" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "识别的文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "辨識的文字" } }
+      }
+    },
+    "export.save.message": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "صدّر عنصر الحافظة هذا إلى ملف." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Dieses Zwischenablageobjekt in eine Datei exportieren." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Export this clipboard item to a file." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Exporta este elemento del portapapeles a un archivo." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Exporter cet élément du presse-papiers dans un fichier." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "このクリップボード項目をファイルに書き出します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 클립보드 항목을 파일로 내보냅니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Exporte este item da área de transferência para um arquivo." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Экспортировать этот объект буфера обмена в файл." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "将此剪贴板项目导出到文件。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "將此剪貼板項目輸出到檔案。" } }
+      }
+    },
+    "export.showInFinder": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إظهار في Finder" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Im Finder anzeigen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Show in Finder" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mostrar en Finder" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Afficher dans le Finder" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Finderに表示" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Finder에서 보기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mostrar no Finder" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Показать в Finder" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在访达中显示" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在 Finder 中顯示" } }
+      }
+    },
+    "export.success": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تم تصدير %lld من الملفات" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%lld Dateien exportiert" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Exported %lld files" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Se exportaron %lld archivos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%lld fichiers exportés" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%lld個のファイルを書き出しました" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "파일 %lld개를 내보냈습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "%lld arquivos exportados" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Экспортировано файлов: %lld" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已导出 %lld 个文件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已輸出 %lld 個檔案" } }
+      }
+    },
+    "export.unavailable": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يتعذر تصدير هذا التنسيق" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Dieses Format kann nicht exportiert werden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "This format can’t be exported" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Este formato no se puede exportar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ce format ne peut pas être exporté" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "この形式は書き出せません" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 형식은 내보낼 수 없습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Este formato não pode ser exportado" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Этот формат нельзя экспортировать" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法导出此格式" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法輸出此格式" } }
+      }
+    },
+
     "setup.disclosure.expanded": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "موسّع" } },

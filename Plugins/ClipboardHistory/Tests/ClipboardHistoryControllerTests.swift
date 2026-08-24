@@ -786,6 +786,24 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testRecordingNonClipboardUseDoesNotSwallowPendingExternalCopy() async {
+        let existing = item(text: "existing", pinned: false)
+        let fixture = makeFixture(initialItems: [existing])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        fixture.pasteboard.simulateCopy("new external copy")
+        fixture.controller.recordSuccessfulUse(id: existing.id)
+        fixture.controller.processPasteboardChange()
+
+        let captured = await waitUntil {
+            fixture.controller.items.contains(where: { $0.text == "new external copy" })
+        }
+        XCTAssertTrue(captured)
+        XCTAssertNotNil(fixture.controller.items.first(where: { $0.id == existing.id })?.lastUsedAt)
+        fixture.controller.stop()
+    }
+
     func testRichPayloadIsCapturedAndReplayedWithoutFlattening() async throws {
         let payload = ClipboardHistoryPayload(pasteboardItems: [
             ClipboardStoredPasteboardItem(representations: [

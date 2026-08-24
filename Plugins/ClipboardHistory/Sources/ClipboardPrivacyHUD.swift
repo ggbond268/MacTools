@@ -17,6 +17,7 @@ enum ClipboardCaptureSuppressionEvent: Equatable, Sendable {
 @MainActor
 protocol ClipboardPrivacyHUDPresenting: AnyObject {
     func handleSuppressionEvent(_ event: ClipboardCaptureSuppressionEvent)
+    func showSuccess(_ message: String)
     func showFailure(_ message: String)
     func dismiss()
 }
@@ -70,6 +71,10 @@ struct ClipboardPrivacyHUDContent: Equatable, Sendable {
 
     static func failure(_ message: String) -> Self {
         Self(title: message, systemImage: "exclamationmark.triangle.fill", tone: .failure)
+    }
+
+    static func success(_ message: String) -> Self {
+        Self(title: message, systemImage: "checkmark.circle.fill", tone: .success)
     }
 }
 
@@ -150,6 +155,10 @@ final class ClipboardPrivacyHUDController: ClipboardPrivacyHUDPresenting {
 
     func showFailure(_ message: String) {
         showTransient(.failure(message), duration: failureDuration)
+    }
+
+    func showSuccess(_ message: String) {
+        showTransient(.success(message))
     }
 
     func dismiss() {

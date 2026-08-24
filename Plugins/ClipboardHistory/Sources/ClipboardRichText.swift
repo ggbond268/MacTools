@@ -21,34 +21,40 @@ enum ClipboardRichText {
 
     static func attributedString(for payload: ClipboardHistoryPayload) -> NSAttributedString? {
         for representation in payload.representations {
-            let documentType: NSAttributedString.DocumentType
-            switch representation.typeIdentifier {
-            case ClipboardRepresentationType.rtfd:
-                documentType = .rtfd
-            case ClipboardRepresentationType.rtf:
-                documentType = .rtf
-            case ClipboardRepresentationType.html:
-                documentType = .html
-            default:
-                continue
-            }
-            var options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-                .documentType: documentType,
-            ]
-            // AppKit's default HTML importer permits subsidiary resource loads. Clipboard HTML is
-            // untrusted and must remain local, so install a delegate that rejects every request.
-            if documentType == .html {
-                options[webResourceLoadDelegateOption] = ClipboardHTMLResourceLoadDenyDelegate()
-            }
-            if let attributedString = try? NSAttributedString(
-                data: representation.data,
-                options: options,
-                documentAttributes: nil
-            ) {
+            if let attributedString = attributedString(for: representation) {
                 return attributedString
             }
         }
         return nil
+    }
+
+    static func attributedString(
+        for representation: ClipboardStoredRepresentation
+    ) -> NSAttributedString? {
+        let documentType: NSAttributedString.DocumentType
+        switch representation.typeIdentifier {
+        case ClipboardRepresentationType.rtfd:
+            documentType = .rtfd
+        case ClipboardRepresentationType.rtf:
+            documentType = .rtf
+        case ClipboardRepresentationType.html:
+            documentType = .html
+        default:
+            return nil
+        }
+        var options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: documentType,
+        ]
+        // AppKit's default HTML importer permits subsidiary resource loads. Clipboard HTML is
+        // untrusted and must remain local, so install a delegate that rejects every request.
+        if documentType == .html {
+            options[webResourceLoadDelegateOption] = ClipboardHTMLResourceLoadDenyDelegate()
+        }
+        return try? NSAttributedString(
+            data: representation.data,
+            options: options,
+            documentAttributes: nil
+        )
     }
 }
 

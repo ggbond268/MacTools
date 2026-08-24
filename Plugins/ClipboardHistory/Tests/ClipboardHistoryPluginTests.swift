@@ -1110,11 +1110,16 @@ private final class FakeClipboardPasteCommandSender: ClipboardPasteCommandSendin
 @MainActor
 private final class FakeClipboardPrivacyHUDPresenter: ClipboardPrivacyHUDPresenting {
     private(set) var events: [ClipboardCaptureSuppressionEvent] = []
+    private(set) var successes: [String] = []
     private(set) var failures: [String] = []
     private(set) var dismissCount = 0
 
     func handleSuppressionEvent(_ event: ClipboardCaptureSuppressionEvent) {
         events.append(event)
+    }
+
+    func showSuccess(_ message: String) {
+        successes.append(message)
     }
 
     func showFailure(_ message: String) {

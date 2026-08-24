@@ -19,6 +19,17 @@ struct VisionClipboardImageTextRecognizer: ClipboardImageTextRecognizing {
             return nil
         }
 
+        return await Self.recognizeText(
+            in: imageData,
+            maximumCharacterCount: Self.maximumIndexedCharacterCount
+        )
+    }
+
+    static func recognizeText(
+        in imageData: Data,
+        maximumCharacterCount: Int?
+    ) async -> String? {
+
         let worker = Task.detached(priority: .utility) { () -> String? in
             guard !Task.isCancelled,
                   let source = CGImageSourceCreateWithData(
@@ -65,7 +76,10 @@ struct VisionClipboardImageTextRecognizer: ClipboardImageTextRecognizing {
                 .joined(separator: "\n")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return nil }
-            return String(text.prefix(Self.maximumIndexedCharacterCount))
+            if let maximumCharacterCount {
+                return String(text.prefix(maximumCharacterCount))
+            }
+            return text
         }
         return await withTaskCancellationHandler {
             await worker.value
@@ -82,5 +96,45 @@ struct VisionClipboardImageTextRecognizer: ClipboardImageTextRecognizing {
             return false
         }
         return width * height <= maximumSourcePixelCount
+    }
+}
+
+struct VisionClipboardImageTextExportRecognizer: ClipboardImageTextRecognizing {
+    typealias ImageRecognizer = @Sendable (Data) async -> String?
+
+    private let imageRecognizer: ImageRecognizer
+
+    init() {
+        imageRecognizer = { imageData in
+            await VisionClipboardImageTextRecognizer.recognizeText(
+                in: imageData,
+                maximumCharacterCount: nil
+            )
+        }
+    }
+
+    init(imageRecognizer: @escaping ImageRecognizer) {
+        self.imageRecognizer = imageRecognizer
+    }
+
+    func recognizeText(in payload: ClipboardHistoryPayload) async -> String? {
+        let images = payload.pasteboardItems.compactMap { item in
+            item.representations.first(where: {
+                ClipboardRepresentationType.isImage($0.typeIdentifier)
+            })?.data
+        }
+        guard !images.isEmpty else { return nil }
+
+        var recognized: [String] = []
+        recognized.reserveCapacity(images.count)
+        for image in images {
+            guard !Task.isCancelled else { return nil }
+            guard let result = await imageRecognizer(image) else { continue }
+            let text = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            recognized.append(text)
+        }
+        guard !recognized.isEmpty else { return nil }
+        return recognized.joined(separator: "\n\n")
     }
 }

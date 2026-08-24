@@ -1067,7 +1067,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             itemID: items[index].id,
             changeCount: pasteboard.changeCount
         )
-        markItemUsed(at: index)
+        lastSeenChangeCount = pasteboard.changeCount
+        recordItemUsage(at: index)
         return true
     }
 
@@ -1113,7 +1114,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         guard pasteboard.writePlainText(text) else { return false }
         items[index].discardCachedPayloadIfReloadable()
         currentHistoryItemPasteboardState = nil
-        markItemUsed(at: index)
+        lastSeenChangeCount = pasteboard.changeCount
+        recordItemUsage(at: index)
         return true
     }
 
@@ -1149,11 +1151,16 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         return .succeeded
     }
 
-    private func markItemUsed(at index: Int) {
-        lastSeenChangeCount = pasteboard.changeCount
+    private func recordItemUsage(at index: Int) {
         items[index].lastUsedAt = Date()
         persistCurrentItems()
         notifyChanged()
+    }
+
+    func recordSuccessfulUse(id: UUID) {
+        guard !isClearingHistory,
+              let index = items.firstIndex(where: { $0.id == id }) else { return }
+        recordItemUsage(at: index)
     }
 
     func togglePin(id: UUID) {

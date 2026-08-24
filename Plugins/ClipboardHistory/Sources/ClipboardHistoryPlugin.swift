@@ -93,6 +93,7 @@ final class ClipboardHistoryPlugin:
         onIgnoreNextCopy: { [weak self] in
             self?.armIgnoreNextCopy()
         },
+        hudPresenter: privacyHUDPresenter,
         pasteCommandSender: pasteCommandSender
     )
 
