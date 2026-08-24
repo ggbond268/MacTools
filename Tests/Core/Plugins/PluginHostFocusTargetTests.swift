@@ -21,6 +21,59 @@ final class PluginHostFocusTargetTests: XCTestCase {
         XCTAssertEqual(target?.preferredWindowNumber, 42)
         withExtendedLifetime(host) {}
     }
+
+    func testUsesOnlyVisibleKeyPluginWindowAsLayoutTarget() {
+        let eligibleWindow = FocusTargetTestWindow(isKey: true, isVisible: true)
+        let ineligibleWindow = FocusTargetTestWindow(isKey: false, isVisible: true)
+        let eligiblePlugin = WindowLayoutTargetPlugin(id: "eligible", window: eligibleWindow)
+        let ineligiblePlugin = WindowLayoutTargetPlugin(id: "ineligible", window: ineligibleWindow)
+        let host = makePluginHostForTests(
+            plugins: [ineligiblePlugin, eligiblePlugin],
+            loadDynamicPluginsOnInit: false
+        )
+
+        XCTAssertTrue(host.focusedPluginWindowLayoutTarget() === eligibleWindow)
+    }
+}
+
+private final class FocusTargetTestWindow: NSWindow {
+    private let reportedIsKey: Bool
+    private let reportedIsVisible: Bool
+
+    init(isKey: Bool, isVisible: Bool) {
+        reportedIsKey = isKey
+        reportedIsVisible = isVisible
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 100),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+    }
+
+    override var isKeyWindow: Bool { reportedIsKey }
+    override var isVisible: Bool { reportedIsVisible }
+}
+
+@MainActor
+private final class WindowLayoutTargetPlugin: MacToolsPlugin, PluginWindowLayoutTargetProviding {
+    let metadata: PluginMetadata
+    let focusedWindowLayoutTarget: NSWindow?
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+
+    init(id: String, window: NSWindow?) {
+        metadata = PluginMetadata(
+            id: id,
+            title: id,
+            iconName: "rectangle",
+            iconTint: .blue,
+            order: 0,
+            defaultDescription: ""
+        )
+        focusedWindowLayoutTarget = window
+    }
 }
 
 @MainActor

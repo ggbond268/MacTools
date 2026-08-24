@@ -489,6 +489,25 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { panel?.isVisible == true }
 
+    var focusedWindowLayoutTarget: NSWindow? {
+        guard let panel,
+              Self.isEligibleWindowLayoutTarget(
+                  isVisible: panel.isVisible,
+                  isKeyWindow: panel.isKeyWindow
+              )
+        else {
+            return nil
+        }
+        return panel
+    }
+
+    static func isEligibleWindowLayoutTarget(
+        isVisible: Bool,
+        isKeyWindow: Bool
+    ) -> Bool {
+        isVisible && isKeyWindow
+    }
+
     static func shouldDismissForGlobalShortcut(
         isVisible: Bool,
         isKeyWindow: Bool
@@ -687,7 +706,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             return .moveSelection(offset: -1)
         case 45 where flags == .control:
             return .moveSelection(offset: 1)
-        case 51 where flags == .command:
+        case 51 where flags == [.command, .shift]:
             return .deleteSelection
         case 125 where flags.isEmpty:
             return .moveSelection(offset: 1)
@@ -1828,7 +1847,7 @@ private struct ClipboardHistoryPanelView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(localization.string(
             "panel.detail.keyboardHint",
-            defaultValue: "↑↓ 浏览 · Return 粘贴 · ⇧Return 粘贴为纯文本 · ⌘1–9 粘贴 · ⌃1–8 筛选 · ⌘P 固定 · ⌘⌫ 删除 · Esc 关闭"
+            defaultValue: "↑↓ 浏览 · Return 粘贴 · ⇧Return 粘贴为纯文本 · ⌘1–9 粘贴 · ⌃1–8 筛选 · ⌘P 固定 · ⇧⌘⌫ 删除 · Esc 关闭"
         ))
     }
 
@@ -1862,7 +1881,7 @@ private struct ClipboardHistoryPanelView: View {
                     action: localization.string("common.pin", defaultValue: "固定")
                 )
                 PluginPaletteKeyboardHint(
-                    key: "⌘⌫",
+                    key: "⇧⌘⌫",
                     action: localization.string("common.delete", defaultValue: "删除")
                 )
             }

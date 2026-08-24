@@ -417,16 +417,15 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     var focusedWindowLayoutTarget: NSWindow? {
-        guard let settingsWindow,
-              Self.isEligibleFocusedWindowLayoutTarget(
-                  isKeyWindow: settingsWindow.isKeyWindow,
-                  isVisible: settingsWindow.isVisible,
-                  isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
-              )
-        else {
-            return nil
+        if let settingsWindow,
+           Self.isEligibleFocusedWindowLayoutTarget(
+               isKeyWindow: settingsWindow.isKeyWindow,
+               isVisible: settingsWindow.isVisible,
+               isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
+           ) {
+            return settingsWindow
         }
-        return settingsWindow
+        return pluginHost.focusedPluginWindowLayoutTarget()
     }
 
     static func isEligibleFocusedWindowLayoutTarget(

@@ -7396,67 +7396,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ للتنقل · Return للصق · ⇧Return للصق كنص عادي · ⌘1–9 للصق · ⌃1–8 للتصفية · ⌘P للتثبيت · ⌘⌫ للحذف · Esc للإغلاق"
+            "value": "↑↓ للتنقل · Return للصق · ⇧Return للصق كنص عادي · ⌘1–9 للصق · ⌃1–8 للتصفية · ⌘P للتثبيت · ⇧⌘⌫ للحذف · Esc للإغلاق"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ Navigieren · Return Einfügen · ⇧Return Als reinen Text einfügen · ⌘1–9 Einfügen · ⌃1–8 Filtern · ⌘P Anheften · ⌘⌫ Löschen · Esc Schließen"
+            "value": "↑↓ Navigieren · Return Einfügen · ⇧Return Als reinen Text einfügen · ⌘1–9 Einfügen · ⌃1–8 Filtern · ⌘P Anheften · ⇧⌘⌫ Löschen · Esc Schließen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ Navigate · Return Paste · ⇧Return Paste as Plain Text · ⌘1–9 Paste · ⌃1–8 Filter · ⌘P Pin · ⌘⌫ Remove · Esc Close"
+            "value": "↑↓ Navigate · Return Paste · ⇧Return Paste as Plain Text · ⌘1–9 Paste · ⌃1–8 Filter · ⌘P Pin · ⇧⌘⌫ Remove · Esc Close"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ Navegar · Return Pegar · ⇧Return Pegar como texto sin formato · ⌘1–9 Pegar · ⌃1–8 Filtrar · ⌘P Fijar · ⌘⌫ Eliminar · Esc Cerrar"
+            "value": "↑↓ Navegar · Return Pegar · ⇧Return Pegar como texto sin formato · ⌘1–9 Pegar · ⌃1–8 Filtrar · ⌘P Fijar · ⇧⌘⌫ Eliminar · Esc Cerrar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ Naviguer · Return Coller · ⇧Return Coller en texte brut · ⌘1–9 Coller · ⌃1–8 Filtrer · ⌘P Épingler · ⌘⌫ Supprimer · Esc Fermer"
+            "value": "↑↓ Naviguer · Return Coller · ⇧Return Coller en texte brut · ⌘1–9 Coller · ⌃1–8 Filtrer · ⌘P Épingler · ⇧⌘⌫ Supprimer · Esc Fermer"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ 移動 · Return ペースト · ⇧Return 標準テキストとしてペースト · ⌘1–9 ペースト · ⌃1–8 絞り込み · ⌘P ピン留め · ⌘⌫ 削除 · Esc 閉じる"
+            "value": "↑↓ 移動 · Return ペースト · ⇧Return 標準テキストとしてペースト · ⌘1–9 ペースト · ⌃1–8 絞り込み · ⌘P ピン留め · ⇧⌘⌫ 削除 · Esc 閉じる"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ 이동 · Return 붙여넣기 · ⇧Return 일반 텍스트로 붙여넣기 · ⌘1–9 붙여넣기 · ⌃1–8 필터 · ⌘P 고정 · ⌘⌫ 삭제 · Esc 닫기"
+            "value": "↑↓ 이동 · Return 붙여넣기 · ⇧Return 일반 텍스트로 붙여넣기 · ⌘1–9 붙여넣기 · ⌃1–8 필터 · ⌘P 고정 · ⇧⌘⌫ 삭제 · Esc 닫기"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ Navegar · Return Colar · ⇧Return Colar como texto simples · ⌘1–9 Colar · ⌃1–8 Filtrar · ⌘P Fixar · ⌘⌫ Remover · Esc Fechar"
+            "value": "↑↓ Navegar · Return Colar · ⇧Return Colar como texto simples · ⌘1–9 Colar · ⌃1–8 Filtrar · ⌘P Fixar · ⇧⌘⌫ Remover · Esc Fechar"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ Навигация · Return Вставить · ⇧Return Вставить как обычный текст · ⌘1–9 Вставить · ⌃1–8 Фильтр · ⌘P Закрепить · ⌘⌫ Удалить · Esc Закрыть"
+            "value": "↑↓ Навигация · Return Вставить · ⇧Return Вставить как обычный текст · ⌘1–9 Вставить · ⌃1–8 Фильтр · ⌘P Закрепить · ⇧⌘⌫ Удалить · Esc Закрыть"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ 浏览 · Return 粘贴 · ⇧Return 粘贴为纯文本 · ⌘1–9 粘贴 · ⌃1–8 筛选 · ⌘P 固定 · ⌘⌫ 删除 · Esc 关闭"
+            "value": "↑↓ 浏览 · Return 粘贴 · ⇧Return 粘贴为纯文本 · ⌘1–9 粘贴 · ⌃1–8 筛选 · ⌘P 固定 · ⇧⌘⌫ 删除 · Esc 关闭"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ 瀏覽 · Return 貼上 · ⇧Return 貼上為純文字 · ⌘1–9 貼上 · ⌃1–8 篩選 · ⌘P 固定 · ⌘⌫ 刪除 · Esc 關閉"
+            "value": "↑↓ 瀏覽 · Return 貼上 · ⇧Return 貼上為純文字 · ⌘1–9 貼上 · ⌃1–8 篩選 · ⌘P 固定 · ⇧⌘⌫ 刪除 · Esc 關閉"
           }
         }
       }

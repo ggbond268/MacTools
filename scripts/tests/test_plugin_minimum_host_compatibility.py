@@ -90,6 +90,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginPrivateDataKeychainIdentity": "1.3.0",
     "PluginSettingsActionShortcutItem": "1.3.0",
     "PluginSettingsShortcutRecorderControl": "1.3.0",
+    "PluginWindowLayoutTargetProviding": "1.3.0",
 }
 
 

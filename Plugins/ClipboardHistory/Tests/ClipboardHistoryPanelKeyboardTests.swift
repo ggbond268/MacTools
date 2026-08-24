@@ -43,6 +43,21 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertFalse(ClipboardHistoryPanelController.shouldCenterPanel(hasExistingPanel: true))
     }
 
+    func testWindowLayoutTargetRequiresVisibleKeyPanel() {
+        XCTAssertTrue(ClipboardHistoryPanelController.isEligibleWindowLayoutTarget(
+            isVisible: true,
+            isKeyWindow: true
+        ))
+        XCTAssertFalse(ClipboardHistoryPanelController.isEligibleWindowLayoutTarget(
+            isVisible: true,
+            isKeyWindow: false
+        ))
+        XCTAssertFalse(ClipboardHistoryPanelController.isEligibleWindowLayoutTarget(
+            isVisible: false,
+            isKeyWindow: true
+        ))
+    }
+
     func testFailedClearKeepsPreservedHistoryVisibleWithInlineError() {
         let presentation = ClipboardHistoryPanelPresentation.resolve(
             itemCount: 2,
@@ -532,14 +547,20 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(oneMinute, "1 minute ago")
     }
 
-    func testCommandDeleteRemovesASelectedItemWithoutClaimingPlainBackspace() {
+    func testShiftCommandDeleteRemovesASelectedItemWithoutClaimingEditingShortcuts() {
         XCTAssertNil(command(keyCode: 51, isEditingText: true))
         XCTAssertNil(command(keyCode: 51))
+        XCTAssertNil(command(keyCode: 51, modifiers: .command, isEditingText: true))
+        XCTAssertNil(command(keyCode: 51, modifiers: .command))
+        XCTAssertNil(command(keyCode: 51, modifiers: .option, isEditingText: true))
         XCTAssertEqual(
-            command(keyCode: 51, modifiers: .command, isEditingText: true),
+            command(keyCode: 51, modifiers: [.command, .shift], isEditingText: true),
             .deleteSelection
         )
-        XCTAssertEqual(command(keyCode: 51, modifiers: .command), .deleteSelection)
+        XCTAssertEqual(
+            command(keyCode: 51, modifiers: [.command, .shift]),
+            .deleteSelection
+        )
     }
 
     func testRichTextPreviewAndPlainTextConversionPreserveUsefulContent() throws {

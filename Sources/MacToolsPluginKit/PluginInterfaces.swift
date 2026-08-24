@@ -204,6 +204,13 @@ public protocol PluginFocusedWindowTargetConsuming: AnyObject {
     var focusedWindowTargetProvider: (() -> PluginFocusedWindowTarget?)? { get set }
 }
 
+/// Optional window-layout target supplied by a plugin that owns a normal, user-positionable window.
+/// Transient command, confirmation, and feedback surfaces should not adopt this protocol.
+@MainActor
+public protocol PluginWindowLayoutTargetProviding: AnyObject {
+    var focusedWindowLayoutTarget: NSWindow? { get }
+}
+
 /// Optional hook for built-in plugins that cache localized descriptors or
 /// other language-dependent presentation data. The host invokes it when the
 /// app language changes; implementations must not activate, deactivate, or

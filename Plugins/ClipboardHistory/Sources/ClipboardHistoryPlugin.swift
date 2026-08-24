@@ -24,6 +24,7 @@ final class ClipboardHistoryPlugin:
     PluginPrimaryPanel,
     PluginActionProviding,
     PluginGroupedShortcutSettingsProviding,
+    PluginWindowLayoutTargetProviding,
     AccessibilityPermissionRefreshing
 {
     static let pluginID = "clipboard-history"
@@ -74,6 +75,9 @@ final class ClipboardHistoryPlugin:
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var focusedWindowLayoutTarget: NSWindow? {
+        panelController.focusedWindowLayoutTarget
+    }
 
     private let settingsStore: ClipboardHistorySettingsStore
     private let localization: PluginLocalization

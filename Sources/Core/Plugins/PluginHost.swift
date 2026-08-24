@@ -1727,6 +1727,16 @@ final class PluginHost: ObservableObject {
         focusedApplicationTargetProvider.currentHostWindowProvider = provider
     }
 
+    func focusedPluginWindowLayoutTarget() -> NSWindow? {
+        activePlugins.lazy
+            .compactMap { plugin in
+                (plugin as? any PluginWindowLayoutTargetProviding)?.focusedWindowLayoutTarget
+            }
+            .first { window in
+                window.isKeyWindow && window.isVisible
+            }
+    }
+
     func captureCurrentFocusedWindowTarget() {
         focusedApplicationTargetProvider.captureCurrentTarget()
     }
