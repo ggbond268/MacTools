@@ -1,5 +1,14 @@
 import MacToolsPluginKit
 
+@MainActor
+private final class LegacyPresetApplying: PluginActionShortcutPresetApplying {
+    var previewActionShortcutPreset: ((
+        Set<String>,
+        [String: ShortcutBinding]
+    ) -> PluginActionShortcutPresetPreview)?
+    var applyActionShortcutPreset: ((Set<String>, [String: ShortcutBinding]) -> String?)?
+}
+
 @main
 struct PluginKitV5CompatibilityClient {
     @MainActor
@@ -69,6 +78,32 @@ struct PluginKitV5CompatibilityClient {
               state.footnote == "Grant access",
               state.statusText == "Required" else {
             fatalError("Plugin permission v5 value ABI changed")
+        }
+
+        let previewItem = PluginActionShortcutPresetPreviewItem(
+            actionID: "run",
+            currentBinding: binding,
+            proposedBinding: nil
+        )
+        let previewLabels = Mirror(reflecting: previewItem).children.compactMap(\.label)
+        guard previewLabels == [
+            "actionID",
+            "currentBinding",
+            "proposedBinding",
+            "conflictOwnerDescription",
+        ] else {
+            fatalError("PluginActionShortcutPresetPreviewItem v5 stored layout changed: \(previewLabels)")
+        }
+
+        let legacy = LegacyPresetApplying()
+        let legacyPresetApplying: any PluginActionShortcutPresetApplying = legacy
+        legacyPresetApplying.previewActionShortcutPreset = { _, _ in
+            PluginActionShortcutPresetPreview(items: [previewItem])
+        }
+        legacyPresetApplying.applyActionShortcutPreset = { _, _ in nil }
+        guard legacyPresetApplying.previewActionShortcutPreset?(["run"], [:]).items.count == 1,
+              legacyPresetApplying.applyActionShortcutPreset?(["run"], [:]) == nil else {
+            fatalError("Legacy PluginActionShortcutPresetApplying conformance failed")
         }
     }
 }

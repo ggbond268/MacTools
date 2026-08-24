@@ -151,6 +151,53 @@ final class RunLinkExecutionCoordinatorTests: XCTestCase {
         XCTAssertEqual(panels.first?.accessibilityLabel(), "Failed and Action unavailable.")
     }
 
+    func testWindowLayoutHeadlessFeedbackIsCompactAndOptInOnSuccess() {
+        XCTAssertNil(WindowLayoutActionFeedback.feedback(
+            actionTitle: "Left Half",
+            outcome: .completed(.succeeded())
+        ))
+
+        let feedback = WindowLayoutActionFeedback.feedback(
+            actionTitle: "Left Half",
+            outcome: .completed(.succeeded(message: "Left Half"))
+        )
+        XCTAssertEqual(
+            feedback,
+            RunLinkExecutionFeedback(
+                tone: .success,
+                title: "Left Half",
+                message: "Left Half",
+                presentation: .compact,
+                dismissDelay: .milliseconds(1_100)
+            )
+        )
+        XCTAssertEqual(feedback?.accessibilityLabel, "Left Half")
+    }
+
+    func testWindowLayoutHeadlessFailureAlwaysProducesStandardFeedback() {
+        XCTAssertEqual(
+            WindowLayoutActionFeedback.feedback(
+                actionTitle: "Next Desktop",
+                outcome: .completed(.failed(message: "No adjacent Desktop."))
+            ),
+            RunLinkExecutionFeedback(
+                tone: .failure,
+                title: "Next Desktop",
+                message: "No adjacent Desktop."
+            )
+        )
+
+        let staleActionFeedback = WindowLayoutActionFeedback.feedback(
+            actionTitle: nil,
+            outcome: .rejected(.unknownAction(ActionKey(
+                providerID: "window-layouts",
+                actionID: "custom.removed"
+            )))
+        )
+        XCTAssertEqual(staleActionFeedback?.title, FeatureL10n.string("窗口布局"))
+        XCTAssertEqual(staleActionFeedback?.tone, .failure)
+    }
+
     func testCancellingSystemConfirmationDismissesPresentationAndResumesOnce() async {
         var response: ((Bool) -> Void)?
         var dismissCount = 0

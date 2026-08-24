@@ -135,6 +135,47 @@ final class PluginPanelControlLayoutTests: XCTestCase {
         XCTAssertEqual(long.fittingSize.height, ordinary.fittingSize.height, accuracy: 0.5)
     }
 
+    @MainActor
+    func testShortcutRecorderFieldUsesCompactHeightForMiniControls() {
+        let recorder = NSHostingView(rootView:
+            PluginShortcutRecorderField(
+                displayText: "⌥ + ⌘ + C",
+                isRecording: false,
+                minWidth: 60
+            )
+            .controlSize(.mini)
+            .frame(width: 60)
+        )
+
+        XCTAssertEqual(recorder.fittingSize.height, 24, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testCompactShortcutRecorderExpandsBeyondItsMinimumForLongBindings() {
+        let short = NSHostingView(rootView:
+            PluginShortcutRecorderField(
+                displayText: "⌘\u{2009}V",
+                isRecording: false,
+                minWidth: 60
+            )
+            .controlSize(.mini)
+            .fixedSize(horizontal: true, vertical: false)
+        )
+        let long = NSHostingView(rootView:
+            PluginShortcutRecorderField(
+                displayText: "⌃\u{2009}⌥\u{2009}⇧\u{2009}⌘\u{2009}Help",
+                isRecording: false,
+                minWidth: 60
+            )
+            .controlSize(.mini)
+            .fixedSize(horizontal: true, vertical: false)
+        )
+
+        XCTAssertEqual(short.fittingSize.width, 60, accuracy: 0.5)
+        XCTAssertGreaterThan(long.fittingSize.width, short.fittingSize.width)
+        XCTAssertEqual(long.fittingSize.height, 24, accuracy: 0.5)
+    }
+
     private func tag(of kind: PluginPanelControlKind) -> UInt8 {
         withUnsafeBytes(of: kind) { bytes in
             bytes[0]

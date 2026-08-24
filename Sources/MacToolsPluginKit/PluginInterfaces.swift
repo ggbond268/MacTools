@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -178,6 +179,29 @@ public protocol MenuBarHostStatusItemRecovering: AnyObject {
 @MainActor
 public protocol PluginSettingsPresenting: AnyObject {
     var requestSettingsPresentation: (() -> Void)? { get set }
+}
+
+/// An exact host-selected window target for commands that may outlive a temporary MacTools surface.
+/// `preferredWindowNumber` is required when the target belongs to MacTools so plugins can exclude
+/// transient search, grid, confirmation, and feedback panels.
+public struct PluginFocusedWindowTarget {
+    public let application: NSRunningApplication
+    public let preferredWindowNumber: Int?
+
+    public init(
+        application: NSRunningApplication,
+        preferredWindowNumber: Int? = nil
+    ) {
+        self.application = application
+        self.preferredWindowNumber = preferredWindowNumber
+    }
+}
+
+/// Optional host context for commands that must continue targeting the exact window focused before
+/// a MacTools search, grid, or other transient action surface became active.
+@MainActor
+public protocol PluginFocusedWindowTargetConsuming: AnyObject {
+    var focusedWindowTargetProvider: (() -> PluginFocusedWindowTarget?)? { get set }
 }
 
 /// Optional hook for built-in plugins that cache localized descriptors or

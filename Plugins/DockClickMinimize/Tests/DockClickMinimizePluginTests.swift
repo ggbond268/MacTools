@@ -142,6 +142,21 @@ final class DockClickMinimizePluginTests: XCTestCase {
         }
     }
 
+    func testAccessibilityResolverScopesHitTestingToDockApplication() {
+        var requestedProcessIdentifiers: [pid_t] = []
+        let resolver = DockAccessibilityResolver(
+            dockProcessIdentifierProvider: { 42 },
+            accessibilityElementAtPosition: { processIdentifier, _ in
+                requestedProcessIdentifiers.append(processIdentifier)
+                return nil
+            },
+            workspaceNotificationCenter: NotificationCenter()
+        )
+
+        XCTAssertNil(resolver.resolveApplication(at: CGPoint(x: 10, y: 20)))
+        XCTAssertEqual(requestedProcessIdentifiers, [42])
+    }
+
     func testModifiedClicksAreIgnoredByPolicy() {
         XCTAssertTrue(DockClickModifierPolicy.isPlainClick(flags: []))
         XCTAssertFalse(DockClickModifierPolicy.isPlainClick(flags: .maskCommand))

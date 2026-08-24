@@ -41,7 +41,7 @@ final class ShortcutAssignmentServiceTests: XCTestCase {
             reference
         )
 
-        let reloadedStore = ActionShortcutAssignmentStore(userDefaults: harness.defaults)
+        let reloadedStore = ActionShortcutAssignmentStore(defaults: harness.defaults)
         XCTAssertEqual(reloadedStore.assignments(), harness.service.assignments)
     }
 
@@ -170,6 +170,314 @@ final class ShortcutAssignmentServiceTests: XCTestCase {
             .failure(.conflict(ownerDescription: "亮度连续调节"))
         )
         XCTAssertEqual(harness.service.assignments.map(\.reference), [second])
+    }
+
+    func testPresetReplacementIsConflictCheckedAndAtomic() throws {
+        let harness = try makeHarness()
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[0], to: harness.references[1]),
+            .success
+        )
+
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1"],
+                bindingsByActionID: ["action-1": harness.bindings[0]]
+            ),
+            .failure(.conflict(ownerDescription: "操作 2"))
+        )
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[1]])
+
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1", "action-2"],
+                bindingsByActionID: [
+                    "action-1": harness.bindings[0],
+                    "action-2": harness.bindings[1],
+                ]
+            ),
+            .success
+        )
+        XCTAssertEqual(
+            Set(harness.service.assignments.map(\.reference)),
+            Set(harness.references)
+        )
+
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1", "action-2"],
+                bindingsByActionID: [:]
+            ),
+            .success
+        )
+        XCTAssertTrue(harness.service.assignments.isEmpty)
+    }
+
+    func testPresetPreviewShowsChangesWithoutMutatingAssignments() throws {
+        let harness = try makeHarness()
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[0], to: harness.references[0]),
+            .success
+        )
+        let assignmentsBeforePreview = harness.service.assignments
+
+        let preview = harness.service.replacementPreview(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1", "action-2"],
+            bindingsByActionID: [
+                "action-1": harness.bindings[1],
+                "action-2": harness.bindings[0],
+            ]
+        )
+
+        XCTAssertTrue(preview.canApply)
+        XCTAssertTrue(preview.hasChanges)
+        XCTAssertEqual(preview.items.count, 2)
+        XCTAssertEqual(
+            preview.items.first(where: { $0.actionID == "action-1" })?.currentBinding,
+            harness.bindings[0]
+        )
+        XCTAssertEqual(harness.service.assignments, assignmentsBeforePreview)
+    }
+
+    func testPresetPreviewReportsConvergedAssignmentNormalizationAsAChange() throws {
+        let harness = try makeHarness()
+        let records = [
+            ActionShortcutAssignmentRecord(
+                reference: harness.references[0],
+                binding: harness.bindings[0]
+            ),
+            ActionShortcutAssignmentRecord(
+                reference: harness.references[0],
+                binding: harness.bindings[1]
+            ),
+        ]
+        XCTAssertEqual(
+            ActionShortcutAssignmentStore(defaults: harness.defaults).replaceAll(records),
+            .committed
+        )
+
+        let preview = harness.service.replacementPreview(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1"],
+            bindingsByActionID: ["action-1": harness.bindings[0]]
+        )
+
+        XCTAssertEqual(
+            harness.service.currentBindings(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1"]
+            )["action-1"],
+            harness.bindings
+        )
+        XCTAssertTrue(preview.hasChanges)
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1"],
+                bindingsByActionID: ["action-1": harness.bindings[0]]
+            ),
+            .success
+        )
+        XCTAssertEqual(harness.service.assignments.map(\.binding), [harness.bindings[0]])
+    }
+
+    func testReplacementTransactionRestoresExactConvergedRecordsWhenMutationFails() throws {
+        let reporter = PreferencesBackupChangeReporter()
+        var reportedSources: [PreferencesBackupChangeSource] = []
+        reporter.onCommittedChange = { reportedSources.append($0) }
+        let harness = try makeHarness(preferencesBackupChangeReporter: reporter)
+        let records = [
+            ActionShortcutAssignmentRecord(
+                reference: harness.references[0],
+                binding: harness.bindings[0]
+            ),
+            ActionShortcutAssignmentRecord(
+                reference: harness.references[0],
+                binding: harness.bindings[1]
+            ),
+        ]
+        XCTAssertEqual(
+            ActionShortcutAssignmentStore(defaults: harness.defaults).replaceAll(records),
+            .committed
+        )
+
+        let error = harness.service.performReplacementTransaction(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1"],
+            bindingsByActionID: [:]
+        ) {
+            "Layout storage failed"
+        }
+
+        XCTAssertEqual(error, "Layout storage failed")
+        XCTAssertEqual(harness.service.assignments, records)
+        XCTAssertEqual(reportedSources, [])
+    }
+
+    func testReplacementTransactionReportsChangedAssignmentsAfterMutationSucceeds() throws {
+        let reporter = PreferencesBackupChangeReporter()
+        var reportedSources: [PreferencesBackupChangeSource] = []
+        reporter.onCommittedChange = { reportedSources.append($0) }
+        let harness = try makeHarness(preferencesBackupChangeReporter: reporter)
+
+        let error = harness.service.performReplacementTransaction(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1"],
+            bindingsByActionID: ["action-1": harness.bindings[0]]
+        ) {
+            nil
+        }
+
+        XCTAssertNil(error)
+        XCTAssertEqual(reportedSources, [.actionShortcutAssignments])
+    }
+
+    func testReplacementTransactionDoesNotReportNoOpAssignments() throws {
+        let reporter = PreferencesBackupChangeReporter()
+        var reportedSources: [PreferencesBackupChangeSource] = []
+        reporter.onCommittedChange = { reportedSources.append($0) }
+        let harness = try makeHarness(preferencesBackupChangeReporter: reporter)
+
+        let error = harness.service.performReplacementTransaction(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1"],
+            bindingsByActionID: [:]
+        ) {
+            nil
+        }
+
+        XCTAssertNil(error)
+        XCTAssertEqual(reportedSources, [])
+    }
+
+    func testReplacementTransactionDoesNotReportWhenRollbackFails() throws {
+        let defaults = ScriptedActionShortcutDefaults()
+        let initialRecord = ActionShortcutAssignmentRecord(
+            reference: ActionReference(
+                key: ActionKey(providerID: "shortcut-tests", actionID: "action-1")
+            ),
+            binding: ShortcutBinding(keyCode: 10, modifiers: [.command, .option])
+        )
+        XCTAssertEqual(
+            ActionShortcutAssignmentStore(defaults: defaults).replaceAll([initialRecord]),
+            .committed
+        )
+
+        let reporter = PreferencesBackupChangeReporter()
+        var reportedSources: [PreferencesBackupChangeSource] = []
+        reporter.onCommittedChange = { reportedSources.append($0) }
+        let harness = try makeHarness(
+            defaults: defaults,
+            preferencesBackupChangeReporter: reporter
+        )
+        defaults.payloadWriteBehaviors = [.accept, .corrupt, .ignore]
+
+        let error = harness.service.performReplacementTransaction(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1"],
+            bindingsByActionID: ["action-1": harness.bindings[1]]
+        ) {
+            "Layout storage failed"
+        }
+
+        XCTAssertEqual(
+            error,
+            "Layout storage failed "
+                + ActionShortcutAssignmentError.persistenceRollbackFailed.localizedDescription
+        )
+        XCTAssertEqual(reportedSources, [])
+    }
+
+    func testPresetPreviewReportsConflictOutsideManagedAssignments() throws {
+        let harness = try makeHarness()
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[0], to: harness.references[1]),
+            .success
+        )
+
+        let preview = harness.service.replacementPreview(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1"],
+            bindingsByActionID: ["action-1": harness.bindings[0]]
+        )
+
+        XCTAssertFalse(preview.canApply)
+        XCTAssertEqual(preview.items.first?.conflictOwnerDescription, "操作 2")
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[1]])
+    }
+
+    func testPresetCanPreviewAndClearRetiredManagedAction() throws {
+        let harness = try makeHarness()
+        let retiredReference = ActionReference(
+            key: ActionKey(providerID: "shortcut-tests", actionID: "retired-action")
+        )
+        let retiredRecord = ActionShortcutAssignmentRecord(
+            reference: retiredReference,
+            binding: harness.bindings[0]
+        )
+        XCTAssertEqual(
+            ActionShortcutAssignmentStore(defaults: harness.defaults)
+                .replaceAll([retiredRecord]),
+            .committed
+        )
+
+        let preview = harness.service.replacementPreview(
+            providerID: "shortcut-tests",
+            managedActionIDs: ["action-1", "retired-action"],
+            bindingsByActionID: ["action-1": harness.bindings[1]]
+        )
+
+        XCTAssertTrue(preview.canApply)
+        XCTAssertEqual(
+            preview.items.first(where: { $0.actionID == "retired-action" })?.currentBinding,
+            harness.bindings[0]
+        )
+        XCTAssertNil(
+            preview.items.first(where: { $0.actionID == "retired-action" })?.proposedBinding
+        )
+        XCTAssertEqual(
+            harness.service.replaceAssignments(
+                providerID: "shortcut-tests",
+                managedActionIDs: ["action-1", "retired-action"],
+                bindingsByActionID: ["action-1": harness.bindings[1]]
+            ),
+            .success
+        )
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[0]])
+    }
+
+    func testExplicitRetirementRemovesOnlyMatchingPluginAssignments() throws {
+        let harness = try makeHarness()
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[0], to: harness.references[0]),
+            .success
+        )
+        XCTAssertEqual(
+            harness.service.assign(harness.bindings[1], to: harness.references[1]),
+            .success
+        )
+
+        XCTAssertEqual(
+            harness.service.removeRetiredAssignments(
+                providerID: "shortcut-tests",
+                actionIDs: ["action-1"]
+            ),
+            .success
+        )
+
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[1]])
+        XCTAssertEqual(
+            harness.service.removeRetiredAssignments(
+                providerID: "shortcut-tests",
+                actionIDs: ["action-1"]
+            ),
+            .success
+        )
+        XCTAssertEqual(harness.service.assignments.map(\.reference), [harness.references[1]])
     }
 
     func testUnavailableAssignmentsAreRetainedButNotRegistered() throws {
@@ -501,9 +809,18 @@ final class ShortcutAssignmentServiceTests: XCTestCase {
         XCTAssertNotNil(store.loadError)
     }
 
-    private func makeHarness() throws -> ShortcutServiceHarness {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
+    private func makeHarness(
+        defaults suppliedDefaults: (any ActionShortcutAssignmentPersisting)? = nil,
+        preferencesBackupChangeReporter: PreferencesBackupChangeReporter? = nil
+    ) throws -> ShortcutServiceHarness {
+        let defaults: any ActionShortcutAssignmentPersisting
+        if let suppliedDefaults {
+            defaults = suppliedDefaults
+        } else {
+            let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+            userDefaults.removePersistentDomain(forName: suiteName)
+            defaults = userDefaults
+        }
         let registry = ActionRegistry()
         let provider = ShortcutActionTestProvider()
         let definitions = (1 ... 2).map { index in
@@ -535,7 +852,10 @@ final class ShortcutAssignmentServiceTests: XCTestCase {
         let manager = GlobalShortcutManager(registrar: registrar)
         let service = ShortcutAssignmentService(
             registry: registry,
-            store: ActionShortcutAssignmentStore(userDefaults: defaults),
+            store: ActionShortcutAssignmentStore(
+                defaults: defaults,
+                preferencesBackupChangeReporter: preferencesBackupChangeReporter
+            ),
             shortcutManager: manager
         )
         service.synchronize(reservedRegistrations: [], reservedOwnerDescriptions: [:])
@@ -611,7 +931,7 @@ private final class ScriptedActionShortcutDefaults: ActionShortcutAssignmentPers
 
 @MainActor
 private struct ShortcutServiceHarness {
-    let defaults: UserDefaults
+    let defaults: any ActionShortcutAssignmentPersisting
     let registry: ActionRegistry
     let registrar: FakeCarbonHotKeyRegistrar
     let manager: GlobalShortcutManager

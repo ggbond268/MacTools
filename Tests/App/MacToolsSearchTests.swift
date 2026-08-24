@@ -1,4 +1,5 @@
 import Combine
+import Carbon
 import SwiftUI
 import XCTest
 import MacToolsPluginKit
@@ -79,6 +80,30 @@ final class MacToolsSearchTests: XCTestCase {
         XCTAssertEqual(
             host.actionShortcutCatalogItems.first(where: { $0.reference == reference })?.status,
             .unassigned
+        )
+    }
+
+    func testActionSubtitleKeepsOwnerMetadataCompactAndDistinct() {
+        XCTAssertEqual(
+            MacToolsSearchSupportingText.actionSubtitle(
+                ownerTitle: "MacTools",
+                catalogSubtitle: "  mAcToOlS  "
+            ),
+            "MacTools"
+        )
+        XCTAssertEqual(
+            MacToolsSearchSupportingText.actionSubtitle(
+                ownerTitle: "IP Check",
+                catalogSubtitle: "Copy Address"
+            ),
+            "IP Check · Copy Address"
+        )
+        XCTAssertEqual(
+            MacToolsSearchSupportingText.actionSubtitle(
+                ownerTitle: "MacTools",
+                catalogSubtitle: "  "
+            ),
+            "MacTools"
         )
     }
 
@@ -176,7 +201,10 @@ final class MacToolsSearchTests: XCTestCase {
             ),
             appearanceUserDefaults: defaults
         )
-        let model = UnifiedSearchPaletteModel(commandContext: context)
+        let model = UnifiedSearchPaletteModel(
+            commandContext: context,
+            recentStore: CommandPaletteRecentStore(userDefaults: defaults)
+        )
         model.updateQuery(plugin.metadata.title)
         let hideAction = AppHostCommandAction.setPluginVisibility(
             pluginID: plugin.metadata.id,
@@ -236,7 +264,10 @@ final class MacToolsSearchTests: XCTestCase {
             launchAtLoginController: controller,
             appearanceUserDefaults: defaults
         )
-        let model = UnifiedSearchPaletteModel(commandContext: context)
+        let model = UnifiedSearchPaletteModel(
+            commandContext: context,
+            recentStore: CommandPaletteRecentStore(userDefaults: defaults)
+        )
         model.updateQuery("launch at login")
         let (rebuild, cancellable) = expectModelResults(
             model,
@@ -267,6 +298,66 @@ final class MacToolsSearchTests: XCTestCase {
             }
             return definition.action == .setLaunchAtLogin(true)
         })
+    }
+
+    func testModelMigratesPersistedRecentReferencesThroughTheLiveRegistry() {
+        let plugin = MigratingRecentSearchTestPlugin()
+        let host = makePluginHostForTests(plugins: [plugin])
+        let suiteName = "MacToolsSearchRecentMigrationTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = CommandPaletteRecentStore(userDefaults: defaults)
+        let legacyReference = ActionReference(key: plugin.actionKey, schemaVersion: 1)
+        let currentReference = ActionReference(key: plugin.actionKey, schemaVersion: 2)
+        XCTAssertTrue(store.recordSuccessful(legacyReference))
+
+        let model = UnifiedSearchPaletteModel(
+            commandContext: AppHostCommandContext(
+                pluginHost: host,
+                launchAtLoginController: LaunchAtLoginController(
+                    service: SearchTestLaunchAtLoginService()
+                ),
+                appearanceUserDefaults: defaults
+            ),
+            recentStore: store
+        )
+
+        XCTAssertEqual(store.references, [currentReference])
+        XCTAssertEqual(model.sections.first?.kind, .recent)
+        XCTAssertEqual(model.sections.first?.results.count, 1)
+        XCTAssertEqual(
+            model.sections.first?.results.first?.action,
+            .executeAction(currentReference)
+        )
+    }
+
+    func testModelExposesAndCanRepairRejectedRecentPayload() {
+        let suiteName = "MacToolsSearchRecentRepairTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            Data("not-json".utf8),
+            forKey: "command-palette.recent-actions.v1"
+        )
+        let store = CommandPaletteRecentStore(userDefaults: defaults)
+        let model = UnifiedSearchPaletteModel(
+            commandContext: AppHostCommandContext(
+                pluginHost: makePluginHostForTests(plugins: []),
+                launchAtLoginController: LaunchAtLoginController(
+                    service: SearchTestLaunchAtLoginService()
+                ),
+                appearanceUserDefaults: defaults
+            ),
+            recentStore: store
+        )
+
+        XCTAssertTrue(model.recentActionsNeedRepair)
+        XCTAssertFalse(model.hasRecentActions)
+        XCTAssertTrue(model.clearRecentActions())
+        XCTAssertFalse(model.recentActionsNeedRepair)
+        XCTAssertNil(defaults.object(forKey: "command-palette.recent-actions.v1"))
     }
 
     private func expectModelResults(
@@ -425,29 +516,217 @@ final class MacToolsSearchTests: XCTestCase {
         )
     }
 
-    func testPresentationOrderMatchesVisibleGroupsAndQuickSelectionNumbers() {
+    func testTypedPresentationPreservesRelevanceOrderAndQuickSelectionNumbers() {
         let navigation = searchResult(id: "navigation", kind: .navigation)
         let setting = searchResult(id: "setting", kind: .setting)
         let command = searchResult(id: "command", kind: .command)
-        let ordered = MacToolsSearchPresentation.orderedResults([
+        let ordered = [
             command,
             navigation,
             setting
-        ])
+        ]
+        let sections = MacToolsSearchPresentation.sections(
+            query: "command",
+            results: ordered,
+            recentResults: []
+        )
 
-        XCTAssertEqual(ordered.map(\.id), ["navigation", "setting", "command"])
+        XCTAssertEqual(sections.map(\.kind), [.results])
+        XCTAssertEqual(sections.flatMap(\.results).map(\.id), [
+            "command", "navigation", "setting"
+        ])
         XCTAssertEqual(
             MacToolsSearchPresentation.quickSelectionNumber(
                 for: "setting",
                 in: ordered
             ),
-            2
+            3
         )
         XCTAssertNil(
             MacToolsSearchPresentation.quickSelectionNumber(
                 for: "missing",
                 in: ordered
             )
+        )
+    }
+
+    func testExactCommandMatchIsNotRegroupedBelowNavigation() {
+        let exactCommand = MacToolsSearchResult(
+            id: "command.dark",
+            kind: .command,
+            title: "Dark",
+            subtitle: "Appearance",
+            detail: "Use Dark appearance.",
+            keywords: [],
+            systemImage: "moon",
+            action: .executeAction(
+                ActionReference(key: ActionKey(providerID: "app", actionID: "dark"))
+            ),
+            confirmation: nil,
+            suggestionPriority: nil
+        )
+        let navigation = MacToolsSearchResult(
+            id: "navigation.dark-settings",
+            kind: .navigation,
+            title: "Dark Settings",
+            subtitle: "Settings",
+            detail: "Open appearance settings.",
+            keywords: [],
+            systemImage: "gearshape",
+            action: .navigate(destination: .general, target: nil),
+            confirmation: nil,
+            suggestionPriority: nil
+        )
+        let index = MacToolsSearchIndex(items: [navigation, exactCommand])
+
+        XCTAssertEqual(index.results(matching: "dark").map(\.id), [
+            "command.dark", "navigation.dark-settings"
+        ])
+    }
+
+    func testRecencyOnlyBreaksEquivalentLexicalMatches() {
+        let exact = MacToolsSearchResult(
+            id: "exact",
+            kind: .command,
+            title: "Display",
+            subtitle: "",
+            detail: "",
+            keywords: [],
+            systemImage: "display",
+            action: .executeAction(
+                ActionReference(key: ActionKey(providerID: "plugin", actionID: "exact"))
+            ),
+            confirmation: nil,
+            suggestionPriority: nil
+        )
+        let recentPrefixReference = ActionReference(
+            key: ActionKey(providerID: "plugin", actionID: "prefix")
+        )
+        let recentPrefix = MacToolsSearchResult(
+            id: "prefix",
+            kind: .command,
+            title: "Display Settings",
+            subtitle: "",
+            detail: "",
+            keywords: [],
+            systemImage: "display",
+            action: .executeAction(recentPrefixReference),
+            confirmation: nil,
+            suggestionPriority: nil
+        )
+        let index = MacToolsSearchIndex(items: [recentPrefix, exact])
+
+        XCTAssertEqual(
+            index.results(
+                matching: "display",
+                recentReferences: [recentPrefixReference]
+            ).map(\.id),
+            ["exact", "prefix"]
+        )
+    }
+
+    func testTypedSearchUsesTheDocumentedMatchTierOrder() {
+        let query = "display"
+        let exact = rankedSearchResult(id: "exact", title: "Display")
+        let prefix = rankedSearchResult(id: "prefix", title: "Display Settings")
+        let title = rankedSearchResult(id: "title", title: "Open Display Panel")
+        let keyword = rankedSearchResult(
+            id: "keyword",
+            title: "Monitor Tools",
+            keywords: [query]
+        )
+        let subtitle = rankedSearchResult(
+            id: "subtitle",
+            title: "Monitor",
+            subtitle: query
+        )
+        let detail = rankedSearchResult(
+            id: "detail",
+            title: "Screen",
+            detail: query
+        )
+        let index = MacToolsSearchIndex(
+            items: [detail, subtitle, keyword, title, prefix, exact]
+        )
+
+        XCTAssertEqual(index.results(matching: query).map(\.id), [
+            "exact", "prefix", "title", "keyword", "subtitle", "detail"
+        ])
+    }
+
+    func testRecencyBreaksEquivalentRelevanceTies() {
+        let olderReference = ActionReference(
+            key: ActionKey(providerID: "plugin", actionID: "older")
+        )
+        let newerReference = ActionReference(
+            key: ActionKey(providerID: "plugin", actionID: "newer")
+        )
+        let older = rankedSearchResult(
+            id: "older",
+            title: "Display Older",
+            reference: olderReference
+        )
+        let newer = rankedSearchResult(
+            id: "newer",
+            title: "Display Newer",
+            reference: newerReference
+        )
+        let index = MacToolsSearchIndex(items: [older, newer])
+
+        XCTAssertEqual(
+            index.results(
+                matching: "display",
+                recentReferences: [newerReference, olderReference]
+            ).map(\.id),
+            ["newer", "older"]
+        )
+    }
+
+    func testZeroQuerySectionsDeduplicateRecentFromSuggested() {
+        let recent = searchResult(id: "recent", kind: .command)
+        let suggested = searchResult(id: "suggested", kind: .navigation)
+
+        let sections = MacToolsSearchPresentation.sections(
+            query: "",
+            results: [recent, suggested],
+            recentResults: [recent]
+        )
+
+        XCTAssertEqual(sections.map(\.kind), [.recent, .suggested])
+        XCTAssertEqual(sections[0].results.map(\.id), ["recent"])
+        XCTAssertEqual(sections[1].results.map(\.id), ["suggested"])
+    }
+
+    func testParameterlessActionResultIDDoesNotDependOnCatalogPosition() throws {
+        let plugin = SearchableTestPlugin()
+        let result = try XCTUnwrap(
+            MacToolsSearchIndexBuilder.build(
+                pluginHost: makePluginHostForTests(plugins: [plugin])
+            ).items.first { item in
+                guard case let .executeAction(reference) = item.action else { return false }
+                return reference.key == ActionKey(providerID: "searchable", actionID: "sleep")
+            }
+        )
+
+        XCTAssertEqual(result.id, "action.parameterless.searchable/sleep")
+    }
+
+    func testParameterizedAndParameterlessActionResultIDsUseDisjointNamespaces() throws {
+        let parameterized = ActionReference(
+            key: ActionKey(providerID: "foo", actionID: "bar"),
+            parameters: try ActionParameterSet(["value": .boolean(true)])
+        )
+        let parameterless = ActionReference(
+            key: ActionKey(providerID: "foo", actionID: "bar.0")
+        )
+
+        XCTAssertNotEqual(
+            MacToolsSearchResultID.action(reference: parameterized, catalogIndex: 0),
+            MacToolsSearchResultID.action(reference: parameterless, catalogIndex: 1)
+        )
+        XCTAssertEqual(
+            MacToolsSearchResultID.action(reference: parameterless, catalogIndex: 99),
+            "action.parameterless.foo/bar.0"
         )
     }
 
@@ -507,6 +786,71 @@ final class MacToolsSearchTests: XCTestCase {
         )
     }
 
+    func testUnifiedSearchFocusRetriesUntilFocusCanBeClaimed() {
+        let parent = UnifiedSearchTextField(
+            text: .constant(""),
+            placeholder: "Search",
+            accessibilityLabel: "Search",
+            focusRequestID: 1,
+            onCommand: { _ in }
+        )
+        var focusAttempts = 0
+        let coordinator = UnifiedSearchTextField.Coordinator(
+            parent: parent,
+            focusClaim: { _ in
+                focusAttempts += 1
+                return focusAttempts == 3
+            }
+        )
+        let field = UnifiedSearchTextField.SearchTextField(
+            frame: NSRect(x: 0, y: 0, width: 320, height: 28)
+        )
+        defer {
+            coordinator.cancelPendingFocus()
+        }
+
+        coordinator.focus(field, for: 1)
+        for _ in 0 ..< 100 where focusAttempts < 3 {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+
+        XCTAssertEqual(focusAttempts, 3)
+
+        coordinator.focus(field, for: 1)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.03))
+        XCTAssertEqual(focusAttempts, 3)
+    }
+
+    func testUnifiedSearchSelectionResetsToTopResultWhenNormalizedQueryChanges() {
+        XCTAssertTrue(UnifiedSearchSelectionPolicy.shouldResetForQueryChange(
+            from: "",
+            to: "IP Check"
+        ))
+        XCTAssertEqual(
+            UnifiedSearchSelectionPolicy.selection(
+                currentID: "recent.copy-public-ip",
+                availableIDs: ["navigation.ip-check", "recent.copy-public-ip"],
+                resetToFirst: true
+            ),
+            "navigation.ip-check"
+        )
+    }
+
+    func testUnifiedSearchSelectionPreservesDeliberateSelectionForEquivalentQuery() {
+        XCTAssertFalse(UnifiedSearchSelectionPolicy.shouldResetForQueryChange(
+            from: " IP CHECK ",
+            to: "ip check"
+        ))
+        XCTAssertEqual(
+            UnifiedSearchSelectionPolicy.selection(
+                currentID: "command.copy-public-ip",
+                availableIDs: ["navigation.ip-check", "command.copy-public-ip"],
+                resetToFirst: false
+            ),
+            "command.copy-public-ip"
+        )
+    }
+
     func testUnifiedSearchShowsCommandAccessoriesOnlyForSelectedActionRows() {
         let action = MacToolsSearchAction.executeAction(
             ActionReference(key: ActionKey(providerID: "sidecar", actionID: "connect"))
@@ -527,6 +871,16 @@ final class MacToolsSearchTests: XCTestCase {
         ))
         XCTAssertEqual(UnifiedSearchResultRowLayout.quickSelectionColumnWidth, 32)
         XCTAssertEqual(UnifiedSearchResultRowLayout.primaryActionColumnWidth, 56)
+        XCTAssertEqual(UnifiedSearchResultRowLayout.minimumShortcutRecorderWidth, 60)
+
+        let binding = ShortcutBinding(
+            keyCode: UInt16(kVK_ANSI_K),
+            modifiers: [.control, .option, .shift, .command]
+        )
+        XCTAssertEqual(
+            UnifiedSearchResultRowLayout.shortcutRecorderDisplayText(for: binding),
+            "⌃\u{2009}⌥\u{2009}⇧\u{2009}⌘\u{2009}K"
+        )
     }
 
     func testPluginHostPerformsOnlyDeclaredCommands() {
@@ -676,6 +1030,32 @@ final class MacToolsSearchTests: XCTestCase {
             keywords: [],
             systemImage: "magnifyingglass",
             action: .navigate(destination: .general, target: nil),
+            confirmation: nil,
+            suggestionPriority: nil
+        )
+    }
+
+    private func rankedSearchResult(
+        id: String,
+        title: String,
+        subtitle: String = "",
+        detail: String = "",
+        keywords: [String] = [],
+        reference: ActionReference? = nil
+    ) -> MacToolsSearchResult {
+        MacToolsSearchResult(
+            id: id,
+            kind: .command,
+            title: title,
+            subtitle: subtitle,
+            detail: detail,
+            keywords: keywords,
+            systemImage: "command",
+            action: .executeAction(
+                reference ?? ActionReference(
+                    key: ActionKey(providerID: "plugin", actionID: id)
+                )
+            ),
             confirmation: nil,
             suggestionPriority: nil
         )
@@ -897,6 +1277,56 @@ private final class ActionShortcutSearchTestPlugin:
                 systemImage: "command"
             ),
         ]
+    }
+
+    func handleAction(_ action: PluginPanelAction) {}
+
+    func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
+        ActionExecutionHandle { .succeeded() }
+    }
+}
+
+@MainActor
+private final class MigratingRecentSearchTestPlugin: MacToolsPlugin, PluginActionProviding {
+    let metadata = PluginMetadata(
+        id: "migrating-recent-search",
+        title: "Migrating Recent Search",
+        iconName: "arrow.triangle.2.circlepath",
+        iconTint: Color(nsColor: .systemBlue),
+        order: 1,
+        defaultDescription: "Tests recent action migrations"
+    )
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+
+    var actionKey: ActionKey {
+        ActionKey(providerID: metadata.id, actionID: "migrate")
+    }
+
+    var actionDefinitions: [ActionDefinition] {
+        [
+            ActionDefinition(
+                key: actionKey,
+                parameterSchemaVersion: 2,
+                title: "Migrate Recent Action",
+                description: "Tests recent action migrations.",
+                systemImage: "arrow.triangle.2.circlepath"
+            )
+        ]
+    }
+
+    func migrateActionReference(
+        _ reference: ActionReference,
+        toSchemaVersion schemaVersion: Int
+    ) -> ActionReference? {
+        guard reference.key == actionKey,
+              reference.schemaVersion == 1,
+              schemaVersion == 2,
+              reference.parameters.entries.isEmpty else {
+            return nil
+        }
+        return ActionReference(key: actionKey, schemaVersion: schemaVersion)
     }
 
     func handleAction(_ action: PluginPanelAction) {}

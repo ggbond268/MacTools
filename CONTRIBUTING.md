@@ -53,6 +53,7 @@ Thanks for your interest in MacTools. Please keep each contribution small and cl
 - Prefer Apple native frameworks. When adding system frameworks, private include paths, or helper executables inside a plugin bundle, declare the smallest necessary differences in the plugin's own `project.yml`. Bundle resource executables that need separate signing should be listed in `plugin.json.package.signPaths`.
 - Plugins that use private Apple frameworks must load them dynamically at runtime and validate the required classes and selectors. Do not statically link private frameworks, and surface unsupported-system errors instead of crashing.
 - Plugins that intercept pointer events must declare Accessibility permission, stop their event tap on deactivation, and re-enable a tap disabled by macOS.
+- Plugins that move or resize windows must use public Accessibility APIs for ordinary position and size writes, revalidate the focused window immediately before writing, calculate against the current display visible frame, and keep pure multi-display geometry independently testable. Capabilities unavailable through Accessibility may use a narrowly scoped, dynamically loaded, version-gated private API after review and must fail closed when unsupported.
 
 ## Testing
 - Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.

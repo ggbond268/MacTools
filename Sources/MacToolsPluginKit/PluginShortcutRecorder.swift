@@ -90,17 +90,52 @@ public struct PluginShortcutRecorderField: View {
     }
 
     public var body: some View {
+        PluginShortcutRecorderFieldContent(
+            normalizedText: normalizedText,
+            isPlaceholderVisible: isPlaceholderVisible,
+            isRecording: isRecording,
+            minWidth: minWidth
+        )
+    }
+}
+
+private struct PluginShortcutRecorderFieldContent: View {
+    let normalizedText: String
+    let isPlaceholderVisible: Bool
+    let isRecording: Bool
+    let minWidth: CGFloat
+
+    @Environment(\.controlSize) private var controlSize
+
+    private var isCompact: Bool {
+        controlSize == .mini
+    }
+
+    private var height: CGFloat {
+        isCompact ? 24 : PluginSettingsTheme.Size.controlHeight
+    }
+
+    private var horizontalPadding: CGFloat {
+        isCompact ? 6 : PluginSettingsTheme.Spacing.sectionHeaderContent
+    }
+
+    private var textFont: Font {
+        isCompact
+            ? .system(size: 11, design: .monospaced)
+            : PluginSettingsTheme.Typography.monospacedValue
+    }
+
+    var body: some View {
         Text(normalizedText)
-            .font(PluginSettingsTheme.Typography.monospacedValue)
+            .font(textFont)
             .foregroundStyle(isPlaceholderVisible ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
             .lineLimit(1)
             .minimumScaleFactor(0.8)
-            .padding(.horizontal, PluginSettingsTheme.Spacing.sectionHeaderContent)
-            .padding(.vertical, PluginSettingsTheme.Spacing.controlCluster - 3)
+            .padding(.horizontal, horizontalPadding)
             .frame(
                 minWidth: minWidth,
-                minHeight: PluginSettingsTheme.Size.controlHeight,
-                maxHeight: PluginSettingsTheme.Size.controlHeight,
+                minHeight: height,
+                maxHeight: height,
                 alignment: .center
             )
             .background(

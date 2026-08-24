@@ -283,6 +283,7 @@ struct StandaloneCommandPaletteRootView: View {
     let pluginHost: PluginHost
     let launchAtLoginController: LaunchAtLoginController
     let appearanceUserDefaults: UserDefaults
+    let commandPaletteRecentStore: CommandPaletteRecentStore
     @ObservedObject var state: StandaloneCommandPaletteState
     let actions: UnifiedSearchPaletteActions
 
@@ -292,6 +293,7 @@ struct StandaloneCommandPaletteRootView: View {
                 pluginHost: pluginHost,
                 launchAtLoginController: launchAtLoginController,
                 appearanceUserDefaults: appearanceUserDefaults,
+                recentStore: commandPaletteRecentStore,
                 availableSize: geometry.size,
                 presentationOrigin: state.presentationOrigin,
                 shortcutHint: state.shortcutHint,
@@ -396,6 +398,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     private let launchAtLoginController: LaunchAtLoginController
     private let menuBarPanelThemeStore: MenuBarPanelThemeStore
     private let appearanceUserDefaults: UserDefaults
+    let commandPaletteRecentStore: CommandPaletteRecentStore
     private let settingsSidebarPreferences: SettingsSidebarPreferencesStore
     private let commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration
     private(set) var settingsWindow: NSWindow?
@@ -416,6 +419,27 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         AppL10n.search("search.title", defaultValue: "搜索 MacTools")
     }
 
+    var focusedWindowLayoutTarget: NSWindow? {
+        guard let settingsWindow,
+              Self.isEligibleFocusedWindowLayoutTarget(
+                  isKeyWindow: settingsWindow.isKeyWindow,
+                  isVisible: settingsWindow.isVisible,
+                  isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
+              )
+        else {
+            return nil
+        }
+        return settingsWindow
+    }
+
+    static func isEligibleFocusedWindowLayoutTarget(
+        isKeyWindow: Bool,
+        isVisible: Bool,
+        isUnifiedSearchPresented: Bool
+    ) -> Bool {
+        isKeyWindow && isVisible && !isUnifiedSearchPresented
+    }
+
     init(
         pluginHost: PluginHost,
         appUpdater: AppUpdater,
@@ -433,6 +457,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         self.launchAtLoginController = launchAtLoginController
         self.menuBarPanelThemeStore = menuBarPanelThemeStore
         self.appearanceUserDefaults = appearanceUserDefaults
+        self.commandPaletteRecentStore = CommandPaletteRecentStore(
+            userDefaults: appearanceUserDefaults
+        )
         self.settingsSidebarPreferences = SettingsSidebarPreferencesStore(
             userDefaults: appearanceUserDefaults,
             preferencesBackupChangeReporter: pluginHost.preferencesBackupChangeReporter
@@ -487,6 +514,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     func showUnifiedSearch() {
+        pluginHost.captureCurrentFocusedWindowTarget()
         launchAtLoginController.refreshStatus()
         pluginHost.refreshActionPresentations(providerIDs: ["apple-shortcuts"])
         presentSettings(.settings)
@@ -494,6 +522,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     func windowForActionConfirmation() -> NSWindow? {
+        pluginHost.captureCurrentFocusedWindowTarget()
         presentSettings(.settings)
         return settingsWindow
     }
@@ -518,6 +547,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             return
         }
 
+        pluginHost.captureCurrentFocusedWindowTarget()
         launchAtLoginController.refreshStatus()
         pluginHost.refreshActionPresentations(providerIDs: ["apple-shortcuts"])
         onProgrammaticSettingsPresentation()
@@ -668,6 +698,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 menuBarPanelThemeStore: menuBarPanelThemeStore,
                 sidebarPreferences: settingsSidebarPreferences,
                 appearanceUserDefaults: appearanceUserDefaults,
+                commandPaletteRecentStore: commandPaletteRecentStore,
                 showDashboard: { [weak self] in
                     self?.panelPresentationActions.present(.dashboard)
                 },
@@ -719,6 +750,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 pluginHost: pluginHost,
                 launchAtLoginController: launchAtLoginController,
                 appearanceUserDefaults: appearanceUserDefaults,
+                commandPaletteRecentStore: commandPaletteRecentStore,
                 state: state,
                 actions: actions
             )

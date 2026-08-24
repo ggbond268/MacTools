@@ -686,6 +686,7 @@ final class ActionExecutorTests: XCTestCase {
         }
         registry.synchronize([provider.registration(definition: definition)])
         let executor = ActionExecutor(registry: registry)
+        var observedCompletion: ActionExecutionOutcome?
 
         let start = await executor.startSurfaceIndependentTrackingCompletion(
             ActionInvocation(
@@ -693,7 +694,8 @@ final class ActionExecutorTests: XCTestCase {
                 source: .unifiedSearch,
                 mode: .foreground
             ),
-            expectedDefinition: definition
+            expectedDefinition: definition,
+            completionObserver: { observedCompletion = $0 }
         )
         let observer = Task { @MainActor () -> ActionExecutionOutcome? in
             guard let completion = start.completion else { return nil }
@@ -719,6 +721,7 @@ final class ActionExecutorTests: XCTestCase {
 
         XCTAssertEqual(executor.surfaceIndependentExecutionCountForTests, 0)
         XCTAssertFalse(provider.didCancel)
+        XCTAssertEqual(observedCompletion, .completed(.succeeded()))
     }
 
     func testSurfaceIndependentPreparationCancelsBeforeProviderStart() async {

@@ -18,6 +18,23 @@ final class AppShortcutTests: XCTestCase {
         super.tearDown()
     }
 
+    func testShortcutFormatterProvidesCompactNativeNotation() {
+        let binding = ShortcutBinding(
+            keyCode: UInt16(kVK_ANSI_K),
+            modifiers: [.control, .option, .shift, .command]
+        )
+
+        XCTAssertEqual(
+            ShortcutFormatter.displayString(for: binding),
+            "⌃ + ⌥ + ⇧ + ⌘ + K"
+        )
+        XCTAssertEqual(
+            ShortcutFormatter.compactDisplayString(for: binding),
+            "⌃\u{2009}⌥\u{2009}⇧\u{2009}⌘\u{2009}K"
+        )
+        XCTAssertEqual(ShortcutFormatter.compactDisplayString(for: nil), "None")
+    }
+
     func testAppShortcutsDefaultToUnboundAndRecordClearIndependently() throws {
         let defaults = try makeDefaults()
         let manager = GlobalShortcutManager()

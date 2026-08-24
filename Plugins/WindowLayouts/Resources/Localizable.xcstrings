@@ -1,0 +1,369 @@
+{
+  "sourceLanguage": "zh-Hans",
+  "strings": {
+    "metadata.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Window Layouts" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "窗口布局" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "視窗佈局" } }
+      }
+    },
+    "metadata.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Arrange the focused window and create custom layouts" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "排列聚焦窗口并创建自定义布局" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "排列聚焦視窗並建立自訂佈局" } }
+      }
+    },
+    "permission.accessibility.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Accessibility" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "辅助功能" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "輔助使用" } }
+      }
+    },
+    "permission.accessibility.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Used to read and adjust application window positions, sizes, and full-screen state." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "用于读取并调整应用窗口的位置、大小和全屏状态。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "用於讀取並調整應用程式視窗的位置、大小和全螢幕狀態。" } }
+      }
+    },
+    "permission.accessibility.footnote": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "In System Settings → Privacy & Security → Accessibility, allow MacTools." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在系统设置 → 隐私与安全性 → 辅助功能中允许 MacTools。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在系統設定 → 隱私權與安全性 → 輔助使用中允許 MacTools。" } }
+      }
+    },
+    "settings.layout.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Window Spacing" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "窗口间距" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "視窗間距" } }
+      }
+    },
+    "settings.gap.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Window Gaps" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "窗口间距" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "視窗間距" } }
+      }
+    },
+    "settings.gap.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Leave space at screen edges and between adjacent tiled windows." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在屏幕边缘和相邻平铺窗口之间保留间距。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在螢幕邊緣和相鄰平鋪視窗之間保留間距。" } }
+      }
+    },
+    "settings.reset.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Restore Defaults" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "恢复默认设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "回復預設設定" } }
+      }
+    },
+    "settings.reset.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Restore layout behavior defaults without deleting custom commands or shortcuts." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "恢复布局行为默认值，不会删除自定义命令或快捷键。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "回復佈局行為預設值，不會刪除自訂指令或快速鍵。" } }
+      }
+    },
+    "settings.reset.button": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Restore" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "恢复" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "回復" } }
+      }
+    },
+    "settings.shortcuts.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Window Layout Shortcuts" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "窗口布局快捷键" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "視窗佈局快速鍵" } }
+      }
+    },
+    "settings.shortcuts.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Use a preset, then customize any global shortcut individually." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "可使用预设，也可逐项录制自己的全局快捷键。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "可使用預設，也可逐項錄製自己的全域快速鍵。" } }
+      }
+    },
+    "settings.behavior.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Layout Behavior" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "布局行为" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "佈局行為" } } } },
+    "settings.cycles.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Cycle Half-screen Sizes" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "循环半屏尺寸" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "循環半螢幕尺寸" } } } },
+    "settings.cycles.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Repeat any half-screen command to cycle through one-half, two-thirds, and one-third on the same display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "重复执行任一半屏命令时，在当前显示器上的二分之一、三分之二和三分之一之间循环。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "重複執行任一半螢幕指令時，在目前顯示器上的二分之一、三分之二和三分之一之間循環。" } } } },
+    "settings.stageManager.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Avoid Stage Manager" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "避让台前调度" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "避讓幕前調度" } } } },
+    "settings.stageManager.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Keep windows clear of visible Stage Manager thumbnails." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "台前调度缩略图可见时，不把窗口放到缩略图下方。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "幕前調度縮圖可見時，不將視窗放在縮圖下方。" } } } },
+    "settings.feedback.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Show Command Feedback" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "显示命令反馈" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "顯示指令回饋" } } } },
+    "settings.feedback.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Briefly show successful global shortcuts and trackpad gestures. Failures are always shown." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "使用全局快捷键或触控板手势时，短暂显示成功提示；失败始终显示。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "使用全域快捷鍵或觸控板手勢時，短暫顯示成功提示；失敗一律顯示。" } } } },
+    "settings.preset.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Shortcut Preset" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "快捷键预设" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "快速鍵預設" } } } },
+    "settings.preset.none": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "None" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "无" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "無" } } } },
+    "settings.preset.controlOption": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Control–Option (⌃⌥)" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "Control–Option (⌃⌥)" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "Control–Option (⌃⌥)" } } } },
+    "settings.preset.optionCommand": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Option–Command (⌥⌘)" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "Option–Command (⌥⌘)" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "Option–Command (⌥⌘)" } } } },
+    "settings.preset.controlOptionCommand": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Control–Option–Command (⌃⌥⌘)" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "Control–Option–Command (⌃⌥⌘)" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "Control–Option–Command (⌃⌥⌘)" } } } },
+    "settings.preset.unavailable": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "The shortcut preset cannot be applied right now." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前无法应用快捷键预设。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前無法套用快速鍵預設。" } } } },
+    "settings.preset.sectionTitle": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Shortcut Presets" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "快捷键预设" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "快速鍵預設" } } } },
+    "settings.preset.current": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Current Shortcut Scheme" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前快捷键方案" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前快速鍵方案" } } } },
+    "settings.preset.currentDescription": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Open the preset assistant to review changes and conflicts before applying." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开预设助手，先查看更改和冲突，再决定是否应用。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "開啟預設助理，先查看變更和衝突，再決定是否套用。" } } } },
+    "settings.preset.currentBinding": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Current" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前" } } } },
+    "settings.preset.proposedBinding": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Proposed" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "建议" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "建議" } } } },
+    "settings.preset.changeButton": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Change…" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "更改…" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "更改…" } } } },
+    "settings.preset.custom": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Custom" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂" } } } },
+    "settings.preset.selectionDescription": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Selecting a preset only updates the preview; it is not applied immediately." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择预设只会更新预览，不会立即应用。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇預設只會更新預覽，不會立即套用。" } } } },
+    "settings.preset.sheetTitle": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Change Shortcut Preset" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "更改快捷键预设" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "更改快速鍵預設" } } } },
+    "settings.preset.sheetDescription": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Choose a preset and review every change. No shortcuts change until you apply it." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择预设并逐项查看更改；在点击应用前，不会修改任何快捷键。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇預設並逐項查看變更；在點按套用前，不會修改任何快速鍵。" } } } },
+    "settings.preset.sheetPicker": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Preset to Preview" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "要预览的预设" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "要預覽的預設" } } } },
+    "settings.preset.appliedStatus": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Applied" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "已应用" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "已套用" } } } },
+    "settings.preset.notAppliedStatus": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Not Applied" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "尚未应用" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "尚未套用" } } } },
+    "settings.preset.willChange": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Will Change" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将更改" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將更改" } } } },
+    "settings.preset.unchanged": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "No Change" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "无更改" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "無變更" } } } },
+    "settings.preset.conflictOwner": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Conflicts with “%@”" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "与“%@”冲突" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "與「%@」衝突" } } } },
+    "settings.preset.resolveConflicts": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Resolve the marked shortcut conflicts before applying this preset." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "请先解决标记的快捷键冲突，再应用预设。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "請先解決標記的快速鍵衝突，再套用預設。" } } } },
+    "settings.preset.notAppliedDescription": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "No shortcuts change until you click Apply Preset." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "在点击“应用预设”前，不会修改任何快捷键。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "在點按「套用預設」前，不會修改任何快速鍵。" } } } },
+    "settings.preset.preview": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Change Preview" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "更改预览" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "變更預覽" } } } },
+    "settings.preset.previewUnavailable": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Preview is unavailable right now." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前无法预览。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前無法預覽。" } } } },
+    "settings.preset.conflictCount": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "%d shortcut conflicts" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "%d 个快捷键冲突" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "%d 個快速鍵衝突" } } } },
+    "settings.preset.conflictCountOne": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "1 shortcut conflict" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "1 个快捷键冲突" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "1 個快速鍵衝突" } } } },
+    "settings.preset.alreadyApplied": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "These shortcuts already match this preset." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前快捷键已与此预设一致。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前快速鍵已與此預設一致。" } } } },
+    "settings.preset.changeCount": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "%d changes" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "%d 项更改" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "%d 項變更" } } } },
+    "settings.preset.changeCountOne": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "1 change" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "1 项更改" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "1 項變更" } } } },
+    "settings.preset.applyTitle": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Apply Shortcut Preset" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "应用快捷键预设" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "套用快速鍵預設" } } } },
+    "settings.preset.applyDescription": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Only replace the previewed Window Layout shortcuts after confirmation." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "仅在确认后替换预览中列出的窗口布局快捷键。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "僅在確認後取代預覽中列出的視窗佈局快速鍵。" } } } },
+    "settings.preset.applyButton": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Apply Preset" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "应用预设" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "套用預設" } } } },
+    "settings.preset.confirmTitle": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Apply “%@”?" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "应用“%@”？" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "套用「%@」？" } } } },
+    "settings.preset.confirmMessage": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Window Layout shortcuts marked as changed in the preview will be replaced." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "预览中有变化的窗口布局快捷键将被替换。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "預覽中有變更的視窗佈局快速鍵將被取代。" } } } },
+    "settings.preset.confirmButton": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Apply" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "应用" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "套用" } } } },
+    "settings.preset.cancelButton": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Cancel" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "取消" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "取消" } } } },
+    "settings.preset.previewLine": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "%@: %@ → %@" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@: %@ → %@" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "%@: %@ → %@" } } } },
+    "settings.preset.previewConflict": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": " — conflicts with “%@”" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": " — 与“%@”冲突" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": " — 與「%@」衝突" } } } },
+    "settings.preset.unassigned": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Unassigned" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "未分配" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "未指派" } } } },
+    "settings.preset.retiredNextDesktop": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Removed: Move to Next Desktop" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "已移除：移到下一个桌面" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "已移除：移到下一個桌面" } } } },
+    "settings.preset.retiredPreviousDesktop": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Removed: Move to Previous Desktop" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "已移除：移到上一个桌面" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "已移除：移到上一個桌面" } } } },
+    "settings.custom.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Custom Layouts" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义布局" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂佈局" } } } },
+    "settings.custom.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Combine relative or fixed dimensions, nine anchor positions, and offsets for shortcuts or Run Links." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "可组合相对或固定大小、九点定位和偏移，并作为快捷键或 Run Link 使用。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "可組合相對或固定大小、九點定位和偏移，並作為快速鍵或 Run Link 使用。" } } } },
+    "settings.custom.add.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Create Custom Layout" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "创建自定义布局" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "建立自訂佈局" } } } },
+    "settings.custom.add.button": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Create" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "创建" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "建立" } } } },
+    "settings.custom.preview": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Layout Preview" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "布局预览" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "佈局預覽" } } } },
+    "settings.custom.shortcut": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Global Shortcut" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "全局快捷键" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "全域快速鍵" } } } },
+    "settings.custom.shortcut.clear": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Clear Shortcut" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "清除快捷键" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除快速鍵" } } } },
+    "settings.custom.name": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Name" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "名称" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "名稱" } } } },
+    "settings.custom.widthMode": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Width Mode" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "宽度模式" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "寬度模式" } } } },
+    "settings.custom.width": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Width" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "宽度" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "寬度" } } } },
+    "settings.custom.heightMode": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Height Mode" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "高度模式" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "高度模式" } } } },
+    "settings.custom.height": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Height" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "高度" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "高度" } } } },
+    "settings.custom.anchor": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Anchor" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "固定位置" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "固定位置" } } } },
+    "settings.custom.offsetX": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Horizontal Offset" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "水平偏移" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "水平偏移" } } } },
+    "settings.custom.offsetY": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Vertical Offset" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "垂直偏移" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "垂直偏移" } } } },
+    "settings.custom.external": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Allow Run Link" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "允许 Run Link" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "允許 Run Link" } } } },
+    "settings.custom.duplicate": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Duplicate Command" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "复制命令" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "複製指令" } } } },
+    "settings.custom.duplicate.button": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Duplicate" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "复制" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "複製" } } } },
+    "settings.custom.delete": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Delete Command" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除命令" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除指令" } } } },
+    "settings.custom.delete.shortcutUnavailable": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "The shortcut for this layout could not be read before deletion." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除前无法读取此布局的快捷键。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除前無法讀取此佈局的快速鍵。" } } } },
+    "settings.custom.delete.failed": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "The custom layout could not be deleted; its shortcut was restored." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法删除自定义布局；其快捷键已恢复。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法刪除自訂佈局；其快速鍵已還原。" } } } },
+    "settings.custom.delete.rollbackFailed": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "The layout could not be deleted and its shortcut could not be restored:" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法删除布局，也无法恢复其快捷键：" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法刪除佈局，也無法還原其快速鍵：" } } } },
+    "settings.custom.delete.button": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Delete" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除" } } } },
+    "settings.custom.defaultName": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Custom Layout" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义布局" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂佈局" } } } },
+    "settings.custom.copySuffix": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Copy" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "副本" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "副本" } } } },
+    "settings.dimension.current": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Keep Current" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "保持当前" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "保持目前" } } } },
+    "settings.dimension.fraction": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Screen Percentage" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "屏幕比例" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "螢幕比例" } } } },
+    "settings.dimension.points": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fixed Points" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "固定点数" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "固定點數" } } } },
+    "settings.anchor.topLeft": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top Left" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左上" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左上" } } } },
+    "settings.anchor.top": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "上方" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "上方" } } } },
+    "settings.anchor.topRight": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top Right" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右上" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右上" } } } },
+    "settings.anchor.left": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Left" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左侧" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左側" } } } },
+    "settings.anchor.center": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Center" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "居中" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "置中" } } } },
+    "settings.anchor.right": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Right" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右侧" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右側" } } } },
+    "settings.anchor.bottomLeft": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom Left" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左下" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左下" } } } },
+    "settings.anchor.bottom": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "下方" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "下方" } } } },
+    "settings.anchor.bottomRight": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom Right" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右下" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右下" } } } },
+    "action.custom.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Apply a custom window size and anchored position." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "应用自定义窗口大小和固定位置。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "套用自訂視窗大小和固定位置。" } } } },
+    "error.executionCancelled": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "The window layout operation was cancelled." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "窗口布局操作已取消。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "視窗佈局操作已取消。" } } } },
+    "error.executionQueueFull": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Too many window layout operations are waiting." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "等待中的窗口布局操作过多。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "等待中的視窗佈局操作過多。" } } } },
+    "error.accessibilityRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Window Layouts requires Accessibility permission." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "窗口布局需要辅助功能权限。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "視窗佈局需要輔助使用權限。" } }
+      }
+    },
+    "error.noFocusedWindow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No focused window is available." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "没有可用的聚焦窗口。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "沒有可用的聚焦視窗。" } }
+      }
+    },
+    "error.windowUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The focused window is no longer available." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前窗口已不可用。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前視窗已無法使用。" } }
+      }
+    },
+    "error.windowCannotMove": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This window cannot be moved." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "此窗口无法移动。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此視窗無法移動。" } }
+      }
+    },
+    "error.windowCannotResize": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This window cannot be resized." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "此窗口无法调整大小。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此視窗無法調整大小。" } }
+      }
+    },
+    "error.windowSizeConstrained": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This app did not apply the requested window size." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "此应用未应用请求的窗口大小。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此 App 未套用要求的視窗大小。" } }
+      }
+    },
+    "error.fullScreenUnsupported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This window does not support toggling full screen." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "此窗口不支持切换全屏。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此視窗不支援切換全螢幕。" } }
+      }
+    },
+    "error.noDisplay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The display containing this window could not be found." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "找不到此窗口所在的显示器。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "找不到此視窗所在的顯示器。" } }
+      }
+    },
+    "error.noOtherDisplay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No other display is available." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "没有其他可用显示器。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "沒有其他可用顯示器。" } }
+      }
+    },
+    "error.noPreviousFrame": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This window has no previous position to restore." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "此窗口没有可恢复的上一个位置。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此視窗沒有可回復的上一個位置。" } }
+      }
+    },
+    "error.frameReadFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The focused window position and size could not be read." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法读取当前窗口的位置和大小。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法讀取目前視窗的位置和大小。" } }
+      }
+    },
+    "error.frameWriteFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The focused window could not be adjusted." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法调整当前窗口。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法調整目前視窗。" } }
+      }
+    },
+    "error.customCommandUnavailable": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "The custom window command could not be found." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "找不到自定义窗口命令。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "找不到自訂視窗命令。" } } } },
+    "action.left-half.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Left Half" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左半屏" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左半螢幕" } } } },
+    "action.left-half.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the left half of the current display with the focused window." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口填充到当前显示器左半区域。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗填滿目前顯示器左半區域。" } } } },
+    "action.right-half.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Right Half" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右半屏" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右半螢幕" } } } },
+    "action.right-half.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the right half of the current display with the focused window." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口填充到当前显示器右半区域。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗填滿目前顯示器右半區域。" } } } },
+    "action.top-half.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top Half" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "上半屏" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "上半螢幕" } } } },
+    "action.top-half.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the top half of the current display with the focused window." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口填充到当前显示器上半区域。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗填滿目前顯示器上半區域。" } } } },
+    "action.bottom-half.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom Half" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "下半屏" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "下半螢幕" } } } },
+    "action.bottom-half.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the bottom half of the current display with the focused window." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口填充到当前显示器下半区域。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗填滿目前顯示器下半區域。" } } } },
+    "action.top-left-quarter.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top Left Quarter" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左上四分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左上四分之一" } } } },
+    "action.top-left-quarter.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Place the focused window in the top-left quarter of the current display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口放到当前显示器左上角。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗放到目前顯示器左上角。" } } } },
+    "action.top-right-quarter.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top Right Quarter" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右上四分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右上四分之一" } } } },
+    "action.top-right-quarter.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Place the focused window in the top-right quarter of the current display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口放到当前显示器右上角。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗放到目前顯示器右上角。" } } } },
+    "action.bottom-left-quarter.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom Left Quarter" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左下四分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左下四分之一" } } } },
+    "action.bottom-left-quarter.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Place the focused window in the bottom-left quarter of the current display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口放到当前显示器左下角。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗放到目前顯示器左下角。" } } } },
+    "action.bottom-right-quarter.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom Right Quarter" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右下四分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右下四分之一" } } } },
+    "action.bottom-right-quarter.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Place the focused window in the bottom-right quarter of the current display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口放到当前显示器右下角。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗放到目前顯示器右下角。" } } } },
+    "action.maximize.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Maximize Window" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "最大化窗口" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "最大化視窗" } } } },
+    "action.maximize.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the usable area of the current display with the focused window." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将当前窗口填充到显示器可用区域。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將目前視窗填滿顯示器可用區域。" } } } },
+    "action.center.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Center Window" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "居中窗口" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "置中視窗" } } } },
+    "action.center.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Center the focused window while preserving its current size." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "保持当前大小并将窗口移到显示器中央。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "保持目前大小並將視窗移到顯示器中央。" } } } },
+    "action.move-to-next-display.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Move to Next Display" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "移到下一台显示器" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "移到下一台顯示器" } } } },
+    "action.move-to-next-display.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Move the focused window to the next display with proportional position and size." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "按相对位置和大小将窗口移到下一台显示器。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "按相對位置和大小將視窗移到下一台顯示器。" } } } },
+    "action.move-to-previous-display.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Move to Previous Display" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "移到上一台显示器" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "移到上一台顯示器" } } } },
+    "action.move-to-previous-display.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Move the focused window to the previous display with proportional position and size." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "按相对位置和大小将窗口移到上一台显示器。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "按相對位置和大小將視窗移到上一台顯示器。" } } } },
+    "action.restore-previous-frame.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Restore Previous Window Frame" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "恢复上一个窗口位置" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "回復上一個視窗位置" } } } },
+    "action.restore-previous-frame.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Restore the most recently saved position and size for this window." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "恢复此窗口最近一次保存的位置和大小。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "回復此視窗最近一次儲存的位置和大小。" } } } },
+    "action.toggle-full-screen.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Toggle Full Screen" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "切换全屏" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "切換全螢幕" } } } },
+    "action.toggle-full-screen.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Toggle native macOS full screen for the focused window." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "切换当前窗口的 macOS 全屏状态。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "切換目前視窗的 macOS 全螢幕狀態。" } } } },
+    "action.maximize-height.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Maximize Height" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "最大化高度" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "最大化高度" } } } },
+    "action.maximize-height.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Preserve the width and fill the available height." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "保持宽度并填满可用高度。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "保持寬度並填滿可用高度。" } } } },
+    "action.maximize-width.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Maximize Width" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "最大化宽度" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "最大化寬度" } } } },
+    "action.maximize-width.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Preserve the height and fill the available width." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "保持高度并填满可用宽度。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "保持高度並填滿可用寬度。" } } } },
+    "action.reasonable-size.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Reasonable Size" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "合理大小" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "合理大小" } } } },
+    "action.reasonable-size.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Resize to 60% of the screen, capped at 1025 × 900, and center." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "将窗口设为屏幕的 60%，最大 1025 × 900，并居中。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "將視窗設為螢幕的 60%，最大 1025 × 900，並置中。" } } } },
+    "action.move-to-top-edge.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Move to Top Edge" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "移到顶部" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "移到頂端" } } } },
+    "action.move-to-top-edge.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Preserve the size and move to the top edge." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "保持大小并移到屏幕顶部。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "保持大小並移到螢幕頂端。" } } } },
+    "action.move-to-bottom-edge.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Move to Bottom Edge" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "移到底部" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "移到底部" } } } },
+    "action.move-to-bottom-edge.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Preserve the size and move to the bottom edge." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "保持大小并移到屏幕底部。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "保持大小並移到螢幕底部。" } } } },
+    "action.move-to-left-edge.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Move to Left Edge" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "移到左侧" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "移到左側" } } } },
+    "action.move-to-left-edge.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Preserve the size and move to the left edge." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "保持大小并移到屏幕左侧。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "保持大小並移到螢幕左側。" } } } },
+    "action.move-to-right-edge.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Move to Right Edge" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "移到右侧" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "移到右側" } } } },
+    "action.move-to-right-edge.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Preserve the size and move to the right edge." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "保持大小并移到屏幕右侧。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "保持大小並移到螢幕右側。" } } } },
+    "action.first-third.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "First Third" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左侧三分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左側三分之一" } } } },
+    "action.first-third.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the first third of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充左侧三分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿左側三分之一。" } } } },
+    "action.first-two-thirds.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "First Two Thirds" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左侧三分之二" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左側三分之二" } } } },
+    "action.first-two-thirds.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the first two thirds of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充左侧三分之二。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿左側三分之二。" } } } },
+    "action.center-third.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Center Third" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "中间三分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "中間三分之一" } } } },
+    "action.center-third.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the center third of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充中间三分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿中間三分之一。" } } } },
+    "action.last-two-thirds.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Last Two Thirds" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右侧三分之二" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右側三分之二" } } } },
+    "action.last-two-thirds.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the last two thirds of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充右侧三分之二。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿右側三分之二。" } } } },
+    "action.last-third.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Last Third" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右侧三分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右側三分之一" } } } },
+    "action.last-third.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the last third of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充右侧三分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿右側三分之一。" } } } },
+    "action.first-fourth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "First Fourth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "第一个四分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "第一個四分之一" } } } },
+    "action.first-fourth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the first fourth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充最左侧四分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿最左側四分之一。" } } } },
+    "action.second-fourth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Second Fourth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "第二个四分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "第二個四分之一" } } } },
+    "action.second-fourth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the second fourth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充第二个四分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿第二個四分之一。" } } } },
+    "action.third-fourth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Third Fourth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "第三个四分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "第三個四分之一" } } } },
+    "action.third-fourth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the third fourth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充第三个四分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿第三個四分之一。" } } } },
+    "action.last-fourth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Last Fourth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "最后一个四分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "最後一個四分之一" } } } },
+    "action.last-fourth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the last fourth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充最右侧四分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿最右側四分之一。" } } } },
+    "action.top-left-sixth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top Left Sixth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左上六分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左上六分之一" } } } },
+    "action.top-left-sixth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the top-left sixth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充左上六分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿左上六分之一。" } } } },
+    "action.top-center-sixth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top Center Sixth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "中上六分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "中上六分之一" } } } },
+    "action.top-center-sixth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the top-center sixth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充中上六分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿中上六分之一。" } } } },
+    "action.top-right-sixth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Top Right Sixth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右上六分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右上六分之一" } } } },
+    "action.top-right-sixth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the top-right sixth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充右上六分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿右上六分之一。" } } } },
+    "action.bottom-left-sixth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom Left Sixth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "左下六分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "左下六分之一" } } } },
+    "action.bottom-left-sixth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the bottom-left sixth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充左下六分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿左下六分之一。" } } } },
+    "action.bottom-center-sixth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom Center Sixth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "中下六分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "中下六分之一" } } } },
+    "action.bottom-center-sixth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the bottom-center sixth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充中下六分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿中下六分之一。" } } } },
+    "action.bottom-right-sixth.title": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Bottom Right Sixth" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "右下六分之一" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "右下六分之一" } } } },
+    "action.bottom-right-sixth.description": { "extractionState": "manual", "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fill the bottom-right sixth of the display." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "填充右下六分之一。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "填滿右下六分之一。" } } } }
+  },
+  "version": "1.0"
+}

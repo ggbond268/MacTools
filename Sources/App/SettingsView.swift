@@ -56,6 +56,7 @@ struct SettingsView: View {
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
     @ObservedObject var sidebarPreferences: SettingsSidebarPreferencesStore
     let appearanceUserDefaults: UserDefaults
+    let commandPaletteRecentStore: CommandPaletteRecentStore
     @StateObject private var uninstallConfirmationSession = PluginUninstallConfirmationSession()
     var showDashboard: () -> Void = {}
     var showFeaturePanel: () -> Void = {}
@@ -169,6 +170,7 @@ struct SettingsView: View {
                         pluginHost: pluginHost,
                         launchAtLoginController: launchAtLoginController,
                         appearanceUserDefaults: appearanceUserDefaults,
+                        recentStore: commandPaletteRecentStore,
                         navigationCoordinator: navigationCoordinator
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -1560,6 +1562,40 @@ private struct PreferencesImportPreviewSheet: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                previewContent
+                    .padding(24)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                if isImporting {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Spacer()
+                Button(AppL10n.settings("common.cancel", defaultValue: "取消"), action: onCancel)
+                    .buttonStyle(.bordered)
+                    .disabled(isImporting)
+                Button(confirmTitle) {
+                    onImport(selectedInstallablePluginIDs, selection)
+                }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isImporting || selection.isEmpty || previewErrorMessage != nil)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+        }
+        .frame(width: 500, height: 640)
+        .onChange(of: selection) { _, selection in
+            refreshPreview(for: selection)
+        }
+    }
+
+    private var previewContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(AppL10n.preferencesBackup("preferencesBackup.preview.title", defaultValue: "导入偏好设置"))
                 .font(PluginSettingsTheme.Typography.pageTitle)
@@ -1644,29 +1680,8 @@ private struct PreferencesImportPreviewSheet: View {
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
             }
-
-            HStack {
-                Spacer()
-                Button(AppL10n.settings("common.cancel", defaultValue: "取消"), action: onCancel)
-                    .buttonStyle(.bordered)
-                    .disabled(isImporting)
-                Button(confirmTitle) {
-                    onImport(selectedInstallablePluginIDs, selection)
-                }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isImporting || selection.isEmpty || previewErrorMessage != nil)
-            }
-
-            if isImporting {
-                ProgressView()
-                    .controlSize(.small)
-            }
         }
-        .padding(24)
-        .frame(width: 500)
-        .onChange(of: selection) { _, selection in
-            refreshPreview(for: selection)
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var confirmTitle: String {
@@ -3380,6 +3395,7 @@ private struct PluginSettingsRowView: View {
     let pluginID: String
     let row: PluginSettingsRow
     let onAction: (PluginSettingsAction) -> Void
+    @State private var showsConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
@@ -3506,6 +3522,21 @@ private struct PluginSettingsRowView: View {
         case let .action(title, role):
             PluginSettingsActionButton(title: title, role: role) {
                 onAction(.invoke(controlID: row.id))
+            }
+        case let .confirmationAction(title, role, confirmation):
+            PluginSettingsActionButton(title: title, role: role) {
+                showsConfirmation = true
+            }
+            .alert(confirmation.title, isPresented: $showsConfirmation) {
+                Button(confirmation.cancelButtonTitle, role: .cancel) {}
+                Button(
+                    confirmation.confirmButtonTitle,
+                    role: role == .destructive ? .destructive : nil
+                ) {
+                    onAction(.invoke(controlID: row.id))
+                }
+            } message: {
+                Text(confirmation.message)
             }
         case let .status(text, systemImage, tone, actionTitle):
             HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {

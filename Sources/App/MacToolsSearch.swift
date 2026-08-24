@@ -74,23 +74,66 @@ struct MacToolsSearchResult: Identifiable, Hashable {
         Self.normalize(keywords.joined(separator: " "))
     }
 
-    fileprivate static func normalize(_ value: String) -> String {
+    static func normalize(_ value: String) -> String {
         value
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
+enum MacToolsSearchResultID {
+    static func action(
+        reference: ActionReference,
+        catalogIndex: Int
+    ) -> String {
+        if reference.parameters.entries.isEmpty {
+            return "action.parameterless.\(reference.key.id)"
+        }
+        return "action.parameterized.\(reference.key.id).\(catalogIndex)"
+    }
+}
+
+enum MacToolsSearchSupportingText {
+    static func actionSubtitle(
+        ownerTitle: String,
+        catalogSubtitle: String?
+    ) -> String {
+        guard let catalogSubtitle else { return ownerTitle }
+        let trimmedSubtitle = catalogSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSubtitle.isEmpty,
+            MacToolsSearchResult.normalize(trimmedSubtitle)
+                != MacToolsSearchResult.normalize(ownerTitle) else {
+            return ownerTitle
+        }
+        return "\(ownerTitle) · \(trimmedSubtitle)"
+    }
+}
+
 struct MacToolsSearchIndex {
     let items: [MacToolsSearchResult]
     private let indexedItems: [IndexedItem]
+    private let resultsByActionReference: [ActionReference: MacToolsSearchResult]
 
     init(items: [MacToolsSearchResult]) {
         self.items = items
         self.indexedItems = items.map(IndexedItem.init)
+        self.resultsByActionReference = Dictionary(
+            items.compactMap { result in
+                guard case let .executeAction(reference) = result.action else { return nil }
+                return (reference, result)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
-    func results(matching query: String) -> [MacToolsSearchResult] {
+    func result(for reference: ActionReference) -> MacToolsSearchResult? {
+        resultsByActionReference[reference]
+    }
+
+    func results(
+        matching query: String,
+        recentReferences: [ActionReference] = []
+    ) -> [MacToolsSearchResult] {
         let normalizedQuery = MacToolsSearchResult.normalize(query)
         guard !normalizedQuery.isEmpty else {
             return items
@@ -102,26 +145,76 @@ struct MacToolsSearchIndex {
             .split(whereSeparator: \.isWhitespace)
             .map(String.init)
 
+        let recencyByReference = Dictionary(
+            recentReferences.enumerated().map { index, reference in
+                (reference, recentReferences.count - index)
+            },
+            uniquingKeysWith: max
+        )
+
         return indexedItems
-            .compactMap { item -> (IndexedItem, Int)? in
+            .compactMap { item -> RankedItem? in
                 guard tokens.allSatisfy(item.haystack.contains) else {
                     return nil
                 }
 
-                return (item, score(item, query: normalizedQuery, tokens: tokens))
+                let recency: Int
+                if case let .executeAction(reference) = item.result.action {
+                    recency = recencyByReference[reference] ?? 0
+                } else {
+                    recency = 0
+                }
+                return RankedItem(
+                    item: item,
+                    tier: matchTier(item, query: normalizedQuery, tokens: tokens),
+                    score: score(item, query: normalizedQuery, tokens: tokens),
+                    recency: recency
+                )
             }
             .sorted { lhs, rhs in
-                if lhs.1 != rhs.1 {
-                    return lhs.1 > rhs.1
+                if lhs.tier != rhs.tier {
+                    return lhs.tier.rawValue > rhs.tier.rawValue
+                }
+                if lhs.score != rhs.score {
+                    return lhs.score > rhs.score
+                }
+                if lhs.recency != rhs.recency {
+                    return lhs.recency > rhs.recency
                 }
 
-                if lhs.0.result.kind != rhs.0.result.kind {
-                    return kindOrder(lhs.0.result.kind) < kindOrder(rhs.0.result.kind)
+                if lhs.item.result.kind != rhs.item.result.kind {
+                    return kindOrder(lhs.item.result.kind) < kindOrder(rhs.item.result.kind)
                 }
 
-                return lhs.0.result.title.localizedStandardCompare(rhs.0.result.title) == .orderedAscending
+                let titleOrder = lhs.item.result.title.localizedStandardCompare(rhs.item.result.title)
+                if titleOrder != .orderedSame {
+                    return titleOrder == .orderedAscending
+                }
+                return lhs.item.result.id < rhs.item.result.id
             }
-            .map(\.0.result)
+            .map(\.item.result)
+    }
+
+    private func matchTier(
+        _ item: IndexedItem,
+        query: String,
+        tokens: [String]
+    ) -> MatchTier {
+        if item.normalizedTitle == query {
+            return .exactTitle
+        }
+        if item.normalizedTitle.hasPrefix(query) {
+            return .titlePrefix
+        }
+        if item.normalizedTitle.contains(query)
+            || tokens.allSatisfy(item.normalizedTitle.contains) {
+            return .title
+        }
+        if item.normalizedKeywords.contains(query)
+            || tokens.allSatisfy(item.normalizedKeywords.contains) {
+            return .keyword
+        }
+        return .supportingText
     }
 
     private func score(
@@ -152,10 +245,6 @@ struct MacToolsSearchIndex {
             if item.normalizedKeywords.contains(token) {
                 score += 30
             }
-        }
-
-        if item.result.kind == .navigation {
-            score += 10
         }
 
         return score
@@ -204,17 +293,68 @@ struct MacToolsSearchIndex {
             ].joined(separator: " ")
         }
     }
+
+    private enum MatchTier: Int {
+        case supportingText = 1
+        case keyword = 2
+        case title = 3
+        case titlePrefix = 4
+        case exactTitle = 5
+    }
+
+    private struct RankedItem {
+        let item: IndexedItem
+        let tier: MatchTier
+        let score: Int
+        let recency: Int
+    }
+}
+
+enum MacToolsSearchSectionKind: Hashable {
+    case recent
+    case suggested
+    case results
+
+    var title: String? {
+        switch self {
+        case .recent:
+            AppL10n.search("search.group.recent", defaultValue: "最近操作")
+        case .suggested:
+            AppL10n.search("search.group.suggested", defaultValue: "建议")
+        case .results:
+            nil
+        }
+    }
+}
+
+struct MacToolsSearchSection: Identifiable, Hashable {
+    var id: MacToolsSearchSectionKind { kind }
+
+    let kind: MacToolsSearchSectionKind
+    let results: [MacToolsSearchResult]
 }
 
 enum MacToolsSearchPresentation {
     static let quickSelectionLimit = 9
 
-    static func orderedResults(
-        _ results: [MacToolsSearchResult]
-    ) -> [MacToolsSearchResult] {
-        MacToolsSearchResultKind.allCases.flatMap { kind in
-            results.filter { $0.kind == kind }
+    static func sections(
+        query: String,
+        results: [MacToolsSearchResult],
+        recentResults: [MacToolsSearchResult]
+    ) -> [MacToolsSearchSection] {
+        guard MacToolsSearchResult.normalize(query).isEmpty else {
+            return results.isEmpty ? [] : [
+                MacToolsSearchSection(kind: .results, results: results)
+            ]
         }
+
+        let recent = Array(recentResults.prefix(CommandPaletteRecentStore.maximumVisibleReferenceCount))
+        let recentIDs = Set(recent.map(\.id))
+        let suggested = results.filter { !recentIDs.contains($0.id) }
+        return [
+            recent.isEmpty ? nil : MacToolsSearchSection(kind: .recent, results: recent),
+            suggested.isEmpty ? nil : MacToolsSearchSection(kind: .suggested, results: suggested)
+        ].compactMap { $0 }
     }
 
     static func quickSelectionNumber(
@@ -513,7 +653,10 @@ enum MacToolsSearchIndexBuilder {
                 ? AppL10n.search("search.subtitle.macTools", defaultValue: "MacTools")
                 : pluginTitlesByID[entry.reference.key.providerID]
                     ?? entry.reference.key.providerID
-            let subtitle = entry.subtitle.map { "\(ownerTitle) · \($0)" } ?? ownerTitle
+            let subtitle = MacToolsSearchSupportingText.actionSubtitle(
+                ownerTitle: ownerTitle,
+                catalogSubtitle: entry.subtitle
+            )
             let permissionTitles = pluginHost.actionPermissionTitles(for: entry.reference)
             let permissionSummary = permissionTitles.isEmpty
                 ? nil
@@ -530,7 +673,10 @@ enum MacToolsSearchIndexBuilder {
             )?.bindingText
 
             return MacToolsSearchResult(
-                id: "action.\(entry.reference.key.providerID).\(entry.reference.key.actionID).\(index)",
+                id: MacToolsSearchResultID.action(
+                    reference: entry.reference,
+                    catalogIndex: index
+                ),
                 kind: .command,
                 title: entry.title,
                 subtitle: subtitle,
