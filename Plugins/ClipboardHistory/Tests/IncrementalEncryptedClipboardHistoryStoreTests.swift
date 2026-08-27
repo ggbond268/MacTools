@@ -56,14 +56,42 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         )
         var loaded = try reopened.load()
         XCTAssertNil(loaded[0].payload)
-        loaded[0].isPinned = true
+        let usageDate = Date(timeIntervalSince1970: 123_456)
+        loaded[0].lastUsedAt = usageDate
         try reopened.save(loaded)
         XCTAssertNil(loaded[0].payload)
 
         let verified = try reopened.load()
-        XCTAssertTrue(verified[0].isPinned)
+        XCTAssertEqual(verified[0].lastUsedAt, usageDate)
         XCTAssertNil(verified[0].payload)
         XCTAssertEqual(try verified[0].loadPayload().plainText, item.text)
+    }
+
+    func testRoundTripPreservesUnifiedHistoryAndSavedRolesOnOneItem() throws {
+        let fixture = try makeFixture()
+        var item = sampleItem(index: 1)
+        item.setHistoryMembership(false)
+        item.setSavedMetadata(ClipboardHistorySavedMetadata(
+            title: "Reusable value",
+            tags: ["project", "email"],
+            isFavorite: true,
+            savedAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        ))
+
+        try fixture.store.save([item])
+
+        let reopened = IncrementalEncryptedClipboardHistoryStore(
+            databaseURL: fixture.databaseURL,
+            keyStore: fixture.keyStore
+        )
+        let loaded = try XCTUnwrap(reopened.load().first)
+        XCTAssertEqual(loaded.id, item.id)
+        XCTAssertFalse(loaded.isInHistory)
+        XCTAssertTrue(loaded.isSaved)
+        XCTAssertEqual(loaded.savedMetadata, item.savedMetadata)
+        XCTAssertEqual(try loaded.loadPayload().plainText, item.text)
+        XCTAssertEqual(ClipboardHistorySearch.filter([loaded], query: "project"), [loaded])
     }
 
     func testURLOnlyLinkMetadataSurvivesLazyReload() throws {
@@ -359,12 +387,15 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertTrue(loaded.allSatisfy { $0.payload == nil })
         XCTAssertLessThan(loadElapsed, 5)
 
-        loaded[5_000].isPinned = true
+        let usageDate = Date(timeIntervalSince1970: 654_321)
+        loaded[5_000].lastUsedAt = usageDate
         let updateStartedAt = Date()
         try reopened.save(loaded)
         let updateElapsed = Date().timeIntervalSince(updateStartedAt)
         XCTAssertLessThan(updateElapsed, 1)
-        XCTAssertTrue(try reopened.load().contains(where: { $0.id == loaded[5_000].id && $0.isPinned }))
+        XCTAssertTrue(try reopened.load().contains(where: {
+            $0.id == loaded[5_000].id && $0.lastUsedAt == usageDate
+        }))
     }
 
     private func makeFixture(

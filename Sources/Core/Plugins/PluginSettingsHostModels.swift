@@ -14,6 +14,9 @@ struct PluginSettingsPageItem: Identifiable {
     let shortcutItems: [ShortcutSettingsItem]
     let actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration?
     let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
+    let shortcutDefinitionFirstSettingsGroupIDs: Set<String>
+    let collapsibleShortcutSettingsGroupIDs: Set<String>
+    let collapsibleActionSettingsGroupIDs: Set<String>
 
     var layout: PluginSettingsLayout {
         page?.body.layout ?? .form
@@ -39,6 +42,10 @@ struct PluginSettingsPageItem: Identifiable {
 
     var integratedShortcutGroupIDs: Set<String> {
         page?.body.integratedShortcutGroupIDs ?? []
+    }
+
+    var standaloneShortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] {
+        shortcutSettingsGroups.filter { !integratedShortcutGroupIDs.contains($0.id) }
     }
 
     var remainingShortcutItems: [ShortcutSettingsItem] {

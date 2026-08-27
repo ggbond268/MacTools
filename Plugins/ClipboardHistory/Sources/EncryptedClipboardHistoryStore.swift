@@ -17,6 +17,10 @@ protocol ClipboardHistoryKeyStoring: Sendable {
     func deleteKey() throws
 }
 
+enum ClipboardHistoryKeyInitializationLock {
+    static let shared = NSLock()
+}
+
 enum ClipboardHistoryStoreError: Error, Equatable, Sendable {
     case missingEncryptionKey
     case invalidEncryptionKey
@@ -52,7 +56,7 @@ extension ClipboardHistoryStoreError: LocalizedError {
 }
 
 struct ClipboardHistoryKeychainStore: ClipboardHistoryKeyStoring {
-    static let defaultService = PluginPrivateDataKeychainIdentity.service(pluginID: "clipboard-history")
+    static let defaultService = PluginPrivateDataKeychainIdentity.service(pluginID: "clipboard")
     static let defaultAccount = PluginPrivateDataKeychainIdentity.encryptionKeyAccount
 
     let service: String
@@ -95,13 +99,9 @@ struct ClipboardHistoryKeychainStore: ClipboardHistoryKeyStoring {
         guard status == errSecDuplicateItem else {
             throw ClipboardHistoryStoreError.keychain(status)
         }
-        let updateStatus = SecItemUpdate(
-            baseQuery as CFDictionary,
-            [kSecValueData as String: data] as CFDictionary
-        )
-        guard updateStatus == errSecSuccess else {
-            throw ClipboardHistoryStoreError.keychain(updateStatus)
-        }
+        // Key creation is intentionally create-only. A concurrent initializer may
+        // have installed the winning key after our preceding load returned nil.
+        // Replacing that key would make data encrypted by the winner unreadable.
     }
 
     func deleteKey() throws {

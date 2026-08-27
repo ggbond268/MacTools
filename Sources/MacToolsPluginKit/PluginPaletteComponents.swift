@@ -416,6 +416,7 @@ public struct PluginPaletteSurface: View {
 
 public struct PluginPaletteSelectableRowModifier: ViewModifier {
     private let isSelected: Bool
+    @State private var isHovered = false
 
     public init(isSelected: Bool) {
         self.isSelected = isSelected
@@ -430,8 +431,18 @@ public struct PluginPaletteSelectableRowModifier: ViewModifier {
                     cornerRadius: PluginPaletteMetrics.rowCornerRadius,
                     style: .continuous
                 )
-                .fill(isSelected ? Color.accentColor : Color.clear)
+                .fill(rowBackground)
             )
+            .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+            .animation(.easeOut(duration: 0.1), value: isHovered)
+    }
+
+    private var rowBackground: Color {
+        if isSelected {
+            return .accentColor
+        }
+        return isHovered ? Color.primary.opacity(0.09) : .clear
     }
 }
 
@@ -445,13 +456,26 @@ public struct PluginPaletteToolbarControlStyle: ButtonStyle {
     }
 
     public func makeBody(configuration: Configuration) -> some View {
+        PluginPaletteToolbarControlStyleBody(
+            configuration: configuration,
+            size: size,
+            isEnabled: isEnabled
+        )
+    }
+}
+
+private struct PluginPaletteToolbarControlStyleBody: View {
+    let configuration: ButtonStyleConfiguration
+    let size: CGSize
+    let isEnabled: Bool
+    @State private var isHovered = false
+
+    var body: some View {
         configuration.label
             .frame(width: size.width, height: size.height)
             .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
             .background(
-                configuration.isPressed
-                    ? PluginSettingsTheme.Palette.fieldBackground.opacity(0.7)
-                    : PluginSettingsTheme.Palette.fieldBackground,
+                background,
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
             .overlay {
@@ -460,6 +484,18 @@ public struct PluginPaletteToolbarControlStyle: ButtonStyle {
             }
             .opacity(isEnabled ? 1 : 0.5)
             .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .onHover { isHovered = $0 }
+            .animation(.easeOut(duration: 0.1), value: isHovered)
+    }
+
+    private var background: Color {
+        if configuration.isPressed {
+            return PluginSettingsTheme.Palette.fieldBackground.opacity(0.7)
+        }
+        if isHovered, isEnabled {
+            return PluginSettingsTheme.Palette.activeControlBackground
+        }
+        return PluginSettingsTheme.Palette.fieldBackground
     }
 }
 

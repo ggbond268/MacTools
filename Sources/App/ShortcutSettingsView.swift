@@ -803,6 +803,19 @@ private struct ShortcutSettingsStandardRow: View {
     }
 
     var body: some View {
+        rowContent
+            .pluginSettingsListRowPadding(interactive: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
+        if alignsWithActionRows {
+            HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                summary
+                shortcutControl.fixedSize(horizontal: true, vertical: false)
+            }
+        } else {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                 summary
@@ -816,8 +829,7 @@ private struct ShortcutSettingsStandardRow: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
-        .pluginSettingsListRowPadding(interactive: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var summary: some View {

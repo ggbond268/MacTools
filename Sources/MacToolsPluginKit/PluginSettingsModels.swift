@@ -630,6 +630,14 @@ public struct PluginSettingsContext {
     }
 }
 
+/// Lets a plugin offer the host-owned shortcut recorder from focused plugin UI without exposing
+/// shortcut persistence to the plugin. The host supplies a fresh context whenever the UI asks for
+/// one so conflict state and display text stay current.
+@MainActor
+public protocol PluginInlineShortcutSettingsContextConsuming: AnyObject {
+    var inlineShortcutSettingsContextProvider: (() -> PluginSettingsContext)? { get set }
+}
+
 public enum PluginSettingsValidationError: Error, Equatable, CustomStringConvertible {
     case emptySectionID
     case duplicateSectionID(String)

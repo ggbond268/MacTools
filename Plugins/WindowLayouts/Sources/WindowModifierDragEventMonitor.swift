@@ -69,6 +69,29 @@ nonisolated final class SystemWindowModifierDragEventMonitor: @unchecked Sendabl
             stop()
         }
 
+        let readySignal: DispatchSemaphore
+        switch prepareEventLoop(handler: handler) {
+        case let .success(signal): readySignal = signal
+        case let .failure(error): return .failure(error)
+        }
+        eventQueue.async { [self] in
+            runEventLoop()
+        }
+        readySignal.wait()
+
+        guard isRunning else {
+            stop()
+            return .failure(.eventLoopUnavailable)
+        }
+        return .success(())
+    }
+
+    // Keep Core Foundation ownership setup separate from the Dispatch transfer. Swift
+    // 6.3.3's region analysis crashes when these pointer captures and the async closure
+    // share start(handler:). Only the lock-protected monitor crosses the queue boundary.
+    private func prepareEventLoop(
+        handler: WindowModifierDragEventHandler
+    ) -> Result<DispatchSemaphore, WindowModifierDragMonitorStartError> {
         let eventMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
             | CGEventMask(1 << CGEventType.mouseMoved.rawValue)
             | CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
@@ -97,25 +120,16 @@ nonisolated final class SystemWindowModifierDragEventMonitor: @unchecked Sendabl
 
         let readySignal = DispatchSemaphore(value: 0)
         let finishedSignal = DispatchSemaphore(value: 0)
-        lock.withLock {
-            self.tap = tap
-            self.source = source
-            self.callbackPointer = callbackPointer
-            self.readySignal = readySignal
-            self.finishedSignal = finishedSignal
-            self.eventHandler = handler
-            shouldRun = true
-        }
-        eventQueue.async { [self] in
-            runEventLoop()
-        }
-        readySignal.wait()
-
-        guard isRunning else {
-            stop()
-            return .failure(.eventLoopUnavailable)
-        }
-        return .success(())
+        lock.lock()
+        defer { lock.unlock() }
+        self.tap = tap
+        self.source = source
+        self.callbackPointer = callbackPointer
+        self.readySignal = readySignal
+        self.finishedSignal = finishedSignal
+        self.eventHandler = handler
+        shouldRun = true
+        return .success(readySignal)
     }
 
     func stop() {

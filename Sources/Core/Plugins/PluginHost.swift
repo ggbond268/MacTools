@@ -1491,6 +1491,10 @@ final class PluginHost: ObservableObject {
             return
         }
 
+        guard shortcutValidationMessage(binding, for: target.descriptor) == nil else {
+            return
+        }
+
         applyShortcutCustomization(
             .custom(binding),
             for: target.descriptor,
@@ -1503,11 +1507,32 @@ final class PluginHost: ObservableObject {
             return AppL10n.plugins("plugin.shortcut.unavailable", defaultValue: "快捷键不可用。")
         }
 
+        if let message = shortcutValidationMessage(binding, for: target.descriptor) {
+            return message
+        }
+
         return applyShortcutCustomization(
             .custom(binding),
             for: target.descriptor,
             assignmentID: target.assignmentID
         )
+    }
+
+    private func shortcutValidationMessage(
+        _ binding: ShortcutBinding,
+        for descriptor: ShortcutDescriptor
+    ) -> String? {
+        guard let validator = descriptor.plugin as? any PluginShortcutBindingValidating else {
+            return nil
+        }
+        return guardedValue(
+            for: descriptor.plugin,
+            operation: "validate shortcut binding",
+            validator.shortcutValidationMessage(
+                definitionID: descriptor.definition.id,
+                binding: binding
+            )
+        ) ?? nil
     }
 
     func setAppShortcutBindingAndReturnError(
@@ -2765,6 +2790,13 @@ final class PluginHost: ObservableObject {
                     forPluginID: pluginID,
                     shortcutDefinitionID: shortcutDefinitionID
                 )
+            }
+            if let inlineShortcutConsumer = plugin as?
+                any PluginInlineShortcutSettingsContextConsuming {
+                inlineShortcutConsumer.inlineShortcutSettingsContextProvider = { [weak self] in
+                    self?.makePluginSettingsContext(pluginID: pluginID)
+                        ?? PluginSettingsContext(pluginID: pluginID)
+                }
             }
             if let focusTargetConsumer = plugin as? any PluginFocusedWindowTargetConsuming {
                 focusTargetConsumer.focusedWindowTargetProvider = { [weak self] in
@@ -4288,6 +4320,34 @@ final class PluginHost: ObservableObject {
             let pluginID = descriptor.metadata.id
             let matchingPermissionCards = permissionCards.filter { $0.pluginID == pluginID }
             let matchingShortcutItems = shortcutItems.filter { $0.pluginID == pluginID }
+            let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
+            if descriptor.hasSettings,
+               let provider = descriptor.plugin as? any PluginGroupedShortcutSettingsProviding,
+               let configurations = guardedValue(
+                   for: descriptor.plugin,
+                   operation: "read grouped shortcut settings configuration",
+                   provider.shortcutSettingsGroups
+               ) {
+                var seenIDs: Set<String> = []
+                shortcutSettingsGroups = configurations.filter { configuration in
+                    let id = configuration.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let title = configuration.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let systemImage = configuration.systemImage.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let isValid = !id.isEmpty
+                        && !title.isEmpty
+                        && !systemImage.isEmpty
+                        && (!configuration.actionIDs.isEmpty || !configuration.shortcutDefinitionIDs.isEmpty)
+                        && seenIDs.insert(id).inserted
+                    if !isValid {
+                        AppLog.pluginHost.error(
+                            "Plugin \(pluginID, privacy: .public) returned an invalid grouped shortcut settings configuration"
+                        )
+                    }
+                    return isValid
+                }
+            } else {
+                shortcutSettingsGroups = []
+            }
             let rawPage: PluginSettingsPage?
             if descriptor.hasSettings {
                 rawPage = guardedOptionalValue(
@@ -4311,7 +4371,7 @@ final class PluginHost: ObservableObject {
                             rawPage,
                             availableShortcutGroupIDs: Set(
                                 matchingShortcutItems.compactMap(\.settingsGroupID)
-                            )
+                            ).union(shortcutSettingsGroups.map(\.id))
                         )
                         page = rawPage
                     }
@@ -4345,34 +4405,6 @@ final class PluginHost: ObservableObject {
             } else {
                 actionShortcutSettingsConfiguration = nil
             }
-            let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
-            if descriptor.hasSettings,
-               let provider = descriptor.plugin as? any PluginGroupedShortcutSettingsProviding,
-               let configurations = guardedValue(
-                   for: descriptor.plugin,
-                   operation: "read grouped shortcut settings configuration",
-                   provider.shortcutSettingsGroups
-               ) {
-                var seenIDs: Set<String> = []
-                shortcutSettingsGroups = configurations.filter { configuration in
-                    let id = configuration.id.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let title = configuration.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let systemImage = configuration.systemImage.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let isValid = !id.isEmpty
-                        && !title.isEmpty
-                        && !systemImage.isEmpty
-                        && (!configuration.actionIDs.isEmpty || !configuration.shortcutDefinitionIDs.isEmpty)
-                        && seenIDs.insert(id).inserted
-                    if !isValid {
-                        AppLog.pluginHost.error(
-                            "Plugin \(pluginID, privacy: .public) returned an invalid grouped shortcut settings configuration"
-                        )
-                    }
-                    return isValid
-                }
-            } else {
-                shortcutSettingsGroups = []
-            }
             let hasSettingsSurface = !matchingPermissionCards.isEmpty
                 || !matchingShortcutItems.isEmpty
                 || actionShortcutSettingsConfiguration != nil
@@ -4382,6 +4414,9 @@ final class PluginHost: ObservableObject {
             guard hasSettingsSurface else {
                 return nil
             }
+
+            let shortcutGroupPresentation = descriptor.plugin as?
+                any PluginShortcutSettingsGroupPresentationProviding
 
             return PluginSettingsPageItem(
                 id: pluginID,
@@ -4397,7 +4432,13 @@ final class PluginHost: ObservableObject {
                 actionShortcutSettingsConfiguration: shortcutSettingsGroups.isEmpty
                     ? actionShortcutSettingsConfiguration
                     : nil,
-                shortcutSettingsGroups: shortcutSettingsGroups
+                shortcutSettingsGroups: shortcutSettingsGroups,
+                shortcutDefinitionFirstSettingsGroupIDs:
+                    shortcutGroupPresentation?.shortcutDefinitionFirstSettingsGroupIDs ?? [],
+                collapsibleShortcutSettingsGroupIDs:
+                    shortcutGroupPresentation?.collapsibleShortcutSettingsGroupIDs ?? [],
+                collapsibleActionSettingsGroupIDs:
+                    shortcutGroupPresentation?.collapsibleActionSettingsGroupIDs ?? []
             )
         }
     }

@@ -92,6 +92,12 @@
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "单独安装 mactools-cli 后，在此启用本机命令行集成。" } },
       "zh-Hant": { "stringUnit": { "state": "translated", "value": "單獨安裝 mactools-cli 後，在此啟用本機命令列整合。" } }
     } },
+    "plugins.configuration.shortcuts.advanced": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "عناصر تحكم متقدمة" } }, "de": { "stringUnit": { "state": "translated", "value": "Erweiterte Steuerung" } }, "en": { "stringUnit": { "state": "translated", "value": "Advanced Controls" } }, "es": { "stringUnit": { "state": "translated", "value": "Controles avanzados" } }, "fr": { "stringUnit": { "state": "translated", "value": "Commandes avancées" } }, "ja": { "stringUnit": { "state": "translated", "value": "詳細コントロール" } }, "ko": { "stringUnit": { "state": "translated", "value": "고급 제어" } }, "pt": { "stringUnit": { "state": "translated", "value": "Controles avançados" } }, "ru": { "stringUnit": { "state": "translated", "value": "Дополнительные элементы управления" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "高级控制" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "進階控制" } }
+    } },
+    "plugins.configuration.shortcuts.show": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "إظهار الاختصارات" } }, "de": { "stringUnit": { "state": "translated", "value": "Kurzbefehle anzeigen" } }, "en": { "stringUnit": { "state": "translated", "value": "Show Shortcuts" } }, "es": { "stringUnit": { "state": "translated", "value": "Mostrar atajos" } }, "fr": { "stringUnit": { "state": "translated", "value": "Afficher les raccourcis" } }, "ja": { "stringUnit": { "state": "translated", "value": "ショートカットを表示" } }, "ko": { "stringUnit": { "state": "translated", "value": "단축키 표시" } }, "pt": { "stringUnit": { "state": "translated", "value": "Mostrar atalhos" } }, "ru": { "stringUnit": { "state": "translated", "value": "Показать сочетания клавиш" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "显示快捷键" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "顯示快速鍵" } }
+    } },
     "appIntents.title": { "extractionState": "manual", "localizations": {
       "ar": { "stringUnit": { "state": "translated", "value": "اختصارات Apple وSiri وSpotlight" } },
       "de": { "stringUnit": { "state": "translated", "value": "Apple-Kurzbefehle, Siri und Spotlight" } },

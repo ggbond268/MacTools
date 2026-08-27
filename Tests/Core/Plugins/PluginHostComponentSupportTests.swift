@@ -261,6 +261,80 @@ final class PluginHostComponentSupportTests: XCTestCase {
         XCTAssertEqual(renderCounter.lastContext?.shortcutItems.count, 2)
     }
 
+    func testEmbeddedMixedShortcutGroupIsNotRenderedAgainByHost() {
+        let queueGroup = PluginShortcutSettingsGroupConfiguration(
+            id: "queue",
+            title: "Queue",
+            actionIDs: ["previous"],
+            shortcutDefinitionIDs: ["paste-next"],
+            placementAfterSectionID: "queue-settings"
+        )
+        let generalGroup = PluginShortcutSettingsGroupConfiguration(
+            id: "general",
+            title: "General",
+            actionIDs: [],
+            shortcutDefinitionIDs: ["open"]
+        )
+        func item(isVisible: Bool) -> PluginSettingsPageItem {
+            PluginSettingsPageItem(
+                id: "component", pluginID: "component", title: "Component",
+                description: "", iconName: "clipboard", iconTint: .blue,
+                installedAt: nil,
+                page: .form(sections: [
+                    PluginSettingsSection(
+                        id: "queue-settings", isVisible: isVisible,
+                        embeddedShortcutGroupIDs: ["queue"]
+                    ) { _ in EmptyView() },
+                ]),
+                permissionCards: [], shortcutItems: [],
+                actionShortcutSettingsConfiguration: nil,
+                shortcutSettingsGroups: [queueGroup, generalGroup],
+                shortcutDefinitionFirstSettingsGroupIDs: [],
+                collapsibleShortcutSettingsGroupIDs: [],
+                collapsibleActionSettingsGroupIDs: []
+            )
+        }
+        XCTAssertEqual(item(isVisible: true).standaloneShortcutSettingsGroups.map(\.id), ["general"])
+        XCTAssertEqual(item(isVisible: false).standaloneShortcutSettingsGroups.map(\.id), ["queue", "general"])
+        XCTAssertEqual(item(isVisible: true).shortcutSettingsGroups.map(\.id), ["queue", "general"])
+    }
+
+    func testEmbeddedActionOnlyShortcutGroupRetainsThePluginSettingsPage() throws {
+        let group = PluginShortcutSettingsGroupConfiguration(
+            id: "advanced", title: "Advanced", actionIDs: ["pause"]
+        )
+        let plugin = MockComponentPanelPlugin(
+            id: "component",
+            settingsPage: .form(sections: [
+                PluginSettingsSection(id: "shortcuts", embeddedShortcutGroupIDs: ["advanced"]) { _ in
+                    Text("Advanced controls")
+                },
+            ]),
+            shortcutSettingsGroups: [group]
+        )
+        let host = makeHost(plugins: [plugin])
+        let item = try XCTUnwrap(host.pluginSettingsItems.first)
+        XCTAssertNotNil(item.page)
+        XCTAssertEqual(item.sections.map(\.id), ["shortcuts"])
+        XCTAssertEqual(item.integratedShortcutGroupIDs, ["advanced"])
+        XCTAssertTrue(item.standaloneShortcutSettingsGroups.isEmpty)
+        XCTAssertTrue(item.shortcutItems.isEmpty, "Action-only groups do not require plugin shortcut definitions")
+    }
+
+    func testEmbeddingAnUndeclaredShortcutGroupStillRejectsThePage() throws {
+        let plugin = MockComponentPanelPlugin(
+            id: "component",
+            settingsPage: .form(sections: [
+                PluginSettingsSection(id: "shortcuts", embeddedShortcutGroupIDs: ["missing"]) { _ in
+                    Text("Invalid")
+                },
+            ]),
+            shortcutDefinitions: [shortcutDefinition(id: "open", groupID: "general")]
+        )
+        let host = makeHost(plugins: [plugin])
+        XCTAssertNil(try XCTUnwrap(host.pluginSettingsItems.first).page)
+    }
+
     func testDynamicSettingsLayoutMismatchKeepsHostShortcutSurfaceButHidesPluginPage() throws {
         let plugin = MockComponentPanelPlugin(
             id: "dynamic",
@@ -848,7 +922,8 @@ private final class StubDynamicPluginLoader: DynamicPluginLoading {
 
 @MainActor
 private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPanel,
-    PluginPanelSurfaceLifecycleHandling, PluginRuntimeLocalizationRefreshing, PluginShortcutBindingChangeHandling {
+    PluginPanelSurfaceLifecycleHandling, PluginRuntimeLocalizationRefreshing, PluginShortcutBindingChangeHandling,
+    PluginGroupedShortcutSettingsProviding {
     struct ShortcutBindingChange: Equatable {
         let id: String
         let binding: ShortcutBinding?
@@ -863,6 +938,7 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
     let permissionRequirements: [PluginPermissionRequirement]
     let shortcutDefinitions: [PluginShortcutDefinition]
     let settingsPage: PluginSettingsPage?
+    let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
@@ -881,7 +957,8 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
         isActive: Bool = false,
         permissionRequirements: [PluginPermissionRequirement] = [],
         settingsPage: PluginSettingsPage? = nil,
-        shortcutDefinitions: [PluginShortcutDefinition] = []
+        shortcutDefinitions: [PluginShortcutDefinition] = [],
+        shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] = []
     ) {
         self.metadata = PluginMetadata(
             id: id,
@@ -896,6 +973,7 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
         self.permissionRequirements = permissionRequirements
         self.shortcutDefinitions = shortcutDefinitions
         self.settingsPage = settingsPage
+        self.shortcutSettingsGroups = shortcutSettingsGroups
     }
 
     var componentPanelState: PluginComponentState {

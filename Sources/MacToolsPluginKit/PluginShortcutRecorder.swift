@@ -215,6 +215,41 @@ public struct PluginShortcutRecorder: View {
     }
 }
 
+/// Presents the standard shortcut recording popover from a caller-owned interactive control.
+/// This keeps normal clicks available for the control's primary action while allowing an
+/// Option-click or context-menu command to set `isPresented` and edit the displayed shortcut.
+public struct PluginShortcutRecordingAnchor: View {
+    @Binding private var isPresented: Bool
+    private let onRecord: (ShortcutBinding) -> PluginShortcutRecordingResult
+    private let onBeginRecording: (() -> Void)?
+    private let onEndRecording: (() -> Void)?
+
+    public init(
+        isPresented: Binding<Bool>,
+        onRecord: @escaping (ShortcutBinding) -> PluginShortcutRecordingResult,
+        onBeginRecording: (() -> Void)? = nil,
+        onEndRecording: (() -> Void)? = nil
+    ) {
+        _isPresented = isPresented
+        self.onRecord = onRecord
+        self.onBeginRecording = onBeginRecording
+        self.onEndRecording = onEndRecording
+    }
+
+    public var body: some View {
+        GeometryReader { proxy in
+            PluginShortcutRecorderPopoverAnchor(
+                isPresented: $isPresented,
+                onRecord: onRecord,
+                onBeginRecording: onBeginRecording,
+                onEndRecording: onEndRecording
+            )
+            .frame(width: max(proxy.size.width, 1), height: max(proxy.size.height, 1))
+            .allowsHitTesting(false)
+        }
+    }
+}
+
 /// Keeps the recorder and its trailing clear affordance in stable columns.
 /// Reset remains available from the recorder's context menu when a caller supports it.
 public struct PluginSettingsShortcutRecorderControl: View {

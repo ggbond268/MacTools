@@ -615,6 +615,21 @@ public protocol PluginGroupedShortcutSettingsProviding: AnyObject {
     var shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] { get }
 }
 
+/// Optional presentation hints for host-rendered shortcut groups. These hints do not change the
+/// shortcut model or persistence and therefore remain safe for older plugin packages.
+@MainActor
+public protocol PluginShortcutSettingsGroupPresentationProviding: AnyObject {
+    var shortcutDefinitionFirstSettingsGroupIDs: Set<String> { get }
+    var collapsibleShortcutSettingsGroupIDs: Set<String> { get }
+    var collapsibleActionSettingsGroupIDs: Set<String> { get }
+}
+
+public extension PluginShortcutSettingsGroupPresentationProviding {
+    var shortcutDefinitionFirstSettingsGroupIDs: Set<String> { [] }
+    var collapsibleShortcutSettingsGroupIDs: Set<String> { [] }
+    var collapsibleActionSettingsGroupIDs: Set<String> { [] }
+}
+
 /// Declares action IDs that this plugin intentionally removed. The host discards only matching
 /// shortcut assignments while retaining assignments for actions that are merely unavailable.
 @MainActor

@@ -2,7 +2,7 @@ import XCTest
 @testable import ClipboardHistoryPlugin
 
 final class ClipboardRetentionPolicyTests: XCTestCase {
-    func testExpirationDeletesOldUnpinnedItemsButRetainsPins() {
+    func testExpirationAppliesToLegacyPinnedRows() {
         let now = Date(timeIntervalSince1970: 10_000_000)
         var settings = ClipboardHistorySettings.defaults
         settings.expiration = .oneDay
@@ -17,11 +17,11 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
                 settings: settings,
                 now: now
             ).map(\.id)),
-            Set([oldPin.id, current.id])
+            Set([current.id])
         )
     }
 
-    func testMaximumCountPrioritizesPinsThenNewestHistory() {
+    func testMaximumCountUsesNewestHistoryRegardlessOfLegacyPinFlag() {
         let now = Date(timeIntervalSince1970: 10_000_000)
         var settings = ClipboardHistorySettings.defaults
         settings.maximumItemCount = 2
@@ -35,10 +35,10 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
             settings: settings,
             now: now
         )
-        XCTAssertEqual(Set(retained.map(\.id)), Set([pin.id, newer.id]))
+        XCTAssertEqual(Set(retained.map(\.id)), Set([older.id, newer.id]))
     }
 
-    func testPinnedItemsAreNeverAutomaticallyRemovedWhenLimitIsReduced() {
+    func testLegacyPinnedRowsDoNotExceedReducedHistoryLimit() {
         let now = Date(timeIntervalSince1970: 10_000_000)
         var settings = ClipboardHistorySettings.defaults
         settings.maximumItemCount = 2
@@ -50,9 +50,9 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
             )
         }
         let result = ClipboardRetentionPolicy.evaluate(items, settings: settings, now: now)
-        XCTAssertEqual(result.items.count, 3)
-        XCTAssertEqual(result.items.map(\.text), ["pin-2", "pin-1", "pin-0"])
-        XCTAssertTrue(result.isCaptureBlockedByPinnedItems)
+        XCTAssertEqual(result.items.count, 2)
+        XCTAssertEqual(result.items.map(\.text), ["pin-2", "pin-1"])
+        XCTAssertFalse(result.isCaptureBlockedByProtectedItems)
     }
 
     func testOversizedNewestItemDoesNotPreventOlderItemsFromUsingRemainingCapacity() {
@@ -86,9 +86,9 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
             now: now
         )
 
-        XCTAssertFalse(retained.contains(where: { $0.id == newestThatDoesNotFit.id }))
-        XCTAssertTrue(retained.contains(where: { $0.id == pin.id }))
-        XCTAssertEqual(retained.filter { !$0.isPinned }.count, existingRecent.count)
+        XCTAssertTrue(retained.contains(where: { $0.id == newestThatDoesNotFit.id }))
+        XCTAssertFalse(retained.contains(where: { $0.id == pin.id }))
+        XCTAssertEqual(retained.count, existingRecent.count + 1)
     }
 
     func testTotalPayloadBudgetBoundsMaximumConfiguredHistory() {
@@ -161,6 +161,59 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
         )
     }
 
+    func testHistoryRetentionDemotesSavedItemInsteadOfDeletingItsRecord() {
+        let now = Date(timeIntervalSince1970: 10_000_000)
+        var settings = ClipboardHistorySettings.defaults
+        settings.maximumItemCount = 1
+        let newest = item(text: "newest", date: now, pinned: false)
+        var olderSaved = item(
+            text: "older saved",
+            date: now.addingTimeInterval(-60),
+            pinned: false
+        )
+        olderSaved.setSavedMetadata(ClipboardHistorySavedMetadata(
+            title: "Saved",
+            savedAt: now
+        ))
+
+        let retained = ClipboardRetentionPolicy.prune(
+            [newest, olderSaved],
+            settings: settings,
+            now: now
+        )
+
+        XCTAssertEqual(Set(retained.map(\.id)), Set([newest.id, olderSaved.id]))
+        XCTAssertEqual(retained.first { $0.id == olderSaved.id }?.isInHistory, false)
+        XCTAssertEqual(retained.first { $0.id == olderSaved.id }?.isSaved, true)
+    }
+
+    func testSavedOnlyItemDoesNotConsumeHistoryCountOrPayloadBudget() {
+        let now = Date(timeIntervalSince1970: 10_000_000)
+        var settings = ClipboardHistorySettings.defaults
+        settings.maximumItemCount = 1
+        settings.maximumTotalPayloadByteCount = 1
+        let historyItem = logicalItem(text: "history", date: now, payloadByteCount: 1)
+        var savedOnly = logicalItem(
+            text: "saved only",
+            date: now.addingTimeInterval(-60),
+            payloadByteCount: 10_000
+        )
+        savedOnly.setHistoryMembership(false)
+        savedOnly.setSavedMetadata(ClipboardHistorySavedMetadata(
+            title: "Saved",
+            savedAt: now
+        ))
+
+        let retained = ClipboardRetentionPolicy.prune(
+            [historyItem, savedOnly],
+            settings: settings,
+            now: now
+        )
+
+        XCTAssertEqual(Set(retained.map(\.id)), Set([historyItem.id, savedOnly.id]))
+        XCTAssertEqual(retained.filter(\.isInHistory).map(\.id), [historyItem.id])
+    }
+
     private func logicalItem(
         text: String,
         date: Date,
@@ -207,8 +260,38 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
 
         XCTAssertEqual(result.items.count, ClipboardHistorySettings.maximumSupportedItemCount)
         XCTAssertFalse(result.items.contains(where: { $0.text == "item-0" }))
-        XCTAssertEqual(result.evictedUnpinnedItemCount, 1)
-        XCTAssertFalse(result.isCaptureBlockedByPinnedItems)
+        XCTAssertEqual(result.evictedItemCount, 1)
+        XCTAssertFalse(result.isCaptureBlockedByProtectedItems)
+    }
+
+    func testExplicitQueueProtectionSurvivesExpirationAndCountEviction() {
+        var settings = ClipboardHistorySettings.defaults
+        settings.maximumItemCount = 100
+        settings.expiration = .oneDay
+        let now = Date()
+        let queued = item(
+            text: "queued",
+            date: now.addingTimeInterval(-10 * 24 * 60 * 60),
+            pinned: false
+        )
+        let recent = (0..<100).map { offset in
+            item(
+                text: "recent-\(offset)",
+                date: now.addingTimeInterval(TimeInterval(-offset)),
+                pinned: false
+            )
+        }
+
+        let result = ClipboardRetentionPolicy.evaluate(
+            recent + [queued],
+            settings: settings,
+            now: now,
+            protectedItemIDs: [queued.id]
+        )
+
+        XCTAssertTrue(result.items.contains(where: { $0.id == queued.id }))
+        XCTAssertEqual(result.items.count, 100)
+        XCTAssertFalse(result.isCaptureBlockedByProtectedItems)
     }
 
     func testTenThousandCachedItemsCanBeFullyScannedWithinInteractiveBudget() {

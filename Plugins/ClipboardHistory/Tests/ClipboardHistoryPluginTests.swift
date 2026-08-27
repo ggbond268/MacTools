@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import MacToolsPluginKit
 import Security
@@ -6,20 +7,31 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPluginTests: XCTestCase {
-    func testPublishesOnlyTheSixCanonicalPayloadFreeActions() {
+    func testScopeShortcutReservesShiftForBackwardCycling() {
+        let plugin = makePlugin()
+
+        XCTAssertNil(plugin.shortcutValidationMessage(
+            definitionID: ClipboardHistoryPlugin.ShortcutID.panelCycleScope,
+            binding: ShortcutBinding(keyCode: 48, modifiers: [.control])
+        ))
+        XCTAssertNotNil(plugin.shortcutValidationMessage(
+            definitionID: ClipboardHistoryPlugin.ShortcutID.panelCycleScope,
+            binding: ShortcutBinding(keyCode: 48, modifiers: [.control, .shift])
+        ))
+        XCTAssertNil(plugin.shortcutValidationMessage(
+            definitionID: ClipboardHistoryPlugin.ShortcutID.panelShare,
+            binding: ShortcutBinding(keyCode: 14, modifiers: [.command, .shift])
+        ))
+    }
+
+    func testPublishesCanonicalPayloadFreeActions() {
         let plugin = makePlugin()
         let definitions = plugin.actionDefinitions
 
         XCTAssertEqual(Set(definitions.map(\.key.actionID)), ClipboardHistoryPlugin.ActionID.all)
-        XCTAssertEqual(definitions.count, 6)
+        XCTAssertEqual(definitions.count, ClipboardHistoryPlugin.ActionID.all.count)
         XCTAssertTrue(definitions.allSatisfy(\.parameters.isEmpty))
         XCTAssertTrue(definitions.allSatisfy { $0.externalInvocationPolicy == .unavailable })
-        XCTAssertEqual(
-            definitions.first {
-                $0.key.actionID == ClipboardHistoryPlugin.ActionID.clearUnpinnedHistory
-            }?.risk,
-            .confirmationRequired
-        )
         XCTAssertEqual(
             definitions.first {
                 $0.key.actionID == ClipboardHistoryPlugin.ActionID.clearAllHistory
@@ -68,25 +80,37 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         let plugin = makePlugin()
         let page = try XCTUnwrap(plugin.settingsPage)
         XCTAssertEqual(page.body.layout, .form)
-        XCTAssertTrue(page.body.integratedShortcutGroupIDs.isEmpty)
+        XCTAssertEqual(page.body.integratedShortcutGroupIDs, [
+            "sequential-paste-shortcuts", "clipboard-window-shortcuts", "collection-shortcuts",
+        ])
         guard case let .form(sections) = page.body else {
             return XCTFail("Expected form settings")
         }
         XCTAssertEqual(sections.map(\.id), [
             "clipboard-essential-settings",
+            "clipboard-queue-settings",
+            "clipboard-snippet-settings",
+            "clipboard-advanced-settings",
+            "clipboard-additional-shortcuts",
             "clipboard-retention-settings",
             "clipboard-exclusion-settings",
             "clipboard-data-settings",
         ])
         XCTAssertEqual(plugin.shortcutSettingsGroups.map(\.id), [
             "primary-shortcuts",
+            "sequential-paste-shortcuts",
+            "clipboard-window-shortcuts",
             "privacy-copy-shortcuts",
             "collection-shortcuts",
         ])
         XCTAssertNil(plugin.shortcutSettingsGroups[0].description)
-        XCTAssertNil(plugin.shortcutSettingsGroups[1].description)
+        XCTAssertNotNil(plugin.shortcutSettingsGroups[1].description)
         XCTAssertNotNil(plugin.shortcutSettingsGroups[2].description)
-        XCTAssertEqual(plugin.shortcutSettingsGroups[0].actionIDs, [ClipboardHistoryPlugin.ActionID.openHistory])
+        XCTAssertNil(plugin.shortcutSettingsGroups[3].description)
+        XCTAssertNotNil(plugin.shortcutSettingsGroups[4].description)
+        XCTAssertEqual(plugin.shortcutSettingsGroups[0].actionIDs, [
+            ClipboardHistoryPlugin.ActionID.openHistory,
+        ])
         XCTAssertEqual(
             plugin.shortcutSettingsGroups[0].shortcutDefinitionIDs,
             ["paste-clipboard-as-plain-text"]
@@ -95,19 +119,42 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             Set(plugin.shortcutSettingsGroups.flatMap(\.actionIDs)),
             ClipboardHistoryPlugin.ActionID.all
         )
-        XCTAssertEqual(plugin.shortcutSettingsGroups[2].actionIDs, [
+        XCTAssertEqual(plugin.shortcutSettingsGroups[1].actionIDs, [
+            ClipboardHistoryPlugin.ActionID.previousSequentialQueueItem,
+            ClipboardHistoryPlugin.ActionID.skipSequentialQueueItem,
+            ClipboardHistoryPlugin.ActionID.restartSequentialQueue,
+            ClipboardHistoryPlugin.ActionID.cancelSequentialQueue,
+        ])
+        XCTAssertEqual(
+            plugin.shortcutSettingsGroups[1].shortcutDefinitionIDs,
+            ["paste-sequentially"]
+        )
+        XCTAssertEqual(
+            plugin.shortcutDefinitionFirstSettingsGroupIDs,
+            ["sequential-paste-shortcuts"]
+        )
+        XCTAssertEqual(
+            plugin.collapsibleActionSettingsGroupIDs,
+            ["sequential-paste-shortcuts"]
+        )
+        XCTAssertEqual(
+            plugin.collapsibleShortcutSettingsGroupIDs,
+            ["clipboard-window-shortcuts", "collection-shortcuts"]
+        )
+        XCTAssertEqual(plugin.shortcutSettingsGroups[4].actionIDs, [
             ClipboardHistoryPlugin.ActionID.toggleCollection,
             ClipboardHistoryPlugin.ActionID.pauseCollection,
             ClipboardHistoryPlugin.ActionID.resumeCollection,
-            ClipboardHistoryPlugin.ActionID.clearUnpinnedHistory,
             ClipboardHistoryPlugin.ActionID.clearAllHistory,
         ])
         XCTAssertEqual(
             plugin.shortcutSettingsGroups.map(\.placementAfterSectionID),
             [
                 "clipboard-essential-settings",
-                "clipboard-essential-settings",
-                "clipboard-data-settings",
+                "clipboard-queue-settings",
+                "clipboard-additional-shortcuts",
+                "clipboard-snippet-settings",
+                "clipboard-additional-shortcuts",
             ]
         )
         XCTAssertNotNil(plugin.primaryPanel)
@@ -120,20 +167,40 @@ final class ClipboardHistoryPluginTests: XCTestCase {
 
         XCTAssertEqual(
             Set(shortcuts.map(\.actionID)),
-            ["private-copy", "ignore-next-copy", "paste-clipboard-as-plain-text"]
+            [
+                "private-copy",
+                "ignore-next-copy",
+                "paste-clipboard-as-plain-text",
+                "paste-sequentially",
+                "panel-cycle-scope",
+                "panel-actions",
+                "panel-export",
+                "panel-edit-snippet",
+                "panel-share",
+                "panel-save",
+                "panel-delete",
+                "panel-multi-select",
+                "panel-toggle-selection",
+                "panel-copy-combined",
+                "panel-paste-combined",
+            ]
         )
-        XCTAssertTrue(shortcuts.allSatisfy { $0.defaultBinding == nil })
-        XCTAssertEqual(
-            shortcuts.map(\.settingsControlTitle),
-            ["立即私密复制", "忽略下一次复制", "粘贴当前剪贴板为纯文本"]
-        )
-        XCTAssertEqual(
-            shortcuts.map(\.settingsControlSystemImage),
-            ["keyboard", "cursorarrow.click", "textformat"]
-        )
+        XCTAssertEqual(shortcuts.filter { $0.scope == .whilePluginActive }.count, 11)
+        let selectionShortcut = shortcuts.first { $0.id == ClipboardHistoryPlugin.ShortcutID.panelToggleSelection }
+        XCTAssertEqual(selectionShortcut?.defaultBinding, ShortcutBinding(keyCode: 36, modifiers: [.command]))
+        XCTAssertEqual(selectionShortcut?.defaultBinding,
+                       ClipboardHistoryPlugin.defaultPanelShortcutBinding(ClipboardHistoryPlugin.ShortcutID.panelToggleSelection))
+        XCTAssertTrue(shortcuts.filter { $0.scope == .whilePluginActive }.allSatisfy {
+            $0.settingsGroupID == "clipboard-window-shortcuts"
+        })
         XCTAssertEqual(
             Set(shortcuts.compactMap(\.settingsGroupTitle)),
-            ["敏感内容复制快捷键", "纯文本粘贴快捷键"]
+            [
+                "敏感内容复制快捷键",
+                "纯文本粘贴快捷键",
+                "Sequential Paste",
+                "Clipboard Window Shortcuts",
+            ]
         )
         XCTAssertFalse(plugin.actionDefinitions.contains { $0.key.actionID == "private-copy" })
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility"])
@@ -305,7 +372,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(clearedActionID, ClipboardHistoryPlugin.ActionID.openHistory)
     }
 
-    func testLegacyUnlimitedItemCountMigratesToTenThousand() {
+    func testUnlimitedItemCountRemainsExplicitlyUnlimited() {
         let suiteName = "ClipboardHistoryItemLimitMigrationTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -322,9 +389,9 @@ final class ClipboardHistoryPluginTests: XCTestCase {
 
         XCTAssertEqual(
             settings.maximumItemCount,
-            ClipboardHistorySettings.maximumSupportedItemCount
+            ClipboardHistorySettings.noItemCountLimit
         )
-        XCTAssertFalse(ClipboardHistorySettingsStore.allowedItemCounts.contains(
+        XCTAssertTrue(ClipboardHistorySettingsStore.allowedItemCounts.contains(
             ClipboardHistorySettings.noItemCountLimit
         ))
     }
@@ -350,6 +417,98 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             ClipboardHistorySettings.maximumSupportedTotalPayloadByteCount
         )
         XCTAssertEqual(ClipboardHistorySettingsStore.allowedTotalPayloadByteCounts.last, 5 * 1_024 * 1_024 * 1_024)
+    }
+
+    func testSequentialHUDSettingsDefaultAndPersist() {
+        let suiteName = "ClipboardHistorySequentialHUDSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        let storage = UserDefaultsPluginStorage(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            userDefaults: defaults
+        )
+        let settings = ClipboardHistorySettingsStore(storage: storage)
+
+        XCTAssertEqual(settings.sequentialHUDDismissal, .tenSeconds)
+        XCTAssertFalse(settings.hidesSequentialHUDPreview)
+        settings.sequentialHUDDismissal = .never
+        settings.hidesSequentialHUDPreview = true
+
+        let restored = ClipboardHistorySettingsStore(storage: storage)
+        XCTAssertEqual(restored.sequentialHUDDismissal, .never)
+        XCTAssertTrue(restored.hidesSequentialHUDPreview)
+    }
+
+    func testSequentialHUDThumbnailRejectsMalformedDataAndProducesBoundedPNG() throws {
+        XCTAssertNil(ClipboardHistoryPlugin.makeHUDThumbnailData(from: Data("invalid".utf8)))
+
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 320,
+            pixelsHigh: 180,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ))
+        let source = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let thumbnail = try XCTUnwrap(ClipboardHistoryPlugin.makeHUDThumbnailData(from: source))
+        let result = try XCTUnwrap(NSBitmapImageRep(data: thumbnail))
+
+        XCTAssertLessThanOrEqual(result.pixelsWide, 160)
+        XCTAssertLessThanOrEqual(result.pixelsHigh, 160)
+    }
+
+    func testKeywordExpansionRetriesAfterAccessibilityBecomesTrusted() {
+        var isTrusted = false
+        let plugin = makePlugin(accessibilityTrusted: { isTrusted })
+
+        plugin.setKeywordExpansionEnabledForTesting(true)
+        XCTAssertEqual(plugin.keywordExpansionStartAttemptCountForTesting, 0)
+
+        isTrusted = true
+        plugin.refreshAccessibilityPermission()
+        XCTAssertEqual(plugin.keywordExpansionStartAttemptCountForTesting, 0)
+        XCTAssertFalse(plugin.hasConfiguredKeywordExpansionForTesting)
+        XCTAssertFalse(plugin.isKeywordExpansionRunningForTesting)
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testAddingFirstSnippetKeywordRestartsEnabledExpansion() async throws {
+        let plugin = makePlugin(
+            savedPersistence: InMemoryClipboardSavedLibraryPersistence(),
+            accessibilityTrusted: { true }
+        )
+        plugin.savedLibraryController.start()
+        for _ in 0..<100 where !plugin.savedLibraryController.isLoaded {
+            await Task.yield()
+        }
+        XCTAssertTrue(plugin.savedLibraryController.isLoaded)
+
+        plugin.setKeywordExpansionEnabledForTesting(true)
+        let attemptsBeforeKeyword = plugin.keywordExpansionStartAttemptCountForTesting
+        XCTAssertFalse(plugin.hasConfiguredKeywordExpansionForTesting)
+
+        let saved = await plugin.savedLibraryController.saveSnippet(ClipboardSnippetDraft(
+            id: nil,
+            title: "Build",
+            content: "Build the app",
+            tags: [],
+            keyword: ";bb",
+            isFavorite: false
+        ))
+
+        XCTAssertNotNil(saved)
+        XCTAssertTrue(plugin.hasConfiguredKeywordExpansionForTesting)
+        XCTAssertGreaterThan(
+            plugin.keywordExpansionStartAttemptCountForTesting,
+            attemptsBeforeKeyword
+        )
+        plugin.deactivate(reason: .hostShutdown)
     }
 
     func testPrivateCopyShortcutSuppressesSynthesizedCopyBeforePayloadRead() async throws {
@@ -551,6 +710,189 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(hud.failures, ["剪贴板中没有可粘贴的文本"])
     }
 
+    func testSequentialPasteShortcutUsesRecentHistoryNewestFirst() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardPasteCommandSender()
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            pasteCommandSender: sender,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        plugin.controller.settings.sequentialHUDDismissal = .never
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        pasteboard.simulateCopy("Older")
+        plugin.controller.processPasteboardChange()
+        let capturedOlder = await waitUntil { plugin.controller.items.count == 1 }
+        XCTAssertTrue(capturedOlder)
+        pasteboard.simulateCopy("Newer")
+        plugin.controller.processPasteboardChange()
+        let capturedNewer = await waitUntil { plugin.controller.items.count == 2 }
+        XCTAssertTrue(capturedNewer)
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let pastedNewer = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(pastedNewer)
+        XCTAssertEqual(pasteboard.text, "Newer")
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let pastedOlder = await waitUntil { sender.sendCount == 2 }
+        XCTAssertTrue(pastedOlder)
+        XCTAssertEqual(pasteboard.text, "Older")
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testSequentialPasteFailureDoesNotAdvanceTheImplicitQueue() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardPasteCommandSender()
+        sender.shouldSucceed = false
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            pasteCommandSender: sender,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        pasteboard.simulateCopy("Still next")
+        plugin.controller.processPasteboardChange()
+        let captured = await waitUntil { plugin.controller.items.count == 1 }
+        XCTAssertTrue(captured)
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let failedPaste = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(failedPaste)
+        sender.shouldSucceed = true
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let successfulRetry = await waitUntil { sender.sendCount == 2 }
+        XCTAssertTrue(successfulRetry)
+
+        XCTAssertEqual(pasteboard.text, "Still next")
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testRapidSequentialPasteRequestsAreSerializedWithoutDuplicatesOrSkips() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = BlockingClipboardPasteCommandSender {
+            pasteboard.text
+        }
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            pasteCommandSender: sender,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        plugin.controller.settings.sequentialHUDDismissal = .never
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        for (index, text) in ["Oldest", "Middle", "Newest"].enumerated() {
+            pasteboard.simulateCopy(text)
+            plugin.controller.processPasteboardChange()
+            let expectedCount = index + 1
+            let captured = await waitUntil { plugin.controller.items.count == expectedCount }
+            XCTAssertTrue(captured)
+        }
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        plugin.handleShortcutAction(id: "paste-sequentially")
+
+        let firstStarted = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(firstStarted)
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(sender.sendCount, 1, "Only one paste may be in flight")
+        XCTAssertEqual(sender.pastedTexts, ["Newest"])
+
+        sender.completeNextPaste()
+        let secondStarted = await waitUntil { sender.sendCount == 2 }
+        XCTAssertTrue(secondStarted)
+        XCTAssertEqual(sender.pastedTexts, ["Newest", "Middle"])
+
+        sender.completeNextPaste()
+        let thirdStarted = await waitUntil { sender.sendCount == 3 }
+        XCTAssertTrue(thirdStarted)
+        XCTAssertEqual(sender.pastedTexts, ["Newest", "Middle", "Oldest"])
+
+        sender.completeNextPaste()
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testSuccessfulPasteFinishingDuringDeactivationDoesNotAdvanceOrPersistImplicitQueue() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = BlockingClipboardPasteCommandSender { pasteboard.text }
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            pasteCommandSender: sender,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        for (index, text) in ["Older", "Newer"].enumerated() {
+            pasteboard.simulateCopy(text)
+            plugin.controller.processPasteboardChange()
+            let captured = await waitUntil { plugin.controller.items.count == index + 1 }
+            XCTAssertTrue(captured)
+        }
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let firstStarted = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(firstStarted)
+        XCTAssertEqual(sender.pastedTexts, ["Newer"])
+        plugin.deactivate(reason: .hostShutdown)
+        sender.completeNextPaste()
+        for _ in 0..<50 { await Task.yield() }
+
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let secondStarted = await waitUntil { sender.sendCount == 2 }
+        XCTAssertTrue(secondStarted)
+        XCTAssertEqual(sender.pastedTexts, ["Newer", "Newer"])
+        sender.completeNextPaste()
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testExternalCopyResetsImplicitQueueBeforeStartingANewRecentSnapshot() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardPasteCommandSender()
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            pasteCommandSender: sender,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        for (index, text) in ["Older", "Newer"].enumerated() {
+            pasteboard.simulateCopy(text)
+            plugin.controller.processPasteboardChange()
+            let didCapture = await waitUntil { plugin.controller.items.count == index + 1 }
+            XCTAssertTrue(didCapture)
+        }
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let didPasteNewer = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(didPasteNewer)
+        XCTAssertEqual(pasteboard.text, "Newer")
+
+        pasteboard.simulateCopy("Fresh external copy")
+        plugin.controller.processPasteboardChange()
+        let didCaptureFreshCopy = await waitUntil { plugin.controller.items.count == 3 }
+        XCTAssertTrue(didCaptureFreshCopy)
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let didPasteFreshCopy = await waitUntil { sender.sendCount == 2 }
+        XCTAssertTrue(didPasteFreshCopy)
+        XCTAssertEqual(pasteboard.text, "Fresh external copy")
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
     func testPrivacyShortcutsFailClosedWhileHistoryIsLoading() async {
         let persistence = BlockingLoadClipboardHistoryPersistence()
         let sender = FakeClipboardCopyCommandSender()
@@ -628,10 +970,10 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             result = await handle.result()
         }
 
-        for _ in 0..<100 where !persistence.resetStarted {
+        for _ in 0..<100 where !persistence.saveStarted {
             await Task.yield()
         }
-        XCTAssertTrue(persistence.resetStarted)
+        XCTAssertTrue(persistence.saveStarted)
         XCTAssertNil(result)
         XCTAssertTrue(plugin.controller.isClearingHistory)
 
@@ -644,7 +986,6 @@ final class ClipboardHistoryPluginTests: XCTestCase {
 
         let didCopy = await plugin.controller.copyItem(id: originalItem.id)
         XCTAssertFalse(didCopy)
-        plugin.controller.togglePin(id: originalItem.id)
         _ = await plugin.controller.deleteItem(id: originalItem.id)
         plugin.controller.settings.maximumItemCount = 100
         XCTAssertEqual(plugin.controller.items, [originalItem])
@@ -656,7 +997,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(sender.sendCount, 0)
         XCTAssertEqual(hud.failures, ["剪贴板历史尚未准备好"])
 
-        persistence.allowResetToFinish()
+        persistence.allowSaveToFinish()
         await resultTask.value
         XCTAssertEqual(result, .succeeded())
         XCTAssertFalse(plugin.controller.isClearingHistory)
@@ -690,7 +1031,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         guard case .failed = retryResult else {
             return XCTFail("Expected clear-all to remain unavailable while storage is blocked")
         }
-        XCTAssertEqual(persistence.resetCount, 1)
+        XCTAssertEqual(persistence.saveCount, 1)
         XCTAssertEqual(plugin.controller.items, persistence.items)
         XCTAssertNotNil(plugin.controller.errorMessage)
         plugin.controller.stop()
@@ -765,13 +1106,15 @@ final class ClipboardHistoryPluginTests: XCTestCase {
     private func makePlugin(
         pasteboard: (any ClipboardPasteboardAccess)? = nil,
         persistence: (any ClipboardHistoryPersisting)? = nil,
+        savedPersistence: (any ClipboardSavedLibraryPersisting)? = nil,
         copyCommandSender: (any ClipboardCopyCommandSending)? = nil,
         pasteCommandSender: (any ClipboardPasteCommandSending)? = nil,
         privacyHUDPresenter: (any ClipboardPrivacyHUDPresenting)? = nil,
         imageTextRecognizer: (any ClipboardImageTextRecognizing)? = nil,
         accessibilityTrusted: @escaping () -> Bool = { true },
         accessibilityRequester: @escaping (Bool) -> Bool = { _ in true },
-        frontmostProcessIdentifier: @escaping () -> pid_t? = { 1234 }
+        frontmostProcessIdentifier: @escaping () -> pid_t? = { 1234 },
+        sequentialPasteStabilizationDelay: Duration = .milliseconds(120)
     ) -> ClipboardHistoryPlugin {
         let suiteName = "ClipboardHistoryPluginTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -792,13 +1135,15 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             context: context,
             pasteboard: pasteboard,
             persistence: persistence ?? EmptyClipboardHistoryPersistence(),
+            savedPersistence: savedPersistence,
             copyCommandSender: copyCommandSender,
             pasteCommandSender: pasteCommandSender,
             privacyHUDPresenter: privacyHUDPresenter ?? FakeClipboardPrivacyHUDPresenter(),
             imageTextRecognizer: imageTextRecognizer,
             accessibilityTrusted: accessibilityTrusted,
             accessibilityRequester: accessibilityRequester,
-            frontmostProcessIdentifier: frontmostProcessIdentifier
+            frontmostProcessIdentifier: frontmostProcessIdentifier,
+            sequentialPasteStabilizationDelay: sequentialPasteStabilizationDelay
         )
     }
 
@@ -864,6 +1209,54 @@ private struct EmptyClipboardHistoryPersistence: ClipboardHistoryPersisting {
     func removeAll() throws {}
 }
 
+private final class InMemoryClipboardSavedLibraryPersistence:
+    ClipboardSavedLibraryPersisting,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var items: [UUID: ClipboardSavedItem] = [:]
+    private var payloads: [UUID: ClipboardHistoryPayload] = [:]
+
+    func prepare() throws {}
+
+    func load() throws -> [ClipboardSavedItem] {
+        lock.withLock { Array(items.values) }
+    }
+
+    func save(_ item: ClipboardSavedItem, payloadChanged: Bool) throws {
+        let payload = try item.loadPayload()
+        lock.withLock {
+            items[item.id] = item
+            payloads[item.id] = payload
+        }
+    }
+
+    func loadPayload(id: UUID) throws -> ClipboardHistoryPayload {
+        try lock.withLock {
+            guard let payload = payloads[id] else {
+                throw ClipboardHistoryPayloadAccessError.unavailable
+            }
+            return payload
+        }
+    }
+
+    func updateLastUsedAt(id: UUID, date: Date) throws {}
+
+    func delete(id: UUID) throws {
+        lock.withLock {
+            items.removeValue(forKey: id)
+            payloads.removeValue(forKey: id)
+        }
+    }
+
+    func removeAll() throws {
+        lock.withLock {
+            items.removeAll()
+            payloads.removeAll()
+        }
+    }
+}
+
 private final class BlockingLoadClipboardHistoryPersistence: ClipboardHistoryPersisting, @unchecked Sendable {
     private let condition = NSCondition()
     private var started = false
@@ -908,7 +1301,7 @@ private final class BlockingClipboardHistoryPersistence: ClipboardHistoryPersist
         storedItems = items
     }
 
-    var resetStarted: Bool {
+    var saveStarted: Bool {
         condition.withLock { started }
     }
 
@@ -923,23 +1316,23 @@ private final class BlockingClipboardHistoryPersistence: ClipboardHistoryPersist
     }
 
     func save(_ items: [ClipboardHistoryItem]) throws {
-        condition.withLock { storedItems = items }
-    }
-
-    func reset() throws {
         condition.lock()
         started = true
         condition.broadcast()
         while !mayFinish {
             condition.wait()
         }
-        storedItems = []
+        storedItems = items
         condition.unlock()
+    }
+
+    func reset() throws {
+        condition.withLock { storedItems = [] }
     }
 
     func removeAll() throws {}
 
-    func allowResetToFinish() {
+    func allowSaveToFinish() {
         condition.withLock {
             mayFinish = true
             condition.broadcast()
@@ -949,6 +1342,7 @@ private final class BlockingClipboardHistoryPersistence: ClipboardHistoryPersist
 
 private final class FailingClipboardHistoryPersistence: ClipboardHistoryPersisting, @unchecked Sendable {
     let items: [ClipboardHistoryItem]
+    private(set) var saveCount = 0
     private(set) var resetCount = 0
 
     init(items: [ClipboardHistoryItem]) {
@@ -960,6 +1354,7 @@ private final class FailingClipboardHistoryPersistence: ClipboardHistoryPersisti
     func load() throws -> [ClipboardHistoryItem] { items }
 
     func save(_ items: [ClipboardHistoryItem]) throws {
+        saveCount += 1
         throw ClipboardHistoryStoreError.unavailableStorage
     }
 
@@ -1097,13 +1492,48 @@ private final class FakeClipboardCopyCommandSender: ClipboardCopyCommandSending 
 
 @MainActor
 private final class FakeClipboardPasteCommandSender: ClipboardPasteCommandSending {
+    var shouldSucceed = true
     private(set) var sendCount = 0
     private(set) var targetProcessIdentifiers: [pid_t] = []
 
     func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
         sendCount += 1
         targetProcessIdentifiers.append(processIdentifier)
-        return true
+        return shouldSucceed
+    }
+}
+
+@MainActor
+private final class BlockingClipboardPasteCommandSender: ClipboardPasteCommandSending {
+    private let currentPasteboardText: () -> String?
+    private var completions: [CheckedContinuation<Bool, Never>] = []
+    private var pendingCompletionCredits = 0
+    private(set) var sendCount = 0
+    private(set) var pastedTexts: [String] = []
+
+    init(currentPasteboardText: @escaping () -> String?) {
+        self.currentPasteboardText = currentPasteboardText
+    }
+
+    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
+        sendCount += 1
+        pastedTexts.append(currentPasteboardText() ?? "")
+        return await withCheckedContinuation { continuation in
+            if pendingCompletionCredits > 0 {
+                pendingCompletionCredits -= 1
+                continuation.resume(returning: true)
+            } else {
+                completions.append(continuation)
+            }
+        }
+    }
+
+    func completeNextPaste() {
+        guard !completions.isEmpty else {
+            pendingCompletionCredits += 1
+            return
+        }
+        completions.removeFirst().resume(returning: true)
     }
 }
 

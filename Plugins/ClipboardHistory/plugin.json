@@ -1,51 +1,51 @@
 {
-  "id": "clipboard-history",
-  "displayName": "剪贴板历史",
-  "summary": "搜索本机加密保存的剪贴板历史和固定项目。",
+  "id": "clipboard",
+  "displayName": "剪贴板",
+  "summary": "搜索历史记录并管理可重复使用的片段和已存项目。",
   "localizedMetadata": {
     "ar": {
-      "displayName": "سجل الحافظة",
-      "summary": "ابحث في سجل الحافظة والعناصر المثبتة المشفرة محليًا."
+      "displayName": "الحافظة",
+      "summary": "ابحث في السجل وأدر المقتطفات والعناصر المحفوظة القابلة لإعادة الاستخدام."
     },
     "de": {
-      "displayName": "Zwischenablageverlauf",
-      "summary": "Lokal verschlüsselten Zwischenablageverlauf und angeheftete Einträge durchsuchen."
+      "displayName": "Zwischenablage",
+      "summary": "Verlauf durchsuchen und wiederverwendbare Textbausteine und gespeicherte Elemente verwalten."
     },
     "en": {
-      "displayName": "Clipboard History",
-      "summary": "Search locally encrypted clipboard history and pinned items."
+      "displayName": "Clipboard",
+      "summary": "Search history and manage reusable snippets and saved items."
     },
     "es": {
-      "displayName": "Historial del portapapeles",
-      "summary": "Busca en el historial del portapapeles cifrado localmente y en elementos fijados."
+      "displayName": "Portapapeles",
+      "summary": "Busca en el historial y gestiona fragmentos reutilizables y elementos guardados."
     },
     "fr": {
-      "displayName": "Historique du presse-papiers",
-      "summary": "Recherchez dans l’historique du presse-papiers chiffré localement et les éléments épinglés."
+      "displayName": "Presse-papiers",
+      "summary": "Recherchez dans l’historique et gérez les extraits réutilisables et les éléments enregistrés."
     },
     "ja": {
-      "displayName": "クリップボード履歴",
-      "summary": "ローカルで暗号化されたクリップボード履歴と固定項目を検索します。"
+      "displayName": "クリップボード",
+      "summary": "履歴を検索し、再利用できるスニペットと保存項目を管理します。"
     },
     "ko": {
-      "displayName": "클립보드 기록",
-      "summary": "로컬에서 암호화된 클립보드 기록과 고정된 항목을 검색합니다."
+      "displayName": "클립보드",
+      "summary": "기록을 검색하고 재사용 가능한 스니펫과 저장된 항목을 관리합니다."
     },
     "pt": {
-      "displayName": "Histórico da área de transferência",
-      "summary": "Pesquise o histórico da área de transferência criptografado localmente e itens fixados."
+      "displayName": "Área de transferência",
+      "summary": "Pesquise o histórico e gerencie trechos reutilizáveis e itens salvos."
     },
     "ru": {
-      "displayName": "История буфера обмена",
-      "summary": "Поиск в локально зашифрованной истории буфера обмена и закреплённых элементах."
+      "displayName": "Буфер обмена",
+      "summary": "Ищите в истории и управляйте повторно используемыми фрагментами и сохранёнными элементами."
     },
     "zh-Hans": {
-      "displayName": "剪贴板历史",
-      "summary": "搜索本机加密保存的剪贴板历史和固定项目。"
+      "displayName": "剪贴板",
+      "summary": "搜索历史记录并管理可重复使用的片段和已存项目。"
     },
     "zh-Hant": {
-      "displayName": "剪貼簿記錄",
-      "summary": "搜尋在本機加密儲存的剪貼簿記錄和固定項目。"
+      "displayName": "剪貼簿",
+      "summary": "搜尋記錄並管理可重複使用的片段和已儲存項目。"
     }
   },
   "version": "1.0.0",
@@ -82,10 +82,16 @@
     "resume-collection-description": "@localizable.action.resume.description",
     "toggle-collection-title": "@localizable.action.toggle.title",
     "toggle-collection-description": "@localizable.action.toggle.description",
-    "clear-unpinned-history-title": "@localizable.action.clearUnpinned.title",
-    "clear-unpinned-history-description": "@localizable.action.clearUnpinned.description",
     "clear-all-history-title": "@localizable.action.clearAll.title",
-    "clear-all-history-description": "@localizable.action.clearAll.description"
+    "clear-all-history-description": "@localizable.action.clearAll.description",
+    "previous-sequential-queue-item-title": "@localizable.hud.queue.previous",
+    "previous-sequential-queue-item-description": "@localizable.action.queue.previous.description",
+    "skip-sequential-queue-item-title": "@localizable.hud.queue.skip",
+    "skip-sequential-queue-item-description": "@localizable.action.queue.skip.description",
+    "restart-sequential-queue-title": "@localizable.hud.queue.restart",
+    "restart-sequential-queue-description": "@localizable.action.queue.restart.description",
+    "cancel-sequential-queue-title": "@localizable.hud.queue.cancel",
+    "cancel-sequential-queue-description": "@localizable.action.queue.cancel.description"
   },
   "presentation": {
     "longDescription": "@productStrings.summary",
@@ -176,7 +182,8 @@
   "privacy": {
     "dataObserved": [
       "clipboard-content",
-      "frontmost-application"
+      "frontmost-application",
+      "local-keyword-input-when-enabled"
     ],
     "dataPersisted": [
       "encrypted-clipboard-history",
@@ -209,7 +216,7 @@
       "global-shortcut"
     ],
     "suggestedTestAction": {
-      "providerID": "clipboard-history",
+      "providerID": "clipboard",
       "actionID": "open-history"
     }
   },
@@ -224,7 +231,7 @@
   "actions": {
     "providers": [
       {
-        "id": "clipboard-history",
+        "id": "clipboard",
         "kind": "static",
         "staticActions": [
           {
@@ -236,6 +243,98 @@
               "history"
             ],
             "systemImage": "clipboard",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "previous-sequential-queue-item",
+            "title": "@productStrings.previous-sequential-queue-item-title",
+            "description": "@productStrings.previous-sequential-queue-item-description",
+            "keywords": [
+              "clipboard",
+              "queue"
+            ],
+            "systemImage": "chevron.left",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "skip-sequential-queue-item",
+            "title": "@productStrings.skip-sequential-queue-item-title",
+            "description": "@productStrings.skip-sequential-queue-item-description",
+            "keywords": [
+              "clipboard",
+              "queue"
+            ],
+            "systemImage": "forward.end",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "restart-sequential-queue",
+            "title": "@productStrings.restart-sequential-queue-title",
+            "description": "@productStrings.restart-sequential-queue-description",
+            "keywords": [
+              "clipboard",
+              "queue"
+            ],
+            "systemImage": "backward.end",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "cancel-sequential-queue",
+            "title": "@productStrings.cancel-sequential-queue-title",
+            "description": "@productStrings.cancel-sequential-queue-description",
+            "keywords": [
+              "clipboard",
+              "queue"
+            ],
+            "systemImage": "xmark.circle",
             "parameters": [],
             "permissionIDs": [],
             "risk": "safe",
@@ -323,29 +422,6 @@
               "app-intent"
             ],
             "automaticEligible": true,
-            "externalInvocation": "unavailable"
-          },
-          {
-            "id": "clear-unpinned-history",
-            "title": "@productStrings.clear-unpinned-history-title",
-            "description": "@productStrings.clear-unpinned-history-description",
-            "keywords": [
-              "clipboard",
-              "history"
-            ],
-            "systemImage": "trash",
-            "parameters": [],
-            "permissionIDs": [],
-            "risk": "confirmationRequired",
-            "surfaces": [
-              "unified-search",
-              "global-shortcut",
-              "workflow",
-              "action-grid",
-              "trackpad-gesture",
-              "manual"
-            ],
-            "automaticEligible": false,
             "externalInvocation": "unavailable"
           },
           {

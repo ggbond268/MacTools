@@ -40,6 +40,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginActionShortcutSettingsProviding": "1.2.0",
     "PluginShortcutSettingsGroupConfiguration": "1.3.0",
     "PluginGroupedShortcutSettingsProviding": "1.3.0",
+    "PluginShortcutSettingsGroupPresentationProviding": "1.3.0",
     "PluginRetiredActionShortcutProviding": "1.2.0",
     "PluginActionShortcutPresetPreviewItem": "1.2.0",
     "PluginActionShortcutPresetPreview": "1.2.0",
@@ -90,7 +91,9 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginPaletteFooter": "1.3.0",
     "PluginPrivateDataKeychainIdentity": "1.3.0",
     "PluginSettingsActionShortcutItem": "1.3.0",
+    "PluginInlineShortcutSettingsContextConsuming": "1.3.0",
     "PluginSettingsShortcutRecorderControl": "1.3.0",
+    "PluginShortcutRecordingAnchor": "1.3.0",
     "PluginWindowLayoutTargetProviding": "1.3.0",
     # Finder-extension permission presentation introduced after host 1.2.0.
     ".finderExtension": "1.2.1",
@@ -280,6 +283,21 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             [
                 "synthetic-legacy-plugin uses ActionRisk but declares "
                 "minHostVersion 1.1.6 (< 1.2.0)"
+            ],
+        )
+        self.assertEqual(
+            minimum_host_violations(
+                "synthetic-legacy-plugin",
+                "1.2.0",
+                "final class Plugin: PluginInlineShortcutSettingsContextConsuming {}\n"
+                "let anchor = PluginShortcutRecordingAnchor()",
+            ),
+            [
+                "synthetic-legacy-plugin uses "
+                "PluginInlineShortcutSettingsContextConsuming but declares "
+                "minHostVersion 1.2.0 (< 1.3.0)",
+                "synthetic-legacy-plugin uses PluginShortcutRecordingAnchor but declares "
+                "minHostVersion 1.2.0 (< 1.3.0)",
             ],
         )
 

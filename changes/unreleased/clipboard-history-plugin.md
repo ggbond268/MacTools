@@ -4,4 +4,4 @@ type: added
 area: Productivity
 ---
 
-Added privacy-first Clipboard History with rich formats, OCR, Finder export and drag, keyboard paste and removal, sensitive-copy controls, encrypted storage, guided setup, and focused-window layouts.
+Added encrypted Clipboard History, Saved clips, and reusable snippets with OCR, export, sharing, combined selection, paste queues, privacy controls, and contextual keyboard-accessible filters.

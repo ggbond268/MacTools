@@ -154,6 +154,38 @@ enum ClipboardRichDocumentExporter {
         return data
     }
 
+    static func plainTextHTML(for payload: ClipboardHistoryPayload) throws -> String {
+        let data = try plainText(for: payload)
+        guard let text = String(data: data, encoding: .utf8), !text.isEmpty else {
+            throw ClipboardExportError.conversionFailed
+        }
+        let escaped = text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+        return """
+        <!doctype html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <meta http-equiv="Content-Security-Policy" content="\(contentSecurityPolicy)">
+        <style>
+        @page { margin: 54pt; }
+        body {
+          color: #111;
+          font: 12pt -apple-system, BlinkMacSystemFont, sans-serif;
+          line-height: 1.45;
+          margin: 0;
+          overflow-wrap: anywhere;
+          white-space: pre-wrap;
+        }
+        </style>
+        </head>
+        <body>\(escaped)</body>
+        </html>
+        """
+    }
+
     static func attachmentCount(in payload: ClipboardHistoryPayload) -> Int {
         guard let attributed = try? attributedString(for: payload), attributed.length > 0 else { return 0 }
         var count = 0

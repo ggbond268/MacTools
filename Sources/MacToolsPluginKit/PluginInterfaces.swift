@@ -48,6 +48,16 @@ public protocol PluginShortcutEventHandling: AnyObject {
     func handleShortcutEvent(id: String, phase: PluginShortcutEventPhase)
 }
 
+/// Lets a plugin reject a shortcut binding whose modifiers have a feature-specific meaning.
+/// The host still performs its ordinary conflict and modifier validation after this check.
+@MainActor
+public protocol PluginShortcutBindingValidating: AnyObject {
+    func shortcutValidationMessage(
+        definitionID: String,
+        binding: ShortcutBinding
+    ) -> String?
+}
+
 public extension MacToolsPlugin {
     var primaryPanel: (any PluginPrimaryPanel)? {
         nil

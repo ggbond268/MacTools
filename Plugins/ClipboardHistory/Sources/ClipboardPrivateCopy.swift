@@ -52,7 +52,10 @@ struct SystemClipboardCopyCommandSender: ClipboardCopyCommandSending {
         keyUp.flags = .maskCommand
         keyDown.postToPid(processIdentifier)
         keyUp.postToPid(processIdentifier)
-        return true
+        // Do not let a rapid sequential-paste request replace the pasteboard payload before the
+        // destination application has handled the synthetic Command-V event.
+        try? await Task.sleep(for: .milliseconds(120))
+        return !Task.isCancelled
     }
 
     private func waitForModifierKeysToClear() async {

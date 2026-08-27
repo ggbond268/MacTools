@@ -33,12 +33,16 @@ enum ClipboardHistoryExportService {
             )], for: plan)
         }
 
-        if plan.format == .pdf, item.kind == .richText {
-            let htmlData = try await ClipboardHistoryExportAsyncWork.run {
-                try ClipboardRichDocumentExporter.html(for: payload)
-            }
-            guard let html = String(data: htmlData, encoding: .utf8) else {
-                throw ClipboardExportError.conversionFailed
+        if plan.format == .pdf, item.kind == .richText || item.kind == .plainText {
+            let html = try await ClipboardHistoryExportAsyncWork.run {
+                if item.kind == .plainText {
+                    return try ClipboardRichDocumentExporter.plainTextHTML(for: payload)
+                }
+                let htmlData = try ClipboardRichDocumentExporter.html(for: payload)
+                guard let html = String(data: htmlData, encoding: .utf8) else {
+                    throw ClipboardExportError.conversionFailed
+                }
+                return html
             }
             let pdf = try await ClipboardPDFExporter().render(html: html)
             guard isValidPDF(pdf) else { throw ClipboardExportError.conversionFailed }
@@ -212,6 +216,15 @@ enum ClipboardHistoryExportService {
                 data: try ClipboardRichDocumentExporter.html(for: payload)
             )]
         case .markdown:
+            if item.kind == .plainText {
+                return [artifact(
+                    baseName: baseName,
+                    extension: "md",
+                    typeIdentifier: UTType(filenameExtension: "md")?.identifier
+                        ?? "net.daringfireball.markdown",
+                    data: try ClipboardRichDocumentExporter.plainText(for: payload)
+                )]
+            }
             let result = try ClipboardRichDocumentExporter.markdown(
                 for: payload,
                 documentBaseName: baseName,

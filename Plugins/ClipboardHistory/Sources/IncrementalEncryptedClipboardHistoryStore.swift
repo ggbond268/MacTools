@@ -22,10 +22,11 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         let textCharacterCount: Int?
         let textLineCount: Int?
         let isSearchTextTruncated: Bool?
-        let isPinned: Bool
         let lastUsedAt: Date?
         let imageSearchText: String?
         let hasCompletedImageTextIndexing: Bool?
+        let isInHistory: Bool?
+        let savedMetadata: ClipboardHistorySavedMetadata?
 
         init(item: ClipboardHistoryItem) {
             id = item.id
@@ -44,10 +45,11 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             textCharacterCount = item.textCharacterCount
             textLineCount = item.textLineCount
             isSearchTextTruncated = item.isSearchTextTruncated
-            isPinned = item.isPinned
             lastUsedAt = item.lastUsedAt
             imageSearchText = item.imageSearchText
             hasCompletedImageTextIndexing = item.hasCompletedImageTextIndexing
+            isInHistory = item.isInHistory
+            savedMetadata = item.savedMetadata
         }
     }
 
@@ -313,10 +315,12 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             textCharacterCount: metadata.textCharacterCount ?? metadata.text.count,
             textLineCount: metadata.textLineCount ?? Self.lineCount(metadata.text),
             isSearchTextTruncated: metadata.isSearchTextTruncated ?? false,
-            isPinned: metadata.isPinned,
+            isPinned: false,
             lastUsedAt: metadata.lastUsedAt,
             imageSearchText: metadata.imageSearchText,
             hasCompletedImageTextIndexing: metadata.hasCompletedImageTextIndexing ?? false,
+            isInHistory: metadata.isInHistory ?? true,
+            savedMetadata: metadata.savedMetadata,
             payloadLoader: { [weak self] in
                 guard let self else {
                     throw ClipboardHistoryPayloadAccessError.unavailable
@@ -378,16 +382,21 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             throw ClipboardHistoryStoreError.unavailableStorage
         }
 
-        let hasDatabase = fileManager.fileExists(atPath: databaseURL.path)
-        let hasLegacy = legacyFileURL.map { fileManager.fileExists(atPath: $0.path) } ?? false
-        if let keyData = try keyStore.loadKey() {
-            guard keyData.count == EncryptedClipboardHistoryStore.keyByteCount else {
-                throw ClipboardHistoryStoreError.invalidEncryptionKey
+        try ClipboardHistoryKeyInitializationLock.shared.withLock {
+            let hasDatabase = fileManager.fileExists(atPath: databaseURL.path)
+            let hasLegacy = legacyFileURL.map { fileManager.fileExists(atPath: $0.path) } ?? false
+            if let keyData = try keyStore.loadKey() {
+                guard keyData.count == EncryptedClipboardHistoryStore.keyByteCount else {
+                    throw ClipboardHistoryStoreError.invalidEncryptionKey
+                }
+            } else if hasDatabase || hasLegacy {
+                throw ClipboardHistoryStoreError.missingEncryptionKey
+            } else {
+                try keyStore.saveKey(Self.makeRandomKey())
+                guard try keyStore.loadKey()?.count == EncryptedClipboardHistoryStore.keyByteCount else {
+                    throw ClipboardHistoryStoreError.missingEncryptionKey
+                }
             }
-        } else if hasDatabase || hasLegacy {
-            throw ClipboardHistoryStoreError.missingEncryptionKey
-        } else {
-            try keyStore.saveKey(Self.makeRandomKey())
         }
 
         let database = try openDatabaseLocked()

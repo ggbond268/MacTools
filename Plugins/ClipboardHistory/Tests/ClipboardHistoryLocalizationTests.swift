@@ -72,6 +72,45 @@ final class ClipboardHistoryLocalizationTests: XCTestCase {
         }
     }
 
+    func testEnglishCatalogDescribesHistoryAndSavedLibraryWithoutPinnedTerminology() throws {
+        let pluginDirectory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let catalog = try jsonObject(
+            at: pluginDirectory.appendingPathComponent("Resources/Localizable.xcstrings")
+        )
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        let expectedValues = [
+            "settings.snippets.clear": "Delete Snippets",
+            "clear.all.message": "Clears History. Saved clips and snippets are kept. This cannot be undone.",
+            "settings.saved.clear.message": "Removes Saved status from clips in History and permanently deletes Saved-only clips. History and snippets are kept. This cannot be undone.",
+            "settings.snippets.clear.message": "Permanently deletes all snippets and their keywords. History and Saved clips are kept. This cannot be undone.",
+            "metadata.title": "Clipboard",
+            "metadata.description": "Search encrypted History and manage reusable snippets and Saved items",
+            "panel.status.count": "%d history items · %d saved",
+            "settings.retention.maximum.description": "When the item limit is reached, the oldest History items are removed automatically. Saved items are unaffected.",
+            "settings.retention.expiration.description": "Never disables age-based expiration; capacity limits may still remove the oldest History items. Saved items are unaffected.",
+            "settings.retention.storageLimit.description": "When the storage limit is reached, the oldest History items are removed. Saved items are unaffected; actual storage remains subject to available disk space.",
+        ]
+
+        for (key, expectedValue) in expectedValues {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], key)
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], key)
+            let value = try localizedValue(key: key, locale: "en", localizations: localizations)
+            XCTAssertEqual(value, expectedValue, key)
+            XCTAssertFalse(value.lowercased().contains("pin"), key)
+        }
+
+        for key in [
+            "saved.editDetails",
+            "saved.error.invalidDateFormat",
+            "saved.error.multipleCursorMarkers",
+            "saved.error.unknownMacro",
+        ] {
+            XCTAssertNotNil(strings[key], key)
+        }
+    }
+
     private func referencedLocalizationKeys(in pluginDirectory: URL) throws -> Set<String> {
         let sourcesDirectory = pluginDirectory.appendingPathComponent("Sources", isDirectory: true)
         let sourceURLs = try FileManager.default.contentsOfDirectory(

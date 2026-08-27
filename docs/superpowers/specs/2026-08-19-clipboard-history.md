@@ -1,156 +1,101 @@
-# Clipboard History Plugin Design
+# Clipboard Plugin Design
 
 Date: 2026-08-19
+Updated: 2026-08-25
 
 ## Summary
 
-Issue [#306](https://github.com/ggbond268/MacTools/issues/306) adds an official `clipboard-history` plugin for searchable local history and pinned items. Because the plugin has not shipped, the first release adopts a representation-based model immediately: it preserves standard pasteboard representations for text, rich text, images, PDFs, media, links, colors, and grouped file references, encrypts payloads and file paths at rest, exposes a dedicated keyboard-first panel, and never uploads clipboard content.
+Issue [#306](https://github.com/ggbond268/MacTools/issues/306) adds the official `clipboard` plugin. It combines encrypted local History, a durable Saved Library, and sequential paste without uploading clipboard content. Because the plugin has not shipped, this first release adopts the final identity and database layout directly rather than carrying a migration from the unreleased `clipboard-history` prototype.
 
-## Competitive research
+## Competitive Research
 
-### Alfred
+- **Alfred** separates automatic clipboard history from permanent snippets, including keyword expansion and dynamic placeholders.
+- **Raycast** combines type-filtered history, OCR, item actions, snippets, and sequential paste in a keyboard-first surface.
+- **Paste** emphasizes rich previews, multi-selection, labels, pinboards, and a visual sequential Paste Stack.
+- **Maccy** validates a small native local-history surface with transient/concealed-type safeguards.
+- **macOS 26** adds opt-in Spotlight clipboard history, while MacTools continues to support macOS 14 with consistent encryption, Saved content, exclusions, and automation boundaries.
 
-Alfred provides searchable text, image, and file history; configurable retention and maximum clip size; application exclusions; history clearing by time window; optional direct paste; clipboard merging; and conversion of a history item into a permanent snippet. Its separate snippet system adds collections, keywords, text expansion, dynamic placeholders, and import/export.
-
-Sources:
+References:
 
 - https://www.alfredapp.com/help/features/clipboard/
 - https://www.alfredapp.com/help/features/snippets/
-- https://www.alfredapp.com/help/features/clipboard/accessing-clipboard-history/
-
-### Raycast
-
-Raycast provides searchable and type-filtered history for text, images, files, links, email addresses, and colors. Advanced actions include copy, direct paste, paste as a selected representation, edit, rename, pin, save as snippet, OCR, QR decoding, AI handoff, recent-window deletion, and sequential paste. Settings cover retention, disabled applications, plain-text preference, result reordering, and the primary copy/paste action.
-
-Source:
-
 - https://manual.raycast.com/clipboard-history
-
-### Paste
-
-Paste emphasizes a visual timeline, content previews, source application and date metadata, full keyboard navigation, multi-selection, numbered quick paste, sequential Paste Stack, editing and labels, source/date/device/type filters, pinboards, iCloud sync, collaboration, and an opt-in local MCP server. Its privacy controls include application exclusions, producer-marked confidential or transient content, retention, and temporary pause.
-
-Sources:
-
 - https://pasteapp.io/help/paste-on-mac
-- https://pasteapp.io/help/what-paste-captures
-- https://pasteapp.io/help/search-and-filters
-
-### Maccy
-
-Maccy validates the value of a smaller native, keyboard-first surface. It provides local history, search, pinning, copy or optional direct paste, configurable polling, and explicit support for ignoring transient, concealed, and application-specific pasteboard types. Recent releases also add previews and on-device OCR, while keeping the app local and open source.
-
-Source:
-
 - https://github.com/p0deje/Maccy
-
-### macOS 26
-
-macOS Tahoe adds an opt-in searchable Clipboard view to Spotlight, with copy and clear-history actions. MacTools still targets macOS 14, and the plugin offers consistent retention, exclusions, encrypted storage, pause, pinning, and canonical actions that the system surface does not expose.
-
-Sources:
-
 - https://support.apple.com/en-euro/guide/mac-help/mchl40d5b86b/26/mac/26
-- https://www.apple.com/newsroom/2025/06/macos-tahoe-26-makes-the-mac-more-capable-productive-and-intelligent-than-ever/
 
-## Product decisions
+## Product Model
 
-| Capability | First release | Rationale |
-| --- | --- | --- |
-| Global shortcut through canonical actions | Yes | Fast access is universal across Alfred, Raycast, Paste, and Maccy. Pressing the shortcut again while the panel is active dismisses it; other action surfaces remain deterministic open operations. |
-| Search text, image text, file names, and source-app metadata | Yes | Rich formats use their plain-text representation when present; Apple Vision indexes image text on-device into the encrypted record. |
-| Keyboard navigation | Yes | Essential for a clipboard tool invoked while typing. |
-| Copy selected item back to the pasteboard | Yes | Meets the issue without Accessibility permission or synthesized input. |
-| Pin/unpin | Yes | Covers the durable-snippet use case with a small privacy surface. |
-| Optional count, age, and storage limits plus per-item byte bounds | Yes | Users can retain up to 10,000 items, disable age expiration, and choose a 64 MB, 256 MB, 1 GB, or 5 GB encrypted-storage budget. |
-| Pause with a visible state | Yes | Common privacy control and an explicit acceptance criterion. |
-| Application exclusions | Yes | Common competitor safeguard; described as best-effort frontmost-app attribution. |
-| Ignore transient/concealed producer markers | Yes | A low-cost, privacy-preserving safeguard demonstrated by Paste and Maccy. It is not secret detection. |
-| Private Copy shortcut | Yes | Sends Command-C to the frontmost app after arming one-shot suppression, so selected sensitive text is neither read nor stored. Accessibility permission is optional and scoped to this shortcut. |
-| Ignore next context-menu copy | Yes | A 15-second one-shot suppression covers mouse-driven copying that cannot invoke Private Copy directly. |
-| Privacy HUD | Yes | A click-through, non-activating HUD shows the Ignore Next Copy countdown and confirms consumption, Private Copy success, expiration, or failure without changing application focus. |
-| Encrypted local payload store | Yes | Release-blocking requirement in issue #306. The encryption key lives in Keychain. |
-| Images, PDFs, rich text, links, colors, audio, and video | Yes | Preserve standard macOS pasteboard representations so copying an item back does not flatten it to text. |
-| Grouped file references | Yes | Preserve multi-file clipboard items without duplicating file contents into the encrypted history. Finder-copied PDFs, images, audio, and video remain file references for paste, but also match their semantic type filter; a single supported file receives a bounded Quick Look thumbnail plus local format, size, and duration metadata when available. |
-| Arbitrary application-private formats | No | Only standard or recognized image, audio, and movie representations are retained; private formats can carry undocumented or sensitive state. |
-| OCR text recognition | Yes | Image text is indexed on-device, bounded in size, and kept in the same encrypted local record. |
-| Automatic and plain-text paste | Yes | Return and Command-1 through Command-9 paste into the previously active app through the plugin's optional Accessibility path. Shift-Return converts the selected item to plain text first, including on-device recognized image text when available. The optional global plain-text shortcut also uses completed recognition from the still-current clipboard image and reports recognition-in-progress or no-text states through the HUD. |
-| QR recognition | No | QR decoding is independent of text retrieval and remains out of scope. |
-| Edit, rename, labels, or pinboard collections | Later | Useful once pinned-snippet portability and organization are designed. |
-| Snippet keyword expansion | Later | Requires global keystroke observation and secure-input handling distinct from clipboard capture. |
-| Sequential paste or clipboard merging | Later | Valuable power workflow, but independent of trustworthy capture and storage. |
-| Cloud/iCloud sync, collaboration, or export | No | Conflicts with the local-only first-release privacy boundary. |
-| AI or MCP access | No | Clipboard history must not become externally accessible without a separate consent and threat model. |
+### History
+
+History automatically captures supported standard pasteboard representations for text, rich text, images, PDFs, files, links, colors, audio, and video. It is searchable by content, file name, source-app context, semantic link/email/color traits, and on-device OCR. Retention can limit count, age, aggregate encrypted payload bytes, and per-item bytes. Clearing History never removes Saved content.
+
+Collection can be paused and applications excluded. Producer-marked transient or concealed content is skipped. Private Copy Now and Ignore Next Copy suppress sensitive copies before the plugin reads pasteboard types, content, or source context.
+
+### Saved Library
+
+Saved is a durable role on a captured item, not a copied payload. Saving a History item preserves
+the same stable identifier, encrypted payload, source metadata, OCR, and search index while adding
+Saved metadata. A captured item may be visible in both History and Saved; All still renders it once.
+A **Snippet** is a separate authored item created explicitly when the user wants editable reusable
+text or paste-time variables. This keeps literal captured text such as `{{name}}` unchanged.
+
+Saved clips have a name, tags, and usage time. Snippets additionally have an optional expansion keyword. Saving replaces the former pin model; there is no History pin capacity or automatic Saved eviction.
+
+Snippet templates expand `{{date}}`, `{{time}}`, `{{datetime}}`, `{{clipboard}}`, `{{cursor}}`, and `{{uuid}}` at paste time. Date variables accept an optional quoted format. Templates do not run shell commands, AppleScript, or network requests. Optional keyword expansion requires Accessibility, ignores secure text fields, and revalidates the focused editor and insertion point before replacement. Unambiguous keywords expand immediately; a keyword that prefixes a longer configured keyword waits for a delimiter. Unsupported editors fail safely. Ephemeral diagnostics describe the last expansion attempt without retaining typed text or editor contents. Accessibility is also used for direct paste and private copy, independently of keyword expansion.
+
+### Sequential Paste
+
+An explicit queue is an immutable ordered snapshot of selected History items. The Paste Next shortcut can also create a bounded implicit snapshot of recent History. Rapid shortcut presses are buffered and processed in order. A movable transient HUD shows progress, the pasted and next items, image previews when applicable, previous, skip, restart, close, and separate cancel controls.
+
+## Panel and Actions
+
+Filter groups use a fixed two-row region: Scope, Type, and Content summaries above the active
+group's options. Only groups that can produce a smaller nonempty subset appear. Empty, single-item,
+and uniform collections omit that region entirely so results and previews reclaim its height.
+Available groups and option order are captured on opening, never recalculated during search, OCR,
+copying, saving, or deletion; the next opening refreshes them. Control-Tab and Control-Shift-Tab
+cycle available groups without changing their filter values. Control-1 through Control-9 selects
+the corresponding visible option in the active group, with no gaps for absent types. Option-number
+bindings are not intercepted. Footer hints and tooltips reflect the active group's visible options;
+Command-1 through Command-9 remains quick paste.
+
+The floating keyboard-first panel shares the Command Palette visual language. All, History, Saved, and Snippets are explicit scopes with one shared search field. Type and semantic filters, quick paste, mixed clip/snippet multi-selection, export, native sharing, plain-text conversion, Delete, and Save actions remain available when applicable. Per-item Delete removes the selected record everywhere; Unsave only removes its Saved status. Snippets have their own creation, editing, keyword status, tags, and template preview, without a separate Favorites hierarchy.
+
+Settings starts with a concise, non-collapsible Privacy & Storage summary, storage status, Setup Guide, and optional details. Primary shortcuts follow collection. Paste Queue is one section: Paste Next stays visible, while HUD options and previous/skip/restart/cancel shortcuts share one initially collapsed disclosure. Saved Clips and Snippets have separate cards and separate clearing boundaries. Infrequent retention, exclusions, and shortcut controls collapse behind full-width clickable headers.
+
+Clipboard payloads never become Unified Search results, action descriptions, logs, diagnostics, or preference-backup content. Focus-dependent item operations remain inside the plugin panel. Canonical parameter-free actions cover opening Clipboard, collection state, clearing History, and sequential-paste controls.
+
+## Storage and Privacy
+
+Captured items use one table and one stable identity in the SQLite database; History membership and Saved metadata are persisted on that record. Authored snippets use their own table because they have editable template content and expansion metadata rather than captured pasteboard provenance. Searchable metadata and payloads are independently AES-GCM encrypted; large payloads decrypt lazily. One device-local 256-bit key is stored in Keychain. iCloud Keychain is not required.
+
+History clearing removes History membership and deletes only captured records that are not Saved. Clear Saved Clips removes Saved metadata and deletes captured records that are no longer in History; it never deletes snippets. Delete All Snippets affects only authored snippets. A confirmed unreadable-store reset cryptographically erases the shared key and database, so its warning explicitly includes both History and Saved. Uninstall removes the entire private database and key.
+
+Grouped files remain references rather than copied file contents. Unsupported application-private pasteboard types are discarded. OCR runs on-device and its bounded searchable text is encrypted with the item.
 
 ## Defaults
 
-- Maximum stored items: 500 total by default; users may choose 100, 250, 500, 1,000, 2,500, 5,000, or 10,000.
-- Expiration: 30 days for unpinned history; users may choose 1, 7, 30, or 90 days, or no expiration.
-- Maximum embedded payload: 5 MiB per item by default; users may choose 1, 5, 20, or 50 MiB. Oversized items are skipped and reported through the HUD.
-- Maximum retained payload data: 64 MiB by default; users may choose 64 MiB, 256 MiB, 1 GiB, or 5 GiB, subject to available disk space.
-- File clipboard items store encrypted URL/path references and metadata, not copies of the referenced files.
-- Pinned items do not expire by age, but still count toward configured count and aggregate byte limits.
-- Collection starts enabled after the plugin is installed.
-- Apple Passwords, Keychain Access, 1Password, and Bitwarden are excluded by default. Users can add or remove applications.
-
-The aggregate bound remains mandatory because images and other embedded representations can be much larger than text. Retention prioritizes pinned items, then the newest unpinned items.
+- History count: 500, with explicit presets through 10,000 and an Unlimited option. The configured age and storage limits still apply.
+- History expiration: 30 days, configurable through Never.
+- Embedded payload: 5 MiB per item, configurable through 50 MiB.
+- Aggregate History payload: 64 MiB, configurable through 5 GiB and available disk space.
+- Saved Library: no automatic retention or silent count cap.
+- Snippets: 5 MiB of UTF-8 text per item; keyword-enabled snippet bodies: 16 MiB total in the expansion cache. Both limits reject saves explicitly and never truncate content.
+- Default exclusions: Apple Passwords, Keychain Access, 1Password, and Bitwarden.
 
 ## Architecture
 
-### `ClipboardChangeMonitoring`
+- `ClipboardHistoryController` owns capture, retention, lazy History payloads, OCR, and History persistence.
+- `ClipboardHistoryController` also owns Saved metadata for captured items, ensuring Save, recapture, OCR, retention, and deletion all preserve one identity.
+- `ClipboardSavedLibraryController` owns authored snippets, template validation and expansion, and snippet persistence.
+- `IncrementalEncryptedClipboardHistoryStore` persists captured History/Saved state; `IncrementalEncryptedClipboardSavedLibraryStore` persists only authored snippets in the same encrypted database.
+- `ClipboardSnippetKeywordExpander` observes key-down events only while enabled and replaces text through Accessibility without using clipboard round trips.
+- `ClipboardHistoryPanelController` owns the floating History/Saved panel and restores the previous application for paste.
+- `ClipboardSequentialPasteCoordinator` owns immutable explicit and implicit History snapshots and protects queued History rows from retention until completion or cancellation.
 
-Polls `NSPasteboard.general.changeCount` on a modest interval. It reports ownership transitions without persisting content, suppresses changes created when the plugin copies a selected item back to the pasteboard, and consumes one-shot privacy suppression before reading pasteboard types, source context, or payload representations.
+## Deferred Work
 
-### `ClipboardCapturePolicy`
-
-Applies pause, supported-type, producer privacy marker, exclusion, empty-value, exact rich-payload or normalized plain-text consecutive deduplication, and aggregate representation byte-limit checks. Filtering occurs before persistence.
-
-Normalization is used only for plain-text empty and consecutive-duplicate decisions. Original standard representations and pasteboard-item grouping are retained exactly. Standard file URLs are retained as references; unsupported and application-private representations are discarded.
-
-### `ClipboardSourceContextProviding`
-
-Snapshots `NSWorkspace.shared.frontmostApplication` at capture time. The UI describes this as the observed frontmost application, never guaranteed provenance.
-
-### `EncryptedClipboardHistoryStore`
-
-Stores each item's searchable metadata and pasteboard payload in separate AES-GCM-encrypted SQLite blobs. Metadata loads at startup, while payloads decrypt lazily for preview, OCR, copy, or paste; ordinary captures, pin changes, and deletions update only affected rows rather than rewriting the complete history. A random 256-bit key is stored as a device-only Keychain generic password. Pending snapshots still coalesce to the newest revision and flush when the plugin stops. The first launch migrates the previous encrypted `history.mth` envelope into the incremental database and removes the legacy file only after the transaction succeeds. Missing keys, failed authentication, or corrupt rows stop collection with no plaintext fallback.
-
-### `ClipboardHistoryController`
-
-Owns the in-memory snapshot, retention, persistence revisions, copy/delete/pin operations, and monitoring lifecycle. Panel and settings getters read its snapshot and do not scan the pasteboard or filesystem.
-
-### `ClipboardHistoryPanelController`
-
-Owns a floating SwiftUI-backed borderless `NSPanel` that follows the global Command Palette design language through shared PluginKit search, surface, selected-row, toolbar-control, and adaptive keycap components. A compact grip and open/closed-hand cursor expose window dragging without restoring a title bar. The shared search implementation is focused on every presentation and preserves the same IME, arrow-navigation, clearing, and accessibility behavior as the Command Palette, while type filtering and panel actions remain separate, comfortably sized controls. The selected filter uses a quiet accent tint so the solid selected-result treatment remains the primary emphasis. Compact rows use the palette's shared radius, padding, icon column, and content spacing with type-specific leading icons instead of redundant badges. The top-right holds the Command-1 through Command-9 quick-paste position, while the bottom-right aligns relative time and the bottom-left retains only source context. One subtle divider separates history from a detail preview that consumes all remaining space. Detail metadata shows the exact localized timestamp first, followed by a single-unit relative value and one compact content-information line. Text length and line count, image dimensions, PDF page count, file count and non-recursive size, media duration and dimensions, format, and link host are derived only for the selected item in cancellable background work; results are cached for the panel session. Rich text renders its stored formatting, while images scale within a bounded transparency-aware canvas so white edges, transparent regions, and extreme aspect ratios remain legible. Return pastes the selection; Shift-Return pastes a plain-text conversion; arrow keys or Control-P/Control-N navigate while search remains focused; Command-1 through Command-9 paste the corresponding visible result; Command-Delete removes it; Command-P toggles pinning; Escape closes the panel.
-
-Search preserves ordinary case-insensitive substring matching for meaningful queries, treats whitespace-separated query terms as independent word prefixes, and accepts compact word fragments across separators without degrading into an unrestricted character subsequence. For example, `fo baz`, `foba`, `fbaz`, `oobaz`, and `oo baz` match `foo bar baz`, while low-signal fragments such as `oo` alone do not. Search covers clipboard text, on-device image OCR text, source-app metadata, bundle identifiers, and file paths.
-
-### `ClipboardPrivacyHUDController`
-
-Owns a click-through, non-activating panel on the pointer's active display. Ignore Next Copy shows a live countdown until the copy is consumed or the 15-second window expires. Private Copy shows success only after the controller suppresses a pasteboard change and reports failure if no change arrives.
-
-### `ClipboardHistoryPlugin`
-
-Publishes the primary panel, form-based settings page, and the six canonical actions from issue #306. The settings page starts with a persistent, dismissible setup checklist that confirms encrypted storage is ready, points users to the Open Clipboard History action shortcut, and explains the optional sensitive-copy workflows. Shortcut settings use three groups: Open Clipboard History and the plugin-private Paste Current Clipboard as Plain Text command together as the primary group, the two sensitive-copy workflows, and optional advanced controls that combine collection state with confirmed clearing operations. Collection status states explicitly that history lives in an encrypted local database and only the encryption key lives in Keychain; storage settings expose item and byte usage plus presets through 5 GB, while blocking storage errors expose a confirmed reset path instead of leaving an unexplained disabled switch.
-
-The host-owned action shortcuts remain visible alongside a privacy-shortcut group whose controls are individually labeled Private Copy Now and Ignore Next Copy. The former sends Command-C immediately, while the latter arms a 15-second window for a later context-menu or keyboard copy. The Open Clipboard History global shortcut is source-aware: it dismisses a visible key history panel, brings an inactive visible panel forward, and otherwise opens it. A separate optional Paste Current Clipboard as Plain Text shortcut rewrites the clipboard from its existing plain-text representation or completed recognition from the image captured at the same still-current pasteboard change, then sends Command-V without opening history. Pending recognition and completed recognition without text produce distinct HUD feedback; a later clipboard change invalidates the image association so stale recognized text cannot be pasted. Native plain-text conversion remains available while collection is paused. These focus-dependent shortcuts remain plugin-specific, keeping input synthesis out of Unified Search, Automation, Action Grid, Run Links, and unattended invocation. The plugin never creates actions or Unified Search entries for clipboard payloads.
-
-Rich-text document import never runs from a SwiftUI view builder. The preview loads asynchronously, skips formatted import for rich representations above 128 KB, and bounds formatted layout to 12,000 characters; larger content uses a clearly labeled, bounded plain-text preview instead.
-
-## Privacy and failure behavior
-
-- Clipboard representations, derived searchable text, and file paths never appear in logs, action descriptions, diagnostics, settings backup, or canonical action parameters.
-- Exclusions and producer privacy markers are evaluated before a payload is passed to the store.
-- One-shot suppression is consumed before the plugin asks for pasteboard types, source application, or payload representations.
-- Expired items are removed from the encrypted file, not just hidden.
-- Clearing history rewrites or removes the encrypted store immediately.
-- Failed clears keep the visible snapshot intact, and Clear All can reset an unreadable encrypted store and its key.
-- Uninstall invalidates pending persistence, removes the encrypted file, and deletes the Keychain key.
-- Missing keys, authentication failures, corrupt envelopes, and unavailable support storage stop collection and show a user-facing error.
-- Pinned snippets remain local-only and are excluded from portable preferences backup.
-
-## Deferred design questions
-
-- Whether pinned snippets should become a separate library with names, collections, editing, and import/export.
-- Whether sequential paste should be a separate canonical action or its own focused plugin.
-- Whether macOS 26 should offer a migration or conflict notice when Spotlight Clipboard history is also enabled.
+- Snippet collection import/export and sync need a separate portability and privacy design; exporting individual snippet text is supported.
+- Shell, network, AppleScript, AI, and MCP template variables remain intentionally unsupported.
+- Saved-item participation in sequential queues can be designed later with typed queue references; the first release keeps queues History-only.

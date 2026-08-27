@@ -1,6 +1,24 @@
 import Foundation
 import MacToolsPluginKit
 
+enum ClipboardSequentialHUDDismissal: Int, CaseIterable, Identifiable, Sendable {
+    case fiveSeconds = 5
+    case tenSeconds = 10
+    case thirtySeconds = 30
+    case never = -1
+
+    var id: Int { rawValue }
+    var interval: TimeInterval? { self == .never ? nil : TimeInterval(rawValue) }
+}
+
+enum ClipboardSnippetKeywordExpansionStatus: Equatable, Sendable {
+    case off
+    case noKeywords
+    case accessibilityRequired
+    case ready
+    case unavailable
+}
+
 @MainActor
 final class ClipboardHistorySettingsStore: ObservableObject {
     private enum Key {
@@ -12,6 +30,9 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         static let excludedApplications = "excluded-applications"
         static let didCompleteInitialSetup = "did-complete-initial-setup"
         static let didPresentInitialSetup = "did-present-initial-setup"
+        static let sequentialHUDDismissal = "sequential-hud-dismissal"
+        static let hidesSequentialHUDPreview = "sequential-hud-hide-preview"
+        static let keywordExpansionEnabled = "saved-keyword-expansion-enabled"
     }
 
     static let allowedItemCounts = [
@@ -22,6 +43,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         2_500,
         5_000,
         ClipboardHistorySettings.maximumSupportedItemCount,
+        ClipboardHistorySettings.noItemCountLimit,
     ]
     static let allowedItemByteCounts = [
         1 * 1_024 * 1_024,
@@ -88,6 +110,30 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     @Published private(set) var hasCompletedInitialSetup: Bool
     private(set) var hasPresentedInitialSetup: Bool
 
+    @Published var sequentialHUDDismissal: ClipboardSequentialHUDDismissal {
+        didSet {
+            storage.set(sequentialHUDDismissal.rawValue, forKey: Key.sequentialHUDDismissal)
+            onChange?()
+        }
+    }
+
+    @Published var hidesSequentialHUDPreview: Bool {
+        didSet {
+            storage.set(hidesSequentialHUDPreview, forKey: Key.hidesSequentialHUDPreview)
+            onChange?()
+        }
+    }
+
+    @Published var isKeywordExpansionEnabled: Bool {
+        didSet {
+            storage.set(isKeywordExpansionEnabled, forKey: Key.keywordExpansionEnabled)
+            onChange?()
+        }
+    }
+
+    @Published private(set) var keywordExpansionStatus: ClipboardSnippetKeywordExpansionStatus
+    @Published var keywordExpansionDiagnostic: ClipboardSnippetExpansionDiagnostic?
+
     var onChange: (() -> Void)?
 
     private let storage: PluginStorage
@@ -132,6 +178,13 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         }
         hasCompletedInitialSetup = completedInitialSetup
         hasPresentedInitialSetup = storage.bool(forKey: Key.didPresentInitialSetup)
+        sequentialHUDDismissal = ClipboardSequentialHUDDismissal(
+            rawValue: storage.integer(forKey: Key.sequentialHUDDismissal)
+        ) ?? .tenSeconds
+        hidesSequentialHUDPreview = storage.bool(forKey: Key.hidesSequentialHUDPreview)
+        let keywordExpansionEnabled = storage.bool(forKey: Key.keywordExpansionEnabled)
+        isKeywordExpansionEnabled = keywordExpansionEnabled
+        keywordExpansionStatus = keywordExpansionEnabled ? .noKeywords : .off
     }
 
     var snapshot: ClipboardHistorySettings {
@@ -148,6 +201,15 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     func setPaused(_ paused: Bool) {
         guard isPaused != paused else { return }
         isPaused = paused
+    }
+
+    func setKeywordExpansionStatus(_ status: ClipboardSnippetKeywordExpansionStatus) {
+        guard keywordExpansionStatus != status else { return }
+        keywordExpansionStatus = status
+    }
+
+    func refreshKeywordExpansion() {
+        onChange?()
     }
 
     func addExcludedApplications(_ applications: [ClipboardExcludedApplication]) {
@@ -177,9 +239,6 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     }
 
     private static func validItemCount(_ value: Int) -> Int {
-        if value == ClipboardHistorySettings.noItemCountLimit {
-            return ClipboardHistorySettings.maximumSupportedItemCount
-        }
         return allowedItemCounts.contains(value)
             ? value
             : ClipboardHistorySettings.defaultMaximumItemCount

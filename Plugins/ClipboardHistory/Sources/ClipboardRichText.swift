@@ -193,4 +193,41 @@ enum ClipboardPlainTextConversion {
         let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : candidate
     }
+
+    /// Produces text only after the item's complete payload has been loaded successfully.
+    /// Multi-item operations use this path so a corrupt or unavailable payload cannot be
+    /// silently replaced with the bounded metadata kept for search and list presentation.
+    static func completeText(for item: ClipboardHistoryItem) throws -> String? {
+        if item.kind == .image {
+            return nonempty(item.imageSearchText ?? "")
+        }
+
+        let payload = try item.loadPayload()
+        let candidate: String
+        switch item.kind {
+        case .richText:
+            if let nativeText = payload.plainText, !nativeText.isEmpty {
+                candidate = nativeText
+            } else if ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload) {
+                candidate = ClipboardRichText.attributedString(for: payload)?.string ?? ""
+            } else {
+                candidate = ""
+            }
+        case .files:
+            candidate = payload.fileURLs.map(\.path).joined(separator: "\n")
+        case .link:
+            candidate = payload.plainText
+                ?? payload.linkURLs.first?.absoluteString
+                ?? ""
+        case .plainText, .pdf, .color, .media:
+            candidate = payload.plainText ?? ""
+        case .image:
+            candidate = ""
+        }
+        return nonempty(candidate)
+    }
+
+    private static func nonempty(_ text: String) -> String? {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+    }
 }

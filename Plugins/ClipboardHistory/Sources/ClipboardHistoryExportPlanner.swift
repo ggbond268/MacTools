@@ -5,7 +5,11 @@ enum ClipboardHistoryExportPlanner {
     static func options(for item: ClipboardHistoryItem) -> [ClipboardExportOption] {
         switch item.kind {
         case .plainText:
-            [option(.plainText, isDefault: true)]
+            [
+                option(.plainText, isDefault: true),
+                option(.markdown),
+                option(.pdf),
+            ]
         case .richText:
             [
                 option(.html, isDefault: true),
@@ -92,7 +96,7 @@ enum ClipboardHistoryExportPlanner {
         case .markdown:
             return 1 + ClipboardRichDocumentExporter.attachmentCount(in: payload)
         case .pdf:
-            return payload.kind == .richText
+            return payload.kind == .richText || payload.kind == .plainText
                 ? 1
                 : matchingItems(in: payload, where: { $0.typeIdentifier == ClipboardRepresentationType.pdf }).count
         case .png, .jpeg, .tiff:

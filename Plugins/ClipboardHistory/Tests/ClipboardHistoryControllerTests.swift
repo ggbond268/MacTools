@@ -376,42 +376,44 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
-    func testPinnedItemsAtCapacityBlockCaptureBeforeReadingClipboardPayload() async {
-        let pins = (0..<100).map { index in
-            item(text: "pin-\(index)", pinned: true)
+    func testProtectedQueueAtCapacityBlocksCaptureBeforeReadingClipboardPayload() async {
+        let queuedItems = (0..<100).map { index in
+            item(text: "queued-\(index)", pinned: false)
         }
-        let fixture = makeFixture(initialItems: pins)
+        let fixture = makeFixture(initialItems: queuedItems)
         fixture.settings.maximumItemCount = 100
+        fixture.controller.updateSequentialPasteProtectedItemIDs(Set(queuedItems.map(\.id)))
         var rejection: ClipboardCaptureIgnoreReason?
         fixture.controller.onCaptureRejection = { reason, _ in rejection = reason }
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
 
-        XCTAssertTrue(fixture.controller.isCaptureBlockedByPinnedItems)
+        XCTAssertTrue(fixture.controller.isCaptureBlockedByProtectedItems)
         fixture.pasteboard.simulateCopy("not retained")
         fixture.controller.processPasteboardChange()
 
-        XCTAssertEqual(rejection, .pinnedItemsFillCapacity)
+        XCTAssertEqual(rejection, .historyCapacityFull)
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
         XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
         XCTAssertEqual(fixture.controller.items.count, 100)
         fixture.controller.stop()
     }
 
-    func testRejectedCaptureDoesNotEvictExistingHistoryWhenPinnedBytesUseCapacity() async {
-        let pin = logicalItem(
-            text: "pin",
+    func testRejectedCaptureDoesNotEvictHistoryWhenProtectedQueueUsesCapacity() async {
+        let queued = logicalItem(
+            text: "queued",
             payloadByteCount: 30 * 1_024 * 1_024,
-            pinned: true
+            pinned: false
         )
         let existing = logicalItem(
             text: "existing",
             payloadByteCount: 1 * 1_024 * 1_024,
             pinned: false
         )
-        let fixture = makeFixture(initialItems: [pin, existing])
+        let fixture = makeFixture(initialItems: [queued, existing])
         fixture.settings.maximumItemByteCount = 50 * 1_024 * 1_024
         fixture.settings.maximumTotalPayloadByteCount = 64 * 1_024 * 1_024
+        fixture.controller.updateSequentialPasteProtectedItemIDs([queued.id])
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
         let originalIDs = fixture.controller.items.map(\.id)
@@ -425,7 +427,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.processPasteboardChange()
         await fixture.controller.waitForCaptureProcessingForTesting()
 
-        XCTAssertEqual(rejection, .pinnedItemsFillCapacity)
+        XCTAssertEqual(rejection, .historyCapacityFull)
         XCTAssertEqual(fixture.controller.items.map(\.id), originalIDs)
         XCTAssertEqual(fixture.persistence.saveCount, baselineSaveCount)
         fixture.controller.stop()
@@ -558,16 +560,14 @@ final class ClipboardHistoryControllerTests: XCTestCase {
     func testConcurrentLazyPayloadLoadsAreSingleFlightAndCancellationDoesNotReload() async throws {
         let loader = BlockingCountingClipboardPayloadLoader(payload: .plainText("secret"))
         let item = lazyImageItem(payloadLoader: { try loader.load() })
-        let first = Task.detached { try item.loadPayload() }
-        XCTAssertEqual(loader.started.wait(timeout: .now() + 2), .success)
-        let waiterStarted = DispatchSemaphore(value: 0)
-        let cancelledWaiter = Task.detached {
-            waiterStarted.signal()
-            return try item.loadPayload()
+        let first = Task { try await item.loadPayloadAsync() }
+        let loaderStarted = await waitUntil {
+            loader.loadCount == 1
         }
-        XCTAssertEqual(waiterStarted.wait(timeout: .now() + 2), .success)
+        XCTAssertTrue(loaderStarted)
+        let cancelledWaiter = Task { try await item.loadPayloadAsync() }
         let waiterEnteredSingleFlightPath = await waitUntil {
-            item.waitingPayloadLoaderCountForTesting == 1
+            item.waitingPayloadLoaderCountForTesting == 2
         }
         XCTAssertTrue(waiterEnteredSingleFlightPath)
         XCTAssertEqual(loader.loadCount, 1)
@@ -887,6 +887,68 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testCombinedPlainTextFailsAtomicallyWhenAnyCompletePayloadIsUnavailable() async {
+        let available = ClipboardHistoryItem(
+            id: UUID(),
+            text: "complete",
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+        let unavailable = ClipboardHistoryItem(
+            id: UUID(),
+            text: String(repeating: "bounded metadata ", count: 400),
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+        unavailable.configurePayloadLoader({
+            throw ClipboardHistoryPayloadAccessError.unavailable
+        }, discardCachedPayload: true)
+        let fixture = makeFixture(initialItems: [available, unavailable])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        let ids = [available.id, unavailable.id]
+        let combinedText = await fixture.controller.combinedPlainText(ids: ids)
+        let didCopy = await fixture.controller.copyCombinedItemsAsPlainText(ids: ids)
+        XCTAssertNil(combinedText)
+        XCTAssertFalse(didCopy)
+        XCTAssertNil(fixture.pasteboard.lastWrittenPayload)
+        fixture.controller.stop()
+    }
+
+    func testCancellingCombinedCopyBeforePayloadLoadFinishesDoesNotMutatePasteboard() async {
+        let loader = BlockingCountingClipboardPayloadLoader(payload: .plainText("complete"))
+        let item = ClipboardHistoryItem(
+            id: UUID(),
+            text: "bounded metadata",
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+        item.configurePayloadLoader({ try loader.load() }, discardCachedPayload: true)
+        let fixture = makeFixture(initialItems: [item])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        let copyTask = Task {
+            await fixture.controller.copyCombinedItemsAsPlainText(ids: [item.id])
+        }
+        let didStartLoading = await waitUntil { loader.loadCount == 1 }
+        XCTAssertTrue(didStartLoading)
+        copyTask.cancel()
+        loader.release.signal()
+
+        let didCopy = await copyTask.value
+        XCTAssertFalse(didCopy)
+        XCTAssertNil(fixture.pasteboard.lastWrittenPayload)
+        fixture.controller.stop()
+    }
+
     func testMissingFileReferenceIsNotCopiedAsAStalePasteboardItem() async throws {
         let missingURL = URL(fileURLWithPath: "/private/tmp/clipboard-history-missing-\(UUID().uuidString)")
         let payload = ClipboardHistoryPayload(pasteboardItems: [
@@ -1089,26 +1151,132 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
-    func testClearOperationsPersistOnlyExpectedItems() async throws {
-        let pin = item(text: "pin", pinned: true)
+    func testClearAllPersistsEmptyHistory() async throws {
         let recent = item(text: "recent", pinned: false)
-        let fixture = makeFixture(initialItems: [recent, pin])
+        let fixture = makeFixture(initialItems: [recent])
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
-
-        let clearedUnpinned = await fixture.controller.clearUnpinnedHistory()
-        XCTAssertTrue(clearedUnpinned)
-        XCTAssertEqual(fixture.controller.items, [pin])
-        XCTAssertEqual(fixture.persistence.savedItems, [pin])
 
         let clearedAll = await fixture.controller.clearAllHistory()
         XCTAssertTrue(clearedAll)
         XCTAssertTrue(fixture.persistence.savedItems.isEmpty)
-        XCTAssertEqual(fixture.persistence.resetCount, 1)
+        XCTAssertEqual(fixture.persistence.resetCount, 0)
         fixture.controller.stop()
     }
 
-    func testClearAllCancelsInFlightImageIndexingBeforeReset() async throws {
+    func testSavingAndRecapturingPreservesOneStableCapturedItemIdentity() async throws {
+        let fixture = makeFixture()
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        fixture.pasteboard.simulateCopy("shared value")
+        fixture.controller.processPasteboardChange()
+        let originalID = try XCTUnwrap(fixture.controller.items.first?.id)
+
+        let didSaveOriginal = await fixture.controller.toggleSaved(id: originalID)
+        XCTAssertTrue(didSaveOriginal)
+        XCTAssertEqual(fixture.controller.historyItems.map(\.id), [originalID])
+        XCTAssertEqual(fixture.controller.savedItems.map(\.id), [originalID])
+        XCTAssertEqual(fixture.controller.items.count, 1)
+
+        let didClearHistory = await fixture.controller.clearAllHistory()
+        XCTAssertTrue(didClearHistory)
+        XCTAssertTrue(fixture.controller.historyItems.isEmpty)
+        XCTAssertEqual(fixture.controller.savedItems.map(\.id), [originalID])
+        XCTAssertEqual(fixture.controller.items.count, 1)
+
+        fixture.pasteboard.simulateCopy("shared value")
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertEqual(fixture.controller.items.count, 1)
+        XCTAssertEqual(fixture.controller.historyItems.map(\.id), [originalID])
+        XCTAssertEqual(fixture.controller.savedItems.map(\.id), [originalID])
+        fixture.controller.stop()
+    }
+
+    func testRemovingSavedRoleKeepsHistoryButRemovesSavedOnlyRecord() async throws {
+        let historyItem = item(text: "history", pinned: false)
+        let fixture = makeFixture(initialItems: [historyItem])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        let didSaveHistoryItem = await fixture.controller.toggleSaved(id: historyItem.id)
+        XCTAssertTrue(didSaveHistoryItem)
+        let didRemoveFirstSavedRole = await fixture.controller.deleteSavedItem(id: historyItem.id)
+        XCTAssertTrue(didRemoveFirstSavedRole)
+        XCTAssertEqual(fixture.controller.historyItems.map(\.id), [historyItem.id])
+        XCTAssertTrue(fixture.controller.savedItems.isEmpty)
+
+        let didSaveAgain = await fixture.controller.toggleSaved(id: historyItem.id)
+        XCTAssertTrue(didSaveAgain)
+        let didClearHistory = await fixture.controller.clearAllHistory()
+        XCTAssertTrue(didClearHistory)
+        let didRemoveSavedOnlyRecord = await fixture.controller.deleteSavedItem(id: historyItem.id)
+        XCTAssertTrue(didRemoveSavedOnlyRecord)
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        fixture.controller.stop()
+    }
+
+    func testPermanentDeleteRemovesUnifiedHistoryAndSavedItem() async throws {
+        let historyItem = item(text: "delete everywhere", pinned: false)
+        let fixture = makeFixture(initialItems: [historyItem])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        let didSave = await fixture.controller.toggleSaved(id: historyItem.id)
+        XCTAssertTrue(didSave)
+        XCTAssertEqual(fixture.controller.historyItems.map(\.id), [historyItem.id])
+        XCTAssertEqual(fixture.controller.savedItems.map(\.id), [historyItem.id])
+
+        let didDelete = await fixture.controller.deletePermanently(id: historyItem.id)
+        XCTAssertTrue(didDelete)
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertTrue(fixture.persistence.savedItems.isEmpty)
+        fixture.controller.stop()
+    }
+
+    func testClearSavedRolesLeavesHistoryItemsInPlace() async throws {
+        var savedHistoryItem = item(text: "saved", pinned: false)
+        savedHistoryItem.setSavedMetadata(ClipboardHistorySavedMetadata(
+            title: "Saved",
+            savedAt: Date()
+        ))
+        let ordinaryHistoryItem = item(text: "ordinary", pinned: false)
+        let fixture = makeFixture(initialItems: [savedHistoryItem, ordinaryHistoryItem])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        let didClearSavedItems = await fixture.controller.clearAllSavedItems()
+        XCTAssertTrue(didClearSavedItems)
+
+        XCTAssertEqual(
+            Set(fixture.controller.historyItems.map(\.id)),
+            Set([savedHistoryItem.id, ordinaryHistoryItem.id])
+        )
+        XCTAssertTrue(fixture.controller.savedItems.isEmpty)
+        fixture.controller.stop()
+    }
+
+    func testClearSavedClipsDeletesSavedOnlyContentButKeepsHistory() async throws {
+        var savedOnly = item(text: "saved only", pinned: false)
+        savedOnly.setSavedMetadata(ClipboardHistorySavedMetadata(title: "Saved", savedAt: Date()))
+        savedOnly.setHistoryMembership(false)
+        var shared = item(text: "both", pinned: false)
+        shared.setSavedMetadata(ClipboardHistorySavedMetadata(title: "Shared", savedAt: Date()))
+        let history = item(text: "history only", pinned: false)
+        let fixture = makeFixture(initialItems: [savedOnly, shared, history])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        let cleared = await fixture.controller.clearAllSavedItems()
+        XCTAssertTrue(cleared)
+        XCTAssertEqual(Set(fixture.controller.historyItems.map(\.id)), Set([shared.id, history.id]))
+        XCTAssertTrue(fixture.controller.savedItems.isEmpty)
+        XCTAssertFalse(fixture.persistence.savedItems.contains { $0.id == savedOnly.id })
+        XCTAssertEqual(fixture.persistence.resetCount, 0)
+        fixture.controller.stop()
+    }
+
+    func testClearAllCancelsInFlightImageIndexingBeforeSavingEmptyHistory() async throws {
         let recognizer = BlockingCountingClipboardImageTextRecognizer()
         let payload = imagePayload(data: Data([0x01]))
         let image = lazyImageItem(payloadLoader: { payload })
@@ -1127,7 +1295,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let cleared = await fixture.controller.clearAllHistory()
         XCTAssertTrue(cleared)
         XCTAssertTrue(fixture.controller.items.isEmpty)
-        XCTAssertEqual(fixture.persistence.resetCount, 1)
+        XCTAssertEqual(fixture.persistence.resetCount, 0)
         XCTAssertEqual(fixture.controller.pendingImageIndexItemCountForTesting, 0)
 
         await recognizer.releaseAll()
@@ -1136,7 +1304,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
-    func testClearUnpinnedCancelsPendingAsynchronousCapture() async {
+    func testClearAllCancelsPendingAsynchronousCapture() async {
         let fixture = makeFixture()
         fixture.pasteboard.requiresAsynchronousPayloadRead = true
         fixture.controller.start()
@@ -1146,7 +1314,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let didStartRead = await waitUntil { fixture.pasteboard.asyncReadStarted }
         XCTAssertTrue(didStartRead)
 
-        let didClear = await fixture.controller.clearUnpinnedHistory()
+        let didClear = await fixture.controller.clearAllHistory()
         XCTAssertTrue(didClear)
         fixture.pasteboard.completeAsynchronousRead()
         let didFinishRead = await waitUntil { fixture.pasteboard.asyncReadCompleted }
@@ -1199,7 +1367,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             isPinned: false,
             lastUsedAt: nil
         )
-        let pinnedItem = ClipboardHistoryItem(
+        let legacyPinnedItem = ClipboardHistoryItem(
             id: UUID(),
             text: "pinned",
             capturedAt: referenceDate.addingTimeInterval(-expiration - 60),
@@ -1207,7 +1375,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             isPinned: true,
             lastUsedAt: nil
         )
-        let fixture = makeFixture(initialItems: [expiringItem, pinnedItem])
+        let fixture = makeFixture(initialItems: [expiringItem, legacyPinnedItem])
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
 
@@ -1216,8 +1384,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         )
         await waitForPersistence()
 
-        XCTAssertEqual(fixture.controller.items, [pinnedItem])
-        XCTAssertEqual(fixture.persistence.savedItems, [pinnedItem])
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertTrue(fixture.persistence.savedItems.isEmpty)
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
         XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
         fixture.controller.stop()
@@ -1271,30 +1439,6 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(controller.errorMessage, "Localized storage failure")
         XCTAssertTrue(controller.items.isEmpty)
         XCTAssertTrue(try persistence.load().isEmpty)
-        controller.stop()
-    }
-
-    func testPinFailureRestoresLastDurableState() async throws {
-        let existing = item(text: "keep unpinned", pinned: false)
-        let fixture = makeFixture()
-        let persistence = SaveFailingClipboardHistoryPersistence(initialItems: [existing])
-        let controller = ClipboardHistoryController(
-            settings: fixture.settings,
-            pasteboard: fixture.pasteboard,
-            sourceContext: fixture.source,
-            persistence: persistence,
-            monitoringInterval: 60,
-            errorMessageProvider: { _ in "Localized storage failure" }
-        )
-        controller.start()
-        await waitUntilLoaded(controller)
-
-        controller.togglePin(id: existing.id)
-        for _ in 0..<100 where controller.errorMessage == nil { await Task.yield() }
-
-        XCTAssertEqual(controller.items, [existing])
-        XCTAssertEqual(try persistence.load(), [existing])
-        XCTAssertEqual(controller.errorMessage, "Localized storage failure")
         controller.stop()
     }
 
@@ -1482,45 +1626,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         persistence.allowFirstSaveToFinish()
         await clearTask.value
         XCTAssertEqual(result, true)
-        XCTAssertEqual(persistence.resetCount, 1)
-        XCTAssertTrue(persistence.savedSnapshots.isEmpty)
-        controller.stop()
-    }
-
-    func testNoOpClearUnpinnedStillWaitsForPendingPinsOnlySnapshot() async throws {
-        let pin = item(text: "pin", pinned: true)
-        let recent = item(
-            text: "recent",
-            pinned: false,
-            capturedAt: Date().addingTimeInterval(-ClipboardHistorySettings.defaults.expiration.interval! - 60)
-        )
-        let fixture = makeFixture()
-        let persistence = BlockingFirstSaveClipboardHistoryPersistence(initialItems: [recent, pin])
-        let controller = ClipboardHistoryController(
-            settings: fixture.settings,
-            pasteboard: fixture.pasteboard,
-            sourceContext: fixture.source,
-            persistence: persistence,
-            monitoringInterval: 60
-        )
-        controller.start()
-        await waitUntilLoaded(controller)
-
-        for _ in 0..<100 where !persistence.saveStarted { await Task.yield() }
-        XCTAssertEqual(controller.items, [pin])
-
-        var result: Bool?
-        let clearTask = Task { @MainActor in
-            result = await controller.clearUnpinnedHistory()
-        }
-        for _ in 0..<20 { await Task.yield() }
-        XCTAssertNil(result)
-        XCTAssertTrue(controller.isClearingHistory)
-
-        persistence.allowFirstSaveToFinish()
-        await clearTask.value
-        XCTAssertEqual(result, true)
-        XCTAssertEqual(persistence.savedSnapshots.last, [pin])
+        XCTAssertEqual(persistence.resetCount, 0)
+        XCTAssertEqual(persistence.savedSnapshots.last, [])
         controller.stop()
     }
 

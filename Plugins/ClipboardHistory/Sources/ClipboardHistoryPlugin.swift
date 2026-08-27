@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 import MacToolsPluginKit
 import SwiftUI
 
@@ -24,26 +25,35 @@ final class ClipboardHistoryPlugin:
     PluginPrimaryPanel,
     PluginActionProviding,
     PluginGroupedShortcutSettingsProviding,
+    PluginShortcutSettingsGroupPresentationProviding,
+    PluginShortcutBindingValidating,
+    PluginInlineShortcutSettingsContextConsuming,
     PluginWindowLayoutTargetProviding,
     AccessibilityPermissionRefreshing
 {
-    static let pluginID = "clipboard-history"
+    static let pluginID = "clipboard"
     static let pluginOrder = 125
 
     enum ActionID {
         static let openHistory = "open-history"
+        static let previousSequentialQueueItem = "previous-sequential-queue-item"
+        static let skipSequentialQueueItem = "skip-sequential-queue-item"
+        static let restartSequentialQueue = "restart-sequential-queue"
+        static let cancelSequentialQueue = "cancel-sequential-queue"
         static let pauseCollection = "pause-collection"
         static let resumeCollection = "resume-collection"
         static let toggleCollection = "toggle-collection"
-        static let clearUnpinnedHistory = "clear-unpinned-history"
         static let clearAllHistory = "clear-all-history"
 
         static let all: Set<String> = [
             openHistory,
+            previousSequentialQueueItem,
+            skipSequentialQueueItem,
+            restartSequentialQueue,
+            cancelSequentialQueue,
             pauseCollection,
             resumeCollection,
             toggleCollection,
-            clearUnpinnedHistory,
             clearAllHistory,
         ]
     }
@@ -52,7 +62,22 @@ final class ClipboardHistoryPlugin:
         static let privateCopy = "private-copy"
         static let ignoreNextCopy = "ignore-next-copy"
         static let pastePlainText = "paste-clipboard-as-plain-text"
+        static let pasteSequentially = "paste-sequentially"
+        static let panelActions = "panel-actions"
+        static let panelExport = "panel-export"
+        static let panelEditSnippet = "panel-edit-snippet"
+        static let panelShare = "panel-share"
+        static let panelSave = "panel-save"
+        static let panelDelete = "panel-delete"
+        static let panelMultiSelect = "panel-multi-select"
+        static let panelToggleSelection = "panel-toggle-selection"
+        static let panelCopyCombined = "panel-copy-combined"
+        static let panelPasteCombined = "panel-paste-combined"
+        // Keep the stored binding ID stable while cycling filter families instead of scope values.
+        static let panelCycleScope = "panel-cycle-scope"
         static let primaryGroup = "primary-shortcuts"
+        static let panelGroup = "clipboard-window-shortcuts"
+        static let queueGroup = "sequential-paste-shortcuts"
         static let privacyGroup = "privacy-copy-shortcuts"
         static let collectionGroup = "collection-shortcuts"
     }
@@ -63,6 +88,10 @@ final class ClipboardHistoryPlugin:
 
     private enum SettingsSectionID {
         static let essentials = "clipboard-essential-settings"
+        static let queue = "clipboard-queue-settings"
+        static let advanced = "clipboard-advanced-settings"
+        static let snippets = "clipboard-snippet-settings"
+        static let additionalShortcuts = "clipboard-additional-shortcuts"
         static let retention = "clipboard-retention-settings"
         static let exclusions = "clipboard-exclusion-settings"
         static let data = "clipboard-data-settings"
@@ -71,30 +100,117 @@ final class ClipboardHistoryPlugin:
     let metadata: PluginMetadata
     let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
     let controller: ClipboardHistoryController
+    let savedLibraryController: ClipboardSavedLibraryController
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var inlineShortcutSettingsContextProvider: (() -> PluginSettingsContext)?
     var focusedWindowLayoutTarget: NSWindow? {
         panelController.focusedWindowLayoutTarget
     }
 
+    func shortcutValidationMessage(
+        definitionID: String,
+        binding: ShortcutBinding
+    ) -> String? {
+        guard definitionID == ShortcutID.panelCycleScope,
+              binding.modifiers.contains(.shift)
+        else {
+            return nil
+        }
+        return localization.string(
+            "panel.shortcuts.cycleScope.shiftReserved",
+            defaultValue: "Shift is reserved for cycling backward. Record the forward shortcut without Shift."
+        )
+    }
+
     private let settingsStore: ClipboardHistorySettingsStore
+    private let pasteboard: any ClipboardPasteboardAccess
     private let localization: PluginLocalization
     private let copyCommandSender: any ClipboardCopyCommandSending
     private let pasteCommandSender: any ClipboardPasteCommandSending
     private let accessibilityTrusted: () -> Bool
     private let accessibilityRequester: (Bool) -> Bool
     private let frontmostProcessIdentifier: () -> pid_t?
+    private let sequentialPasteStabilizationDelay: Duration
+    private lazy var keywordExpander = ClipboardSnippetKeywordExpander(
+        savedLibraryController: savedLibraryController,
+        pasteboard: pasteboard,
+        onPasteboardWrite: { [weak self] in self?.controller.markCurrentPasteboardChangeAsInternal() }
+    )
     private let privacyHUDPresenter: any ClipboardPrivacyHUDPresenting
+    private let sequentialPasteCoordinator: ClipboardSequentialPasteCoordinator
+    private var pendingSequentialPasteTargets: [pid_t?] = []
+    private var isSequentialPasteInFlight = false
+    private var sequentialPasteWorkerTask: Task<Void, Never>?
+    private var sequentialPasteWorkerGeneration = 0
+    private var sequentialHUDPreviewTask: Task<Void, Never>?
+    private(set) var keywordExpansionStartAttemptCountForTesting = 0
+    var isKeywordExpansionRunningForTesting: Bool { keywordExpander.isRunning }
+    var hasConfiguredKeywordExpansionForTesting: Bool { keywordExpander.hasConfiguredKeywords }
+    private lazy var sequentialPasteHUD: ClipboardSequentialPasteHUDController = {
+        let hud = ClipboardSequentialPasteHUDController(localization: localization)
+        hud.onPasteNext = { [weak self] in
+            guard let self else { return }
+            self.enqueueSequentialPaste(
+                targetProcessIdentifier: self.frontmostProcessIdentifier()
+            )
+        }
+        hud.onPrevious = { [weak self] in
+            guard let self, !self.isSequentialQueueMutationLocked else { return }
+            self.sequentialPasteCoordinator.moveToPrevious()
+            self.sequentialQueueDidChange()
+        }
+        hud.onSkip = { [weak self] in
+            guard let self, !self.isSequentialQueueMutationLocked else { return }
+            self.sequentialPasteCoordinator.skip()
+            self.sequentialQueueDidChange()
+        }
+        hud.onRestart = { [weak self] in
+            guard let self, !self.isSequentialQueueMutationLocked else { return }
+            self.sequentialPasteCoordinator.restart()
+            self.sequentialQueueDidChange()
+        }
+        hud.onCancel = { [weak self] in
+            self?.cancelPendingSequentialPastes()
+            self?.sequentialHUDPreviewTask?.cancel()
+            self?.sequentialHUDPreviewTask = nil
+            self?.sequentialPasteCoordinator.cancel()
+            self?.synchronizeSequentialPasteProtection()
+            self?.sequentialPasteHUD.dismiss()
+        }
+        hud.onClose = { [weak self] in
+            self?.sequentialHUDPreviewTask?.cancel()
+            self?.sequentialHUDPreviewTask = nil
+        }
+        return hud
+    }()
     private lazy var panelController = ClipboardHistoryPanelController(
         historyController: controller,
+        savedLibraryController: savedLibraryController,
         localization: localization,
         onIgnoreNextCopy: { [weak self] in
             self?.armIgnoreNextCopy()
         },
+        onManualClipboardWrite: { [weak self] in
+            self?.resetImplicitQueueForManualClipboardWrite()
+        },
+        onStartSequentialQueue: { [weak self] itemIDs in
+            self?.startSequentialQueue(itemIDs: itemIDs) == true
+        },
         hudPresenter: privacyHUDPresenter,
-        pasteCommandSender: pasteCommandSender
+        pasteCommandSender: pasteCommandSender,
+        shortcutBindingProvider: { [weak self] shortcutID in
+            guard let self else { return nil }
+            if let shortcutBindingResolver = self.shortcutBindingResolver {
+                return shortcutBindingResolver(shortcutID)
+            }
+            return Self.defaultPanelShortcutBinding(shortcutID)
+        },
+        shortcutSettingsContextProvider: { [weak self] in
+            self?.inlineShortcutSettingsContextProvider?()
+        }
     )
 
     init(
@@ -102,6 +218,7 @@ final class ClipboardHistoryPlugin:
         pasteboard: (any ClipboardPasteboardAccess)? = nil,
         sourceContext: (any ClipboardSourceContextProviding)? = nil,
         persistence: (any ClipboardHistoryPersisting)? = nil,
+        savedPersistence: (any ClipboardSavedLibraryPersisting)? = nil,
         copyCommandSender: (any ClipboardCopyCommandSending)? = nil,
         pasteCommandSender: (any ClipboardPasteCommandSending)? = nil,
         privacyHUDPresenter: (any ClipboardPrivacyHUDPresenting)? = nil,
@@ -110,36 +227,59 @@ final class ClipboardHistoryPlugin:
         accessibilityRequester: @escaping (Bool) -> Bool = ClipboardHistoryAccessibilityCheck.requestTrust(prompt:),
         frontmostProcessIdentifier: @escaping () -> pid_t? = {
             NSWorkspace.shared.frontmostApplication?.processIdentifier
-        }
+        },
+        sequentialPasteStabilizationDelay: Duration = .milliseconds(120)
     ) {
         let localization = PluginLocalization(bundle: context.resourceBundle)
         let settingsStore = ClipboardHistorySettingsStore(storage: context.storage)
+        let sequentialPasteCoordinator = ClipboardSequentialPasteCoordinator(
+            store: PluginStorageClipboardSequentialPasteStore(storage: context.storage)
+        )
+        let resolvedPasteboard = pasteboard ?? GeneralClipboardPasteboard()
+        let databaseURL = context.supportDirectory?.appendingPathComponent(
+            "clipboard.sqlite3",
+            isDirectory: false
+        )
+        let keyStore = ClipboardHistoryKeychainStore(
+            service: PluginPrivateDataKeychainIdentity.service(pluginID: Self.pluginID)
+        )
         let resolvedPersistence: any ClipboardHistoryPersisting
         if let persistence {
             resolvedPersistence = persistence
-        } else if let supportDirectory = context.supportDirectory {
+        } else if let databaseURL {
             resolvedPersistence = IncrementalEncryptedClipboardHistoryStore(
-                databaseURL: supportDirectory.appendingPathComponent("history.sqlite3", isDirectory: false),
-                legacyFileURL: supportDirectory.appendingPathComponent("history.mth", isDirectory: false),
-                keyStore: ClipboardHistoryKeychainStore(
-                    service: PluginPrivateDataKeychainIdentity.service(pluginID: Self.pluginID)
-                )
+                databaseURL: databaseURL,
+                keyStore: keyStore
             )
         } else {
             resolvedPersistence = UnavailableClipboardHistoryStore()
         }
+        let resolvedSavedPersistence: any ClipboardSavedLibraryPersisting
+        if let savedPersistence {
+            resolvedSavedPersistence = savedPersistence
+        } else if let databaseURL {
+            resolvedSavedPersistence = IncrementalEncryptedClipboardSavedLibraryStore(
+                databaseURL: databaseURL,
+                keyStore: keyStore
+            )
+        } else {
+            resolvedSavedPersistence = UnavailableClipboardSavedLibraryStore()
+        }
 
         self.localization = localization
         self.settingsStore = settingsStore
+        self.pasteboard = resolvedPasteboard
         self.copyCommandSender = copyCommandSender ?? SystemClipboardCopyCommandSender()
         self.pasteCommandSender = pasteCommandSender ?? SystemClipboardPasteCommandSender()
         self.privacyHUDPresenter = privacyHUDPresenter ?? ClipboardPrivacyHUDController(localization: localization)
+        self.sequentialPasteCoordinator = sequentialPasteCoordinator
         self.accessibilityTrusted = accessibilityTrusted
         self.accessibilityRequester = accessibilityRequester
         self.frontmostProcessIdentifier = frontmostProcessIdentifier
+        self.sequentialPasteStabilizationDelay = sequentialPasteStabilizationDelay
         self.controller = ClipboardHistoryController(
             settings: settingsStore,
-            pasteboard: pasteboard ?? GeneralClipboardPasteboard(),
+            pasteboard: resolvedPasteboard,
             sourceContext: sourceContext ?? WorkspaceClipboardSourceContextProvider(),
             persistence: resolvedPersistence,
             imageTextRecognizer: imageTextRecognizer ?? VisionClipboardImageTextRecognizer(),
@@ -147,15 +287,22 @@ final class ClipboardHistoryPlugin:
                 Self.localizedErrorMessage(error, localization: localization)
             }
         )
+        self.savedLibraryController = ClipboardSavedLibraryController(
+            pasteboard: resolvedPasteboard,
+            persistence: resolvedSavedPersistence,
+            errorMessageProvider: { error in
+                Self.localizedErrorMessage(error, localization: localization)
+            }
+        )
         self.metadata = PluginMetadata(
             id: Self.pluginID,
-            title: localization.string("metadata.title", defaultValue: "剪贴板历史"),
+            title: localization.string("metadata.title", defaultValue: "剪贴板"),
             iconName: "clipboard",
             iconTint: .accentColor,
             order: Self.pluginOrder,
             defaultDescription: localization.string(
                 "metadata.description",
-                defaultValue: "搜索本机加密保存的剪贴板历史和固定项目"
+                defaultValue: "搜索历史记录并管理可重复使用的片段和已存项目"
             )
         )
         self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
@@ -166,11 +313,19 @@ final class ClipboardHistoryPlugin:
             }
         )
 
-        settingsStore.onChange = { [weak controller] in
-            controller?.settingsDidChange()
+        settingsStore.onChange = { [weak self] in
+            self?.controller.settingsDidChange()
+            self?.synchronizeKeywordExpansion()
         }
         controller.onChange = { [weak self] in
             self?.onStateChange?()
+        }
+        savedLibraryController.onChange = { [weak self] in
+            self?.synchronizeKeywordExpansion()
+            self?.onStateChange?()
+        }
+        savedLibraryController.onPasteboardWrite = { [weak self] in
+            self?.controller.markCurrentPasteboardChangeAsInternal()
         }
         controller.onCaptureSuppressionEvent = { [weak privacyHUDPresenter = self.privacyHUDPresenter] event in
             privacyHUDPresenter?.handleSuppressionEvent(event)
@@ -186,10 +341,10 @@ final class ClipboardHistoryPlugin:
                     defaultValue: "未保存：内容超过 %d MB",
                     max(1, limit / (1_024 * 1_024))
                 ))
-            case .pinnedItemsFillCapacity:
+            case .historyCapacityFull:
                 privacyHUDPresenter?.showFailure(localization.string(
-                    "hud.capture.pinnedCapacity",
-                    defaultValue: "未保存：固定项目已占满历史容量"
+                    "hud.capture.capacityFull",
+                    defaultValue: "Not saved: History capacity is full"
                 ))
             case .tooManyObjects:
                 privacyHUDPresenter?.showFailure(localization.format(
@@ -201,13 +356,21 @@ final class ClipboardHistoryPlugin:
                 break
             }
         }
+        controller.onExternalPasteboardChange = { [weak self] in
+            guard let self else { return }
+            self.sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
+            self.synchronizeSequentialPasteProtection()
+        }
+        controller.updateSequentialPasteProtectedItemIDs(
+            sequentialPasteCoordinator.protectedItemIDs()
+        )
     }
 
     var settingsPage: PluginSettingsPage? {
         .form(
             description: localization.string(
                 "metadata.description",
-                defaultValue: "搜索本机加密保存的剪贴板历史和固定项目"
+                defaultValue: "Search encrypted local History and manage reusable Saved items"
             ),
             sections: [
                 PluginSettingsSection(
@@ -217,9 +380,75 @@ final class ClipboardHistoryPlugin:
                     if let self {
                         ClipboardHistorySettingsView(
                             controller: self.controller,
+                            savedLibraryController: self.savedLibraryController,
                             localization: self.localization,
                             settingsContext: context,
                             contentSections: [.essentials]
+                        )
+                    } else {
+                        EmptyView()
+                    }
+                },
+                PluginSettingsSection(
+                    id: SettingsSectionID.queue,
+                    presentation: .edgeToEdge,
+                    embeddedShortcutGroupIDs: ["sequential-paste-shortcuts"]
+                ) { [weak self] context in
+                    if let self {
+                        ClipboardHistorySettingsView(
+                            controller: self.controller,
+                            savedLibraryController: self.savedLibraryController,
+                            localization: self.localization,
+                            settingsContext: context,
+                            contentSections: [.queue]
+                        )
+                    } else {
+                        EmptyView()
+                    }
+                },
+                PluginSettingsSection(
+                    id: SettingsSectionID.snippets,
+                    presentation: .edgeToEdge
+                ) { [weak self] _ in
+                    if let self {
+                        ClipboardHistorySettingsView(
+                            controller: self.controller,
+                            savedLibraryController: self.savedLibraryController,
+                            localization: self.localization,
+                            contentSections: [.snippets],
+                            onManageSnippets: { [weak self] in self?.panelController.showSnippets() }
+                        )
+                    } else {
+                        EmptyView()
+                    }
+                },
+                PluginSettingsSection(
+                    id: SettingsSectionID.advanced,
+                    presentation: .edgeToEdge
+                ) { [weak self] _ in
+                    if let self {
+                        ClipboardHistorySettingsView(
+                            controller: self.controller,
+                            savedLibraryController: self.savedLibraryController,
+                            localization: self.localization,
+                            contentSections: [.advanced]
+                        )
+                    } else {
+                        EmptyView()
+                    }
+                },
+                PluginSettingsSection(
+                    id: SettingsSectionID.additionalShortcuts,
+                    presentation: .edgeToEdge,
+                    embeddedShortcutGroupIDs: [ShortcutID.panelGroup, ShortcutID.collectionGroup]
+                ) { [weak self] context in
+                    if let self {
+                        ClipboardHistorySettingsView(
+                            controller: self.controller,
+                            savedLibraryController: self.savedLibraryController,
+                            localization: self.localization,
+                            settingsContext: context,
+                            contentSections: [.additionalShortcuts]
                         )
                     } else {
                         EmptyView()
@@ -232,6 +461,7 @@ final class ClipboardHistoryPlugin:
                     if let self {
                         ClipboardHistorySettingsView(
                             controller: self.controller,
+                            savedLibraryController: self.savedLibraryController,
                             localization: self.localization,
                             contentSections: [.retention]
                         )
@@ -246,6 +476,7 @@ final class ClipboardHistoryPlugin:
                     if let self {
                         ClipboardHistorySettingsView(
                             controller: self.controller,
+                            savedLibraryController: self.savedLibraryController,
                             localization: self.localization,
                             contentSections: [.exclusions]
                         )
@@ -260,6 +491,7 @@ final class ClipboardHistoryPlugin:
                     if let self {
                         ClipboardHistorySettingsView(
                             controller: self.controller,
+                            savedLibraryController: self.savedLibraryController,
                             localization: self.localization,
                             contentSections: [.data]
                         )
@@ -279,19 +511,14 @@ final class ClipboardHistoryPlugin:
             subtitle = localization.string("panel.status.loading", defaultValue: "正在读取加密历史…")
         } else if settingsStore.isPaused {
             subtitle = localization.string("panel.status.paused", defaultValue: "收集已暂停")
-        } else if controller.isCaptureBlockedByPinnedItems {
-            subtitle = localization.string(
-                "panel.status.pinnedCapacity",
-                defaultValue: "固定项目已占满历史容量"
-            )
         } else if controller.isIgnoringNextCopy {
             subtitle = localization.string("panel.status.ignoreNext", defaultValue: "下次复制不会保存")
         } else {
             subtitle = localization.format(
                 "panel.status.count",
-                defaultValue: "%d 条记录 · %d 条固定",
-                controller.items.count,
-                controller.pinnedItems.count
+                defaultValue: "%d history items · %d saved",
+                controller.historyItems.count,
+                controller.savedItems.count + savedLibraryController.items.count
             )
         }
         return PluginPanelState(
@@ -402,8 +629,200 @@ final class ClipboardHistoryPlugin:
                 ),
                 settingsControlSystemImage: "textformat"
             ),
+            PluginShortcutDefinition(
+                id: ShortcutID.pasteSequentially,
+                title: localization.string(
+                    "shortcut.pasteSequentially.title",
+                    defaultValue: "Paste Sequentially"
+                ),
+                description: localization.string(
+                    "shortcut.pasteSequentially.description",
+                    defaultValue: "Paste the next queued item, or start with a snapshot of recent history."
+                ),
+                actionID: ShortcutID.pasteSequentially,
+                scope: .global,
+                defaultBinding: ShortcutBinding(
+                    keyCode: 9,
+                    modifiers: [.option, .shift]
+                ),
+                isRequired: false,
+                settingsGroupID: ShortcutID.queueGroup,
+                settingsGroupTitle: localization.string(
+                    "settings.queue.shortcuts.title",
+                    defaultValue: "Sequential Paste"
+                ),
+                settingsGroupDescription: localization.string(
+                    "shortcut.pasteSequentially.groupDescription",
+                    defaultValue: "Paste recent entries one at a time; advanced queue controls are optional."
+                ),
+                settingsControlTitle: localization.string(
+                    "shortcut.pasteSequentially.controlTitle",
+                    defaultValue: "Paste Next Queue Item"
+                ),
+                settingsControlSystemImage: "list.number"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelCycleScope,
+                title: localization.string(
+                    "panel.shortcuts.cycleScope",
+                    defaultValue: "Cycle Filter Group"
+                ),
+                description: localization.string(
+                    "panel.shortcuts.cycleScope.description",
+                    defaultValue: "Switch between available filter groups; add Shift to go backward. Control-1 through Control-9 chooses an option in the active group."
+                ),
+                keyCode: 48,
+                modifiers: [.control],
+                systemImage: "rectangle.3.group"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelActions,
+                title: localization.string("panel.shortcuts.actions", defaultValue: "Toggle Actions"),
+                description: localization.string("panel.shortcuts.actions.description", defaultValue: "Open Actions or close it and return to the history search."),
+                keyCode: 40,
+                modifiers: [.command],
+                systemImage: "command"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelEditSnippet,
+                title: localization.string("saved.edit", defaultValue: "Edit Snippet"),
+                description: localization.string("panel.shortcuts.editSnippet.description", defaultValue: "Edit the selected snippet while Clipboard History is focused."),
+                keyCode: 14,
+                modifiers: [.command, .option],
+                systemImage: "pencil"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelExport,
+                title: localization.string("panel.shortcuts.export", defaultValue: "Export"),
+                description: localization.string("panel.shortcuts.export.description", defaultValue: "Open export formats for the focused clipboard item."),
+                keyCode: 14,
+                modifiers: [.command],
+                systemImage: "square.and.arrow.down"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelShare,
+                title: localization.string("panel.shortcuts.share", defaultValue: "Share"),
+                description: localization.string("panel.shortcuts.share.description", defaultValue: "Open the macOS share sheet for the current item or selection."),
+                keyCode: 14,
+                modifiers: [.command, .shift],
+                systemImage: "square.and.arrow.up"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelSave,
+                title: localization.string("panel.shortcuts.save", defaultValue: "Save or Unsave Clip"),
+                description: localization.string("panel.shortcuts.save.description", defaultValue: "Toggle whether the focused captured item is kept in Saved."),
+                keyCode: 35,
+                modifiers: [.command],
+                systemImage: "bookmark"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelDelete,
+                title: localization.string("panel.shortcuts.delete", defaultValue: "Delete Item"),
+                description: localization.string("panel.shortcuts.delete.description", defaultValue: "Delete the focused clipboard item without conflicting with text editing."),
+                keyCode: 51,
+                modifiers: [.command, .shift],
+                systemImage: "trash"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelMultiSelect,
+                title: localization.string("panel.shortcuts.multiSelect", defaultValue: "Select Multiple Items"),
+                description: localization.string("panel.shortcuts.multiSelect.description", defaultValue: "Enter or leave multiple-selection mode."),
+                keyCode: 37,
+                modifiers: [.command],
+                systemImage: "checklist"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelToggleSelection,
+                title: localization.string("panel.selection.toggleFocused", defaultValue: "Mark or Unmark Item"),
+                description: localization.string("panel.shortcuts.toggleSelection.description", defaultValue: "In multi-select mode, select or unselect the highlighted item, even while the search field is focused."),
+                keyCode: 36,
+                modifiers: [.command],
+                systemImage: "checkmark.square"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelCopyCombined,
+                title: localization.string("panel.shortcuts.copyCombined", defaultValue: "Copy Combined Selection"),
+                description: localization.string("panel.shortcuts.copyCombined.description", defaultValue: "Copy selected entries together in their selected order."),
+                keyCode: 8,
+                modifiers: [.command, .shift],
+                systemImage: "doc.on.doc"
+            ),
+            panelShortcut(
+                id: ShortcutID.panelPasteCombined,
+                title: localization.string("panel.shortcuts.pasteCombined", defaultValue: "Paste Combined Selection"),
+                description: localization.string("panel.shortcuts.pasteCombined.description", defaultValue: "Paste selected entries together in their selected order."),
+                keyCode: 36,
+                modifiers: [.command, .shift],
+                systemImage: "arrow.right.doc.on.clipboard"
+            ),
         ]
     }
+
+    private func panelShortcut(
+        id: String,
+        title: String,
+        description: String,
+        keyCode: UInt16,
+        modifiers: ShortcutModifiers,
+        systemImage: String
+    ) -> PluginShortcutDefinition {
+        PluginShortcutDefinition(
+            id: id,
+            title: title,
+            description: description,
+            actionID: id,
+            scope: .whilePluginActive,
+            defaultBinding: ShortcutBinding(keyCode: keyCode, modifiers: modifiers),
+            isRequired: false,
+            settingsGroupID: ShortcutID.panelGroup,
+            settingsGroupTitle: localization.string(
+                "panel.shortcuts.group",
+                defaultValue: "Clipboard Window Shortcuts"
+            ),
+            settingsGroupDescription: localization.string(
+                "panel.shortcuts.group.description",
+                defaultValue: "These shortcuts work only while Clipboard History is focused."
+            ),
+            settingsControlTitle: title,
+            settingsControlSystemImage: systemImage
+        )
+    }
+
+    static func defaultPanelShortcutBinding(_ id: String) -> ShortcutBinding? {
+        switch id {
+        case ShortcutID.panelCycleScope:
+            ShortcutBinding(keyCode: 48, modifiers: [.control])
+        case ShortcutID.panelActions:
+            ShortcutBinding(keyCode: 40, modifiers: [.command])
+        case ShortcutID.panelExport:
+            ShortcutBinding(keyCode: 14, modifiers: [.command])
+        case ShortcutID.panelEditSnippet:
+            ShortcutBinding(keyCode: 14, modifiers: [.command, .option])
+        case ShortcutID.panelShare:
+            ShortcutBinding(keyCode: 14, modifiers: [.command, .shift])
+        case ShortcutID.panelSave:
+            ShortcutBinding(keyCode: 35, modifiers: [.command])
+        case ShortcutID.panelDelete:
+            ShortcutBinding(keyCode: 51, modifiers: [.command, .shift])
+        case ShortcutID.panelMultiSelect:
+            ShortcutBinding(keyCode: 37, modifiers: [.command])
+        case ShortcutID.panelToggleSelection:
+            ShortcutBinding(keyCode: 36, modifiers: [.command])
+        case ShortcutID.panelCopyCombined:
+            ShortcutBinding(keyCode: 8, modifiers: [.command, .shift])
+        case ShortcutID.panelPasteCombined:
+            ShortcutBinding(keyCode: 36, modifiers: [.command, .shift])
+        default:
+            nil
+        }
+    }
+
+    static let queueControlActionIDs = [
+        ActionID.previousSequentialQueueItem,
+        ActionID.skipSequentialQueueItem,
+        ActionID.restartSequentialQueue,
+        ActionID.cancelSequentialQueue,
+    ]
 
     var shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] {
         [
@@ -419,6 +838,41 @@ final class ClipboardHistoryPlugin:
                 placementAfterSectionID: SettingsSectionID.essentials
             ),
             PluginShortcutSettingsGroupConfiguration(
+                id: ShortcutID.queueGroup,
+                title: localization.string(
+                    "settings.queue.shortcuts.title",
+                    defaultValue: "Sequential Paste Queue"
+                ),
+                description: localization.string(
+                    "settings.queue.shortcuts.description",
+                    defaultValue: "Assign Paste Next first. Advanced queue controls are optional and can be added later."
+                ),
+                systemImage: "list.number",
+                actionIDs: Set(Self.queueControlActionIDs),
+                shortcutDefinitionIDs: [ShortcutID.pasteSequentially],
+                placementAfterSectionID: SettingsSectionID.queue
+            ),
+            PluginShortcutSettingsGroupConfiguration(
+                id: ShortcutID.panelGroup,
+                title: localization.string("panel.shortcuts.group", defaultValue: "Clipboard Window Shortcuts"),
+                description: localization.string("panel.shortcuts.group.description", defaultValue: "These shortcuts work only while Clipboard History is focused."),
+                systemImage: "rectangle.and.hand.point.up.left",
+                shortcutDefinitionIDs: [
+                    ShortcutID.panelCycleScope,
+                    ShortcutID.panelActions,
+                    ShortcutID.panelEditSnippet,
+                    ShortcutID.panelExport,
+                    ShortcutID.panelShare,
+                    ShortcutID.panelSave,
+                    ShortcutID.panelDelete,
+                    ShortcutID.panelMultiSelect,
+                    ShortcutID.panelToggleSelection,
+                    ShortcutID.panelCopyCombined,
+                    ShortcutID.panelPasteCombined,
+                ],
+                placementAfterSectionID: SettingsSectionID.additionalShortcuts
+            ),
+            PluginShortcutSettingsGroupConfiguration(
                 id: ShortcutID.privacyGroup,
                 title: localization.string(
                     "shortcut.group.title",
@@ -426,7 +880,7 @@ final class ClipboardHistoryPlugin:
                 ),
                 systemImage: "eye.slash",
                 shortcutDefinitionIDs: [ShortcutID.privateCopy, ShortcutID.ignoreNextCopy],
-                placementAfterSectionID: SettingsSectionID.essentials
+                placementAfterSectionID: SettingsSectionID.snippets
             ),
             PluginShortcutSettingsGroupConfiguration(
                 id: ShortcutID.collectionGroup,
@@ -436,19 +890,32 @@ final class ClipboardHistoryPlugin:
                 ),
                 description: localization.string(
                     "settings.shortcuts.collection.description",
-                    defaultValue: "可选：控制收集状态，或清除未固定记录和全部历史。"
+                    defaultValue: "可选：控制收集状态或清除历史记录。"
                 ),
                 systemImage: "playpause",
-                actionIDs: [
-                    ActionID.toggleCollection,
-                    ActionID.pauseCollection,
-                    ActionID.resumeCollection,
-                    ActionID.clearUnpinnedHistory,
-                    ActionID.clearAllHistory,
-                ],
-                placementAfterSectionID: SettingsSectionID.data
+                actionIDs: Set(Self.collectionControlActionIDs),
+                placementAfterSectionID: SettingsSectionID.additionalShortcuts
             ),
         ]
+    }
+
+    var shortcutDefinitionFirstSettingsGroupIDs: Set<String> {
+        [ShortcutID.queueGroup]
+    }
+
+    static let collectionControlActionIDs = [
+        ActionID.pauseCollection,
+        ActionID.resumeCollection,
+        ActionID.toggleCollection,
+        ActionID.clearAllHistory,
+    ]
+
+    var collapsibleShortcutSettingsGroupIDs: Set<String> {
+        [ShortcutID.panelGroup, ShortcutID.collectionGroup]
+    }
+
+    var collapsibleActionSettingsGroupIDs: Set<String> {
+        [ShortcutID.queueGroup]
     }
 
     var actionDefinitions: [ActionDefinition] {
@@ -461,6 +928,42 @@ final class ClipboardHistoryPlugin:
                     defaultValue: "打开可搜索的本机剪贴板历史面板；再次按下全局快捷键可关闭。"
                 ),
                 systemImage: "clipboard"
+            ),
+            action(
+                id: ActionID.previousSequentialQueueItem,
+                title: localization.string("hud.queue.previous", defaultValue: "Previous Queue Item"),
+                description: localization.string(
+                    "action.queue.previous.description",
+                    defaultValue: "Move the sequential paste queue to the previous item."
+                ),
+                systemImage: "chevron.left"
+            ),
+            action(
+                id: ActionID.skipSequentialQueueItem,
+                title: localization.string("hud.queue.skip", defaultValue: "Skip Queue Item"),
+                description: localization.string(
+                    "action.queue.skip.description",
+                    defaultValue: "Skip the next item without pasting it."
+                ),
+                systemImage: "forward.end"
+            ),
+            action(
+                id: ActionID.restartSequentialQueue,
+                title: localization.string("hud.queue.restart", defaultValue: "Restart Queue"),
+                description: localization.string(
+                    "action.queue.restart.description",
+                    defaultValue: "Start the active paste queue again from its first item."
+                ),
+                systemImage: "backward.end"
+            ),
+            action(
+                id: ActionID.cancelSequentialQueue,
+                title: localization.string("hud.queue.cancel", defaultValue: "Cancel Queue"),
+                description: localization.string(
+                    "action.queue.cancel.description",
+                    defaultValue: "Cancel the active sequential paste queue."
+                ),
+                systemImage: "xmark.circle"
             ),
             action(
                 id: ActionID.pauseCollection,
@@ -484,26 +987,11 @@ final class ClipboardHistoryPlugin:
                 capabilities: [.automatic, .background, .foregroundInteractive]
             ),
             action(
-                id: ActionID.clearUnpinnedHistory,
-                title: localization.string("action.clearUnpinned.title", defaultValue: "清除未固定的剪贴板历史"),
-                description: localization.string(
-                    "action.clearUnpinned.description",
-                    defaultValue: "永久删除所有未固定的剪贴板记录。"
-                ),
-                systemImage: "trash",
-                risk: .confirmationRequired,
-                confirmation: ActionConfirmation(
-                    title: localization.string("clear.unpinned.actionTitle", defaultValue: "清除未固定的剪贴板历史？"),
-                    message: localization.string("clear.unpinned.message", defaultValue: "固定片段会保留。此操作无法撤销。"),
-                    confirmButtonTitle: localization.string("common.clear", defaultValue: "清除")
-                )
-            ),
-            action(
                 id: ActionID.clearAllHistory,
                 title: localization.string("action.clearAll.title", defaultValue: "清除全部剪贴板历史"),
                 description: localization.string(
                     "action.clearAll.description",
-                    defaultValue: "永久删除所有剪贴板记录和固定片段。"
+                    defaultValue: "Permanently delete all History items without removing Saved items."
                 ),
                 systemImage: "trash.slash",
                 risk: .confirmationRequired,
@@ -511,7 +999,7 @@ final class ClipboardHistoryPlugin:
                     title: localization.string("clear.all.title", defaultValue: "清除全部剪贴板历史？"),
                     message: localization.string(
                         "clear.all.actionMessage",
-                        defaultValue: "所有历史记录和固定片段都会被永久删除。此操作无法撤销。"
+                        defaultValue: "All History items will be permanently deleted. Saved items are not affected. This cannot be undone."
                     ),
                     confirmButtonTitle: localization.string("common.clearAll", defaultValue: "全部清除")
                 )
@@ -525,6 +1013,20 @@ final class ClipboardHistoryPlugin:
             return controller.isLoaded
                 ? .available
                 : .unavailable(localization.string("availability.loading", defaultValue: "剪贴板历史仍在载入。"))
+        case ActionID.restartSequentialQueue,
+             ActionID.previousSequentialQueueItem,
+             ActionID.skipSequentialQueueItem:
+            if isSequentialQueueMutationLocked {
+                return .unavailable(localization.string(
+                    "availability.sequentialPaste.inProgress",
+                    defaultValue: "Wait for the current sequential paste to finish."
+                ))
+            }
+            // Queue-control shortcuts remain configurable even while a queue is inactive.
+            // Invoking an inapplicable control is intentionally a no-op.
+            return .available
+        case ActionID.cancelSequentialQueue:
+            return .available
         case ActionID.pauseCollection:
             if let message = collectionActionBlockingMessage() {
                 return .unavailable(message)
@@ -540,16 +1042,6 @@ final class ClipboardHistoryPlugin:
                 return .unavailable(message)
             }
             return .available
-        case ActionID.clearUnpinnedHistory:
-            if controller.isClearingHistory {
-                return .unavailable(localization.string(
-                    "availability.clearInProgress",
-                    defaultValue: "正在清除剪贴板历史。"
-                ))
-            }
-            return controller.recentItems.isEmpty
-                ? .unavailable(localization.string("availability.noUnpinned", defaultValue: "没有可清除的未固定记录。"))
-                : .available
         case ActionID.clearAllHistory:
             if controller.isClearingHistory {
                 return .unavailable(localization.string(
@@ -581,24 +1073,31 @@ final class ClipboardHistoryPlugin:
             } else {
                 panelController.show()
             }
+        case ActionID.previousSequentialQueueItem:
+            guard !isSequentialQueueMutationLocked else { break }
+            sequentialPasteCoordinator.moveToPrevious()
+            sequentialQueueDidChange()
+        case ActionID.skipSequentialQueueItem:
+            guard !isSequentialQueueMutationLocked else { break }
+            sequentialPasteCoordinator.skip()
+            sequentialQueueDidChange()
+        case ActionID.restartSequentialQueue:
+            guard !isSequentialQueueMutationLocked else { break }
+            sequentialPasteCoordinator.restart()
+            sequentialQueueDidChange()
+        case ActionID.cancelSequentialQueue:
+            cancelPendingSequentialPastes()
+            sequentialHUDPreviewTask?.cancel()
+            sequentialHUDPreviewTask = nil
+            sequentialPasteCoordinator.cancel()
+            synchronizeSequentialPasteProtection()
+            sequentialPasteHUD.dismiss()
         case ActionID.pauseCollection:
             settingsStore.setPaused(true)
         case ActionID.resumeCollection:
             settingsStore.setPaused(false)
         case ActionID.toggleCollection:
             settingsStore.setPaused(!settingsStore.isPaused)
-        case ActionID.clearUnpinnedHistory:
-            let controller = controller
-            let failureMessage = localization.string(
-                "availability.clearInProgress",
-                defaultValue: "正在清除剪贴板历史。"
-            )
-            return ActionExecutionHandle {
-                let succeeded = await controller.clearUnpinnedHistory()
-                return succeeded
-                    ? .succeeded()
-                    : .failed(message: controller.errorMessage ?? failureMessage)
-            }
         case ActionID.clearAllHistory:
             let controller = controller
             let failureMessage = localization.string(
@@ -640,6 +1139,10 @@ final class ClipboardHistoryPlugin:
                     targetProcessIdentifier: targetProcessIdentifier
                 )
             }
+        case ShortcutID.pasteSequentially:
+            enqueueSequentialPaste(
+                targetProcessIdentifier: frontmostProcessIdentifier()
+            )
         default:
             return
         }
@@ -664,26 +1167,69 @@ final class ClipboardHistoryPlugin:
     func handlePermissionAction(id: String) {
         guard id == PermissionID.accessibility else { return }
         _ = accessibilityRequester(true)
+        synchronizeKeywordExpansion()
         onStateChange?()
     }
 
     func refreshAccessibilityPermission() {
+        synchronizeKeywordExpansion()
         onStateChange?()
     }
 
     func activate(context: PluginRuntimeContext) {
         controller.start()
+        savedLibraryController.start()
+        synchronizeKeywordExpansion()
     }
 
     func deactivate(reason: PluginDeactivationReason) {
+        cancelPendingSequentialPastes()
+        sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
+        synchronizeSequentialPasteProtection()
         panelController.close(restorePreviousApplication: false)
         privacyHUDPresenter.dismiss()
+        sequentialHUDPreviewTask?.cancel()
+        sequentialHUDPreviewTask = nil
+        sequentialPasteHUD.dismiss()
+        keywordExpander.stop()
         controller.stop()
+        savedLibraryController.stop()
     }
 
     func refresh() {
         controller.settingsDidChange()
         controller.start()
+        savedLibraryController.start()
+        synchronizeKeywordExpansion()
+    }
+
+    private func synchronizeKeywordExpansion() {
+        keywordExpander.onDiagnostic = { [weak settingsStore] diagnostic in
+            settingsStore?.keywordExpansionDiagnostic = diagnostic
+        }
+        guard settingsStore.isKeywordExpansionEnabled else {
+            settingsStore.keywordExpansionDiagnostic = nil
+            keywordExpander.stop()
+            settingsStore.setKeywordExpansionStatus(.off)
+            return
+        }
+        keywordExpander.updateItems()
+        guard keywordExpander.hasConfiguredKeywords else {
+            keywordExpander.stop()
+            settingsStore.setKeywordExpansionStatus(.noKeywords)
+            return
+        }
+        guard accessibilityTrusted() else {
+            keywordExpander.stop()
+            settingsStore.setKeywordExpansionStatus(.accessibilityRequired)
+            return
+        }
+        keywordExpansionStartAttemptCountForTesting += 1
+        settingsStore.setKeywordExpansionStatus(keywordExpander.start() ? .ready : .unavailable)
+    }
+
+    func setKeywordExpansionEnabledForTesting(_ enabled: Bool) {
+        settingsStore.isKeywordExpansionEnabled = enabled
     }
 
     private func performPrivateCopy(targetProcessIdentifier: pid_t?) async {
@@ -756,6 +1302,7 @@ final class ClipboardHistoryPlugin:
         }
         switch controller.rewriteCurrentClipboardAsPlainText() {
         case .succeeded:
+            resetImplicitQueueForManualClipboardWrite()
             break
         case .imageTextRecognitionPending:
             privacyHUDPresenter.showFailure(localization.string(
@@ -787,6 +1334,367 @@ final class ClipboardHistoryPlugin:
             }
             return
         }
+    }
+
+    private func enqueueSequentialPaste(targetProcessIdentifier: pid_t?) {
+        let remainingCount = sequentialPasteCoordinator.availablePasteRequestCount(
+            recentHistoryItemIDs: controller.recentItemIDsForSequentialPaste
+        )
+        let reservedRequestCount = pendingSequentialPasteTargets.count
+            + (isSequentialPasteInFlight ? 1 : 0)
+        guard reservedRequestCount < remainingCount else {
+            showSequentialPasteHUD()
+            return
+        }
+        pendingSequentialPasteTargets.append(targetProcessIdentifier)
+        startSequentialPasteWorkerIfNeeded()
+    }
+
+    private func startSequentialPasteWorkerIfNeeded() {
+        guard sequentialPasteWorkerTask == nil,
+              !pendingSequentialPasteTargets.isEmpty else { return }
+        sequentialPasteWorkerGeneration &+= 1
+        let generation = sequentialPasteWorkerGeneration
+        sequentialPasteWorkerTask = Task { @MainActor [weak self] in
+            await self?.drainSequentialPasteRequests(generation: generation)
+        }
+    }
+
+    private func drainSequentialPasteRequests(generation: Int) async {
+        var pastedAtLeastOneItem = false
+        defer {
+            if sequentialPasteWorkerGeneration == generation {
+                if pastedAtLeastOneItem {
+                    showSequentialPasteHUD()
+                }
+                sequentialPasteWorkerTask = nil
+                startSequentialPasteWorkerIfNeeded()
+            }
+        }
+
+        while sequentialPasteWorkerGeneration == generation,
+              !Task.isCancelled,
+              !pendingSequentialPasteTargets.isEmpty {
+            let targetProcessIdentifier = pendingSequentialPasteTargets.removeFirst()
+            isSequentialPasteInFlight = true
+            let didPaste = await performSequentialPaste(
+                targetProcessIdentifier: targetProcessIdentifier,
+                workerGeneration: generation
+            )
+            isSequentialPasteInFlight = false
+            guard didPaste else {
+                pendingSequentialPasteTargets.removeAll()
+                return
+            }
+            pastedAtLeastOneItem = true
+        }
+    }
+
+    private func cancelPendingSequentialPastes() {
+        sequentialPasteWorkerGeneration &+= 1
+        pendingSequentialPasteTargets.removeAll()
+        isSequentialPasteInFlight = false
+        sequentialPasteWorkerTask?.cancel()
+        sequentialPasteWorkerTask = nil
+    }
+
+    private func performSequentialPaste(
+        targetProcessIdentifier: pid_t?,
+        workerGeneration: Int
+    ) async -> Bool {
+        guard accessibilityTrusted() else {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.sequentialPaste.accessibilityRequired",
+                defaultValue: "Sequential paste requires Accessibility permission"
+            ))
+            if !accessibilityRequester(true) {
+                requestPermissionGuidance?(PermissionID.accessibility)
+            }
+            onStateChange?()
+            return false
+        }
+        guard let targetProcessIdentifier,
+              frontmostProcessIdentifier() == targetProcessIdentifier else {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.sequentialPaste.failed",
+                defaultValue: "Couldn’t paste the next clipboard item"
+            ))
+            return false
+        }
+        guard let operation = sequentialPasteCoordinator.nextOperation(
+            recentHistoryItemIDs: controller.recentItemIDsForSequentialPaste
+        ) else {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.sequentialPaste.empty",
+                defaultValue: "No clipboard items are available to paste"
+            ))
+            return false
+        }
+        let itemID = operation.itemID
+        synchronizeSequentialPasteProtection()
+
+        let didPreparePayload = await controller.preparePayloadForUse(id: itemID)
+        guard isCurrentSequentialPasteWorker(generation: workerGeneration) else {
+            return false
+        }
+        guard didPreparePayload else {
+            _ = sequentialPasteCoordinator.markCurrentUnavailable(operation: operation)
+            synchronizeSequentialPasteProtection()
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.sequentialPaste.unavailable",
+                defaultValue: "This queued item is no longer available"
+            ))
+            return false
+        }
+        let didCopyItem = await controller.copyItem(id: itemID)
+        guard isCurrentSequentialPasteWorker(generation: workerGeneration) else {
+            return false
+        }
+        guard didCopyItem else {
+            _ = sequentialPasteCoordinator.markCurrentUnavailable(operation: operation)
+            synchronizeSequentialPasteProtection()
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.sequentialPaste.unavailable",
+                defaultValue: "This queued item is no longer available"
+            ))
+            return false
+        }
+        let didSendPaste = await pasteCommandSender.sendPasteCommand(to: targetProcessIdentifier)
+        guard isCurrentSequentialPasteWorker(generation: workerGeneration) else {
+            return false
+        }
+        guard didSendPaste else {
+            synchronizeSequentialPasteProtection()
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.sequentialPaste.failed",
+                defaultValue: "Couldn’t paste the next clipboard item"
+            ))
+            return false
+        }
+        // Commit the exact item that was actually sent before yielding for pacing. Session-bound
+        // operations prevent a late completion from advancing a replaced or cancelled queue.
+        _ = sequentialPasteCoordinator.recordSuccessfulPaste(operation: operation)
+        synchronizeSequentialPasteProtection()
+        isSequentialPasteInFlight = false
+
+        // Shortcut presses are buffered immediately, while clipboard replacement is paced so the
+        // destination gets a reliable chance to consume the current payload first.
+        try? await Task.sleep(for: sequentialPasteStabilizationDelay)
+        return true
+    }
+
+    private var isSequentialQueueMutationLocked: Bool {
+        isSequentialPasteInFlight || !pendingSequentialPasteTargets.isEmpty
+    }
+
+    private func isCurrentSequentialPasteWorker(generation: Int) -> Bool {
+        sequentialPasteWorkerGeneration == generation && !Task.isCancelled
+    }
+
+    private func synchronizeSequentialPasteProtection() {
+        controller.updateSequentialPasteProtectedItemIDs(
+            sequentialPasteCoordinator.protectedItemIDs()
+        )
+    }
+
+    private func resetImplicitQueueForManualClipboardWrite() {
+        sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
+        synchronizeSequentialPasteProtection()
+    }
+
+    @discardableResult
+    private func startSequentialQueue(itemIDs: [UUID]) -> Bool {
+        do {
+            try sequentialPasteCoordinator.startExplicitQueue(itemIDs: itemIDs)
+            cancelPendingSequentialPastes()
+            synchronizeSequentialPasteProtection()
+            privacyHUDPresenter.showSuccess(localization.format(
+                "hud.queue.created",
+                defaultValue: "Queue ready · %lld items",
+                sequentialPasteCoordinator.session?.totalCount ?? 0
+            ))
+            showSequentialPasteHUD()
+            return true
+        } catch ClipboardSequentialQueueError.activeQueueExists {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.queue.active",
+                defaultValue: "Finish or cancel the current queue before creating another one"
+            ))
+        } catch ClipboardSequentialQueueError.exceedsMaximumItemCount {
+            privacyHUDPresenter.showFailure(localization.format(
+                "hud.queue.tooMany",
+                defaultValue: "A queue can contain up to %lld items",
+                ClipboardSequentialPasteSession.maximumItemCount
+            ))
+        } catch {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.queue.empty",
+                defaultValue: "Select at least one item for the queue"
+            ))
+        }
+        return false
+    }
+
+    private func sequentialQueueDidChange() {
+        synchronizeSequentialPasteProtection()
+        showSequentialPasteHUD()
+    }
+
+    private func showSequentialPasteHUD() {
+        sequentialHUDPreviewTask?.cancel()
+        sequentialHUDPreviewTask = nil
+        guard let session = sequentialPasteCoordinator.session else {
+            sequentialPasteHUD.dismiss()
+            return
+        }
+        guard !session.isComplete else {
+            sequentialPasteHUD.showCompletion(
+                source: session.source,
+                dismissAfter: settingsStore.sequentialHUDDismissal.interval
+            )
+            return
+        }
+        let justPastedID = session.cursor > 0 ? session.itemIDs[session.cursor - 1] : nil
+        let nextID = session.nextItemID
+        let content = makeSequentialHUDContent(
+            session: session,
+            justPastedID: justPastedID,
+            nextID: nextID,
+            justPastedPreviewImageData: nil,
+            nextPreviewImageData: nil
+        )
+        sequentialPasteHUD.show(
+            content,
+            dismissAfter: settingsStore.sequentialHUDDismissal.interval
+        )
+
+        guard !settingsStore.hidesSequentialHUDPreview else { return }
+        let expectedCursor = session.cursor
+        sequentialHUDPreviewTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            async let justPastedPreview = self.loadItemPreviewImageData(id: justPastedID)
+            async let nextPreview = self.loadItemPreviewImageData(id: nextID)
+            let loadedPreviews = await (justPastedPreview, nextPreview)
+            guard !Task.isCancelled,
+                  let currentSession = self.sequentialPasteCoordinator.session,
+                  currentSession.cursor == expectedCursor,
+                  currentSession.itemIDs == session.itemIDs else { return }
+            let updatedContent = self.makeSequentialHUDContent(
+                session: currentSession,
+                justPastedID: justPastedID,
+                nextID: nextID,
+                justPastedPreviewImageData: loadedPreviews.0,
+                nextPreviewImageData: loadedPreviews.1
+            )
+            self.sequentialPasteHUD.updateContentIfVisible(updatedContent)
+        }
+    }
+
+    private func makeSequentialHUDContent(
+        session: ClipboardSequentialPasteSession,
+        justPastedID: UUID?,
+        nextID: UUID?,
+        justPastedPreviewImageData: Data?,
+        nextPreviewImageData: Data?
+    ) -> ClipboardSequentialPasteHUDContent {
+        ClipboardSequentialPasteHUDContent(
+            source: session.source,
+            justPastedTitle: itemTitle(id: justPastedID),
+            nextTitle: itemTitle(id: nextID),
+            justPastedPreviewImageData: justPastedPreviewImageData,
+            nextPreviewImageData: nextPreviewImageData,
+            position: max(1, session.currentPosition ?? session.totalCount),
+            totalCount: session.totalCount,
+            hidesPreview: settingsStore.hidesSequentialHUDPreview,
+            isComplete: false
+        )
+    }
+
+    private func itemTitle(id: UUID?) -> String? {
+        guard let id, let item = controller.items.first(where: { $0.id == id }) else {
+            return nil
+        }
+        let rawTitle = item.text.isEmpty
+            ? Self.localizedContentKindTitle(item.kind, localization: localization)
+            : item.text
+        let title = rawTitle
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+        return String(title.prefix(100))
+    }
+
+    private static func localizedContentKindTitle(
+        _ kind: ClipboardHistoryContentKind,
+        localization: PluginLocalization
+    ) -> String {
+        switch kind {
+        case .plainText:
+            localization.string("content.kind.text", defaultValue: "Text")
+        case .richText:
+            localization.string("content.kind.richText", defaultValue: "Rich Text")
+        case .image:
+            localization.string("content.kind.image", defaultValue: "Image")
+        case .pdf:
+            localization.string("content.kind.pdf", defaultValue: "PDF")
+        case .files:
+            localization.string("content.kind.files", defaultValue: "Files")
+        case .link:
+            localization.string("content.kind.link", defaultValue: "Link")
+        case .color:
+            localization.string("content.kind.color", defaultValue: "Color")
+        case .media:
+            localization.string("content.kind.media", defaultValue: "Media")
+        }
+    }
+
+    private func loadItemPreviewImageData(id: UUID?) async -> Data? {
+        guard let id,
+              let item = controller.items.first(where: { $0.id == id }),
+              item.filterContentKinds.contains(.image) else { return nil }
+        guard let payload = try? await item.loadPayloadAsync() else { return nil }
+        let worker = Task.detached(priority: .utility) { () -> Data? in
+            guard !Task.isCancelled,
+                  let data = payload.representations.first(where: {
+                      ClipboardRepresentationType.isImage($0.typeIdentifier)
+                  })?.data else { return nil }
+            return Self.makeHUDThumbnailData(from: data)
+        }
+        let imageData = await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+        item.discardCachedPayloadIfReloadable()
+        return imageData
+    }
+
+    nonisolated static func makeHUDThumbnailData(from data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(
+                  data as CFData,
+                  [kCGImageSourceShouldCache: false] as CFDictionary
+              ),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+                as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
+              let height = properties[kCGImagePropertyPixelHeight] as? NSNumber,
+              ClipboardEmbeddedPreviewPolicy.allowsImageSourceDimensions(
+                  width: width.intValue,
+                  height: height.intValue
+              ),
+              !Task.isCancelled,
+              let thumbnail = CGImageSourceCreateThumbnailAtIndex(
+                  source,
+                  0,
+                  [
+                      kCGImageSourceCreateThumbnailFromImageAlways: true,
+                      kCGImageSourceCreateThumbnailWithTransform: true,
+                      kCGImageSourceShouldCacheImmediately: true,
+                      kCGImageSourceThumbnailMaxPixelSize: 160,
+                  ] as CFDictionary
+              ) else { return nil }
+        let bitmap = NSBitmapImageRep(cgImage: thumbnail)
+        return bitmap.representation(using: .png, properties: [:])
     }
 
     private func armIgnoreNextCopy() {
@@ -859,6 +1767,47 @@ final class ClipboardHistoryPlugin:
         _ error: Error,
         localization: PluginLocalization
     ) -> String {
+        if let templateError = error as? ClipboardSnippetTemplateError {
+            return templateError.localizedMessage(localization)
+        }
+        if let savedError = error as? ClipboardSavedLibraryError {
+            switch savedError {
+            case let .duplicateKeyword(keyword):
+                return localization.format(
+                    "saved.error.duplicateKeyword",
+                    defaultValue: "The keyword %@ is already assigned to another snippet.",
+                    keyword
+                )
+            case .invalidKeyword:
+                return localization.string(
+                    "saved.error.invalidKeyword",
+                    defaultValue: "A keyword cannot contain spaces or line breaks."
+                )
+            case let .snippetTooLarge(maximumByteCount):
+                return localization.format(
+                    "saved.error.snippetTooLarge",
+                    defaultValue: "A snippet cannot exceed %@.",
+                    ByteCountFormatter.string(
+                        fromByteCount: Int64(maximumByteCount),
+                        countStyle: .file
+                    )
+                )
+            case let .keywordExpansionCacheFull(maximumByteCount):
+                return localization.format(
+                    "saved.error.keywordCacheFull",
+                    defaultValue: "Keyword-enabled snippets cannot exceed %@ in total.",
+                    ByteCountFormatter.string(
+                        fromByteCount: Int64(maximumByteCount),
+                        countStyle: .file
+                    )
+                )
+            case .plainTextUnavailable:
+                return localization.string(
+                    "saved.error.plainTextUnavailable",
+                    defaultValue: "This saved item doesn’t contain pasteable text."
+                )
+            }
+        }
         guard let storeError = error as? ClipboardHistoryStoreError else {
             return error.localizedDescription
         }

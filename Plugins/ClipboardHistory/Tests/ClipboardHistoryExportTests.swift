@@ -8,6 +8,27 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryExportTests: XCTestCase {
+    func testPDFSharingPreservesPDFDataInsteadOfDegradingToEmbeddedText() async {
+        let pdfData = Data("%PDF-1.7 test".utf8)
+        let payload = ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.plainText,
+                    data: Data("Searchable PDF text".utf8)
+                ),
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.pdf,
+                    data: pdfData
+                ),
+            ]),
+        ])
+
+        let preparedShare = await ClipboardHistoryShareCoordinator.prepareSingleShare(
+            for: item(payload: payload)
+        )
+        XCTAssertEqual(preparedShare, .PDF(pdfData))
+    }
+
     func testPlannerOffersExpectedFormatsAndDefaults() throws {
         let richPayload = try richTextPayload("Title\nBody")
         let richItem = item(payload: richPayload)
@@ -15,6 +36,11 @@ final class ClipboardHistoryExportTests: XCTestCase {
 
         XCTAssertEqual(richOptions.map(\.format), [.html, .pdf, .markdown, .plainText, .original])
         XCTAssertEqual(richOptions.filter(\.isDefault).map(\.format), [.html])
+
+        let plainItem = item(payload: .plainText("Plain note"))
+        let plainOptions = ClipboardHistoryExportPlanner.options(for: plainItem)
+        XCTAssertEqual(plainOptions.map(\.format), [.plainText, .markdown, .pdf])
+        XCTAssertEqual(plainOptions.filter(\.isDefault).map(\.format), [.plainText])
 
         let imageItem = item(payload: imagePayload())
         XCTAssertEqual(ClipboardHistoryExportPlanner.defaultFormat(for: imageItem), .png)
@@ -77,6 +103,49 @@ final class ClipboardHistoryExportTests: XCTestCase {
 
         XCTAssertEqual(artifacts.count, 1)
         XCTAssertEqual(String(data: try XCTUnwrap(artifacts[0].data), encoding: .utf8), text)
+    }
+
+    func testPlainTextExportsMarkdownVerbatimAndReadablePDF() async throws {
+        let text = "# Heading\n\nLiteral <tag> & **markers**"
+        let payload = ClipboardHistoryPayload.plainText(text)
+        let item = item(payload: payload)
+
+        let markdownPlan = try ClipboardHistoryExportPlanner.makePlan(
+            item: item,
+            payload: payload,
+            format: .markdown,
+            baseName: "Clipboard Text"
+        )
+        let markdownArtifacts = try await ClipboardHistoryExportService.makeArtifacts(
+            item: item,
+            payload: payload,
+            plan: markdownPlan,
+            baseName: "Clipboard Text"
+        )
+        XCTAssertEqual(markdownPlan.suggestedName, "Clipboard Text.md")
+        XCTAssertEqual(
+            String(data: try XCTUnwrap(markdownArtifacts[0].data), encoding: .utf8),
+            text
+        )
+
+        let html = try ClipboardRichDocumentExporter.plainTextHTML(for: payload)
+        XCTAssertTrue(html.contains("Literal &lt;tag&gt; &amp; **markers**"), html)
+        XCTAssertFalse(html.contains("Literal <tag>"), html)
+
+        let pdfPlan = try ClipboardHistoryExportPlanner.makePlan(
+            item: item,
+            payload: payload,
+            format: .pdf,
+            baseName: "Clipboard Text"
+        )
+        let pdfArtifacts = try await ClipboardHistoryExportService.makeArtifacts(
+            item: item,
+            payload: payload,
+            plan: pdfPlan,
+            baseName: "Clipboard Text"
+        )
+        XCTAssertEqual(pdfPlan.suggestedName, "Clipboard Text.pdf")
+        XCTAssertTrue(try XCTUnwrap(pdfArtifacts[0].data).starts(with: Data("%PDF".utf8)))
     }
 
     func testRecognizedTextExportRunsRecognizerInsteadOfUsingSearchIndex() async throws {
