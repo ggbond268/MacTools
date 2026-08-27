@@ -48,6 +48,10 @@
       "summary": "重新啟動 macOS 使用者服務，嘗試恢復常見執行階段異常"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.0.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -68,5 +72,155 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "system"
+  "category": "system",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "system",
+      "soft",
+      "restart"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إعادة تشغيل النظام برمجيًا"
+      ],
+      "de": [
+        "System-Sanftneustart"
+      ],
+      "en": [
+        "System Soft Restart"
+      ],
+      "es": [
+        "Reinicio suave del sistema"
+      ],
+      "fr": [
+        "Redémarrage logiciel du système"
+      ],
+      "ja": [
+        "システムソフト再起動"
+      ],
+      "ko": [
+        "시스템 소프트 재시작"
+      ],
+      "pt": [
+        "Reinicialização suave do sistema"
+      ],
+      "ru": [
+        "Мягкий перезапуск системы"
+      ],
+      "zh-Hans": [
+        "系统软重启"
+      ],
+      "zh-Hant": [
+        "系統軟重啟"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "system"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "system-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "system-soft-restart",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "restart-user-services",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "系统软重启",
+              "soft restart",
+              "launchd",
+              "repair",
+              "修复",
+              "重启服务",
+              "system",
+              "soft",
+              "restart",
+              "user",
+              "services"
+            ],
+            "systemImage": "arrow.clockwise.circle.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

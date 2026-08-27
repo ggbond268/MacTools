@@ -39,11 +39,29 @@ struct PluginCatalogProviderConfiguration {
         return URL(string: "https://mactools.ggbond.app/plugins/v\(pluginKitVersion)/catalog.json")!
     }
 
-    static let productionCatalogURL = productionCatalogURL(
-        for: PluginPackageManifestLoader.supportedPluginKitVersion
-    )
+    // Schema 3 lives on its own compatibility endpoint so released PluginKit 5
+    // hosts can keep reading the immutable schema-2 catalog they understand.
+    static let schema3ProductionCatalogURL = URL(
+        string: "https://mactools.ggbond.app/plugins/v5/schema3/catalog.json"
+    )!
 
-    static func defaultSource(environment: [String: String] = ProcessInfo.processInfo.environment) -> PluginCatalogSource {
+    static func productionCatalogURL(
+        forHostVersion hostVersion: String,
+        pluginKitVersion: Int = PluginPackageManifestLoader.supportedPluginKitVersion
+    ) -> URL {
+        guard pluginKitVersion == 5 else {
+            return productionCatalogURL(for: pluginKitVersion)
+        }
+        guard PluginVersionComparator.isVersion(hostVersion, atLeast: "1.2.1") else {
+            return productionCatalogURL(for: pluginKitVersion)
+        }
+        return schema3ProductionCatalogURL
+    }
+
+    static func defaultSource(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        hostVersion: String = AppMetadata.shortVersion ?? "0"
+    ) -> PluginCatalogSource {
         #if DEBUG
         if let rawURL = environment["MACTOOLS_PLUGIN_CATALOG_URL"],
            let url = URL(string: rawURL) {
@@ -55,7 +73,7 @@ struct PluginCatalogProviderConfiguration {
         }
         #endif
 
-        return .production(productionCatalogURL)
+        return .production(productionCatalogURL(forHostVersion: hostVersion))
     }
 
     private static func source(forEnvironmentCatalogURL url: URL) -> PluginCatalogSource {

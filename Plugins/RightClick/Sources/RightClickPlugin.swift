@@ -87,7 +87,7 @@ final class RightClickPlugin: MacToolsPlugin {
         [
             PluginPermissionRequirement(
                 id: RightClickPermissionID.finderExtension,
-                kind: .automation,
+                kind: .finderExtension,
                 title: localization.string("permission.finderExtension.title", defaultValue: "Finder 扩展"),
                 description: localization.string(
                     "permission.finderExtension.description",

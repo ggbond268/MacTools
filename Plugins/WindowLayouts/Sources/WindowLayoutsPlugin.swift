@@ -28,7 +28,8 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     PluginActionShortcutSettingsProviding, PluginRetiredActionShortcutProviding,
     PluginActionShortcutPresetApplying, PluginActionShortcutReplacementTransactionApplying,
     PluginActionShortcutAssignmentChangeHandling, ObservableObject,
-    PluginFocusedWindowTargetConsuming
+    PluginFocusedWindowTargetConsuming, PluginInputGestureClaimProviding,
+    PluginInputGestureConflictConsuming
 {
     private enum PermissionID { static let accessibility = "accessibility" }
     private enum SettingsID {
@@ -36,6 +37,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         static let cyclesHalves = "cycles-halves"
         static let respectsStageManager = "respects-stage-manager"
         static let showsCommandFeedback = "shows-command-feedback"
+        static let modifierDragEnabled = "modifier-drag.enabled"
         static let reset = "reset"
         static let addCustom = "add-custom"
     }
@@ -84,7 +86,12 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     private let applicationTarget: WindowLayoutsApplicationTarget
     private let accessibilityTrusted: @MainActor @Sendable () -> Bool
     private let requestAccessibilityTrust: @MainActor @Sendable (Bool) -> Bool
+    private let makeModifierDragSession: @MainActor () -> any WindowModifierDragSessionManaging
     private var isAccessibilityGranted: Bool
+    private var modifierDragSession: (any WindowModifierDragSessionManaging)?
+    private var modifierDragError: String?
+    private var modifierDragMonitorStartFailed = false
+    private var externalGestureConflicts: [PluginInputGestureConflict] = []
 
     var actionExecutionRevision: UInt64 { store.revision }
 
@@ -95,6 +102,9 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     init(
         context: PluginRuntimeContext = PluginRuntimeContext(pluginID: "window-layouts"),
         executor: WindowLayoutExecuting? = nil,
+        makeModifierDragSession: @escaping @MainActor () -> any WindowModifierDragSessionManaging = {
+            WindowModifierDragSession()
+        },
         accessibilityTrusted: @escaping @MainActor @Sendable () -> Bool = AXIsProcessTrusted,
         requestAccessibilityTrust: @escaping @MainActor @Sendable (Bool) -> Bool = WindowLayoutsAccessibilityCheck.requestTrust
     ) {
@@ -104,6 +114,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         self.store = store
         self.accessibilityTrusted = accessibilityTrusted
         self.requestAccessibilityTrust = requestAccessibilityTrust
+        self.makeModifierDragSession = makeModifierDragSession
         self.isAccessibilityGranted = accessibilityTrusted()
         let applicationTarget = WindowLayoutsApplicationTarget()
         self.applicationTarget = applicationTarget
@@ -141,6 +152,14 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         self.store.onSafetyPolicyMutation = { [weak self] in
             self?.onActionSafetyStateChange?()
         }
+    }
+
+    var activeInputGestureClaims: [PluginInputGestureClaim] {
+        guard store.modifierDragEnabled,
+              isAccessibilityGranted,
+              !modifierDragMonitorStartFailed
+        else { return [] }
+        return [modifierDragClaim]
     }
 
     var permissionRequirements: [PluginPermissionRequirement] {
@@ -286,13 +305,33 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         }
     }
 
-    func activate(context: PluginRuntimeContext) { refreshAccessibilityPermission() }
-    func refresh() { refreshAccessibilityPermission() }
+    func activate(context: PluginRuntimeContext) {
+        refreshAccessibilityPermission()
+        applyModifierDragConfiguration()
+    }
+
+    func deactivate(reason: PluginDeactivationReason) {
+        stopModifierDragSession()
+    }
+
+    func refresh() {
+        refreshAccessibilityPermission()
+        applyModifierDragConfiguration()
+    }
 
     func refreshAccessibilityPermission() {
         let previous = isAccessibilityGranted
         isAccessibilityGranted = accessibilityTrusted()
-        if previous != isAccessibilityGranted { onStateChange?() }
+        if previous != isAccessibilityGranted {
+            if isAccessibilityGranted {
+                modifierDragError = nil
+                modifierDragMonitorStartFailed = false
+            } else if store.modifierDragEnabled {
+                modifierDragError = localizedMessage(for: .accessibilityRequired)
+            }
+            applyModifierDragConfiguration()
+            onStateChange?()
+        }
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
@@ -334,6 +373,8 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
                 store.setRespectsStageManager(value)
             } else if controlID == SettingsID.showsCommandFeedback {
                 store.setShowsCommandFeedback(value)
+            } else if controlID == SettingsID.modifierDragEnabled {
+                setModifierDragEnabled(value)
             } else {
                 updateBoolean(controlID: controlID, value: value)
             }
@@ -402,11 +443,145 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     private var settingsSections: [PluginSettingsSection] {
         var sections = [
             generalSettingsSection,
+            modifierDragSettingsSection,
             shortcutPresetSection,
             customCommandOverviewSection,
         ]
         sections.append(contentsOf: store.customCommands.map(customCommandSection))
         return sections
+    }
+
+    private var modifierDragSettingsSection: PluginSettingsSection {
+        PluginSettingsSection(
+            id: "modifier-drag",
+            title: localizedKey("settings.modifierDrag.sectionTitle", "修饰键拖移"),
+            systemImage: "cursorarrow.motionlines",
+            footer: modifierDragFooter
+        ) { [weak self] _ in
+            if let self {
+                WindowModifierDragSettingsView(plugin: self)
+            }
+        }
+    }
+
+    var isModifierDragEnabled: Bool { store.modifierDragEnabled }
+    var modifierDragModifiers: ShortcutModifiers { store.modifierDragModifiers }
+
+    func setModifierDragModifiers(_ modifiers: ShortcutModifiers) {
+        modifierDragError = nil
+        modifierDragMonitorStartFailed = false
+        store.setModifierDragModifiers(modifiers)
+        applyModifierDragConfiguration()
+    }
+
+    func inputGestureConflictsDidChange(_ conflicts: [PluginInputGestureConflict]) {
+        let previousConflict = modifierDragConflict
+        externalGestureConflicts = conflicts
+        guard previousConflict != modifierDragConflict else { return }
+        applyModifierDragConfiguration()
+    }
+
+    func setModifierDragEnabled(_ enabled: Bool) {
+        modifierDragError = nil
+        modifierDragMonitorStartFailed = false
+        guard enabled else {
+            store.setModifierDragEnabled(false)
+            applyModifierDragConfiguration()
+            return
+        }
+
+        isAccessibilityGranted = accessibilityTrusted()
+        if !isAccessibilityGranted {
+            isAccessibilityGranted = requestAccessibilityTrust(true)
+        }
+        guard isAccessibilityGranted else {
+            modifierDragError = localizedMessage(for: .accessibilityRequired)
+            requestPermissionGuidance?(PermissionID.accessibility)
+            onStateChange?()
+            return
+        }
+        store.setModifierDragEnabled(true)
+        applyModifierDragConfiguration()
+    }
+
+    private func applyModifierDragConfiguration() {
+        guard store.modifierDragEnabled,
+              isAccessibilityGranted,
+              modifierDragConflict == nil
+        else {
+            stopModifierDragSession()
+            return
+        }
+
+        let session: any WindowModifierDragSessionManaging
+        if let modifierDragSession {
+            session = modifierDragSession
+        } else {
+            let newSession = makeModifierDragSession()
+            newSession.onFailure = { [weak self] error in
+                guard let self else { return }
+                self.modifierDragError = self.localizedMessage(for: error)
+                self.onStateChange?()
+            }
+            newSession.onSuccess = { [weak self] in
+                guard let self, self.modifierDragError != nil else { return }
+                self.modifierDragError = nil
+                self.onStateChange?()
+            }
+            modifierDragSession = newSession
+            session = newSession
+        }
+        session.configure(modifiers: store.modifierDragModifiers)
+        switch session.start() {
+        case .success:
+            modifierDragMonitorStartFailed = false
+        case let .failure(error):
+            session.stop()
+            modifierDragSession = nil
+            modifierDragMonitorStartFailed = true
+            modifierDragError = localizedMessage(for: error)
+            onStateChange?()
+        }
+    }
+
+    private func stopModifierDragSession() {
+        modifierDragSession?.stop()
+        modifierDragSession = nil
+    }
+
+    private var modifierDragClaim: PluginInputGestureClaim {
+        PluginInputGestureClaim(
+            id: "pointer.move.modifiers.\(store.modifierDragModifiers.rawValue)",
+            title: localizedKey("settings.modifierDrag.sectionTitle", "修饰键拖移")
+                + " \(store.modifierDragModifiers.symbolString)"
+        )
+    }
+
+    private var modifierDragConflict: PluginInputGestureConflict? {
+        externalGestureConflicts.first(where: { $0.claim.id == modifierDragClaim.id })
+    }
+
+    private var modifierDragFooter: String? {
+        if store.modifierDragEnabled {
+            if let conflict = modifierDragConflict {
+                return localization.format(
+                    "settings.modifierDrag.conflictFormat",
+                    defaultValue: "该组合正由“%@”使用。修饰键拖移已暂停。",
+                    conflict.ownerPluginTitle
+                )
+            }
+            if let modifierDragError { return modifierDragError }
+        }
+        if store.modifierDragModifiers.rawValue.nonzeroBitCount == 1 {
+            return localizedKey(
+                "settings.modifierDrag.singleWarning",
+                "单个修饰键容易误触，建议使用两个或更多修饰键。"
+            )
+        }
+        return localizedKey(
+            "settings.modifierDrag.footer",
+            "按住精确组合并移动指针，即可拖移指针下方最上层窗口；无需点击。"
+        )
     }
 
     private var generalSettingsSection: PluginSettingsSection {
@@ -703,7 +878,10 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     private func handleInvoke(_ controlID: String) {
         switch controlID {
         case SettingsID.reset:
+            modifierDragError = nil
+            modifierDragMonitorStartFailed = false
             store.reset()
+            applyModifierDragConfiguration()
         case SettingsID.addCustom:
             _ = store.addCustomCommand(
                 name: localizedKey("settings.custom.defaultName", "自定义布局")
@@ -942,6 +1120,10 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         case .executionQueueFull: localizedKey("error.executionQueueFull", "等待中的窗口布局操作过多。")
         case .accessibilityRequired: localizedKey("error.accessibilityRequired", "窗口布局需要辅助功能权限。")
         case .noFocusedWindow: localizedKey("error.noFocusedWindow", "没有可用的聚焦窗口。")
+        case .noWindowUnderPointer: localizedKey(
+            "error.noWindowUnderPointer",
+            "指针下方没有可移动的窗口。"
+        )
         case .windowUnavailable: localizedKey("error.windowUnavailable", "当前窗口已不可用。")
         case .windowCannotMove: localizedKey("error.windowCannotMove", "此窗口无法移动。")
         case .windowCannotResize: localizedKey("error.windowCannotResize", "此窗口无法调整大小。")
@@ -956,6 +1138,16 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         case .noPreviousFrame: localizedKey("error.noPreviousFrame", "此窗口没有可恢复的上一个位置。")
         case .frameReadFailed: localizedKey("error.frameReadFailed", "无法读取当前窗口的位置和大小。")
         case .frameWriteFailed: localizedKey("error.frameWriteFailed", "无法调整当前窗口。")
+        }
+    }
+
+    private func localizedMessage(for error: WindowModifierDragMonitorStartError) -> String {
+        switch error {
+        case .eventTapUnavailable, .runLoopSourceUnavailable, .eventLoopUnavailable:
+            localizedKey(
+                "error.modifierDragMonitorUnavailable",
+                "无法启动全局指针监控。请关闭后重新开启修饰键拖移。"
+            )
         }
     }
 

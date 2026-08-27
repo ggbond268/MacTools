@@ -20,10 +20,15 @@ private struct AppearancePluginProvider: PluginProvider {
 }
 
 @MainActor
-final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding {
+final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding,
+    PluginActionPermissionProviding
+{
     private enum ActionID {
         static let setEnabled = "set-enabled"
         static let toggle = "toggle"
+    }
+    private enum PermissionID {
+        static let automation = "automation"
     }
     let metadata: PluginMetadata
 
@@ -78,7 +83,19 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
         )
     }
 
-    var permissionRequirements: [PluginPermissionRequirement] { [] }
+    var permissionRequirements: [PluginPermissionRequirement] {
+        [
+            PluginPermissionRequirement(
+                id: PermissionID.automation,
+                kind: .automation,
+                title: localization.string("permission.automation.title", defaultValue: "自动化"),
+                description: localization.string(
+                    "permission.automation.description",
+                    defaultValue: "切换系统外观时需要控制系统事件。"
+                )
+            ),
+        ]
+    }
     var shortcutDefinitions: [PluginShortcutDefinition] { [] }
 
     var actionDefinitions: [ActionDefinition] {
@@ -147,10 +164,30 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
-        PluginPermissionState(isGranted: true, footnote: nil)
+        PluginPermissionState(
+            isGranted: false,
+            footnote: permissionID == PermissionID.automation
+                ? localization.string(
+                    "permission.automation.footnote",
+                    defaultValue: "macOS 会在首次使用时请求自动化授权。"
+                )
+                : nil,
+            statusText: permissionID == PermissionID.automation
+                ? localization.string("permission.automation.status", defaultValue: "按需确认")
+                : nil,
+            statusSystemImage: permissionID == PermissionID.automation ? "cursorarrow.click.2" : nil,
+            statusTone: permissionID == PermissionID.automation ? .neutral : nil
+        )
     }
 
-    func handlePermissionAction(id: String) {}
+    func handlePermissionAction(id: String) {
+        guard id == PermissionID.automation else { return }
+        requestPermissionGuidance?(PermissionID.automation)
+    }
+    func permissionRequirementIDs(for actionKey: ActionKey) -> [String] {
+        guard actionKey.providerID == metadata.id else { return [] }
+        return [PermissionID.automation]
+    }
     func handleSettingsAction(_ action: PluginSettingsAction) {}
     func handleShortcutAction(id: String) {}
 

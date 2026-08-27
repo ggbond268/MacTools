@@ -48,6 +48,12 @@
       "summary": "將自訂觸控板手勢對應為 MacTools 操作、快速鍵或中鍵點按"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description"
+  },
   "version": "1.0.2",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -66,5 +72,121 @@
     "accessibility",
     "inputMonitoring"
   ],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "trackpad",
+      "gestures",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إيماءات لوحة التتبع"
+      ],
+      "de": [
+        "Trackpad-Gesten"
+      ],
+      "en": [
+        "Trackpad Gestures"
+      ],
+      "es": [
+        "Gestos del trackpad"
+      ],
+      "fr": [
+        "Gestes du trackpad"
+      ],
+      "ja": [
+        "トラックパッドジェスチャ"
+      ],
+      "ko": [
+        "트랙패드 제스처"
+      ],
+      "pt": [
+        "Gestos do trackpad"
+      ],
+      "ru": [
+        "Жесты трекпада"
+      ],
+      "zh-Hans": [
+        "触控板手势"
+      ],
+      "zh-Hant": [
+        "觸控板手勢"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility",
+      "inputMonitoring"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "input-events"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

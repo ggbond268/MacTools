@@ -48,6 +48,10 @@
       "summary": "清空垃圾桶中的所有項目"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -62,6 +66,155 @@
     "componentPanel": false,
     "settings": "none"
   },
-  "permissions": [],
-  "category": "storage"
+  "permissions": [
+    "automation"
+  ],
+  "category": "storage",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "empty",
+      "trash",
+      "storage"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إفراغ سلة المهملات"
+      ],
+      "de": [
+        "Papierkorb leeren"
+      ],
+      "en": [
+        "Empty Trash"
+      ],
+      "es": [
+        "Vaciar papelera"
+      ],
+      "fr": [
+        "Vider la corbeille"
+      ],
+      "ja": [
+        "ゴミ箱を空にする"
+      ],
+      "ko": [
+        "휴지통 비우기"
+      ],
+      "pt": [
+        "Esvaziar Lixo"
+      ],
+      "ru": [
+        "Очистить корзину"
+      ],
+      "zh-Hans": [
+        "清空废纸篓"
+      ],
+      "zh-Hant": [
+        "清空垃圾桶"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "storage"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "automation"
+    ],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "storage-state"
+    ],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "empty-trash",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "empty",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "清空废纸篓",
+              "清空废纸篓中的所有项目",
+              "trash",
+              "delete",
+              "empty"
+            ],
+            "systemImage": "trash",
+            "parameters": [],
+            "permissionIDs": [
+              "automation"
+            ],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "confirmAlways"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

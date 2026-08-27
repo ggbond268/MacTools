@@ -48,6 +48,15 @@
       "summary": "自動隱藏Dock，提供更乾淨的桌面環境"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "action.toggle.title": "@standardAction.toggle.title",
+    "action.toggle.description": "@standardAction.toggle.description",
+    "action.set-enabled.title": "@standardAction.set-enabled.title",
+    "action.set-enabled.description": "@standardAction.set-enabled.description",
+    "action.set-enabled.parameter-summary": "@standardAction.set-enabled.description"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -62,6 +71,200 @@
     "componentPanel": false,
     "settings": "none"
   },
-  "permissions": [],
-  "category": "display"
+  "permissions": [
+    "automation"
+  ],
+  "category": "display",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "auto",
+      "hide",
+      "dock",
+      "display"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إخفاء Dock تلقائيًا"
+      ],
+      "de": [
+        "Dock automatisch ausblenden"
+      ],
+      "en": [
+        "Auto-hide Dock"
+      ],
+      "es": [
+        "Ocultar Dock automáticamente"
+      ],
+      "fr": [
+        "Masquer le Dock automatiquement"
+      ],
+      "ja": [
+        "Dockを自動的に隠す"
+      ],
+      "ko": [
+        "Dock 자동 숨기기"
+      ],
+      "pt": [
+        "Ocultar Dock automaticamente"
+      ],
+      "ru": [
+        "Автоскрытие Dock"
+      ],
+      "zh-Hans": [
+        "自动隐藏程序坞"
+      ],
+      "zh-Hant": [
+        "自動隱藏 Dock"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "display"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "automation"
+    ],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "display-state"
+    ],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "auto-hide-dock",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "toggle",
+            "title": "@productStrings.action.toggle.title",
+            "description": "@productStrings.action.toggle.description",
+            "keywords": [
+              "自动隐藏程序坞",
+              "Dock",
+              "auto",
+              "hide",
+              "dock",
+              "toggle"
+            ],
+            "systemImage": "rectangle.bottomthird.inset.filled",
+            "parameters": [],
+            "permissionIDs": [
+              "automation"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "set-enabled",
+            "title": "@productStrings.action.set-enabled.title",
+            "description": "@productStrings.action.set-enabled.description",
+            "keywords": [
+              "自动隐藏程序坞",
+              "Dock",
+              "auto",
+              "hide",
+              "dock",
+              "set",
+              "enabled"
+            ],
+            "systemImage": "rectangle.bottomthird.inset.filled",
+            "parameters": [
+              {
+                "id": "enabled",
+                "kind": "boolean",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "parameterSummary": "@productStrings.action.set-enabled.parameter-summary",
+            "permissionIDs": [
+              "automation"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

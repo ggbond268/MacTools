@@ -1,0 +1,338 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mactools.ggbond.app/schemas/plugin-manifest-v1.json",
+  "title": "MacTools source plugin manifest",
+  "type": "object",
+  "required": [
+    "id",
+    "displayName",
+    "version",
+    "minHostVersion",
+    "pluginKitVersion",
+    "bundleRelativePath",
+    "capabilities",
+    "permissions",
+    "category"
+  ],
+  "properties": {
+    "id": {"$ref": "#/$defs/pluginIdentifier"},
+    "displayName": {"type": "string", "minLength": 1},
+    "summary": {"type": "string", "minLength": 1},
+    "version": {"$ref": "#/$defs/version"},
+    "minHostVersion": {"$ref": "#/$defs/version"},
+    "pluginKitVersion": {"type": "integer", "minimum": 1},
+    "bundleRelativePath": {"$ref": "#/$defs/bundleRelativePath"},
+    "factoryClass": {"type": "string", "minLength": 1},
+    "capabilities": {"$ref": "#/$defs/capabilities"},
+    "permissions": {"type": "array", "items": {"$ref": "#/$defs/permission"}, "uniqueItems": true},
+    "category": {"enum": ["display", "audio", "system", "storage", "productivity", "monitoring", "other"]},
+    "releaseChannel": {"type": "string", "minLength": 1},
+    "releaseNotesURL": {"type": "string", "format": "uri", "pattern": "^https://"},
+    "localizedMetadata": {"$ref": "#/$defs/localizedMetadata"},
+    "productStrings": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"$ref": "#/$defs/identifier"},
+      "additionalProperties": {
+        "oneOf": [
+          {"enum": ["@displayName", "@summary"]},
+          {"type": "string", "pattern": "^@localizable\\.[^\\s]+$"},
+          {"type": "string", "pattern": "^@standardAction\\.(?:toggle|set-enabled)\\.(?:title|description)$"},
+          {"type": "string", "pattern": "^@standardSetup\\.requirements\\.(?:title|description)$"},
+          {"$ref": "#/$defs/completeLocalizedText"}
+        ]
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "required": ["longDescription", "examples", "screenshots", "publisher", "license"],
+      "properties": {
+        "longDescription": {"$ref": "#/$defs/localizedText"},
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text"],
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "text": {"$ref": "#/$defs/localizedText"}
+            }
+          }
+        },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "path", "alt"],
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "path": {"type": "string", "pattern": "^MarketplaceAssets/"},
+              "alt": {"$ref": "#/$defs/localizedText"}
+            }
+          }
+        },
+        "documentationURL": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "supportURL": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "publisher": {"type": "string", "minLength": 1},
+        "license": {"type": "string", "minLength": 1}
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "required": ["keywords", "localizedSynonyms", "useCases", "goalCategories", "relatedPluginIDs", "alternativePluginIDs"],
+      "properties": {
+        "keywords": {"$ref": "#/$defs/uniqueStrings"},
+        "localizedSynonyms": {"$ref": "#/$defs/completeLocalizedStringArrays"},
+        "useCases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "title"],
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "title": {"$ref": "#/$defs/localizedText"}
+            }
+          }
+        },
+        "goalCategories": {"$ref": "#/$defs/uniqueStrings"},
+        "relatedPluginIDs": {"$ref": "#/$defs/uniqueStrings"},
+        "alternativePluginIDs": {"$ref": "#/$defs/uniqueStrings"}
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "required": ["architectures", "hardware", "applications", "executables", "permissionIDs", "setupComplexity", "requiresRelaunch"],
+      "properties": {
+        "minimumMacOSVersion": {"$ref": "#/$defs/version"},
+        "architectures": {"type": "array", "items": {"enum": ["arm64", "x86_64"]}, "uniqueItems": true},
+        "hardware": {"$ref": "#/$defs/uniqueStrings"},
+        "applications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["bundleID", "name"],
+            "properties": {
+              "bundleID": {"type": "string", "minLength": 1},
+              "name": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "executables": {"$ref": "#/$defs/uniqueStrings"},
+        "permissionIDs": {"type": "array", "items": {"$ref": "#/$defs/permission"}, "uniqueItems": true},
+        "setupComplexity": {"enum": ["none", "simple", "guided", "advanced"]},
+        "requiresRelaunch": {"type": "boolean"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["dataObserved", "dataPersisted", "retention", "networkUse", "networkDomains", "telemetry", "processesSensitiveUserContent", "diagnosticExportsContainUserData"],
+      "properties": {
+        "dataObserved": {"$ref": "#/$defs/uniqueStrings"},
+        "dataPersisted": {"$ref": "#/$defs/uniqueStrings"},
+        "retention": {
+          "type": "object",
+          "required": ["policy"],
+          "properties": {
+            "policy": {"enum": ["none", "session", "until-disabled", "until-uninstalled", "user-controlled"]},
+            "description": {"$ref": "#/$defs/localizedText"}
+          }
+        },
+        "networkUse": {"enum": ["none", "optional", "required"]},
+        "networkDomains": {"$ref": "#/$defs/uniqueStrings"},
+        "allowsUserConfiguredDomains": {"type": "boolean"},
+        "telemetry": {"enum": ["none", "optional", "required"]},
+        "processesSensitiveUserContent": {"type": "boolean"},
+        "diagnosticExportsContainUserData": {"type": "boolean"}
+      }
+    },
+    "actions": {
+      "type": "object",
+      "required": ["providers"],
+      "properties": {
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "kind", "staticActions", "dynamicTemplates"],
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "kind": {"enum": ["static", "dynamic", "mixed"]},
+              "staticActions": {"type": "array", "items": {"$ref": "#/$defs/staticAction"}},
+              "dynamicTemplates": {"type": "array", "items": {"$ref": "#/$defs/dynamicTemplate"}}
+            }
+          }
+        }
+      }
+    },
+    "setup": {
+      "type": "object",
+      "required": ["steps", "optionalSurfaces"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "title", "description"],
+            "properties": {
+              "id": {"$ref": "#/$defs/identifier"},
+              "title": {"$ref": "#/$defs/localizedText"},
+              "description": {"$ref": "#/$defs/localizedText"}
+            }
+          }
+        },
+        "suggestedTestAction": {
+          "type": "object",
+          "required": ["providerID", "actionID"],
+          "properties": {
+            "providerID": {"$ref": "#/$defs/identifier"},
+            "actionID": {"$ref": "#/$defs/identifier"}
+          }
+        },
+        "optionalSurfaces": {"type": "array", "items": {"$ref": "#/$defs/surface"}, "uniqueItems": true},
+        "missingDependencyHelp": {"$ref": "#/$defs/localizedText"}
+      }
+    },
+    "relationships": {
+      "type": "object",
+      "required": ["relatedPluginIDs", "includedPackIDs", "suggestedRecipeIDs", "supersedesPluginIDs"],
+      "properties": {
+        "relatedPluginIDs": {"$ref": "#/$defs/uniqueStrings"},
+        "includedPackIDs": {"$ref": "#/$defs/uniqueStrings"},
+        "suggestedRecipeIDs": {"$ref": "#/$defs/uniqueStrings"},
+        "supersedesPluginIDs": {"$ref": "#/$defs/uniqueStrings"}
+      }
+    }
+  },
+  "$defs": {
+    "pluginIdentifier": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,126}[A-Za-z0-9]$",
+      "not": {"const": "marketplace"}
+    },
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "version": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+){0,2}$"},
+    "bundleRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "capabilities": {
+      "type": "object",
+      "required": ["primaryPanel", "componentPanel", "settings"],
+      "properties": {
+        "primaryPanel": {"type": "boolean"},
+        "componentPanel": {"type": "boolean"},
+        "settings": {"enum": ["none", "form", "workspace"]}
+      },
+      "additionalProperties": false
+    },
+    "localizedMetadata": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "displayName": {"type": "string", "minLength": 1},
+          "summary": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "uniqueStrings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "localizedText": {
+      "type": "string",
+      "pattern": "^@productStrings\\.[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "completeLocalizedText": {
+      "type": "object",
+      "required": ["ar", "de", "en", "es", "fr", "ja", "ko", "pt", "ru", "zh-Hans", "zh-Hant"],
+      "properties": {
+        "ar": {"type": "string", "minLength": 1}, "de": {"type": "string", "minLength": 1},
+        "en": {"type": "string", "minLength": 1}, "es": {"type": "string", "minLength": 1},
+        "fr": {"type": "string", "minLength": 1}, "ja": {"type": "string", "minLength": 1},
+        "ko": {"type": "string", "minLength": 1}, "pt": {"type": "string", "minLength": 1},
+        "ru": {"type": "string", "minLength": 1}, "zh-Hans": {"type": "string", "minLength": 1},
+        "zh-Hant": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "completeLocalizedStringArrays": {
+      "type": "object",
+      "required": ["ar", "de", "en", "es", "fr", "ja", "ko", "pt", "ru", "zh-Hans", "zh-Hant"],
+      "properties": {
+        "ar": {"$ref": "#/$defs/uniqueStrings"}, "de": {"$ref": "#/$defs/uniqueStrings"},
+        "en": {"$ref": "#/$defs/uniqueStrings"}, "es": {"$ref": "#/$defs/uniqueStrings"},
+        "fr": {"$ref": "#/$defs/uniqueStrings"}, "ja": {"$ref": "#/$defs/uniqueStrings"},
+        "ko": {"$ref": "#/$defs/uniqueStrings"}, "pt": {"$ref": "#/$defs/uniqueStrings"},
+        "ru": {"$ref": "#/$defs/uniqueStrings"}, "zh-Hans": {"$ref": "#/$defs/uniqueStrings"},
+        "zh-Hant": {"$ref": "#/$defs/uniqueStrings"}
+      },
+      "additionalProperties": false
+    },
+    "permission": {"enum": ["accessibility", "automation", "calendarFullAccess", "inputMonitoring", "screen-recording", "system-audio-recording"]},
+    "surface": {"enum": ["unified-search", "global-shortcut", "run-link", "workflow", "automatic-rule", "action-grid", "trackpad-gesture", "app-intent", "manual"]},
+    "parameter": {
+      "type": "object",
+      "required": ["id", "kind", "isRequired", "portability"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "kind": {"enum": ["boolean", "integer", "double", "string"]},
+        "isRequired": {"type": "boolean"},
+        "portability": {"enum": ["portable", "localOnly"]}
+      }
+    },
+    "actionPolicy": {
+      "type": "object",
+      "required": ["permissionIDs", "risk", "surfaces", "automaticEligible", "externalInvocation"],
+      "properties": {
+        "permissionIDs": {"type": "array", "items": {"$ref": "#/$defs/permission"}, "uniqueItems": true},
+        "risk": {"enum": ["safe", "confirmationRequired"]},
+        "surfaces": {"type": "array", "items": {"$ref": "#/$defs/surface"}, "uniqueItems": true},
+        "automaticEligible": {"type": "boolean"},
+        "externalInvocation": {"enum": ["unavailable", "allowed", "confirmAlways", "configurable"]}
+      }
+    },
+    "staticAction": {
+      "allOf": [
+        {"$ref": "#/$defs/actionPolicy"},
+        {
+          "type": "object",
+          "required": ["id", "title", "description", "keywords", "systemImage", "parameters"],
+          "properties": {
+            "id": {"$ref": "#/$defs/identifier"},
+            "title": {"$ref": "#/$defs/localizedText"},
+            "description": {"$ref": "#/$defs/localizedText"},
+            "keywords": {"$ref": "#/$defs/uniqueStrings"},
+            "systemImage": {"type": "string", "minLength": 1},
+            "parameters": {"type": "array", "items": {"$ref": "#/$defs/parameter"}},
+            "parameterSummary": {"$ref": "#/$defs/localizedText"}
+          }
+        }
+      ]
+    },
+    "dynamicTemplate": {
+      "allOf": [
+        {"$ref": "#/$defs/actionPolicy"},
+        {
+          "type": "object",
+          "required": ["id", "title", "description", "keywords", "parameters", "entrySource", "parameterSummary", "localOnlyIdentity"],
+          "properties": {
+            "id": {"$ref": "#/$defs/identifier"},
+            "title": {"$ref": "#/$defs/localizedText"},
+            "description": {"$ref": "#/$defs/localizedText"},
+            "keywords": {"$ref": "#/$defs/uniqueStrings"},
+            "parameters": {"type": "array", "items": {"$ref": "#/$defs/parameter"}},
+            "entrySource": {"type": "string", "minLength": 1},
+            "parameterSummary": {"$ref": "#/$defs/localizedText"},
+            "localOnlyIdentity": {"type": "boolean"},
+            "riskVariesByEntry": {"type": "boolean"},
+            "automaticEligibilityVariesByEntry": {"type": "boolean"}
+          }
+        }
+      ]
+    }
+  }
+}

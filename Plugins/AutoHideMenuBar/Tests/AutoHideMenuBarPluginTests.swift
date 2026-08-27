@@ -11,6 +11,14 @@ final class AutoHideMenuBarPluginTests: XCTestCase {
         XCTAssertEqual(plugin.primaryPanelState.subtitle, "已开启")
     }
 
+    func testAutomationPermissionIsReportedAsOnDemand() {
+        let state = makePlugin().permissionState(for: "automation")
+
+        XCTAssertFalse(state.isGranted)
+        XCTAssertEqual(state.statusText, "按需确认")
+        XCTAssertEqual(state.statusTone, .neutral)
+    }
+
     func testSwitchUpdatesMenuBarState() {
         let runner = MockMenuBarCommandRunner()
         let plugin = makePlugin(runner: runner)

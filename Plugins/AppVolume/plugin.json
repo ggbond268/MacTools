@@ -48,6 +48,112 @@
       "summary": "分別調整正在播放音訊的應用程式音量"
     }
   },
+  "productStrings": {
+    "long-description": {
+      "ar": "تحكّم في مستوى صوت كل تطبيق يشغّل الصوت على حدة، بما في ذلك الكتم ومستويات الصوت القابلة لإعادة الاستخدام.",
+      "de": "Steuere die Lautstärke jeder aktiven Audio-App einzeln, einschließlich Stummschaltung und wiederverwendbarer Pegel.",
+      "en": "Control each audio-playing app independently, including mute and reusable volume levels.",
+      "es": "Controla por separado cada aplicación que reproduce audio, incluido el silencio y los niveles reutilizables.",
+      "fr": "Contrôlez séparément chaque app qui diffuse du son, avec sourdine et niveaux réutilisables.",
+      "ja": "音声を再生中のアプリごとに、ミュートや再利用可能な音量を個別に調整します。",
+      "ko": "오디오를 재생 중인 앱마다 음소거 및 재사용 가능한 음량을 개별 제어합니다.",
+      "pt": "Controle separadamente cada app que reproduz áudio, incluindo silêncio e níveis reutilizáveis.",
+      "ru": "Управляйте громкостью каждого приложения со звуком отдельно, включая отключение и повторное использование уровней.",
+      "zh-Hans": "分别控制每个正在播放音频的应用，包括静音和可复用的音量级别。",
+      "zh-Hant": "分別控制每個正在播放音訊的 App，包括靜音和可重複使用的音量級別。"
+    },
+    "example-meeting-volume": {
+      "ar": "اخفض صوت تطبيق الموسيقى مع إبقاء تطبيق الاجتماع مرتفعًا.",
+      "de": "Senke die Musik-App ab, während die Meeting-App laut bleibt.",
+      "en": "Lower a music app while keeping your meeting app loud.",
+      "es": "Baja una aplicación de música y mantén alto el volumen de la reunión.",
+      "fr": "Baissez une app musicale tout en gardant l’app de réunion audible.",
+      "ja": "会議アプリの音量を保ったまま、音楽アプリだけ下げます。",
+      "ko": "회의 앱 음량은 유지하면서 음악 앱 음량만 낮춥니다.",
+      "pt": "Baixe um app de música mantendo o app da reunião audível.",
+      "ru": "Уменьшите громкость музыки, сохранив громкость приложения для встречи.",
+      "zh-Hans": "调低音乐应用，同时保持会议应用音量。",
+      "zh-Hant": "調低音樂 App，同時保持會議 App 音量。"
+    },
+    "use-case-balance-app-audio": {
+      "ar": "موازنة صوت التطبيقات",
+      "de": "App-Audio ausgleichen",
+      "en": "Balance app audio",
+      "es": "Equilibrar el audio de aplicaciones",
+      "fr": "Équilibrer le son des apps",
+      "ja": "アプリ音声のバランス調整",
+      "ko": "앱 오디오 균형 조절",
+      "pt": "Equilibrar áudio dos apps",
+      "ru": "Сбалансировать звук приложений",
+      "zh-Hans": "平衡应用音量",
+      "zh-Hant": "平衡 App 音量"
+    },
+    "template-app-volume-set-volume-title": {
+      "ar": "تعيين مستوى صوت تطبيق نشط",
+      "de": "Lautstärke einer aktiven App festlegen",
+      "en": "Set Active App Volume",
+      "es": "Establecer volumen de una aplicación activa",
+      "fr": "Régler le volume d’une app active",
+      "ja": "再生中アプリの音量を設定",
+      "ko": "활성 앱 음량 설정",
+      "pt": "Definir volume de um app ativo",
+      "ru": "Установить громкость активного приложения",
+      "zh-Hans": "设置活动应用音量",
+      "zh-Hant": "設定活動 App 音量"
+    },
+    "template-app-volume-set-volume-description": {
+      "ar": "يضبط مستوى صوت تطبيق يشغّل الصوت حاليًا على هذا الـ Mac.",
+      "de": "Legt die Lautstärke einer App fest, die gerade auf diesem Mac Audio wiedergibt.",
+      "en": "Set the volume of an app currently playing audio on this Mac.",
+      "es": "Ajusta el volumen de una aplicación que reproduce audio en este Mac.",
+      "fr": "Règle le volume d’une app qui diffuse actuellement du son sur ce Mac.",
+      "ja": "この Mac で現在音声を再生しているアプリの音量を設定します。",
+      "ko": "이 Mac에서 현재 오디오를 재생 중인 앱의 음량을 설정합니다.",
+      "pt": "Define o volume de um app que está a reproduzir áudio neste Mac.",
+      "ru": "Задаёт громкость приложения, которое сейчас воспроизводит звук на этом Mac.",
+      "zh-Hans": "设置当前在这台 Mac 上播放音频的应用音量。",
+      "zh-Hant": "設定目前在這台 Mac 上播放音訊的 App 音量。"
+    },
+    "template-app-volume-set-volume-parameter-summary": {
+      "ar": "معرّف تطبيق محلي ومستوى صوت من 0 إلى 1",
+      "de": "Lokale App-ID und Lautstärke von 0 bis 1",
+      "en": "Local app identifier and volume from 0 to 1",
+      "es": "Identificador local de aplicación y volumen de 0 a 1",
+      "fr": "Identifiant local de l’app et volume de 0 à 1",
+      "ja": "ローカルアプリ識別子と 0〜1 の音量",
+      "ko": "로컬 앱 식별자 및 0~1 음량",
+      "pt": "Identificador local do app e volume de 0 a 1",
+      "ru": "Локальный идентификатор приложения и громкость от 0 до 1",
+      "zh-Hans": "本地应用标识符和 0 到 1 的音量",
+      "zh-Hant": "本機 App 識別碼和 0 到 1 的音量"
+    },
+    "setup-grant-system-audio-title": {
+      "ar": "السماح بصوت النظام",
+      "de": "Systemaudio erlauben",
+      "en": "Allow System Audio",
+      "es": "Permitir audio del sistema",
+      "fr": "Autoriser l’audio système",
+      "ja": "システムオーディオを許可",
+      "ko": "시스템 오디오 허용",
+      "pt": "Permitir áudio do sistema",
+      "ru": "Разрешить системный звук",
+      "zh-Hans": "允许系统音频",
+      "zh-Hant": "允許系統音訊"
+    },
+    "setup-grant-system-audio-description": {
+      "ar": "امنح الإذن عند أول تعديل لمستوى الصوت.",
+      "de": "Erteile die Berechtigung bei der ersten Lautstärkeänderung.",
+      "en": "Grant permission when changing an app volume for the first time.",
+      "es": "Concede permiso al cambiar por primera vez el volumen de una aplicación.",
+      "fr": "Accordez l’autorisation au premier changement de volume d’une app.",
+      "ja": "初めてアプリ音量を変更するときに許可します。",
+      "ko": "앱 음량을 처음 변경할 때 권한을 허용합니다.",
+      "pt": "Conceda permissão ao alterar o volume de um app pela primeira vez.",
+      "ru": "Предоставьте разрешение при первом изменении громкости приложения.",
+      "zh-Hans": "首次更改应用音量时授予权限。",
+      "zh-Hant": "首次更改 App 音量時授予權限。"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,7 +169,202 @@
     "settings": "form"
   },
   "permissions": [
-    "screen-recording"
+    "system-audio-recording"
   ],
-  "category": "audio"
+  "category": "audio",
+  "presentation": {
+    "longDescription": "@productStrings.long-description",
+    "examples": [
+      {
+        "id": "meeting-volume",
+        "text": "@productStrings.example-meeting-volume"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "application volume",
+      "audio",
+      "mute",
+      "mixer"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "صوت التطبيقات",
+        "خالط الصوت"
+      ],
+      "de": [
+        "App-Lautstärke",
+        "Audiomixer"
+      ],
+      "en": [
+        "app volume",
+        "audio mixer"
+      ],
+      "es": [
+        "volumen por aplicación",
+        "mezclador"
+      ],
+      "fr": [
+        "volume des apps",
+        "mélangeur audio"
+      ],
+      "ja": [
+        "アプリ音量",
+        "オーディオミキサー"
+      ],
+      "ko": [
+        "앱 음량",
+        "오디오 믹서"
+      ],
+      "pt": [
+        "volume por app",
+        "misturador de áudio"
+      ],
+      "ru": [
+        "громкость приложений",
+        "аудиомикшер"
+      ],
+      "zh-Hans": [
+        "应用音量",
+        "音频混音"
+      ],
+      "zh-Hant": [
+        "App 音量",
+        "音訊混音"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "balance-app-audio",
+        "title": "@productStrings.use-case-balance-app-audio"
+      }
+    ],
+    "goalCategories": [
+      "audio",
+      "focus",
+      "automation"
+    ],
+    "relatedPluginIDs": [
+      "system-mute"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "15.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [
+      "audio-output"
+    ],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "system-audio-recording"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "active-audio-applications",
+      "application-audio-levels"
+    ],
+    "dataPersisted": [
+      "application-identifiers",
+      "preferred-volume-levels"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "app-volume",
+        "kind": "dynamic",
+        "staticActions": [],
+        "dynamicTemplates": [
+          {
+            "id": "set-volume",
+            "title": "@productStrings.template-app-volume-set-volume-title",
+            "description": "@productStrings.template-app-volume-set-volume-description",
+            "entrySource": "active-audio-applications",
+            "keywords": [
+              "application volume",
+              "audio",
+              "mute"
+            ],
+            "parameters": [
+              {
+                "id": "application",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "localOnly"
+              },
+              {
+                "id": "volume",
+                "kind": "double",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "parameterSummary": "@productStrings.template-app-volume-set-volume-parameter-summary",
+            "localOnlyIdentity": true,
+            "permissionIDs": [
+              "system-audio-recording"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          }
+        ]
+      }
+    ]
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "grant-system-audio",
+        "title": "@productStrings.setup-grant-system-audio-title",
+        "description": "@productStrings.setup-grant-system-audio-description"
+      }
+    ],
+    "optionalSurfaces": [
+      "global-shortcut",
+      "workflow",
+      "automatic-rule",
+      "action-grid"
+    ]
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "system-mute"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

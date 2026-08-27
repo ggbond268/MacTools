@@ -48,6 +48,23 @@
       "summary": "掃描系統快取、開發產物與殘留安裝包，預設移到廢紙簍，執行前校驗路徑安全"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "retention-description": {
+      "ar": "تظل إعدادات التنظيف محفوظة حتى إزالة بيانات الإضافة. يحتفظ سجل التدقيق بملفين بحد أقصى، حجم كل منهما 5 ميغابايت، وتُضغط سجلات التجهيز بعد الاسترداد.",
+      "de": "Bereinigungseinstellungen bleiben bis zum Entfernen der Plug-in-Daten erhalten. Der Prüfverlauf umfasst höchstens zwei 5-MB-Dateien; Staging-Einträge werden nach der Wiederherstellung komprimiert.",
+      "en": "Cleanup settings persist until plugin data is removed. Audit history keeps at most two 5 MB log files, and staging records are compacted after recovery.",
+      "es": "Los ajustes de limpieza se conservan hasta que se eliminan los datos del complemento. El historial de auditoría guarda como máximo dos archivos de 5 MB y los registros de preparación se compactan tras la recuperación.",
+      "fr": "Les réglages de nettoyage restent jusqu’à la suppression des données du module. L’historique d’audit conserve au plus deux fichiers de 5 Mo et les enregistrements de préparation sont compactés après récupération.",
+      "ja": "クリーンアップ設定はプラグインデータを削除するまで保持されます。監査履歴は最大 5 MB のログを 2 ファイル保持し、ステージング記録は復旧後に圧縮されます。",
+      "ko": "정리 설정은 플러그인 데이터를 제거할 때까지 유지됩니다. 감사 기록은 최대 5MB 로그 파일 2개를 보관하며 스테이징 기록은 복구 후 정리됩니다.",
+      "pt": "As definições de limpeza permanecem até os dados do plugin serem removidos. O histórico de auditoria mantém no máximo dois ficheiros de 5 MB e os registos de preparação são compactados após a recuperação.",
+      "ru": "Настройки очистки хранятся до удаления данных плагина. История аудита содержит не более двух файлов по 5 МБ, а записи подготовки уплотняются после восстановления.",
+      "zh-Hans": "清理设置会保留到插件数据被移除。审计历史最多保留两个 5 MB 日志文件，暂存记录会在恢复后压缩整理。",
+      "zh-Hant": "清理設定會保留到外掛資料被移除。稽核歷史最多保留兩個 5 MB 記錄檔，暫存記錄會在復原後壓縮整理。"
+    }
+  },
   "version": "2.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +80,157 @@
     "settings": "workspace"
   },
   "permissions": [],
-  "category": "storage"
+  "category": "storage",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "disk",
+      "clean",
+      "cleanup",
+      "storage"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "تنظيف القرص"
+      ],
+      "de": [
+        "Datenträgerbereinigung"
+      ],
+      "en": [
+        "Disk Cleanup"
+      ],
+      "es": [
+        "Limpieza de disco"
+      ],
+      "fr": [
+        "Nettoyage du disque"
+      ],
+      "ja": [
+        "ディスククリーンアップ"
+      ],
+      "ko": [
+        "디스크 정리"
+      ],
+      "pt": [
+        "Limpeza de disco"
+      ],
+      "ru": [
+        "Очистка диска"
+      ],
+      "zh-Hans": [
+        "磁盘清理"
+      ],
+      "zh-Hant": [
+        "磁碟清理"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "storage"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "filesystem-paths",
+      "file-sizes"
+    ],
+    "dataPersisted": [
+      "plugin-configuration",
+      "cleanup-audit-history",
+      "cleanup-staging-journal"
+    ],
+    "retention": {
+      "policy": "user-controlled",
+      "description": "@productStrings.retention-description"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "disk-clean",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "scan-and-review",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "磁盘清理",
+              "扫描",
+              "打开详情",
+              "disk",
+              "clean",
+              "scan",
+              "and",
+              "review"
+            ],
+            "systemImage": "magnifyingglass",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

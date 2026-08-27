@@ -1843,6 +1843,146 @@
           }
         }
       }
+    },
+    "action.manifest.startForDuration.title": {
+        "localizations": {
+            "ar": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "منع الإسبات لمدة"
+                }
+            },
+            "de": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Für einen Zeitraum wach halten"
+                }
+            },
+            "en": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Keep Awake for a Duration"
+                }
+            },
+            "es": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Mantener activo durante un periodo"
+                }
+            },
+            "fr": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Maintenir actif pendant une durée"
+                }
+            },
+            "ja": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "指定時間スリープを防ぐ"
+                }
+            },
+            "ko": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "지정 시간 동안 잠자기 방지"
+                }
+            },
+            "pt": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Manter ativo durante um período"
+                }
+            },
+            "ru": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Не переходить в сон заданное время"
+                }
+            },
+            "zh-Hans": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "在指定时长内阻止休眠"
+                }
+            },
+            "zh-Hant": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "在指定時長內阻止休眠"
+                }
+            }
+        }
+    },
+    "action.manifest.startForDuration.description": {
+        "localizations": {
+            "ar": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "يُبقي Mac نشطًا لعدد الدقائق المطلوب."
+                }
+            },
+            "de": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Hält den Mac für die angegebene Anzahl von Minuten wach."
+                }
+            },
+            "en": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Keep the Mac awake for the requested number of minutes."
+                }
+            },
+            "es": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Mantiene el Mac activo durante el número de minutos indicado."
+                }
+            },
+            "fr": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Maintient le Mac actif pendant le nombre de minutes demandé."
+                }
+            },
+            "ja": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "指定した分数だけ Mac のスリープを防ぎます。"
+                }
+            },
+            "ko": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "요청한 시간(분) 동안 Mac이 잠자기 상태로 전환되지 않도록 합니다."
+                }
+            },
+            "pt": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Mantém o Mac ativo durante o número de minutos indicado."
+                }
+            },
+            "ru": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Не дает Mac переходить в сон указанное количество минут."
+                }
+            },
+            "zh-Hans": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "让 Mac 在指定分钟数内保持唤醒。"
+                }
+            },
+            "zh-Hant": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "讓 Mac 在指定分鐘數內保持喚醒。"
+                }
+            }
+        }
     }
   },
   "version": "1.0"

@@ -298,6 +298,7 @@ struct GeneralSettingsView: View {
     @ObservedObject var menuBarIconGallery: MenuBarIconGalleryLibrary
     @ObservedObject var launchAtLoginController: LaunchAtLoginController
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
+    @ObservedObject private var cliService = CLIBrokerServiceController.shared
     @AppStorage(AppAppearancePreference.userDefaultsKey) private var appearancePreferenceRawValue = AppAppearancePreference.system.rawValue
     @AppStorage(AppLanguagePreference.userDefaultsKey) private var languagePreferenceRawValue = AppLanguagePreference.system.rawValue
     @AppStorage(MenuBarClickBehaviorPreference.userDefaultsKey) private var clickBehaviorRawValue = MenuBarClickBehaviorPreference.standard.rawValue
@@ -349,6 +350,15 @@ struct GeneralSettingsView: View {
                 } header: {
                     SettingsGroupedFormSectionHeader(
                         title: AppL10n.settings("general.section.startup", defaultValue: "启动"),
+                        layoutWidth: widths.readableContent
+                    )
+                }
+                Section {
+                    CLISettingsRow(service: cliService)
+                        .settingsGroupedFormRowWidth(widths.sectionLayout)
+                } header: {
+                    SettingsGroupedFormSectionHeader(
+                        title: AppL10n.settings("general.section.commandLine", defaultValue: "命令行"),
                         layoutWidth: widths.readableContent
                     )
                 }
@@ -520,6 +530,93 @@ struct GeneralSettingsView: View {
                 clickBehaviorRawValue = rawValue
             }
         )
+    }
+}
+
+private struct CLISettingsRow: View {
+    @ObservedObject var service: CLIBrokerServiceController
+
+    var body: some View {
+        HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
+            ZStack {
+                RoundedRectangle(
+                    cornerRadius: GeneralSettingsCardLayout.iconCornerRadius,
+                    style: .continuous
+                )
+                .fill(Color.accentColor.opacity(0.12))
+                Image(systemName: "terminal")
+                    .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .frame(
+                width: GeneralSettingsCardLayout.iconSize,
+                height: GeneralSettingsCardLayout.iconSize
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(AppL10n.settings("commandLine.title", defaultValue: "MacTools 命令行"))
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                Text(subtitle)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(service.lastError == nil ? .secondary : Color.orange)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if service.status == .requiresApproval {
+                Button(AppL10n.settings("commandLine.approve", defaultValue: "允许后台运行")) {
+                    service.openApprovalSettings()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            Toggle(
+                AppL10n.settings("commandLine.enable", defaultValue: "启用"),
+                isOn: Binding(
+                    get: { service.isRegistered },
+                    set: { enabled in
+                        if enabled {
+                            _ = service.ensureRegistered()
+                        } else {
+                            _ = service.unregister()
+                        }
+                    }
+                )
+            )
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .fixedSize()
+        }
+        .frame(
+            maxWidth: .infinity,
+            minHeight: GeneralSettingsCardLayout.minRowHeight,
+            alignment: .leading
+        )
+        .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+        .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
+        .onAppear { service.refresh() }
+    }
+
+    private var subtitle: String {
+        if let error = service.lastError { return error }
+        switch service.status {
+        case .enabled:
+            return AppL10n.settings(
+                "commandLine.enabled",
+                defaultValue: "已允许单独安装的 mactools-cli 连接到 MacTools。"
+            )
+        case .requiresApproval:
+            return AppL10n.settings(
+                "commandLine.requiresApproval",
+                defaultValue: "请在系统设置中允许 MacTools 命令行代理后台运行。"
+            )
+        case .notRegistered, .notFound, .registrationFailed:
+            return AppL10n.settings(
+                "commandLine.description",
+                defaultValue: "单独安装 mactools-cli 后，在此启用本机命令行集成。"
+            )
+        }
     }
 }
 

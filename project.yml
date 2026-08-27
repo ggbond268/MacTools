@@ -12,6 +12,19 @@ packages:
 include:
 - path: Configs/GeneratedPlugins.yml
 targets:
+  MacToolsCLIProtocol:
+    type: library.static
+    platform: macOS
+    deploymentTarget: '14.0'
+    sources:
+    - path: Sources/MacToolsCLIProtocol
+    settings:
+      base:
+        PRODUCT_NAME: MacToolsCLIProtocol
+        PRODUCT_MODULE_NAME: MacToolsCLIProtocol
+        SWIFT_VERSION: 6.0
+        MACOSX_DEPLOYMENT_TARGET: '14.0'
+        CODE_SIGNING_ALLOWED: false
   MacToolsPluginKit:
     type: framework
     platform: macOS
@@ -68,9 +81,15 @@ targets:
       - "**/.gitkeep"
       - MacToolsPluginKit/**
       - MacToolsAppIntents/**
+      - MacToolsCLIProtocol/**
+      - MacToolsCLI/**
+      - MacToolsCLIBroker/**
       - Extensions/**
       - "../Plugins/**"
       - Plugins/**/CalendarPluginResources/**
+    - path: Sources/MacToolsCLI/CLIArgumentParser.swift
+    - path: Sources/MacToolsCLI/CLIStartupDeadline.swift
+    - path: Sources/MacToolsCLI/CLISignalCoordinator.swift
     dependencies:
     - target: MacToolsPluginKit
       embed: true
@@ -78,6 +97,13 @@ targets:
       embed: true
     - target: RightClickFinderSync
       embed: true
+    - target: MacToolsCLIProtocol
+    - target: MacToolsCLI
+      link: false
+      embed: false
+    - target: MacToolsCLIBroker
+      link: false
+      embed: false
     - package: Sparkle
     settings:
       base:
@@ -106,6 +132,89 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.dev"
           MACTOOLS_URL_SCHEME: mactools-dev
           RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH: Library/Application Support/MacTools Dev/right-click-menu.json
+        Release:
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
+    postBuildScripts:
+    - name: Embed MacTools CLI broker
+      script: |
+        set -euo pipefail
+        app_macos_dir="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/MacOS"
+        launch_agents_dir="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
+        mkdir -p "$app_macos_dir" "$launch_agents_dir"
+        ditto "$BUILT_PRODUCTS_DIR/MacToolsCLIBroker" "$app_macos_dir/MacToolsCLIBroker"
+        service_name="$PRODUCT_BUNDLE_IDENTIFIER.cli-broker"
+        sed "s/__MACTOOLS_CLI_SERVICE_NAME__/$service_name/g" \
+          "$SRCROOT/Configs/MacToolsCLIBroker-LaunchAgent.plist" \
+          > "$launch_agents_dir/app.ggbond.MacTools.cli-broker.plist"
+      inputFiles:
+      - "$(BUILT_PRODUCTS_DIR)/MacToolsCLIBroker"
+      - "$(SRCROOT)/Configs/MacToolsCLIBroker-LaunchAgent.plist"
+      outputFiles:
+      - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/MacToolsCLIBroker"
+      - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/app.ggbond.MacTools.cli-broker.plist"
+  MacToolsCLI:
+    type: tool
+    platform: macOS
+    deploymentTarget: '14.0'
+    configFiles:
+      Debug: Configs/AppDebug.xcconfig
+      Release: Configs/AppRelease.xcconfig
+    sources:
+    - path: Sources/Core/CLI/CLIServiceConfiguration.swift
+    - path: Sources/Core/CLI/CLIPeerIdentityValidator.swift
+    - path: Sources/MacToolsCLI
+    dependencies:
+    - target: MacToolsCLIProtocol
+    settings:
+      base:
+        PRODUCT_NAME: mactools
+        PRODUCT_MODULE_NAME: MacToolsCLI
+        PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.cli"
+        GENERATE_INFOPLIST_FILE: true
+        CREATE_INFOPLIST_SECTION_IN_BINARY: true
+        SWIFT_VERSION: 6.0
+        MACOSX_DEPLOYMENT_TARGET: '14.0'
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+        OTHER_CODE_SIGN_FLAGS: "--identifier $(PRODUCT_BUNDLE_IDENTIFIER)"
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.dev.cli"
+        Release:
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
+  MacToolsCLIBroker:
+    type: tool
+    platform: macOS
+    deploymentTarget: '14.0'
+    configFiles:
+      Debug: Configs/AppDebug.xcconfig
+      Release: Configs/AppRelease.xcconfig
+    sources:
+    - path: Sources/Core/CLI/CLIServiceConfiguration.swift
+    - path: Sources/Core/CLI/CLIPeerIdentityValidator.swift
+    - path: Sources/Core/CLI/CLIRequestAdmissionState.swift
+    - path: Sources/MacToolsCLIBroker
+    dependencies:
+    - target: MacToolsCLIProtocol
+    settings:
+      base:
+        PRODUCT_NAME: MacToolsCLIBroker
+        PRODUCT_MODULE_NAME: MacToolsCLIBroker
+        PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.cli-broker"
+        GENERATE_INFOPLIST_FILE: true
+        CREATE_INFOPLIST_SECTION_IN_BINARY: true
+        SWIFT_VERSION: 6.0
+        MACOSX_DEPLOYMENT_TARGET: '14.0'
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+        OTHER_CODE_SIGN_FLAGS: "--identifier $(PRODUCT_BUNDLE_IDENTIFIER)"
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.dev.cli-broker"
         Release:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true

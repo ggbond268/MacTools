@@ -27,6 +27,7 @@ final class SavedScriptsPluginTests: XCTestCase {
         XCTAssertEqual(definition.risk, .confirmationRequired)
         XCTAssertNotNil(definition.confirmation)
         XCTAssertEqual(definition.externalInvocationPolicy, .unavailable)
+        XCTAssertFalse(definition.capabilities.contains(.automatic))
         XCTAssertTrue(definition.capabilities.contains(.cancellable))
         XCTAssertTrue(definition.capabilities.contains(.reportsProgress))
 
@@ -52,9 +53,24 @@ final class SavedScriptsPluginTests: XCTestCase {
             allowExternalInvocation: true
         )).get()
 
-        XCTAssertEqual(plugin.actionDefinitions.first?.risk, .safe)
-        XCTAssertEqual(plugin.actionDefinitions.first?.externalInvocationPolicy, .confirmAlways)
-        XCTAssertNotNil(plugin.actionDefinitions.first?.confirmation)
+        let template = try PluginManifestActionAssertions.dynamicTemplate(
+            pluginDirectoryName: "SavedScripts",
+            id: "run-script"
+        )
+        XCTAssertEqual(template["riskVariesByEntry"] as? Bool, true)
+        XCTAssertEqual(template["automaticEligibilityVariesByEntry"] as? Bool, true)
+        XCTAssertEqual(template["externalInvocation"] as? String, "configurable")
+        XCTAssertTrue(
+            Set(template["surfaces"] as? [String] ?? []).isSuperset(
+                of: ["run-link", "automatic-rule"]
+            )
+        )
+
+        let definition = try XCTUnwrap(plugin.actionDefinitions.first)
+        XCTAssertEqual(definition.risk, .safe)
+        XCTAssertEqual(definition.externalInvocationPolicy, .confirmAlways)
+        XCTAssertTrue(definition.capabilities.contains(.automatic))
+        XCTAssertNotNil(definition.confirmation)
     }
 
     func testActionExecutesScriptAndCapturesOutputForStandaloneLibrary() async throws {

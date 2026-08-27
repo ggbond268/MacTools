@@ -48,6 +48,16 @@
       "summary": "透過快速鍵翻譯選取文字或截圖區域。"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description",
+    "action.select-translation.title": "@localizable.shortcut.selectTranslation.title",
+    "action.select-translation.description": "@localizable.shortcut.selectTranslation.description",
+    "action.screenshot-translation.title": "@localizable.shortcut.screenshotTranslation.title",
+    "action.screenshot-translation.description": "@localizable.shortcut.screenshotTranslation.description"
+  },
   "version": "0.2.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -67,5 +77,196 @@
     "automation",
     "screen-recording"
   ],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "translator",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "المترجم"
+      ],
+      "de": [
+        "Übersetzer"
+      ],
+      "en": [
+        "Translator"
+      ],
+      "es": [
+        "Traductor"
+      ],
+      "fr": [
+        "Traducteur"
+      ],
+      "ja": [
+        "翻訳"
+      ],
+      "ko": [
+        "번역"
+      ],
+      "pt": [
+        "Tradutor"
+      ],
+      "ru": [
+        "Переводчик"
+      ],
+      "zh-Hans": [
+        "翻译"
+      ],
+      "zh-Hant": [
+        "翻譯"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility",
+      "automation",
+      "screen-recording"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "selected-text",
+      "screenshots",
+      "translation-requests"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "required",
+    "networkDomains": [
+      "api.openai.com"
+    ],
+    "allowsUserConfiguredDomains": true,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "translator",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "select-translation",
+            "title": "@productStrings.action.select-translation.title",
+            "description": "@productStrings.action.select-translation.description",
+            "keywords": [
+              "翻译",
+              "划词翻译",
+              "translator",
+              "select",
+              "translation"
+            ],
+            "systemImage": "text.cursor",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility",
+              "automation"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "screenshot-translation",
+            "title": "@productStrings.action.screenshot-translation.title",
+            "description": "@productStrings.action.screenshot-translation.description",
+            "keywords": [
+              "翻译",
+              "截图翻译",
+              "OCR",
+              "translator",
+              "screenshot",
+              "translation"
+            ],
+            "systemImage": "viewfinder",
+            "parameters": [],
+            "permissionIDs": [
+              "screen-recording"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

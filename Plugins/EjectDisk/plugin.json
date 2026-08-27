@@ -48,6 +48,10 @@
       "summary": "推出所有可移動磁盤"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +67,150 @@
     "settings": "none"
   },
   "permissions": [],
-  "category": "storage"
+  "category": "storage",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "eject",
+      "disk",
+      "disks",
+      "storage"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إخراج الأقراص"
+      ],
+      "de": [
+        "Datenträger auswerfen"
+      ],
+      "en": [
+        "Eject Disks"
+      ],
+      "es": [
+        "Expulsar discos"
+      ],
+      "fr": [
+        "Éjecter les disques"
+      ],
+      "ja": [
+        "ディスクを取り出す"
+      ],
+      "ko": [
+        "디스크 추출"
+      ],
+      "pt": [
+        "Ejetar discos"
+      ],
+      "ru": [
+        "Извлечь диски"
+      ],
+      "zh-Hans": [
+        "推出磁盘"
+      ],
+      "zh-Hant": [
+        "退出磁碟"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "storage"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "storage-state"
+    ],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "eject-disk",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "eject-all",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "推出磁盘",
+              "推出所有可移动磁盘",
+              "disk",
+              "eject",
+              "volume",
+              "all"
+            ],
+            "systemImage": "eject",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "confirmAlways"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

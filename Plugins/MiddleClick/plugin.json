@@ -48,6 +48,12 @@
       "summary": "觸控板輕點 → 模擬滑鼠中鍵"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description"
+  },
   "version": "1.0.16",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -62,6 +68,164 @@
     "componentPanel": false,
     "settings": "form"
   },
-  "permissions": ["accessibility"],
-  "category": "productivity"
+  "permissions": [
+    "accessibility"
+  ],
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "middle",
+      "click",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "النقر بالزر الأوسط"
+      ],
+      "de": [
+        "Mittelklick"
+      ],
+      "en": [
+        "Middle Click"
+      ],
+      "es": [
+        "Clic central"
+      ],
+      "fr": [
+        "Clic du milieu"
+      ],
+      "ja": [
+        "ミドルクリック"
+      ],
+      "ko": [
+        "가운데 클릭"
+      ],
+      "pt": [
+        "Clique do meio"
+      ],
+      "ru": [
+        "Средний щелчок"
+      ],
+      "zh-Hans": [
+        "模拟鼠标中键"
+      ],
+      "zh-Hant": [
+        "模擬滑鼠中鍵"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "input-events"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "middle-click",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "toggle",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "模拟鼠标中键",
+              "触控板轻点 → 模拟鼠标中键",
+              "middle",
+              "click",
+              "toggle"
+            ],
+            "systemImage": "hand.tap",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "automatic-rule",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

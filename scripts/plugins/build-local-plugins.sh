@@ -411,6 +411,8 @@ if [[ "$SKIP_CATALOG" != "1" ]]; then
     "$REPO_ROOT/scripts/plugins/generate-plugin-catalog.sh" \
         --mode debug \
         --output "$CATALOG_PATH" \
+        --plugins-root "$SOURCE_DIR" \
+        --allow-sparse-legacy \
         "${catalog_args[@]}"
 fi
 

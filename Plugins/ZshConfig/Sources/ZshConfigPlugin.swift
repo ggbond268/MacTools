@@ -31,6 +31,10 @@ private enum ControlID {
 @MainActor
 final class ZshConfigPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
+    private enum PermissionID {
+        static let automation = "automation"
+    }
+
     // MARK: Metadata
 
     let metadata: PluginMetadata
@@ -100,6 +104,42 @@ final class ZshConfigPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     func handleAction(_ action: PluginPanelAction) {
         // The host intercepts the Edit button and navigates to this plugin's settings page.
+    }
+
+    var permissionRequirements: [PluginPermissionRequirement] {
+        [
+            PluginPermissionRequirement(
+                id: PermissionID.automation,
+                kind: .automation,
+                title: localization.string("permission.automation.title", defaultValue: "自动化"),
+                description: localization.string(
+                    "permission.automation.description",
+                    defaultValue: "从终端载入配置时需要控制“终端”。"
+                )
+            ),
+        ]
+    }
+
+    func permissionState(for permissionID: String) -> PluginPermissionState {
+        PluginPermissionState(
+            isGranted: false,
+            footnote: permissionID == PermissionID.automation
+                ? localization.string(
+                    "permission.automation.footnote",
+                    defaultValue: "macOS 会在首次从终端载入配置时请求自动化授权。"
+                )
+                : nil,
+            statusText: permissionID == PermissionID.automation
+                ? localization.string("permission.automation.status", defaultValue: "按需确认")
+                : nil,
+            statusSystemImage: permissionID == PermissionID.automation ? "cursorarrow.click.2" : nil,
+            statusTone: permissionID == PermissionID.automation ? .neutral : nil
+        )
+    }
+
+    func handlePermissionAction(id: String) {
+        guard id == PermissionID.automation else { return }
+        requestPermissionGuidance?(PermissionID.automation)
     }
 
     // MARK: - Configuration

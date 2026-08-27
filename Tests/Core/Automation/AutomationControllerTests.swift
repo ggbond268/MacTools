@@ -727,6 +727,7 @@ final class AutomationControllerTests: XCTestCase {
         XCTAssertEqual(provider.beginCount, 0)
         XCTAssertEqual(provider.cancelCount, 0)
     }
+
 }
 
 @MainActor

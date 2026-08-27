@@ -23,6 +23,8 @@ final class MacToolsAppRuntime {
     private var statusItemController: MenuBarStatusItemController?
     private var actionGridOverlayController: ActionGridOverlayController?
     private var appIntentCatalogCancellable: AnyCancellable?
+    private var cliBrokerActivationCancellable: AnyCancellable?
+    private lazy var cliHostBridge = CLIHostBridge()
     private lazy var settingsRecoveryScheduler = SettingsRecoveryScheduler { [weak self] in
         self?.windowRouter?.showSettings()
     }
@@ -106,6 +108,7 @@ final class MacToolsAppRuntime {
             menuBarPanelThemeStore: menuBarPanelThemeStore
         )
 
+        startCLIHostIfAvailable()
         bootstrapDynamicPlugins()
     }
 
@@ -121,6 +124,9 @@ final class MacToolsAppRuntime {
 
     func terminate() {
         settingsRecoveryScheduler.cancel()
+        cliBrokerActivationCancellable?.cancel()
+        cliBrokerActivationCancellable = nil
+        cliHostBridge.stop()
         pluginHost.flushAutomaticPreferencesBackupBeforeTermination()
         pluginHost.automationController.stopAutomaticRules()
         actionGridOverlayController?.close(restoringFocus: false)
@@ -190,6 +196,21 @@ final class MacToolsAppRuntime {
         automationStartupCoordinator.actionRegistryDidBecomeReady()
         appIntentCoordinator.actionRegistryDidBecomeReady()
         activateAppURLRouter()
+    }
+
+    private func startCLIHostIfAvailable() {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+            return
+        }
+        cliBrokerActivationCancellable = NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification
+        )
+        .sink { _ in
+            Task { @MainActor in
+                CLIBrokerServiceController.shared.applicationDidBecomeActive()
+            }
+        }
+        cliHostBridge.start()
     }
 
     private func activateAppURLRouter() {

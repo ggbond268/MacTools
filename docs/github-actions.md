@@ -6,7 +6,7 @@
 - `Prepare Release`：在 GitHub Actions 页面手动触发。输入发布类型、目标版本和是否继续发布；它会检查、bump、提交版本变更、创建 tag，并在需要时显式触发 `Release` 或 `Plugin Release`。
 - `Release`：在推送 `v*.*.*` 或 `v*.*.*-*` tag，或手动输入 tag 时运行。构建 Release 版本，使用 Developer ID 签名、公证、打包 DMG，创建或更新 GitHub Release；稳定版会明确标记为 GitHub Latest，并更新官网使用的 `docs/app-release.json`，预发布不会覆盖稳定版下载元数据。
 - `Homebrew Cask Update`：手动输入版本时运行；未输入版本则从稳定 `v*` App Release 中查找同时包含 `MacTools.dmg` 与 `MacTools.sha256` 的最新版，通过 `brew bump-cask-pr` 向官方 `Homebrew/homebrew-cask` 提交 cask bump PR。
-- `Plugin Release` runs for a pushed `plugins-*` tag or a manually selected plugin batch tag. PluginKit v2 keeps `docs/plugins/catalog.json`, PluginKit v3 and later use `docs/plugins/vN/catalog.json`, the v4 catalog remains immutable for MacTools through 1.1.6, and MacTools 1.2 uses the new `docs/plugins/v5/catalog.json`. The first release of an ABI line rebuilds and signs every plugin. Plugin batches use `--latest=false` and never replace the latest App release.
+- `Plugin Release` runs for a pushed `plugins-*` tag or a manually selected plugin batch tag. Legacy PluginKit catalogs below v5 are immutable, and the schema-3 workflow rejects attempts to republish them. PluginKit v3 and later use versioned paths, the v4 catalog remains available to MacTools through 1.1.6, MacTools 1.2.0 keeps `docs/plugins/v5/catalog.json`, and hosts from 1.2.1 use `docs/plugins/v5/schema3/catalog.json`. The first release of a new ABI or schema compatibility line rebuilds and signs every plugin. Plugin batches use `--latest=false` and never replace the latest App release.
 - `Deploy Pages`：在 `site/**` 或 `docs/app-release.json` 合入 `main`、`Release` / `Plugin Release` 成功完成，或手动触发时运行。它先构建 `site/` 下的 Astro 官网，再合并 `docs/` 中的 App 发布元数据、appcast、插件 catalog、图标库等静态发布资源并发布到 GitHub Pages；PR 不会触发这条流水线。
 
 ## 需要配置的 Secrets
@@ -172,7 +172,7 @@ make release ARGS="--type plugin --version 1.1.0 --plugin-mode all --yes"
 
 应用内是否显示“可更新”只比较插件版本，不比较 batch tag 或 asset URL。因此只有实际变化的插件需要递增各自 `plugin.json.version`；未变化插件不会因为新批次 tag 而显示可更新或无效。
 
-`pluginKitVersion` is the plugin ABI boundary. Raising it requires rebuilding every plugin package and incrementing each plugin's own `plugin.json.version`. The release helper automatically switches an ABI migration to `plugin_mode=all` and writes a complete catalog for the new ABI. PluginKit v5 writes `docs/plugins/v5/catalog.json` and does not modify the v4 catalog used by MacTools through 1.1.6. Catalog validation rejects mixed PluginKit versions so the host never loads a binary from an incompatible ABI.
+`pluginKitVersion` is the plugin ABI boundary. Raising it requires rebuilding every plugin package and incrementing each plugin's own `plugin.json.version`. The release helper automatically switches an ABI or catalog-schema compatibility migration to `plugin_mode=all` and writes a complete catalog for the new line. PluginKit v5 schema 3 writes `docs/plugins/v5/schema3/catalog.json` and does not modify the schema-2 catalog used by MacTools 1.2.0 or the v4 catalog used by earlier hosts. Catalog validation rejects mixed PluginKit versions so the host never loads a binary from an incompatible ABI.
 
 推送插件批次 tag：
 
@@ -190,7 +190,7 @@ git push origin plugins-1.0.1
 5. 用 Developer ID 重新签名这些插件 bundle，并打包为 `*.mactoolsplugin.zip`。
 6. 创建或更新对应的 `plugins-*` GitHub Release，并只上传本批变化插件的 zip。catalog-only 变化可以创建没有 zip asset 的插件 Release。
 7. 相同 ABI 内生成本批 delta catalog 并合并进该 ABI 的 catalog；ABI 首次升级则生成包含全部插件的完整 catalog。
-8. Sign the catalog with `PLUGIN_CATALOG_PRIVATE_KEY_BASE64` and write `docs/plugins/catalog.json` for v2 or `docs/plugins/vN/catalog.json` for PluginKit N >= 3. PluginKit v5 writes `docs/plugins/v5/catalog.json` and never overwrites the v4 compatibility baseline.
+8. Sign the catalog with `PLUGIN_CATALOG_PRIVATE_KEY_BASE64` and write it to the selected compatibility path. PluginKit v5 schema 3 writes `docs/plugins/v5/schema3/catalog.json` and never overwrites the schema-2 or v4 compatibility baselines.
 9. 将对应版本化 catalog 提交回 `main`，再由 `Deploy Pages` 发布到 GitHub Pages。
 
 如果 `auto` 模式没有发现插件包或 catalog 变化，工作流会成功结束，不创建或更新 GitHub Release。
@@ -280,7 +280,7 @@ Finder right-click menu items now stay hidden when the plugin is disabled.
 
 - PR 构建不读取发布 Secrets，只执行未签名构建和测试。
 - Release 工作流只使用 `contents: write` 创建或更新 GitHub Release，并把 `docs/appcast.xml` 与 `docs/app-release.json` 提交回 `main`；普通 Build 工作流只有 `contents: read`。
-- The Plugin Release workflow uses `contents: write` only to create or update a plugin batch release and commit the signed catalog to `main`. PluginKit v2 writes `docs/plugins/catalog.json`; PluginKit v3 and later write `docs/plugins/vN/catalog.json`. The v4 catalog remains available to MacTools through 1.1.6 while PluginKit v5 writes `docs/plugins/v5/catalog.json`.
+- The Plugin Release workflow uses `contents: write` only to create or update a plugin batch release and commit the signed catalog to `main`. The v4 and PluginKit v5/schema-2 catalogs remain available to released hosts while schema-3 PluginKit v5 releases write `docs/plugins/v5/schema3/catalog.json`.
 - Deploy Pages 工作流在官网源码或 App 下载元数据合入 `main`、Release / Plugin Release 成功后发布站点，使用 `contents: read`、`pages: write` 和 `id-token: write`。
 - 签名证书导入临时 keychain，任务结束后清理。
 - App Store Connect `.p8`、Sparkle 私钥和插件 catalog 私钥只写入 runner 临时目录或进程环境，使用后删除。

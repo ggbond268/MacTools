@@ -48,6 +48,20 @@
       "summary": "管理 Homebrew 包、軟體倉庫並執行系統診斷"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description",
+    "action.update.title": "@localizable.detail.diagnostics.update.title",
+    "action.update.description": "@localizable.detail.diagnostics.update.desc",
+    "action.upgrade-all.title": "@localizable.detail.diagnostics.upgrade.title",
+    "action.upgrade-all.description": "@localizable.detail.diagnostics.upgrade.desc",
+    "action.doctor.title": "@localizable.detail.diagnostics.doctor.title",
+    "action.doctor.description": "@localizable.detail.diagnostics.doctor.desc",
+    "action.cleanup.title": "@localizable.detail.diagnostics.cleanup.title",
+    "action.cleanup.description": "@localizable.detail.diagnostics.cleanup.desc"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +77,245 @@
     "settings": "workspace"
   },
   "permissions": [],
-  "category": "system"
+  "category": "system",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "homebrew",
+      "manager",
+      "system"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "Homebrew"
+      ],
+      "de": [
+        "Homebrew"
+      ],
+      "en": [
+        "Homebrew Manager"
+      ],
+      "es": [
+        "Homebrew"
+      ],
+      "fr": [
+        "Homebrew"
+      ],
+      "ja": [
+        "Homebrew"
+      ],
+      "ko": [
+        "Homebrew"
+      ],
+      "pt": [
+        "Homebrew"
+      ],
+      "ru": [
+        "Homebrew"
+      ],
+      "zh-Hans": [
+        "Homebrew 管理"
+      ],
+      "zh-Hant": [
+        "Homebrew 管理"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "system"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [
+      "brew"
+    ],
+    "permissionIDs": [],
+    "setupComplexity": "advanced",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "system-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "required",
+    "networkDomains": [
+      "brew.sh",
+      "formulae.brew.sh",
+      "github.com",
+      "githubusercontent.com"
+    ],
+    "allowsUserConfiguredDomains": true,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "homebrew",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "update",
+            "title": "@productStrings.action.update.title",
+            "description": "@productStrings.action.update.description",
+            "keywords": [
+              "Homebrew",
+              "更新软件源",
+              "brew",
+              "homebrew",
+              "update"
+            ],
+            "systemImage": "arrow.clockwise.circle.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "automatic-rule",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "upgrade-all",
+            "title": "@productStrings.action.upgrade-all.title",
+            "description": "@productStrings.action.upgrade-all.description",
+            "keywords": [
+              "Homebrew",
+              "更新所有包",
+              "brew",
+              "homebrew",
+              "upgrade",
+              "all"
+            ],
+            "systemImage": "arrow.up.circle.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "doctor",
+            "title": "@productStrings.action.doctor.title",
+            "description": "@productStrings.action.doctor.description",
+            "keywords": [
+              "Homebrew",
+              "运行诊断",
+              "brew",
+              "homebrew",
+              "doctor"
+            ],
+            "systemImage": "heart.text.square.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "automatic-rule",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "cleanup",
+            "title": "@productStrings.action.cleanup.title",
+            "description": "@productStrings.action.cleanup.description",
+            "keywords": [
+              "Homebrew",
+              "清理缓存",
+              "brew",
+              "homebrew",
+              "cleanup"
+            ],
+            "systemImage": "trash.circle.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

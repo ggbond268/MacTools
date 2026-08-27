@@ -142,6 +142,12 @@ struct MarketplacePluginSearchTarget: Hashable {
     }
 }
 
+enum MarketplacePluginSearchAvailability {
+    static func contains(pluginID: String, in items: [PluginManagementItem]) -> Bool {
+        items.contains { $0.id == pluginID }
+    }
+}
+
 struct UnifiedSearchQuickSelectionRequest: Equatable {
     let id: UInt
     let number: Int
@@ -207,9 +213,10 @@ final class SettingsNavigationCoordinator: ObservableObject {
                 pluginHost.hasPluginSettingsSearchTarget($0)
             },
             isPluginManagementAvailable: { pluginID in
-                pluginHost.pluginManagementItems.contains {
-                    $0.id == pluginID && $0.canUninstall
-                }
+                MarketplacePluginSearchAvailability.contains(
+                    pluginID: pluginID,
+                    in: pluginHost.pluginManagementItems
+                )
             },
             isPluginSurfaceAvailable: { target in
                 let items = switch target.surface {

@@ -21,10 +21,10 @@ private struct EmptyTrashPluginProvider: PluginProvider {
 
 @MainActor
 final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfaceLifecycleHandling,
-    PluginActionProviding
+    PluginActionProviding, PluginActionPermissionProviding
 {
     private enum PermissionID {
-        static let finderAutomation = "finder-automation"
+        static let automation = "automation"
     }
     private enum ActionID {
         static let empty = "empty"
@@ -98,7 +98,7 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
     var permissionRequirements: [PluginPermissionRequirement] {
         [
             PluginPermissionRequirement(
-                id: PermissionID.finderAutomation,
+                id: PermissionID.automation,
                 kind: .automation,
                 title: localization.string("permission.automation.title", defaultValue: "Finder 自动化"),
                 description: localization.string(
@@ -129,6 +129,13 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
                 executionTimeoutSeconds: 600
             ),
         ]
+    }
+
+    func permissionRequirementIDs(for actionKey: ActionKey) -> [String] {
+        guard actionKey.providerID == metadata.id, actionKey.actionID == ActionID.empty else {
+            return []
+        }
+        return [PermissionID.automation]
     }
 
     func actionAvailability(for reference: ActionReference) -> ActionAvailability {
@@ -179,7 +186,7 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
-        guard permissionID == PermissionID.finderAutomation else {
+        guard permissionID == PermissionID.automation else {
             return PluginPermissionState(isGranted: true, footnote: nil)
         }
         return PluginPermissionState(
@@ -189,7 +196,7 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
     }
 
     func handlePermissionAction(id: String) {
-        guard id == PermissionID.finderAutomation,
+        guard id == PermissionID.automation,
               let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") else {
             return
         }

@@ -48,6 +48,23 @@
       "summary": "儲存並執行 AppleScript 和 Shell 腳本。"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "action.run-script.parameter-summary": {
+      "ar": "اختر البرنامج النصي المحفوظ على هذا الـ Mac لتشغيله.",
+      "de": "Wähle das auf diesem Mac gespeicherte Skript aus, das ausgeführt werden soll.",
+      "en": "Select the saved script stored on this Mac to run.",
+      "es": "Selecciona el script guardado en este Mac que quieres ejecutar.",
+      "fr": "Sélectionnez le script enregistré sur ce Mac à exécuter.",
+      "ja": "この Mac に保存されているスクリプトから、実行する項目を選択します。",
+      "ko": "이 Mac에 저장된 스크립트 중 실행할 항목을 선택하세요.",
+      "pt": "Selecione o script salvo neste Mac para executar.",
+      "ru": "Выберите сохранённый на этом Mac скрипт для запуска.",
+      "zh-Hans": "选择存储在此 Mac 上、要运行的已存脚本。",
+      "zh-Hant": "選擇儲存在此 Mac 上、要執行的已儲存指令碼。"
+    }
+  },
   "version": "1.0.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +80,158 @@
     "settings": "workspace"
   },
   "permissions": [],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "saved",
+      "scripts",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "البرامج النصية المحفوظة"
+      ],
+      "de": [
+        "Gespeicherte Skripte"
+      ],
+      "en": [
+        "Saved Scripts"
+      ],
+      "es": [
+        "Scripts guardados"
+      ],
+      "fr": [
+        "Scripts enregistrés"
+      ],
+      "ja": [
+        "保存済みスクリプト"
+      ],
+      "ko": [
+        "저장된 스크립트"
+      ],
+      "pt": [
+        "Scripts salvos"
+      ],
+      "ru": [
+        "Сохранённые скрипты"
+      ],
+      "zh-Hans": [
+        "已存脚本"
+      ],
+      "zh-Hant": [
+        "已儲存腳本"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "script-content",
+      "script-output",
+      "script-working-directories"
+    ],
+    "dataPersisted": [
+      "plugin-configuration",
+      "script-content",
+      "script-working-directories"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "saved-scripts",
+        "kind": "dynamic",
+        "staticActions": [],
+        "dynamicTemplates": [
+          {
+            "id": "run-script",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "entrySource": "saved-scripts",
+            "parameters": [],
+            "parameterSummary": "@productStrings.action.run-script.parameter-summary",
+            "localOnlyIdentity": true,
+            "keywords": [
+              "saved",
+              "scripts",
+              "run",
+              "script"
+            ],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "configurable",
+            "riskVariesByEntry": true,
+            "automaticEligibilityVariesByEntry": true
+          }
+        ]
+      }
+    ]
+  }
 }

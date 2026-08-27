@@ -48,6 +48,112 @@
       "summary": "切換系統亮色與深色外觀"
     }
   },
+  "productStrings": {
+    "long-description": {
+      "ar": "بدّل مظهر macOS بين الوضعين الفاتح والداكن من أي سطح إجراءات في MacTools.",
+      "de": "Wechsle die macOS-Darstellung über jede MacTools-Aktionsoberfläche zwischen Hell und Dunkel.",
+      "en": "Switch macOS between light and dark appearance from any MacTools action surface.",
+      "es": "Cambia macOS entre la apariencia clara y oscura desde cualquier superficie de acciones de MacTools.",
+      "fr": "Basculez macOS entre les apparences claire et sombre depuis toute surface d’action MacTools.",
+      "ja": "MacTools の各アクション画面から macOS のライト／ダーク外観を切り替えます。",
+      "ko": "MacTools의 모든 동작 화면에서 macOS의 라이트 및 다크 모드를 전환합니다.",
+      "pt": "Alterne o macOS entre os modos claro e escuro em qualquer superfície de ações do MacTools.",
+      "ru": "Переключайте светлое и тёмное оформление macOS с любой поверхности действий MacTools.",
+      "zh-Hans": "从 MacTools 的任意操作界面切换 macOS 的浅色与深色外观。",
+      "zh-Hant": "從 MacTools 的任意操作介面切換 macOS 的淺色與深色外觀。"
+    },
+    "example-evening-workflow": {
+      "ar": "شغّل الوضع الداكن تلقائيًا عند بدء روتين المساء.",
+      "de": "Aktiviere den Dunkelmodus automatisch, wenn deine Abendroutine beginnt.",
+      "en": "Turn on Dark Mode automatically when your evening routine begins.",
+      "es": "Activa el modo oscuro automáticamente al comenzar tu rutina nocturna.",
+      "fr": "Activez automatiquement le mode sombre au début de votre routine du soir.",
+      "ja": "夜のルーティン開始時にダークモードを自動で有効にします。",
+      "ko": "저녁 루틴이 시작되면 다크 모드를 자동으로 켭니다.",
+      "pt": "Ative o modo escuro automaticamente quando começar a rotina noturna.",
+      "ru": "Автоматически включайте тёмный режим в начале вечернего сценария.",
+      "zh-Hans": "在晚间流程开始时自动开启深色模式。",
+      "zh-Hant": "在晚間流程開始時自動開啟深色模式。"
+    },
+    "use-case-switch-system-appearance": {
+      "ar": "تبديل مظهر النظام",
+      "de": "Systemdarstellung wechseln",
+      "en": "Switch system appearance",
+      "es": "Cambiar la apariencia del sistema",
+      "fr": "Changer l’apparence du système",
+      "ja": "システム外観を切り替える",
+      "ko": "시스템 화면 모드 전환",
+      "pt": "Alternar a aparência do sistema",
+      "ru": "Переключить оформление системы",
+      "zh-Hans": "切换系统外观",
+      "zh-Hant": "切換系統外觀"
+    },
+    "action-appearance-toggle-title": {
+      "ar": "تبديل المظهر",
+      "de": "Darstellung wechseln",
+      "en": "Toggle Appearance",
+      "es": "Alternar apariencia",
+      "fr": "Basculer l’apparence",
+      "ja": "外観を切り替える",
+      "ko": "화면 모드 전환",
+      "pt": "Alternar aparência",
+      "ru": "Переключить оформление",
+      "zh-Hans": "切换外观",
+      "zh-Hant": "切換外觀"
+    },
+    "action-appearance-toggle-description": {
+      "ar": "التبديل بين المظهر الفاتح والداكن.",
+      "de": "Zwischen heller und dunkler Darstellung wechseln.",
+      "en": "Switch between light and dark appearance.",
+      "es": "Cambia entre la apariencia clara y oscura.",
+      "fr": "Bascule entre les apparences claire et sombre.",
+      "ja": "ライトとダークの外観を切り替えます。",
+      "ko": "라이트 및 다크 모드를 전환합니다.",
+      "pt": "Alterne entre os modos claro e escuro.",
+      "ru": "Переключает светлое и тёмное оформление.",
+      "zh-Hans": "在浅色与深色外观之间切换。",
+      "zh-Hant": "在淺色與深色外觀之間切換。"
+    },
+    "action-appearance-set-enabled-title": {
+      "ar": "تعيين الوضع الداكن",
+      "de": "Dunkelmodus festlegen",
+      "en": "Set Dark Mode",
+      "es": "Establecer modo oscuro",
+      "fr": "Définir le mode sombre",
+      "ja": "ダークモードを設定",
+      "ko": "다크 모드 설정",
+      "pt": "Definir modo escuro",
+      "ru": "Установить тёмный режим",
+      "zh-Hans": "设置深色模式",
+      "zh-Hant": "設定深色模式"
+    },
+    "action-appearance-set-enabled-description": {
+      "ar": "تشغيل الوضع الداكن أو إيقافه صراحةً.",
+      "de": "Dunkelmodus ausdrücklich ein- oder ausschalten.",
+      "en": "Explicitly turn Dark Mode on or off.",
+      "es": "Activa o desactiva explícitamente el modo oscuro.",
+      "fr": "Active ou désactive explicitement le mode sombre.",
+      "ja": "ダークモードを明示的にオンまたはオフにします。",
+      "ko": "다크 모드를 명시적으로 켜거나 끕니다.",
+      "pt": "Ative ou desative explicitamente o modo escuro.",
+      "ru": "Явно включает или выключает тёмный режим.",
+      "zh-Hans": "明确开启或关闭深色模式。",
+      "zh-Hant": "明確開啟或關閉深色模式。"
+    },
+    "action-appearance-set-enabled-parameter-summary": {
+      "ar": "ما إذا كان الوضع الداكن مفعّلًا",
+      "de": "Ob der Dunkelmodus aktiviert ist",
+      "en": "Whether Dark Mode is enabled",
+      "es": "Si el modo oscuro está activado",
+      "fr": "Indique si le mode sombre est activé",
+      "ja": "ダークモードを有効にするかどうか",
+      "ko": "다크 모드 활성화 여부",
+      "pt": "Se o modo escuro está ativo",
+      "ru": "Включён ли тёмный режим",
+      "zh-Hans": "是否开启深色模式",
+      "zh-Hant": "是否開啟深色模式"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -62,6 +168,217 @@
     "componentPanel": false,
     "settings": "none"
   },
-  "permissions": [],
-  "category": "display"
+  "permissions": [
+    "automation"
+  ],
+  "category": "display",
+  "presentation": {
+    "longDescription": "@productStrings.long-description",
+    "examples": [
+      {
+        "id": "evening-workflow",
+        "text": "@productStrings.example-evening-workflow"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "appearance",
+      "dark mode",
+      "light mode",
+      "theme"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "المظهر",
+        "الوضع الداكن"
+      ],
+      "de": [
+        "Darstellung",
+        "Dunkelmodus"
+      ],
+      "en": [
+        "appearance",
+        "dark mode"
+      ],
+      "es": [
+        "apariencia",
+        "modo oscuro"
+      ],
+      "fr": [
+        "apparence",
+        "mode sombre"
+      ],
+      "ja": [
+        "外観",
+        "ダークモード"
+      ],
+      "ko": [
+        "화면 모드",
+        "다크 모드"
+      ],
+      "pt": [
+        "aparência",
+        "modo escuro"
+      ],
+      "ru": [
+        "оформление",
+        "тёмный режим"
+      ],
+      "zh-Hans": [
+        "外观",
+        "深色模式"
+      ],
+      "zh-Hant": [
+        "外觀",
+        "深色模式"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "switch-system-appearance",
+        "title": "@productStrings.use-case-switch-system-appearance"
+      }
+    ],
+    "goalCategories": [
+      "personalization",
+      "automation"
+    ],
+    "relatedPluginIDs": [
+      "night-shift"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "automation"
+    ],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "system-appearance"
+    ],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "appearance",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "toggle",
+            "title": "@productStrings.action-appearance-toggle-title",
+            "description": "@productStrings.action-appearance-toggle-description",
+            "keywords": [
+              "appearance",
+              "toggle",
+              "theme"
+            ],
+            "systemImage": "circle.lefthalf.filled",
+            "parameters": [],
+            "permissionIDs": [
+              "automation"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "set-enabled",
+            "title": "@productStrings.action-appearance-set-enabled-title",
+            "description": "@productStrings.action-appearance-set-enabled-description",
+            "keywords": [
+              "appearance",
+              "dark mode",
+              "set"
+            ],
+            "systemImage": "circle.lefthalf.filled",
+            "parameters": [
+              {
+                "id": "enabled",
+                "kind": "boolean",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "parameterSummary": "@productStrings.action-appearance-set-enabled-parameter-summary",
+            "permissionIDs": [
+              "automation"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  },
+  "setup": {
+    "steps": [],
+    "suggestedTestAction": {
+      "providerID": "appearance",
+      "actionID": "toggle"
+    },
+    "optionalSurfaces": [
+      "global-shortcut",
+      "workflow",
+      "automatic-rule",
+      "action-grid"
+    ]
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "night-shift"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

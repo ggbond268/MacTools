@@ -19,6 +19,10 @@ The following plugin source directories publish canonical actions:
 
 Parameterized actions publish concrete catalog entries rather than asking each action surface to construct parameters. For example, Sidecar publishes per-device entries, Display Resolution publishes current display modes, App Volume publishes current audio apps, Battery Charge Limit publishes useful limit presets, and Fan Control publishes saved presets. Availability is resolved again at execution time so stale hardware, processes, or configuration fail safely.
 
+Clipboard History publishes its six parameter-free actions in the source manifest and runtime
+consistency test. Product metadata describes local encrypted storage without embedding clipboard
+content, and remains independent of the manifest's private-data uninstall policy.
+
 Operations that eject storage, empty Trash, clear the clipboard, change hardware management, or enter a physical clean session preserve confirmation or foreground-only requirements. Machine-local parameters are marked local-only, and actions that require an interactive chooser or key lifecycle do not expose Run Links.
 
 Unattended automation is also an explicit provider decision. An action must publish both `.background` and `.automatic` before an automatic rule may run it; confirmation-required actions remain interactive even if they otherwise support background execution. Providers should keep the default overlap policy unless concurrent execution is known to be safe, return an execution handle promptly from `beginAction`, and perform expensive work asynchronously behind that handle.

@@ -26,6 +26,7 @@ GENERATED_PLUGIN_PROJECT_CONFIG := Configs/GeneratedPlugins.yml
 LOCAL_PLUGIN_BUILD_DIR ?= build/LocalPlugins
 LOCAL_PLUGIN_CATALOG := $(LOCAL_PLUGIN_BUILD_DIR)/catalog.dev.json
 DEBUG_BUILD_PRODUCTS_DIR := $(DERIVED_DATA)/Build/Products/Debug
+DEBUG_CLI_PATH := $(DEBUG_BUILD_PRODUCTS_DIR)/mactools
 DEBUG_PLUGIN_INSTALL_DIR ?= $(HOME)/Library/Application Support/MacTools Dev/Plugins/Installed
 LOCAL_ICON_GALLERY_DIR ?= build/LocalIconGallery
 LOCAL_ICON_GALLERY_CATALOG := $(LOCAL_ICON_GALLERY_DIR)/catalog.dev.json
@@ -36,15 +37,15 @@ PLUGIN_RELEASE_DIST_DIR ?= build/PluginRelease
 PLUGIN_RELEASE_ASSETS_DIR ?= $(PLUGIN_RELEASE_DIST_DIR)/Assets
 PLUGIN_RELEASE_CATALOG ?= $(PLUGIN_RELEASE_DIST_DIR)/catalog.json
 PLUGIN_KIT_VERSION ?= $(shell $(PYTHON3) -c 'import glob,json; versions={json.load(open(path, encoding="utf-8"))["pluginKitVersion"] for path in glob.glob("Plugins/*/plugin.json")}; print(next(iter(versions)) if len(versions) == 1 else "")')
-PLUGIN_RELEASE_SIGNED_CATALOG ?= $(if $(filter 2,$(PLUGIN_KIT_VERSION)),docs/plugins/catalog.json,docs/plugins/v$(PLUGIN_KIT_VERSION)/catalog.json)
-PLUGIN_CATALOG_MINIMUM_HOST_VERSION ?= $(if $(filter 5,$(PLUGIN_KIT_VERSION)),1.2.0,1.1.6)
+PLUGIN_RELEASE_SIGNED_CATALOG ?= $(if $(filter 5,$(PLUGIN_KIT_VERSION)),docs/plugins/v5/schema3/catalog.json,$(if $(filter 2,$(PLUGIN_KIT_VERSION)),docs/plugins/catalog.json,docs/plugins/v$(PLUGIN_KIT_VERSION)/catalog.json))
+PLUGIN_CATALOG_MINIMUM_HOST_VERSION ?= 1.2.1
 PLUGIN_RELEASE_BASE_URL ?= https://github.com/$(PLUGIN_RELEASE_REPO)/releases/download/$(PLUGIN_RELEASE_TAG)
 E2E_SCRIPT := scripts/e2e/mactools-e2e.sh
 E2E_SESSION ?=
 E2E_DURATION ?= 90
 E2E_PACK ?=
 
-.PHONY: setup validate-local-debug-config generate-plugin-config generate build script-tests ci sync-debug-plugins build-plugin build-plugins generate-icon-gallery package-plugins-release stop-debug-app install-debug-app run run-open e2e-preflight e2e-prepare e2e-upgrade e2e-reseed e2e-resume e2e-rebuild e2e-audit e2e-scenarios e2e-record e2e-record-pack e2e-verify-code e2e-collect e2e-restore e2e-self-test clean release release-local
+.PHONY: setup validate-local-debug-config generate-plugin-config generate build build-cli script-tests ci sync-debug-plugins build-plugin build-plugins generate-icon-gallery package-plugins-release stop-debug-app install-debug-app run run-open e2e-preflight e2e-prepare e2e-upgrade e2e-reseed e2e-resume e2e-rebuild e2e-audit e2e-scenarios e2e-record e2e-record-pack e2e-verify-code e2e-collect e2e-restore e2e-self-test clean release release-local
 
 setup:
 	@if [ ! -f LocalConfig.xcconfig ]; then cp LocalConfig.sample.xcconfig LocalConfig.xcconfig; fi
@@ -75,6 +76,13 @@ build: validate-local-debug-config generate
 	if [[ -x "$$LSREGISTER" ]]; then \
 		"$$LSREGISTER" -u "$(CURDIR)/$(APP_PATH)" >/dev/null 2>&1 || true; \
 	fi
+
+build-cli: validate-local-debug-config generate
+	@echo "Building standalone Debug CLI..."
+	@mkdir -p build
+	@touch build/.metadata_never_index
+	@$(XCODEBUILD) -project $(PROJECT_FILE) -scheme MacToolsCLI -configuration Debug -destination "$(BUILD_DESTINATION)" -derivedDataPath $(DERIVED_DATA) build -quiet
+	@echo "CLI ready: $(abspath $(DEBUG_CLI_PATH))"
 
 script-tests:
 	@$(PYTHON3) -m unittest discover -s scripts/tests -p 'test_*.py'
@@ -128,6 +136,12 @@ generate-icon-gallery:
 		--output-dir "$(LOCAL_ICON_GALLERY_DIR)"
 
 package-plugins-release: generate
+	@case " 1 2 3 4 " in \
+		*" $(PLUGIN_KIT_VERSION) "*) \
+			echo "PluginKit versions below 5 use immutable legacy catalogs and cannot be released by the schema-3 tooling." >&2; \
+			exit 1; \
+			;; \
+	esac
 	@./scripts/plugins/build-plugin-release-assets.sh \
 		--source-dir "$(LOCAL_PLUGIN_SOURCE_DIR)" \
 		--build-dir "$(PLUGIN_RELEASE_BUILD_DIR)" \

@@ -21,6 +21,14 @@ def parse_args():
     parser.add_argument("--previous-catalog", default="docs/plugins/catalog.json")
     parser.add_argument("--output", required=True)
     parser.add_argument(
+        "--require-version-bump",
+        action="store_true",
+        help=(
+            "Require every plugin already present in the previous catalog to use a "
+            "strictly newer version. Intended for full compatibility-line migrations."
+        ),
+    )
+    parser.add_argument(
         "--shared-path",
         action="append",
         default=[],
@@ -151,6 +159,9 @@ def normalize_selected(raw_values, plugins):
 
 
 def plan_release(args):
+    if args.require_version_bump and args.mode != "all":
+        raise SystemExit("--require-version-bump requires --mode all")
+
     plugins = read_plugins(args.source_dir)
     plugin_kit_version = current_plugin_kit_version(plugins)
     previous_catalog = load_json(args.previous_catalog)
@@ -264,6 +275,13 @@ def plan_release(args):
                     errors.append(
                         f"{plugin_id}: version cannot go backwards "
                         f"({previous_version} -> {current_version})"
+                    )
+                    continue
+                if args.require_version_bump and version_cmp == 0:
+                    errors.append(
+                        f"{plugin_id}: compatibility migration requires a version bump "
+                        f"above {previous_version}. Bump {plugin['manifestPath']} version "
+                        "before publishing the full rebuild."
                     )
                     continue
                 handle_plugin_kit_change(plugin_id, plugin, previous_entry, version_cmp)

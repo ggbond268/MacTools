@@ -14,6 +14,7 @@ PLUGIN_RELEASE_WORKFLOW = REPO_ROOT / ".github/workflows/plugin-release.yml"
 MAKEFILE = REPO_ROOT / "Makefile"
 ACTION_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/ActionModels.swift"
 COMPONENT_THEME_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginComponentTheme.swift"
+PLUGIN_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
     # Canonical action registry, execution, discovery, and surface bridges.
@@ -91,6 +92,8 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginSettingsActionShortcutItem": "1.3.0",
     "PluginSettingsShortcutRecorderControl": "1.3.0",
     "PluginWindowLayoutTargetProviding": "1.3.0",
+    # Finder-extension permission presentation introduced after host 1.2.0.
+    ".finderExtension": "1.2.1",
 }
 
 
@@ -142,18 +145,34 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
         ]
         self.assertEqual(incompatible, [])
 
-    def test_plugin_kit5_release_targets_versioned_host_compatible_catalog(self) -> None:
+    def test_plugin_kit5_schema3_release_targets_a_new_compatibility_catalog(self) -> None:
         workflow = PLUGIN_RELEASE_WORKFLOW.read_text(encoding="utf-8")
         makefile = MAKEFILE.read_text(encoding="utf-8")
         self.assertIn(
-            'PLUGIN_CATALOG_RELATIVE_PATH="docs/plugins/v5/catalog.json"',
+            'PLUGIN_CATALOG_RELATIVE_PATH="docs/plugins/v5/schema3/catalog.json"',
             workflow,
         )
-        self.assertIn('PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.2.0"', workflow)
+        self.assertIn('PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.2.1"', workflow)
         self.assertIn(
-            "PLUGIN_CATALOG_MINIMUM_HOST_VERSION ?= $(if $(filter 5,$(PLUGIN_KIT_VERSION)),1.2.0,1.1.6)",
+            "PLUGIN_CATALOG_MINIMUM_HOST_VERSION ?= 1.2.1",
             makefile,
         )
+        released_catalog = json.loads(
+            (REPO_ROOT / "docs/plugins/v5/catalog.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(released_catalog["schemaVersion"], 2)
+
+    def test_schema3_release_floor_applies_to_future_plugin_kit_versions(self) -> None:
+        workflow = PLUGIN_RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        makefile = MAKEFILE.read_text(encoding="utf-8")
+        self.assertIn(
+            'PLUGIN_CATALOG_RELATIVE_PATH="docs/plugins/v${PLUGIN_KIT_VERSION}/catalog.json"',
+            workflow,
+        )
+        self.assertGreaterEqual(workflow.count('PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.2.1"'), 2)
+        self.assertIn("PluginKit versions below 5 use immutable legacy catalogs", workflow)
+        self.assertIn("if (( PLUGIN_KIT_VERSION < 5 )); then", workflow)
+        self.assertIn('case " 1 2 3 4 " in', makefile)
 
     def test_every_current_plugin_targets_plugin_kit5_and_a_released_host_line(self) -> None:
         incompatible = []
@@ -189,6 +208,27 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             violations += minimum_host_violations(manifest["id"], declared, source)
 
         self.assertEqual(violations, [], "\n".join(violations))
+
+    def test_plugin_permission_kind_preserves_released_case_order(self) -> None:
+        source = PLUGIN_MODELS.read_text(encoding="utf-8")
+        match = re.search(
+            r"public enum PluginPermissionKind\s*\{(?P<body>.*?)\n\}",
+            source,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+        cases = re.findall(r"^\s*case\s+(\w+)", match.group("body"), flags=re.MULTILINE)
+        self.assertEqual(
+            cases[:6],
+            [
+                "accessibility",
+                "inputMonitoring",
+                "calendarFullAccess",
+                "automation",
+                "screenRecording",
+                "finderExtension",
+            ],
+        )
 
     def test_action_model_inventory_covers_every_public_type_used_by_plugins(self) -> None:
         action_model_symbols = public_top_level_type_names(

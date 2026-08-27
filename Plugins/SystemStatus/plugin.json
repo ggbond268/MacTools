@@ -48,6 +48,23 @@
       "summary": "實時查看系統狀態"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "retention-description": {
+      "ar": "تظل الإعدادات محفوظة حتى إزالة بيانات الإضافة. يقتصر سجل الأداء على 24 ساعة و8640 عينة.",
+      "de": "Einstellungen bleiben bis zum Entfernen der Plug-in-Daten erhalten. Der Leistungsverlauf ist auf 24 Stunden und 8.640 Messwerte begrenzt.",
+      "en": "Settings persist until plugin data is removed. Performance history is limited to 24 hours and 8,640 samples.",
+      "es": "Los ajustes se conservan hasta que se eliminan los datos del complemento. El historial de rendimiento se limita a 24 horas y 8640 muestras.",
+      "fr": "Les réglages restent jusqu’à la suppression des données du module. L’historique des performances est limité à 24 heures et 8 640 échantillons.",
+      "ja": "設定はプラグインデータを削除するまで保持されます。パフォーマンス履歴は 24 時間、8,640 サンプルに制限されます。",
+      "ko": "설정은 플러그인 데이터를 제거할 때까지 유지됩니다. 성능 기록은 24시간 및 8,640개 샘플로 제한됩니다.",
+      "pt": "As definições permanecem até os dados do plugin serem removidos. O histórico de desempenho está limitado a 24 horas e 8640 amostras.",
+      "ru": "Настройки хранятся до удаления данных плагина. История производительности ограничена 24 часами и 8640 образцами.",
+      "zh-Hans": "设置会保留到插件数据被移除。性能历史仅保留 24 小时，最多 8,640 个样本。",
+      "zh-Hant": "設定會保留到外掛資料被移除。效能歷史僅保留 24 小時，最多 8,640 個樣本。"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +80,114 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "monitoring"
+  "category": "monitoring",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "system",
+      "status",
+      "monitoring"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "حالة النظام"
+      ],
+      "de": [
+        "Systemstatus"
+      ],
+      "en": [
+        "System Status"
+      ],
+      "es": [
+        "Estado del sistema"
+      ],
+      "fr": [
+        "État du système"
+      ],
+      "ja": [
+        "システム状況"
+      ],
+      "ko": [
+        "시스템 상태"
+      ],
+      "pt": [
+        "Status do sistema"
+      ],
+      "ru": [
+        "Состояние системы"
+      ],
+      "zh-Hans": [
+        "系统状态"
+      ],
+      "zh-Hant": [
+        "系統狀態"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "monitoring"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "monitoring-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration",
+      "performance-history"
+    ],
+    "retention": {
+      "policy": "user-controlled",
+      "description": "@productStrings.retention-description"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

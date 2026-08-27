@@ -66,5 +66,314 @@
     "accessibility"
   ],
   "uninstallDataPolicy": "removePrivateData",
-  "category": "productivity"
+  "category": "productivity",
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup-storage-title": "@localizable.setup.storage.title",
+    "setup-storage-description": "@localizable.settings.storage.encrypted.description",
+    "setup-collection-title": "@localizable.settings.collection.toggleTitle",
+    "setup-collection-description": "@localizable.setup.collection.actionDescription",
+    "open-history-title": "@localizable.action.open.title",
+    "open-history-description": "@localizable.action.open.description",
+    "pause-collection-title": "@localizable.action.pause.title",
+    "pause-collection-description": "@localizable.action.pause.description",
+    "resume-collection-title": "@localizable.action.resume.title",
+    "resume-collection-description": "@localizable.action.resume.description",
+    "toggle-collection-title": "@localizable.action.toggle.title",
+    "toggle-collection-description": "@localizable.action.toggle.description",
+    "clear-unpinned-history-title": "@localizable.action.clearUnpinned.title",
+    "clear-unpinned-history-description": "@localizable.action.clearUnpinned.description",
+    "clear-all-history-title": "@localizable.action.clearAll.title",
+    "clear-all-history-description": "@localizable.action.clearAll.description"
+  },
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools/blob/main/docs/superpowers/specs/2026-08-19-clipboard-history.md",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "clipboard",
+      "history",
+      "paste",
+      "OCR",
+      "export"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "سجل الحافظة"
+      ],
+      "de": [
+        "Zwischenablageverlauf"
+      ],
+      "en": [
+        "Clipboard History"
+      ],
+      "es": [
+        "Historial del portapapeles"
+      ],
+      "fr": [
+        "Historique du presse-papiers"
+      ],
+      "ja": [
+        "クリップボード履歴"
+      ],
+      "ko": [
+        "클립보드 기록"
+      ],
+      "pt": [
+        "Histórico da área de transferência"
+      ],
+      "ru": [
+        "История буфера обмена"
+      ],
+      "zh-Hans": [
+        "剪贴板历史"
+      ],
+      "zh-Hant": [
+        "剪貼簿記錄"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "recall-copied-content",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [
+      "clipboard-clear"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "clipboard-content",
+      "frontmost-application"
+    ],
+    "dataPersisted": [
+      "encrypted-clipboard-history",
+      "local-encryption-key"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "secure-storage",
+        "title": "@productStrings.setup-storage-title",
+        "description": "@productStrings.setup-storage-description"
+      },
+      {
+        "id": "collection",
+        "title": "@productStrings.setup-collection-title",
+        "description": "@productStrings.setup-collection-description"
+      }
+    ],
+    "optionalSurfaces": [
+      "global-shortcut"
+    ],
+    "suggestedTestAction": {
+      "providerID": "clipboard-history",
+      "actionID": "open-history"
+    }
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "clipboard-clear"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "clipboard-history",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "open-history",
+            "title": "@productStrings.open-history-title",
+            "description": "@productStrings.open-history-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "clipboard",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "pause-collection",
+            "title": "@productStrings.pause-collection-title",
+            "description": "@productStrings.pause-collection-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "pause.circle",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual",
+              "automatic-rule",
+              "app-intent"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "resume-collection",
+            "title": "@productStrings.resume-collection-title",
+            "description": "@productStrings.resume-collection-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "play.circle",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual",
+              "automatic-rule",
+              "app-intent"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "toggle-collection",
+            "title": "@productStrings.toggle-collection-title",
+            "description": "@productStrings.toggle-collection-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "playpause",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual",
+              "automatic-rule",
+              "app-intent"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "clear-unpinned-history",
+            "title": "@productStrings.clear-unpinned-history-title",
+            "description": "@productStrings.clear-unpinned-history-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "trash",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "clear-all-history",
+            "title": "@productStrings.clear-all-history-title",
+            "description": "@productStrings.clear-all-history-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "trash.slash",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

@@ -3,17 +3,69 @@
   "displayName": "Apple 快捷指令",
   "summary": "发现并运行现有的 Apple 快捷指令。",
   "localizedMetadata": {
-    "ar": { "displayName": "اختصارات Apple", "summary": "اكتشف اختصارات Apple الحالية وشغّلها." },
-    "de": { "displayName": "Apple-Kurzbefehle", "summary": "Vorhandene Apple-Kurzbefehle entdecken und ausführen." },
-    "en": { "displayName": "Apple Shortcuts", "summary": "Discover and run existing Apple Shortcuts." },
-    "es": { "displayName": "Atajos de Apple", "summary": "Descubre y ejecuta atajos de Apple existentes." },
-    "fr": { "displayName": "Raccourcis Apple", "summary": "Découvrez et exécutez vos raccourcis Apple." },
-    "ja": { "displayName": "Appleショートカット", "summary": "既存のAppleショートカットを見つけて実行します。" },
-    "ko": { "displayName": "Apple 단축어", "summary": "기존 Apple 단축어를 찾아 실행합니다." },
-    "pt": { "displayName": "Atalhos da Apple", "summary": "Descubra e execute atalhos existentes da Apple." },
-    "ru": { "displayName": "Быстрые команды Apple", "summary": "Находите и запускайте существующие быстрые команды Apple." },
-    "zh-Hans": { "displayName": "Apple 快捷指令", "summary": "发现并运行现有的 Apple 快捷指令。" },
-    "zh-Hant": { "displayName": "Apple 捷徑", "summary": "探索並執行現有的 Apple 捷徑。" }
+    "ar": {
+      "displayName": "اختصارات Apple",
+      "summary": "اكتشف اختصارات Apple الحالية وشغّلها."
+    },
+    "de": {
+      "displayName": "Apple-Kurzbefehle",
+      "summary": "Vorhandene Apple-Kurzbefehle entdecken und ausführen."
+    },
+    "en": {
+      "displayName": "Apple Shortcuts",
+      "summary": "Discover and run existing Apple Shortcuts."
+    },
+    "es": {
+      "displayName": "Atajos de Apple",
+      "summary": "Descubre y ejecuta atajos de Apple existentes."
+    },
+    "fr": {
+      "displayName": "Raccourcis Apple",
+      "summary": "Découvrez et exécutez vos raccourcis Apple."
+    },
+    "ja": {
+      "displayName": "Appleショートカット",
+      "summary": "既存のAppleショートカットを見つけて実行します。"
+    },
+    "ko": {
+      "displayName": "Apple 단축어",
+      "summary": "기존 Apple 단축어를 찾아 실행합니다."
+    },
+    "pt": {
+      "displayName": "Atalhos da Apple",
+      "summary": "Descubra e execute atalhos existentes da Apple."
+    },
+    "ru": {
+      "displayName": "Быстрые команды Apple",
+      "summary": "Находите и запускайте существующие быстрые команды Apple."
+    },
+    "zh-Hans": {
+      "displayName": "Apple 快捷指令",
+      "summary": "发现并运行现有的 Apple 快捷指令。"
+    },
+    "zh-Hant": {
+      "displayName": "Apple 捷徑",
+      "summary": "探索並執行現有的 Apple 捷徑。"
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description",
+    "action.run-shortcut.parameter-summary": {
+      "ar": "اختر اختصار Apple المخزن على هذا الـ Mac لتشغيله.",
+      "de": "Wähle den auf diesem Mac gespeicherten Apple-Kurzbefehl aus, der ausgeführt werden soll.",
+      "en": "Select the Apple Shortcut stored on this Mac to run.",
+      "es": "Selecciona el atajo de Apple guardado en este Mac que quieres ejecutar.",
+      "fr": "Sélectionnez le raccourci Apple enregistré sur ce Mac à exécuter.",
+      "ja": "この Mac に保存されている Apple ショートカットから、実行する項目を選択します。",
+      "ko": "이 Mac에 저장된 Apple 단축어 중 실행할 항목을 선택하세요.",
+      "pt": "Selecione o Atalho Apple salvo neste Mac para executar.",
+      "ru": "Выберите сохранённую на этом Mac быструю команду Apple для запуска.",
+      "zh-Hans": "选择存储在此 Mac 上、要运行的 Apple 快捷指令。",
+      "zh-Hant": "選擇儲存在此 Mac 上、要執行的 Apple 捷徑。"
+    }
   },
   "version": "1.0.0",
   "minHostVersion": "1.2.0",
@@ -29,6 +81,169 @@
     "componentPanel": false,
     "settings": "workspace"
   },
-  "permissions": [],
-  "category": "productivity"
+  "permissions": [
+    "automation"
+  ],
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "apple",
+      "shortcuts",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "اختصارات Apple"
+      ],
+      "de": [
+        "Apple-Kurzbefehle"
+      ],
+      "en": [
+        "Apple Shortcuts"
+      ],
+      "es": [
+        "Atajos de Apple"
+      ],
+      "fr": [
+        "Raccourcis Apple"
+      ],
+      "ja": [
+        "Appleショートカット"
+      ],
+      "ko": [
+        "Apple 단축어"
+      ],
+      "pt": [
+        "Atalhos da Apple"
+      ],
+      "ru": [
+        "Быстрые команды Apple"
+      ],
+      "zh-Hans": [
+        "Apple 快捷指令"
+      ],
+      "zh-Hant": [
+        "Apple 捷徑"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [
+      {
+        "bundleID": "com.apple.shortcuts",
+        "name": "Shortcuts"
+      }
+    ],
+    "executables": [],
+    "permissionIDs": [
+      "automation"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "shortcut-names",
+      "shortcut-folders"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "apple-shortcuts",
+        "kind": "dynamic",
+        "staticActions": [],
+        "dynamicTemplates": [
+          {
+            "id": "run-shortcut",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "entrySource": "apple-shortcuts",
+            "parameters": [],
+            "parameterSummary": "@productStrings.action.run-shortcut.parameter-summary",
+            "localOnlyIdentity": true,
+            "keywords": [
+              "apple",
+              "shortcuts",
+              "run",
+              "shortcut"
+            ],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "confirmAlways",
+            "riskVariesByEntry": true
+          }
+        ]
+      }
+    ]
+  }
 }

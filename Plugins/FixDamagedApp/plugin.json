@@ -48,6 +48,10 @@
       "summary": "移除隔離屬性，解決「已損壞」或「不受信任」提示"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +67,153 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "fix",
+      "damaged",
+      "app",
+      "apps",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إصلاح التطبيقات التالفة"
+      ],
+      "de": [
+        "Beschädigte Apps reparieren"
+      ],
+      "en": [
+        "Fix Damaged Apps"
+      ],
+      "es": [
+        "Reparar apps dañadas"
+      ],
+      "fr": [
+        "Réparer les apps endommagées"
+      ],
+      "ja": [
+        "破損したアプリを修復"
+      ],
+      "ko": [
+        "손상된 앱 복구"
+      ],
+      "pt": [
+        "Corrigir apps danificados"
+      ],
+      "ru": [
+        "Исправить повреждённые приложения"
+      ],
+      "zh-Hans": [
+        "修复损坏应用"
+      ],
+      "zh-Hant": [
+        "修復損壞的 App"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "productivity-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "fix-damaged-app",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "choose-app",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "修复损坏应用",
+              "移除隔离属性，解决「已损坏」或「不受信任」提示",
+              "app",
+              "quarantine",
+              "fix",
+              "damaged",
+              "choose"
+            ],
+            "systemImage": "wrench.and.screwdriver.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

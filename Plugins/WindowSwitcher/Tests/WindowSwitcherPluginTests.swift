@@ -53,6 +53,22 @@ private final class WindowSwitcherMemoryStorage: PluginStorage {
 
 @MainActor
 final class WindowSwitcherPluginTests: XCTestCase {
+    func testManifestActionMatchesRuntimePolicy() throws {
+        let plugin = WindowSwitcherPlugin(
+            context: PluginRuntimeContext(
+                pluginID: WindowSwitcherConstants.pluginID,
+                storage: WindowSwitcherMemoryStorage()
+            ),
+            accessibilityTrusted: { true }
+        )
+
+        try PluginManifestActionAssertions.assertConsistency(
+            pluginDirectoryName: "WindowSwitcher",
+            definitions: plugin.actionDefinitions,
+            permissionIDs: plugin.permissionRequirementIDs(for:)
+        )
+    }
+
     func testShortcutRecorderUsesGroupSummaryWithoutDuplicateControlLabel() {
         let plugin = WindowSwitcherPlugin(accessibilityTrusted: { true })
         let definition = plugin.shortcutDefinitions.first

@@ -3,25 +3,195 @@
   "displayName": "自定义快捷操作：键盘、触控板、鼠标",
   "summary": "将输入映射为操作",
   "localizedMetadata": {
-    "ar": { "displayName": "اختصارات مخصصة: لوحة المفاتيح، لوحة التتبع، الماوس", "summary": "اربط الإدخالات بالإجراءات." },
-    "de": { "displayName": "Eigene Kurzbefehle: Tastatur, Trackpad, Maus", "summary": "Eingaben Aktionen zuordnen." },
-    "en": { "displayName": "Custom Shortcuts: Keyboard, Trackpad, Mouse", "summary": "Map inputs to actions" },
-    "es": { "displayName": "Atajos personalizados: Teclado, Panel táctil, Ratón", "summary": "Asigna entradas a acciones." },
-    "fr": { "displayName": "Raccourcis personnalisés : Clavier, Pavé tactile, Souris", "summary": "Associer les entrées aux actions." },
-    "ja": { "displayName": "カスタムショートカット：キーボード、トラックパッド、マウス", "summary": "入力をアクションに割り当てます。" },
-    "ko": { "displayName": "사용자화 단축키: 키보드, 트랙패드, 마우스", "summary": "입력을 동작에 연결합니다." },
-    "pt": { "displayName": "Atalhos personalizados: Teclado, Trackpad, Rato", "summary": "Associe entradas a ações." },
-    "ru": { "displayName": "Пользовательские сочетания: Клавиатура, Трекпад, Мышь", "summary": "Сопоставляйте ввод с действиями." },
-    "zh-Hans": { "displayName": "自定义快捷操作：键盘、触控板、鼠标", "summary": "将输入映射为操作" },
-    "zh-Hant": { "displayName": "自訂快速操作：鍵盤、觸控板、滑鼠", "summary": "將輸入對應至操作。" }
+    "ar": {
+      "displayName": "اختصارات مخصصة: لوحة المفاتيح، لوحة التتبع، الماوس",
+      "summary": "اربط الإدخالات بالإجراءات."
+    },
+    "de": {
+      "displayName": "Eigene Kurzbefehle: Tastatur, Trackpad, Maus",
+      "summary": "Eingaben Aktionen zuordnen."
+    },
+    "en": {
+      "displayName": "Custom Shortcuts: Keyboard, Trackpad, Mouse",
+      "summary": "Map inputs to actions"
+    },
+    "es": {
+      "displayName": "Atajos personalizados: Teclado, Panel táctil, Ratón",
+      "summary": "Asigna entradas a acciones."
+    },
+    "fr": {
+      "displayName": "Raccourcis personnalisés : Clavier, Pavé tactile, Souris",
+      "summary": "Associer les entrées aux actions."
+    },
+    "ja": {
+      "displayName": "カスタムショートカット：キーボード、トラックパッド、マウス",
+      "summary": "入力をアクションに割り当てます。"
+    },
+    "ko": {
+      "displayName": "사용자화 단축키: 키보드, 트랙패드, 마우스",
+      "summary": "입력을 동작에 연결합니다."
+    },
+    "pt": {
+      "displayName": "Atalhos personalizados: Teclado, Trackpad, Rato",
+      "summary": "Associe entradas a ações."
+    },
+    "ru": {
+      "displayName": "Пользовательские сочетания: Клавиатура, Трекпад, Мышь",
+      "summary": "Сопоставляйте ввод с действиями."
+    },
+    "zh-Hans": {
+      "displayName": "自定义快捷操作：键盘、触控板、鼠标",
+      "summary": "将输入映射为操作"
+    },
+    "zh-Hant": {
+      "displayName": "自訂快速操作：鍵盤、觸控板、滑鼠",
+      "summary": "將輸入對應至操作。"
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description"
   },
   "version": "1.0.1",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
   "bundleRelativePath": "InputRemapping.bundle",
   "factoryClass": "InputRemappingPlugin.InputRemappingPluginFactory",
-  "build": { "project": "../../MacTools.xcodeproj", "scheme": "InputRemappingPlugin" },
-  "capabilities": { "primaryPanel": true, "componentPanel": false, "settings": "workspace" },
-  "permissions": ["accessibility", "inputMonitoring"],
-  "category": "productivity"
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "InputRemappingPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "workspace"
+  },
+  "permissions": [
+    "accessibility",
+    "inputMonitoring"
+  ],
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "input",
+      "remapping",
+      "custom",
+      "shortcuts",
+      "keyboard",
+      "trackpad",
+      "mouse",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "اختصارات مخصصة: لوحة المفاتيح، لوحة التتبع، الماوس"
+      ],
+      "de": [
+        "Eigene Kurzbefehle: Tastatur, Trackpad, Maus"
+      ],
+      "en": [
+        "Custom Shortcuts: Keyboard, Trackpad, Mouse"
+      ],
+      "es": [
+        "Atajos personalizados: Teclado, Panel táctil, Ratón"
+      ],
+      "fr": [
+        "Raccourcis personnalisés : Clavier, Pavé tactile, Souris"
+      ],
+      "ja": [
+        "カスタムショートカット：キーボード、トラックパッド、マウス"
+      ],
+      "ko": [
+        "사용자화 단축키: 키보드, 트랙패드, 마우스"
+      ],
+      "pt": [
+        "Atalhos personalizados: Teclado, Trackpad, Rato"
+      ],
+      "ru": [
+        "Пользовательские сочетания: Клавиатура, Трекпад, Мышь"
+      ],
+      "zh-Hans": [
+        "自定义快捷操作：键盘、触控板、鼠标"
+      ],
+      "zh-Hant": [
+        "自訂快速操作：鍵盤、觸控板、滑鼠"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility",
+      "inputMonitoring"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "input-events"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

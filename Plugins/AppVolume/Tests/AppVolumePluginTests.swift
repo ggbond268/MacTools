@@ -6,6 +6,16 @@ import MacToolsPluginKit
 
 @MainActor
 final class AppVolumePluginTests: XCTestCase {
+    func testManifestDynamicActionMatchesRuntimePolicy() throws {
+        let plugin = makePlugin()
+
+        try PluginManifestActionAssertions.assertConsistency(
+            pluginDirectoryName: "AppVolume",
+            definitions: plugin.actionDefinitions,
+            permissionIDs: plugin.permissionRequirementIDs(for:)
+        )
+    }
+
     func testMetadataAndPermissionRequirement() {
         let plugin = makePlugin()
 
