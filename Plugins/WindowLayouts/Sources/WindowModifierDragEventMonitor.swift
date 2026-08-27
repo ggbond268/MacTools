@@ -69,6 +69,34 @@ nonisolated final class SystemWindowModifierDragEventMonitor: @unchecked Sendabl
             stop()
         }
 
+        let readySignal = DispatchSemaphore(value: 0)
+        let finishedSignal = DispatchSemaphore(value: 0)
+        switch prepareEventTap(handler: handler, readySignal: readySignal, finishedSignal: finishedSignal) {
+        case .success:
+            break
+        case let .failure(error):
+            return .failure(error)
+        }
+
+        eventQueue.async { [self] in
+            runEventLoop()
+        }
+        readySignal.wait()
+
+        guard isRunning else {
+            stop()
+            return .failure(.eventLoopUnavailable)
+        }
+        return .success(())
+    }
+
+    // Keep Core Foundation resource setup separate from queue startup to avoid a Swift 6.3.3
+    // SendNonSendable compiler crash. Publish all startup state under the same lock.
+    private func prepareEventTap(
+        handler: WindowModifierDragEventHandler,
+        readySignal: DispatchSemaphore,
+        finishedSignal: DispatchSemaphore
+    ) -> Result<Void, WindowModifierDragMonitorStartError> {
         let eventMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
             | CGEventMask(1 << CGEventType.mouseMoved.rawValue)
             | CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
@@ -95,8 +123,6 @@ nonisolated final class SystemWindowModifierDragEventMonitor: @unchecked Sendabl
             return .failure(.runLoopSourceUnavailable)
         }
 
-        let readySignal = DispatchSemaphore(value: 0)
-        let finishedSignal = DispatchSemaphore(value: 0)
         lock.withLock {
             self.tap = tap
             self.source = source
@@ -105,15 +131,6 @@ nonisolated final class SystemWindowModifierDragEventMonitor: @unchecked Sendabl
             self.finishedSignal = finishedSignal
             self.eventHandler = handler
             shouldRun = true
-        }
-        eventQueue.async { [self] in
-            runEventLoop()
-        }
-        readySignal.wait()
-
-        guard isRunning else {
-            stop()
-            return .failure(.eventLoopUnavailable)
         }
         return .success(())
     }
