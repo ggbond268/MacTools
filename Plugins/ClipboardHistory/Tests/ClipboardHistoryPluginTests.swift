@@ -154,12 +154,14 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             "clipboard-essential-settings",
             "clipboard-queue-settings",
             "clipboard-snippet-settings",
-            "clipboard-advanced-settings",
             "clipboard-additional-shortcuts",
             "clipboard-retention-settings",
             "clipboard-exclusion-settings",
             "clipboard-data-settings",
         ])
+        let advancedSection = try XCTUnwrap(sections.first { $0.id == "clipboard-additional-shortcuts" })
+        XCTAssertNotNil(advancedSection.headerAccessory, "Advanced belongs outside the native settings card")
+        XCTAssertEqual(sections.filter { $0.headerAccessory != nil }.map(\.id), [advancedSection.id])
         XCTAssertEqual(plugin.shortcutSettingsGroups.map(\.id), [
             "primary-shortcuts",
             "sequential-paste-shortcuts",

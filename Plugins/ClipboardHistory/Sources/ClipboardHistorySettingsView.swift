@@ -8,7 +8,6 @@ enum ClipboardHistorySettingsContentSection: Hashable {
     case queue
     case saved
     case snippets
-    case advanced
     case additionalShortcuts
     case retention
     case exclusions
@@ -43,7 +42,6 @@ struct ClipboardHistorySettingsView: View {
             .essentials,
             .queue,
             .snippets,
-            .advanced,
             .additionalShortcuts,
             .retention,
             .exclusions,
@@ -73,15 +71,6 @@ struct ClipboardHistorySettingsView: View {
             }
             if contentSections.contains(.snippets) {
                 snippetsSection
-            }
-            if contentSections.contains(.advanced) {
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    Text(localization.string("settings.advanced.title", defaultValue: "Advanced Settings"))
-                        .font(PluginSettingsTheme.Typography.sectionTitle)
-                        .foregroundStyle(.secondary)
-                    Divider().frame(maxWidth: .infinity, maxHeight: 1)
-                }
-                .padding(.top, PluginSettingsTheme.Spacing.sectionHeaderContent)
             }
             if contentSections.contains(.additionalShortcuts) {
                 additionalShortcutsSection
@@ -1345,6 +1334,26 @@ struct ClipboardHistorySettingsView: View {
                 defaultValue: "%d KB",
                 byteCount / 1_024
             )
+    }
+}
+
+/// A section header, not a settings row: the native Form must not wrap it in a card.
+struct ClipboardSettingsAdvancedDivider: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            Text(title)
+                .font(PluginSettingsTheme.Typography.secondaryLabel)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Rectangle()
+                .fill(PluginSettingsTheme.Palette.separator)
+                .frame(height: PluginSettingsTheme.Stroke.hairline)
+                .accessibilityHidden(true)
+        }
+        .padding(.top, PluginSettingsTheme.Spacing.section)
     }
 }
 

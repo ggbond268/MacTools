@@ -393,17 +393,17 @@
     },
     "settings.advanced.title": {
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Advanced Settings" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "高级设置" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "進階設定" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Advanced" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "高级" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "進階" } },
         "ja": { "stringUnit": { "state": "translated", "value": "詳細設定" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "고급 설정" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Erweiterte Einstellungen" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Réglages avancés" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Ajustes avanzados" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Definições avançadas" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "고급" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Erweitert" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Avancé" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Avanzado" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Avançado" } },
         "ru": { "stringUnit": { "state": "translated", "value": "Расширенные настройки" } },
-        "ar": { "stringUnit": { "state": "translated", "value": "إعدادات متقدمة" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "متقدم" } }
       }
     },
     "settings.snippets.manage": {

@@ -52,6 +52,31 @@ final class ClipboardHistoryWindowStyleTests: XCTestCase {
         XCTAssertGreaterThan(expanded.fittingSize.height, collapsed.fittingSize.height + 180)
     }
 
+    func testAdvancedDividerIsCompactTransparentAndHasATrailingHairline() throws {
+        for scheme in [ColorScheme.light, .dark] {
+            for title in ["Advanced", "高级", "Erweitert", "Расширенные настройки", "متقدم"] {
+                let view = ClipboardSettingsAdvancedDivider(title: title)
+                    .frame(width: 400)
+                    .environment(\.colorScheme, scheme)
+                let hosting = NSHostingView(rootView: view)
+                XCTAssertEqual(hosting.fittingSize.width, 400, accuracy: 0.5)
+                XCTAssertLessThan(hosting.fittingSize.height, 45, "The divider must not become another large card")
+
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+                XCTAssertEqual(try XCTUnwrap(bitmap.colorAt(x: 2, y: 2)).alphaComponent, 0)
+                let lineRows = (0..<bitmap.pixelsHigh).filter { y in
+                    (bitmap.colorAt(x: bitmap.pixelsWide - 2, y: y)?.alphaComponent ?? 0) > 0
+                }
+                XCTAssertFalse(lineRows.isEmpty, "The trailing horizontal rule must be visible")
+                XCTAssertLessThanOrEqual(lineRows.count, 2, "The rule must remain a hairline")
+                XCTAssertGreaterThan(try XCTUnwrap(lineRows.first), bitmap.pixelsHigh / 2,
+                    "More breathing room belongs above the divider than below it")
+            }
+        }
+    }
+
     func testHistoryContentFillsNativeWindowFrameBeforeAndAfterResizing() throws {
         let panel = NSPanel(
             contentRect: NSRect(x: 100, y: 100, width: 900, height: 620),

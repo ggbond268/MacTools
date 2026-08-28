@@ -89,7 +89,6 @@ final class ClipboardHistoryPlugin:
     private enum SettingsSectionID {
         static let essentials = "clipboard-essential-settings"
         static let queue = "clipboard-queue-settings"
-        static let advanced = "clipboard-advanced-settings"
         static let snippets = "clipboard-snippet-settings"
         static let additionalShortcuts = "clipboard-additional-shortcuts"
         static let retention = "clipboard-retention-settings"
@@ -428,21 +427,6 @@ final class ClipboardHistoryPlugin:
                     }
                 },
                 PluginSettingsSection(
-                    id: SettingsSectionID.advanced,
-                    presentation: .edgeToEdge
-                ) { [weak self] _ in
-                    if let self {
-                        ClipboardHistorySettingsView(
-                            controller: self.controller,
-                            savedLibraryController: self.savedLibraryController,
-                            localization: self.localization,
-                            contentSections: [.advanced]
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                },
-                PluginSettingsSection(
                     id: SettingsSectionID.additionalShortcuts,
                     presentation: .edgeToEdge,
                     embeddedShortcutGroupIDs: [ShortcutID.panelGroup, ShortcutID.collectionGroup]
@@ -457,6 +441,12 @@ final class ClipboardHistoryPlugin:
                         )
                     } else {
                         EmptyView()
+                    }
+                }.headerAccessory { [weak self] _ in
+                    if let self {
+                        ClipboardSettingsAdvancedDivider(
+                            title: self.localization.string("settings.advanced.title", defaultValue: "高级")
+                        )
                     }
                 },
                 PluginSettingsSection(
