@@ -5,6 +5,57 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
+    func testSnippetMetadataSearchUsesTitleTagsAndKeywordInBothScopes() async {
+        var snippet = ClipboardSavedItem(title: "Customer reply", tags: ["support"], keyword: ";reply",
+            savedKind: .snippet, payload: .plainText("Thanks for contacting us"), templateText: "Thanks for contacting us")
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [], savedItems: [snippet])
+        for mode in [ClipboardPanelMode.all, .snippets] {
+            model.mode = mode
+            for query in ["Customer", "support", ";reply", "Thanks"] {
+                model.query = query
+                await model.waitForSearchForTesting()
+                XCTAssertEqual(model.visibleItems.map(\.id), [snippet.id], "\(mode) \(query)")
+            }
+        }
+        snippet.updateMetadata(title: "Updated title", tags: ["sales"], keyword: ";sales", isFavorite: false,
+                               templateText: "Thanks for contacting us", updatedAt: Date())
+        model.updateSavedItems([snippet])
+        model.query = ";reply"
+        await model.waitForSearchForTesting()
+        XCTAssertTrue(model.visibleItems.isEmpty)
+        model.query = ";sales"
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.visibleItems.map(\.id), [snippet.id])
+    }
+
+    func testSnippetExportRoutePreservesClickedTargetAndCombinedIntent() {
+        let history = UUID(), snippet = UUID()
+        XCTAssertEqual(ClipboardPanelExportRoute.historyItemID(ids: [history], snippetIDs: [snippet]), history)
+        XCTAssertNil(ClipboardPanelExportRoute.historyItemID(ids: [snippet], snippetIDs: [snippet]))
+        XCTAssertNil(ClipboardPanelExportRoute.historyItemID(ids: [history, snippet], snippetIDs: [snippet]))
+        XCTAssertNil(ClipboardPanelExportRoute.historyItemID(ids: [history], snippetIDs: [], combining: true))
+        XCTAssertEqual(ClipboardPanelExportRoute.snippetFormats, [.plainText, .markdown, .html, .pdf])
+    }
+
+    func testSnippetLoadingFailureDoesNotLookEmptyOrHideWorkingHistory() {
+        let loading = ClipboardHistoryPanelPresentation.resolve(itemCount: 0, visibleItemCount: 0,
+            hasStorageError: false, isLoaded: true, isSnippetScope: true, snippetsAreLoaded: false)
+        XCTAssertTrue(loading.showsLoading)
+        XCTAssertFalse(loading.showsEmptyState)
+        let failed = ClipboardHistoryPanelPresentation.resolve(itemCount: 0, visibleItemCount: 0,
+            hasStorageError: false, isLoaded: true, isSnippetScope: true, snippetsHaveStorageError: true)
+        XCTAssertTrue(failed.showsErrorOnly)
+        XCTAssertFalse(failed.showsEmptyState)
+        let history = ClipboardHistoryPanelPresentation.resolve(itemCount: 3, visibleItemCount: 3,
+            hasStorageError: false, isLoaded: true, snippetsHaveStorageError: true)
+        XCTAssertTrue(history.showsHistory)
+        XCTAssertFalse(history.showsErrorOnly)
+        let recovered = ClipboardHistoryPanelPresentation.resolve(itemCount: 1, visibleItemCount: 1,
+            hasStorageError: true, isLoaded: false, isSnippetScope: true)
+        XCTAssertTrue(recovered.showsHistory)
+        XCTAssertFalse(recovered.showsLoading)
+    }
     func testActionKeyboardOrderMatchesRenderedGroupsAndSearchResults() {
         let entries: [ClipboardHistoryExportMenuEntry] = [
             .init(title: "Paste", action: .paste),

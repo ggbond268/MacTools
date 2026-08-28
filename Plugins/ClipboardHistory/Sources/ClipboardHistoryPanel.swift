@@ -1072,7 +1072,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                         let presentation = savedItem.historyPresentationItem()
                         guard contentFilter.matches(presentation),
                               semanticFilter.matches(presentation),
-                              ClipboardHistorySearch.matches(index: presentation.searchIndex, query: query) else {
+                              ClipboardHistorySearch.matches(index: savedItem.searchIndex, query: query) else {
                             continue
                         }
                         collector.consider(ClipboardPanelSearchCandidate(
@@ -2181,6 +2181,10 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             }
             self.onManualClipboardWrite()
             previousApplication.activate(options: [])
+            let preparedClipboardVersion = self.historyController.currentPasteboardVersion
+            var cursorAccess: SystemClipboardSnippetPasteCursorAccess?
+            var cursorContext: ClipboardSnippetPasteCursorContext?
+            defer { cursorAccess?.stop() }
             let activationDeadline = ProcessInfo.processInfo.systemUptime + 0.4
             while !previousApplication.isActive,
                   ProcessInfo.processInfo.systemUptime < activationDeadline {
@@ -2190,17 +2194,24 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                   NSWorkspace.shared.frontmostApplication?.processIdentifier
                     == previousApplication.processIdentifier,
                   await pasteCommandSender.sendPasteCommand(
-                      to: previousApplication.processIdentifier
+                      to: previousApplication.processIdentifier,
+                      beforeSending: {
+                          guard self.historyController.currentPasteboardVersion == preparedClipboardVersion else { return false }
+                          if let offset = expansion.cursorUTF16OffsetFromEnd, offset > 0,
+                             let access = SystemClipboardSnippetPasteCursorAccess(processIdentifier: previousApplication.processIdentifier) {
+                              cursorAccess = access
+                              if let selection = access.selection {
+                                  cursorContext = ClipboardSnippetPasteCursorContext(selection: selection, expansion: expansion)
+                              }
+                          }
+                          return self.historyController.currentPasteboardVersion == preparedClipboardVersion
+                      }
                   ) else {
                 NSSound.beep()
                 return
             }
-            if let offset = expansion.cursorUTF16OffsetFromEnd, offset > 0 {
-                try? await Task.sleep(for: .milliseconds(40))
-                _ = ClipboardSnippetCursorPositioner.moveCursorBackward(
-                    in: previousApplication.processIdentifier,
-                    byUTF16Offset: offset
-                )
+            if let cursorAccess, let cursorContext {
+                await cursorContext.apply(access: cursorAccess)
             }
         }
     }
@@ -2263,8 +2274,13 @@ struct ClipboardHistoryPanelPresentation: Equatable {
         itemCount: Int,
         visibleItemCount: Int,
         hasStorageError: Bool,
-        isLoaded: Bool
+        isLoaded: Bool,
+        isSnippetScope: Bool = false,
+        snippetsAreLoaded: Bool = true,
+        snippetsHaveStorageError: Bool = false
     ) -> Self {
+        let isLoaded = isSnippetScope ? snippetsAreLoaded : isLoaded
+        let hasStorageError = isSnippetScope ? snippetsHaveStorageError : hasStorageError
         guard isLoaded else {
             return Self(
                 showsLoading: true,
@@ -2702,16 +2718,36 @@ private struct ClipboardHistoryPanelView: View {
             itemCount: logicalItemCount,
             visibleItemCount: visibleItems.count,
             hasStorageError: controller.errorMessage != nil,
-            isLoaded: controller.isLoaded
+            isLoaded: controller.isLoaded,
+            isSnippetScope: model.mode == .snippets,
+            snippetsAreLoaded: savedLibraryController.isLoaded,
+            snippetsHaveStorageError: savedLibraryController.fatalErrorMessage != nil
         )
+    }
+
+    private var scopedStorageError: String? {
+        model.mode == .snippets ? savedLibraryController.fatalErrorMessage : controller.errorMessage
+    }
+
+    private func retryScopedStorage() {
+        if model.mode == .snippets { savedLibraryController.retryLoading() }
+        else { controller.retryStorageAccess() }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginPaletteMetrics.contentSpacing) {
             panelToolbar
             if presentation.showsInlineStorageError,
-               let errorMessage = controller.errorMessage {
+               let errorMessage = scopedStorageError {
                 storageErrorBanner(errorMessage)
+            }
+            if model.mode == .all || model.mode == .snippets {
+                if let message = savedLibraryController.fatalErrorMessage, model.mode == .all {
+                    snippetErrorBanner(message, retry: true)
+                } else if let message = savedLibraryController.errorMessage,
+                          savedLibraryController.fatalErrorMessage == nil {
+                    snippetErrorBanner(message, retry: false)
+                }
             }
             panelContent
             footer
@@ -2849,17 +2885,19 @@ private struct ClipboardHistoryPanelView: View {
                 )
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if presentation.showsErrorOnly, let errorMessage = controller.errorMessage {
+        } else if presentation.showsErrorOnly, let errorMessage = scopedStorageError {
             ContentUnavailableView {
                 Label(
-                    localization.string("panel.error.title", defaultValue: "无法读取剪贴板历史"),
+                    model.mode == .snippets
+                        ? localization.string("settings.snippets.section", defaultValue: "Snippets")
+                        : localization.string("panel.error.title", defaultValue: "无法读取剪贴板历史"),
                     systemImage: "lock.trianglebadge.exclamationmark"
                 )
             } description: {
                 Text(errorMessage)
             } actions: {
                 Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
-                    controller.retryStorageAccess()
+                    retryScopedStorage()
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -2941,13 +2979,43 @@ private struct ClipboardHistoryPanelView: View {
             }
             Spacer(minLength: 0)
             Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
-                controller.retryStorageAccess()
+                retryScopedStorage()
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func snippetErrorBanner(_ message: String, retry: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(localization.string("settings.snippets.section", defaultValue: "Snippets"))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+                Text(message)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: 0)
+            if retry {
+                Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
+                    savedLibraryController.retryLoading()
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+            } else {
+                Button { savedLibraryController.clearError() } label: {
+                    Image(systemName: "xmark").frame(width: 24, height: 24).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(localization.string("common.close", defaultValue: "Close"))
+                .accessibilityLabel(localization.string("common.close", defaultValue: "Close"))
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
         .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 9))
     }
 
@@ -3494,12 +3562,14 @@ private struct ClipboardHistoryPanelView: View {
             }
             exportActions(for: item)
             Divider()
-            Button(item.isSaved
-                ? localization.string("saved.remove", defaultValue: "Unsave Clip")
-                : localization.string("saved.save", defaultValue: "Save Clip")) {
-                toggleSaved(item.id)
+            if !model.isSavedPresentation(item.id) {
+                Button(item.isSaved
+                    ? localization.string("saved.remove", defaultValue: "Unsave Clip")
+                    : localization.string("saved.save", defaultValue: "Save Clip")) {
+                    toggleSaved(item.id)
+                }
+                Divider()
             }
-            Divider()
             Button(localization.string("common.delete", defaultValue: "删除"), role: .destructive) {
                 deletePanelItem(item.id)
             }
@@ -3767,7 +3837,7 @@ private struct ClipboardHistoryPanelView: View {
         if item.kind == .files {
             exportMenuItems(for: item)
         } else {
-            let options = ClipboardHistoryExportPlanner.options(for: item)
+            let options = exportOptions(for: item)
             if options.isEmpty {
                 Button(localization.string("export.unavailable", defaultValue: "无法导出此格式")) {}
                     .disabled(true)
@@ -3789,7 +3859,7 @@ private struct ClipboardHistoryPanelView: View {
                 onCopyReferencedFiles(item.id)
             }
         } else {
-            let options = ClipboardHistoryExportPlanner.options(for: item)
+            let options = exportOptions(for: item)
             if options.isEmpty {
                 Button(localization.string("export.unavailable", defaultValue: "无法导出此格式")) {}
                     .disabled(true)
@@ -3799,7 +3869,7 @@ private struct ClipboardHistoryPanelView: View {
                         option.format,
                         localization: localization
                     )) {
-                        onExport(item.id, option.format)
+                        exportPanelItems([item.id], format: option.format)
                     }
                 }
             }
@@ -4659,7 +4729,7 @@ private struct ClipboardHistoryPanelView: View {
         case .share:
             sharePanelItems(ids)
         case let .combinedExport(format):
-            onExportCombined(ids, format)
+            exportPanelItems(ids, format: format, combining: true)
         case .startQueue:
             _ = onStartSequentialQueue(ids)
         case .requestExport:
@@ -4700,7 +4770,7 @@ private struct ClipboardHistoryPanelView: View {
             }
         case let .format(format):
             guard let id = ids.first else { return }
-            onExport(id, format)
+            exportPanelItems([id], format: format)
         case .showInFinder:
             guard let id = ids.first else { return }
             onShowReferencedFiles(id)
@@ -4744,6 +4814,24 @@ private struct ClipboardHistoryPanelView: View {
     private func sharePanelItems(_ itemIDs: [UUID]) {
         guard !itemIDs.isEmpty else { return }
         onShare(itemIDs)
+    }
+
+    private func exportPanelItems(_ itemIDs: [UUID], format: ClipboardExportFormat, combining: Bool = false) {
+        guard !itemIDs.isEmpty else { return }
+        if let historyID = ClipboardPanelExportRoute.historyItemID(
+            ids: itemIDs, snippetIDs: model.visibleSavedPresentationItemIDs, combining: combining
+        ) {
+            onExport(historyID, format)
+        } else {
+            onExportCombined(itemIDs, format)
+        }
+    }
+
+    private func exportOptions(for item: ClipboardHistoryItem) -> [ClipboardExportOption] {
+        if model.isSavedPresentation(item.id) {
+            return ClipboardPanelExportRoute.snippetFormats.map { .init(format: $0, isDefault: $0 == .plainText) }
+        }
+        return ClipboardHistoryExportPlanner.options(for: item)
     }
 
     private func deletePanelItem(_ itemID: UUID) {

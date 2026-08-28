@@ -6,6 +6,78 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryControllerTests: XCTestCase {
+    func testAbandonedPayloadLoadCannotPublishAfterCancellation() async {
+        let loader = BlockingCountingClipboardPayloadLoader(payload: .plainText("secret"))
+        let reference = ClipboardHistoryPayloadReference(loader: { try loader.load() })
+        let load = Task { try await reference.loadAsync() }
+        let started = await waitUntil { loader.loadCount == 1 }
+        XCTAssertTrue(started)
+        load.cancel()
+        _ = try? await load.value
+        reference.discardCachedPayloadIfReloadable()
+        XCTAssertNil(reference.cached)
+        loader.release.signal()
+        let finished = await waitUntil { !reference.isLoadingForTesting }
+        XCTAssertTrue(finished)
+        XCTAssertNil(reference.cached)
+        XCTAssertEqual(loader.loadCount, 1)
+    }
+
+    func testPendingLargeCaptureRespectsPauseResumeAndNewExclusions() async {
+        for excludeSource in [false, true] {
+            let fixture = makeFixture()
+            fixture.source.application = ClipboardSourceApplication(bundleIdentifier: "test.producer", name: "Producer")
+            fixture.controller.start()
+            await waitUntilLoaded(fixture.controller)
+            fixture.pasteboard.simulateCopy(String(repeating: "x", count: ClipboardHistoryController.maximumSynchronousCaptureByteCount + 1))
+            fixture.controller.processPasteboardChange()
+            if excludeSource {
+                fixture.settings.addExcludedApplications([
+                    ClipboardExcludedApplication(bundleIdentifier: "test.producer", name: "Producer"),
+                ])
+            } else {
+                fixture.settings.setPaused(true)
+                fixture.settings.setPaused(false)
+            }
+            await fixture.controller.waitForCaptureProcessingForTesting()
+            // Let cancelled workers drain without allowing them to resurrect their capture.
+            for _ in 0..<20 { await Task.yield() }
+            XCTAssertTrue(fixture.controller.items.isEmpty)
+            fixture.controller.stop()
+        }
+    }
+
+    func testAbandonedMixedSyncAndAsyncPayloadConsumersDoNotRetainResult() async {
+        let loader = BlockingCountingClipboardPayloadLoader(payload: .plainText("secret"))
+        let reference = ClipboardHistoryPayloadReference(loader: { try loader.load() })
+        let first = Task { try await reference.loadAsync() }
+        let started = await waitUntil { loader.loadCount == 1 }
+        XCTAssertTrue(started)
+        let second = Task.detached { try reference.load() }
+        let waiting = await waitUntil { reference.waitingLoaderCountForTesting == 2 }
+        XCTAssertTrue(waiting)
+        first.cancel()
+        _ = try? await first.value
+        second.cancel()
+        _ = try? await second.value
+        loader.release.signal()
+        let finished = await waitUntil { !reference.isLoadingForTesting }
+        XCTAssertTrue(finished)
+        XCTAssertNil(reference.cached)
+    }
+
+    func testCancelledSynchronousPayloadLoaderDoesNotRetainResult() async {
+        let loader = BlockingCountingClipboardPayloadLoader(payload: .plainText("secret"))
+        let reference = ClipboardHistoryPayloadReference(loader: { try loader.load() })
+        let task = Task.detached { try reference.load() }
+        let started = await waitUntil { loader.loadCount == 1 }
+        XCTAssertTrue(started)
+        task.cancel()
+        loader.release.signal()
+        _ = try? await task.value
+        XCTAssertNil(reference.cached)
+    }
+
     func testGeneralPasteboardRoundTripsGroupedRichRepresentations() throws {
         let namedPasteboard = NSPasteboard(
             name: NSPasteboard.Name("ClipboardHistoryControllerTests.\(UUID().uuidString)")

@@ -516,6 +516,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     var onItemCaptured: ((UUID) -> Void)?
 
     let settings: ClipboardHistorySettingsStore
+    var currentPasteboardVersion: Int { pasteboard.changeCount }
 
     private let pasteboard: any ClipboardPasteboardAccess
     private let sourceContext: any ClipboardSourceContextProviding
@@ -679,6 +680,10 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     func settingsDidChange() {
         capturePolicyRevision &+= 1
+        if settings.isPaused {
+            cancelPendingCaptureProcessing()
+            cancelPendingPasteboardPayloadRead()
+        }
         guard !isMutatingItems else {
             needsSettingsReconciliation = true
             notifyChanged()
@@ -920,6 +925,11 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                   self.errorMessage == nil else {
                 return
             }
+            defer {
+                if self.captureProcessingSequence == sequence {
+                    self.captureProcessingTask = nil
+                }
+            }
             while true {
                 guard !Task.isCancelled,
                       self.captureProcessingGeneration == generation,
@@ -929,6 +939,11 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 }
                 let policyRevision = self.capturePolicyRevision
                 let settings = self.settings.snapshot
+                guard ClipboardCapturePolicy.preflight(
+                    types: Set(payload.representations.map(\.typeIdentifier)),
+                    sourceApplication: sourceApplication,
+                    settings: settings
+                ) == nil else { return }
                 let newestItem = self.items.first(where: \.isInHistory)
                 let worker = Task.detached(priority: .userInitiated) {
                     ClipboardCapturePolicy.evaluatePayload(
@@ -959,9 +974,6 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                     changeCount: changeCount
                 )
                 break
-            }
-            if self.captureProcessingSequence == sequence {
-                self.captureProcessingTask = nil
             }
         }
     }

@@ -491,50 +491,6 @@ struct ClipboardSnippetExpansion: Equatable, Sendable {
     }
 }
 
-enum ClipboardSnippetCursorPositioner {
-    static func moveCursorBackward(
-        in processIdentifier: pid_t,
-        byUTF16Offset offset: Int
-    ) -> Bool {
-        guard offset > 0 else { return true }
-        let application = AXUIElementCreateApplication(processIdentifier)
-        var focusedValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            application,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedValue
-        ) == .success,
-        let focusedValue,
-        CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
-            return false
-        }
-        let focusedElement = unsafeDowncast(focusedValue as AnyObject, to: AXUIElement.self)
-        var rangeValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            focusedElement,
-            kAXSelectedTextRangeAttribute as CFString,
-            &rangeValue
-        ) == .success,
-        let rangeValue,
-        CFGetTypeID(rangeValue) == AXValueGetTypeID() else {
-            return false
-        }
-        var selectedRange = CFRange()
-        guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &selectedRange),
-              selectedRange.length == 0,
-              selectedRange.location >= offset else {
-            return false
-        }
-        selectedRange.location -= offset
-        guard let updatedRange = AXValueCreate(.cfRange, &selectedRange) else { return false }
-        return AXUIElementSetAttributeValue(
-            focusedElement,
-            kAXSelectedTextRangeAttribute as CFString,
-            updatedRange
-        ) == .success
-    }
-}
-
 enum ClipboardSnippetTemplateEngine {
     static func expandAsync(_ template: String, context: ClipboardSnippetExpansionContext) async throws -> ClipboardSnippetExpansion {
         let task = Task.detached(priority: .userInitiated) { try expand(template, context: context) }
@@ -1219,6 +1175,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 self.items.removeAll { $0.id == id }
                 self.itemLoadErrorMessages.removeValue(forKey: id)
                 self.keywordTemplatesByID.removeValue(forKey: id)
+                self.errorMessage = nil
                 self.reloadKeywordTemplateCache()
                 self.onChange?()
                 return true

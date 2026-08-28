@@ -7,6 +7,29 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPluginTests: XCTestCase {
+    func testExternalCopyDuringPreDispatchWaitCancelsImplicitPaste() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = PreDispatchClipboardPasteCommandSender()
+        let persistence = BlockingClipboardHistoryPersistence(items: [historyItem()])
+        persistence.allowSaveToFinish()
+        let plugin = makePlugin(pasteboard: pasteboard,
+            persistence: persistence,
+            pasteCommandSender: sender, accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 }, sequentialPasteStabilizationDelay: .zero)
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        plugin.controller.stop()
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let started = await waitUntil { sender.isWaiting }
+        XCTAssertTrue(started)
+        pasteboard.simulateCopy("new external copy")
+        sender.resume()
+        let finished = await waitUntil { !plugin.hasPendingSequentialPasteForTesting }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(sender.sentCount, 0)
+        XCTAssertEqual(pasteboard.text, "new external copy")
+        plugin.deactivate(reason: .hostShutdown)
+    }
     func testScopeShortcutReservesShiftForBackwardCycling() {
         let plugin = makePlugin()
 
@@ -1615,11 +1638,26 @@ private final class FakeClipboardPasteCommandSender: ClipboardPasteCommandSendin
     private(set) var sendCount = 0
     private(set) var targetProcessIdentifiers: [pid_t] = []
 
-    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
+    func sendPasteCommand(to processIdentifier: pid_t, beforeSending: () -> Bool) async -> Bool {
+        guard beforeSending() else { return false }
         sendCount += 1
         targetProcessIdentifiers.append(processIdentifier)
         return shouldSucceed
     }
+}
+
+@MainActor
+private final class PreDispatchClipboardPasteCommandSender: ClipboardPasteCommandSending {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var sentCount = 0
+    var isWaiting: Bool { continuation != nil }
+    func sendPasteCommand(to processIdentifier: pid_t, beforeSending: () -> Bool) async -> Bool {
+        await withCheckedContinuation { continuation = $0 }
+        guard !Task.isCancelled, beforeSending() else { return false }
+        sentCount += 1
+        return true
+    }
+    func resume() { continuation?.resume(); continuation = nil }
 }
 
 @MainActor
@@ -1634,7 +1672,8 @@ private final class BlockingClipboardPasteCommandSender: ClipboardPasteCommandSe
         self.currentPasteboardText = currentPasteboardText
     }
 
-    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
+    func sendPasteCommand(to processIdentifier: pid_t, beforeSending: () -> Bool) async -> Bool {
+        guard beforeSending() else { return false }
         sendCount += 1
         pastedTexts.append(currentPasteboardText() ?? "")
         return await withCheckedContinuation { continuation in

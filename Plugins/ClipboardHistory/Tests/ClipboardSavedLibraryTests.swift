@@ -897,6 +897,51 @@ final class ClipboardSavedLibraryTests: XCTestCase {
     }
 
     @MainActor
+    func testSnippetLoadFailureHasRetryableStateAndRecovers() async {
+        let snippet = ClipboardSavedItem(title: "Template", savedKind: .snippet,
+            payload: .plainText("body"), templateText: "body")
+        let store = SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [snippet])
+        store.failOperations(load: true)
+        let controller = ClipboardSavedLibraryController(pasteboard: SavedLibraryTestPasteboard(),
+            persistence: store, errorMessageProvider: { _ in "Storage unavailable" })
+        await startSavedLibrary(controller)
+        XCTAssertEqual(controller.fatalErrorMessage, "Storage unavailable")
+        XCTAssertTrue(controller.items.isEmpty)
+
+        store.failOperations(load: false)
+        controller.retryLoading()
+        XCTAssertFalse(controller.isLoaded)
+        await waitForSavedLibraryLoad(controller)
+        XCTAssertNil(controller.fatalErrorMessage)
+        XCTAssertEqual(controller.items.map(\.id), [snippet.id])
+        controller.stop()
+    }
+
+    @MainActor
+    func testFailedSnippetDeleteKeepsItemAndRetryClearsError() async {
+        let snippet = ClipboardSavedItem(title: "Template", savedKind: .snippet,
+            payload: .plainText("body"), templateText: "body")
+        let store = SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [snippet])
+        let controller = ClipboardSavedLibraryController(pasteboard: SavedLibraryTestPasteboard(),
+            persistence: store, errorMessageProvider: { _ in "Could not delete" })
+        await startSavedLibrary(controller)
+        store.failOperations(delete: true)
+        let failed = await controller.delete(id: snippet.id)
+        XCTAssertFalse(failed)
+        XCTAssertEqual(controller.errorMessage, "Could not delete")
+        XCTAssertEqual(controller.items.map(\.id), [snippet.id])
+        XCTAssertEqual(store.persistedItems.map(\.id), [snippet.id])
+        XCTAssertNil(controller.fatalErrorMessage)
+
+        store.failOperations(delete: false)
+        let deleted = await controller.delete(id: snippet.id)
+        XCTAssertTrue(deleted)
+        XCTAssertNil(controller.errorMessage)
+        XCTAssertTrue(controller.items.isEmpty)
+        controller.stop()
+    }
+
+    @MainActor
     func testSavedPayloadFailureIsScopedToTheAffectedItem() async throws {
         let item = ClipboardSavedItem(
             title: "Unreadable item",
@@ -1061,6 +1106,15 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
     private let failPayloadLoads: Bool
     private var items: [ClipboardSavedItem]
     private var payloads: [UUID: ClipboardHistoryPayload]
+    private var failsLoad = false
+    private var failsDelete = false
+
+    func failOperations(load: Bool? = nil, delete: Bool? = nil) {
+        lock.withLock {
+            if let load { failsLoad = load }
+            if let delete { failsDelete = delete }
+        }
+    }
 
     var persistedItems: [ClipboardSavedItem] { lock.withLock { items } }
     var loadPayloadCount: Int { lock.withLock { storedLoadPayloadCount } }
@@ -1096,7 +1150,7 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
     func load() throws -> [ClipboardSavedItem] {
         Thread.sleep(forTimeInterval: loadDelay)
         return try lock.withLock {
-            if failLoadWhileNonempty, !items.isEmpty {
+            if failsLoad || (failLoadWhileNonempty && !items.isEmpty) {
                 throw ClipboardHistoryStoreError.invalidEnvelope
             }
             return items.map { $0.reloadingPayload(using: self) }
@@ -1148,7 +1202,8 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
     }
 
     func delete(id: UUID) throws {
-        lock.withLock {
+        try lock.withLock {
+            if failsDelete { throw ClipboardHistoryStoreError.unavailableStorage }
             items.removeAll { $0.id == id }
             payloads.removeValue(forKey: id)
         }

@@ -16,7 +16,13 @@ protocol ClipboardCopyCommandSending {
 
 @MainActor
 protocol ClipboardPasteCommandSending {
-    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool
+    func sendPasteCommand(to processIdentifier: pid_t, beforeSending: () -> Bool) async -> Bool
+}
+
+extension ClipboardPasteCommandSending {
+    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
+        await sendPasteCommand(to: processIdentifier, beforeSending: { true })
+    }
 }
 
 @MainActor
@@ -74,7 +80,7 @@ struct SystemClipboardCopyCommandSender: ClipboardCopyCommandSending {
 
 @MainActor
 struct SystemClipboardPasteCommandSender: ClipboardPasteCommandSending {
-    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
+    func sendPasteCommand(to processIdentifier: pid_t, beforeSending: () -> Bool) async -> Bool {
         await waitForModifierKeysToClear()
         // Give the previously active application one run-loop turn to regain key focus.
         try? await Task.sleep(nanoseconds: 80_000_000)
@@ -96,6 +102,11 @@ struct SystemClipboardPasteCommandSender: ClipboardPasteCommandSending {
             return false
         }
 
+        // No suspension between the caller's ownership check and event dispatch.
+        guard beforeSending(), !Task.isCancelled,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier else { return false }
+        keyDown.setIntegerValueField(.eventSourceUserData, value: SystemClipboardSnippetReplacementAccess.syntheticEventMarker)
+        keyUp.setIntegerValueField(.eventSourceUserData, value: SystemClipboardSnippetReplacementAccess.syntheticEventMarker)
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
         keyDown.postToPid(processIdentifier)

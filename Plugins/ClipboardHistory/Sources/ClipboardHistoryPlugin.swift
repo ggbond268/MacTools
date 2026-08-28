@@ -1476,7 +1476,17 @@ final class ClipboardHistoryPlugin:
             ))
             return false
         }
-        let didSendPaste = await pasteCommandSender.sendPasteCommand(to: targetProcessIdentifier)
+        let preparedClipboardVersion = pasteboard.changeCount
+        let didSendPaste = await pasteCommandSender.sendPasteCommand(to: targetProcessIdentifier) { [weak self] in
+            guard let self,
+                  self.isCurrentSequentialPasteWorker(generation: workerGeneration),
+                  self.sequentialPasteCoordinator.session?.matches(operation) == true else { return false }
+            guard self.pasteboard.changeCount == preparedClipboardVersion else {
+                self.resetImplicitQueueForManualClipboardWrite()
+                return false
+            }
+            return true
+        }
         guard isCurrentSequentialPasteWorker(generation: workerGeneration) else {
             return false
         }

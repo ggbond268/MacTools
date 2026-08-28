@@ -20,6 +20,15 @@ struct ClipboardExportOption: Equatable, Hashable, Identifiable, Sendable {
     var id: ClipboardExportFormat { format }
 }
 
+enum ClipboardPanelExportRoute {
+    static let snippetFormats: [ClipboardExportFormat] = [.plainText, .markdown, .html, .pdf]
+
+    static func historyItemID(ids: [UUID], snippetIDs: Set<UUID>, combining: Bool = false) -> UUID? {
+        guard !combining, ids.count == 1, let id = ids.first, !snippetIDs.contains(id) else { return nil }
+        return id
+    }
+}
+
 struct ClipboardExportPlan: Equatable, Sendable {
     enum Destination: Equatable, Sendable {
         case file
