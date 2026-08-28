@@ -461,6 +461,36 @@ final class MacToolsSearchTests: XCTestCase {
         XCTAssertEqual(coordinator.searchRevealRequest?.target, .plugin(expectedTarget))
     }
 
+    func testGroupedShortcutSearchTargetsRenderedAnchorAndExpandsCollapsedContent() throws {
+        let plugin = SearchableTestPlugin()
+        plugin.usesShortcutGroup = true
+        let host = makePluginHostForTests(plugins: [plugin])
+        let page = try XCTUnwrap(host.pluginSettingsItems.first { $0.pluginID == plugin.metadata.id })
+        XCTAssertEqual(page.standaloneShortcutSettingsGroups.map(\.id), ["primary-shortcuts"])
+        let result = try XCTUnwrap(MacToolsSearchIndexBuilder.build(pluginHost: host).items.first {
+            $0.id == "shortcut-group.\(plugin.metadata.id).primary-shortcuts"
+        })
+        let anchor = PluginMixedShortcutFormSection.searchTarget(
+            pluginID: plugin.metadata.id, groupID: "primary-shortcuts")
+        XCTAssertEqual(result.action, .navigate(
+            destination: .plugins(.configuration(plugin.metadata.id)), target: .plugin(anchor)))
+        XCTAssertTrue(host.hasPluginSettingsSearchTarget(anchor))
+
+        var isExpanded = false
+        PluginMixedShortcutFormSection.reveal(target: anchor, pluginID: "other-plugin",
+                                             groupID: "primary-shortcuts", isExpanded: &isExpanded)
+        XCTAssertFalse(isExpanded)
+        PluginMixedShortcutFormSection.reveal(target: anchor, pluginID: plugin.metadata.id,
+                                             groupID: "other-group", isExpanded: &isExpanded)
+        XCTAssertFalse(isExpanded)
+        PluginMixedShortcutFormSection.reveal(target: anchor, pluginID: plugin.metadata.id,
+                                             groupID: "primary-shortcuts", isExpanded: &isExpanded)
+        XCTAssertTrue(isExpanded)
+        PluginMixedShortcutFormSection.reveal(target: nil, pluginID: plugin.metadata.id,
+                                             groupID: "primary-shortcuts", isExpanded: &isExpanded)
+        XCTAssertTrue(isExpanded, "Clearing the highlight must not collapse the user's controls")
+    }
+
     func testGeneralSettingResultCarriesGeneralPageAndExactSearchTarget() throws {
         let host = makePluginHostForTests(plugins: [])
         let result = try XCTUnwrap(
@@ -1202,10 +1232,12 @@ private final class SearchTestLaunchAtLoginService: LaunchAtLoginServicing {
 private final class SearchableTestPlugin:
     MacToolsPlugin,
     PluginPrimaryPanel,
+    PluginGroupedShortcutSettingsProviding,
     PluginSettingsSearchProviding,
     PluginCommandProviding
 {
     static let customEntryID = "shortcut-target"
+    var usesShortcutGroup = false
 
     let metadata = PluginMetadata(
         id: "searchable",
@@ -1224,6 +1256,16 @@ private final class SearchableTestPlugin:
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     var performedCommandIDs: [String] = []
     var commandTitle = "让显示器休眠"
+
+    var shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] {
+        guard usesShortcutGroup else { return [] }
+        return [PluginShortcutSettingsGroupConfiguration(
+            id: "primary-shortcuts",
+            title: "Primary Shortcuts",
+            systemImage: "keyboard",
+            shortcutDefinitionIDs: ["decrease"]
+        )]
+    }
 
     var primaryPanelState: PluginPanelState {
         PluginPanelState(
@@ -1294,7 +1336,9 @@ private final class SearchableTestPlugin:
                 actionID: "decrease",
                 scope: .global,
                 defaultBinding: nil,
-                isRequired: false
+                isRequired: false,
+                settingsGroupID: usesShortcutGroup ? "primary-shortcuts" : nil,
+                settingsGroupTitle: usesShortcutGroup ? "Primary Shortcuts" : nil
             )
         ]
     }

@@ -1645,6 +1645,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 NSSound.beep()
                 return
             }
+            let preparedClipboardVersion = self.historyController.currentPasteboardVersion
             previousApplication.activate(options: [])
             let activationDeadline = ProcessInfo.processInfo.systemUptime + 0.4
             while !previousApplication.isActive,
@@ -1655,7 +1656,9 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                   NSWorkspace.shared.frontmostApplication?.processIdentifier
                     == previousApplication.processIdentifier,
                   await self.pasteCommandSender.sendPasteCommand(
-                      to: previousApplication.processIdentifier
+                      to: previousApplication.processIdentifier,
+                      expectedPasteboardVersion: preparedClipboardVersion,
+                      currentPasteboardVersion: { self.historyController.currentPasteboardVersion }
                   ) else {
                 NSSound.beep()
                 return
@@ -1977,7 +1980,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             return .moveSelection(offset: -1)
         case 45 where flags == .control:
             return .moveSelection(offset: 1)
-        case 0 where flags == .command && isMultiSelectionEnabled:
+        case 0 where flags == .command && isMultiSelectionEnabled && !isEditingText:
             return .selectAllVisible
         case 49 where flags.isEmpty && !isEditingText && isMultiSelectionEnabled:
             return .toggleFocusedSelection
@@ -2107,13 +2110,14 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 NSSound.beep()
                 return
             }
-            let copied: Bool
+            let preparedClipboardVersion: Int?
             if asPlainText {
-                copied = self.historyController.copyItemAsPlainText(id: id)
+                preparedClipboardVersion = self.historyController.copyItemAsPlainText(id: id)
+                    ? self.historyController.currentPasteboardVersion : nil
             } else {
-                copied = await self.historyController.copyItem(id: id)
+                preparedClipboardVersion = await self.historyController.copyItemForPaste(id: id)
             }
-            guard copied,
+            guard let preparedClipboardVersion,
                   !Task.isCancelled,
                   self.actionState.isCurrent(token, panelIsVisible: self.isVisible) else {
                 NSSound.beep()
@@ -2134,7 +2138,9 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                   NSWorkspace.shared.frontmostApplication?.processIdentifier
                     == previousApplication.processIdentifier,
                   await pasteCommandSender.sendPasteCommand(
-                      to: previousApplication.processIdentifier
+                      to: previousApplication.processIdentifier,
+                      expectedPasteboardVersion: preparedClipboardVersion,
+                      currentPasteboardVersion: { self.historyController.currentPasteboardVersion }
                   ) else {
                 NSSound.beep()
                 return
@@ -2168,7 +2174,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         itemActionTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.finishItemAction(token) }
-            guard let expansion = await self.savedLibraryController.copy(
+            guard let preparedCopy = await self.savedLibraryController.copyForPaste(
                       id: id,
                       asPlainText: asPlainText
                   ),
@@ -2181,7 +2187,8 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             }
             self.onManualClipboardWrite()
             previousApplication.activate(options: [])
-            let preparedClipboardVersion = self.historyController.currentPasteboardVersion
+            let preparedClipboardVersion = preparedCopy.pasteboardVersion
+            let expansion = preparedCopy.expansion
             var cursorAccess: SystemClipboardSnippetPasteCursorAccess?
             var cursorContext: ClipboardSnippetPasteCursorContext?
             defer { cursorAccess?.stop() }

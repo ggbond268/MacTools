@@ -4,6 +4,128 @@ import XCTest
 @testable import ClipboardHistoryPlugin
 
 final class ClipboardSavedLibraryTests: XCTestCase {
+    @MainActor
+    func testStopDuringSnippetValidationCannotRecreateUninstalledStorage() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipboardUninstallRace-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let keyStore = SavedLibraryTestKeyStore()
+        let databaseURL = directory.appendingPathComponent("clipboard.sqlite3")
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: SavedLibraryTestPasteboard(),
+            persistence: IncrementalEncryptedClipboardSavedLibraryStore(
+                databaseURL: databaseURL, keyStore: keyStore
+            )
+        )
+        await startSavedLibrary(controller)
+        var validating = false
+        controller.maximumExpandedTextByteCount = {
+            validating = true
+            return 5 * 1024 * 1024
+        }
+        let pending = Task { @MainActor in
+            await controller.saveSnippet(ClipboardSnippetDraft(id: nil, title: "Pending",
+                content: String(repeating: "private text ", count: 100_000),
+                tags: [], keyword: nil, isFavorite: false))
+        }
+        while !validating { await Task.yield() }
+        controller.stop(invalidatePersistence: true)
+        try FileManager.default.removeItem(at: directory)
+        try keyStore.deleteKey()
+        let saved = await pending.value
+        XCTAssertNil(saved)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: databaseURL.path))
+        XCTAssertNil(try keyStore.loadKey())
+        XCTAssertTrue(controller.items.isEmpty)
+        XCTAssertNil(controller.errorMessage)
+    }
+
+    @MainActor
+    func testStopAndRestartRejectsQueuedMutationsFromPreviousLifecycle() async {
+        let store = SlowSavedLibraryTestStore(saveDelay: 0)
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: SavedLibraryTestPasteboard(), persistence: store)
+        await startSavedLibrary(controller)
+        var validating = false
+        controller.maximumExpandedTextByteCount = {
+            validating = true
+            return 5 * 1024 * 1024
+        }
+        let draft = ClipboardSnippetDraft(id: nil, title: "Old lifecycle",
+            content: String(repeating: "text ", count: 200_000),
+            tags: [], keyword: nil, isFavorite: false)
+        let first = Task { @MainActor in await controller.saveSnippet(draft) }
+        while !validating { await Task.yield() }
+        var queued = false
+        let second = Task { @MainActor in
+            queued = true
+            return await controller.saveSnippet(draft)
+        }
+        while !queued { await Task.yield() }
+        controller.stop()
+        controller.start()
+        let oldResults = await [first.value, second.value]
+        XCTAssertTrue(oldResults.allSatisfy { $0 == nil })
+        XCTAssertTrue(store.persistedItems.isEmpty)
+        await waitForSavedLibraryLoad(controller)
+        let fresh = await controller.saveSnippet(ClipboardSnippetDraft(id: nil,
+            title: "New lifecycle", content: "fresh", tags: [], keyword: nil, isFavorite: false))
+        XCTAssertNotNil(fresh)
+        XCTAssertEqual(store.persistedItems.map(\.title), ["New lifecycle"])
+        controller.stop()
+    }
+
+    func testInvalidatedSavedStoreCannotRecreateDatabaseOrKey() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipboardRetiredStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let keyStore = SavedLibraryTestKeyStore()
+        let databaseURL = directory.appendingPathComponent("clipboard.sqlite3")
+        let store = IncrementalEncryptedClipboardSavedLibraryStore(databaseURL: databaseURL, keyStore: keyStore)
+        let item = ClipboardSavedItem(title: "Snippet", savedKind: .snippet, payload: .plainText("body"))
+        try store.save(item, payloadChanged: true)
+        let lazyItem = try XCTUnwrap(store.load().first)
+        store.invalidate()
+        try FileManager.default.removeItem(at: directory)
+        try keyStore.deleteKey()
+
+        try store.prepare()
+        XCTAssertTrue(try store.load().isEmpty)
+        XCTAssertThrowsError(try store.save(item, payloadChanged: true))
+        XCTAssertThrowsError(try store.updateLastUsedAt(id: item.id, date: Date()))
+        XCTAssertThrowsError(try lazyItem.loadPayload())
+        try store.delete(id: item.id)
+        try store.removeAll()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: databaseURL.path))
+        XCTAssertNil(try keyStore.loadKey())
+    }
+
+    @MainActor
+    func testSnippetPasteReceiptKeepsWriteVersionAcrossMetadataAwait() async throws {
+        let item = ClipboardSavedItem(title: "Snippet", savedKind: .snippet,
+                                      payload: .plainText("expanded text"), templateText: "expanded text")
+        let gate = SavedLibraryTestGate()
+        defer { gate.open() }
+        let store = SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [item], lastUsedGate: gate)
+        let pasteboard = SavedLibraryTestPasteboard()
+        let controller = ClipboardSavedLibraryController(pasteboard: pasteboard, persistence: store)
+        await startSavedLibrary(controller)
+        let pending = Task { @MainActor in await controller.copyForPaste(id: item.id) }
+        while !gate.hasEntered { await Task.yield() }
+        let writtenVersion = pasteboard.changeCount
+        XCTAssertEqual(pasteboard.text, "expanded text")
+        _ = pasteboard.writePlainText("external copy")
+        gate.open()
+        let result = await pending.value
+        let receipt = try XCTUnwrap(result)
+        XCTAssertEqual(receipt.pasteboardVersion, writtenVersion)
+        XCTAssertNotEqual(receipt.pasteboardVersion, pasteboard.changeCount)
+        XCTAssertEqual(receipt.expansion.text, "expanded text")
+        XCTAssertEqual(pasteboard.text, "external copy")
+        controller.stop()
+    }
     func testSnippetVariableInsertionUsesAndReplacesTheCurrentSelection() {
         let inserted = ClipboardSnippetEditorInsertion.insert(
             "{{date}}",
@@ -1104,6 +1226,7 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
     private let payloadLoadDelay: TimeInterval
     private let failLoadWhileNonempty: Bool
     private let failPayloadLoads: Bool
+    private let lastUsedGate: SavedLibraryTestGate?
     private var items: [ClipboardSavedItem]
     private var payloads: [UUID: ClipboardHistoryPayload]
     private var failsLoad = false
@@ -1132,7 +1255,8 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
         payloadLoadDelay: TimeInterval = 0,
         initialItems: [ClipboardSavedItem] = [],
         failLoadWhileNonempty: Bool = false,
-        failPayloadLoads: Bool = false
+        failPayloadLoads: Bool = false,
+        lastUsedGate: SavedLibraryTestGate? = nil
     ) {
         self.saveDelay = saveDelay
         self.loadDelay = loadDelay
@@ -1140,6 +1264,7 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
         self.payloadLoadDelay = payloadLoadDelay
         self.failLoadWhileNonempty = failLoadWhileNonempty
         self.failPayloadLoads = failPayloadLoads
+        self.lastUsedGate = lastUsedGate
         items = initialItems
         payloads = Dictionary(uniqueKeysWithValues: initialItems.compactMap { item in
             try? (item.id, item.loadPayload())
@@ -1194,6 +1319,7 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
     }
 
     func updateLastUsedAt(id: UUID, date: Date) throws {
+        lastUsedGate?.wait()
         Thread.sleep(forTimeInterval: lastUsedDelay)
         lock.withLock {
             guard let index = items.firstIndex(where: { $0.id == id }) else { return }
@@ -1213,6 +1339,35 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
             items.removeAll()
             payloads.removeAll()
         }
+    }
+}
+
+private final class SavedLibraryTestGate: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var entered = false
+    private var isOpen = false
+
+    var hasEntered: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return entered
+    }
+
+    func wait() {
+        condition.lock()
+        defer { condition.unlock() }
+        entered = true
+        let deadline = Date().addingTimeInterval(5)
+        while !isOpen {
+            if !condition.wait(until: deadline) { break }
+        }
+    }
+
+    func open() {
+        condition.lock()
+        isOpen = true
+        condition.broadcast()
+        condition.unlock()
     }
 }
 

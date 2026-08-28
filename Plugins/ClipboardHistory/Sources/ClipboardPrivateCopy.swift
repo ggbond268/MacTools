@@ -20,8 +20,14 @@ protocol ClipboardPasteCommandSending {
 }
 
 extension ClipboardPasteCommandSending {
-    func sendPasteCommand(to processIdentifier: pid_t) async -> Bool {
-        await sendPasteCommand(to: processIdentifier, beforeSending: { true })
+    func sendPasteCommand(
+        to processIdentifier: pid_t,
+        expectedPasteboardVersion: Int,
+        currentPasteboardVersion: () -> Int
+    ) async -> Bool {
+        await sendPasteCommand(to: processIdentifier, beforeSending: {
+            !Task.isCancelled && currentPasteboardVersion() == expectedPasteboardVersion
+        })
     }
 }
 

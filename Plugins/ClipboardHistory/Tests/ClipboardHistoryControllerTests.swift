@@ -858,6 +858,34 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testHistoryPasteReceiptDoesNotAdoptALaterExternalCopy() async throws {
+        let existing = item(text: "history payload", pinned: false)
+        let fixture = makeFixture(initialItems: [existing])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        let prepared = await fixture.controller.copyItemForPaste(id: existing.id)
+        let writtenVersion = try XCTUnwrap(prepared)
+        XCTAssertEqual(writtenVersion, fixture.controller.currentPasteboardVersion)
+        fixture.pasteboard.simulateCopy("external copy")
+        XCTAssertNotEqual(writtenVersion, fixture.controller.currentPasteboardVersion)
+        XCTAssertEqual(fixture.pasteboard.text, "external copy")
+        fixture.controller.stop()
+    }
+
+    func testCombinedPasteOwnsOnlyItsPreparedClipboardVersion() async {
+        let existing = item(text: "one", pinned: false)
+        let fixture = makeFixture(initialItems: [existing])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        XCTAssertTrue(fixture.controller.writeCombinedPlainText("one\ntwo", historyItemIDs: [existing.id]))
+        let writtenVersion = fixture.controller.currentPasteboardVersion
+        XCTAssertEqual(fixture.pasteboard.text, "one\ntwo")
+        fixture.pasteboard.simulateCopy("external copy")
+        XCTAssertNotEqual(writtenVersion, fixture.controller.currentPasteboardVersion)
+        XCTAssertEqual(fixture.pasteboard.text, "external copy")
+        fixture.controller.stop()
+    }
+
     func testRecordingNonClipboardUseDoesNotSwallowPendingExternalCopy() async {
         let existing = item(text: "existing", pinned: false)
         let fixture = makeFixture(initialItems: [existing])

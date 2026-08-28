@@ -80,6 +80,11 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
         try lock.withLock { try prepareLocked() }
     }
 
+    /// Uninstall permanently retires this instance, including escaped lazy payload loaders.
+    func invalidate() {
+        lock.withLock { isInvalidated = true }
+    }
+
     func load() throws -> [ClipboardSavedItem] {
         try lock.withLock {
             guard !isInvalidated else { return [] }

@@ -397,7 +397,7 @@ final class ClipboardHistoryPlugin:
                 PluginSettingsSection(
                     id: SettingsSectionID.queue,
                     presentation: .edgeToEdge,
-                    embeddedShortcutGroupIDs: ["sequential-paste-shortcuts"]
+                    embeddedShortcutGroupIDs: [ShortcutID.queueGroup]
                 ) { [weak self] context in
                     if let self {
                         ClipboardHistorySettingsView(
@@ -1198,7 +1198,7 @@ final class ClipboardHistoryPlugin:
         sequentialPasteHUD.dismiss()
         keywordExpander.stop()
         controller.stop()
-        savedLibraryController.stop()
+        savedLibraryController.stop(invalidatePersistence: reason == .uninstalling)
     }
 
     func refresh() {
@@ -1328,7 +1328,12 @@ final class ClipboardHistoryPlugin:
             ))
             return
         }
-        guard await pasteCommandSender.sendPasteCommand(to: targetProcessIdentifier) else {
+        let preparedClipboardVersion = controller.currentPasteboardVersion
+        guard await pasteCommandSender.sendPasteCommand(
+            to: targetProcessIdentifier,
+            expectedPasteboardVersion: preparedClipboardVersion,
+            currentPasteboardVersion: { self.controller.currentPasteboardVersion }
+        ) else {
             privacyHUDPresenter.showFailure(localization.string(
                 "hud.pastePlain.failed",
                 defaultValue: "无法粘贴纯文本"
@@ -1457,7 +1462,7 @@ final class ClipboardHistoryPlugin:
             ))
             return false
         }
-        let didCopyItem = await controller.copyItem(id: itemID) { [weak self] in
+        let preparedClipboardVersion = await controller.copyItemForPaste(id: itemID) { [weak self] in
             guard let self else { return false }
             return self.isCurrentSequentialPasteWorker(generation: workerGeneration)
                 && self.sequentialPasteCoordinator.session?.matches(operation) == true
@@ -1467,7 +1472,7 @@ final class ClipboardHistoryPlugin:
               sequentialPasteCoordinator.session?.matches(operation) == true else {
             return false
         }
-        guard didCopyItem else {
+        guard let preparedClipboardVersion else {
             _ = sequentialPasteCoordinator.markCurrentUnavailable(operation: operation)
             synchronizeSequentialPasteProtection()
             privacyHUDPresenter.showFailure(localization.string(
@@ -1476,7 +1481,6 @@ final class ClipboardHistoryPlugin:
             ))
             return false
         }
-        let preparedClipboardVersion = pasteboard.changeCount
         let didSendPaste = await pasteCommandSender.sendPasteCommand(to: targetProcessIdentifier) { [weak self] in
             guard let self,
                   self.isCurrentSequentialPasteWorker(generation: workerGeneration),

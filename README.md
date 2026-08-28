@@ -92,7 +92,7 @@
 
 > **Deep links and Run Links:** Open MacTools surfaces or invoke explicitly eligible actions and workflows through the guarded [`mactools://app/...` URL API](docs/url-scheme.md).
 
-Clipboard History searches snippet names, tags, keywords, and content together. Two-character searches also match inside words, so `88` finds `MT88 tripod`. Snippet exports use the same formats from the Actions panel and context menu, and snippet storage failures provide recovery feedback without hiding usable history. Pausing collection cancels pending captures; a new copy cancels a pending implicit paste instead of overwriting the new clipboard content. Snippet cursor placement is best-effort and leaves subsequent typing or focus changes alone.
+Clipboard History searches snippet names, tags, keywords, and content together. Two-character searches also match inside words, so `88` finds `MT88 tripod`. Snippet exports use the same formats from the Actions panel and context menu, and snippet storage failures provide recovery feedback without hiding usable history. Pausing collection cancels pending captures; pasting from history, snippets, combined selections, or the plain-text shortcut cancels if another copy replaces the prepared clipboard before paste dispatch. New copies also end implicit paste queues. Pending snippet saves are cancelled on deactivation and cannot recreate storage after uninstall. Snippet cursor placement is best-effort and leaves subsequent typing or focus changes alone. In multi-select mode, Command-A still selects text when editing the search field. Settings search reveals and expands the matching shortcut group, including Clipboard Window Shortcuts and Paste Queue controls, without collapsing sections already opened.
 
 ## Supported Languages
 

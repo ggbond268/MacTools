@@ -4,4 +4,4 @@ type: fixed
 area: Clipboard
 ---
 
-Respect privacy changes during capture, release cancelled payloads, and protect paste and snippet cursor placement. Restore snippet metadata search, context-menu exports, and storage-error recovery.
+Improve Clipboard capture, paste, and snippet-save reliability. Fix snippet search, exports, storage recovery, text selection, and discovery of shortcut controls in Settings.

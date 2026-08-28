@@ -1792,6 +1792,20 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertNil(command(keyCode: 49, hasMarkedText: true, isMultiSelectionEnabled: true))
     }
 
+    func testCommandASelectsSearchTextInsteadOfItemsWhileEditing() {
+        XCTAssertNil(command(keyCode: 0, modifiers: .command,
+                             isEditingText: true, isMultiSelectionEnabled: true))
+        XCTAssertEqual(command(keyCode: 0, modifiers: .command,
+                               isMultiSelectionEnabled: true), .selectAllVisible)
+        XCTAssertNil(command(keyCode: 0, modifiers: .command))
+        XCTAssertNil(command(keyCode: 0, modifiers: [.command, .shift],
+                             isMultiSelectionEnabled: true))
+        XCTAssertNil(command(keyCode: 0, modifiers: .command,
+                             hasMarkedText: true, isMultiSelectionEnabled: true))
+        XCTAssertNil(command(keyCode: 0, modifiers: .command,
+                             hasAttachedSheet: true, isMultiSelectionEnabled: true))
+    }
+
     func testCommandReturnTogglesHighlightedItemWhileSearchingOnlyInMultiSelectMode() {
         for isEditing in [false, true] {
             XCTAssertEqual(command(keyCode: 36, modifiers: .command,

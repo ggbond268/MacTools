@@ -2,11 +2,52 @@ import AppKit
 import Foundation
 import MacToolsPluginKit
 import Security
+import SwiftUI
 import XCTest
 @testable import ClipboardHistoryPlugin
+@testable import MacTools
 
 @MainActor
 final class ClipboardHistoryPluginTests: XCTestCase {
+    func testExternalCopyDuringPlainTextPasteWaitCancelsDispatch() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        pasteboard.simulateCopy("original")
+        let sender = PreDispatchClipboardPasteCommandSender()
+        let hud = FakeClipboardPrivacyHUDPresenter()
+        let plugin = makePlugin(pasteboard: pasteboard, pasteCommandSender: sender,
+                                privacyHUDPresenter: hud, accessibilityTrusted: { true })
+        plugin.handleShortcutAction(id: "paste-clipboard-as-plain-text")
+        let waiting = await waitUntil { sender.isWaiting }
+        XCTAssertTrue(waiting)
+        pasteboard.simulateCopy("new external copy")
+        sender.resume()
+        let finished = await waitUntil { !hud.failures.isEmpty }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(sender.sentCount, 0)
+        XCTAssertEqual(pasteboard.text, "new external copy")
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testPasteOwnershipIsRecheckedAtDispatchAndAllowsUnchangedClipboard() async {
+        for externalCopy in [false, true] {
+            let pasteboard = PluginTestClipboardPasteboard()
+            pasteboard.simulateCopy("prepared")
+            let version = pasteboard.changeCount
+            let sender = PreDispatchClipboardPasteCommandSender()
+            let task = Task { @MainActor in
+                await sender.sendPasteCommand(to: 42, expectedPasteboardVersion: version,
+                                             currentPasteboardVersion: { pasteboard.changeCount })
+            }
+            let waiting = await waitUntil { sender.isWaiting }
+            XCTAssertTrue(waiting)
+            if externalCopy { pasteboard.simulateCopy("replacement") }
+            sender.resume()
+            let sent = await task.value
+            XCTAssertEqual(sent, !externalCopy)
+            XCTAssertEqual(sender.sentCount, externalCopy ? 0 : 1)
+        }
+    }
+
     func testExternalCopyDuringPreDispatchWaitCancelsImplicitPaste() async {
         let pasteboard = PluginTestClipboardPasteboard()
         let sender = PreDispatchClipboardPasteCommandSender()
@@ -182,6 +223,80 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         )
         XCTAssertNotNil(plugin.primaryPanel)
         XCTAssertEqual(plugin.primaryPanelDescriptor.controlStyle, .button)
+    }
+
+    func testEmbeddedShortcutSearchRevealsActualCustomSettingsSections() async throws {
+        let plugin = makePlugin(pasteboard: PluginTestClipboardPasteboard())
+        let host = makePluginHostForTests(plugins: [plugin], loadDynamicPluginsOnInit: false)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        let page = try XCTUnwrap(host.pluginSettingsItems.first {
+            $0.pluginID == ClipboardHistoryPlugin.pluginID
+        })
+        let index = MacToolsSearchIndexBuilder.build(pluginHost: host)
+
+        for groupID in page.integratedShortcutGroupIDs.sorted() {
+            XCTAssertFalse(page.standaloneShortcutSettingsGroups.contains { $0.id == groupID })
+            let section = try XCTUnwrap(page.sections.first {
+                if case let .custom(content) = $0.content {
+                    return content.embeddedShortcutGroupIDs.contains(groupID)
+                }
+                return false
+            })
+            let target = PluginSettingsSearchTarget(pluginID: plugin.metadata.id, entryID: groupID)
+            // Action-only collection controls have no plugin-shortcut search result today.
+            if groupID != ClipboardHistoryPlugin.ShortcutID.collectionGroup {
+                let result = try XCTUnwrap(index.items.first {
+                    $0.id == "shortcut-group.\(plugin.metadata.id).\(groupID)"
+                })
+                XCTAssertEqual(result.action, .navigate(
+                    destination: .plugins(.configuration(plugin.metadata.id)), target: .plugin(target)))
+                XCTAssertTrue(host.hasPluginSettingsSearchTarget(target))
+            }
+            let content = host.pluginSettingsContentViewItem(
+                for: plugin.metadata.id, sectionID: section.id
+            ).content
+            func root(_ target: PluginSettingsSearchTarget?) -> some View {
+                content
+                    .environment(\.pluginSettingsSearchTarget, target)
+                    .frame(width: 900)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            let view = NSHostingView(rootView: root(nil))
+            view.layoutSubtreeIfNeeded()
+            let collapsedHeight = view.fittingSize.height
+
+            view.rootView = root(target)
+            let didExpand = await waitUntil {
+                view.layoutSubtreeIfNeeded()
+                return view.fittingSize.height > collapsedHeight + 100
+            }
+            XCTAssertTrue(didExpand, "Search must expand the actual embedded \(groupID) controls")
+            let expandedHeight = view.fittingSize.height
+
+            // Clearing the temporary highlight must preserve the user's expanded section.
+            view.rootView = root(nil)
+            view.layoutSubtreeIfNeeded()
+            await Task.yield()
+            XCTAssertEqual(view.fittingSize.height, expandedHeight, accuracy: 1)
+
+            // A search can also be present before the custom section first appears.
+            let initialView = NSHostingView(rootView: root(target))
+            let initiallyExpanded = await waitUntil {
+                initialView.layoutSubtreeIfNeeded()
+                return initialView.fittingSize.height > collapsedHeight + 100
+            }
+            XCTAssertTrue(initiallyExpanded, "Initial search must reveal \(groupID)")
+
+            for unrelated in [
+                PluginSettingsSearchTarget(pluginID: "another-plugin", entryID: groupID),
+                PluginSettingsSearchTarget(pluginID: plugin.metadata.id, entryID: "unknown-group"),
+            ] {
+                let unrelatedView = NSHostingView(rootView: root(unrelated))
+                unrelatedView.layoutSubtreeIfNeeded()
+                await Task.yield()
+                XCTAssertEqual(unrelatedView.fittingSize.height, collapsedHeight, accuracy: 1)
+            }
+        }
     }
 
     func testPublishesFocusedClipboardOperationsAsPluginShortcutsInsteadOfCanonicalActions() {

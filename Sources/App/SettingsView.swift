@@ -3296,7 +3296,8 @@ private struct SettingsFullWidthDisclosure<Label: View, Content: View>: View {
     }
 }
 
-private struct PluginMixedShortcutFormSection: View {
+struct PluginMixedShortcutFormSection: View {
+    @Environment(\.pluginSettingsSearchTarget) private var searchTarget
     @ObservedObject var pluginHost: PluginHost
     let pluginID: String
     let configuration: PluginShortcutSettingsGroupConfiguration
@@ -3306,6 +3307,21 @@ private struct PluginMixedShortcutFormSection: View {
     let collapsesActionContent: Bool
     let layoutWidths: SettingsGroupedFormWidths
     @State private var isExpanded = false
+
+    static func searchTarget(pluginID: String, groupID: String) -> PluginSettingsSearchTarget {
+        PluginSettingsSearchTarget(pluginID: pluginID, entryID: groupID)
+    }
+
+    static func reveal(
+        target: PluginSettingsSearchTarget?,
+        pluginID: String,
+        groupID: String,
+        isExpanded: inout Bool
+    ) {
+        if target == searchTarget(pluginID: pluginID, groupID: groupID) {
+            isExpanded = true
+        }
+    }
 
     private var matchingShortcutItems: [ShortcutSettingsItem] {
         let itemIDs = Set(configuration.shortcutDefinitionIDs.map {
@@ -3347,8 +3363,12 @@ private struct PluginMixedShortcutFormSection: View {
         }
         .pluginSettingsSearchAnchor(
             pluginID: pluginID,
-            entryID: "shortcut-group.\(configuration.id)"
+            entryID: Self.searchTarget(pluginID: pluginID, groupID: configuration.id).entryID
         )
+        .onChange(of: searchTarget, initial: true) { _, target in
+            Self.reveal(target: target, pluginID: pluginID,
+                        groupID: configuration.id, isExpanded: &isExpanded)
+        }
     }
 
     @ViewBuilder

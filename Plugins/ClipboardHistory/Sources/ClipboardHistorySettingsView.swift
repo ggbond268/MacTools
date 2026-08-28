@@ -17,6 +17,7 @@ enum ClipboardHistorySettingsContentSection: Hashable {
 
 @MainActor
 struct ClipboardHistorySettingsView: View {
+    @Environment(\.pluginSettingsSearchTarget) private var searchTarget
     @ObservedObject var controller: ClipboardHistoryController
     @ObservedObject var savedLibraryController: ClipboardSavedLibraryController
     @ObservedObject private var settings: ClipboardHistorySettingsStore
@@ -94,6 +95,9 @@ struct ClipboardHistorySettingsView: View {
             if contentSections.contains(.data) {
                 dataSection
             }
+        }
+        .onChange(of: searchTarget, initial: true) { _, target in
+            revealShortcutGroup(target)
         }
         .onAppear {
             guard contentSections.contains(.essentials),
@@ -186,6 +190,22 @@ struct ClipboardHistorySettingsView: View {
                     secondaryButton: .cancel(Text(localization.string("common.cancel", defaultValue: "取消")))
                 )
             }
+        }
+    }
+
+    private func revealShortcutGroup(_ target: PluginSettingsSearchTarget?) {
+        guard let target, target.pluginID == ClipboardHistoryPlugin.pluginID else { return }
+        switch target.entryID {
+        case ClipboardHistoryPlugin.ShortcutID.panelGroup
+            where contentSections.contains(.additionalShortcuts):
+            isWindowShortcutsExpanded = true
+        case ClipboardHistoryPlugin.ShortcutID.collectionGroup
+            where contentSections.contains(.additionalShortcuts):
+            isCollectionShortcutsExpanded = true
+        case ClipboardHistoryPlugin.ShortcutID.queueGroup where contentSections.contains(.queue):
+            expandedAdvancedSections.insert(.queue)
+        default:
+            break
         }
     }
 
@@ -586,6 +606,10 @@ struct ClipboardHistorySettingsView: View {
                         .font(PluginSettingsTheme.Typography.rowTitle)
                 }
                 .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+                .pluginSettingsSearchAnchor(
+                    pluginID: ClipboardHistoryPlugin.pluginID,
+                    entryID: ClipboardHistoryPlugin.ShortcutID.panelGroup
+                )
 
                 PluginSettingsListDivider()
 
@@ -624,6 +648,10 @@ struct ClipboardHistorySettingsView: View {
                         .font(PluginSettingsTheme.Typography.rowTitle)
                 }
                 .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+                .pluginSettingsSearchAnchor(
+                    pluginID: ClipboardHistoryPlugin.pluginID,
+                    entryID: ClipboardHistoryPlugin.ShortcutID.collectionGroup
+                )
             }
             .pluginSettingsCardBackground(.standard)
         }
@@ -693,6 +721,10 @@ struct ClipboardHistorySettingsView: View {
             }
             .pluginSettingsCardBackground(.standard)
         }
+        .pluginSettingsSearchAnchor(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            entryID: ClipboardHistoryPlugin.ShortcutID.queueGroup
+        )
     }
 
     private var sequentialPasteAdvancedOptions: some View {

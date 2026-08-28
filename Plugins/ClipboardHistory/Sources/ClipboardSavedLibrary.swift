@@ -749,6 +749,11 @@ protocol ClipboardSavedLibraryPersisting: Sendable {
     func updateLastUsedAt(id: UUID, date: Date) throws
     func delete(id: UUID) throws
     func removeAll() throws
+    func invalidate()
+}
+
+extension ClipboardSavedLibraryPersisting {
+    func invalidate() {}
 }
 
 struct UnavailableClipboardSavedLibraryStore: ClipboardSavedLibraryPersisting {
@@ -770,57 +775,70 @@ struct UnavailableClipboardSavedLibraryStore: ClipboardSavedLibraryPersisting {
 private final class ClipboardSavedLibraryPersistenceWorker: @unchecked Sendable {
     private let persistence: any ClipboardSavedLibraryPersisting
     private let queue = DispatchQueue(label: "cc.ggbond.mactools.clipboard.saved-library.persistence")
+    // Accessed only on queue; rejects work submitted after stop drained the queue.
+    private var generation: UInt64 = 0
 
     init(persistence: any ClipboardSavedLibraryPersisting) {
         self.persistence = persistence
     }
 
-    func load() async throws -> [ClipboardSavedItem] {
+    func load(generation: UInt64) async throws -> [ClipboardSavedItem] {
         try await withCheckedThrowingContinuation { continuation in
-            queue.async { [persistence] in
-                continuation.resume(with: Result { try persistence.load() })
+            queue.async { [self] in
+                continuation.resume(with: Result {
+                    guard self.generation == generation else { throw CancellationError() }
+                    return try persistence.load()
+                })
             }
         }
     }
 
-    func save(_ item: ClipboardSavedItem, payloadChanged: Bool) async throws {
+    func save(_ item: ClipboardSavedItem, payloadChanged: Bool, generation: UInt64) async throws {
         try await withCheckedThrowingContinuation { continuation in
-            queue.async { [persistence] in
+            queue.async { [self] in
                 continuation.resume(with: Result {
+                    guard self.generation == generation else { throw CancellationError() }
                     try persistence.save(item, payloadChanged: payloadChanged)
                 })
             }
         }
     }
 
-    func updateLastUsedAt(id: UUID, date: Date) async throws {
+    func updateLastUsedAt(id: UUID, date: Date, generation: UInt64) async throws {
         try await withCheckedThrowingContinuation { continuation in
-            queue.async { [persistence] in
+            queue.async { [self] in
                 continuation.resume(with: Result {
+                    guard self.generation == generation else { throw CancellationError() }
                     try persistence.updateLastUsedAt(id: id, date: date)
                 })
             }
         }
     }
 
-    func delete(id: UUID) async throws {
+    func delete(id: UUID, generation: UInt64) async throws {
         try await withCheckedThrowingContinuation { continuation in
-            queue.async { [persistence] in
-                continuation.resume(with: Result { try persistence.delete(id: id) })
+            queue.async { [self] in
+                continuation.resume(with: Result {
+                    guard self.generation == generation else { throw CancellationError() }
+                    try persistence.delete(id: id)
+                })
             }
         }
     }
 
-    func removeAll() async throws {
+    func removeAll(generation: UInt64) async throws {
         try await withCheckedThrowingContinuation { continuation in
-            queue.async { [persistence] in
-                continuation.resume(with: Result { try persistence.removeAll() })
+            queue.async { [self] in
+                continuation.resume(with: Result {
+                    guard self.generation == generation else { throw CancellationError() }
+                    try persistence.removeAll()
+                })
             }
         }
     }
 
-    func flush() {
-        queue.sync {}
+    func invalidateAndFlush() {
+        queue.sync { generation &+= 1 }
     }
 }
 
@@ -920,6 +938,8 @@ final class ClipboardSavedLibraryController: ObservableObject {
     private var keywordCacheRevision: UInt64 = 0
     private var keywordTemplatesByID: [UUID: String] = [:]
     private var reservedKeywordIdentities: Set<String> = []
+    private var lifecycleGeneration: UInt64 = 0
+    private var isActive = false
     init(
         pasteboard: any ClipboardPasteboardAccess,
         persistence: any ClipboardSavedLibraryPersisting,
@@ -932,21 +952,25 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     func start() {
+        isActive = true
         guard loadTask == nil else { return }
         if isLoaded {
             reloadKeywordTemplateCache()
             return
         }
+        let generation = lifecycleGeneration
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let loadedItems = try await worker.load()
+                let loadedItems = try await worker.load(generation: generation)
                 guard !Task.isCancelled else { return }
                 let snippets = loadedItems.filter(\.isSnippet)
                 items = ClipboardSavedLibrarySearch.sorted(snippets)
                 for legacyClip in loadedItems where !legacyClip.isSnippet {
-                    try? await worker.delete(id: legacyClip.id)
+                    guard !Task.isCancelled else { return }
+                    try? await worker.delete(id: legacyClip.id, generation: generation)
                 }
+                guard !Task.isCancelled else { return }
                 errorMessage = nil
                 fatalErrorMessage = nil
                 isLoaded = true
@@ -963,14 +987,20 @@ final class ClipboardSavedLibraryController: ObservableObject {
         }
     }
 
-    func stop() {
+    func stop(invalidatePersistence: Bool = false) {
+        // Invalidate suspended and queued mutations before draining writes. Once
+        // this returns, uninstall may safely remove the database and its key.
+        isActive = false
+        lifecycleGeneration &+= 1
+        isLoaded = false
         loadTask?.cancel()
         loadTask = nil
         keywordTemplateLoadTask?.cancel()
         keywordTemplateLoadTask = nil
         keywordCacheRevision &+= 1
         keywordTemplatesByID.removeAll()
-        worker.flush()
+        worker.invalidateAndFlush()
+        if invalidatePersistence { persistence.invalidate() }
     }
 
     func clearError() {
@@ -1023,12 +1053,12 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     func saveSnippet(_ draft: ClipboardSnippetDraft) async -> ClipboardSavedItem? {
-        await withLibraryMutation {
-            await self.saveSnippetLocked(draft)
+        await withLibraryMutation(cancelledResult: nil) { generation in
+            await self.saveSnippetLocked(draft, generation: generation)
         }
     }
 
-    private func saveSnippetLocked(_ draft: ClipboardSnippetDraft) async -> ClipboardSavedItem? {
+    private func saveSnippetLocked(_ draft: ClipboardSnippetDraft, generation: UInt64) async -> ClipboardSavedItem? {
         guard isLoaded else { return nil }
         let now = Date()
         let existing = draft.id.flatMap { id in items.first { $0.id == id } }
@@ -1082,11 +1112,13 @@ final class ClipboardSavedLibraryController: ObservableObject {
         } catch is CancellationError {
             return nil
         } catch {
+            guard isCurrentMutation(generation) else { return nil }
             errorMessage = errorMessageProvider(error)
             onChange?()
             return nil
         }
 
+        guard isCurrentMutation(generation) else { return nil }
         let reservedKeywordIdentity = normalizedKeyword.map(Self.keywordIdentity)
         if let reservedKeywordIdentity,
            reservedKeywordIdentities.contains(reservedKeywordIdentity) {
@@ -1137,21 +1169,21 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 templateText: draft.content
             )
         }
-        guard await persistNewOrUpdated(item, payloadChanged: payloadChanged) else { return nil }
+        guard await persistNewOrUpdated(item, payloadChanged: payloadChanged, generation: generation) else { return nil }
         reloadKeywordTemplateCache()
         return item
     }
 
     func toggleFavorite(id: UUID) async -> Bool {
-        await withLibraryMutation {
+        await withLibraryMutation(cancelledResult: false) { generation in
             guard var item = self.items.first(where: { $0.id == id }) else { return false }
             item.updateFavorite(!item.isFavorite, updatedAt: Date())
-            return await self.persistNewOrUpdated(item, payloadChanged: false)
+            return await self.persistNewOrUpdated(item, payloadChanged: false, generation: generation)
         }
     }
 
     func updateMetadata(_ draft: ClipboardSavedMetadataDraft) async -> ClipboardSavedItem? {
-        await withLibraryMutation {
+        await withLibraryMutation(cancelledResult: nil) { generation in
             guard var item = self.items.first(where: { $0.id == draft.id }), !item.isSnippet else {
                 return nil
             }
@@ -1163,15 +1195,16 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 templateText: item.templateText,
                 updatedAt: Date()
             )
-            return await self.persistNewOrUpdated(item, payloadChanged: false) ? item : nil
+            return await self.persistNewOrUpdated(item, payloadChanged: false, generation: generation) ? item : nil
         }
     }
 
     func delete(id: UUID) async -> Bool {
-        await withLibraryMutation {
+        await withLibraryMutation(cancelledResult: false) { generation in
             guard self.items.contains(where: { $0.id == id }) else { return false }
             do {
-                try await self.worker.delete(id: id)
+                try await self.worker.delete(id: id, generation: generation)
+                guard self.isCurrentMutation(generation) else { return false }
                 self.items.removeAll { $0.id == id }
                 self.itemLoadErrorMessages.removeValue(forKey: id)
                 self.keywordTemplatesByID.removeValue(forKey: id)
@@ -1180,6 +1213,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 self.onChange?()
                 return true
             } catch {
+                guard self.isCurrentMutation(generation) else { return false }
                 self.errorMessage = self.errorMessageProvider(error)
                 self.onChange?()
                 return false
@@ -1188,12 +1222,13 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     func clearAll() async -> Bool {
-        await withLibraryMutation {
+        await withLibraryMutation(cancelledResult: false) { generation in
             self.keywordCacheRevision &+= 1
             self.keywordTemplateLoadTask?.cancel()
             self.keywordTemplateLoadTask = nil
             do {
-                try await self.worker.removeAll()
+                try await self.worker.removeAll(generation: generation)
+                guard self.isCurrentMutation(generation) else { return false }
                 self.items.removeAll()
                 self.keywordTemplatesByID.removeAll()
                 self.itemLoadErrorMessages.removeAll()
@@ -1202,6 +1237,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 self.onChange?()
                 return true
             } catch {
+                guard self.isCurrentMutation(generation) else { return false }
                 self.errorMessage = self.errorMessageProvider(error)
                 self.onChange?()
                 return false
@@ -1210,16 +1246,25 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     func copy(id: UUID, asPlainText: Bool = false) async -> ClipboardSnippetExpansion? {
-        await withLibraryMutation {
-            await self.copyLocked(id: id, asPlainText: asPlainText)
+        await copyForPaste(id: id, asPlainText: asPlainText)?.expansion
+    }
+
+    struct PreparedCopy {
+        let expansion: ClipboardSnippetExpansion
+        let pasteboardVersion: Int
+    }
+
+    func copyForPaste(id: UUID, asPlainText: Bool = false) async -> PreparedCopy? {
+        await withLibraryMutation(cancelledResult: nil) { generation in
+            await self.copyLocked(id: id, asPlainText: asPlainText, generation: generation)
         }
     }
 
-    private func copyLocked(id: UUID, asPlainText: Bool) async -> ClipboardSnippetExpansion? {
+    private func copyLocked(id: UUID, asPlainText: Bool, generation: UInt64) async -> PreparedCopy? {
         guard let item = items.first(where: { $0.id == id }) else { return nil }
         let payload = await loadPayload(for: item)
         defer { item.discardCachedPayloadIfReloadable() }
-        guard let payload, !Task.isCancelled else { return nil }
+        guard let payload, isCurrentMutation(generation) else { return nil }
 
         let expansion: ClipboardSnippetExpansion?
         if item.isSnippet, let template = payload.plainText {
@@ -1231,6 +1276,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
             } catch is CancellationError {
                 return nil
             } catch {
+                guard isCurrentMutation(generation) else { return nil }
                 errorMessage = errorMessageProvider(error)
                 onChange?()
                 return nil
@@ -1240,7 +1286,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
         }
 
         let wrote: Bool
-        guard !Task.isCancelled else { return nil }
+        guard isCurrentMutation(generation) else { return nil }
         if let expansion {
             wrote = pasteboard.writePlainText(expansion.text)
         } else if asPlainText {
@@ -1254,21 +1300,28 @@ final class ClipboardSavedLibraryController: ObservableObject {
             wrote = pasteboard.writePayload(payload)
         }
         guard wrote else { return nil }
+        let pasteboardVersion = pasteboard.changeCount
         item.discardCachedPayloadIfReloadable()
         onPasteboardWrite?()
 
-        if let index = items.firstIndex(where: { $0.id == id }) {
+        if items.contains(where: { $0.id == id }) {
             let lastUsedAt = Date()
             do {
-                try await worker.updateLastUsedAt(id: id, date: lastUsedAt)
+                try await worker.updateLastUsedAt(id: id, date: lastUsedAt, generation: generation)
+                guard isCurrentMutation(generation),
+                      let index = items.firstIndex(where: { $0.id == id }) else { return nil }
                 items[index].lastUsedAt = lastUsedAt
                 items = ClipboardSavedLibrarySearch.sorted(items)
             } catch {
+                guard isCurrentMutation(generation) else { return nil }
                 errorMessage = errorMessageProvider(error)
             }
         }
         onChange?()
-        return expansion ?? ClipboardSnippetExpansion(text: payload.plainText ?? "", cursorOffsetFromEnd: nil)
+        return PreparedCopy(
+            expansion: expansion ?? ClipboardSnippetExpansion(text: payload.plainText ?? "", cursorOffsetFromEnd: nil),
+            pasteboardVersion: pasteboardVersion
+        )
     }
 
     func matchingItems(query: String) -> [ClipboardSavedItem] {
@@ -1332,10 +1385,13 @@ final class ClipboardSavedLibraryController: ObservableObject {
 
     private func persistNewOrUpdated(
         _ item: ClipboardSavedItem,
-        payloadChanged: Bool
+        payloadChanged: Bool,
+        generation: UInt64
     ) async -> Bool {
+        guard isCurrentMutation(generation) else { return false }
         do {
-            try await worker.save(item, payloadChanged: payloadChanged)
+            try await worker.save(item, payloadChanged: payloadChanged, generation: generation)
+            guard isCurrentMutation(generation) else { return false }
             let reloadableItem = item.reloadingPayload(using: persistence)
             if let index = items.firstIndex(where: { $0.id == item.id }) {
                 items[index] = reloadableItem
@@ -1347,6 +1403,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
             onChange?()
             return true
         } catch {
+            guard isCurrentMutation(generation) else { return false }
             errorMessage = errorMessageProvider(error)
             onChange?()
             return false
@@ -1354,12 +1411,23 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     private func withLibraryMutation<Result>(
-        operation: @MainActor () async -> Result
+        cancelledResult: Result,
+        operation: @MainActor (UInt64) async -> Result
     ) async -> Result {
+        let generation = lifecycleGeneration
+        guard isCurrentMutation(generation) else { return cancelledResult }
         await mutationGate.acquire()
-        let result = await operation()
+        guard isCurrentMutation(generation) else {
+            await mutationGate.release()
+            return cancelledResult
+        }
+        let result = await operation(generation)
         await mutationGate.release()
-        return result
+        return isCurrentMutation(generation) ? result : cancelledResult
+    }
+
+    private func isCurrentMutation(_ generation: UInt64) -> Bool {
+        isActive && lifecycleGeneration == generation && !Task.isCancelled
     }
 
     private func reloadKeywordTemplateCache() {
@@ -1401,8 +1469,11 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     private func loadPayload(for item: ClipboardSavedItem) async -> ClipboardHistoryPayload? {
+        let generation = lifecycleGeneration
+        guard isCurrentMutation(generation) else { return nil }
         do {
             let payload = try await item.loadPayloadAsync()
+            guard isCurrentMutation(generation) else { return nil }
             if itemLoadErrorMessages.removeValue(forKey: item.id) != nil {
                 onChange?()
             }
@@ -1410,6 +1481,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
         } catch is CancellationError {
             return nil
         } catch {
+            guard isCurrentMutation(generation) else { return nil }
             itemLoadErrorMessages[item.id] = errorMessageProvider(error)
             onChange?()
             return nil

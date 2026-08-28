@@ -1113,9 +1113,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @discardableResult
     func copyItem(id: UUID, canWrite: @MainActor () -> Bool = { true }) async -> Bool {
-        guard !isMutatingItems else { return false }
+        await copyItemForPaste(id: id, canWrite: canWrite) != nil
+    }
+
+    /// Returns the version owned by this write, even if the caller resumes later.
+    func copyItemForPaste(id: UUID, canWrite: @MainActor () -> Bool = { true }) async -> Int? {
+        guard !isMutatingItems else { return nil }
         guard let item = items.first(where: { $0.id == id }),
-              let payload = try? await item.loadPayloadAsync() else { return false }
+              let payload = try? await item.loadPayloadAsync() else { return nil }
         let fileURLs = payload.fileURLs
         if !fileURLs.isEmpty {
             let hasUnavailableReferences = await Task.detached(priority: .userInitiated) {
@@ -1123,7 +1128,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             }.value
             guard !Task.isCancelled, !hasUnavailableReferences else {
                 item.discardCachedPayloadIfReloadable()
-                return false
+                return nil
             }
         }
         guard !Task.isCancelled,
@@ -1131,12 +1136,13 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
               canWrite(),
               let index = items.firstIndex(where: { $0.id == id }) else {
             item.discardCachedPayloadIfReloadable()
-            return false
+            return nil
         }
         guard pasteboard.writePayload(payload) else {
             item.discardCachedPayloadIfReloadable()
-            return false
+            return nil
         }
+        let writtenVersion = pasteboard.changeCount
         items[index].discardCachedPayloadIfReloadable()
         currentHistoryItemPasteboardState = (
             itemID: items[index].id,
@@ -1144,7 +1150,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         )
         lastSeenChangeCount = pasteboard.changeCount
         recordItemUsage(at: index)
-        return true
+        return writtenVersion
     }
 
     func preparePayloadForUse(id: UUID) async -> Bool {
