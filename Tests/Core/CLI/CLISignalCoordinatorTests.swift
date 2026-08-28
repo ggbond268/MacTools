@@ -6,21 +6,58 @@ final class CLISignalCoordinatorTests: XCTestCase {
     func testCommandTaskStatePersistsCancellationAcrossInstallation() async {
         let cancelledBeforeInstall = CLICommandTaskState()
         cancelledBeforeInstall.cancel()
+        let firstGate = CommandTaskGate()
         let firstTask = Task<Int32, Error> {
+            // Task creation starts execution immediately. Keep this task pending
+            // until install has delivered the previously recorded cancellation.
+            await firstGate.wait()
             try Task.checkCancellation()
             return 0
         }
         cancelledBeforeInstall.install(firstTask)
+        await firstGate.open()
         await assertCancellation(firstTask)
 
         let cancelledAfterInstall = CLICommandTaskState()
+        let secondGate = CommandTaskGate()
         let secondTask = Task<Int32, Error> {
-            try await Task.sleep(for: .seconds(30))
+            await secondGate.wait()
+            try Task.checkCancellation()
             return 0
         }
         cancelledAfterInstall.install(secondTask)
         cancelledAfterInstall.cancel()
+        await secondGate.open()
         await assertCancellation(secondTask)
+    }
+
+    func testCommandTaskStateDoesNotCancelAnInstalledTaskWithoutARequest() async throws {
+        let state = CLICommandTaskState()
+        let gate = CommandTaskGate()
+        let task = Task<Int32, Error> {
+            await gate.wait()
+            try Task.checkCancellation()
+            return 42
+        }
+        state.install(task)
+        await gate.open()
+        let result = try await task.value
+        XCTAssertEqual(result, 42)
+    }
+
+    func testCancellationDoesNotReplaceAnAlreadyCompletedTaskResult() async throws {
+        let state = CLICommandTaskState()
+        state.cancel()
+        let task = Task<Int32, Error> {
+            try Task.checkCancellation()
+            return 42
+        }
+        let completedResult = try await task.value
+        XCTAssertEqual(completedResult, 42)
+        state.install(task)
+        // Cancellation is cooperative and cannot undo an already returned value.
+        let installedResult = try await task.value
+        XCTAssertEqual(installedResult, 42)
     }
 
     func testSignalStateHandlesOnceAndStopsAfterFinish() {
@@ -58,6 +95,22 @@ final class CLISignalCoordinatorTests: XCTestCase {
         } catch {
             XCTFail("Expected CancellationError, got \(error)")
         }
+    }
+}
+
+private actor CommandTaskGate {
+    private var isOpen = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func open() {
+        isOpen = true
+        continuation?.resume()
+        continuation = nil
     }
 }
 
