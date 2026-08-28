@@ -1501,7 +1501,7 @@ enum ClipboardHistorySearch {
         _ query: String,
         compactQuery: String
     ) -> Bool {
-        if compactQuery.count >= 3 {
+        if compactQuery.count >= 2 {
             return true
         }
         return query.unicodeScalars.contains { !$0.isASCII }

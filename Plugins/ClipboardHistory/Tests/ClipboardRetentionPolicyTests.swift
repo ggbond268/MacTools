@@ -441,7 +441,52 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
         XCTAssertEqual(ClipboardHistorySearch.filter([matching], query: "oobaz"), [matching])
         XCTAssertEqual(ClipboardHistorySearch.filter([matching], query: "oo baz"), [matching])
         XCTAssertEqual(ClipboardHistorySearch.filter([matching], query: "fo baz"), [matching])
-        XCTAssertTrue(ClipboardHistorySearch.filter([matching], query: "oo").isEmpty)
+        XCTAssertEqual(ClipboardHistorySearch.filter([matching], query: "oo"), [matching])
+    }
+
+    func testSearchMatchesTwoCharacterSubstringsInsideWords() {
+        let cases: [(text: String, query: String, expected: Bool)] = [
+            ("MT88 tripod", "88", true),
+            ("MT88 tripod", " 88 ", true),
+            ("MT88 tripod", "t8", true),
+            ("MT88 tripod", "89", false),
+            ("MT88 tripod", "8", false),
+            ("MT88 tripod", "m", true),
+            ("foo bar baz", "oo", true),
+            ("Café", "AF", true),
+            ("foo bar baz", "oz", false),
+        ]
+        for testCase in cases {
+            let candidate = item(text: testCase.text, date: Date(), pinned: false)
+            let context = "\(testCase.text) / \(testCase.query)"
+            XCTAssertEqual(
+                ClipboardHistorySearch.matches(index: candidate.searchIndex, query: testCase.query),
+                testCase.expected, context
+            )
+            XCTAssertEqual(
+                ClipboardHistorySearch.filter([candidate], query: testCase.query),
+                testCase.expected ? [candidate] : [], context
+            )
+        }
+    }
+
+    func testTwoCharacterSearchScansTenThousandItemsWithinInteractiveBudget() {
+        let items = (0..<ClipboardHistorySettings.maximumSupportedItemCount).map { offset in
+            item(text: "MT88 tripod \(offset)", date: Date(), pinned: false)
+        }
+        for query in ["88", "zz"] {
+            let startedAt = ContinuousClock.now
+            let count = items.reduce(0) { count, item in
+                count + (ClipboardHistorySearch.matches(index: item.searchIndex, query: query) ? 1 : 0)
+            }
+            XCTAssertEqual(count, query == "88" ? items.count : 0)
+            XCTAssertLessThan(ContinuousClock.now - startedAt, .seconds(2), query)
+        }
+        let result = ClipboardHistorySearch.result(
+            items, query: "88", limit: ClipboardHistoryPanelModel.resultPageSize
+        )
+        XCTAssertEqual(result.items.count, ClipboardHistoryPanelModel.resultPageSize)
+        XCTAssertTrue(result.hasMore)
     }
 
     func testSearchMatchesOnDeviceImageTextIndex() {

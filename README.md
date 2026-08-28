@@ -92,7 +92,7 @@
 
 > **Deep links and Run Links:** Open MacTools surfaces or invoke explicitly eligible actions and workflows through the guarded [`mactools://app/...` URL API](docs/url-scheme.md).
 
-Clipboard History searches snippet names, tags, keywords, and content together. Snippet exports use the same formats from the Actions panel and context menu, and snippet storage failures provide recovery feedback without hiding usable history. Pausing collection cancels pending captures; a new copy cancels a pending implicit paste instead of overwriting the new clipboard content. Snippet cursor placement is best-effort and leaves subsequent typing or focus changes alone.
+Clipboard History searches snippet names, tags, keywords, and content together. Two-character searches also match inside words, so `88` finds `MT88 tripod`. Snippet exports use the same formats from the Actions panel and context menu, and snippet storage failures provide recovery feedback without hiding usable history. Pausing collection cancels pending captures; a new copy cancels a pending implicit paste instead of overwriting the new clipboard content. Snippet cursor placement is best-effort and leaves subsequent typing or focus changes alone.
 
 ## Supported Languages
 

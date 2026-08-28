@@ -5,6 +5,26 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
+    func testTwoCharacterSubstringSearchFindsHistoryAndSnippetMetadata() async {
+        let history = item(text: "MT88 tripod", pinned: false)
+        let unrelated = item(text: "MT99 tripod", pinned: false)
+        let snippet = ClipboardSavedItem(title: "MT88 setup", tags: [], keyword: nil,
+            savedKind: .snippet, payload: .plainText("Setup instructions"), templateText: "Setup instructions")
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [history, unrelated], savedItems: [snippet])
+        model.query = "88"
+        for mode in [ClipboardPanelMode.all, .history, .snippets] {
+            model.mode = mode
+            await model.waitForSearchForTesting()
+            let expected: Set<UUID> = switch mode {
+            case .all: [history.id, snippet.id]
+            case .history: [history.id]
+            default: [snippet.id]
+            }
+            XCTAssertEqual(Set(model.visibleItems.map(\.id)), expected, "\(mode)")
+        }
+    }
+
     func testSnippetMetadataSearchUsesTitleTagsAndKeywordInBothScopes() async {
         var snippet = ClipboardSavedItem(title: "Customer reply", tags: ["support"], keyword: ";reply",
             savedKind: .snippet, payload: .plainText("Thanks for contacting us"), templateText: "Thanks for contacting us")
@@ -1162,14 +1182,16 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.prepareForPresentation(items: items)
         await model.waitForSearchForTesting()
 
-        let startedAt = ContinuousClock.now
-        model.query = "shared result"
-        await model.waitForSearchForTesting()
-        let elapsed = ContinuousClock.now - startedAt
+        for query in ["shared result", "ar"] {
+            let startedAt = ContinuousClock.now
+            model.query = query
+            await model.waitForSearchForTesting()
+            let elapsed = ContinuousClock.now - startedAt
 
-        XCTAssertEqual(model.visibleItems.count, ClipboardHistoryPanelModel.resultPageSize)
-        XCTAssertTrue(model.hasMoreResults)
-        XCTAssertLessThan(elapsed, .seconds(2))
+            XCTAssertEqual(model.visibleItems.count, ClipboardHistoryPanelModel.resultPageSize)
+            XCTAssertTrue(model.hasMoreResults)
+            XCTAssertLessThan(elapsed, .seconds(2), query)
+        }
     }
 
     func testLatestDebouncedQueryWins() async {
