@@ -17,14 +17,16 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
     static let maximumKeywordExpansionCacheByteCount = 16 * 1_024 * 1_024
 
     let id: UUID
-    var title: String
-    var tags: [String]
-    var keyword: String?
-    var isFavorite: Bool
+    private(set) var title: String
+    private(set) var tags: [String]
+    private(set) var keyword: String?
+    private(set) var isFavorite: Bool
     let savedKind: ClipboardSavedItemKind
     let createdAt: Date
-    var updatedAt: Date
-    var lastUsedAt: Date?
+    private(set) var updatedAt: Date
+    var lastUsedAt: Date? {
+        didSet { cachedHistoryPresentation?.lastUsedAt = lastUsedAt }
+    }
     let sourceApplication: ClipboardSourceApplication?
     let contentKind: ClipboardHistoryContentKind
     let payloadByteCount: Int
@@ -33,13 +35,16 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
     let linkURLs: [URL]
     let representationTypeIdentifiers: [String]
     let payloadDigest: Data
-    var templateText: String?
-    var templateSearchText: String?
-    var hasDynamicTemplateContent: Bool
-    var clipSearchText: String?
-    var imageSearchText: String?
+    private(set) var templateText: String?
+    private(set) var templateSearchText: String?
+    private(set) var hasDynamicTemplateContent: Bool
+    private(set) var clipSearchText: String?
+    private(set) var imageSearchText: String?
     private(set) var searchIndex: ClipboardHistorySearchIndex
     private let payloadReference: ClipboardHistoryPayloadReference
+    // Metadata is loaded off-main. Prepare classification/indexing there once instead of
+    // repeating it for every filter snapshot and every candidate of every search.
+    private var cachedHistoryPresentation: ClipboardHistoryItem?
 
     init(
         id: UUID = UUID(),
@@ -102,6 +107,7 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
             imageSearchText: self.imageSearchText
         )
         payloadReference = ClipboardHistoryPayloadReference(payload: payload)
+        cachedHistoryPresentation = makeHistoryPresentationItem()
     }
 
     init(
@@ -164,6 +170,7 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
             imageSearchText: imageSearchText
         )
         payloadReference = ClipboardHistoryPayloadReference(loader: payloadLoader)
+        cachedHistoryPresentation = makeHistoryPresentationItem()
     }
 
     var isSnippet: Bool { savedKind == .snippet }
@@ -211,15 +218,18 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
         )
         self.updatedAt = updatedAt
         refreshSearchIndex()
+        cachedHistoryPresentation = makeHistoryPresentationItem()
     }
 
     mutating func updateFavorite(_ isFavorite: Bool, updatedAt: Date) {
         self.isFavorite = isFavorite
         self.updatedAt = updatedAt
+        cachedHistoryPresentation = makeHistoryPresentationItem()
     }
 
     func reloadingPayload(using persistence: any ClipboardSavedLibraryPersisting) -> Self {
-        Self(
+        let id = id
+        return Self(
             id: id,
             title: title,
             tags: tags,
@@ -246,7 +256,14 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
     }
 
     func historyPresentationItem() -> ClipboardHistoryItem {
-        ClipboardHistoryItem(
+        cachedHistoryPresentation ?? makeHistoryPresentationItem()
+    }
+
+    private func makeHistoryPresentationItem() -> ClipboardHistoryItem {
+        // Capture only the payload reference, not this value and its previous cached
+        // presentation, so metadata edits cannot retain a chain of old snapshots.
+        let payloadReference = payloadReference
+        return ClipboardHistoryItem(
             id: id,
             text: templateText ?? templateSearchText ?? title,
             capturedAt: updatedAt,
@@ -258,6 +275,7 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
             fileReferenceCount: fileReferenceCount,
             linkURLs: linkURLs,
             representationTypeIdentifiers: representationTypeIdentifiers,
+            searchIndex: searchIndex,
             payloadDigest: payloadDigest,
             allowsRichTextImport: contentKind == .richText,
             textCharacterCount: templateText?.count ?? templateSearchText?.count ?? title.count,
@@ -267,7 +285,7 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
             lastUsedAt: lastUsedAt,
             imageSearchText: imageSearchText,
             hasCompletedImageTextIndexing: imageSearchText != nil,
-            payloadLoader: { try loadPayload() }
+            payloadLoader: { try payloadReference.load() }
         )
     }
 
@@ -877,13 +895,12 @@ enum ClipboardSavedLibrarySearch {
         limit: Int,
         itemsAreSorted: Bool = false
     ) -> Result {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preparedQuery = ClipboardHistorySearch.PreparedQuery(query)
         var matches: [ClipboardSavedItem] = []
         matches.reserveCapacity(min(items.count, max(limit + 1, 1)))
         for item in items {
             guard !Task.isCancelled else { return Result(items: [], hasMore: false) }
-            guard trimmed.isEmpty
-                || ClipboardHistorySearch.matches(index: item.searchIndex, query: trimmed) else {
+            guard ClipboardHistorySearch.matches(index: item.searchIndex, query: preparedQuery) else {
                 continue
             }
             matches.append(item)
@@ -925,6 +942,37 @@ final class ClipboardSavedLibraryController: ObservableObject {
     func expansionContext(clipboardText: String?) -> ClipboardSnippetExpansionContext {
         var context = ClipboardSnippetExpansionContext.current(clipboardText: clipboardText)
         context.maximumUTF8ByteCount = maximumExpandedTextByteCount()
+        return context
+    }
+
+    func expansionContext(for template: String) async throws -> ClipboardSnippetExpansionContext {
+        let generation = lifecycleGeneration
+        let needsClipboard = try await ClipboardHistoryExportAsyncWork.run {
+            ClipboardSnippetTemplateEngine.requiresClipboardText(template)
+        }
+        guard isCurrentMutation(generation) else { throw CancellationError() }
+        var context = expansionContext(clipboardText: nil)
+        guard needsClipboard else { return context }
+        let expectedChangeCount = pasteboard.changeCount
+        let result = await pasteboard.readPlainTextAsynchronously(
+            maximumByteCount: max(0, context.maximumUTF8ByteCount),
+            expectedChangeCount: expectedChangeCount
+        )
+        guard isCurrentMutation(generation), pasteboard.changeCount == expectedChangeCount else {
+            throw CancellationError()
+        }
+        switch result {
+        case let .payload(payload):
+            context.clipboardText = payload.plainText
+        case .empty:
+            break
+        case .oversized, .tooManyObjects:
+            throw ClipboardSnippetTemplateError.expandedTextTooLarge(
+                maximumByteCount: context.maximumUTF8ByteCount
+            )
+        case .changed:
+            throw CancellationError()
+        }
         return context
     }
 
@@ -1271,7 +1319,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
             do {
                 expansion = try await ClipboardSnippetTemplateEngine.expandAsync(
                     template,
-                    context: expansionContext(clipboardText: pasteboard.readPlainText())
+                    context: try await expansionContext(for: template)
                 )
             } catch is CancellationError {
                 return nil
@@ -1365,7 +1413,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
             guard expandsSnippet else { return template }
             do {
                 return try await ClipboardSnippetTemplateEngine.expandAsync(
-                    template, context: expansionContext(clipboardText: pasteboard.readPlainText())
+                    template, context: try await expansionContext(for: template)
                 ).text
             } catch is CancellationError {
                 return nil

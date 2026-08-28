@@ -4,6 +4,105 @@ import XCTest
 @testable import ClipboardHistoryPlugin
 
 final class ClipboardSavedLibraryTests: XCTestCase {
+    func testCachedHistoryPresentationTracksMetadataWithoutChangingOlderCopies() {
+        let original = ClipboardSavedItem(title: "Original", savedKind: .snippet,
+            payload: .plainText("first body"), templateText: "first body")
+        let firstPresentation = original.historyPresentationItem()
+        var edited = original
+        let editedAt = original.updatedAt.addingTimeInterval(10)
+        edited.updateMetadata(title: "Edited", tags: ["changed"], keyword: ";edited",
+            isFavorite: false, templateText: "second body https://example.com", updatedAt: editedAt)
+        edited.lastUsedAt = editedAt.addingTimeInterval(1)
+
+        XCTAssertEqual(original.historyPresentationItem(), firstPresentation)
+        XCTAssertEqual(edited.historyPresentationItem().text, "second body https://example.com")
+        XCTAssertEqual(edited.historyPresentationItem().capturedAt, editedAt)
+        XCTAssertEqual(edited.historyPresentationItem().lastUsedAt, edited.lastUsedAt)
+        XCTAssertTrue(edited.historyPresentationItem().semanticTraits.contains(.link))
+        XCTAssertTrue(ClipboardHistorySearch.matches(index: edited.searchIndex, query: "changed"))
+        XCTAssertFalse(ClipboardHistorySearch.matches(index: original.searchIndex, query: "changed"))
+    }
+
+    @MainActor
+    func testLiteralAndDateSnippetsNeverReadClipboardWhenCopiedOrResolved() async {
+        for template in ["literal template", "{{date format=\"yyyy\"}}", #"\{{clipboard}}"#] {
+            let item = ClipboardSavedItem(title: "Template", savedKind: .snippet,
+                payload: .plainText(template), templateText: template)
+            let board = SavedLibraryTestPasteboard()
+            let controller = ClipboardSavedLibraryController(pasteboard: board,
+                persistence: SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [item]))
+            await startSavedLibrary(controller)
+            let resolved = await controller.resolvedPlainText(id: item.id)
+            let copied = await controller.copy(id: item.id)
+            XCTAssertNotNil(resolved, template)
+            XCTAssertNotNil(copied, template)
+            XCTAssertEqual(board.plainTextReadCount, 0, template)
+            XCTAssertEqual(board.asynchronousPlainTextReadCount, 0, template)
+            controller.stop()
+        }
+    }
+
+    @MainActor
+    func testClipboardVariableReadsBoundedSnapshotAsynchronously() async {
+        let template = "Hello {{clipboard}}"
+        let item = ClipboardSavedItem(title: "Template", savedKind: .snippet,
+            payload: .plainText(template), templateText: template)
+        let board = SavedLibraryTestPasteboard()
+        board.text = "Ada"
+        let controller = ClipboardSavedLibraryController(pasteboard: board,
+            persistence: SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [item]))
+        await startSavedLibrary(controller)
+        let result = await controller.copy(id: item.id)
+        XCTAssertEqual(result?.text, "Hello Ada")
+        XCTAssertEqual(board.plainTextReadCount, 0)
+        XCTAssertEqual(board.asynchronousPlainTextReadCount, 1)
+
+        board.text = "oversized clipboard"
+        controller.maximumExpandedTextByteCount = { 3 }
+        let previousVersion = board.changeCount
+        let rejected = await controller.copy(id: item.id)
+        XCTAssertNil(rejected)
+        XCTAssertEqual(board.changeCount, previousVersion)
+        XCTAssertNotNil(controller.errorMessage)
+        controller.stop()
+    }
+
+    @MainActor
+    func testClipboardVariableCannotWriteAfterVersionChangeOrCancellation() async throws {
+        for cancel in [false, true] {
+            let template = "{{clipboard}}"
+            let item = ClipboardSavedItem(title: "Template", savedKind: .snippet,
+                payload: .plainText(template), templateText: template)
+            let board = SavedLibraryTestPasteboard()
+            var pendingRead: CheckedContinuation<ClipboardPasteboardReadResult, Never>?
+            board.onAsynchronousPlainTextRead = {
+                await withCheckedContinuation { pendingRead = $0 }
+            }
+            let controller = ClipboardSavedLibraryController(pasteboard: board,
+                persistence: SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [item]))
+            await startSavedLibrary(controller)
+            let task = Task { await controller.copy(id: item.id) }
+            let deadline = ContinuousClock.now + .seconds(5)
+            while pendingRead == nil, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            guard let pendingRead else {
+                task.cancel()
+                XCTFail("Expected asynchronous clipboard read")
+                controller.stop()
+                return
+            }
+            if cancel { task.cancel() } else { board.changeCount += 1 }
+            let expectedVersion = board.changeCount
+            pendingRead.resume(returning: .payload(.plainText("stale value")))
+            let result = await task.value
+            XCTAssertNil(result)
+            XCTAssertEqual(board.changeCount, expectedVersion)
+            XCTAssertNil(board.payload)
+            controller.stop()
+        }
+    }
+
     @MainActor
     func testStopDuringSnippetValidationCannotRecreateUninstalledStorage() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -1390,8 +1489,26 @@ private final class SavedLibraryTestPasteboard: ClipboardPasteboardAccess {
     var typeNames: Set<String> = []
     var text: String?
     var payload: ClipboardHistoryPayload?
+    private(set) var plainTextReadCount = 0
+    private(set) var asynchronousPlainTextReadCount = 0
+    var onAsynchronousPlainTextRead: (@MainActor () async -> ClipboardPasteboardReadResult)?
 
-    func readPlainText() -> String? { text }
+    func readPlainText() -> String? {
+        plainTextReadCount += 1
+        return text
+    }
+
+    func readPlainTextAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardReadResult {
+        asynchronousPlainTextReadCount += 1
+        if let onAsynchronousPlainTextRead { return await onAsynchronousPlainTextRead() }
+        guard changeCount == expectedChangeCount else { return .changed }
+        guard let text else { return .empty }
+        guard text.utf8.count <= maximumByteCount else { return .oversized }
+        return .payload(.plainText(text))
+    }
 
     func readPayload(maximumByteCount: Int) -> ClipboardPasteboardReadResult {
         guard let payload else { return .empty }

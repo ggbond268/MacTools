@@ -9,6 +9,58 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPluginTests: XCTestCase {
+    func testSnippetClipboardWriteResetsImplicitQueueBeforeBlockedUsageSaveAndPreservesExplicitQueue() async throws {
+        for usesExplicitQueue in [false, true] {
+            let first = ClipboardHistoryItem(id: UUID(), text: "First", capturedAt: Date(),
+                sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+            let second = ClipboardHistoryItem(id: UUID(), text: "Second", capturedAt: Date().addingTimeInterval(-10),
+                sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+            let snippet = ClipboardSavedItem(title: "Template", savedKind: .snippet,
+                payload: .plainText("Snippet written"), templateText: "Snippet written")
+            let savedPersistence = try BlockingUsageClipboardSavedPersistence(item: snippet)
+            defer { savedPersistence.finishUsageUpdate() }
+            let persistence = BlockingClipboardHistoryPersistence(items: [first, second])
+            persistence.allowSaveToFinish()
+            let pasteboard = PluginTestClipboardPasteboard()
+            let sender = FakeClipboardPasteCommandSender()
+            let initialSession = usesExplicitQueue
+                ? try ClipboardSequentialPasteSession(source: .explicitQueue, itemIDs: [first.id, second.id])
+                : nil
+            let plugin = makePlugin(pasteboard: pasteboard, persistence: persistence,
+                savedPersistence: savedPersistence, pasteCommandSender: sender,
+                frontmostProcessIdentifier: { 42 }, sequentialPasteStabilizationDelay: .zero,
+                initialExplicitSession: initialSession)
+            defer { plugin.deactivate(reason: .hostShutdown) }
+            plugin.controller.start()
+            await waitUntilLoaded(plugin.controller)
+            plugin.controller.stop()
+            plugin.savedLibraryController.start()
+            let loaded = await waitUntil { plugin.savedLibraryController.isLoaded }
+            XCTAssertTrue(loaded)
+            plugin.handleShortcutAction(id: "paste-sequentially")
+            let pastedFirst = await waitUntil {
+                sender.sendCount == 1 && !plugin.hasPendingSequentialPasteForTesting
+            }
+            XCTAssertTrue(pastedFirst)
+            XCTAssertEqual(pasteboard.text, "First")
+
+            let copyTask = Task { @MainActor in await plugin.savedLibraryController.copy(id: snippet.id) }
+            let writeCompleted = await waitUntil { savedPersistence.usageUpdateStarted }
+            XCTAssertTrue(writeCompleted)
+            XCTAssertEqual(pasteboard.text, "Snippet written")
+            // The copy has not returned: only the successful-write callback can reset the queue.
+            plugin.handleShortcutAction(id: "paste-sequentially")
+            let pastedAfterSnippet = await waitUntil {
+                sender.sendCount == 2 && !plugin.hasPendingSequentialPasteForTesting
+            }
+            XCTAssertTrue(pastedAfterSnippet)
+            XCTAssertEqual(pasteboard.text, usesExplicitQueue ? "Second" : "First")
+            savedPersistence.finishUsageUpdate()
+            _ = await copyTask.value
+            XCTAssertNotNil(plugin.savedLibraryController.errorMessage, "Usage persistence fails after the clipboard write")
+        }
+    }
+
     func testExternalCopyDuringPlainTextPasteWaitCancelsDispatch() async {
         let pasteboard = PluginTestClipboardPasteboard()
         pasteboard.simulateCopy("original")
@@ -966,6 +1018,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         let sender = BlockingClipboardPasteCommandSender { pasteboard.text }
         let plugin = makePlugin(
             pasteboard: pasteboard,
+            persistence: RestartableClipboardHistoryPersistence(),
             pasteCommandSender: sender,
             accessibilityTrusted: { true },
             frontmostProcessIdentifier: { 42 },
@@ -1361,7 +1414,8 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         accessibilityTrusted: @escaping () -> Bool = { true },
         accessibilityRequester: @escaping (Bool) -> Bool = { _ in true },
         frontmostProcessIdentifier: @escaping () -> pid_t? = { 1234 },
-        sequentialPasteStabilizationDelay: Duration = .milliseconds(120)
+        sequentialPasteStabilizationDelay: Duration = .milliseconds(120),
+        initialExplicitSession: ClipboardSequentialPasteSession? = nil
     ) -> ClipboardHistoryPlugin {
         let suiteName = "ClipboardHistoryPluginTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -1374,6 +1428,9 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             userDefaults: defaults
         )
         storage.set(false, forKey: "collection-paused")
+        if let initialExplicitSession {
+            PluginStorageClipboardSequentialPasteStore(storage: storage).saveExplicitSession(initialExplicitSession)
+        }
         let context = PluginRuntimeContext(
             pluginID: ClipboardHistoryPlugin.pluginID,
             storage: storage
@@ -1460,12 +1517,61 @@ private final class PluginTestPayloadGate: @unchecked Sendable {
     }
 }
 
+private final class RestartableClipboardHistoryPersistence: ClipboardHistoryPersisting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [ClipboardHistoryItem] = []
+    func prepare() throws {}
+    func load() throws -> [ClipboardHistoryItem] { lock.withLock { items } }
+    func save(_ items: [ClipboardHistoryItem]) throws { lock.withLock { self.items = items } }
+    func reset() throws { lock.withLock { items = [] } }
+    func removeAll() throws { try reset() }
+}
+
 private struct EmptyClipboardHistoryPersistence: ClipboardHistoryPersisting {
     func prepare() throws {}
     func load() throws -> [ClipboardHistoryItem] { [] }
     func save(_ items: [ClipboardHistoryItem]) throws {}
     func reset() throws {}
     func removeAll() throws {}
+}
+
+private final class BlockingUsageClipboardSavedPersistence: ClipboardSavedLibraryPersisting, @unchecked Sendable {
+    private let base = InMemoryClipboardSavedLibraryPersistence()
+    private let condition = NSCondition()
+    private var started = false
+    private var mayFinish = false
+
+    init(item: ClipboardSavedItem) throws {
+        try base.save(item, payloadChanged: true)
+    }
+
+    var usageUpdateStarted: Bool { condition.withLock { started } }
+
+    func prepare() throws { try base.prepare() }
+    func load() throws -> [ClipboardSavedItem] { try base.load() }
+    func save(_ item: ClipboardSavedItem, payloadChanged: Bool) throws {
+        try base.save(item, payloadChanged: payloadChanged)
+    }
+    func loadPayload(id: UUID) throws -> ClipboardHistoryPayload { try base.loadPayload(id: id) }
+    func delete(id: UUID) throws { try base.delete(id: id) }
+    func removeAll() throws { try base.removeAll() }
+
+    func updateLastUsedAt(id: UUID, date: Date) throws {
+        condition.lock()
+        started = true
+        condition.broadcast()
+        let deadline = Date().addingTimeInterval(10)
+        while !mayFinish, condition.wait(until: deadline) {}
+        condition.unlock()
+        throw ClipboardHistoryStoreError.unavailableStorage
+    }
+
+    func finishUsageUpdate() {
+        condition.withLock {
+            mayFinish = true
+            condition.broadcast()
+        }
+    }
 }
 
 private final class InMemoryClipboardSavedLibraryPersistence:

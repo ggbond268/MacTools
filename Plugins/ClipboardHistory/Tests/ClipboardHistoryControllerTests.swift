@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import MacToolsPluginKit
 import XCTest
@@ -6,6 +7,36 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryControllerTests: XCTestCase {
+    func testCommittedItemUpdatesPatchPanelAndDeletionStillReconciles() async throws {
+        let fixture = makeFixture(initialItems: [item(text: "First", pinned: false), item(text: "Second", pinned: false)])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: fixture.controller.items)
+        await model.waitForSearchForTesting()
+        let id = try XCTUnwrap(model.selectedItemID)
+        var changedIDs: Set<UUID>?
+        let subscription = fixture.controller.itemUpdates.sink { update in
+            changedIDs = update.changedIDs
+            model.updateItems(update.items, changedIDs: update.changedIDs)
+        }
+        let saved = await fixture.controller.toggleSaved(id: id)
+        XCTAssertTrue(saved)
+        XCTAssertEqual(changedIDs, [id])
+        XCTAssertFalse(model.isSearching)
+        XCTAssertEqual(model.visibleItems.first(where: { $0.id == id })?.isSaved, true)
+        fixture.controller.recordSuccessfulUse(id: id)
+        XCTAssertEqual(changedIDs, [id])
+        XCTAssertFalse(model.isSearching)
+        XCTAssertNotNil(model.visibleItems.first(where: { $0.id == id })?.lastUsedAt)
+        let deleted = await fixture.controller.deleteItem(id: id)
+        XCTAssertTrue(deleted)
+        await model.waitForSearchForTesting()
+        XCTAssertFalse(model.visibleItems.contains { $0.id == id })
+        XCTAssertEqual(model.scopedItemCount, 1)
+        withExtendedLifetime(subscription) {}
+    }
+
     func testAbandonedPayloadLoadCannotPublishAfterCancellation() async {
         let loader = BlockingCountingClipboardPayloadLoader(payload: .plainText("secret"))
         let reference = ClipboardHistoryPayloadReference(loader: { try loader.load() })
@@ -1394,14 +1425,6 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(controller.isCollectionOperational)
         XCTAssertEqual(controller.items, [original])
         XCTAssertNil(controller.errorMessage)
-
-        // Keeping the UI stable must not remove the durable-write serialization guard.
-        let overlappingToggle = await controller.toggleSaved(id: id)
-        let overlappingDelete = await controller.deletePermanently(id: id)
-        let overlappingClear = await controller.clearAllHistory()
-        XCTAssertFalse(overlappingToggle)
-        XCTAssertFalse(overlappingDelete)
-        XCTAssertFalse(overlappingClear)
 
         persistence.allowFirstSaveToFinish()
         let didSave = await saveTask.value

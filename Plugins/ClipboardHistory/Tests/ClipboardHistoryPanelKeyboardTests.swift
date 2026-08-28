@@ -5,6 +5,208 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
+    func testActionContextRejectsRemovedTargetBeforeAndAfterSearchRetargetsSelection() async throws {
+        let first = item(text: "First", pinned: false)
+        let second = item(text: "Second", pinned: false)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [first, second])
+        await model.waitForSearchForTesting()
+        model.selectedItemID = first.id
+        let context = try XCTUnwrap(model.actionContext)
+        XCTAssertTrue(model.canPerformAction(in: context))
+        model.requestActionMenu()
+        model.updateItems([second])
+        XCTAssertFalse(model.canPerformAction(in: context))
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.selectedItemID, second.id)
+        XCTAssertFalse(model.canPerformAction(in: context))
+        XCTAssertEqual(context.itemIDs, [first.id])
+    }
+
+    func testActionContextTracksOrderedSelectionAndHighlightedTarget() async throws {
+        let first = item(text: "First", pinned: false)
+        let second = item(text: "Second", pinned: false)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [first, second])
+        await model.waitForSearchForTesting()
+        model.selectedItemID = first.id
+        model.setMultiSelectionEnabled(true)
+        let context = try XCTUnwrap(model.actionContext)
+        model.selectedItemID = second.id
+        XCTAssertFalse(model.canPerformAction(in: context), "Mark Item must retain the original highlighted target")
+        model.toggleFocusedSelection()
+        let both = try XCTUnwrap(model.actionContext)
+        XCTAssertEqual(both.itemIDs, [first.id, second.id])
+        model.toggleFocusedSelection()
+        XCTAssertFalse(model.canPerformAction(in: both))
+    }
+
+    func testActionContextSurvivesUnrelatedCaptureButRejectsDeletedSnippet() async throws {
+        let history = item(text: "History", pinned: false)
+        let snippet = ClipboardSavedItem(title: "Template", savedKind: .snippet,
+            payload: .plainText("Hello"), templateText: "Hello")
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [history], savedItems: [snippet])
+        await model.waitForSearchForTesting()
+        model.selectedItemID = snippet.id
+        let context = try XCTUnwrap(model.actionContext)
+        XCTAssertEqual(context.snippetIDs, [snippet.id])
+        model.updateItems([history, item(text: "New capture", pinned: false)])
+        XCTAssertTrue(model.canPerformAction(in: context))
+        model.updateSavedItems([])
+        XCTAssertFalse(model.canPerformAction(in: context))
+    }
+
+    func testActionContextRejectsChangedSaveStateInsteadOfReversingDisplayedAction() async throws {
+        var history = item(text: "History", pinned: false)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [history])
+        await model.waitForSearchForTesting()
+        let context = try XCTUnwrap(model.actionContext)
+        XCTAssertTrue(context.savedClipIDs.isEmpty)
+        history.setSavedMetadata(ClipboardHistorySavedMetadata(title: "Saved", savedAt: Date()))
+        model.updateItems([history])
+        XCTAssertFalse(model.canPerformAction(in: context), "An old Save action must not become Unsave")
+    }
+
+    func testCombinedClipboardWriteChecksCancellationAndVisibilityBeforeWriting() {
+        for (cancelled, current) in [(true, true), (false, false), (true, false)] {
+            var events: [String] = []
+            XCTAssertFalse(ClipboardHistoryPanelClipboardWrite.perform(
+                isCancelled: cancelled, isCurrent: current,
+                write: { events.append("write"); return true },
+                didWrite: { events.append("manual") }
+            ))
+            XCTAssertTrue(events.isEmpty)
+        }
+        var events: [String] = []
+        XCTAssertFalse(ClipboardHistoryPanelClipboardWrite.perform(
+            isCancelled: false, isCurrent: true,
+            write: { events.append("failed"); return false },
+            didWrite: { events.append("manual") }
+        ))
+        XCTAssertEqual(events, ["failed"])
+        events = []
+        XCTAssertTrue(ClipboardHistoryPanelClipboardWrite.perform(
+            isCancelled: false, isCurrent: true,
+            write: { events.append("write"); return true },
+            didWrite: { events.append("manual") }
+        ))
+        XCTAssertEqual(events, ["write", "manual"])
+    }
+
+    func testCombinedClipboardWriteRejectsTargetsDeletedDuringResolution() {
+        let history = UUID(), snippet = UUID(), unrelated = UUID()
+        XCTAssertTrue(ClipboardHistoryPanelClipboardWrite.targetsAreAvailable(
+            [history, snippet], availableIDs: [history, snippet, unrelated]
+        ))
+        for available: Set<UUID> in [[history, unrelated], [snippet, unrelated], []] {
+            XCTAssertFalse(ClipboardHistoryPanelClipboardWrite.targetsAreAvailable(
+                [history, snippet], availableIDs: available
+            ))
+        }
+        XCTAssertFalse(ClipboardHistoryPanelClipboardWrite.targetsAreAvailable([], availableIDs: [history]))
+    }
+
+    func testActionPaletteRoutesOnlyOfferedActionsUsingCurrentShortcutBindings() {
+        let save = ClipboardHistoryPlugin.ShortcutID.panelSave
+        let share = ClipboardHistoryPlugin.ShortcutID.panelShare
+        let edit = ClipboardHistoryPlugin.ShortcutID.panelEditSnippet
+        let entries: [ClipboardHistoryExportMenuEntry] = [
+            .init(title: "Save", action: .saveToLibrary, shortcutDefinitionID: save),
+            .init(title: "Share", action: .share, shortcutDefinitionID: share),
+            .init(title: "Edit", action: .editSaved, shortcutDefinitionID: edit),
+        ]
+        let bindings = [
+            save: ShortcutBinding(keyCode: 35, modifiers: .command),
+            share: ShortcutBinding(keyCode: 14, modifiers: [.command, .shift]),
+            edit: ShortcutBinding(keyCode: 14, modifiers: [.command, .option]),
+        ]
+        func action(_ key: UInt16, _ flags: NSEvent.ModifierFlags,
+                    offered: [ClipboardHistoryExportMenuEntry]? = nil,
+                    configured: [String: ShortcutBinding]? = nil) -> ClipboardHistoryExportMenuEntry.Action? {
+            ClipboardHistoryActionPaletteShortcuts.action(keyCode: key, modifiers: flags,
+                entries: offered ?? entries, bindings: configured ?? bindings,
+                isEditingText: true, hasSelectedText: false, hasMarkedText: false,
+                isRecordingShortcut: false)
+        }
+        XCTAssertEqual(action(35, .command), .saveToLibrary)
+        XCTAssertEqual(action(14, [.command, .shift]), .share)
+        XCTAssertEqual(action(14, [.command, .option]), .editSaved)
+        XCTAssertNil(action(35, .command, offered: []))
+        XCTAssertNil(action(35, .command, configured: [:]))
+        XCTAssertEqual(action(1, [.command, .option], configured: [
+            save: ShortcutBinding(keyCode: 1, modifiers: [.command, .option]),
+        ]), .saveToLibrary)
+    }
+
+    func testActionPalettePreservesSearchEditingCompositionRecordingAndReturnSubmission() {
+        let id = ClipboardHistoryPlugin.ShortcutID.panelSave
+        let entries: [ClipboardHistoryExportMenuEntry] = [
+            .init(title: "Paste", action: .paste, shortcut: "Return"),
+            .init(title: "Plain Text", action: .pastePlainText, shortcut: "⇧Return"),
+            .init(title: "Copy", action: .copy, shortcut: "⌘C"),
+            .init(title: "Save", action: .saveToLibrary, shortcutDefinitionID: id),
+        ]
+        func action(_ key: UInt16, _ flags: NSEvent.ModifierFlags = [],
+                    selection: Bool = false, marked: Bool = false,
+                    recording: Bool = false, binding: ShortcutBinding? = nil) -> ClipboardHistoryExportMenuEntry.Action? {
+            ClipboardHistoryActionPaletteShortcuts.action(keyCode: key, modifiers: flags,
+                entries: entries, bindings: [id: binding ?? ShortcutBinding(keyCode: 35, modifiers: .command)],
+                isEditingText: true, hasSelectedText: selection, hasMarkedText: marked,
+                isRecordingShortcut: recording)
+        }
+        XCTAssertNil(action(36))
+        XCTAssertNil(action(76))
+        XCTAssertNil(action(53))
+        XCTAssertEqual(action(36, .shift), .pastePlainText)
+        XCTAssertEqual(action(8, .command), .copy)
+        XCTAssertNil(action(8, .command, selection: true))
+        XCTAssertNil(action(35, .command, marked: true))
+        XCTAssertNil(action(35, .command, recording: true))
+        for key: UInt16 in [0, 7, 9, 6] {
+            XCTAssertNil(action(key, .command, binding: ShortcutBinding(keyCode: key, modifiers: .command)))
+        }
+        for key: UInt16 in [123, 124, 125, 126] {
+            XCTAssertNil(action(key, .command, binding: ShortcutBinding(keyCode: key, modifiers: .command)))
+            XCTAssertNil(action(key, .option, binding: ShortcutBinding(keyCode: key, modifiers: .option)))
+        }
+    }
+
+    func testLargeSnippetLibraryOpeningAndMissSearchReuseMetadataWithoutLoadingPayloads() async {
+        let loads = ClipboardPayloadLoadCounter()
+        let template = String(repeating: "Reusable customer reply without a match. ", count: 80)
+        let snippets = (0..<1_000).map { index in
+            ClipboardSavedItem(
+                id: UUID(), title: "Reply \(index)", tags: ["support"], keyword: ";reply\(index)",
+                isFavorite: false, savedKind: .snippet, createdAt: .distantPast,
+                updatedAt: .distantPast, lastUsedAt: nil, sourceApplication: nil,
+                contentKind: .plainText, payloadByteCount: template.utf8.count,
+                fileURLs: [], fileReferenceCount: 0, linkURLs: [],
+                representationTypeIdentifiers: [ClipboardRepresentationType.plainText],
+                payloadDigest: Data("snippet-\(index)".utf8), templateSearchText: template,
+                hasDynamicTemplateContent: false, clipSearchText: nil, imageSearchText: nil,
+                payloadLoader: {
+                    loads.increment()
+                    return .plainText(template)
+                }
+            )
+        }
+        let model = ClipboardHistoryPanelModel()
+        // Construction represents the background database load, outside the UI budget.
+        let openedAt = Date()
+        model.prepareForPresentation(items: [], savedItems: snippets)
+        XCTAssertLessThan(Date().timeIntervalSince(openedAt), 1.0)
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.visibleItems.count, ClipboardHistoryPanelModel.resultPageSize)
+        let searchStartedAt = Date()
+        model.query = "zzzz-unmatched-customer"
+        await model.waitForSearchForTesting()
+        XCTAssertTrue(model.visibleItems.isEmpty)
+        XCTAssertLessThan(Date().timeIntervalSince(searchStartedAt), 2.0)
+        XCTAssertEqual(loads.value, 0)
+    }
+
     func testTwoCharacterSubstringSearchFindsHistoryAndSnippetMetadata() async {
         let history = item(text: "MT88 tripod", pinned: false)
         let unrelated = item(text: "MT99 tripod", pinned: false)

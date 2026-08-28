@@ -777,6 +777,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         linkURLs: [URL] = [],
         representationTypeIdentifiers: [String],
         semanticTraits: Set<ClipboardHistorySemanticTrait>? = nil,
+        searchIndex: ClipboardHistorySearchIndex? = nil,
         payloadDigest: Data,
         allowsRichTextImport: Bool,
         textCharacterCount: Int,
@@ -822,7 +823,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         self.lastUsedAt = lastUsedAt
         self.imageSearchText = boundedImageSearchText
         self.hasCompletedImageTextIndexing = hasCompletedImageTextIndexing
-        searchIndex = ClipboardHistorySearch.makeIndex(
+        self.searchIndex = searchIndex ?? ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: boundedText, savedMetadata: savedMetadata),
             sourceApplication: sourceApplication,
             fileURLs: fileURLs,
@@ -1367,6 +1368,30 @@ enum ClipboardHistorySearch {
         let hasMore: Bool
     }
 
+    struct PreparedQuery: Sendable {
+        let normalizedText: String
+        let tokens: [String]
+        let compactCharacters: [Character]
+        let distinctCharacters: Set<Character>
+        let allowsSubstring: Bool
+        let isEmpty: Bool
+
+        init(_ query: String) {
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            isEmpty = trimmed.isEmpty
+            normalizedText = String(ClipboardHistorySearch.normalized(
+                String(trimmed.prefix(maximumNormalizedCharacterCount))
+            ).prefix(maximumNormalizedCharacterCount))
+            tokens = ClipboardHistorySearch.tokens(in: normalizedText)
+            let compact = ClipboardHistorySearch.compactTokens(tokens)
+            compactCharacters = Array(compact)
+            distinctCharacters = Set(compactCharacters)
+            allowsSubstring = ClipboardHistorySearch.allowsExactSubstringMatch(
+                normalizedText, compactQuery: compact
+            )
+        }
+    }
+
     private struct WordFragmentSearchState: Hashable {
         let queryOffset: Int
         let wordIndex: Int
@@ -1391,25 +1416,21 @@ enum ClipboardHistorySearch {
     }
 
     static func matches(index: ClipboardHistorySearchIndex, query: String) -> Bool {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else { return true }
-        let normalizedQuery = String(
-            normalized(String(trimmedQuery.prefix(maximumNormalizedCharacterCount)))
-                .prefix(maximumNormalizedCharacterCount)
-        )
-        let queryTokens = tokens(in: normalizedQuery)
-        let compactQuery = compactTokens(queryTokens)
-        if allowsExactSubstringMatch(normalizedQuery, compactQuery: compactQuery),
-           index.normalizedText.contains(normalizedQuery) {
+        matches(index: index, query: PreparedQuery(query))
+    }
+
+    static func matches(index: ClipboardHistorySearchIndex, query: PreparedQuery) -> Bool {
+        guard !query.isEmpty else { return true }
+        if query.allowsSubstring, index.normalizedText.contains(query.normalizedText) {
             return true
         }
-        if !queryTokens.isEmpty,
-           queryTokens.allSatisfy({ queryToken in
+        if !query.tokens.isEmpty,
+           query.tokens.allSatisfy({ queryToken in
                index.tokens.contains { $0.hasPrefix(queryToken) }
            }) {
             return true
         }
-        return compactQueryMatchesWordFragments(compactQuery, words: index.tokens)
+        return compactQueryMatchesWordFragments(query, words: index.tokens)
     }
 
     static func result(
@@ -1417,37 +1438,17 @@ enum ClipboardHistorySearch {
         query: String,
         limit: Int?
     ) -> Result {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else {
+        let preparedQuery = PreparedQuery(query)
+        guard !preparedQuery.isEmpty else {
             guard let limit, items.count > limit else {
                 return Result(items: items, hasMore: false)
             }
             return Result(items: Array(items.prefix(limit)), hasMore: true)
         }
-        let normalizedQuery = String(
-            normalized(String(trimmedQuery.prefix(maximumNormalizedCharacterCount)))
-                .prefix(maximumNormalizedCharacterCount)
-        )
-        let queryTokens = tokens(in: normalizedQuery)
-        let compactQuery = compactTokens(queryTokens)
         var matches: [ClipboardHistoryItem] = []
         for item in items {
             guard !Task.isCancelled else { return Result(items: [], hasMore: false) }
-            let normalizedText = item.searchIndex.normalizedText
-            let searchableTokens = item.searchIndex.tokens
-            if allowsExactSubstringMatch(
-                normalizedQuery,
-                compactQuery: compactQuery
-            ) && normalizedText.contains(normalizedQuery) {
-                matches.append(item)
-            } else if !queryTokens.isEmpty, queryTokens.allSatisfy({ queryToken in
-                searchableTokens.contains { $0.hasPrefix(queryToken) }
-            }) {
-                matches.append(item)
-            } else if compactQueryMatchesWordFragments(
-                compactQuery,
-                words: searchableTokens
-            ) {
+            if Self.matches(index: item.searchIndex, query: preparedQuery) {
                 matches.append(item)
             }
             if let limit, matches.count > limit {
@@ -1508,27 +1509,41 @@ enum ClipboardHistorySearch {
     }
 
     private static func compactQueryMatchesWordFragments(
-        _ query: String,
+        _ query: PreparedQuery,
         words: [String]
     ) -> Bool {
-        let queryCharacters = Array(query)
+        let queryCharacters = query.compactCharacters
         guard queryCharacters.count >= 2, words.count >= 2 else { return false }
+        // Every fragment must come from an indexed word. Reject impossible queries
+        // before allocating character arrays or exploring repeated-token states.
+        guard query.distinctCharacters.allSatisfy({ character in
+            words.contains { $0.contains(character) }
+        }) else { return false }
         let wordCharacters = words.map(Array.init)
-        guard let firstQueryCharacter = queryCharacters.first,
-              wordCharacters.contains(where: { $0.contains(firstQueryCharacter) }) else {
-            return false
-        }
         var memoizedResults: [WordFragmentSearchState: Bool] = [:]
 
-        func contains(_ fragment: [Character], in word: [Character]) -> Bool {
-            guard !fragment.isEmpty, fragment.count <= word.count else { return false }
-            for startIndex in 0...(word.count - fragment.count) {
-                let endIndex = startIndex + fragment.count
-                if word[startIndex..<endIndex].elementsEqual(fragment) {
-                    return true
-                }
+        func commonPrefixLength(queryOffset: Int, word: [Character], wordOffset: Int = 0) -> Int {
+            let limit = min(queryCharacters.count - queryOffset, word.count - wordOffset)
+            var length = 0
+            while length < limit,
+                  queryCharacters[queryOffset + length] == word[wordOffset + length] {
+                length += 1
             }
-            return false
+            return length
+        }
+
+        // An interior first fragment is always a prefix of the compact query.
+        // Calculate its longest occurrence once per needed word, not once per
+        // length, and do no interior work when ordinary prefixes already match.
+        var interiorPrefixLengths = Array(repeating: -1, count: wordCharacters.count)
+        func interiorPrefixLength(at wordIndex: Int) -> Int {
+            if interiorPrefixLengths[wordIndex] >= 0 { return interiorPrefixLengths[wordIndex] }
+            let word = wordCharacters[wordIndex]
+            let length = word.indices.reduce(0) { longest, offset in
+                max(longest, commonPrefixLength(queryOffset: 0, word: word, wordOffset: offset))
+            }
+            interiorPrefixLengths[wordIndex] = length
+            return length
         }
 
         func matches(
@@ -1537,6 +1552,7 @@ enum ClipboardHistorySearch {
             minimumFragmentLength: Int,
             usedWordCount: Int
         ) -> Bool {
+            guard !Task.isCancelled else { return false }
             if queryOffset == queryCharacters.count {
                 return usedWordCount >= 2
             }
@@ -1561,35 +1577,34 @@ enum ClipboardHistorySearch {
                 return false
             }
 
-            for prefixLength in minimumFragmentLength...maximumPrefixLength {
-                let queryRange = queryOffset..<(queryOffset + prefixLength)
-                guard queryCharacters[queryRange].elementsEqual(word.prefix(prefixLength)) else {
-                    break
-                }
-                if matchesWordFragment(
-                    length: prefixLength,
-                    queryOffset: queryOffset,
-                    wordIndex: wordIndex,
-                    usedWordCount: usedWordCount
-                ) {
-                    memoizedResults[state] = true
-                    return true
-                }
-            }
-
-            if usedWordCount == 0, maximumPrefixLength >= 2 {
-                for fragmentLength in 2...maximumPrefixLength {
-                    let queryRange = queryOffset..<(queryOffset + fragmentLength)
-                    let fragment = Array(queryCharacters[queryRange])
-                    guard contains(fragment, in: word) else { continue }
+            let matchingPrefixLength = commonPrefixLength(queryOffset: queryOffset, word: word)
+            if matchingPrefixLength >= minimumFragmentLength {
+                for prefixLength in minimumFragmentLength...matchingPrefixLength {
                     if matchesWordFragment(
-                        length: fragmentLength,
+                        length: prefixLength,
                         queryOffset: queryOffset,
                         wordIndex: wordIndex,
                         usedWordCount: usedWordCount
                     ) {
                         memoizedResults[state] = true
                         return true
+                    }
+                }
+            }
+
+            if usedWordCount == 0 {
+                let maximumInteriorLength = interiorPrefixLength(at: wordIndex)
+                if maximumInteriorLength >= 2 {
+                    for fragmentLength in 2...maximumInteriorLength {
+                        if matchesWordFragment(
+                            length: fragmentLength,
+                            queryOffset: queryOffset,
+                            wordIndex: wordIndex,
+                            usedWordCount: usedWordCount
+                        ) {
+                            memoizedResults[state] = true
+                            return true
+                        }
                     }
                 }
             }

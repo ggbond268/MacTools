@@ -489,6 +489,73 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
         XCTAssertTrue(result.hasMore)
     }
 
+    func testPreparedSearchPreservesWordFragmentRulesAcrossSmallCorpus() {
+        func referenceFragments(_ query: String, words: [String]) -> Bool {
+            func finish(offset: Int, previousWord: Int) -> Bool {
+                guard previousWord + 1 < words.count else { return false }
+                for wordIndex in (previousWord + 1)..<words.count {
+                    let minimum = wordIndex == previousWord + 1 ? 1 : 3
+                    let remaining = String(query.dropFirst(offset))
+                    let maximum = min(remaining.count, words[wordIndex].count)
+                    guard maximum >= minimum else { continue }
+                    for length in minimum...maximum {
+                        guard words[wordIndex].hasPrefix(String(remaining.prefix(length))) else { continue }
+                        if offset + length == query.count || finish(offset: offset + length, previousWord: wordIndex) {
+                            return true
+                        }
+                    }
+                }
+                return false
+            }
+            for index in words.indices {
+                let maximum = min(query.count, words[index].count)
+                guard maximum > 0 else { continue }
+                for length in 1...maximum {
+                    let fragment = String(query.prefix(length))
+                    guard words[index].hasPrefix(fragment)
+                        || (length >= 2 && words[index].contains(fragment)) else { continue }
+                    if finish(offset: length, previousWord: index) { return true }
+                }
+            }
+            return false
+        }
+        var queries = ["a", "b"]
+        var frontier = queries
+        for _ in 2...5 {
+            frontier = frontier.flatMap { [$0 + "a", $0 + "b"] }
+            queries += frontier
+        }
+        let vocabulary = ["aa", "ab", "ba", "bb"]
+        for first in vocabulary {
+            for second in vocabulary {
+                for third in vocabulary {
+                    let words = [first, second, third]
+                    let text = words.joined(separator: " ")
+                    let candidate = item(text: text, date: Date(), pinned: false)
+                    for query in queries {
+                        let expected = (query.count >= 2 && text.contains(query))
+                            || words.contains { $0.hasPrefix(query) }
+                            || (query.count >= 2 && referenceFragments(query, words: words))
+                        XCTAssertEqual(ClipboardHistorySearch.matches(index: candidate.searchIndex,
+                            query: ClipboardHistorySearch.PreparedQuery(query)), expected, "\(text) / \(query)")
+                    }
+                }
+            }
+        }
+    }
+
+    func testNearMissRepeatedTokensStayWithinSearchBudget() {
+        let text = Array(repeating: String(repeating: "a", count: 64), count: 48).joined(separator: " ")
+        let items = (0..<1_000).map { offset in
+            item(text: "\(offset) \(text)", date: Date(), pinned: false)
+        }
+        let started = ContinuousClock.now
+        let result = ClipboardHistorySearch.result(items, query: "aaaaaz", limit: 50)
+        XCTAssertTrue(result.items.isEmpty)
+        XCTAssertFalse(result.hasMore)
+        XCTAssertLessThan(ContinuousClock.now - started, .seconds(2))
+    }
+
     func testSearchMatchesOnDeviceImageTextIndex() {
         let payload = ClipboardHistoryPayload(pasteboardItems: [
             ClipboardStoredPasteboardItem(representations: [

@@ -331,6 +331,7 @@ final class ClipboardHistoryPlugin:
         }
         savedLibraryController.onPasteboardWrite = { [weak self] in
             self?.controller.markCurrentPasteboardChangeAsInternal()
+            self?.resetImplicitQueueForManualClipboardWrite()
         }
         controller.onCaptureSuppressionEvent = { [weak privacyHUDPresenter = self.privacyHUDPresenter] event in
             privacyHUDPresenter?.handleSuppressionEvent(event)

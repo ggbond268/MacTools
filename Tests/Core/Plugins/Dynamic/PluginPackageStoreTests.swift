@@ -381,6 +381,94 @@ final class PluginPackageStoreTests: XCTestCase {
         )
     }
 
+    func testReinstallWaitsForFailedPrivateDirectoryCleanupToRecover() throws {
+        try assertReinstallWaitsForPrivateCleanup(failsDirectoryRemoval: true)
+    }
+
+    func testReinstallWaitsForFailedPrivateKeyCleanupToRecover() throws {
+        try assertReinstallWaitsForPrivateCleanup(failsDirectoryRemoval: false)
+    }
+
+    private func assertReinstallWaitsForPrivateCleanup(failsDirectoryRemoval: Bool) throws {
+        let pluginID = "com.example.private-pending-reinstall"
+        let sourceURL = try makePackage(id: pluginID, uninstallDataPolicy: .removePrivateData)
+        var cleanupFails = true
+        var removedKeyPluginIDs: [String] = []
+        let store = makeStore(
+            privateDataDirectoryRemover: { url in
+                if cleanupFails && failsDirectoryRemoval { throw CocoaError(.fileWriteNoPermission) }
+                try FileManager.default.removeItem(at: url)
+            },
+            privateDataKeyRemover: { id in
+                if cleanupFails && !failsDirectoryRemoval { throw CocoaError(.fileWriteNoPermission) }
+                removedKeyPluginIDs.append(id)
+            }
+        )
+        let original = try store.installPackage(from: sourceURL)
+        let context = store.runtimeContext(for: original)
+        let privateURL = try XCTUnwrap(context.supportDirectory).appendingPathComponent("private-data")
+        try Data("original private data".utf8).write(to: privateURL)
+
+        XCTAssertThrowsError(try store.uninstall(pluginID: pluginID, removeData: false))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: original.packageURL.path))
+        XCTAssertThrowsError(try store.installPackage(from: sourceURL)) { error in
+            guard case .installFailed = error as? PluginPackageStoreError else {
+                return XCTFail("Expected installFailed while private cleanup is pending, got \(error)")
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: original.packageURL.path),
+            "A rejected reinstall must not leave a new package under the old cleanup intent")
+        let pending = defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?[pluginID]
+            as? [String: String]
+        XCTAssertEqual(pending?["phase"], "staging")
+
+        cleanupFails = false
+        let reinstalled = try store.installPackage(from: sourceURL)
+        XCTAssertEqual(reinstalled.id, pluginID)
+        XCTAssertEqual(defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?.count, 0)
+        let freshContext = store.runtimeContext(for: reinstalled)
+        let freshURL = try XCTUnwrap(freshContext.supportDirectory).appendingPathComponent("fresh-data")
+        try Data("fresh private data".utf8).write(to: freshURL)
+        let keyRemovalsAfterRecovery = removedKeyPluginIDs.count
+        XCTAssertEqual(store.installedRecords().map(\.id), [pluginID])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: freshURL.path))
+        XCTAssertEqual(removedKeyPluginIDs.count, keyRemovalsAfterRecovery,
+            "Old uninstall recovery must never remove the new installation's key")
+    }
+
+    func testCleanupCompletePackageResidueDoesNotBlockOrDamageReinstall() throws {
+        let pluginID = "com.example.private-residue-reinstall"
+        let sourceURL = try makePackage(id: pluginID, uninstallDataPolicy: .removePrivateData)
+        var residueRemovalFails = true
+        var removedKeyPluginIDs: [String] = []
+        let store = makeStore(
+            packageFileRemover: { url in
+                if residueRemovalFails { throw CocoaError(.fileWriteNoPermission) }
+                try FileManager.default.removeItem(at: url)
+            },
+            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
+        )
+        _ = try store.installPackage(from: sourceURL)
+        try store.uninstall(pluginID: pluginID, removeData: false)
+        let pending = defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?[pluginID]
+            as? [String: String]
+        XCTAssertEqual(pending?["phase"], "cleanupComplete")
+
+        let reinstalled = try store.installPackage(from: sourceURL)
+        let context = store.runtimeContext(for: reinstalled)
+        let freshURL = try XCTUnwrap(context.supportDirectory).appendingPathComponent("fresh-data")
+        try Data("fresh private data".utf8).write(to: freshURL)
+        XCTAssertEqual(store.installedRecords().map(\.id), [pluginID])
+        XCTAssertEqual(removedKeyPluginIDs, [pluginID])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: freshURL.path))
+
+        residueRemovalFails = false
+        XCTAssertEqual(store.installedRecords().map(\.id), [pluginID])
+        XCTAssertEqual(defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?.count, 0)
+        XCTAssertEqual(removedKeyPluginIDs, [pluginID])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: freshURL.path))
+    }
+
     func testFailedUpdateRestoresExistingPackage() throws {
         let sourceURL = try makePackage(id: "com.example.demo", version: "1.0.0")
         let invalidUpdateURL = try makePackage(id: "com.example.demo", version: "2.0.0", bundleRelativePath: "Missing.bundle")
@@ -480,6 +568,7 @@ final class PluginPackageStoreTests: XCTestCase {
     private func makeStore(
         synchronizeUserDefaults: @escaping (UserDefaults) -> Bool = { $0.synchronize() },
         packageFileMover: ((URL, URL) throws -> Void)? = nil,
+        packageFileRemover: ((URL) throws -> Void)? = nil,
         privateDataDirectoryRemover: ((URL) throws -> Void)? = nil,
         privateDataKeyRemover: ((String) throws -> Void)? = nil,
         now: @escaping () -> Date = { Date() }
@@ -489,6 +578,7 @@ final class PluginPackageStoreTests: XCTestCase {
             userDefaults: defaults,
             synchronizeUserDefaults: synchronizeUserDefaults,
             packageFileMover: packageFileMover,
+            packageFileRemover: packageFileRemover,
             privateDataDirectoryRemover: privateDataDirectoryRemover,
             privateDataKeyRemover: privateDataKeyRemover,
             now: now,

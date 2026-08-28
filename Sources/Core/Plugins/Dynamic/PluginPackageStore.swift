@@ -322,6 +322,15 @@ final class PluginPackageStore {
         }
 
         let manifest = try PluginPackageManifestLoader.load(from: sourceURL, hostVersion: hostVersion)
+        // Recovery is best effort. An unresolved staging intent still owns this plugin's
+        // private data and must not be allowed to delete a newly installed generation later.
+        // A cleanup-complete intent owns only obsolete package residue, so it is safe to keep.
+        guard privateUninstallIntents()[manifest.id]?.phase != .staging else {
+            throw PluginPackageStoreError.installFailed(AppL10n.plugins(
+                "plugin.error.store.privateUninstallPending",
+                defaultValue: "上次卸载的私密数据尚未清理完成，请稍后重试安装。"
+            ))
+        }
         let destinationURL = installedDirectory
             .appendingPathComponent(manifest.id, isDirectory: true)
             .appendingPathExtension("mactoolsplugin")

@@ -83,6 +83,31 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertNil(recaptured.payload)
     }
 
+    func testTargetedChangesPreserveUnchangedEncryptedRowsAndLazyPayloads() throws {
+        let fixture = try makeFixture()
+        let originals = (0..<3).map(sampleItem)
+        try fixture.store.save(originals)
+        var loaded = try fixture.store.load()
+        let editedID = loaded[0].id
+        let untouchedID = loaded[1].id
+        let removedID = loaded[2].id
+        var database: OpaquePointer?
+        XCTAssertEqual(sqlite3_open_v2(fixture.databaseURL.path, &database, SQLITE_OPEN_READONLY, nil), SQLITE_OK)
+        let connection = try XCTUnwrap(database)
+        defer { sqlite3_close(connection) }
+        let untouchedMetadata = try metadata(for: untouchedID, database: connection)
+        loaded[0].setSavedMetadata(ClipboardHistorySavedMetadata(title: "Keep", savedAt: Date()))
+        loaded.removeLast()
+        try fixture.store.saveChanges(loaded, changedIDs: [editedID, removedID])
+        XCTAssertEqual(try metadata(for: untouchedID, database: connection), untouchedMetadata)
+        XCTAssertTrue(loaded.allSatisfy { $0.payload == nil })
+        let reopened = IncrementalEncryptedClipboardHistoryStore(databaseURL: fixture.databaseURL, keyStore: fixture.keyStore)
+        let verified = try reopened.load()
+        XCTAssertEqual(Set(verified.map(\.id)), [editedID, untouchedID])
+        XCTAssertTrue(try XCTUnwrap(verified.first { $0.id == editedID }).isSaved)
+        XCTAssertTrue(verified.allSatisfy { $0.payload == nil })
+    }
+
     func testRoundTripPreservesUnifiedHistoryAndSavedRolesOnOneItem() throws {
         let fixture = try makeFixture()
         var item = sampleItem(index: 1)

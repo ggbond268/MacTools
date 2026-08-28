@@ -197,7 +197,6 @@ struct ClipboardSnippetKeywordMatcher: Sendable {
 final class ClipboardSnippetKeywordExpander {
     var onDiagnostic: ((ClipboardSnippetExpansionDiagnostic) -> Void)?
     private let savedLibraryController: ClipboardSavedLibraryController
-    private let pasteboard: any ClipboardPasteboardAccess
     private let onPasteboardWrite: () -> Void
     private var replacementTask: Task<Void, Never>?
     private var replacementTransaction: ClipboardSnippetReplacementTransaction?
@@ -210,11 +209,10 @@ final class ClipboardSnippetKeywordExpander {
 
     init(
         savedLibraryController: ClipboardSavedLibraryController,
-        pasteboard: any ClipboardPasteboardAccess,
+        pasteboard _: any ClipboardPasteboardAccess,
         onPasteboardWrite: @escaping () -> Void = {}
     ) {
         self.savedLibraryController = savedLibraryController
-        self.pasteboard = pasteboard
         self.onPasteboardWrite = onPasteboardWrite
     }
 
@@ -429,13 +427,13 @@ final class ClipboardSnippetKeywordExpander {
             onDiagnostic?(.templateUnavailable)
             return .safelyRejectedBeforeMutation
         }
-        let context = savedLibraryController.expansionContext(clipboardText: pasteboard.readPlainText())
         cancelReplacementBeforeForwardingInput()
         let previousTask = replacementTask
         replacementTask = Task { @MainActor [weak self] in
             await previousTask?.value
             guard let self, !Task.isCancelled else { return }
             do {
+                let context = try await savedLibraryController.expansionContext(for: template)
                 let expansion = try await ClipboardSnippetTemplateEngine.expandAsync(template, context: context)
                 guard !Task.isCancelled else { return }
                 await self.replacePreparedExpansion(expansion, match: match, expectedElement: expectedElement,

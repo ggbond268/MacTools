@@ -7659,6 +7659,22 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法移除外掛私密資料：%@" } }
       }
     },
+    "plugin.error.store.privateUninstallPending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لم يكتمل تنظيف البيانات الخاصة من إزالة التثبيت السابقة. حاول التثبيت مرة أخرى لاحقًا." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die privaten Daten der vorherigen Deinstallation wurden noch nicht vollständig entfernt. Versuche die Installation später erneut." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Private data cleanup from the previous uninstall is incomplete. Try installing again later." } },
+        "es": { "stringUnit": { "state": "translated", "value": "La limpieza de los datos privados de la desinstalación anterior no ha terminado. Intenta instalar de nuevo más tarde." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Le nettoyage des données privées de la désinstallation précédente n’est pas terminé. Réessayez l’installation plus tard." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "前回のアンインストールで非公開データの削除が完了していません。しばらくしてから再度インストールしてください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이전 제거에서 비공개 데이터 정리가 완료되지 않았습니다. 나중에 다시 설치해 주세요." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "A limpeza dos dados privados da desinstalação anterior não foi concluída. Tente instalar novamente mais tarde." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Очистка конфиденциальных данных после предыдущего удаления не завершена. Попробуйте установить плагин позже." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "上次卸载的私密数据尚未清理完成，请稍后重试安装。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "上次解除安裝的私密資料尚未清理完成，請稍後重試安裝。" } }
+      }
+    },
     "plugin.error.store.removeFailedFormat": {
       "extractionState": "manual",
       "localizations": {

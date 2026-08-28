@@ -7,8 +7,17 @@ protocol ClipboardHistoryPersisting: Sendable {
     func prepare() throws
     func load() throws -> [ClipboardHistoryItem]
     func save(_ items: [ClipboardHistoryItem]) throws
+    func saveChanges(_ items: [ClipboardHistoryItem], changedIDs: Set<UUID>) throws
     func reset() throws
     func removeAll() throws
+}
+
+extension ClipboardHistoryPersisting {
+    /// Legacy stores/test doubles can persist the worker's merged collection. Production SQLite
+    /// writes only the affected rows; neither path accepts an obsolete controller snapshot.
+    func saveChanges(_ items: [ClipboardHistoryItem], changedIDs: Set<UUID>) throws {
+        try save(items)
+    }
 }
 
 protocol ClipboardHistoryKeyStoring: Sendable {

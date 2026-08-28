@@ -146,7 +146,11 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         }
     }
 
-    private func saveLocked(_ items: [ClipboardHistoryItem]) throws {
+    func saveChanges(_ items: [ClipboardHistoryItem], changedIDs: Set<UUID>) throws {
+        try lock.withLock { try saveLocked(items, changedIDs: changedIDs) }
+    }
+
+    private func saveLocked(_ items: [ClipboardHistoryItem], changedIDs: Set<UUID>? = nil) throws {
         guard !isInvalidated else { return }
         try prepareLocked()
         let key = try encryptionKeyLocked()
@@ -156,9 +160,10 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         try execute("BEGIN IMMEDIATE TRANSACTION", database: database)
         do {
             let requestedIDs = Set(items.map(\.id))
-            let existingIDs = try itemIDs(database: database)
-            let removedIDs = existingIDs.subtracting(requestedIDs)
-            let additionalPayloadBytes = items.reduce(into: 0) { total, item in
+            let existingIDs = try changedIDs == nil ? itemIDs(database: database) : Set(cachedItems.keys)
+            let affectedItems = changedIDs.map { ids in items.filter { ids.contains($0.id) } } ?? items
+            let removedIDs = existingIDs.subtracting(requestedIDs).intersection(changedIDs ?? existingIDs)
+            let additionalPayloadBytes = affectedItems.reduce(into: 0) { total, item in
                 if !existingIDs.contains(item.id)
                     || cachedItems[item.id]?.payloadDigest != item.payloadDigest {
                     total += item.payloadByteCount + 64
@@ -171,7 +176,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
                 try deleteItem(id: removedID, database: database)
             }
 
-            for item in items {
+            for item in affectedItems {
                 let previous = cachedItems[item.id]
                 if previous == item {
                     continue
@@ -228,7 +233,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             }
             // Recapture can replace the in-memory reference even when the durable
             // payload is unchanged. Every committed reference must remain evictable.
-            for item in items {
+            for item in affectedItems {
                 let id = item.id
                 item.configurePayloadLoader({ [weak self] in
                     guard let self else {

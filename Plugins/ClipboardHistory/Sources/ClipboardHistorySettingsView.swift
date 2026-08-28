@@ -429,7 +429,10 @@ struct ClipboardHistorySettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
-                    Toggle("", isOn: $settings.isKeywordExpansionEnabled)
+                    Toggle(localization.string(
+                        "settings.saved.expansion.title",
+                        defaultValue: "Expand Snippet Keywords"
+                    ), isOn: $settings.isKeywordExpansionEnabled)
                         .labelsHidden()
                         .toggleStyle(.switch)
                 }
@@ -753,7 +756,10 @@ struct ClipboardHistorySettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Toggle("", isOn: $settings.hidesSequentialHUDPreview)
+                    Toggle(localization.string(
+                        "settings.sequentialPaste.hidePreview.title",
+                        defaultValue: "Hide Content Preview"
+                    ), isOn: $settings.hidesSequentialHUDPreview)
                         .labelsHidden()
                         .toggleStyle(.switch)
                 }
