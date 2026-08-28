@@ -34,6 +34,26 @@ final class PluginHostFocusTargetTests: XCTestCase {
 
         XCTAssertTrue(host.focusedPluginWindowLayoutTarget() === eligibleWindow)
     }
+
+    func testVisibleRegisteredParentIsEligibleWhileItsActionsChildIsKey() {
+        let parent = FocusTargetTestWindow(isKey: false, isVisible: true)
+        let child = FocusTargetTestWindow(isKey: true, isVisible: true)
+        parent.addChildWindow(child, ordered: .above)
+        defer { parent.removeChildWindow(child) }
+        let host = makePluginHostForTests(plugins: [WindowLayoutTargetPlugin(id: "parent", window: parent)], loadDynamicPluginsOnInit: false)
+        XCTAssertTrue(host.focusedPluginWindowLayoutTarget() === parent)
+    }
+
+    func testHiddenParentOrHiddenChildNeverConfersLayoutEligibility() {
+        for (parentVisible, childVisible) in [(false, true), (true, false)] {
+            let parent = FocusTargetTestWindow(isKey: false, isVisible: parentVisible)
+            let child = FocusTargetTestWindow(isKey: true, isVisible: childVisible)
+            parent.addChildWindow(child, ordered: .above)
+            let host = makePluginHostForTests(plugins: [WindowLayoutTargetPlugin(id: "parent", window: parent)], loadDynamicPluginsOnInit: false)
+            XCTAssertNil(host.focusedPluginWindowLayoutTarget())
+            parent.removeChildWindow(child)
+        }
+    }
 }
 
 private final class FocusTargetTestWindow: NSWindow {

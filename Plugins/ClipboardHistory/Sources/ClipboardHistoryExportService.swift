@@ -372,8 +372,10 @@ enum ClipboardHistoryExportService {
                       CGImageSourceGetCount(source) > 0 else {
                     throw ClipboardExportError.invalidPayload
                 }
-            } else if type.conforms(to: .pdf), !isValidPDF(representation.data) {
-                throw ClipboardExportError.invalidPayload
+            } else if type.conforms(to: .pdf) {
+                guard isValidPDF(representation.data) else {
+                    throw ClipboardExportError.invalidPayload
+                }
             } else if !(type.conforms(to: .audio) || type.conforms(to: .movie)
                         || type.conforms(to: .rtf)) {
                 throw ClipboardExportError.unsupportedRepresentation

@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import ImageIO
+import PDFKit
 import MacToolsPluginKit
 import UniformTypeIdentifiers
 import XCTest
@@ -8,6 +9,45 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryExportTests: XCTestCase {
+    func testEmbeddedPDFExportsOriginalBytesAndFulfillsFilePromise() async throws {
+        let document = PDFDocument()
+        document.insert(try XCTUnwrap(PDFPage(image: NSImage(size: NSSize(width: 32, height: 32), flipped: false) { rect in
+            NSColor.white.setFill()
+            rect.fill()
+            return true
+        })), at: 0)
+        let data = try XCTUnwrap(document.dataRepresentation())
+        let payload = ClipboardHistoryPayload(pasteboardItems: [ClipboardStoredPasteboardItem(representations: [
+            ClipboardStoredRepresentation(typeIdentifier: ClipboardRepresentationType.pdf, data: data),
+        ])])
+        let item = item(payload: payload)
+        let plan = try ClipboardHistoryExportPlanner.makePlan(item: item, payload: payload, format: .original, baseName: "Document")
+        let artifacts = try await ClipboardHistoryExportService.makeArtifacts(item: item, payload: payload, plan: plan, baseName: "Document")
+        XCTAssertEqual(artifacts.first?.data, data)
+
+        let bundle = await ClipboardHistoryFilePromiseFactory.makeBundle(item: item, localization: PluginLocalization(bundle: .main), onSuccess: {})
+        let provider = try XCTUnwrap(bundle?.writers.first as? NSFilePromiseProvider)
+        let delegate = try XCTUnwrap(bundle?.delegates.first)
+        let destination = try makeTemporaryDirectory().appendingPathComponent("Promised.pdf")
+        let error: (any Error)? = await withCheckedContinuation { continuation in
+            delegate.filePromiseProvider(provider, writePromiseTo: destination) { continuation.resume(returning: $0) }
+        }
+        XCTAssertNil(error)
+        XCTAssertEqual(try Data(contentsOf: destination), data)
+    }
+
+    func testMalformedEmbeddedPDFIsRejected() async throws {
+        let payload = ClipboardHistoryPayload(pasteboardItems: [ClipboardStoredPasteboardItem(representations: [
+            ClipboardStoredRepresentation(typeIdentifier: ClipboardRepresentationType.pdf, data: Data("not a PDF".utf8)),
+        ])])
+        let item = item(payload: payload)
+        let plan = try ClipboardHistoryExportPlanner.makePlan(item: item, payload: payload, format: .original, baseName: "Document")
+        do {
+            _ = try await ClipboardHistoryExportService.makeArtifacts(item: item, payload: payload, plan: plan, baseName: "Document")
+            XCTFail("Malformed PDF must not be exported")
+        } catch { XCTAssertEqual(error as? ClipboardExportError, .invalidPayload) }
+    }
+
     func testPDFSharingPreservesPDFDataInsteadOfDegradingToEmbeddedText() async {
         let pdfData = Data("%PDF-1.7 test".utf8)
         let payload = ClipboardHistoryPayload(pasteboardItems: [

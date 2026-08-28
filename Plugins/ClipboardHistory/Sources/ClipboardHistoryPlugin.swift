@@ -147,6 +147,9 @@ final class ClipboardHistoryPlugin:
     private var sequentialPasteWorkerGeneration = 0
     private var sequentialHUDPreviewTask: Task<Void, Never>?
     private(set) var keywordExpansionStartAttemptCountForTesting = 0
+    var hasPendingSequentialPasteForTesting: Bool {
+        sequentialPasteWorkerTask != nil || isSequentialPasteInFlight || !pendingSequentialPasteTargets.isEmpty
+    }
     var isKeywordExpansionRunningForTesting: Bool { keywordExpander.isRunning }
     var hasConfiguredKeywordExpansionForTesting: Bool { keywordExpander.hasConfiguredKeywords }
     private lazy var sequentialPasteHUD: ClipboardSequentialPasteHUDController = {
@@ -294,6 +297,9 @@ final class ClipboardHistoryPlugin:
                 Self.localizedErrorMessage(error, localization: localization)
             }
         )
+        self.savedLibraryController.maximumExpandedTextByteCount = { [weak settingsStore] in
+            ClipboardHistorySettingsStore.validExpandedTextByteCount(settingsStore?.maximumExpandedTextByteCount ?? 0)
+        }
         self.metadata = PluginMetadata(
             id: Self.pluginID,
             title: localization.string("metadata.title", defaultValue: "剪贴板"),
@@ -358,8 +364,7 @@ final class ClipboardHistoryPlugin:
         }
         controller.onExternalPasteboardChange = { [weak self] in
             guard let self else { return }
-            self.sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
-            self.synchronizeSequentialPasteProtection()
+            self.resetImplicitQueueForManualClipboardWrite()
         }
         controller.updateSequentialPasteProtectedItemIDs(
             sequentialPasteCoordinator.protectedItemIDs()
@@ -1381,6 +1386,8 @@ final class ClipboardHistoryPlugin:
                 targetProcessIdentifier: targetProcessIdentifier,
                 workerGeneration: generation
             )
+            // An old worker must not clear a newly started worker's reservations.
+            guard isCurrentSequentialPasteWorker(generation: generation) else { return }
             isSequentialPasteInFlight = false
             guard didPaste else {
                 pendingSequentialPasteTargets.removeAll()
@@ -1431,10 +1438,14 @@ final class ClipboardHistoryPlugin:
             return false
         }
         let itemID = operation.itemID
+        let implicitClipboardVersion = sequentialPasteCoordinator.session?.source == .recentHistory
+            ? pasteboard.changeCount : nil
         synchronizeSequentialPasteProtection()
 
         let didPreparePayload = await controller.preparePayloadForUse(id: itemID)
-        guard isCurrentSequentialPasteWorker(generation: workerGeneration) else {
+        guard isCurrentSequentialPasteWorker(generation: workerGeneration),
+              sequentialPasteCoordinator.session?.matches(operation) == true,
+              revalidateImplicitClipboardVersion(implicitClipboardVersion) else {
             return false
         }
         guard didPreparePayload else {
@@ -1446,8 +1457,14 @@ final class ClipboardHistoryPlugin:
             ))
             return false
         }
-        let didCopyItem = await controller.copyItem(id: itemID)
-        guard isCurrentSequentialPasteWorker(generation: workerGeneration) else {
+        let didCopyItem = await controller.copyItem(id: itemID) { [weak self] in
+            guard let self else { return false }
+            return self.isCurrentSequentialPasteWorker(generation: workerGeneration)
+                && self.sequentialPasteCoordinator.session?.matches(operation) == true
+                && self.revalidateImplicitClipboardVersion(implicitClipboardVersion)
+        }
+        guard isCurrentSequentialPasteWorker(generation: workerGeneration),
+              sequentialPasteCoordinator.session?.matches(operation) == true else {
             return false
         }
         guard didCopyItem else {
@@ -1498,8 +1515,21 @@ final class ClipboardHistoryPlugin:
     }
 
     private func resetImplicitQueueForManualClipboardWrite() {
+        // A request can be buffered before its first implicit session is created.
+        guard sequentialPasteCoordinator.session?.source != .explicitQueue else { return }
+        cancelPendingSequentialPastes()
         sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
         synchronizeSequentialPasteProtection()
+    }
+
+    private func revalidateImplicitClipboardVersion(_ expectedVersion: Int?) -> Bool {
+        guard let expectedVersion else { return true }
+        guard pasteboard.changeCount == expectedVersion else {
+            // A copy may precede the polling callback while a payload is loading.
+            resetImplicitQueueForManualClipboardWrite()
+            return false
+        }
+        return true
     }
 
     @discardableResult

@@ -72,10 +72,10 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             match,
             ClipboardSnippetKeywordMatch(itemID: longID, keyword: ";bb", delimiter: "")
         )
-        XCTAssertEqual(match?.requiresPostDeliveryExpansion, true)
+        XCTAssertEqual(match?.deliveredText, ";bb")
     }
 
-    func testDelimiterMatchCanExpandBeforeTheDelimiterIsDelivered() {
+    func testDelimiterMatchValidatesTheAlreadyDeliveredDelimiterAlongWithKeyword() {
         let itemID = UUID()
         let match = ClipboardSnippetKeywordMatch(
             itemID: itemID,
@@ -83,7 +83,11 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             delimiter: " "
         )
 
-        XCTAssertFalse(match.requiresPostDeliveryExpansion)
+        XCTAssertEqual(match.deliveredText, ";bb ")
+        let context = ClipboardSnippetReplacementContext(selectionLocation: 4, selectionLength: 0,
+            keywordLocation: 0, keywordLength: 4, keyword: match.deliveredText)
+        XCTAssertTrue(context.isValid(selection: CFRange(location: 4, length: 0), keywordText: ";bb "))
+        XCTAssertFalse(context.isValid(selection: CFRange(location: 3, length: 0), keywordText: ";bb"))
     }
 
     func testTextElementClassificationAcceptsOrdinaryTextAreasWithoutSubrole() {
@@ -149,15 +153,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         XCTAssertFalse(context.isValid(
             selection: CFRange(location: 12, length: 0),
             keywordText: ";changed"
-        ))
-        XCTAssertTrue(ClipboardSnippetMatchedEventPolicy.suppressesOriginalDelimiter(
-            outcome: .succeeded
-        ))
-        XCTAssertTrue(ClipboardSnippetMatchedEventPolicy.suppressesOriginalDelimiter(
-            outcome: .consumedAfterMutation
-        ))
-        XCTAssertFalse(ClipboardSnippetMatchedEventPolicy.suppressesOriginalDelimiter(
-            outcome: .safelyRejectedBeforeMutation
         ))
     }
 
@@ -449,6 +444,15 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         XCTAssertNil(controller.items.first?.templateText)
         XCTAssertEqual(controller.templateForKeywordExpansion(id: item.id), content)
         XCTAssertFalse(try XCTUnwrap(controller.items.first).isPayloadCachedForTesting)
+        controller.stop()
+        XCTAssertNil(controller.templateForKeywordExpansion(id: item.id))
+        controller.start()
+        for _ in 0..<200 where controller.templateForKeywordExpansion(id: item.id) == nil {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertEqual(controller.templateForKeywordExpansion(id: item.id), content,
+                       "Reactivation must rebuild the cleared cache without editing the snippet")
+        controller.stop()
     }
 
     @MainActor
@@ -758,6 +762,41 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         XCTAssertNil(result)
         XCTAssertTrue(controller.items.isEmpty)
         XCTAssertNotNil(controller.errorMessage)
+    }
+
+    @MainActor
+    func testOversizedExpansionLeavesClipboardUntouchedAndCanRetryWithLargerLimit() async throws {
+        let pasteboard = SavedLibraryTestPasteboard()
+        let controller = ClipboardSavedLibraryController(pasteboard: pasteboard,
+            persistence: SlowSavedLibraryTestStore(saveDelay: 0))
+        await startSavedLibrary(controller)
+        let result = await controller.saveSnippet(ClipboardSnippetDraft(id: nil, title: "Repeated clipboard",
+            content: "{{clipboard}}{{clipboard}}", tags: [], keyword: nil, isFavorite: false))
+        let saved = try XCTUnwrap(result)
+        controller.maximumExpandedTextByteCount = { 1_024 * 1_024 }
+        let copiedText = String(repeating: "x", count: 1_024 * 1_024)
+        pasteboard.text = copiedText
+        let before = pasteboard.changeCount
+        let rejected = await controller.copy(id: saved.id)
+        XCTAssertNil(rejected)
+        XCTAssertEqual(pasteboard.changeCount, before)
+        XCTAssertEqual(pasteboard.text, copiedText)
+        XCTAssertNotNil(controller.errorMessage)
+        controller.maximumExpandedTextByteCount = { 5 * 1_024 * 1_024 }
+        let accepted = await controller.copy(id: saved.id)
+        XCTAssertEqual(accepted?.text, copiedText + copiedText)
+        controller.stop()
+    }
+
+    @MainActor
+    func testPreviewClipboardRefusesSensitiveProducerContent() {
+        let pasteboard = SavedLibraryTestPasteboard()
+        pasteboard.text = "name"
+        XCTAssertEqual(ClipboardSnippetPreviewClipboard.readText(from: pasteboard), "name")
+        for type in ClipboardCapturePolicy.ignoredProducerTypes {
+            pasteboard.typeNames = [type]
+            XCTAssertNil(ClipboardSnippetPreviewClipboard.readText(from: pasteboard))
+        }
     }
 
     @MainActor

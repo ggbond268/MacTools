@@ -2,7 +2,17 @@ import AppKit
 import MacToolsPluginKit
 import SwiftUI
 
-enum ClipboardSnippetVariable: String, CaseIterable, Identifiable {
+@MainActor
+enum ClipboardSnippetPreviewClipboard {
+    static func readText(from pasteboard: any ClipboardPasteboardAccess = GeneralClipboardPasteboard()) -> String? {
+        let changeCount = pasteboard.changeCount
+        guard pasteboard.typeNames.isDisjoint(with: ClipboardCapturePolicy.ignoredProducerTypes) else { return nil }
+        let text = pasteboard.readPlainText()
+        return pasteboard.changeCount == changeCount ? text : nil
+    }
+}
+
+enum ClipboardSnippetVariable: String, CaseIterable, Identifiable, Sendable {
     case date, time, datetime, clipboard, cursor, uuid
     var id: String { rawValue }
     var isDate: Bool { self == .date || self == .time || self == .datetime }
@@ -17,7 +27,7 @@ enum ClipboardSnippetVariable: String, CaseIterable, Identifiable {
     }
 }
 
-struct ClipboardSnippetVariableOptions: Equatable {
+struct ClipboardSnippetVariableOptions: Equatable, Sendable {
     var variable: ClipboardSnippetVariable = .date
     var format = ""
     var offset = ""
@@ -49,11 +59,15 @@ struct ClipboardSnippetVariableOptions: Equatable {
         text: String,
         selection: NSRange
     ) throws -> ClipboardSnippetExpansion {
+        try ClipboardSnippetTemplateEngine.expand(previewTemplate(text: text, selection: selection), context: context)
+    }
+
+    func previewTemplate(text: String, selection: NSRange) -> String {
         if variable == .cursor {
             let candidate = ClipboardSnippetEditorInsertion.insert(template, into: text, selectedRange: selection)
-            return try ClipboardSnippetTemplateEngine.expand(candidate.text, context: context)
+            return candidate.text
         }
-        return try ClipboardSnippetTemplateEngine.expand(template, context: context)
+        return template
     }
 }
 
@@ -64,11 +78,12 @@ struct ClipboardSnippetVariablePicker: View {
     let selection: NSRange
     let localization: PluginLocalization
     let onInsert: (String) -> Void
+    var maximumExpandedTextByteCount: Int = ClipboardSnippetExpansionContext.defaultMaximumUTF8ByteCount
 
     @State private var options = ClipboardSnippetVariableOptions()
     @State private var usesCustomFormat = false
-    @State private var context = ClipboardSnippetExpansionContext.current(clipboardText: nil)
     @State private var preview: Result<ClipboardSnippetExpansion, Error>?
+    @State private var previewedTemplate: String?
     @State private var previewUUID = UUID()
 
     var body: some View {
@@ -130,8 +145,7 @@ struct ClipboardSnippetVariablePicker: View {
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button(localization.string("saved.variable.insert", defaultValue: "Insert")) {
-                    // Recheck the selected options at insertion, not just the last timer tick.
-                    guard (try? options.preview(context: context, text: text, selection: selection)) != nil else { return }
+                    guard canInsert else { return }
                     onInsert(options.template)
                     dismiss()
                 }
@@ -148,10 +162,9 @@ struct ClipboardSnippetVariablePicker: View {
             options = ClipboardSnippetVariableOptions(variable: variable)
             usesCustomFormat = false
         }
-        .onChange(of: options) { _, _ in refreshPreview() }
-        .task {
+        .task(id: options) {
             while !Task.isCancelled {
-                refreshPreview()
+                await refreshPreview()
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }
@@ -223,7 +236,7 @@ struct ClipboardSnippetVariablePicker: View {
     }
 
     private var canInsert: Bool {
-        if case .success = preview { return true }
+        if case .success = preview, previewedTemplate == options.template { return true }
         return false
     }
 
@@ -238,11 +251,22 @@ struct ClipboardSnippetVariablePicker: View {
         return value.count > 2000 ? String(value.prefix(2000)) + "…" : value
     }
 
-    private func refreshPreview() {
+    private func refreshPreview() async {
         let uuid = previewUUID
-        context = .current(clipboardText: options.variable == .clipboard
-            ? NSPasteboard.general.string(forType: .string) : nil)
+        let currentOptions = options
+        let template = currentOptions.previewTemplate(text: text, selection: selection)
+        let needsClipboard = await Task.detached { ClipboardSnippetTemplateEngine.requiresClipboardText(template) }.value
+        guard !Task.isCancelled else { return }
+        var context = ClipboardSnippetExpansionContext.current(clipboardText: needsClipboard
+            ? ClipboardSnippetPreviewClipboard.readText() : nil)
+        context.maximumUTF8ByteCount = maximumExpandedTextByteCount
         context.uuid = { uuid }
-        preview = Result { try options.preview(context: context, text: text, selection: selection) }
+        do {
+            let expansion = try await ClipboardSnippetTemplateEngine.expandAsync(template, context: context)
+            guard !Task.isCancelled else { return }
+            preview = .success(expansion)
+        } catch is CancellationError { return }
+        catch { preview = .failure(error) }
+        previewedTemplate = currentOptions.template
     }
 }

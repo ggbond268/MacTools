@@ -949,6 +949,28 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testCopyRevalidatesQueueOwnershipAfterPayloadLoadBeforeWriting() async {
+        let loader = BlockingCountingClipboardPayloadLoader(payload: .plainText("old queue payload"))
+        let item = ClipboardHistoryItem(id: UUID(), text: "metadata", capturedAt: Date(),
+            sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        item.configurePayloadLoader({ try loader.load() }, discardCachedPayload: true)
+        let fixture = makeFixture(initialItems: [item])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        var queueIsCurrent = true
+        let task = Task { await fixture.controller.copyItem(id: item.id, canWrite: { queueIsCurrent }) }
+        let started = await waitUntil { loader.loadCount == 1 }
+        XCTAssertTrue(started)
+        queueIsCurrent = false
+        fixture.pasteboard.text = "new external copy"
+        loader.release.signal()
+        let copied = await task.value
+        XCTAssertFalse(copied)
+        XCTAssertNil(fixture.pasteboard.lastWrittenPayload)
+        XCTAssertEqual(fixture.pasteboard.text, "new external copy")
+        fixture.controller.stop()
+    }
+
     func testMissingFileReferenceIsNotCopiedAsAStalePasteboardItem() async throws {
         let missingURL = URL(fileURLWithPath: "/private/tmp/clipboard-history-missing-\(UUID().uuidString)")
         let payload = ClipboardHistoryPayload(pasteboardItems: [
@@ -1192,6 +1214,107 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(fixture.controller.historyItems.map(\.id), [originalID])
         XCTAssertEqual(fixture.controller.savedItems.map(\.id), [originalID])
         fixture.controller.stop()
+    }
+
+    func testSavingClipDoesNotDisableHistoryDuringPersistence() async throws {
+        await assertSavedToggleKeepsHistoryInteractive(initiallySaved: false)
+    }
+
+    func testUnsavingClipDoesNotDisableHistoryDuringPersistence() async throws {
+        await assertSavedToggleKeepsHistoryInteractive(initiallySaved: true)
+    }
+
+    func testSavedToggleFailureKeepsOriginalMetadataAndAllowsStorageRetry() async throws {
+        for initiallySaved in [false, true] {
+            var original = item(text: "retain on save failure", pinned: false)
+            if initiallySaved {
+                original.setSavedMetadata(ClipboardHistorySavedMetadata(title: "Saved", savedAt: Date()))
+            }
+            let fixture = makeFixture()
+            let persistence = SaveFailingClipboardHistoryPersistence(initialItems: [original])
+            let controller = ClipboardHistoryController(
+                settings: fixture.settings,
+                pasteboard: fixture.pasteboard,
+                sourceContext: fixture.source,
+                persistence: persistence,
+                monitoringInterval: 60,
+                errorMessageProvider: { _ in "Save failed" }
+            )
+            defer { controller.stop() }
+            controller.start()
+            await waitUntilLoaded(controller)
+
+            let didSave = await controller.toggleSaved(id: original.id)
+            XCTAssertFalse(didSave)
+            XCTAssertEqual(controller.items, [original])
+            XCTAssertEqual(try persistence.load(), [original])
+            XCTAssertEqual(controller.errorMessage, "Save failed")
+            XCTAssertFalse(controller.isClearingHistory)
+
+            // A failed metadata write must release the internal mutation barrier.
+            controller.retryStorageAccess()
+            await waitUntilLoaded(controller)
+            XCTAssertNil(controller.errorMessage)
+            XCTAssertEqual(controller.items, [original])
+        }
+    }
+
+    private func assertSavedToggleKeepsHistoryInteractive(initiallySaved: Bool) async {
+        var original = item(text: "keep the preview visible", pinned: false)
+        if initiallySaved {
+            original.setSavedMetadata(ClipboardHistorySavedMetadata(title: "Saved", savedAt: Date()))
+        }
+        let fixture = makeFixture()
+        let persistence = BlockingFirstSaveClipboardHistoryPersistence(initialItems: [original])
+        let controller = ClipboardHistoryController(
+            settings: fixture.settings,
+            pasteboard: fixture.pasteboard,
+            sourceContext: fixture.source,
+            persistence: persistence,
+            monitoringInterval: 60
+        )
+        defer {
+            persistence.allowFirstSaveToFinish()
+            controller.stop()
+        }
+        controller.start()
+        await waitUntilLoaded(controller)
+        var clearingStates: [Bool] = []
+        controller.onChange = { [weak controller] in
+            if let controller { clearingStates.append(controller.isClearingHistory) }
+        }
+        let id = original.id
+        let saveTask = Task { await controller.toggleSaved(id: id) }
+        let didStart = await waitUntil { persistence.saveStarted }
+        XCTAssertTrue(didStart)
+
+        // The same state controls the list, preview, footer, and toolbar buttons.
+        // A metadata write must not give them a transient disabled appearance.
+        XCTAssertFalse(controller.isClearingHistory)
+        XCTAssertTrue(controller.isCollectionOperational)
+        XCTAssertEqual(controller.items, [original])
+        XCTAssertNil(controller.errorMessage)
+
+        // Keeping the UI stable must not remove the durable-write serialization guard.
+        let overlappingToggle = await controller.toggleSaved(id: id)
+        let overlappingDelete = await controller.deletePermanently(id: id)
+        let overlappingClear = await controller.clearAllHistory()
+        XCTAssertFalse(overlappingToggle)
+        XCTAssertFalse(overlappingDelete)
+        XCTAssertFalse(overlappingClear)
+
+        persistence.allowFirstSaveToFinish()
+        let didSave = await saveTask.value
+        XCTAssertTrue(didSave)
+        XCTAssertEqual(controller.items.map(\.id), [id])
+        XCTAssertEqual(controller.items.first?.isSaved, !initiallySaved)
+        XCTAssertEqual(controller.items.first?.text, original.text)
+        XCTAssertFalse(controller.isClearingHistory)
+        XCTAssertTrue(controller.isCollectionOperational)
+        XCTAssertFalse(clearingStates.isEmpty)
+        XCTAssertTrue(clearingStates.allSatisfy { !$0 })
+        XCTAssertEqual(persistence.savedSnapshots.count, 1)
+        XCTAssertEqual(persistence.savedSnapshots.last, controller.items)
     }
 
     func testRemovingSavedRoleKeepsHistoryButRemovesSavedOnlyRecord() async throws {

@@ -17,13 +17,39 @@ protocol ClipboardSnippetReplacementAccess {
 }
 
 @MainActor
+final class ClipboardSnippetReplacementTransaction {
+    private let access: any ClipboardSnippetReplacementAccess
+    private(set) var didDispatchPaste = false
+    private var finished = false
+
+    init(access: any ClipboardSnippetReplacementAccess) { self.access = access }
+
+    func markPasteDispatched() { didDispatchPaste = true }
+    func finish() { finished = true }
+
+    /// Run before returning a real input event to the editor, never in a delayed
+    /// cancellation cleanup. The access object revalidates focus, text and selection.
+    func cancelBeforeForwardingInput() {
+        guard !finished else { return }
+        if !didDispatchPaste, access.keywordIsSelected() {
+            access.restoreSelection()
+        }
+        // Once paste is posted, let delivery drain without touching the caret or
+        // restoring the clipboard early. Do not hold or replay the user's event.
+        finished = true
+    }
+}
+
+@MainActor
 enum ClipboardSnippetTextReplacement {
     static func perform(
         using access: any ClipboardSnippetReplacementAccess,
+        transaction: ClipboardSnippetReplacementTransaction? = nil,
         pause: @escaping @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(20)) }
     ) async -> Bool {
         var succeeded = false
         defer {
+            transaction?.finish()
             access.restoreClipboard()
             if !succeeded && !Task.isCancelled && access.keywordIsSelected() {
                 access.restoreSelection()
@@ -47,6 +73,7 @@ enum ClipboardSnippetTextReplacement {
             do { try await pause() } catch { return false }
         }
         guard !Task.isCancelled, access.keywordIsSelected(), access.pasteReplacement() else { return false }
+        transaction?.markPasteDispatched()
         // Once Command-V is posted, cancellation must not immediately restore the
         // clipboard before the destination has read it. No further editor writes
         // occur while this bounded delivery check drains.

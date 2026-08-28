@@ -1876,16 +1876,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             case .shareSelection:
                 let ids = self.model.actionItemIDs
                 guard !ids.isEmpty else { return event }
-                if ids.count == 1,
-                   let id = ids.first,
-                   let savedItem = self.model.savedItem(forPresentationID: id) {
-                    self.shareCoordinator.share(
-                        savedItem: savedItem,
-                        from: self.panel?.contentView
-                    )
-                } else {
-                    self.shareCoordinator.share(itemIDs: ids, from: self.panel?.contentView)
-                }
+                self.shareItems(ids: ids)
                 return nil
             case let .moveSelection(offset):
                 self.moveSelection(by: offset)
@@ -5546,13 +5537,7 @@ private struct ClipboardHistoryActionPalette: View {
 
     private var filteredEntries: [ClipboardHistoryExportMenuEntry] {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalizedQuery.isEmpty else { return entries }
-        return entries.filter { entry in
-            ClipboardHistorySearch.matches(
-                text: ([entry.title] + entry.keywords).joined(separator: " "),
-                query: normalizedQuery
-            )
-        }
+        return ClipboardHistoryExportMenuEntry.visibleEntries(entries, query: normalizedQuery)
     }
 
     private var groups: [ClipboardHistoryExportMenuEntry.Group] {
@@ -5748,7 +5733,18 @@ private struct ClipboardHistoryActionPalette: View {
     }
 }
 
-private struct ClipboardHistoryExportMenuEntry: Equatable, Identifiable {
+struct ClipboardHistoryExportMenuEntry: Equatable, Identifiable {
+    /// Rendering and keyboard navigation consume the same stable, grouped order.
+    static func visibleEntries(_ entries: [Self], query: String) -> [Self] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let matching = entries.filter { entry in
+            query.isEmpty || ClipboardHistorySearch.matches(
+                text: ([entry.title] + entry.keywords).joined(separator: " "), query: query
+            )
+        }
+        return Group.allCases.flatMap { group in matching.filter { $0.group == group } }
+    }
+
     enum Group: Int, CaseIterable, Comparable {
         case item
         case exportAndShare

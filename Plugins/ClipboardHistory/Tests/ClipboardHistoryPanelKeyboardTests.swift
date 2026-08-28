@@ -5,6 +5,32 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
+    func testActionKeyboardOrderMatchesRenderedGroupsAndSearchResults() {
+        let entries: [ClipboardHistoryExportMenuEntry] = [
+            .init(title: "Paste", action: .paste),
+            .init(title: "Save Clip", action: .saveToLibrary, group: .selection),
+            .init(title: "Delete", action: .delete, group: .selection),
+            .init(title: "Share", action: .share, group: .exportAndShare),
+            .init(title: "Export PDF", action: .format(.pdf), group: .exportAndShare),
+            .init(title: "Pause", action: .toggleCollection, group: .history),
+        ]
+        let visible = ClipboardHistoryExportMenuEntry.visibleEntries(entries, query: "")
+        XCTAssertEqual(visible.map(\.action), [.paste, .share, .format(.pdf), .saveToLibrary, .delete, .toggleCollection])
+        for index in visible.indices {
+            let next = ClipboardHistoryPanelModel.wrappedIndex(index + 1, count: visible.count)
+            XCTAssertEqual(visible[next].id, visible[(index + 1) % visible.count].id)
+        }
+        XCTAssertEqual(ClipboardHistoryExportMenuEntry.visibleEntries(entries, query: " export ").map(\.action), [.format(.pdf)])
+        XCTAssertTrue(ClipboardHistoryExportMenuEntry.visibleEntries(entries, query: "no-such-action").isEmpty)
+        let snippetEntries: [ClipboardHistoryExportMenuEntry] = [
+            .init(title: "Delete", action: .delete, group: .selection),
+            .init(title: "Edit Snippet", action: .editSaved),
+            .init(title: "Share", action: .share, group: .exportAndShare),
+            .init(title: "Copy Combined", action: .copyCombined),
+        ]
+        XCTAssertEqual(ClipboardHistoryExportMenuEntry.visibleEntries(snippetEntries, query: "").map(\.action), [.editSaved, .copyCombined, .share, .delete])
+    }
+
     func testSnippetScopeRefreshesAfterCreateEditAndDeleteWithoutReopening() async {
         var snippet = ClipboardSavedItem(title: "New template", savedKind: .snippet,
             payload: .plainText("original"), templateText: "original")

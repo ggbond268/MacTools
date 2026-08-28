@@ -858,6 +858,113 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         plugin.deactivate(reason: .hostShutdown)
     }
 
+    func testExternalCopyCancelsBufferedPastesWithoutClearingNewWorkerReservations() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = BlockingClipboardPasteCommandSender { pasteboard.text }
+        let plugin = makePlugin(
+            pasteboard: pasteboard, pasteCommandSender: sender,
+            accessibilityTrusted: { true }, frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        for (index, text) in ["Older", "Newer"].enumerated() {
+            pasteboard.simulateCopy(text)
+            plugin.controller.processPasteboardChange()
+            let captured = await waitUntil { plugin.controller.items.count == index + 1 }
+            XCTAssertTrue(captured)
+        }
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let oldStarted = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(oldStarted)
+
+        pasteboard.simulateCopy("Fresh")
+        plugin.controller.processPasteboardChange()
+        let freshCaptured = await waitUntil { plugin.controller.items.count == 3 }
+        XCTAssertTrue(freshCaptured)
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let newStarted = await waitUntil { sender.sendCount == 2 }
+        XCTAssertTrue(newStarted)
+        XCTAssertEqual(sender.pastedTexts, ["Newer", "Fresh"])
+
+        // Finishing the old sender must not advance the new queue or discard its request.
+        sender.completeNextPaste()
+        for _ in 0..<50 { await Task.yield() }
+        XCTAssertEqual(sender.sendCount, 2)
+        sender.completeNextPaste()
+        let nextStarted = await waitUntil { sender.sendCount == 3 }
+        XCTAssertTrue(nextStarted)
+        XCTAssertEqual(sender.pastedTexts, ["Newer", "Fresh", "Newer"])
+        sender.completeNextPaste()
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testExternalCopyDuringPayloadLoadCancelsImplicitPasteBeforePolling() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardPasteCommandSender()
+        let item = historyItem()
+        let persistence = BlockingClipboardHistoryPersistence(items: [item])
+        persistence.allowSaveToFinish()
+        let plugin = makePlugin(pasteboard: pasteboard, persistence: persistence,
+            pasteCommandSender: sender, accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 }, sequentialPasteStabilizationDelay: .zero)
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        // Keep the loaded items but disable polling to exercise the pre-write check alone.
+        plugin.controller.stop()
+        let gate = PluginTestPayloadGate()
+        item.configurePayloadLoader({ gate.load() }, discardCachedPayload: true)
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let started = await waitUntil { gate.started }
+        XCTAssertTrue(started)
+        pasteboard.simulateCopy("new external copy")
+        gate.release.signal()
+        let finished = await waitUntil { !plugin.hasPendingSequentialPasteForTesting }
+        XCTAssertTrue(finished)
+        XCTAssertEqual(sender.sendCount, 0)
+        XCTAssertEqual(pasteboard.text, "new external copy")
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testExternalCopyCancelsRequestBeforeFirstImplicitSessionStarts() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardPasteCommandSender()
+        let plugin = makePlugin(pasteboard: pasteboard, pasteCommandSender: sender,
+            accessibilityTrusted: { true }, frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero)
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        pasteboard.simulateCopy("old")
+        plugin.controller.processPasteboardChange()
+        let captured = await waitUntil { plugin.controller.items.count == 1 }
+        XCTAssertTrue(captured)
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        pasteboard.simulateCopy("new")
+        plugin.controller.processPasteboardChange()
+        XCTAssertFalse(plugin.hasPendingSequentialPasteForTesting)
+        for _ in 0..<50 { await Task.yield() }
+        XCTAssertEqual(sender.sendCount, 0)
+        XCTAssertEqual(pasteboard.text, "new")
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testExpandedTextLimitDefaultsPersistsAndRejectsUnknownStoredValues() {
+        let suiteName = "ClipboardExpandedLimitTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let storage = UserDefaultsPluginStorage(pluginID: ClipboardHistoryPlugin.pluginID, userDefaults: defaults)
+        let settings = ClipboardHistorySettingsStore(storage: storage)
+        XCTAssertEqual(settings.maximumExpandedTextByteCount, 5 * 1_024 * 1_024)
+        for value in ClipboardHistorySettingsStore.allowedExpandedTextByteCounts {
+            settings.maximumExpandedTextByteCount = value
+            XCTAssertEqual(ClipboardHistorySettingsStore(storage: storage).maximumExpandedTextByteCount, value)
+        }
+        storage.set(-1, forKey: "snippet-maximum-expanded-text-byte-count")
+        XCTAssertEqual(ClipboardHistorySettingsStore(storage: storage).maximumExpandedTextByteCount, 5 * 1_024 * 1_024)
+    }
+
     func testExternalCopyResetsImplicitQueueBeforeStartingANewRecentSnapshot() async {
         let pasteboard = PluginTestClipboardPasteboard()
         let sender = FakeClipboardPasteCommandSender()
@@ -1198,6 +1305,18 @@ private struct FakePluginClipboardImageTextRecognizer: ClipboardImageTextRecogni
 
     func recognizeText(in payload: ClipboardHistoryPayload) async -> String? {
         text
+    }
+}
+
+private final class PluginTestPayloadGate: @unchecked Sendable {
+    let release = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var didStart = false
+    var started: Bool { lock.withLock { didStart } }
+    func load() -> ClipboardHistoryPayload {
+        lock.withLock { didStart = true }
+        release.wait()
+        return .plainText("old queued payload")
     }
 }
 

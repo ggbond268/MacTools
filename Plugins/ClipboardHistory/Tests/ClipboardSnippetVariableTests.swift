@@ -3,6 +3,65 @@ import XCTest
 @testable import ClipboardHistoryPlugin
 
 final class ClipboardSnippetVariableTests: XCTestCase {
+    func testExpandedLimitCountsUTF8LiteralsTransformationsAndNotCursorMarker() throws {
+        var context = context("é")
+        context.maximumUTF8ByteCount = 4
+        XCTAssertEqual(try ClipboardSnippetTemplateEngine.expand("{{clipboard}}{{cursor}}{{clipboard}}", context: context).text, "éé")
+        for template in ["x{{clipboard}}{{clipboard}}", "{{clipboard}}{{clipboard}}x", "ééé", #"{{clipboard fallback="12345"}}"#] {
+            if template.contains("fallback") { context.clipboardText = nil }
+            XCTAssertThrowsError(try ClipboardSnippetTemplateEngine.expand(template, context: context)) {
+                XCTAssertEqual($0 as? ClipboardSnippetTemplateError, .expandedTextTooLarge(maximumByteCount: 4))
+            }
+        }
+        context.clipboardText = "ßßß"
+        XCTAssertThrowsError(try ClipboardSnippetTemplateEngine.expand(#"{{clipboard case="upper"}}"#, context: context))
+    }
+
+    func testRepeatedClipboardExpansionRejectsOversizedOutputWithoutReturningPartialText() async throws {
+        var context = context(String(repeating: "a", count: 1_024 * 1_024))
+        context.maximumUTF8ByteCount = 1_024 * 1_024
+        do {
+            _ = try await ClipboardSnippetTemplateEngine.expandAsync(String(repeating: "{{clipboard}}", count: 100), context: context)
+            XCTFail("Expected explicit output limit")
+        } catch {
+            XCTAssertEqual(error as? ClipboardSnippetTemplateError, .expandedTextTooLarge(maximumByteCount: context.maximumUTF8ByteCount))
+        }
+    }
+
+    func testExpansionCancellationDoesNotReturnAnOutput() async {
+        let context = context("x")
+        let task = Task {
+            try await ClipboardSnippetTemplateEngine.expandAsync(String(repeating: "{{clipboard}}", count: 100_000), context: context)
+        }
+        task.cancel()
+        do { _ = try await task.value; XCTFail("Expected cancellation") }
+        catch { XCTAssertTrue(error is CancellationError) }
+    }
+
+    @MainActor
+    func testAsyncExpansionEvaluatesVariablesOffTheMainThread() async throws {
+        var context = context()
+        context.uuid = {
+            XCTAssertFalse(Thread.isMainThread)
+            return UUID()
+        }
+        let expanded = try await ClipboardSnippetTemplateEngine.expandAsync("{{uuid}}", context: context)
+        XCTAssertNotNil(UUID(uuidString: expanded.text))
+    }
+
+    func testCursorPreviewIncludesClipboardVariablesFromTheDraft() throws {
+        let options = ClipboardSnippetVariableOptions(variable: .cursor)
+        let draft = "Hi {{clipboard}}, "
+        let selection = NSRange(location: draft.utf16.count, length: 0)
+        let template = options.previewTemplate(text: draft, selection: selection)
+        XCTAssertTrue(ClipboardSnippetTemplateEngine.requiresClipboardText(template))
+        let preview = try options.preview(context: context("NAME"), text: draft, selection: selection)
+        XCTAssertEqual(preview.text, "Hi NAME, ")
+        XCTAssertEqual(preview.cursorOffsetFromEnd, 0)
+        XCTAssertFalse(ClipboardSnippetTemplateEngine.requiresClipboardText(#"\{{clipboard}} {{cursor}}"#))
+        XCTAssertFalse(ClipboardSnippetTemplateEngine.requiresClipboardText("{{date}}"))
+    }
+
     private func context(_ text: String? = nil, date: String = "2024-01-02T03:04:05Z") -> ClipboardSnippetExpansionContext {
         ClipboardSnippetExpansionContext(
             date: ISO8601DateFormatter().date(from: date)!,

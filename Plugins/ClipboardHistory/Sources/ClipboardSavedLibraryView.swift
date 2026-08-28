@@ -575,6 +575,7 @@ struct ClipboardSnippetEditorSheet: View {
     @State private var isSaving = false
     @State private var contentSelection = NSRange(location: 0, length: 0)
     @State private var variablePickerRequest: VariablePickerRequest?
+    @State private var previewTask: Task<Void, Never>?
 
     private struct VariablePickerRequest: Identifiable {
         let id = UUID()
@@ -623,7 +624,8 @@ struct ClipboardSnippetEditorSheet: View {
                         text: request.text,
                         selection: request.selection,
                         localization: localization,
-                        onInsert: insertVariable
+                        onInsert: insertVariable,
+                        maximumExpandedTextByteCount: settings.maximumExpandedTextByteCount
                     )
                 }
             }
@@ -687,11 +689,17 @@ struct ClipboardSnippetEditorSheet: View {
 
             HStack {
                 Button(localization.string("saved.editor.preview", defaultValue: "Preview")) {
-                    preview = Result {
-                        try ClipboardSnippetTemplateEngine.expand(
-                            draft.content,
-                            context: .current(clipboardText: NSPasteboard.general.string(forType: .string))
-                        )
+                    previewTask?.cancel()
+                    let template = draft.content
+                    var context = ClipboardSnippetExpansionContext.current(clipboardText: ClipboardSnippetPreviewClipboard.readText())
+                    context.maximumUTF8ByteCount = settings.maximumExpandedTextByteCount
+                    previewTask = Task {
+                        do {
+                            let expansion = try await ClipboardSnippetTemplateEngine.expandAsync(template, context: context)
+                            guard !Task.isCancelled else { return }
+                            preview = .success(expansion)
+                        } catch is CancellationError { return }
+                        catch { preview = .failure(error) }
                     }
                 }
                 .buttonStyle(.bordered)
@@ -720,6 +728,8 @@ struct ClipboardSnippetEditorSheet: View {
         }
         .padding(22)
         .frame(minWidth: 680, idealWidth: 720, minHeight: 480)
+        .onChange(of: draft.content) { _, _ in previewTask?.cancel(); preview = nil }
+        .onDisappear { previewTask?.cancel() }
     }
 
     private func insertVariable(_ insertion: String) {

@@ -33,6 +33,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         static let sequentialHUDDismissal = "sequential-hud-dismissal"
         static let hidesSequentialHUDPreview = "sequential-hud-hide-preview"
         static let keywordExpansionEnabled = "saved-keyword-expansion-enabled"
+        static let maximumExpandedTextByteCount = "snippet-maximum-expanded-text-byte-count"
     }
 
     static let allowedItemCounts = [
@@ -57,6 +58,18 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         1 * 1_024 * 1_024 * 1_024,
         ClipboardHistorySettings.maximumSupportedTotalPayloadByteCount,
     ]
+    static let allowedExpandedTextByteCounts = [1, 5, 20, 50].map { $0 * 1_024 * 1_024 }
+
+    @Published var maximumExpandedTextByteCount: Int {
+        didSet {
+            storage.set(Self.validExpandedTextByteCount(maximumExpandedTextByteCount), forKey: Key.maximumExpandedTextByteCount)
+            onChange?()
+        }
+    }
+
+    static func validExpandedTextByteCount(_ value: Int) -> Int {
+        allowedExpandedTextByteCounts.contains(value) ? value : ClipboardSnippetExpansionContext.defaultMaximumUTF8ByteCount
+    }
 
     @Published var isPaused: Bool {
         didSet {
@@ -183,6 +196,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         ) ?? .tenSeconds
         hidesSequentialHUDPreview = storage.bool(forKey: Key.hidesSequentialHUDPreview)
         let keywordExpansionEnabled = storage.bool(forKey: Key.keywordExpansionEnabled)
+        maximumExpandedTextByteCount = Self.validExpandedTextByteCount(storage.integer(forKey: Key.maximumExpandedTextByteCount))
         isKeywordExpansionEnabled = keywordExpansionEnabled
         keywordExpansionStatus = keywordExpansionEnabled ? .noKeywords : .off
     }

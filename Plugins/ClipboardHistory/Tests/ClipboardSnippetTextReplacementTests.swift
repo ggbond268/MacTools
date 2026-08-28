@@ -4,6 +4,38 @@ import XCTest
 
 @MainActor
 final class ClipboardSnippetTextReplacementTests: XCTestCase {
+    func testIncomingCharacterRestoresKeywordSelectionBeforeBeingForwarded() async {
+        let access = FakeSnippetReplacementAccess()
+        let transaction = ClipboardSnippetReplacementTransaction(access: access)
+        let task = Task {
+            await ClipboardSnippetTextReplacement.perform(using: access, transaction: transaction)
+        }
+        while access.nativeAttempts == 0 { await Task.yield() }
+        task.cancel()
+        transaction.cancelBeforeForwardingInput()
+        // Simulate delivery immediately, without yielding for task cancellation cleanup.
+        let textAfterInput = access.keywordIsSelected() ? "x" : ";bbx"
+        XCTAssertEqual(textAfterInput, ";bbx")
+        XCTAssertEqual(access.selectionRestores, 1)
+        let result = await task.value
+        XCTAssertFalse(result)
+        XCTAssertEqual(access.pastes, 0)
+        XCTAssertEqual(access.selectionRestores, 1, "No delayed caret movement after user typing")
+    }
+
+    func testInputCancellationDoesNotMoveCaretInChangedEditorOrAfterPasteDispatch() {
+        let changed = FakeSnippetReplacementAccess()
+        changed.ownsSelection = false
+        ClipboardSnippetReplacementTransaction(access: changed).cancelBeforeForwardingInput()
+        XCTAssertEqual(changed.selectionRestores, 0)
+        let posted = FakeSnippetReplacementAccess()
+        let transaction = ClipboardSnippetReplacementTransaction(access: posted)
+        transaction.markPasteDispatched()
+        transaction.cancelBeforeForwardingInput()
+        XCTAssertEqual(posted.selectionRestores, 0)
+        XCTAssertEqual(posted.clipboardRestores, 0)
+    }
+
     func testDelayedKeywordSelectionCanCatchUpWithoutSelectingAgain() async {
         let access = FakeSnippetReplacementAccess()
         access.selectionReady = false
@@ -207,6 +239,6 @@ private final class FakeSnippetReplacementAccess: ClipboardSnippetReplacementAcc
     func replaceUsingAccessibility() { nativeAttempts += 1; expanded = nativeWorks }
     func pasteReplacement() -> Bool { pastes += 1; expanded = pasteWorks; return canPost || pasteWorks }
     func restoreClipboard() { clipboardRestores += 1 }
-    func restoreSelection() { selectionRestores += 1 }
+    func restoreSelection() { selectionRestores += 1; selectionReady = false }
     func positionCursor() { cursorPlacements += 1 }
 }

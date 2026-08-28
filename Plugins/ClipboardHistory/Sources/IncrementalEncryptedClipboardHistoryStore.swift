@@ -167,7 +167,6 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             if additionalPayloadBytes > 0 {
                 try requireAvailableDiskCapacity(forAdditionalBytes: additionalPayloadBytes)
             }
-            var writtenPayloadIDs = Set<UUID>()
             for removedID in removedIDs {
                 try deleteItem(id: removedID, database: database)
             }
@@ -198,7 +197,6 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
                             payload: encryptedPayload,
                             database: database
                         )
-                        writtenPayloadIDs.insert(item.id)
                     } else {
                         try updateMetadata(
                             id: item.id,
@@ -219,7 +217,6 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
                         payload: encryptedPayload,
                         database: database
                     )
-                    writtenPayloadIDs.insert(item.id)
                 }
             }
             try execute("COMMIT", database: database)
@@ -229,7 +226,9 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
                 try? execute("PRAGMA incremental_vacuum", database: database)
                 try? postCommitMaintenance?()
             }
-            for item in items where writtenPayloadIDs.contains(item.id) {
+            // Recapture can replace the in-memory reference even when the durable
+            // payload is unchanged. Every committed reference must remain evictable.
+            for item in items {
                 let id = item.id
                 item.configurePayloadLoader({ [weak self] in
                     guard let self else {

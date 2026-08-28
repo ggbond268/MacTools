@@ -490,13 +490,24 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     static let maximumBackgroundImageTextIndexItemCount = 100
     static let sourceApplicationAttributionGraceInterval: TimeInterval = 1.5
 
+    private enum ItemMutation {
+        case savedMetadata
+        case content
+    }
+
     @Published private(set) var items: [ClipboardHistoryItem] = []
     @Published private(set) var errorMessage: String?
     @Published private(set) var storageError: ClipboardHistoryStoreError?
     @Published private(set) var isLoaded = false
     @Published private(set) var isIgnoringNextCopy = false
-    @Published private(set) var isClearingHistory = false
+    @Published private var itemMutation: ItemMutation?
     @Published private(set) var isCaptureBlockedByProtectedItems = false
+
+    /// Only content mutations disable the panel. Saving a bookmark still holds
+    /// the persistence barrier, but must not dim every control while it commits.
+    var isClearingHistory: Bool { itemMutation == .content }
+
+    private var isMutatingItems: Bool { itemMutation != nil }
 
     var onChange: (() -> Void)?
     var onCaptureSuppressionEvent: ((ClipboardCaptureSuppressionEvent) -> Void)?
@@ -668,7 +679,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     func settingsDidChange() {
         capturePolicyRevision &+= 1
-        guard !isClearingHistory else {
+        guard !isMutatingItems else {
             needsSettingsReconciliation = true
             notifyChanged()
             return
@@ -687,7 +698,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     func retryStorageAccess() {
-        guard loadTask == nil, !isClearingHistory else { return }
+        guard loadTask == nil, !isMutatingItems else { return }
         timer?.invalidate()
         timer = nil
         errorMessage = nil
@@ -699,7 +710,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     func processPasteboardChange(now: Date = Date()) {
         guard isLoaded, errorMessage == nil else { return }
-        if !isClearingHistory {
+        if !isMutatingItems {
             pruneExpiredItemsIfNeeded(now: now)
         }
         guard pasteboardPayloadReadTask == nil else { return }
@@ -727,7 +738,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             discardSourceApplicationAttribution()
             return
         }
-        guard !isClearingHistory else { return }
+        guard !isMutatingItems else { return }
 
         let currentSettings = settings.snapshot
         if isCaptureBlockedByProtectedItems {
@@ -825,7 +836,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         changeCount currentChangeCount: Int,
         capturedAt: Date
     ) {
-        guard !isClearingHistory, errorMessage == nil else { return }
+        guard !isMutatingItems, errorMessage == nil else { return }
         let currentSettings = settings.snapshot
         let payload: ClipboardHistoryPayload
         switch result {
@@ -905,14 +916,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             guard !Task.isCancelled,
                   let self,
                   self.captureProcessingGeneration == generation,
-                  !self.isClearingHistory,
+                  !self.isMutatingItems,
                   self.errorMessage == nil else {
                 return
             }
             while true {
                 guard !Task.isCancelled,
                       self.captureProcessingGeneration == generation,
-                      !self.isClearingHistory,
+                      !self.isMutatingItems,
                       self.errorMessage == nil else {
                     return
                 }
@@ -935,7 +946,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 }
                 guard !Task.isCancelled,
                       self.captureProcessingGeneration == generation,
-                      !self.isClearingHistory,
+                      !self.isMutatingItems,
                       self.errorMessage == nil else {
                     return
                 }
@@ -1089,8 +1100,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     @discardableResult
-    func copyItem(id: UUID) async -> Bool {
-        guard !isClearingHistory else { return false }
+    func copyItem(id: UUID, canWrite: @MainActor () -> Bool = { true }) async -> Bool {
+        guard !isMutatingItems else { return false }
         guard let item = items.first(where: { $0.id == id }),
               let payload = try? await item.loadPayloadAsync() else { return false }
         let fileURLs = payload.fileURLs
@@ -1104,7 +1115,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             }
         }
         guard !Task.isCancelled,
-              !isClearingHistory,
+              !isMutatingItems,
+              canWrite(),
               let index = items.firstIndex(where: { $0.id == id }) else {
             item.discardCachedPayloadIfReloadable()
             return false
@@ -1124,7 +1136,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     func preparePayloadForUse(id: UUID) async -> Bool {
-        guard !isClearingHistory,
+        guard !isMutatingItems,
               let item = items.first(where: { $0.id == id }) else {
             return false
         }
@@ -1157,7 +1169,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @discardableResult
     func copyItemAsPlainText(id: UUID) -> Bool {
-        guard !isClearingHistory else { return false }
+        guard !isMutatingItems else { return false }
         guard let index = items.firstIndex(where: { $0.id == id }) else { return false }
         guard let text = ClipboardPlainTextConversion.text(for: items[index]) else { return false }
         guard pasteboard.writePlainText(text) else { return false }
@@ -1170,7 +1182,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @discardableResult
     func copyCombinedItemsAsPlainText(ids: [UUID]) async -> Bool {
-        guard !isClearingHistory else { return false }
+        guard !isMutatingItems else { return false }
         guard let text = await combinedPlainText(ids: ids),
               pasteboard.writePlainText(text) else { return false }
         currentHistoryItemPasteboardState = nil
@@ -1181,7 +1193,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @discardableResult
     func writeCombinedPlainText(_ text: String, historyItemIDs: [UUID]) -> Bool {
-        guard !isClearingHistory, !text.isEmpty, pasteboard.writePlainText(text) else {
+        guard !isMutatingItems, !text.isEmpty, pasteboard.writePlainText(text) else {
             return false
         }
         currentHistoryItemPasteboardState = nil
@@ -1191,7 +1203,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     func combinedPlainText(ids: [UUID]) async -> String? {
-        guard !isClearingHistory else { return nil }
+        guard !isMutatingItems else { return nil }
         let itemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         let selectedItems = ids.compactMap { itemsByID[$0] }
         guard !selectedItems.isEmpty, selectedItems.count == ids.count else { return nil }
@@ -1278,14 +1290,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     func recordSuccessfulUse(id: UUID) {
-        guard !isClearingHistory,
+        guard !isMutatingItems,
               let index = items.firstIndex(where: { $0.id == id }) else { return }
         recordItemUsage(at: index)
     }
 
     @discardableResult
     func deleteItem(id: UUID) async -> Bool {
-        guard !isClearingHistory else { return false }
+        guard !isMutatingItems else { return false }
         guard let index = items.firstIndex(where: { $0.id == id }), items[index].isInHistory else {
             return false
         }
@@ -1301,7 +1313,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     /// Permanently removes the unified item regardless of its History or Saved memberships.
     @discardableResult
     func deletePermanently(id: UUID) async -> Bool {
-        guard !isClearingHistory,
+        guard !isMutatingItems,
               let index = items.firstIndex(where: { $0.id == id }) else { return false }
         var updated = items
         updated.remove(at: index)
@@ -1310,7 +1322,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @discardableResult
     func toggleSaved(id: UUID) async -> Bool {
-        guard !isClearingHistory,
+        guard !isMutatingItems,
               let index = items.firstIndex(where: { $0.id == id }) else { return false }
         var updated = items
         if updated[index].isSaved {
@@ -1325,11 +1337,11 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 savedAt: now
             ))
         }
-        return await replaceItemsDurably(with: updated)
+        return await replaceItemsDurably(with: updated, mutation: .savedMetadata)
     }
 
     func updateSavedMetadata(_ draft: ClipboardSavedMetadataDraft) async -> ClipboardHistoryItem? {
-        guard !isClearingHistory,
+        guard !isMutatingItems,
               let index = items.firstIndex(where: { $0.id == draft.id }),
               items[index].isSaved else { return nil }
         var updated = items
@@ -1338,23 +1350,23 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             tags: ClipboardSavedItem.normalizedTags(draft.tags),
             updatedAt: Date()
         )
-        guard await replaceItemsDurably(with: updated) else { return nil }
+        guard await replaceItemsDurably(with: updated, mutation: .savedMetadata) else { return nil }
         return items.first { $0.id == draft.id }
     }
 
     @discardableResult
     func toggleSavedFavorite(id: UUID) async -> Bool {
-        guard !isClearingHistory,
+        guard !isMutatingItems,
               let index = items.firstIndex(where: { $0.id == id }),
               items[index].isSaved else { return false }
         var updated = items
         updated[index].toggleSavedFavorite(updatedAt: Date())
-        return await replaceItemsDurably(with: updated)
+        return await replaceItemsDurably(with: updated, mutation: .savedMetadata)
     }
 
     @discardableResult
     func deleteSavedItem(id: UUID) async -> Bool {
-        guard !isClearingHistory,
+        guard !isMutatingItems,
               let index = items.firstIndex(where: { $0.id == id }),
               items[index].isSaved else { return false }
         var updated = items
@@ -1362,7 +1374,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         if !updated[index].isInHistory {
             updated.remove(at: index)
         }
-        return await replaceItemsDurably(with: updated)
+        return await replaceItemsDurably(with: updated, mutation: .savedMetadata)
     }
 
     @discardableResult
@@ -1582,11 +1594,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         }
     }
 
-    private func replaceItemsDurably(with replacement: [ClipboardHistoryItem]) async -> Bool {
-        guard !isClearingHistory else { return false }
+    private func replaceItemsDurably(
+        with replacement: [ClipboardHistoryItem],
+        mutation: ItemMutation = .content
+    ) async -> Bool {
+        guard !isMutatingItems else { return false }
         cancelPendingCaptureProcessing()
         cancelScheduledImageIndexPersistence()
-        isClearingHistory = true
+        itemMutation = mutation
         notifyChanged()
 
         let succeeded = await persistBarrierAndWait(replacement)
@@ -1594,7 +1609,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             items = replacement
             refreshProtectedCapacityState()
         }
-        isClearingHistory = false
+        itemMutation = nil
         notifyChanged()
         if succeeded {
             reconcileSettingsIfNeeded()
@@ -1619,12 +1634,12 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     private func resetPersistentHistory() async -> Bool {
-        guard !isClearingHistory else { return false }
+        guard !isMutatingItems else { return false }
         cancelPendingCaptureProcessing()
         cancelPendingPasteboardPayloadRead()
         cancelImageIndexing()
         cancelScheduledImageIndexPersistence()
-        isClearingHistory = true
+        itemMutation = .content
         notifyChanged()
         do {
             try await persistenceWorker.reset()
@@ -1634,13 +1649,13 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             storageError = nil
             isLoaded = true
             lastSeenChangeCount = pasteboard.changeCount
-            isClearingHistory = false
+            itemMutation = nil
             notifyChanged()
             reconcileSettingsIfNeeded()
             startMonitoringIfPossible()
             return true
         } catch {
-            isClearingHistory = false
+            itemMutation = nil
             errorMessage = errorMessageProvider(error)
             storageError = error as? ClipboardHistoryStoreError
             notifyChanged()
@@ -1701,7 +1716,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
               pendingImageIndexItemIDs.isEmpty,
               isLoaded,
               errorMessage == nil,
-              !isClearingHistory else {
+              !isMutatingItems else {
             return
         }
         let candidates = items.lazy.filter {
@@ -1727,7 +1742,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         guard imageIndexingTask == nil,
               isLoaded,
               errorMessage == nil,
-              !isClearingHistory else {
+              !isMutatingItems else {
             return
         }
 
@@ -1776,7 +1791,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         imageIndexingTask = nil
         defer { startNextImageTextIndexingIfNeeded() }
         guard didLoadPayload,
-              !isClearingHistory,
+              !isMutatingItems,
               let index = items.firstIndex(where: { $0.id == itemID }),
               !items[index].hasCompletedImageTextIndexing else {
             return

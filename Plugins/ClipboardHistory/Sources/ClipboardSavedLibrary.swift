@@ -409,6 +409,7 @@ enum ClipboardSnippetTemplateError: Error, Equatable, LocalizedError, Sendable {
     case invalidDateFormat
     case invalidVariableOptions
     case multipleCursorMarkers
+    case expandedTextTooLarge(maximumByteCount: Int)
 
     var errorDescription: String? {
         switch self {
@@ -417,6 +418,7 @@ enum ClipboardSnippetTemplateError: Error, Equatable, LocalizedError, Sendable {
         case .invalidDateFormat: "The snippet contains an invalid date or time format."
         case .invalidVariableOptions: "Check the variable options, offset, and time zone."
         case .multipleCursorMarkers: "A snippet can contain only one cursor marker."
+        case let .expandedTextTooLarge(limit): "Expanded text exceeds the configured limit of \(limit / 1_024 / 1_024) MB."
         }
     }
 
@@ -448,16 +450,20 @@ enum ClipboardSnippetTemplateError: Error, Equatable, LocalizedError, Sendable {
                 "saved.error.multipleCursorMarkers",
                 defaultValue: "A snippet can contain only one cursor marker."
             )
+        case let .expandedTextTooLarge(limit):
+            localization.format("saved.error.expandedTextTooLarge", defaultValue: "Expanded text exceeds the %lld MB limit. Change it in Snippets → Advanced.", limit / 1_024 / 1_024)
         }
     }
 }
 
 struct ClipboardSnippetExpansionContext: Sendable {
+    static let defaultMaximumUTF8ByteCount = 5 * 1_024 * 1_024
     var date: Date
     var locale: Locale
     var timeZone: TimeZone
     var clipboardText: String?
     var uuid: @Sendable () -> UUID
+    var maximumUTF8ByteCount: Int = defaultMaximumUTF8ByteCount
 
     static func current(clipboardText: String?) -> Self {
         Self(
@@ -530,6 +536,15 @@ enum ClipboardSnippetCursorPositioner {
 }
 
 enum ClipboardSnippetTemplateEngine {
+    static func expandAsync(_ template: String, context: ClipboardSnippetExpansionContext) async throws -> ClipboardSnippetExpansion {
+        let task = Task.detached(priority: .userInitiated) { try expand(template, context: context) }
+        return try await withTaskCancellationHandler {
+            let result = try await task.value
+            try Task.checkCancellation()
+            return result
+        } onCancel: { task.cancel() }
+    }
+
     private static let expression = try! NSRegularExpression(
         pattern: #"\{\{\s*([A-Za-z][A-Za-z0-9-]*)((?:\s+[A-Za-z][A-Za-z0-9-]*="(?:[^"\\]|\\.)*")*)\s*\}\}"#
     )
@@ -546,13 +561,23 @@ enum ClipboardSnippetTemplateEngine {
         var literalStart = template.startIndex
         let cursorSentinel = "\u{F8FF}MACTOOLS-CLIPBOARD-CURSOR-\(UUID().uuidString)\u{F8FF}"
         var hasCursor = false
+        var outputByteCount = 0
+        func append(_ value: String, isCursor: Bool = false) throws {
+            try Task.checkCancellation()
+            let count = isCursor ? 0 : value.utf8.count
+            guard count <= max(0, context.maximumUTF8ByteCount) - outputByteCount else {
+                throw ClipboardSnippetTemplateError.expandedTextTooLarge(maximumByteCount: context.maximumUTF8ByteCount)
+            }
+            outputByteCount += count
+            output += value
+        }
 
         for match in matches {
             guard let wholeRange = Range(match.range(at: 0), in: template),
                   let nameRange = Range(match.range(at: 1), in: template),
                   let optionsRange = Range(match.range(at: 2), in: template) else { continue }
-            output += template[literalStart..<wholeRange.lowerBound]
-                .replacingOccurrences(of: #"\{{"#, with: "{{")
+            try append(template[literalStart..<wholeRange.lowerBound]
+                .replacingOccurrences(of: #"\{{"#, with: "{{"))
             let name = String(template[nameRange]).lowercased()
             let options = try parseOptions(String(template[optionsRange]))
             let replacement: String
@@ -600,12 +625,12 @@ enum ClipboardSnippetTemplateEngine {
             default:
                 throw ClipboardSnippetTemplateError.unknownMacro(name)
             }
-            output += replacement
+            try append(replacement, isCursor: name == "cursor")
             literalStart = wholeRange.upperBound
         }
 
         // Only template literals are unescaped; clipboard/fallback content is never interpreted.
-        output += template[literalStart...].replacingOccurrences(of: #"\{{"#, with: "{{")
+        try append(template[literalStart...].replacingOccurrences(of: #"\{{"#, with: "{{"))
         let cursorOffset: Int?
         if let cursorRange = output.range(of: cursorSentinel) {
             cursorOffset = output.distance(from: cursorRange.upperBound, to: output.endIndex)
@@ -620,11 +645,20 @@ enum ClipboardSnippetTemplateEngine {
         (try? validatedMatches(template).isEmpty == false) ?? false
     }
 
+    static func requiresClipboardText(_ template: String) -> Bool {
+        guard let matches = try? validatedMatches(template) else { return false }
+        return matches.contains { match in
+            guard let range = Range(match.range(at: 1), in: template) else { return false }
+            return template[range].lowercased() == "clipboard"
+        }
+    }
+
     private static func validatedMatches(_ template: String) throws -> [NSTextCheckingResult] {
         let source = template as NSString
         var matches: [NSTextCheckingResult] = []
         var location = 0
         while location < source.length {
+            try Task.checkCancellation()
             let remaining = NSRange(location: location, length: source.length - location)
             let opening = source.range(of: "{{", options: [], range: remaining)
             let closing = source.range(of: "}}", options: [], range: remaining)
@@ -912,6 +946,13 @@ final class ClipboardSavedLibraryController: ObservableObject {
 
     var onChange: (() -> Void)?
     var onPasteboardWrite: (() -> Void)?
+    var maximumExpandedTextByteCount: () -> Int = { ClipboardSnippetExpansionContext.defaultMaximumUTF8ByteCount }
+
+    func expansionContext(clipboardText: String?) -> ClipboardSnippetExpansionContext {
+        var context = ClipboardSnippetExpansionContext.current(clipboardText: clipboardText)
+        context.maximumUTF8ByteCount = maximumExpandedTextByteCount()
+        return context
+    }
 
     private let pasteboard: any ClipboardPasteboardAccess
     private let persistence: any ClipboardSavedLibraryPersisting
@@ -935,7 +976,11 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     func start() {
-        guard !isLoaded, loadTask == nil else { return }
+        guard loadTask == nil else { return }
+        if isLoaded {
+            reloadKeywordTemplateCache()
+            return
+        }
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -975,6 +1020,11 @@ final class ClipboardSavedLibraryController: ObservableObject {
     func clearError() {
         guard errorMessage != nil else { return }
         errorMessage = nil
+        onChange?()
+    }
+
+    func reportExpansionError(_ error: Error) {
+        errorMessage = errorMessageProvider(error)
         onChange?()
     }
 
@@ -1069,10 +1119,12 @@ final class ClipboardSavedLibraryController: ObservableObject {
             }
         }
         do {
-            _ = try ClipboardSnippetTemplateEngine.expand(
+            _ = try await ClipboardSnippetTemplateEngine.expandAsync(
                 draft.content,
-                context: .current(clipboardText: nil)
+                context: expansionContext(clipboardText: nil)
             )
+        } catch is CancellationError {
+            return nil
         } catch {
             errorMessage = errorMessageProvider(error)
             onChange?()
@@ -1209,15 +1261,18 @@ final class ClipboardSavedLibraryController: ObservableObject {
     private func copyLocked(id: UUID, asPlainText: Bool) async -> ClipboardSnippetExpansion? {
         guard let item = items.first(where: { $0.id == id }) else { return nil }
         let payload = await loadPayload(for: item)
+        defer { item.discardCachedPayloadIfReloadable() }
         guard let payload, !Task.isCancelled else { return nil }
 
         let expansion: ClipboardSnippetExpansion?
         if item.isSnippet, let template = payload.plainText {
             do {
-                expansion = try ClipboardSnippetTemplateEngine.expand(
+                expansion = try await ClipboardSnippetTemplateEngine.expandAsync(
                     template,
-                    context: .current(clipboardText: pasteboard.readPlainText())
+                    context: expansionContext(clipboardText: pasteboard.readPlainText())
                 )
+            } catch is CancellationError {
+                return nil
             } catch {
                 errorMessage = errorMessageProvider(error)
                 onChange?()
@@ -1228,6 +1283,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
         }
 
         let wrote: Bool
+        guard !Task.isCancelled else { return nil }
         if let expansion {
             wrote = pasteboard.writePlainText(expansion.text)
         } else if asPlainText {
@@ -1297,10 +1353,17 @@ final class ClipboardSavedLibraryController: ObservableObject {
         defer { item.discardCachedPayloadIfReloadable() }
         if item.isSnippet, let template = payload.plainText {
             guard expandsSnippet else { return template }
-            return try? ClipboardSnippetTemplateEngine.expand(
-                template,
-                context: .current(clipboardText: pasteboard.readPlainText())
-            ).text
+            do {
+                return try await ClipboardSnippetTemplateEngine.expandAsync(
+                    template, context: expansionContext(clipboardText: pasteboard.readPlainText())
+                ).text
+            } catch is CancellationError {
+                return nil
+            } catch {
+                errorMessage = errorMessageProvider(error)
+                onChange?()
+                return nil
+            }
         }
         return ClipboardPlainTextConversion.text(for: item.historyPresentationItem())
     }

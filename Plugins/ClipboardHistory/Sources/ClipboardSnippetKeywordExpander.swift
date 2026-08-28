@@ -7,7 +7,7 @@ struct ClipboardSnippetKeywordMatch: Equatable, Sendable {
     let keyword: String
     let delimiter: String
 
-    var requiresPostDeliveryExpansion: Bool { delimiter.isEmpty }
+    var deliveredText: String { keyword + delimiter }
 }
 
 struct ClipboardSnippetReplacementContext: Equatable, Sendable {
@@ -77,14 +77,6 @@ final class ClipboardSnippetExpansionScheduler {
             guard let self, self.generation == expectedGeneration else { return }
             self.task = nil
         }
-    }
-}
-
-enum ClipboardSnippetMatchedEventPolicy {
-    static func suppressesOriginalDelimiter(outcome: ClipboardSnippetExpansionOutcome) -> Bool {
-        // Replaying is safe only when the original focus, selection, and keyword were
-        // revalidated and no Accessibility mutation succeeded.
-        outcome != .safelyRejectedBeforeMutation
     }
 }
 
@@ -208,6 +200,7 @@ final class ClipboardSnippetKeywordExpander {
     private let pasteboard: any ClipboardPasteboardAccess
     private let onPasteboardWrite: () -> Void
     private var replacementTask: Task<Void, Never>?
+    private var replacementTransaction: ClipboardSnippetReplacementTransaction?
     private var matcher = ClipboardSnippetKeywordMatcher()
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -268,7 +261,7 @@ final class ClipboardSnippetKeywordExpander {
     }
 
     func stop() {
-        replacementTask?.cancel()
+        cancelReplacementBeforeForwardingInput()
         expansionScheduler.cancel()
         matcher.reset()
         trackedElement = nil
@@ -297,7 +290,7 @@ final class ClipboardSnippetKeywordExpander {
         if event.getIntegerValueField(.eventSourceUserData) == SystemClipboardSnippetReplacementAccess.syntheticEventMarker {
             return Unmanaged.passUnretained(event)
         }
-        replacementTask?.cancel()
+        cancelReplacementBeforeForwardingInput()
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             expansionScheduler.cancel()
             resetTracking()
@@ -324,23 +317,15 @@ final class ClipboardSnippetKeywordExpander {
             return Unmanaged.passUnretained(event)
         }
 
-        if match.requiresPostDeliveryExpansion {
-            guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
-                onDiagnostic?(.focusUnavailable)
-                resetTracking()
-                return Unmanaged.passUnretained(event)
-            }
-            schedulePostDeliveryExpansion(match, processIdentifier: processIdentifier)
-            // The final keyword character has not reached the target editor yet. Let this
-            // key event through, then validate and replace the complete keyword once the
-            // editor's Accessibility value and selection catch up.
+        guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+            onDiagnostic?(.focusUnavailable)
+            resetTracking()
             return Unmanaged.passUnretained(event)
         }
-
-        let outcome = attemptExpansion(match)
-        return ClipboardSnippetMatchedEventPolicy.suppressesOriginalDelimiter(
-            outcome: outcome
-        ) ? nil : Unmanaged.passUnretained(event)
+        // Deliver even a disambiguating delimiter first. Expansion can be cancelled
+        // while preparing large templates without losing any of the user's typing.
+        schedulePostDeliveryExpansion(match, processIdentifier: processIdentifier)
+        return Unmanaged.passUnretained(event)
     }
 
     private func schedulePostDeliveryExpansion(
@@ -399,7 +384,8 @@ final class ClipboardSnippetKeywordExpander {
         }
         trackedElement = focusedElement
 
-        let keywordUTF16Count = match.keyword.utf16.count
+        let deliveredKeyword = match.deliveredText
+        let keywordUTF16Count = deliveredKeyword.utf16.count
         guard selectedRange.length == 0,
               selectedRange.location >= keywordUTF16Count else {
             onDiagnostic?(.contextChanged)
@@ -415,7 +401,7 @@ final class ClipboardSnippetKeywordExpander {
             selectionLength: selectedRange.length,
             keywordLocation: keywordRange.location,
             keywordLength: keywordRange.length,
-            keyword: match.keyword
+            keyword: deliveredKeyword
         )
         guard replacementContext.isValid(
             selection: selectedRange,
@@ -438,15 +424,39 @@ final class ClipboardSnippetKeywordExpander {
         expectedElement: AXUIElement,
         replacementContext: ClipboardSnippetReplacementContext
     ) -> ClipboardSnippetExpansionOutcome {
-        let keywordRange = CFRange(
-            location: replacementContext.keywordLocation,
-            length: replacementContext.keywordLength
-        )
         guard savedLibraryController.items.contains(where: { $0.id == match.itemID }),
               let template = savedLibraryController.templateForKeywordExpansion(id: match.itemID) else {
             onDiagnostic?(.templateUnavailable)
             return .safelyRejectedBeforeMutation
         }
+        let context = savedLibraryController.expansionContext(clipboardText: pasteboard.readPlainText())
+        cancelReplacementBeforeForwardingInput()
+        let previousTask = replacementTask
+        replacementTask = Task { @MainActor [weak self] in
+            await previousTask?.value
+            guard let self, !Task.isCancelled else { return }
+            do {
+                let expansion = try await ClipboardSnippetTemplateEngine.expandAsync(template, context: context)
+                guard !Task.isCancelled else { return }
+                await self.replacePreparedExpansion(expansion, match: match, expectedElement: expectedElement,
+                                                    replacementContext: replacementContext)
+            } catch is CancellationError {
+                return
+            } catch {
+                self.savedLibraryController.reportExpansionError(error)
+            }
+        }
+        resetTracking()
+        return .consumedAfterMutation
+    }
+
+    private func replacePreparedExpansion(
+        _ expansion: ClipboardSnippetExpansion,
+        match: ClipboardSnippetKeywordMatch,
+        expectedElement: AXUIElement,
+        replacementContext: ClipboardSnippetReplacementContext
+    ) async {
+        let keywordRange = CFRange(location: replacementContext.keywordLocation, length: replacementContext.keywordLength)
         guard let focusedElement = Self.focusedElement(),
               Self.isSameElement(focusedElement, expectedElement),
               Self.secureTextClassification(focusedElement) == .nonSecure,
@@ -454,14 +464,10 @@ final class ClipboardSnippetKeywordExpander {
               replacementContext.isValid(
                   selection: selectedRange,
                   keywordText: Self.string(in: keywordRange, of: focusedElement)
-              ),
-              let expansion = try? ClipboardSnippetTemplateEngine.expand(
-                  template,
-                  context: .current(clipboardText: pasteboard.readPlainText())
               ) else {
             onDiagnostic?(.contextChanged)
             resetTracking()
-            return .safelyRejectedBeforeMutation
+            return
         }
 
         var mutableKeywordRange = keywordRange
@@ -472,12 +478,8 @@ final class ClipboardSnippetKeywordExpander {
                   keywordRangeValue
               ) == .success else {
             onDiagnostic?(.replacementUnavailable)
-            let canReplay = Self.revalidatesOriginalContext(
-                expectedElement: expectedElement,
-                replacementContext: replacementContext
-            )
             resetTracking()
-            return canReplay ? .safelyRejectedBeforeMutation : .consumedAfterMutation
+            return
         }
 
         var cursorLocation: Int?
@@ -491,30 +493,29 @@ final class ClipboardSnippetKeywordExpander {
             cursorLocation = keywordRange.location + prefixUTF16Count
         }
         guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
-            return .consumedAfterMutation
+            return
         }
         let access = SystemClipboardSnippetReplacementAccess(
             element: focusedElement, processIdentifier: processIdentifier, context: replacementContext,
             replacement: expansion.text + match.delimiter, cursorLocation: cursorLocation,
             onPasteboardWrite: onPasteboardWrite
         )
-        replacementTask?.cancel()
-        let previousTask = replacementTask
-        replacementTask = Task { @MainActor [weak self] in
-            // Finish restoration of any earlier temporary pasteboard before starting another.
-            await previousTask?.value
-            guard !Task.isCancelled else { return }
-            let succeeded = await ClipboardSnippetTextReplacement.perform(using: access)
-            guard !Task.isCancelled else { return }
-            self?.onDiagnostic?(succeeded ? .expanded : .replacementUnavailable)
-        }
-        resetTracking()
-        return .consumedAfterMutation
+        let transaction = ClipboardSnippetReplacementTransaction(access: access)
+        replacementTransaction = transaction
+        let succeeded = await ClipboardSnippetTextReplacement.perform(using: access, transaction: transaction)
+        guard !Task.isCancelled else { return }
+        onDiagnostic?(succeeded ? .expanded : .replacementUnavailable)
     }
 
     private func resetTracking() {
         matcher.reset()
         trackedElement = nil
+    }
+
+    private func cancelReplacementBeforeForwardingInput() {
+        replacementTask?.cancel()
+        replacementTransaction?.cancelBeforeForwardingInput()
+        replacementTransaction = nil
     }
 
     static func focusedElement(

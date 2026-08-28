@@ -1759,7 +1759,9 @@ final class PluginHost: ObservableObject {
                 (plugin as? any PluginWindowLayoutTargetProviding)?.focusedWindowLayoutTarget
             }
             .first { window in
-                window.isKeyWindow && window.isVisible
+                window.isVisible && (window.isKeyWindow || (window.childWindows ?? []).contains {
+                    $0.parent === window && $0.isVisible && $0.isKeyWindow
+                })
             }
     }
 

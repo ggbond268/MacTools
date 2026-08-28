@@ -67,6 +67,22 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(try verified[0].loadPayload().plainText, item.text)
     }
 
+    func testRecapturedPayloadRemainsEvictableAfterMetadataOnlySave() throws {
+        let fixture = try makeFixture()
+        let text = String(repeating: "x", count: 2 * 1_024 * 1_024)
+        let original = ClipboardHistoryItem(id: UUID(), text: text, capturedAt: Date(), sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        try fixture.store.save([original])
+        let incoming = ClipboardHistoryItem(id: UUID(), text: text, capturedAt: Date().addingTimeInterval(1), sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        let recaptured = try XCTUnwrap(original.recaptured(from: incoming))
+        XCTAssertNotNil(recaptured.payload)
+        try fixture.store.save([recaptured])
+        recaptured.discardCachedPayloadIfReloadable()
+        XCTAssertNil(recaptured.payload)
+        XCTAssertEqual(try recaptured.loadPayload().plainText, text)
+        recaptured.discardCachedPayloadIfReloadable()
+        XCTAssertNil(recaptured.payload)
+    }
+
     func testRoundTripPreservesUnifiedHistoryAndSavedRolesOnOneItem() throws {
         let fixture = try makeFixture()
         var item = sampleItem(index: 1)

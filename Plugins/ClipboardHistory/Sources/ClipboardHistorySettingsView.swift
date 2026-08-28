@@ -31,6 +31,7 @@ struct ClipboardHistorySettingsView: View {
     @State private var isWindowShortcutsExpanded = false
     @State private var isCollectionShortcutsExpanded = false
     @State private var isMaintenanceExpanded = false
+    @State private var isSnippetAdvancedExpanded = false
 
     init(
         controller: ClipboardHistoryController,
@@ -431,6 +432,23 @@ struct ClipboardHistorySettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .pluginSettingsListRowPadding()
                 }
+                PluginSettingsListDivider()
+                ClipboardSettingsDisclosure(isExpanded: $isSnippetAdvancedExpanded,
+                    headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal) {
+                    settingPickerRow(
+                        title: localization.string("settings.snippets.expandedLimit.title", defaultValue: "Expanded Text Limit"),
+                        description: localization.string("settings.snippets.expandedLimit.description", defaultValue: "Limits the final text after variables expand, including previews. Oversized output is rejected, never truncated."),
+                        selection: $settings.maximumExpandedTextByteCount
+                    ) {
+                        ForEach(ClipboardHistorySettingsStore.allowedExpandedTextByteCounts, id: \.self) { count in
+                            Text(byteCountTitle(count)).tag(count)
+                        }
+                    }
+                } label: {
+                    Text(localization.string("settings.snippets.advanced", defaultValue: "Advanced"))
+                        .font(PluginSettingsTheme.Typography.rowTitle)
+                }
+                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
             }
             .pluginSettingsCardBackground(.standard)
         }
