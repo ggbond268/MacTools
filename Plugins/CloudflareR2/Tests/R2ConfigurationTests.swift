@@ -6,6 +6,42 @@ import XCTest
 @testable import CloudflareR2Plugin
 
 final class R2ConfigurationTests: XCTestCase {
+    func testNightlyServiceNamePreservesExistingStableNamespace() {
+        for channel in [nil, "stable", "development", "unknown"] {
+            XCTAssertEqual(
+                R2KeychainSecretStore(releaseChannel: channel).service,
+                "cc.ggbond.mactools.cloudflare-r2"
+            )
+        }
+        XCTAssertEqual(
+            R2KeychainSecretStore(releaseChannel: "nightly").service,
+            "cc.ggbond.mactools.cloudflare-r2.nightly"
+        )
+    }
+
+    func testNightlySecretWritesDoNotAffectStable() throws {
+        let service = "cc.ggbond.mactools.cloudflare-r2.tests.\(UUID().uuidString)"
+        let stable = R2KeychainSecretStore(service: service, releaseChannel: "stable")
+        let nightly = R2KeychainSecretStore(service: service, releaseChannel: "nightly")
+        defer {
+            for item in [stable, nightly] {
+                SecItemDelete([
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: item.service,
+                    kSecAttrAccount as String: item.account,
+                ] as CFDictionary)
+            }
+        }
+
+        try stable.saveSecret("stable-secret")
+        XCTAssertFalse(try nightly.containsSecret())
+        XCTAssertNil(try nightly.loadSecret())
+        try nightly.saveSecret("nightly-secret")
+        try nightly.saveSecret("updated-nightly-secret")
+        XCTAssertEqual(try nightly.loadSecret(), "updated-nightly-secret")
+        XCTAssertEqual(try stable.loadSecret(), "stable-secret")
+    }
+
     func testConfigurationRequiresEveryCoreFieldAndTrimsValues() async {
         await MainActor.run {
             let store = R2ConfigurationStore(

@@ -72,6 +72,31 @@ jobs:
       - name: Verify PluginKit v5 binary compatibility
         run: ./scripts/plugins/verify-plugin-kit-v5-binary-compatibility.sh
 
+      - name: Build and verify unsigned Nightly configuration
+        run: |
+          VERSION="$(awk '$1 == "MARKETING_VERSION" && $2 == "=" { print $3; exit }' Configs/AppVersion.xcconfig)"
+          PLUGIN_KIT_VERSION="$(scripts/nightly-release.py plugin-kit-version --plugins-dir Plugins)"
+          xcodebuild \
+            -project "${PROJECT_NAME}.xcodeproj" \
+            -scheme "${SCHEME}" \
+            -configuration Nightly \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath "${DERIVED_DATA}" \
+            CURRENT_PROJECT_VERSION=1.1 \
+            PLUGIN_CATALOG_URL="https://mactools.ggbond.app/nightly/plugins/v${PLUGIN_KIT_VERSION}/catalog.json" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            build \
+            -quiet
+          scripts/nightly-release.py verify-app \
+            --app "${DERIVED_DATA}/Build/Products/Nightly/MacTools Nightly.app" \
+            --cli "${DERIVED_DATA}/Build/Products/Nightly/mactools" \
+            --bundle-identifier-prefix "${CI_BUNDLE_IDENTIFIER_PREFIX}" \
+            --version "$VERSION" \
+            --build-number 1.1 \
+            --plugin-kit-version "$PLUGIN_KIT_VERSION"
+
       - name: Package Debug app artifact
         if: github.event_name == 'workflow_dispatch'
         run: |

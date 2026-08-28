@@ -109,6 +109,26 @@ final class CLIPeerIdentityValidatorTests: XCTestCase {
         )
     }
 
+    func testPeerMatchingRejectsOtherReleaseChannelsInBothDirections() {
+        let validator = CLIPeerIdentityValidator()
+        let hosts = ["com.example.mactools", "com.example.mactools.dev", "com.example.mactools.nightly"]
+        for brokerHost in hosts {
+            let broker = CLIPeerIdentity(
+                processIdentifier: 1, effectiveUserIdentifier: 501,
+                signingIdentifier: brokerHost + ".cli-broker", teamIdentifier: "TEAM123"
+            )
+            for peerHost in hosts {
+                for (role, suffix) in [(CLIPeerRole.host, ""), (.commandLineTool, ".cli"), (.broker, ".cli-broker")] {
+                    let peer = CLIPeerIdentity(
+                        processIdentifier: 2, effectiveUserIdentifier: 501,
+                        signingIdentifier: peerHost + suffix, teamIdentifier: "TEAM123"
+                    )
+                    XCTAssertEqual(validator.matches(peer, as: role, relativeTo: broker), peerHost == brokerHost)
+                }
+            }
+        }
+    }
+
     func testCompleteRequirementIncludesAppleAnchorExactRoleAndTeam() {
         XCTAssertEqual(
             CLIPeerIdentityValidator().requirementString(

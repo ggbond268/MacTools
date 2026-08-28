@@ -9,7 +9,8 @@ Usage:
 Builds selected plugin packages, signs their bundles, zips them as release assets,
 generates a release catalog for those assets, and optionally writes a signed catalog.
 Without --plugin it builds all discovered plugins. --plugin can be repeated or
-passed as a comma-separated list.
+passed as a comma-separated list. --nightly-build-number derives valid,
+monotonic source-major.run.attempt versions without changing source manifests.
 USAGE
 }
 
@@ -27,6 +28,8 @@ DESTINATION=""
 XCODEBUILD_COMMAND="${XCODEBUILD:-}"
 MINIMUM_HOST_VERSION=""
 RELEASE_NOTES_URL=""
+NIGHTLY_BUILD_NUMBER=""
+PRODUCTS_DIR=""
 PLUGIN_FILTERS=()
 
 while [[ $# -gt 0 ]]; do
@@ -87,6 +90,14 @@ while [[ $# -gt 0 ]]; do
             RELEASE_NOTES_URL="${2:-}"
             shift 2
             ;;
+        --nightly-build-number)
+            NIGHTLY_BUILD_NUMBER="${2:-}"
+            shift 2
+            ;;
+        --products-dir)
+            PRODUCTS_DIR="${2:-}"
+            shift 2
+            ;;
         --plugin)
             IFS=',' read -r -a raw_plugin_filters <<< "${2:-}"
             for raw_plugin_filter in "${raw_plugin_filters[@]}"; do
@@ -107,6 +118,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$CONFIGURATION" == "Nightly" && -z "$NIGHTLY_BUILD_NUMBER" ]]; then
+    echo "--nightly-build-number is required for Nightly plugin release assets." >&2
+    exit 1
+fi
+if [[ "$CONFIGURATION" != "Nightly" && -n "$NIGHTLY_BUILD_NUMBER" ]]; then
+    echo "--nightly-build-number is only valid with --configuration Nightly." >&2
+    exit 1
+fi
 
 if [[ -z "$BASE_URL" || -z "$CATALOG_OUTPUT" ]]; then
     usage >&2
@@ -153,6 +173,12 @@ if [[ -n "$DESTINATION" ]]; then
 fi
 if [[ -n "$XCODEBUILD_COMMAND" ]]; then
     build_args+=(--xcodebuild "$XCODEBUILD_COMMAND")
+fi
+if [[ -n "$NIGHTLY_BUILD_NUMBER" ]]; then
+    build_args+=(--nightly-build-number "$NIGHTLY_BUILD_NUMBER")
+fi
+if [[ -n "$PRODUCTS_DIR" ]]; then
+    build_args+=(--products-dir "$PRODUCTS_DIR")
 fi
 for plugin_filter in "${PLUGIN_FILTERS[@]}"; do
     build_args+=(--plugin "$plugin_filter")

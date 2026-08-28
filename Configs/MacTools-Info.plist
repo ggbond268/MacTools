@@ -41,6 +41,12 @@
 	<true/>
 	<key>MTPluginCatalogPublicKey</key>
 	<string>$(PLUGIN_CATALOG_PUBLIC_KEY)</string>
+	<key>MTPluginCatalogURL</key>
+	<string>$(PLUGIN_CATALOG_URL)</string>
+	<key>MTApplicationSupportDirectoryName</key>
+	<string>$(APPLICATION_SUPPORT_DIRECTORY_NAME)</string>
+	<key>MTReleaseChannel</key>
+	<string>$(MACTOOLS_RELEASE_CHANNEL)</string>
 	<key>MTRightClickConfigurationHomeRelativePath</key>
 	<string>$(RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH)</string>
 	<key>NSAppleEventsUsageDescription</key>
@@ -58,7 +64,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://mactools.ggbond.app/appcast.xml</string>
+	<string>$(SPARKLE_FEED_URL)</string>
 	<key>SUPublicEDKey</key>
 	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
 	<key>SUScheduledCheckInterval</key>

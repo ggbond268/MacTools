@@ -200,6 +200,24 @@ make run MACTOOLS_PLUGIN_CATALOG_URL=https://mactools.ggbond.app/plugins/catalog
 
 The app copies the package into its own staging and installed directories. Uninstall deletes only the installed copy under MacTools application support; it never deletes the plugin source directory or the local build directory.
 
+## Public Nightly Catalog
+
+The public Nightly channel publishes a separate, signed catalog under `docs/nightly/plugins/vN/catalog.json`. It never modifies or merges into the stable `docs/plugins/vN/catalog.json` catalog.
+
+Each publishing Nightly workflow run performs one aggregate `Nightly` app build, then passes that build's products directory to `build-plugin-release-assets.sh --products-dir`. Every plugin package and the host app therefore come from the same source commit. The workflow publishes a complete catalog rather than an incremental delta. An early step in the same job skips scheduled publication if the selected source tree matches the source of the deployed Nightly appcast, excluding `docs/nightly/**`. Other repository changes are conservatively treated as relevant. Manual dispatch always publishes; an unavailable previous source or failed comparison also proceeds normally. No additional tracking files or commits are needed for this check.
+
+Nightly package versions are generated artifacts using `source-major.run.attempt`, where `source-major` comes from the plugin's committed manifest and `run.attempt` comes from GitHub Actions. This produces valid, monotonically increasing versions without changing or pre-bumping source `plugin.json` files. Stable plugin releases continue to own committed manifest version bumps.
+
+The workflow signs the complete catalog with the existing catalog key, verifies every package URL and PluginKit version, and publishes it together with the dedicated Nightly appcast. See `docs/github-actions.md` for the maintainer enablement and two-run update validation procedure.
+
+Fan Control and Battery Charge Limit preserve their stable helper paths and append `.nightly` to the system-wide installation paths in the Nightly host. Their Nightly helper targets embed a `.nightly` bundle identifier so package signing uses a separate code-signing identifier. Bundled helper filenames remain unchanged inside the already isolated plugin packages. Generated Nightly manifests update the localized setup descriptions to match the installed paths; source manifests and stable output remain unchanged.
+
+Translator and Cloudflare R2 append `.nightly` to their Keychain service names when the host's `MTReleaseChannel` is `nightly`. All lookup, update, and deletion queries use that service; there is no fallback or migration from stable secrets. The existing PluginKit interface is unchanged.
+
+Activity Bar uses `/tmp/mactools-nightly-activity-bar.sock` and `mactools-nightly-activity-<tool>-hook.sh` for Nightly. These filenames deliberately do not contain the original stable filenames, so older stable versions cannot remove Nightly hook registrations by substring. New installers match their own script path when registering or removing entries in the shared Claude, Cursor, and Codex configuration files. Plugin IDs remain unchanged; the host already isolates plugin data, caches, and temporary directories. The trackpad listener lock remains shared to prevent competing hardware listeners.
+
+The embedded CLI broker uses `<host-bundle-identifier>.cli-broker`, including Nightly's `.nightly` component. Its LaunchAgent label, Mach service, embedded Info.plist, and signing identity must agree. The separately built CLI prototype similarly uses `<host-bundle-identifier>.cli`; it is validated during CI but is not added to the published app. The Nightly workflow explicitly signs the broker executable before signing the app.
+
 ## Release Flow
 
 Recommended production flow is an incremental batch plugin release:

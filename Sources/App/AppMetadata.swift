@@ -2,6 +2,12 @@ import AppKit
 import Foundation
 
 enum AppMetadata {
+    enum ReleaseChannel: String {
+        case stable
+        case development
+        case nightly
+    }
+
     static let repositoryDisplayName = "ggbond268/MacTools"
 
     static var appName: String {
@@ -16,6 +22,14 @@ enum AppMetadata {
 
     static var buildNumber: String? {
         bundleString(kCFBundleVersionKey as String)
+    }
+
+    static var releaseChannel: ReleaseChannel {
+        guard let rawValue = bundleString("MTReleaseChannel"),
+              let channel = ReleaseChannel(rawValue: rawValue) else {
+            return .stable
+        }
+        return channel
     }
 
     static var versionDescription: String {

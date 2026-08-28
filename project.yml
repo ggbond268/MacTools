@@ -4,6 +4,7 @@ options:
   autoCreateSchemes: false
 configs:
   Debug: debug
+  Nightly: release
   Release: release
 packages:
   Sparkle:
@@ -43,6 +44,10 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
       configs:
+        Nightly:
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
         Release:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true
@@ -64,6 +69,10 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
       configs:
+        Nightly:
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
         Release:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true
@@ -74,6 +83,7 @@ targets:
     deploymentTarget: '14.0'
     configFiles:
       Debug: Configs/AppDebug.xcconfig
+      Nightly: Configs/AppNightly.xcconfig
       Release: Configs/AppRelease.xcconfig
     sources:
     - path: Sources
@@ -120,7 +130,10 @@ targets:
         INFOPLIST_FILE: Configs/MacTools-Info.plist
         CODE_SIGN_ENTITLEMENTS: Configs/MacTools.entitlements
         MACTOOLS_URL_SCHEME: mactools
+        APPLICATION_SUPPORT_DIRECTORY_NAME: MacTools
+        MACTOOLS_RELEASE_CHANNEL: stable
         RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH: Library/Application Support/MacTools/right-click-menu.json
+        SPARKLE_FEED_URL: https://mactools.ggbond.app/appcast.xml
         SPARKLE_PUBLIC_ED_KEY: YS4ioWunyQC5rP/YQdDbG9panyqCKNyBd0iPTUqIFY0=
         SWIFT_OBJC_BRIDGING_HEADER: Sources/MacTools-Bridging-Header.h
         SWIFT_INCLUDE_PATHS: "$(SRCROOT)/Sources/Core/MultitouchSupport"
@@ -131,7 +144,21 @@ targets:
           PRODUCT_NAME: "MacTools Dev"
           PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.dev"
           MACTOOLS_URL_SCHEME: mactools-dev
+          APPLICATION_SUPPORT_DIRECTORY_NAME: "MacTools Dev"
+          MACTOOLS_RELEASE_CHANNEL: development
           RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH: Library/Application Support/MacTools Dev/right-click-menu.json
+        Nightly:
+          PRODUCT_NAME: "MacTools Nightly"
+          PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.nightly"
+          MACTOOLS_URL_SCHEME: mactools-nightly
+          APPLICATION_SUPPORT_DIRECTORY_NAME: "MacTools Nightly"
+          MACTOOLS_RELEASE_CHANNEL: nightly
+          RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH: Library/Application Support/MacTools Nightly/right-click-menu.json
+          SPARKLE_FEED_URL: https://mactools.ggbond.app/nightly/appcast.xml
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NIGHTLY"
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
         Release:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true
@@ -160,6 +187,7 @@ targets:
     deploymentTarget: '14.0'
     configFiles:
       Debug: Configs/AppDebug.xcconfig
+      Nightly: Configs/AppNightly.xcconfig
       Release: Configs/AppRelease.xcconfig
     sources:
     - path: Sources/Core/CLI/CLIServiceConfiguration.swift
@@ -182,6 +210,11 @@ targets:
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.dev.cli"
+        Nightly:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.nightly.cli"
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
         Release:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true
@@ -192,6 +225,7 @@ targets:
     deploymentTarget: '14.0'
     configFiles:
       Debug: Configs/AppDebug.xcconfig
+      Nightly: Configs/AppNightly.xcconfig
       Release: Configs/AppRelease.xcconfig
     sources:
     - path: Sources/Core/CLI/CLIServiceConfiguration.swift
@@ -215,6 +249,11 @@ targets:
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.dev.cli-broker"
+        Nightly:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.nightly.cli-broker"
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
         Release:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true
@@ -225,6 +264,7 @@ targets:
     deploymentTarget: '14.0'
     configFiles:
       Debug: Configs/AppDebug.xcconfig
+      Nightly: Configs/AppNightly.xcconfig
       Release: Configs/AppRelease.xcconfig
     sources:
     - path: Sources/Extensions/RightClickFinderSync
@@ -246,13 +286,27 @@ targets:
         INFOPLIST_FILE: Sources/Extensions/RightClickFinderSync/RightClickFinderSync-Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/Extensions/RightClickFinderSync/RightClickFinderSync.entitlements
         MACTOOLS_URL_SCHEME: mactools
+        RIGHT_CLICK_EXTENSION_DISPLAY_NAME: MacTools 右键工具
+        RIGHT_CLICK_TOOLBAR_ITEM_NAME: MacTools
         RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH: Library/Application Support/MacTools/right-click-menu.json
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.dev.right-click.finder-sync"
           CODE_SIGN_ENTITLEMENTS: Sources/Extensions/RightClickFinderSync/RightClickFinderSync-Debug.entitlements
           MACTOOLS_URL_SCHEME: mactools-dev
+          RIGHT_CLICK_EXTENSION_DISPLAY_NAME: MacTools Dev 右键工具
+          RIGHT_CLICK_TOOLBAR_ITEM_NAME: MacTools Dev
           RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH: Library/Application Support/MacTools Dev/right-click-menu.json
+        Nightly:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.nightly.right-click.finder-sync"
+          CODE_SIGN_ENTITLEMENTS: Sources/Extensions/RightClickFinderSync/RightClickFinderSync-Nightly.entitlements
+          MACTOOLS_URL_SCHEME: mactools-nightly
+          RIGHT_CLICK_EXTENSION_DISPLAY_NAME: MacTools Nightly 右键工具
+          RIGHT_CLICK_TOOLBAR_ITEM_NAME: MacTools Nightly
+          RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH: Library/Application Support/MacTools Nightly/right-click-menu.json
+          DEAD_CODE_STRIPPING: true
+          DEPLOYMENT_POSTPROCESSING: true
+          STRIP_INSTALLED_PRODUCT: true
         Release:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true

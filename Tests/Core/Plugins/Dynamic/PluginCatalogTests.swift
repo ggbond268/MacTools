@@ -32,6 +32,57 @@ final class PluginCatalogTests: XCTestCase {
         )
     }
 
+    func testConfiguredNightlyCatalogOverridesProductionURL() throws {
+        let nightlyURL = try XCTUnwrap(
+            URL(string: "https://mactools.ggbond.app/nightly/plugins/v5/catalog.json")
+        )
+
+        XCTAssertEqual(
+            PluginCatalogProviderConfiguration.configuredProductionCatalogURL(
+                for: 5,
+                infoDictionary: ["MTPluginCatalogURL": nightlyURL.absoluteString]
+            ),
+            nightlyURL
+        )
+    }
+
+    func testNightlyChannelDerivesVersionedCatalogWhenBuildSettingIsEmpty() {
+        XCTAssertEqual(
+            PluginCatalogProviderConfiguration.configuredProductionCatalogURL(
+                for: 6,
+                infoDictionary: [
+                    "MTPluginCatalogURL": "",
+                    "MTReleaseChannel": "nightly"
+                ]
+            ),
+            URL(string: "https://mactools.ggbond.app/nightly/plugins/v6/catalog.json")
+        )
+    }
+
+    func testNightlyChannelDerivesVersionedCatalogWhenBuildSettingIsUnresolved() {
+        XCTAssertEqual(
+            PluginCatalogProviderConfiguration.configuredProductionCatalogURL(
+                for: 6,
+                infoDictionary: [
+                    "MTPluginCatalogURL": "$(PLUGIN_CATALOG_URL)",
+                    "MTReleaseChannel": "nightly"
+                ]
+            ),
+            URL(string: "https://mactools.ggbond.app/nightly/plugins/v6/catalog.json")
+        )
+    }
+
+    func testConfiguredCatalogRejectsNonHTTPSURL() {
+        XCTAssertEqual(
+            PluginCatalogProviderConfiguration.configuredProductionCatalogURL(
+                for: 5,
+                hostVersion: "1.2.0",
+                infoDictionary: ["MTPluginCatalogURL": "file:///tmp/catalog.json"]
+            ),
+            URL(string: "https://mactools.ggbond.app/plugins/v5/catalog.json")
+        )
+    }
+
     func testReleasedVersionKeepsSchema2CompatibilityCatalogURL() throws {
         XCTAssertEqual(
             PluginCatalogProviderConfiguration.productionCatalogURL(forHostVersion: "1.2.0"),
@@ -39,9 +90,33 @@ final class PluginCatalogTests: XCTestCase {
         )
     }
 
+    func testEmptyConfiguredCatalogFollowsSupportedPluginKitVersion() {
+        XCTAssertEqual(
+            PluginCatalogProviderConfiguration.configuredProductionCatalogURL(
+                for: 6,
+                infoDictionary: ["MTPluginCatalogURL": ""]
+            ),
+            URL(string: "https://mactools.ggbond.app/plugins/v6/catalog.json")
+        )
+    }
+
     func testSchema3HostUsesSchema3CompatibilityCatalogURL() throws {
         XCTAssertEqual(
             PluginCatalogProviderConfiguration.productionCatalogURL(forHostVersion: "1.2.1"),
+            URL(string: "https://mactools.ggbond.app/plugins/v5/schema3/catalog.json")
+        )
+    }
+
+    func testConfiguredStableCatalogFollowsHostSchemaCompatibility() {
+        XCTAssertEqual(
+            PluginCatalogProviderConfiguration.configuredProductionCatalogURL(
+                for: 5,
+                hostVersion: "1.2.1",
+                infoDictionary: [
+                    "MTPluginCatalogURL": "",
+                    "MTReleaseChannel": "stable"
+                ]
+            ),
             URL(string: "https://mactools.ggbond.app/plugins/v5/schema3/catalog.json")
         )
     }

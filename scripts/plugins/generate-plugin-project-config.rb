@@ -300,6 +300,7 @@ plugin_roots.each do |plugin_root|
     "deploymentTarget" => "14.0",
     "configFiles" => {
       "Debug" => "Debug.xcconfig",
+      "Nightly" => "Release.xcconfig",
       "Release" => "Release.xcconfig"
     },
     "sources" => core_sources,
@@ -315,6 +316,7 @@ plugin_roots.each do |plugin_root|
     "deploymentTarget" => "14.0",
     "configFiles" => {
       "Debug" => "Debug.xcconfig",
+      "Nightly" => "Release.xcconfig",
       "Release" => "Release.xcconfig"
     },
     "sources" => bundle_sources,
@@ -351,6 +353,9 @@ test_settings = {
   "configs" => {
     "Debug" => {
       "TEST_HOST" => "$(BUILT_PRODUCTS_DIR)/MacTools Dev.app/Contents/MacOS/MacTools Dev"
+    },
+    "Nightly" => {
+      "TEST_HOST" => "$(BUILT_PRODUCTS_DIR)/MacTools Nightly.app/Contents/MacOS/MacTools Nightly"
     },
     "Release" => {
       "TEST_HOST" => "$(BUILT_PRODUCTS_DIR)/MacTools.app/Contents/MacOS/MacTools"

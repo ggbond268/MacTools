@@ -33,6 +33,16 @@ final class CLIServiceConfigurationTests: XCTestCase {
         )
     }
 
+    func testNightlyRolesUseOneServiceDistinctFromStableAndDevelopment() {
+        let host = "com.example.mactools.nightly"
+        for suffix in ["", ".cli", ".cli-broker"] {
+            XCTAssertEqual(CLIServiceConfiguration.serviceName(bundleIdentifier: host + suffix), host + ".cli-broker")
+        }
+        for other in ["com.example.mactools", "com.example.mactools.dev"] {
+            XCTAssertNotEqual(CLIServiceConfiguration.serviceName(bundleIdentifier: other), host + ".cli-broker")
+        }
+    }
+
     func testBareExecutableNameResolvesAgainstPath() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let executable = root.appendingPathComponent("bin/mactools")

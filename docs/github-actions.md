@@ -1,13 +1,40 @@
 # GitHub Actions 自动构建
 
-本仓库提供六条流水线：
+本仓库提供七条流水线：
 
-- `Build`：在 `main` push、Pull Request 和手动触发时运行。执行 XcodeGen、Debug 测试，并在非 PR 场景额外编译 unsigned Release app 做配置校验；不上传不可分发的未签名产物。
+- `Build`：在 `main` push、Pull Request 和手动触发时运行。执行 XcodeGen、Debug 测试，并为每次变更编译和核对 unsigned Nightly app；在非 PR 场景还会额外编译 unsigned Release app 做配置校验。它不上传不可分发的未签名产物。
 - `Prepare Release`：在 GitHub Actions 页面手动触发。输入发布类型、目标版本和是否继续发布；它会检查、bump、提交版本变更、创建 tag，并在需要时显式触发 `Release` 或 `Plugin Release`。
 - `Release`：在推送 `v*.*.*` 或 `v*.*.*-*` tag，或手动输入 tag 时运行。构建 Release 版本，使用 Developer ID 签名、公证、打包 DMG，创建或更新 GitHub Release；稳定版会明确标记为 GitHub Latest，并更新官网使用的 `docs/app-release.json`，预发布不会覆盖稳定版下载元数据。
+- `Nightly`：启用后每天 UTC 06:00 从 `main` 构建。它复用稳定发布已有的签名、公证、Sparkle 和插件 catalog Secrets，生成可与稳定版共存的 `MacTools Nightly.app`、同一提交的完整插件集、独立 appcast 和独立 PluginKit v5 catalog。每次运行使用唯一 `nightly-<run>-<attempt>` tag；先以 draft 上传并核对全部产物，再发布为 prerelease，绝不覆盖已有 tag 或资产。
 - `Homebrew Cask Update`：手动输入版本时运行；未输入版本则从稳定 `v*` App Release 中查找同时包含 `MacTools.dmg` 与 `MacTools.sha256` 的最新版，通过 `brew bump-cask-pr` 向官方 `Homebrew/homebrew-cask` 提交 cask bump PR。
 - `Plugin Release` runs for a pushed `plugins-*` tag or a manually selected plugin batch tag. Legacy PluginKit catalogs below v5 are immutable, and the schema-3 workflow rejects attempts to republish them. PluginKit v3 and later use versioned paths, the v4 catalog remains available to MacTools through 1.1.6, MacTools 1.2.0 keeps `docs/plugins/v5/catalog.json`, and hosts from 1.2.1 use `docs/plugins/v5/schema3/catalog.json`. The first release of a new ABI or schema compatibility line rebuilds and signs every plugin. Plugin batches use `--latest=false` and never replace the latest App release.
-- `Deploy Pages`：在 `site/**` 或 `docs/app-release.json` 合入 `main`、`Release` / `Plugin Release` 成功完成，或手动触发时运行。它先构建 `site/` 下的 Astro 官网，再合并 `docs/` 中的 App 发布元数据、appcast、插件 catalog、图标库等静态发布资源并发布到 GitHub Pages；PR 不会触发这条流水线。
+- `Deploy Pages`：在 `site/**`、`docs/app-release.json` 或 `docs/nightly/**` 合入 `main`，`Release` / `Plugin Release` / `Nightly` 成功完成，或手动触发时运行。它先构建 `site/` 下的 Astro 官网，再合并 `docs/` 中的 App 发布元数据、appcast、插件 catalog、图标库等静态发布资源并发布到 GitHub Pages；PR 不会触发这条流水线。
+
+## 启用 Nightly（仓库维护者）
+
+Nightly 不需要新的发布证书或私钥。合并实现后，维护者只需完成以下步骤：
+
+1. 确认稳定版使用的九项必需 Secrets 仍然可用：`APPLE_DEVELOPMENT_TEAM`、`BUNDLE_IDENTIFIER_PREFIX`、`DEVELOPER_ID_CERT_P12`、`DEVELOPER_ID_CERT_PASSWORD`、`ASC_API_KEY_P8_BASE64`、`ASC_API_KEY_ID`、`ASC_API_ISSUER_ID`、`SPARKLE_PRIVATE_KEY` 和 `PLUGIN_CATALOG_PRIVATE_KEY_BASE64`。
+2. 在 `Settings` → `Actions` → `General` 中保留 `Read and write permissions`；在 `Settings` → `Pages` 中保留 `GitHub Actions` 发布源。这两项也是现有发布流程的要求。
+3. 打开 `Actions` → `Nightly`，以 `main` 手动运行一次。检查签名、公证、GitHub prerelease、`docs/nightly/appcast.xml`、`docs/nightly/plugins/v5/catalog.json` 和 Pages 部署均成功；安装该 DMG，并从 Nightly catalog 安装至少一个插件。
+4. 再以 `main` 手动运行一次，在已安装的 Nightly 中验证 N → N+1 Sparkle 更新及已安装插件的启动前自动同步。通过后，在 `Settings` → `Secrets and variables` → `Actions` → `Variables` 中创建 repository variable `ENABLE_NIGHTLY_RELEASES=true`，启用每日计划任务。删除该 variable 或改为其他值即可暂停计划任务；手动运行仍可用于验证。
+
+手动输入的 ref 必须已经属于 `origin/main`，工作流才会接触发布凭据。Nightly 使用独立 bundle ID、显示名称、`mactools-nightly://` URL Scheme、Application Support 目录、Sparkle feed 和插件 catalog；稳定版 appcast、下载元数据和插件 catalog 在发布前后都会受到路径检查。每个 Nightly 的完整插件集与 app 来自同一个 source commit，插件版本使用合法且单调递增的 `source-major.run.attempt` 格式以避免缓存复用。工作流保留最近 14 个匹配 `nightly-<run>-<attempt>` 的 prerelease，并始终额外保护当前已提交或已部署 appcast 引用的构建；稳定版和其他 prerelease 不在清理范围内。
+
+手动 `Build` workflow 产生的 Debug artifact 仍然只是 CI 调试输出，不会发布到 GitHub Releases、官网或任何 Sparkle feed，也不是第二个 Nightly 渠道。
+
+### Nightly isolation and unchanged-run verification
+
+The Nightly job reads the deployed `https://mactools.ggbond.app/nightly/appcast.xml`, resolves that advertised GitHub prerelease's target source SHA, and compares its tree with the selected source before accessing release credentials. It ignores generated `docs/nightly/**` changes; all other tracked changes are conservatively considered relevant. An unchanged scheduled run reports `unchanged` and skips building, signing, notarizing, release/plugin uploads, and metadata commits. A manual run always reports `publish`, including same-commit N to N+1 and rollback tests. First publication, an unavailable or malformed feed, an unusable release source, or a failed comparison defaults to publication. The check stays within the existing single job and writes no repository tracking state.
+
+Before enabling the schedule, include these coexistence checks in the two manual runs:
+
+1. With stable installed, install the Nightly Fan Control and Battery Charge Limit plugins. Authorize their helper installation and confirm the new files end in `.smc-helper.nightly` under `/Library/PrivilegedHelperTools`; stable helper files remain unchanged. The Nightly helper signing identifiers also end in `.nightly`.
+2. Update Nightly and verify stable can still use its existing helpers without another installation prompt. Separate helpers do not isolate hardware state: test one app's fan or charging policy at a time.
+3. Use separate test credentials in stable and Nightly Translator and Cloudflare R2. Confirm Nightly starts without stable credentials and that saving, updating, or deleting Nightly credentials leaves stable credentials intact.
+4. Install Activity Bar hooks in both apps, in either order. Confirm both channels receive AI events. Remove Nightly's hooks and confirm stable hooks still work; reinstall Nightly's hooks, remove stable hooks, and confirm Nightly still works. Closing either app must leave the other app's listener available.
+5. If testing the experimental CLI, build the standalone tool with the same `Nightly` configuration as the app. Follow `docs/testing/cli-phase-0.md` using the Nightly app and product paths; enable its broker through Nightly's settings. Verify `doctor` connects only to Nightly, and that disabling Nightly's broker leaves stable's broker registration intact. The release workflow checks the broker's embedded identifier, LaunchAgent service, and signature; the standalone prototype remains outside the published app.
+6. After enabling the schedule, confirm a run with only generated `docs/nightly/**` changes reports `unchanged` without a release or metadata commit. Manual dispatch of the same source must still publish.
 
 ## 需要配置的 Secrets
 

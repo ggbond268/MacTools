@@ -57,14 +57,14 @@ final class AutomaticPreferencesBackupStore: @unchecked Sendable {
         self.afterVersionedFileWrite = afterVersionedFileWrite
     }
 
-    static func defaultDirectoryURL(fileManager: FileManager = .default) -> URL {
-        let applicationSupport = fileManager.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first ?? fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return applicationSupport
-            .appendingPathComponent("MacTools", isDirectory: true)
+    static func defaultDirectoryURL(
+        fileManager: FileManager = .default,
+        infoDictionary: [String: Any]? = Bundle.main.infoDictionary
+    ) -> URL {
+        AppStorageScope.applicationSupportRoot(
+            fileManager: fileManager,
+            infoDictionary: infoDictionary
+        )
             .appendingPathComponent("Automatic Backups", isDirectory: true)
     }
 

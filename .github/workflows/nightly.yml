@@ -1,0 +1,597 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or commit to publish; use a known-good commit for rollback"
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-release
+  cancel-in-progress: false
+
+env:
+  PROJECT_NAME: MacTools
+  APP_PRODUCT_NAME: MacTools Nightly
+  SCHEME: MacTools
+  CONFIGURATION: Nightly
+  DERIVED_DATA: build/DerivedDataNightly
+  NIGHTLY_RETENTION_COUNT: 14
+
+jobs:
+  release:
+    name: Build, sign, notarize, and publish Nightly
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.ENABLE_NIGHTLY_RELEASES == 'true' }}
+    runs-on: macos-26
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout selected source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || 'main' }}
+          fetch-depth: 0
+
+      - name: Set Nightly metadata
+        run: |
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$SOURCE_SHA" origin/main; then
+            echo "Nightly source $SOURCE_SHA is not part of origin/main; refusing to expose release credentials." >&2
+            exit 1
+          fi
+          scripts/nightly-release.py metadata \
+            --app-version-config Configs/AppVersion.xcconfig \
+            --plugins-dir Plugins \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-sha "$SOURCE_SHA" \
+            --run-number "$GITHUB_RUN_NUMBER" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --github-env "$GITHUB_ENV"
+
+      - name: Decide whether to publish Nightly
+        id: nightly_gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "decision=publish" >> "$GITHUB_OUTPUT"
+            echo "Manual run: forced Nightly publication." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          PREVIOUS_SOURCE_SHA=""
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            APPCAST_PATH="$RUNNER_TEMP/advertised-nightly-appcast.xml"
+            if curl --fail --silent --show-error --location \
+              --connect-timeout 10 --max-time 30 \
+              "https://mactools.ggbond.app/nightly/appcast.xml" \
+              --output "$APPCAST_PATH" \
+              && PREVIOUS_TAG="$(scripts/nightly-release.py appcast-tag --input "$APPCAST_PATH")"; then
+              PREVIOUS_SOURCE_SHA="$(gh release view "$PREVIOUS_TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --json targetCommitish,isDraft,isPrerelease \
+                --jq 'if .isDraft == false and .isPrerelease == true then .targetCommitish else "" end')" \
+                || PREVIOUS_SOURCE_SHA=""
+            fi
+          fi
+          scripts/nightly-release.py publication-decision \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --source-sha "$SOURCE_SHA" \
+            --previous-source-sha "$PREVIOUS_SOURCE_SHA" \
+            --github-output "$GITHUB_OUTPUT" \
+            --github-step-summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Report unchanged Nightly
+        if: steps.nightly_gate.outputs.decision == 'unchanged'
+        run: echo "No source changes since the advertised Nightly; publication skipped."
+
+      - name: Validate required secrets
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+          BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
+          DEVELOPER_ID_CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          PLUGIN_CATALOG_PRIVATE_KEY_BASE64: ${{ secrets.PLUGIN_CATALOG_PRIVATE_KEY_BASE64 }}
+        run: |
+          missing=0
+          for name in \
+            APPLE_DEVELOPMENT_TEAM \
+            BUNDLE_IDENTIFIER_PREFIX \
+            DEVELOPER_ID_CERT_P12 \
+            DEVELOPER_ID_CERT_PASSWORD \
+            ASC_API_KEY_P8_BASE64 \
+            ASC_API_KEY_ID \
+            ASC_API_ISSUER_ID \
+            SPARKLE_PRIVATE_KEY \
+            PLUGIN_CATALOG_PRIVATE_KEY_BASE64; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing required secret: $name" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Show Xcode version
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+
+      - name: Install catalog signing dependency
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/plugin-signing-venv"
+          "$RUNNER_TEMP/plugin-signing-venv/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/plugin-signing-venv/bin/python" -m pip install cryptography
+          echo "$RUNNER_TEMP/plugin-signing-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Write release local config
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+          BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
+        run: |
+          umask 077
+          cat > LocalConfig.xcconfig <<EOF
+          DEVELOPMENT_TEAM = ${APPLE_DEVELOPMENT_TEAM}
+          BUNDLE_IDENTIFIER_PREFIX = ${BUNDLE_IDENTIFIER_PREFIX}
+          EOF
+
+      - name: Generate Xcode project
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: make generate
+
+      - name: Run contributor-testable validation
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: |
+          make script-tests
+          /usr/bin/python3 scripts/changelog.py validate
+          xcodebuild \
+            -project "${PROJECT_NAME}.xcodeproj" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=macOS" \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            test \
+            -quiet
+          ./scripts/plugins/verify-plugin-kit-v5-binary-compatibility.sh
+
+      - name: Import Developer ID certificate
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          DEVELOPER_ID_CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/developer-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+
+          echo "$DEVELOPER_ID_CERT_P12" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$DEVELOPER_ID_CERT_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F'"' '/Developer ID Application/ { print $2; exit }')"
+          if [[ -z "$SIGNING_IDENTITY" ]]; then
+            echo "Developer ID Application identity was not found in imported certificate." >&2
+            exit 1
+          fi
+
+          rm -f "$CERT_PATH"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build unsigned Nightly app and plugins
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: |
+          ./scripts/xcodebuild-filtered.sh \
+            -project "${PROJECT_NAME}.xcodeproj" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath "$DERIVED_DATA" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            PLUGIN_CATALOG_URL="https://mactools.ggbond.app/nightly/plugins/v${PLUGIN_KIT_VERSION}/catalog.json" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            build \
+            -quiet
+
+          scripts/nightly-release.py verify-app \
+            --app "$DERIVED_DATA/Build/Products/Nightly/$APP_PRODUCT_NAME.app" \
+            --cli "$DERIVED_DATA/Build/Products/Nightly/mactools" \
+            --bundle-identifier-prefix "${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}" \
+            --version "$VERSION" \
+            --build-number "$BUILD_NUMBER" \
+            --plugin-kit-version "$PLUGIN_KIT_VERSION"
+
+      - name: Sign app bundle
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: |
+          APP_PATH="$DERIVED_DATA/Build/Products/Nightly/$APP_PRODUCT_NAME.app"
+          ENTITLEMENTS="Configs/MacTools.entitlements"
+          FINDER_SYNC_ENTITLEMENTS="Sources/Extensions/RightClickFinderSync/RightClickFinderSync-Nightly.entitlements"
+          SPARKLE_FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+          SPARKLE_CURRENT="$SPARKLE_FRAMEWORK/Versions/Current"
+
+          sign_path() {
+            /usr/bin/codesign --force --sign "$SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" --options runtime --timestamp "$1"
+          }
+
+          sign_path_with_entitlements() {
+            /usr/bin/codesign --force --sign "$SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" --options runtime --timestamp --entitlements "$2" "$1"
+          }
+
+          sign_path_preserving_entitlements() {
+            /usr/bin/codesign --force --sign "$SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" --options runtime --timestamp --preserve-metadata=entitlements "$1"
+          }
+
+          if [[ -d "$SPARKLE_FRAMEWORK" ]]; then
+            [[ ! -d "$SPARKLE_CURRENT/XPCServices/Installer.xpc" ]] || sign_path "$SPARKLE_CURRENT/XPCServices/Installer.xpc"
+            [[ ! -d "$SPARKLE_CURRENT/XPCServices/Downloader.xpc" ]] || sign_path_preserving_entitlements "$SPARKLE_CURRENT/XPCServices/Downloader.xpc"
+            [[ ! -f "$SPARKLE_CURRENT/Autoupdate" ]] || sign_path "$SPARKLE_CURRENT/Autoupdate"
+            [[ ! -d "$SPARKLE_CURRENT/Updater.app" ]] || sign_path "$SPARKLE_CURRENT/Updater.app"
+          fi
+
+          while IFS= read -r binary; do
+            [[ -n "$binary" ]] || continue
+            sign_path "$binary"
+          done < <(find "$APP_PATH/Contents" -type f \( -name "*.dylib" -o -name "*.so" \) -print)
+
+          while IFS= read -r bundle; do
+            [[ -n "$bundle" ]] || continue
+            if [[ "$bundle" == *"/Sparkle.framework" || "$bundle" == *"/Sparkle.framework/"* ]]; then
+              continue
+            fi
+            if [[ "$(basename "$bundle")" == "RightClickFinderSync.appex" ]]; then
+              sign_path_with_entitlements "$bundle" "$FINDER_SYNC_ENTITLEMENTS"
+            else
+              sign_path "$bundle"
+            fi
+          done < <(find "$APP_PATH/Contents" -depth -type d \( -name "*.framework" -o -name "*.app" -o -name "*.xpc" -o -name "*.appex" \) -print)
+
+          # The broker is a plain executable, so the bundle/dylib loops above do not sign it.
+          CLI_BROKER="$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
+          [[ -f "$CLI_BROKER" ]] || { echo "Nightly CLI broker is missing" >&2; exit 1; }
+          sign_path "$CLI_BROKER"
+
+          [[ ! -d "$SPARKLE_FRAMEWORK" ]] || sign_path "$SPARKLE_FRAMEWORK"
+          /usr/bin/codesign \
+            --force \
+            --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --options runtime \
+            --timestamp \
+            --entitlements "$ENTITLEMENTS" \
+            "$APP_PATH"
+
+          FINDER_SYNC_APPEX="$APP_PATH/Contents/PlugIns/RightClickFinderSync.appex"
+          FINDER_SYNC_EXTENSION_POINT="$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$FINDER_SYNC_APPEX/Contents/Info.plist")"
+          if [[ "$FINDER_SYNC_EXTENSION_POINT" != "com.apple.FinderSync" ]]; then
+            echo "Finder Sync extension point is invalid: $FINDER_SYNC_EXTENSION_POINT" >&2
+            exit 1
+          fi
+          FINDER_SYNC_SIGNED_ENTITLEMENTS="$(/usr/bin/codesign -d --entitlements :- "$FINDER_SYNC_APPEX" 2>/dev/null || true)"
+          if [[ "$FINDER_SYNC_SIGNED_ENTITLEMENTS" != *"com.apple.security.app-sandbox"* ]]; then
+            echo "Finder Sync extension is missing app sandbox entitlement" >&2
+            exit 1
+          fi
+          if [[ "$FINDER_SYNC_SIGNED_ENTITLEMENTS" != *"com.apple.security.temporary-exception.files.home-relative-path.read-only"* ]]; then
+            echo "Finder Sync extension is missing right-click config read entitlement" >&2
+            exit 1
+          fi
+          if [[ "$FINDER_SYNC_SIGNED_ENTITLEMENTS" != *"MacTools Nightly/right-click-menu.json"* ]]; then
+            echo "Finder Sync extension is missing the Nightly configuration entitlement" >&2
+            exit 1
+          fi
+          /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          scripts/nightly-release.py verify-app \
+            --app "$APP_PATH" --signed \
+            --bundle-identifier-prefix "${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}" \
+            --version "$VERSION" --build-number "$BUILD_NUMBER" \
+            --plugin-kit-version "$PLUGIN_KIT_VERSION"
+
+      - name: Build and sign same-commit Nightly plugins
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          PLUGIN_CATALOG_PRIVATE_KEY_BASE64: ${{ secrets.PLUGIN_CATALOG_PRIVATE_KEY_BASE64 }}
+          BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
+        run: |
+          CODE_SIGN_KEYCHAIN="$KEYCHAIN_PATH" \
+            scripts/plugins/build-plugin-release-assets.sh \
+              --source-dir Plugins \
+              --build-dir "$PLUGIN_BUILD_DIR" \
+              --dist-dir "$ARTIFACT_ROOT" \
+              --assets-dir "$PLUGIN_ASSETS_DIR" \
+              --products-dir "$DERIVED_DATA/Build/Products/Nightly" \
+              --base-url "$PLUGIN_ASSET_BASE_URL" \
+              --catalog-output "$PLUGIN_CATALOG_PATH" \
+              --signed-catalog-output "$SIGNED_PLUGIN_CATALOG_PATH" \
+              --sign-identity "$SIGNING_IDENTITY" \
+              --configuration Nightly \
+              --minimum-host-version "$PLUGIN_CATALOG_MINIMUM_HOST_VERSION" \
+              --release-notes-url "$PLUGIN_RELEASE_NOTES_URL" \
+              --nightly-build-number "$BUILD_NUMBER"
+
+          scripts/nightly-release.py verify-helper-signatures \
+            --packages-dir "$PLUGIN_BUILD_DIR/Packages" \
+            --bundle-identifier-prefix "$BUNDLE_IDENTIFIER_PREFIX"
+
+          scripts/nightly-release.py verify-catalog \
+            --catalog "$SIGNED_PLUGIN_CATALOG_PATH" \
+            --plugins-dir Plugins \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --build-number "$BUILD_NUMBER"
+
+          PLUGIN_CATALOG_PUBLIC_KEY="$(sed -n 's/^[[:space:]]*PLUGIN_CATALOG_PUBLIC_KEY[[:space:]]*=[[:space:]]*//p' Configs/Release.xcconfig | head -n 1)"
+          [[ -n "$PLUGIN_CATALOG_PUBLIC_KEY" ]] || { echo "Plugin catalog public key is missing." >&2; exit 1; }
+          xcrun swift scripts/plugins/preflight-app-plugin-catalog.swift \
+            --app-version "$VERSION" \
+            --catalog-url "https://mactools.ggbond.app/nightly/plugins/v${PLUGIN_KIT_VERSION}/catalog.json" \
+            --expected-catalog "$SIGNED_PLUGIN_CATALOG_PATH" \
+            --public-key-base64 "$PLUGIN_CATALOG_PUBLIC_KEY" \
+            --deployed-catalog "$SIGNED_PLUGIN_CATALOG_PATH" \
+            --required-plugin-kit-version "$PLUGIN_KIT_VERSION"
+
+      - name: Create and sign Nightly DMG
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
+        run: |
+          APP_PATH="$DERIVED_DATA/Build/Products/Nightly/$APP_PRODUCT_NAME.app"
+          STAGE_DIR="$(mktemp -d "$RUNNER_TEMP/mactools-nightly-dmg.XXXXXX")"
+          mkdir -p "$(dirname "$DMG_PATH")"
+          ditto "$APP_PATH" "$STAGE_DIR/$APP_PRODUCT_NAME.app"
+          ln -s /Applications "$STAGE_DIR/Applications"
+          hdiutil create -volname "$APP_PRODUCT_NAME" -srcfolder "$STAGE_DIR" -fs HFS+ -ov -format UDZO -imagekey zlib-level=9 "$DMG_PATH" >/dev/null
+          /bin/rm -rf "$STAGE_DIR"
+          /usr/bin/codesign \
+            --force \
+            --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --timestamp \
+            --identifier "${BUNDLE_IDENTIFIER_PREFIX}.mactools.nightly.disk-image" \
+            "$DMG_PATH"
+          /usr/bin/codesign --verify --verbose=2 "$DMG_PATH"
+
+      - name: Notarize and staple Nightly DMG
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_API_KEY_ID}.p8"
+          echo "$ASC_API_KEY_P8_BASE64" | base64 --decode > "$API_KEY_PATH"
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$API_KEY_PATH" \
+            --key-id "$ASC_API_KEY_ID" \
+            --issuer "$ASC_API_ISSUER_ID" \
+            --wait \
+            --timeout 30m
+          xcrun stapler staple "$DMG_PATH"
+          spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
+          rm -f "$API_KEY_PATH"
+
+      - name: Generate Nightly notes, checksum, and appcast
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          DMG_DIRECTORY="$(dirname "$DMG_PATH")"
+          DMG_NAME="$(basename "$DMG_PATH")"
+          (cd "$DMG_DIRECTORY" && shasum -a 256 "$DMG_NAME") | tee "$SHA256_PATH"
+          RELEASE_NOTES_PATH="$RUNNER_TEMP/nightly-release-notes.md"
+          NIGHTLY_APPCAST_PATH="$RUNNER_TEMP/nightly-appcast.xml"
+          scripts/nightly-release.py notes \
+            --output "$RELEASE_NOTES_PATH" \
+            --repository "$GITHUB_REPOSITORY" \
+            --version "$VERSION" \
+            --build-number "$BUILD_NUMBER" \
+            --source-sha "$SOURCE_SHA"
+
+          SIGN_UPDATE="$DERIVED_DATA/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update"
+          if [[ ! -x "$SIGN_UPDATE" ]]; then
+            SIGN_UPDATE="$(find "$DERIVED_DATA/SourcePackages" -path "*/Sparkle/bin/sign_update" -type f -perm -111 | head -n 1)"
+          fi
+          [[ -n "$SIGN_UPDATE" && -x "$SIGN_UPDATE" ]] || { echo "Sparkle sign_update tool was not found." >&2; exit 1; }
+          SPARKLE_KEY_PATH="$RUNNER_TEMP/sparkle_ed25519_key"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$SPARKLE_KEY_PATH"
+          SIGN_OUTPUT="$("$SIGN_UPDATE" "$DMG_PATH" --ed-key-file "$SPARKLE_KEY_PATH")"
+          rm -f "$SPARKLE_KEY_PATH"
+          ED_SIGNATURE="$(printf '%s' "$SIGN_OUTPUT" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')"
+
+          scripts/nightly-release.py appcast \
+            --output "$NIGHTLY_APPCAST_PATH" \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --version "$VERSION" \
+            --build-number "$BUILD_NUMBER" \
+            --signature "$ED_SIGNATURE" \
+            --file-size "$(stat -f '%z' "$DMG_PATH")" \
+            --publication-date "$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')" \
+            --release-notes "$RELEASE_NOTES_PATH"
+          {
+            echo "RELEASE_NOTES_PATH=$RELEASE_NOTES_PATH"
+            echo "NIGHTLY_APPCAST_PATH=$NIGHTLY_APPCAST_PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Create immutable-by-workflow draft prerelease
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Nightly release $TAG already exists; published assets are never overwritten." >&2
+            exit 1
+          fi
+          gh release create "$TAG" \
+            --target "$SOURCE_SHA" \
+            --draft \
+            --prerelease \
+            --latest=false \
+            --title "MacTools Nightly — Unstable ($BUILD_NUMBER)" \
+            --notes-file "$RELEASE_NOTES_PATH"
+
+          assets=(
+            "$DMG_PATH#MacTools-Nightly.dmg"
+            "$SHA256_PATH#MacTools-Nightly.sha256"
+            "$SIGNED_PLUGIN_CATALOG_PATH#catalog.json"
+          )
+          while IFS= read -r asset; do
+            [[ -n "$asset" ]] && assets+=("$asset")
+          done < <(find "$PLUGIN_ASSETS_DIR" -maxdepth 1 -name "*.mactoolsplugin.zip" -type f -print | sort)
+          gh release upload "$TAG" "${assets[@]}"
+
+          EXPECTED_ASSETS_PATH="$RUNNER_TEMP/nightly-expected-assets.txt"
+          {
+            echo "MacTools-Nightly.dmg"
+            echo "MacTools-Nightly.sha256"
+            echo "catalog.json"
+            find "$PLUGIN_ASSETS_DIR" -maxdepth 1 -name "*.mactoolsplugin.zip" -type f -exec basename {} \; | sort
+          } | sort > "$EXPECTED_ASSETS_PATH"
+          gh release view "$TAG" --json assets --jq '.assets[].name' | sort > "$RUNNER_TEMP/nightly-actual-assets.txt"
+          diff -u "$EXPECTED_ASSETS_PATH" "$RUNNER_TEMP/nightly-actual-assets.txt"
+          gh release edit "$TAG" --draft=false --prerelease --latest=false
+          RELEASE_STATE="$(gh release view "$TAG" --json isDraft,isPrerelease --jq '[.isDraft, .isPrerelease] | @tsv')"
+          if [[ "$RELEASE_STATE" != $'false\ttrue' ]]; then
+            echo "Nightly release has unexpected publication state: $RELEASE_STATE" >&2
+            exit 1
+          fi
+          LATEST_TAG="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [[ "$LATEST_TAG" == "$TAG" ]]; then
+            echo "Nightly release unexpectedly replaced the stable Latest release." >&2
+            exit 1
+          fi
+
+      - name: Apply bounded Nightly retention
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASES_PATH="$RUNNER_TEMP/nightly-releases.json"
+          RELEASE_PAGES_PATH="$RUNNER_TEMP/nightly-release-pages.json"
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            > "$RELEASE_PAGES_PATH"
+          jq 'flatten | map({tagName: .tag_name, isDraft: .draft, isPrerelease: .prerelease, publishedAt: .published_at})' \
+            "$RELEASE_PAGES_PATH" > "$RELEASES_PATH"
+
+          PRESERVE_TAG_ARGS=()
+          COMMITTED_APPCAST_PATH="$RUNNER_TEMP/committed-nightly-appcast.xml"
+          if git show "origin/main:$NIGHTLY_APPCAST_RELATIVE_PATH" > "$COMMITTED_APPCAST_PATH" 2>/dev/null; then
+            COMMITTED_TAG="$(scripts/nightly-release.py appcast-tag --input "$COMMITTED_APPCAST_PATH")"
+            PRESERVE_TAG_ARGS+=(--preserve-tag "$COMMITTED_TAG")
+          fi
+
+          DEPLOYED_APPCAST_PATH="$RUNNER_TEMP/deployed-nightly-appcast.xml"
+          if curl --fail --silent --show-error --location \
+            "https://mactools.ggbond.app/nightly/appcast.xml" \
+            --output "$DEPLOYED_APPCAST_PATH" \
+            && DEPLOYED_TAG="$(scripts/nightly-release.py appcast-tag --input "$DEPLOYED_APPCAST_PATH")"; then
+            PRESERVE_TAG_ARGS+=(--preserve-tag "$DEPLOYED_TAG")
+          else
+            echo "The deployed Nightly appcast is unavailable; skipping retention to preserve rollback safety."
+            exit 0
+          fi
+
+          scripts/nightly-release.py stale-tags \
+            --input "$RELEASES_PATH" \
+            --keep "$NIGHTLY_RETENTION_COUNT" \
+            "${PRESERVE_TAG_ARGS[@]}" \
+            > "$RUNNER_TEMP/stale-nightly-tags.txt"
+          while IFS= read -r stale_tag; do
+            [[ -n "$stale_tag" ]] || continue
+            gh release delete "$stale_tag" --cleanup-tag --yes
+          done < "$RUNNER_TEMP/stale-nightly-tags.txt"
+
+      - name: Upload Nightly workflow artifact
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacTools-Nightly-${{ env.BUILD_NUMBER }}
+          path: |
+            ${{ env.DMG_PATH }}
+            ${{ env.SHA256_PATH }}
+            ${{ env.SIGNED_PLUGIN_CATALOG_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish dedicated Nightly catalog and appcast last
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: |
+          git diff --exit-code "$SOURCE_SHA" -- \
+            docs/appcast.xml \
+            docs/app-release.json \
+            docs/plugins \
+            Configs/AppVersion.xcconfig \
+            .github/workflows/release.yml \
+            .github/workflows/plugin-release.yml
+
+          cp "$SIGNED_PLUGIN_CATALOG_PATH" "$RUNNER_TEMP/nightly-plugin-catalog.json"
+          cp "$NIGHTLY_APPCAST_PATH" "$RUNNER_TEMP/nightly-appcast.xml"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B nightly-publish-main origin/main
+          mkdir -p "$(dirname "$NIGHTLY_PLUGIN_CATALOG_RELATIVE_PATH")"
+          mkdir -p "$(dirname "$NIGHTLY_APPCAST_RELATIVE_PATH")"
+          cp "$RUNNER_TEMP/nightly-plugin-catalog.json" "$NIGHTLY_PLUGIN_CATALOG_RELATIVE_PATH"
+          cp "$RUNNER_TEMP/nightly-appcast.xml" "$NIGHTLY_APPCAST_RELATIVE_PATH"
+          git add "$NIGHTLY_PLUGIN_CATALOG_RELATIVE_PATH" "$NIGHTLY_APPCAST_RELATIVE_PATH"
+
+          CHANGED_PATHS="$(git diff --cached --name-only)"
+          EXPECTED_PATHS="$(printf '%s\n%s\n' "$NIGHTLY_APPCAST_RELATIVE_PATH" "$NIGHTLY_PLUGIN_CATALOG_RELATIVE_PATH" | sort)"
+          if [[ "$(printf '%s\n' "$CHANGED_PATHS" | sort)" != "$EXPECTED_PATHS" ]]; then
+            echo "Nightly publication attempted to modify unexpected paths:" >&2
+            printf '%s\n' "$CHANGED_PATHS" >&2
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "Nightly metadata did not change; refusing to advance the feed." >&2
+            exit 1
+          fi
+          git commit -m "ci: publish MacTools Nightly $BUILD_NUMBER"
+          git push origin HEAD:main
+
+      - name: Cleanup keychain
+        if: always() && steps.nightly_gate.outputs.decision == 'publish'
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          fi

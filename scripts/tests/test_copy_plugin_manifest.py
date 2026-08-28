@@ -37,6 +37,29 @@ def runtime_envelope(**overrides: object) -> dict[str, object]:
 
 
 class CopyPluginManifestTests(unittest.TestCase):
+    def test_nightly_helper_disclosures_match_isolated_paths_without_changing_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            for directory, plugin_id in [("FanControl", "fan-control"), ("BatteryChargeLimit", "battery-charge-limit")]:
+                source = REPO_ROOT / "Plugins" / directory / "plugin.json"
+                original = source.read_bytes()
+                base_path = f"/Library/PrivilegedHelperTools/cc.ggbond.mactools.{plugin_id}.smc-helper"
+                for configuration in ["Release", "Nightly"]:
+                    with self.subTest(plugin=plugin_id, configuration=configuration):
+                        destination = root / f"{directory}-{configuration}.json"
+                        subprocess.run([
+                            sys.executable, str(SCRIPT), "copy", "--source", str(source),
+                            "--destination", str(destination), "--configuration", configuration,
+                            "--app-version-config", str(APP_VERSION_CONFIG),
+                        ], check=True)
+                        manifest = json.loads(destination.read_text(encoding="utf-8"))
+                        step = next(step for step in manifest["setup"]["steps"] if step["id"] == "install-privileged-helper")
+                        for description in step["description"].values():
+                            self.assertIn(base_path + (".nightly" if configuration == "Nightly" else ""), description)
+                            if configuration == "Release":
+                                self.assertNotIn(base_path + ".nightly", description)
+                self.assertEqual(source.read_bytes(), original)
+
     def test_debug_copy_uses_local_host_version(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = pathlib.Path(temporary_directory)
@@ -119,6 +142,110 @@ class CopyPluginManifestTests(unittest.TestCase):
             )
 
             self.assertEqual(destination.read_bytes(), original)
+
+    def test_nightly_copy_derives_valid_monotonic_version_without_changing_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            source = root / "plugin.json"
+            destination = root / "copied.json"
+            config = root / "AppVersion.xcconfig"
+            source.write_text(
+                json.dumps(runtime_envelope(
+                    version="1.4.2",
+                    minHostVersion="1.2.0",
+                )),
+                encoding="utf-8",
+            )
+            original = source.read_bytes()
+            config.write_text("MARKETING_VERSION = 1.2.3\n", encoding="utf-8")
+
+            subprocess.run(
+                [
+                    sys.executable, str(SCRIPT), "copy",
+                    "--source", str(source),
+                    "--destination", str(destination),
+                    "--configuration", "Nightly",
+                    "--app-version-config", str(config),
+                    "--nightly-build-number", "412.2",
+                ],
+                check=True,
+            )
+
+            copied = json.loads(destination.read_text(encoding="utf-8"))
+            self.assertEqual(copied["version"], "1.412.2")
+            self.assertEqual(copied["minHostVersion"], "1.2.0")
+            self.assertEqual(source.read_bytes(), original)
+
+    def test_nightly_copy_rejects_invalid_build_number(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            source = root / "plugin.json"
+            destination = root / "copied.json"
+            config = root / "AppVersion.xcconfig"
+            source.write_text(
+                json.dumps(runtime_envelope()),
+                encoding="utf-8",
+            )
+            config.write_text("MARKETING_VERSION = 1.2.3\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable, str(SCRIPT), "copy",
+                    "--source", str(source),
+                    "--destination", str(destination),
+                    "--configuration", "Nightly",
+                    "--app-version-config", str(config),
+                    "--nightly-build-number", "412-beta",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("numeric run.attempt components", result.stderr)
+
+    def test_nightly_packaging_reuses_aggregate_build_products(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            source = root / "Source"
+            plugin_root = source / "Example"
+            products = root / "Products"
+            output = root / "Output"
+            bundle = products / "Example.bundle"
+            plugin_root.mkdir(parents=True)
+            bundle.mkdir(parents=True)
+            (bundle / "payload").write_text("nightly bundle", encoding="utf-8")
+            (plugin_root / "plugin.json").write_text(
+                json.dumps(runtime_envelope(
+                    id="example-nightly-plugin",
+                    version="1.3.0",
+                    minHostVersion="1.2.0",
+                )),
+                encoding="utf-8",
+            )
+
+            subprocess.run(
+                [
+                    str(REPO_ROOT / "scripts/plugins/build-local-plugins.sh"),
+                    "--source-dir", str(source),
+                    "--output-dir", str(output),
+                    "--configuration", "Nightly",
+                    "--products-dir", str(products),
+                    "--nightly-build-number", "512.1",
+                    "--skip-catalog",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            package = output / "Packages/example-nightly-plugin.mactoolsplugin"
+            manifest = json.loads((package / "plugin.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["version"], "1.512.1")
+            self.assertEqual(
+                (package / "Example.bundle/payload").read_text(encoding="utf-8"),
+                "nightly bundle",
+            )
 
     def test_release_copy_expands_source_localization_references(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

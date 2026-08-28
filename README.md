@@ -102,6 +102,14 @@ MacTools supports Simplified Chinese, Traditional Chinese, English, Spanish, Fre
 brew install --cask mactools
 ```
 
+### Nightly builds
+
+When a public Nightly release is available, download `MacTools-Nightly.dmg` from the newest [`nightly-*` prerelease](https://github.com/ggbond268/MacTools/releases). Nightly is an unstable, separately signed app with its own settings, URL scheme, update feed, and same-commit plugin catalog, so it can be installed beside stable MacTools. Do not rely on it for critical workflows; published Nightly assets are retained only for a bounded period.
+
+Nightly uses separate privileged helper installations for Fan Control and Battery Charge Limit, and separate Keychain services for Translator and Cloudflare R2. Configure Nightly credentials separately; stable credentials are not copied or modified. The physical hardware is still shared, so avoid applying competing fan or charging policies from both apps at once. Scheduled runs skip publication when the source is unchanged apart from generated Nightly metadata; manual runs can always force a new build.
+
+Activity Bar uses separate Nightly hook scripts and a separate socket, so installing or removing one channel's hooks leaves the other channel's hooks intact. The Nightly CLI broker also uses its own service and signing identity. Shared hardware controls and the trackpad's single-listener lock remain shared intentionally.
+
 ### Experimental command-line prototype
 
 The source tree includes a separately built `mactools` prototype for local testing. Phase 0 intentionally supports only `help`, `version`, and `doctor`; it does not ship in the app bundle or expose app actions yet. Build and test it with the signed local app by following [the Phase 0 test guide](docs/testing/cli-phase-0.md).
