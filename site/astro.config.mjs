@@ -4,5 +4,5 @@ export default defineConfig({
   site: "https://mactools.ggbond.app",
   base: "/",
   output: "static",
-  trailingSlash: "never",
+  trailingSlash: "ignore",
 });
