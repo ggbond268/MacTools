@@ -78,7 +78,10 @@ final class ClipboardHistorySettingsAccessibilityTests: XCTestCase {
             hosting.layoutSubtreeIfNeeded()
             namedSwitch = accessibilityElements(in: window).first { element in
                 let role = element.role
-                guard role == "AXCheckBox" || role == "AXSwitch" else { return false }
+                guard element.object is NSSwitch
+                    || role == "AXCheckBox"
+                    || role == "AXSwitch"
+                else { return false }
                 return element.label == title || element.title == title
             }
             if namedSwitch != nil { break }
@@ -105,6 +108,12 @@ final class ClipboardHistorySettingsAccessibilityTests: XCTestCase {
                   visited.insert(ObjectIdentifier(object)).inserted else { return }
             let element = AccessibilityTestElement(object: object)
             result.append(element)
+            if let window = object as? NSWindow, let contentView = window.contentView {
+                visit(contentView)
+            }
+            if let view = object as? NSView {
+                for subview in view.subviews { visit(subview) }
+            }
             for child in element.children { visit(child) }
         }
         visit(root)

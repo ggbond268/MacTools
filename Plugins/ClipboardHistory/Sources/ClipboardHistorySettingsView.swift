@@ -429,16 +429,13 @@ struct ClipboardHistorySettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
-                    Toggle(localization.string(
-                        "settings.saved.expansion.title",
-                        defaultValue: "Expand Snippet Keywords"
-                    ), isOn: $settings.isKeywordExpansionEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .accessibilityLabel(Text(localization.string(
+                    ClipboardSettingsSwitch(
+                        accessibilityLabel: localization.string(
                             "settings.saved.expansion.title",
                             defaultValue: "Expand Snippet Keywords"
-                        )))
+                        ),
+                        isOn: $settings.isKeywordExpansionEnabled
+                    )
                 }
                 .pluginSettingsListRowPadding(interactive: true)
                 if let diagnostic = keywordExpansionDiagnosticTitle {
@@ -760,16 +757,13 @@ struct ClipboardHistorySettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Toggle(localization.string(
-                        "settings.sequentialPaste.hidePreview.title",
-                        defaultValue: "Hide Content Preview"
-                    ), isOn: $settings.hidesSequentialHUDPreview)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .accessibilityLabel(Text(localization.string(
+                    ClipboardSettingsSwitch(
+                        accessibilityLabel: localization.string(
                             "settings.sequentialPaste.hidePreview.title",
                             defaultValue: "Hide Content Preview"
-                        )))
+                        ),
+                        isOn: $settings.hidesSequentialHUDPreview
+                    )
                 }
                 .pluginSettingsListRowPadding(interactive: true)
                 if let context = settingsContext {
@@ -1478,6 +1472,50 @@ private enum ClipboardHistorySettingsClearRequest: String, Identifiable {
     case resetUnreadable
 
     var id: String { rawValue }
+}
+
+private struct ClipboardSettingsSwitch: NSViewRepresentable {
+    let accessibilityLabel: String
+    @Binding var isOn: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isOn: $isOn)
+    }
+
+    func makeNSView(context: Context) -> ClipboardAccessibleSwitch {
+        let control = ClipboardAccessibleSwitch()
+        control.target = context.coordinator
+        control.action = #selector(Coordinator.didToggle(_:))
+        control.setAccessibilityLabel(accessibilityLabel)
+        control.state = isOn ? .on : .off
+        return control
+    }
+
+    func updateNSView(_ control: ClipboardAccessibleSwitch, context: Context) {
+        context.coordinator.isOn = $isOn
+        control.setAccessibilityLabel(accessibilityLabel)
+        control.state = isOn ? .on : .off
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var isOn: Binding<Bool>
+
+        init(isOn: Binding<Bool>) {
+            self.isOn = isOn
+        }
+
+        @objc func didToggle(_ sender: NSSwitch) {
+            isOn.wrappedValue = sender.state == .on
+        }
+    }
+}
+
+private final class ClipboardAccessibleSwitch: NSSwitch {
+    override func accessibilityPerformPress() -> Bool {
+        performClick(nil)
+        return true
+    }
 }
 
 struct ClipboardSettingsDisclosure<Label: View, Content: View>: View {

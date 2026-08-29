@@ -1628,9 +1628,12 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.processPasteboardChange(
             now: referenceDate.addingTimeInterval(120)
         )
-        await waitForPersistence()
+        let didPersistPruning = await waitUntil {
+            fixture.persistence.savedItems.isEmpty
+        }
 
         XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertTrue(didPersistPruning)
         XCTAssertTrue(fixture.persistence.savedItems.isEmpty)
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
         XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
@@ -1934,12 +1937,6 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(10))
         }
         return condition()
-    }
-
-    private func waitForPersistence() async {
-        for _ in 0..<10 {
-            await Task.yield()
-        }
     }
 
     private func assertPreparationFailureStopsPayloadReads(
