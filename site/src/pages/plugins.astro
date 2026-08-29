@@ -902,7 +902,15 @@ const structuredData = {
               {settingsPlugins.map((plugin) => {
                 const text = localizedPluginText(plugin);
                 return (
-                  <button type="button" class="settings-sidebar-item" data-settings-tab={plugin.id} aria-selected="false">
+                  <button
+                    type="button"
+                    class="settings-sidebar-item"
+                    data-settings-tab={plugin.id}
+                    data-plugin-name-zh={text.zh.displayName}
+                    data-plugin-name-en={text.en.displayName}
+                    data-plugin-id={plugin.id}
+                    aria-selected="false"
+                  >
                     <span
                       class="sidebar-icon"
                       style={`--sidebar-icon: url("${symbol(iconByPlugin[plugin.id] ?? "slider.horizontal.3.png")}"); --sidebar-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
