@@ -1518,6 +1518,133 @@ final class PluginHost: ObservableObject {
         )
     }
 
+    struct ShortcutBindingConflict: Identifiable, Equatable {
+        let targetShortcutID: String
+        let conflictingShortcutID: String
+        let binding: ShortcutBinding
+        let ownerDescription: String
+        let canSwap: Bool
+
+        var id: String {
+            "\(targetShortcutID)|\(conflictingShortcutID)|\(binding.keyCode)|\(binding.modifiers.rawValue)"
+        }
+    }
+
+    enum ShortcutConflictResolution {
+        case swap
+        case replace
+    }
+
+    func shortcutBindingConflict(
+        for binding: ShortcutBinding,
+        targetShortcutID: String
+    ) -> ShortcutBindingConflict? {
+        guard let target = shortcutMutationTarget(for: targetShortcutID),
+              actionReference(for: target.descriptor) == nil
+        else { return nil }
+        guard let conflict = shortcutDescriptors().first(where: {
+            $0.itemID != target.descriptor.itemID
+                && resolvedBinding(for: $0) == binding
+                && !canShareShortcutBinding(target.descriptor, with: $0)
+        }), actionReference(for: conflict) == nil else { return nil }
+
+        return ShortcutBindingConflict(
+            targetShortcutID: target.descriptor.itemID,
+            conflictingShortcutID: conflict.itemID,
+            binding: binding,
+            ownerDescription: "\(conflict.pluginTitle) · \(conflict.definition.title)",
+            canSwap: resolvedBinding(for: target.descriptor) != nil
+        )
+    }
+
+    @discardableResult
+    func resolveShortcutBindingConflict(
+        _ conflict: ShortcutBindingConflict,
+        resolution: ShortcutConflictResolution
+    ) -> String? {
+        guard let target = shortcutDescriptor(for: conflict.targetShortcutID),
+              let previousOwner = shortcutDescriptor(for: conflict.conflictingShortcutID),
+              actionReference(for: target) == nil,
+              actionReference(for: previousOwner) == nil,
+              resolvedBinding(for: previousOwner) == conflict.binding
+        else {
+            let message = AppL10n.plugins(
+                "plugin.shortcut.conflictChanged",
+                defaultValue: "快捷键冲突已发生变化，请重试。"
+            )
+            shortcutErrors[conflict.targetShortcutID] = message
+            rebuildDerivedState()
+            return message
+        }
+
+        if let message = shortcutValidationMessage(conflict.binding, for: target) {
+            shortcutErrors[target.itemID] = message
+            rebuildDerivedState()
+            return message
+        }
+        let previousTargetBinding = resolvedBinding(for: target)
+        if resolution == .swap, let previousTargetBinding {
+            if let message = shortcutValidationMessage(previousTargetBinding, for: previousOwner) {
+                shortcutErrors[target.itemID] = message
+                rebuildDerivedState()
+                return message
+            }
+            if let remainingConflict = shortcutDescriptors().first(where: {
+                $0.itemID != target.itemID
+                    && $0.itemID != previousOwner.itemID
+                    && resolvedBinding(for: $0) == previousTargetBinding
+                    && !canShareShortcutBinding(previousOwner, with: $0)
+            }) {
+                let message = ShortcutValidationError.duplicate(
+                    ownerDescription: "\(remainingConflict.pluginTitle) · \(remainingConflict.definition.title)"
+                ).localizedDescription
+                shortcutErrors[target.itemID] = message
+                rebuildDerivedState()
+                return message
+            }
+        }
+
+        let originalTargetCustomization = shortcutStore.customization(for: target.itemID)
+        let originalOwnerCustomization = shortcutStore.customization(for: previousOwner.itemID)
+        let previousOwnerCustomization: ShortcutCustomization = switch resolution {
+        case .swap:
+            previousTargetBinding.map(ShortcutCustomization.custom) ?? .cleared
+        case .replace:
+            .cleared
+        }
+        let expectedPreviousOwnerBinding: ShortcutBinding? = switch resolution {
+        case .swap: previousTargetBinding
+        case .replace: nil
+        }
+        shortcutStore.setCustomization(previousOwnerCustomization, for: previousOwner.itemID)
+        shortcutStore.setCustomization(.custom(conflict.binding), for: target.itemID)
+
+        guard legacyResolvedBinding(for: target) == conflict.binding,
+              legacyResolvedBinding(for: previousOwner) == expectedPreviousOwnerBinding
+        else {
+            shortcutStore.setCustomization(originalTargetCustomization, for: target.itemID)
+            shortcutStore.setCustomization(originalOwnerCustomization, for: previousOwner.itemID)
+            let message = AppL10n.plugins(
+                "plugin.shortcut.saveFailed",
+                defaultValue: "无法保存快捷键。"
+            )
+            shortcutErrors[target.itemID] = message
+            rebuildDerivedState()
+            return message
+        }
+
+        shortcutErrors.removeValue(forKey: target.itemID)
+        shortcutErrors.removeValue(forKey: previousOwner.itemID)
+        notifyShortcutBindingChange(for: target, binding: conflict.binding)
+        notifyShortcutBindingChange(
+            for: previousOwner,
+            binding: resolution == .swap ? previousTargetBinding : nil
+        )
+        rebuildDerivedState()
+        syncGlobalShortcuts()
+        return nil
+    }
+
     private func shortcutValidationMessage(
         _ binding: ShortcutBinding,
         for descriptor: ShortcutDescriptor

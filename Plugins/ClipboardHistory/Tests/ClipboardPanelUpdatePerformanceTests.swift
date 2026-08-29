@@ -85,7 +85,7 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         var items = makeItems(3)
         items[1].setSavedMetadata(.init(title: "Saved", savedAt: .now))
         let model = ClipboardHistoryPanelModel()
-        model.prepareForPresentation(items: items)
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
         await model.waitForSearchForTesting()
         let initialIDs = model.visibleItems.map(\.id)
         let initialFamilies = model.availableFilterFamilies
@@ -93,7 +93,7 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         model.query = "Saved"
         await model.waitForSearchForTesting()
         model.setMultiSelectionEnabled(true)
-        model.prepareForPresentation(items: items)
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
         XCTAssertFalse(model.isSearching)
         XCTAssertEqual(model.mode, .all)
         XCTAssertEqual(model.query, "")
@@ -117,6 +117,28 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         XCTAssertTrue(model.visibleItems.first(where: { $0.id == items[0].id })?.isSaved == true)
     }
 
+    func testChangedRevisionRejectsSameCountWarmPage() async {
+        let original = makeItems(3)
+        let replacement = makeItems(3)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(
+            items: original,
+            historyRevision: 10,
+            savedRevision: 4
+        )
+        await model.waitForSearchForTesting()
+
+        model.prepareForPresentation(
+            items: replacement,
+            historyRevision: 11,
+            savedRevision: 4
+        )
+        await model.waitForSearchForTesting()
+
+        XCTAssertEqual(Set(model.visibleItems.map(\.id)), Set(replacement.map(\.id)))
+        XCTAssertTrue(Set(model.visibleItems.map(\.id)).isDisjoint(with: Set(original.map(\.id))))
+    }
+
     func testReorderedSnapshotThenTargetedUpdateUsesCorrectIndex() async {
         var items = makeItems(3)
         let model = ClipboardHistoryPanelModel()
@@ -135,13 +157,13 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
     func testLargeWarmReopenAndMetadataPatchStayWithinBudget() async {
         var items = makeItems(50_000)
         let model = ClipboardHistoryPanelModel()
-        model.prepareForPresentation(items: items)
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
         await model.waitForSearchForTesting()
         var start = ContinuousClock.now
-        model.prepareForPresentation(items: items)
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
         let reopen = ContinuousClock.now - start
         XCTAssertFalse(model.isSearching)
-        XCTAssertLessThan(reopen, .milliseconds(150))
+        XCTAssertLessThan(reopen, .milliseconds(50))
         items[0].lastUsedAt = .now
         start = .now
         model.updateItems(items, changedIDs: [items[0].id])

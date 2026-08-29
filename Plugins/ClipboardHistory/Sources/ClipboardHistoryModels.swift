@@ -610,20 +610,17 @@ final class ClipboardHistoryPayloadReference: @unchecked Sendable {
 struct ClipboardHistorySavedMetadata: Codable, Equatable, Sendable {
     var title: String
     var tags: [String]
-    var isFavorite: Bool
     let savedAt: Date
     var updatedAt: Date
 
     init(
         title: String,
         tags: [String] = [],
-        isFavorite: Bool = false,
         savedAt: Date = Date(),
         updatedAt: Date? = nil
     ) {
         self.title = title
         self.tags = tags
-        self.isFavorite = isFavorite
         self.savedAt = savedAt
         self.updatedAt = updatedAt ?? savedAt
     }
@@ -861,14 +858,6 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         guard var metadata = savedMetadata else { return }
         metadata.title = title
         metadata.tags = tags
-        metadata.updatedAt = updatedAt
-        savedMetadata = metadata
-        refreshSearchIndex()
-    }
-
-    mutating func toggleSavedFavorite(updatedAt: Date) {
-        guard var metadata = savedMetadata else { return }
-        metadata.isFavorite.toggle()
         metadata.updatedAt = updatedAt
         savedMetadata = metadata
         refreshSearchIndex()

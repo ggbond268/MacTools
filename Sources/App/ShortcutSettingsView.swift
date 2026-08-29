@@ -643,6 +643,7 @@ struct ShortcutSettingsRowsView: View {
     let items: [ShortcutSettingsItem]
     var alignsWithActionRows = false
     @State private var pendingWarning: CommonShortcutBindingWarning?
+    @State private var pendingConflict: PluginHost.ShortcutBindingConflict?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -681,6 +682,34 @@ struct ShortcutSettingsRowsView: View {
                 _ = save(item, binding: warning.binding)
             }
         }
+        .confirmationDialog(
+            FeatureL10n.string("处理快捷键冲突"),
+            isPresented: Binding(
+                get: { pendingConflict != nil },
+                set: { if !$0 { pendingConflict = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingConflict
+        ) { conflict in
+            if conflict.canSwap {
+                Button(FeatureL10n.string("交换快捷键")) {
+                    _ = pluginHost.resolveShortcutBindingConflict(conflict, resolution: .swap)
+                    pendingConflict = nil
+                }
+            }
+            Button(FeatureL10n.string("替换原快捷键"), role: .destructive) {
+                _ = pluginHost.resolveShortcutBindingConflict(conflict, resolution: .replace)
+                pendingConflict = nil
+            }
+            Button(FeatureL10n.string("取消"), role: .cancel) {
+                pendingConflict = nil
+            }
+        } message: { conflict in
+            Text(FeatureL10n.format(
+                "此快捷键已分配给“%@”。交换会保留两个操作的快捷键；替换会清除原操作的快捷键。",
+                conflict.ownerDescription
+            ))
+        }
     }
 
     private func configure(_ item: ShortcutSettingsItem, binding: ShortcutBinding) -> String? {
@@ -694,6 +723,13 @@ struct ShortcutSettingsRowsView: View {
 
     private func save(_ item: ShortcutSettingsItem, binding: ShortcutBinding) -> String? {
         pluginHost.clearShortcutError(for: item.id)
+        if let conflict = pluginHost.shortcutBindingConflict(
+            for: binding,
+            targetShortcutID: item.id
+        ) {
+            pendingConflict = conflict
+            return nil
+        }
         return pluginHost.setShortcutBindingAndReturnError(binding, for: item.id)
     }
 
@@ -712,6 +748,7 @@ struct GroupedShortcutSettingsRowsView: View {
     @ObservedObject var pluginHost: PluginHost
     let groups: [ShortcutSettingsGroup]
     @State private var pendingWarning: CommonShortcutBindingWarning?
+    @State private var pendingConflict: PluginHost.ShortcutBindingConflict?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -746,6 +783,34 @@ struct GroupedShortcutSettingsRowsView: View {
                 _ = save(item, binding: warning.binding)
             }
         }
+        .confirmationDialog(
+            FeatureL10n.string("处理快捷键冲突"),
+            isPresented: Binding(
+                get: { pendingConflict != nil },
+                set: { if !$0 { pendingConflict = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingConflict
+        ) { conflict in
+            if conflict.canSwap {
+                Button(FeatureL10n.string("交换快捷键")) {
+                    _ = pluginHost.resolveShortcutBindingConflict(conflict, resolution: .swap)
+                    pendingConflict = nil
+                }
+            }
+            Button(FeatureL10n.string("替换原快捷键"), role: .destructive) {
+                _ = pluginHost.resolveShortcutBindingConflict(conflict, resolution: .replace)
+                pendingConflict = nil
+            }
+            Button(FeatureL10n.string("取消"), role: .cancel) {
+                pendingConflict = nil
+            }
+        } message: { conflict in
+            Text(FeatureL10n.format(
+                "此快捷键已分配给“%@”。交换会保留两个操作的快捷键；替换会清除原操作的快捷键。",
+                conflict.ownerDescription
+            ))
+        }
     }
 
     private func configure(_ item: ShortcutSettingsItem, binding: ShortcutBinding) -> String? {
@@ -759,6 +824,13 @@ struct GroupedShortcutSettingsRowsView: View {
 
     private func save(_ item: ShortcutSettingsItem, binding: ShortcutBinding) -> String? {
         pluginHost.clearShortcutError(for: item.id)
+        if let conflict = pluginHost.shortcutBindingConflict(
+            for: binding,
+            targetShortcutID: item.id
+        ) {
+            pendingConflict = conflict
+            return nil
+        }
         return pluginHost.setShortcutBindingAndReturnError(binding, for: item.id)
     }
 

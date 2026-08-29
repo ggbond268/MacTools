@@ -10,8 +10,7 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         let firstPresentation = original.historyPresentationItem()
         var edited = original
         let editedAt = original.updatedAt.addingTimeInterval(10)
-        edited.updateMetadata(title: "Edited", tags: ["changed"], keyword: ";edited",
-            isFavorite: false, templateText: "second body https://example.com", updatedAt: editedAt)
+        edited.updateMetadata(title: "Edited", tags: ["changed"], keyword: ";edited", templateText: "second body https://example.com", updatedAt: editedAt)
         edited.lastUsedAt = editedAt.addingTimeInterval(1)
 
         XCTAssertEqual(original.historyPresentationItem(), firstPresentation)
@@ -161,7 +160,7 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         let pending = Task { @MainActor in
             await controller.saveSnippet(ClipboardSnippetDraft(id: nil, title: "Pending",
                 content: String(repeating: "private text ", count: 100_000),
-                tags: [], keyword: nil, isFavorite: false))
+                tags: [], keyword: nil))
         }
         while !validating { await Task.yield() }
         controller.stop(invalidatePersistence: true)
@@ -188,7 +187,7 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         }
         let draft = ClipboardSnippetDraft(id: nil, title: "Old lifecycle",
             content: String(repeating: "text ", count: 200_000),
-            tags: [], keyword: nil, isFavorite: false)
+            tags: [], keyword: nil)
         let first = Task { @MainActor in await controller.saveSnippet(draft) }
         while !validating { await Task.yield() }
         var queued = false
@@ -204,7 +203,7 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         XCTAssertTrue(store.persistedItems.isEmpty)
         await waitForSavedLibraryLoad(controller)
         let fresh = await controller.saveSnippet(ClipboardSnippetDraft(id: nil,
-            title: "New lifecycle", content: "fresh", tags: [], keyword: nil, isFavorite: false))
+            title: "New lifecycle", content: "fresh", tags: [], keyword: nil))
         XCTAssertNotNil(fresh)
         XCTAssertEqual(store.persistedItems.map(\.title), ["New lifecycle"])
         controller.stop()
@@ -489,7 +488,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             title: "Durable",
             tags: ["work", "Work"],
             keyword: ";durable",
-            isFavorite: true,
             savedKind: .snippet,
             payload: .plainText("Hello {{date}}"),
             templateText: "Hello {{date}}"
@@ -505,7 +503,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         XCTAssertEqual(loaded[0].title, "Durable")
         XCTAssertEqual(loaded[0].tags, ["work"])
         XCTAssertEqual(loaded[0].keyword, ";durable")
-        XCTAssertTrue(loaded[0].isFavorite)
         XCTAssertEqual(try loaded[0].loadPayload().plainText, "Hello {{date}}")
     }
 
@@ -720,7 +717,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             content: "Regards",
             tags: [],
             keyword: ";sig",
-            isFavorite: false
         ))
         XCTAssertNotNil(first)
         let duplicate = await controller.saveSnippet(ClipboardSnippetDraft(
@@ -729,7 +725,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             content: "Hello",
             tags: [],
             keyword: ";SIG",
-            isFavorite: false
         ))
         XCTAssertNil(duplicate)
         XCTAssertTrue(controller.errorMessage?.contains("already assigned") == true)
@@ -740,7 +735,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             content: "Hello",
             tags: [],
             keyword: "two words",
-            isFavorite: false
         ))
         XCTAssertNil(invalid)
         XCTAssertTrue(controller.errorMessage?.contains("spaces") == true)
@@ -760,7 +754,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             content: #"\{{date}}"#,
             tags: [],
             keyword: nil,
-            isFavorite: false
         ))
         let saved = try XCTUnwrap(savedResult)
 
@@ -912,7 +905,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
                 content: "first",
                 tags: [],
                 keyword: ";Sig",
-                isFavorite: false
             ))
         }
         await Task.yield()
@@ -922,7 +914,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             content: "second",
             tags: [],
             keyword: ";sig",
-            isFavorite: false
         ))
         let first = await firstTask.value
 
@@ -944,7 +935,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             content: "body",
             tags: [],
             keyword: nil,
-            isFavorite: false,
             isNew: true
         )
 
@@ -954,31 +944,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
 
         XCTAssertEqual(Set(results.compactMap { $0?.id }), Set([try XCTUnwrap(draft.id)]))
         XCTAssertEqual(controller.items.count, 1)
-    }
-
-    @MainActor
-    func testSavedMutationsForOneItemAreSerialized() async throws {
-        let controller = ClipboardSavedLibraryController(
-            pasteboard: SavedLibraryTestPasteboard(),
-            persistence: SlowSavedLibraryTestStore(saveDelay: 0.08)
-        )
-        await startSavedLibrary(controller)
-        let savedResult = await controller.saveSnippet(ClipboardSnippetDraft(
-            id: nil,
-            title: "Favorite",
-            content: "body",
-            tags: [],
-            keyword: nil,
-            isFavorite: false
-        ))
-        let saved = try XCTUnwrap(savedResult)
-
-        async let first = controller.toggleFavorite(id: saved.id)
-        async let second = controller.toggleFavorite(id: saved.id)
-        let results = await [first, second]
-
-        XCTAssertEqual(results, [true, true])
-        XCTAssertEqual(controller.items.first?.isFavorite, false)
     }
 
     @MainActor
@@ -999,7 +964,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             content: oversized,
             tags: [],
             keyword: nil,
-            isFavorite: false
         ))
 
         XCTAssertNil(result)
@@ -1014,7 +978,7 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             persistence: SlowSavedLibraryTestStore(saveDelay: 0))
         await startSavedLibrary(controller)
         let result = await controller.saveSnippet(ClipboardSnippetDraft(id: nil, title: "Repeated clipboard",
-            content: "{{clipboard}}{{clipboard}}", tags: [], keyword: nil, isFavorite: false))
+            content: "{{clipboard}}{{clipboard}}", tags: [], keyword: nil))
         let saved = try XCTUnwrap(result)
         controller.maximumExpandedTextByteCount = { 1_024 * 1_024 }
         let copiedText = String(repeating: "x", count: 1_024 * 1_024)
@@ -1063,7 +1027,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             content: content,
             tags: [],
             keyword: nil,
-            isFavorite: false
         ))
         let saved = try XCTUnwrap(savedResult)
         let expansion = await controller.copy(id: saved.id)

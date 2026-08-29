@@ -12,7 +12,6 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
         let title: String
         let tags: [String]
         let keyword: String?
-        let isFavorite: Bool
         let savedKind: ClipboardSavedItemKind
         let createdAt: Date
         let updatedAt: Date
@@ -35,7 +34,6 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
             title = item.title
             tags = item.tags
             keyword = item.keyword
-            isFavorite = item.isFavorite
             savedKind = item.savedKind
             createdAt = item.createdAt
             updatedAt = item.updatedAt
@@ -260,7 +258,6 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
             title: metadata.title,
             tags: metadata.tags,
             keyword: metadata.keyword,
-            isFavorite: metadata.isFavorite,
             savedKind: metadata.savedKind,
             createdAt: metadata.createdAt,
             updatedAt: metadata.updatedAt,

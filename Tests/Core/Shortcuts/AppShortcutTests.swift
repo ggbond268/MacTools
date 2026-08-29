@@ -274,6 +274,44 @@ final class AppShortcutTests: XCTestCase {
         )
     }
 
+    func testActivePluginShortcutConflictCanSwapOrReplaceWithoutDuplicateBindings() throws {
+        let firstBinding = ShortcutBinding(keyCode: 0, modifiers: [.command, .option])
+        let secondBinding = ShortcutBinding(keyCode: 1, modifiers: [.command, .shift])
+        let host = makeHost(
+            defaults: try makeDefaults(),
+            plugins: [TwoShortcutTestPlugin(first: firstBinding, second: secondBinding)]
+        )
+
+        let swapConflict = try XCTUnwrap(host.shortcutBindingConflict(
+            for: secondBinding,
+            targetShortcutID: TwoShortcutTestPlugin.firstItemID
+        ))
+        XCTAssertTrue(swapConflict.canSwap)
+        XCTAssertNil(host.resolveShortcutBindingConflict(swapConflict, resolution: .swap))
+        XCTAssertEqual(
+            host.shortcutItems.first { $0.id == TwoShortcutTestPlugin.firstItemID }?.bindingText,
+            ShortcutFormatter.displayString(for: secondBinding)
+        )
+        XCTAssertEqual(
+            host.shortcutItems.first { $0.id == TwoShortcutTestPlugin.secondItemID }?.bindingText,
+            ShortcutFormatter.displayString(for: firstBinding)
+        )
+
+        let replaceConflict = try XCTUnwrap(host.shortcutBindingConflict(
+            for: firstBinding,
+            targetShortcutID: TwoShortcutTestPlugin.firstItemID
+        ))
+        XCTAssertNil(host.resolveShortcutBindingConflict(replaceConflict, resolution: .replace))
+        XCTAssertEqual(
+            host.shortcutItems.first { $0.id == TwoShortcutTestPlugin.firstItemID }?.bindingText,
+            ShortcutFormatter.displayString(for: firstBinding)
+        )
+        XCTAssertEqual(
+            host.shortcutItems.first { $0.id == TwoShortcutTestPlugin.secondItemID }?.bindingText,
+            ShortcutFormatter.displayString(for: nil)
+        )
+    }
+
     func testStoredCommonApplicationShortcutsRemainActive() throws {
         let defaults = try makeDefaults()
         let appBinding = ShortcutBinding(
@@ -680,6 +718,48 @@ private final class AppShortcutTestPlugin: MacToolsPlugin {
                 defaultBinding: defaultBinding,
                 isRequired: false
             )
+        ]
+    }
+}
+
+@MainActor
+private final class TwoShortcutTestPlugin: MacToolsPlugin {
+    static let firstItemID = "two-shortcut-test.shortcut.first"
+    static let secondItemID = "two-shortcut-test.shortcut.second"
+
+    let metadata = PluginMetadata(
+        id: "two-shortcut-test",
+        title: "Two Shortcut Test",
+        iconName: "keyboard",
+        iconTint: .blue,
+        order: 2,
+        defaultDescription: "Tests scoped shortcut conflicts"
+    )
+    let shortcutDefinitions: [PluginShortcutDefinition]
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+
+    init(first: ShortcutBinding, second: ShortcutBinding) {
+        shortcutDefinitions = [
+            PluginShortcutDefinition(
+                id: "first",
+                title: "First",
+                description: "First command",
+                actionID: "first",
+                scope: .whilePluginActive,
+                defaultBinding: first,
+                isRequired: false
+            ),
+            PluginShortcutDefinition(
+                id: "second",
+                title: "Second",
+                description: "Second command",
+                actionID: "second",
+                scope: .whilePluginActive,
+                defaultBinding: second,
+                isRequired: false
+            ),
         ]
     }
 }

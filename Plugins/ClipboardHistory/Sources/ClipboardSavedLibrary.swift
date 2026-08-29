@@ -20,7 +20,6 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
     private(set) var title: String
     private(set) var tags: [String]
     private(set) var keyword: String?
-    private(set) var isFavorite: Bool
     let savedKind: ClipboardSavedItemKind
     let createdAt: Date
     private(set) var updatedAt: Date
@@ -51,7 +50,6 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
         title: String,
         tags: [String] = [],
         keyword: String? = nil,
-        isFavorite: Bool = false,
         savedKind: ClipboardSavedItemKind,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
@@ -66,7 +64,6 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
         self.title = Self.normalizedTitle(title, fallback: payload.searchableText)
         self.tags = Self.normalizedTags(tags)
         self.keyword = Self.normalizedKeyword(keyword)
-        self.isFavorite = isFavorite
         self.savedKind = savedKind
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -115,7 +112,6 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
         title: String,
         tags: [String],
         keyword: String?,
-        isFavorite: Bool,
         savedKind: ClipboardSavedItemKind,
         createdAt: Date,
         updatedAt: Date,
@@ -138,7 +134,6 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
         self.title = Self.normalizedTitle(title, fallback: "")
         self.tags = Self.normalizedTags(tags)
         self.keyword = Self.normalizedKeyword(keyword)
-        self.isFavorite = isFavorite
         self.savedKind = savedKind
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -201,14 +196,12 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
         title: String,
         tags: [String],
         keyword: String?,
-        isFavorite: Bool,
         templateText: String?,
         updatedAt: Date
     ) {
         self.title = Self.normalizedTitle(title, fallback: templateText ?? clipSearchText ?? "")
         self.tags = Self.normalizedTags(tags)
         self.keyword = Self.normalizedKeyword(keyword)
-        self.isFavorite = isFavorite
         self.templateText = templateText
         templateSearchText = templateText.map {
             String($0.prefix(ClipboardHistoryItem.maximumSearchableCharacterCount))
@@ -221,12 +214,6 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
         cachedHistoryPresentation = makeHistoryPresentationItem()
     }
 
-    mutating func updateFavorite(_ isFavorite: Bool, updatedAt: Date) {
-        self.isFavorite = isFavorite
-        self.updatedAt = updatedAt
-        cachedHistoryPresentation = makeHistoryPresentationItem()
-    }
-
     func reloadingPayload(using persistence: any ClipboardSavedLibraryPersisting) -> Self {
         let id = id
         return Self(
@@ -234,7 +221,6 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
             title: title,
             tags: tags,
             keyword: keyword,
-            isFavorite: isFavorite,
             savedKind: savedKind,
             createdAt: createdAt,
             updatedAt: updatedAt,
@@ -294,7 +280,6 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
             && lhs.title == rhs.title
             && lhs.tags == rhs.tags
             && lhs.keyword == rhs.keyword
-            && lhs.isFavorite == rhs.isFavorite
             && lhs.savedKind == rhs.savedKind
             && lhs.createdAt == rhs.createdAt
             && lhs.updatedAt == rhs.updatedAt
@@ -378,7 +363,6 @@ struct ClipboardSnippetDraft: Equatable, Sendable {
     var content: String
     var tags: [String]
     var keyword: String?
-    var isFavorite: Bool
     var isNew = false
 
     static let empty = Self(
@@ -387,7 +371,6 @@ struct ClipboardSnippetDraft: Equatable, Sendable {
         content: "",
         tags: [],
         keyword: nil,
-        isFavorite: false,
         isNew: true
     )
 }
@@ -929,7 +912,10 @@ enum ClipboardSavedLibrarySearch {
 
 @MainActor
 final class ClipboardSavedLibraryController: ObservableObject {
-    @Published private(set) var items: [ClipboardSavedItem] = []
+    private(set) var presentationRevision: UInt64 = 0
+    @Published private(set) var items: [ClipboardSavedItem] = [] {
+        didSet { presentationRevision &+= 1 }
+    }
     @Published private(set) var errorMessage: String?
     @Published private(set) var fatalErrorMessage: String?
     @Published private(set) var itemLoadErrorMessages: [UUID: String] = [:]
@@ -1196,7 +1182,6 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 title: draft.title,
                 tags: draft.tags,
                 keyword: normalizedKeyword,
-                isFavorite: draft.isFavorite,
                 templateText: draft.content,
                 updatedAt: now
             )
@@ -1207,7 +1192,6 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 title: draft.title,
                 tags: draft.tags,
                 keyword: normalizedKeyword,
-                isFavorite: draft.isFavorite,
                 savedKind: .snippet,
                 createdAt: existing?.createdAt ?? now,
                 updatedAt: now,
@@ -1222,14 +1206,6 @@ final class ClipboardSavedLibraryController: ObservableObject {
         return item
     }
 
-    func toggleFavorite(id: UUID) async -> Bool {
-        await withLibraryMutation(cancelledResult: false) { generation in
-            guard var item = self.items.first(where: { $0.id == id }) else { return false }
-            item.updateFavorite(!item.isFavorite, updatedAt: Date())
-            return await self.persistNewOrUpdated(item, payloadChanged: false, generation: generation)
-        }
-    }
-
     func updateMetadata(_ draft: ClipboardSavedMetadataDraft) async -> ClipboardSavedItem? {
         await withLibraryMutation(cancelledResult: nil) { generation in
             guard var item = self.items.first(where: { $0.id == draft.id }), !item.isSnippet else {
@@ -1239,7 +1215,6 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 title: draft.title,
                 tags: draft.tags,
                 keyword: item.keyword,
-                isFavorite: item.isFavorite,
                 templateText: item.templateText,
                 updatedAt: Date()
             )
@@ -1388,8 +1363,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
             title: item.title,
             content: content,
             tags: item.tags,
-            keyword: item.keyword,
-            isFavorite: item.isFavorite
+            keyword: item.keyword
         )
     }
 

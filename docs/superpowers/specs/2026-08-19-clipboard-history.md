@@ -62,6 +62,11 @@ Command-1 through Command-9 remains quick paste.
 
 The floating keyboard-first panel shares the Command Palette visual language. All, History, Saved, and Snippets are explicit scopes with one shared search field. Type and semantic filters, quick paste, mixed clip/snippet multi-selection, export, native sharing, plain-text conversion, Delete, and Save actions remain available when applicable. Per-item Delete removes the selected record everywhere; Unsave only removes its Saved status. Snippets have their own creation, editing, keyword status, tags, and template preview, without a separate Favorites hierarchy.
 
+Clipboard-window commands resolve through one binding map. Configurable commands cannot silently
+claim fixed navigation, quick-paste, or filter keys, and configurable conflicts offer Swap,
+Replace, or Cancel. The footer, overflow guide, Actions window, and inline controls all display
+the effective bindings from that same map.
+
 Settings starts with a concise, non-collapsible Privacy & Storage summary, storage status, Setup Guide, and optional details. Primary shortcuts follow collection. Paste Queue is one section: Paste Next stays visible, while HUD options and previous/skip/restart/cancel shortcuts share one initially collapsed disclosure. Saved Clips and Snippets have separate cards and separate clearing boundaries. Infrequent retention, exclusions, and shortcut controls collapse behind full-width clickable headers.
 
 Clipboard payloads never become Unified Search results, action descriptions, logs, diagnostics, or preference-backup content. Focus-dependent item operations remain inside the plugin panel. Canonical parameter-free actions cover opening Clipboard, collection state, clearing History, and sequential-paste controls.
@@ -91,7 +96,9 @@ Grouped files remain references rather than copied file contents. Unsupported ap
 - `ClipboardSavedLibraryController` owns authored snippets, template validation and expansion, and snippet persistence.
 - `IncrementalEncryptedClipboardHistoryStore` persists captured History/Saved state; `IncrementalEncryptedClipboardSavedLibraryStore` persists only authored snippets in the same encrypted database.
 - `ClipboardSnippetKeywordExpander` observes key-down events only while enabled and replaces text through Accessibility without using clipboard round trips.
+- History capture and snippet expansion use independent lazy pasteboard-reader helper processes, so a blocked or cancelled snippet read cannot stall or reset capture work.
 - `ClipboardHistoryPanelController` owns the floating History/Saved panel and restores the previous application for paste.
+- The panel caches its bounded initial page against monotonic History and Snippet revisions, allowing constant-time unchanged reopens while rebuilding asynchronously whenever either source changes.
 - `ClipboardSequentialPasteCoordinator` owns immutable explicit mixed-item snapshots and implicit History snapshots, and protects queued History rows from retention until completion or cancellation.
 
 ## Deferred Work

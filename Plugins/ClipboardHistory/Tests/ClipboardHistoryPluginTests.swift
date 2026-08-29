@@ -9,6 +9,17 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPluginTests: XCTestCase {
+    func testHistoryAndSnippetClipboardReadsUseIndependentProcesses() {
+        let plugin = makePlugin()
+        defer { plugin.deactivate(reason: .hostShutdown) }
+
+        let historyReader = try? XCTUnwrap(plugin.historyPasteboardReaderForTesting)
+        XCTAssertNotNil(historyReader)
+        if let historyReader {
+            XCTAssertFalse(historyReader === plugin.snippetPasteboardReaderForTesting)
+        }
+    }
+
     func testDeactivationStopsSnippetPasteboardReaderWithoutRelaunching() async {
         let reader = ClipboardPasteboardReaderProcess(
             helperURL: { URL(fileURLWithPath: "/bin/sleep") },
@@ -510,6 +521,47 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility"])
     }
 
+    func testClipboardWindowShortcutValidationProtectsFixedCommandFamilies() {
+        let plugin = makePlugin()
+        let configurableID = ClipboardHistoryPlugin.ShortcutID.panelSave
+
+        XCTAssertNotNil(plugin.shortcutValidationMessage(
+            definitionID: configurableID,
+            binding: ShortcutBinding(keyCode: 18, modifiers: [.command])
+        ))
+        XCTAssertNotNil(plugin.shortcutValidationMessage(
+            definitionID: configurableID,
+            binding: ClipboardHistoryFixedShortcut.pastePlainText
+        ))
+        XCTAssertNotNil(plugin.shortcutValidationMessage(
+            definitionID: configurableID,
+            binding: ClipboardHistoryFixedShortcut.paste
+        ))
+        XCTAssertNil(plugin.shortcutValidationMessage(
+            definitionID: configurableID,
+            binding: ShortcutBinding(keyCode: 1, modifiers: [.command, .option])
+        ))
+    }
+
+    func testClipboardWindowShortcutValidationProtectsDerivedReverseCycleBinding() {
+        let plugin = makePlugin()
+        let cycleBinding = ShortcutBinding(keyCode: 48, modifiers: [.control])
+        let reverseBinding = ShortcutBinding(keyCode: 48, modifiers: [.control, .shift])
+        var bindings = [ClipboardHistoryPlugin.ShortcutID.panelCycleScope: cycleBinding]
+        plugin.shortcutBindingResolver = { bindings[$0] }
+
+        XCTAssertNotNil(plugin.shortcutValidationMessage(
+            definitionID: ClipboardHistoryPlugin.ShortcutID.panelSave,
+            binding: reverseBinding
+        ))
+
+        bindings[ClipboardHistoryPlugin.ShortcutID.panelSave] = reverseBinding
+        XCTAssertNotNil(plugin.shortcutValidationMessage(
+            definitionID: ClipboardHistoryPlugin.ShortcutID.panelCycleScope,
+            binding: cycleBinding
+        ))
+    }
+
     func testInitialSetupPresentationAndCompletionPersistIndependently() {
         let suiteName = "ClipboardHistoryInitialSetupTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -803,7 +855,6 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             content: "Build the app",
             tags: [],
             keyword: ";bb",
-            isFavorite: false
         ))
 
         XCTAssertNotNil(saved)

@@ -213,7 +213,6 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         item.setSavedMetadata(ClipboardHistorySavedMetadata(
             title: "Reusable value",
             tags: ["project", "email"],
-            isFavorite: true,
             savedAt: Date(timeIntervalSince1970: 100),
             updatedAt: Date(timeIntervalSince1970: 200)
         ))

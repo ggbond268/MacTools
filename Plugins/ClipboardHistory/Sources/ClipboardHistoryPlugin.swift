@@ -114,16 +114,113 @@ final class ClipboardHistoryPlugin:
         definitionID: String,
         binding: ShortcutBinding
     ) -> String? {
-        guard definitionID == ShortcutID.panelCycleScope,
-              binding.modifiers.contains(.shift)
-        else {
-            return nil
+        if definitionID == ShortcutID.panelCycleScope,
+           binding.modifiers.contains(.shift) {
+            return localization.string(
+                "panel.shortcuts.cycleScope.shiftReserved",
+                defaultValue: "Shift is reserved for cycling backward. Record the forward shortcut without Shift."
+            )
         }
-        return localization.string(
-            "panel.shortcuts.cycleScope.shiftReserved",
-            defaultValue: "Shift is reserved for cycling backward. Record the forward shortcut without Shift."
+
+        if let reverseConflictOwner = reverseCycleShortcutConflictOwner(
+            definitionID: definitionID,
+            binding: binding
+        ) {
+            return localization.format(
+                "panel.shortcuts.reverseCycleConflict",
+                defaultValue: "This key is reserved for cycling filters backward by %@.",
+                reverseConflictOwner
+            )
+        }
+
+        guard Self.panelShortcutDefinitionIDs.contains(definitionID),
+              let owner = fixedClipboardCommandOwner(for: binding)
+        else { return nil }
+        return localization.format(
+            "panel.shortcuts.fixedConflict",
+            defaultValue: "This key is used by the Clipboard window for %@.",
+            owner
         )
     }
+
+    private func fixedClipboardCommandOwner(for binding: ShortcutBinding) -> String? {
+        switch binding {
+        case ClipboardHistoryFixedShortcut.close:
+            return localization.string("common.close", defaultValue: "Close")
+        case ClipboardHistoryFixedShortcut.paste:
+            return localization.string("common.paste", defaultValue: "Paste")
+        case ClipboardHistoryFixedShortcut.pastePlainText:
+            return localization.string("panel.pastePlain", defaultValue: "Paste as Plain Text")
+        case ClipboardHistoryFixedShortcut.copy:
+            return localization.string("common.copy", defaultValue: "Copy")
+        case ClipboardHistoryFixedShortcut.previous,
+             ClipboardHistoryFixedShortcut.next,
+             ClipboardHistoryFixedShortcut.previousAlternate,
+             ClipboardHistoryFixedShortcut.nextAlternate:
+            return localization.string("panel.footer.navigate", defaultValue: "Navigate")
+        case ClipboardHistoryFixedShortcut.extendPrevious,
+             ClipboardHistoryFixedShortcut.extendNext:
+            return localization.string("panel.selection.extend", defaultValue: "Extend Selection")
+        default:
+            if ClipboardHistoryFixedShortcut.numberKeyCodes.contains(binding.keyCode),
+               binding.modifiers == .command {
+                return localization.string("panel.shortcuts.quickPaste", defaultValue: "Quick Paste")
+            }
+            if ClipboardHistoryFixedShortcut.numberKeyCodes.contains(binding.keyCode),
+               binding.modifiers == .control {
+                return localization.string("panel.shortcuts.chooseFilter", defaultValue: "Choose Filter")
+            }
+            return nil
+        }
+    }
+
+    private func reverseCycleShortcutConflictOwner(
+        definitionID: String,
+        binding: ShortcutBinding
+    ) -> String? {
+        guard let shortcutBindingResolver else { return nil }
+
+        if definitionID == ShortcutID.panelCycleScope {
+            let reverseBinding = ShortcutBinding(
+                keyCode: binding.keyCode,
+                modifiers: binding.modifiers.union(.shift)
+            )
+            guard let conflictingDefinitionID = Self.panelShortcutDefinitionIDs.first(where: {
+                $0 != ShortcutID.panelCycleScope
+                    && shortcutBindingResolver($0) == reverseBinding
+            }) else { return nil }
+            return shortcutDefinitionTitle(conflictingDefinitionID)
+        }
+
+        guard let forwardBinding = shortcutBindingResolver(ShortcutID.panelCycleScope) else {
+            return nil
+        }
+        let reverseBinding = ShortcutBinding(
+            keyCode: forwardBinding.keyCode,
+            modifiers: forwardBinding.modifiers.union(.shift)
+        )
+        guard binding == reverseBinding else { return nil }
+        return shortcutDefinitionTitle(ShortcutID.panelCycleScope)
+    }
+
+    private func shortcutDefinitionTitle(_ definitionID: String) -> String {
+        shortcutDefinitions.first(where: { $0.id == definitionID })?.title ?? definitionID
+    }
+
+    static let panelShortcutDefinitionIDs: Set<String> = [
+        ShortcutID.panelActions,
+        ShortcutID.panelCycleScope,
+        ShortcutID.panelExport,
+        ShortcutID.panelEditSnippet,
+        ShortcutID.panelShare,
+        ShortcutID.panelSave,
+        ShortcutID.panelDelete,
+        ShortcutID.panelMultiSelect,
+        ShortcutID.panelToggleSelection,
+        ShortcutID.panelSelectAll,
+        ShortcutID.panelCopyCombined,
+        ShortcutID.panelPasteCombined,
+    ]
 
     private let settingsStore: ClipboardHistorySettingsStore
     private let pasteboard: any ClipboardPasteboardAccess
@@ -155,6 +252,9 @@ final class ClipboardHistoryPlugin:
     var isKeywordExpansionRunningForTesting: Bool { keywordExpander.isRunning }
     var hasConfiguredKeywordExpansionForTesting: Bool { keywordExpander.hasConfiguredKeywords }
     var snippetPasteboardReaderForTesting: ClipboardPasteboardReaderProcess { snippetPasteboardReader }
+    var historyPasteboardReaderForTesting: ClipboardPasteboardReaderProcess? {
+        (pasteboard as? GeneralClipboardPasteboard)?.payloadReaderForTesting
+    }
     private lazy var sequentialPasteHUD: ClipboardSequentialPasteHUDController = {
         let hud = ClipboardSequentialPasteHUDController(localization: localization)
         hud.onPasteNext = { [weak self] in
@@ -243,8 +343,20 @@ final class ClipboardHistoryPlugin:
         let sequentialPasteCoordinator = ClipboardSequentialPasteCoordinator(
             store: PluginStorageClipboardSequentialPasteStore(storage: context.storage)
         )
+        let snippetPasteboardReaderHelperURL = context.resourceBundle.url(
+            forResource: "mactools-clipboard-pasteboard-reader-helper",
+            withExtension: nil,
+            subdirectory: "PasteboardReaderHelper"
+        )
+        let resolvedSnippetPasteboardReader = snippetPasteboardReader ?? ClipboardPasteboardReaderProcess {
+            snippetPasteboardReaderHelperURL
+        }
         let resolvedPasteboard = pasteboard ?? GeneralClipboardPasteboard(
             resourceBundle: context.resourceBundle
+        )
+        let resolvedSavedLibraryPasteboard: any ClipboardPasteboardAccess = pasteboard ?? GeneralClipboardPasteboard(
+            resourceBundle: context.resourceBundle,
+            payloadReader: resolvedSnippetPasteboardReader
         )
         let databaseURL = context.supportDirectory?.appendingPathComponent(
             "clipboard.sqlite3",
@@ -290,14 +402,7 @@ final class ClipboardHistoryPlugin:
         self.accessibilityRequester = accessibilityRequester
         self.frontmostProcessIdentifier = frontmostProcessIdentifier
         self.sequentialPasteStabilizationDelay = sequentialPasteStabilizationDelay
-        let snippetPasteboardReaderHelperURL = context.resourceBundle.url(
-            forResource: "mactools-clipboard-pasteboard-reader-helper",
-            withExtension: nil,
-            subdirectory: "PasteboardReaderHelper"
-        )
-        self.snippetPasteboardReader = snippetPasteboardReader ?? ClipboardPasteboardReaderProcess {
-            snippetPasteboardReaderHelperURL
-        }
+        self.snippetPasteboardReader = resolvedSnippetPasteboardReader
         self.controller = ClipboardHistoryController(
             settings: settingsStore,
             pasteboard: resolvedPasteboard,
@@ -309,7 +414,7 @@ final class ClipboardHistoryPlugin:
             }
         )
         self.savedLibraryController = ClipboardSavedLibraryController(
-            pasteboard: resolvedPasteboard,
+            pasteboard: resolvedSavedLibraryPasteboard,
             persistence: resolvedSavedPersistence,
             errorMessageProvider: { error in
                 Self.localizedErrorMessage(error, localization: localization)

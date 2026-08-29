@@ -208,8 +208,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         let template = String(repeating: "Reusable customer reply without a match. ", count: 80)
         let snippets = (0..<1_000).map { index in
             ClipboardSavedItem(
-                id: UUID(), title: "Reply \(index)", tags: ["support"], keyword: ";reply\(index)",
-                isFavorite: false, savedKind: .snippet, createdAt: .distantPast,
+                id: UUID(), title: "Reply \(index)", tags: ["support"], keyword: ";reply\(index)", savedKind: .snippet, createdAt: .distantPast,
                 updatedAt: .distantPast, lastUsedAt: nil, sourceApplication: nil,
                 contentKind: .plainText, payloadByteCount: template.utf8.count,
                 fileURLs: [], fileReferenceCount: 0, linkURLs: [],
@@ -270,7 +269,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
                 XCTAssertEqual(model.visibleItems.map(\.id), [snippet.id], "\(mode) \(query)")
             }
         }
-        snippet.updateMetadata(title: "Updated title", tags: ["sales"], keyword: ";sales", isFavorite: false,
+        snippet.updateMetadata(title: "Updated title", tags: ["sales"], keyword: ";sales",
                                templateText: "Thanks for contacting us", updatedAt: Date())
         model.updateSavedItems([snippet])
         model.query = ";reply"
@@ -349,8 +348,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertTrue(model.isSavedPresentation(snippet.id))
         XCTAssertEqual(model.selectedItemID, snippet.id)
 
-        snippet.updateMetadata(title: "Edited template", tags: [], keyword: nil,
-            isFavorite: false, templateText: "original", updatedAt: Date())
+        snippet.updateMetadata(title: "Edited template", tags: [], keyword: nil, templateText: "original", updatedAt: Date())
         model.updateSavedItems([snippet])
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.savedItem(forPresentationID: snippet.id)?.title, "Edited template")
@@ -448,13 +446,13 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
     func testReopeningUnchangedHistoryUsesInitialPageWithoutSearching() async {
         let items = (0..<80).map { item(text: "item \($0)", pinned: false) }
         let model = ClipboardHistoryPanelModel()
-        model.prepareForPresentation(items: items)
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
         XCTAssertFalse(model.showsSearchProgress)
         await model.waitForSearchForTesting()
         let firstPage = model.visibleItems
         model.query = "item 79"
         await model.waitForSearchForTesting()
-        model.prepareForPresentation(items: items)
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
         XCTAssertFalse(model.isSearching)
         XCTAssertFalse(model.showsSearchProgress)
         XCTAssertEqual(model.visibleItems, firstPage)
@@ -2066,15 +2064,14 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(command(keyCode: 14, modifiers: [.command, .shift]), .shareSelection)
         XCTAssertEqual(command(keyCode: 40, modifiers: .command), .toggleActionMenu)
         XCTAssertEqual(command(keyCode: 37, modifiers: [.command]), .toggleMultiSelection)
-        XCTAssertEqual(command(keyCode: 49, isMultiSelectionEnabled: true), .toggleFocusedSelection)
-        XCTAssertNil(command(keyCode: 49, isEditingText: true, isMultiSelectionEnabled: true))
+        XCTAssertNil(command(keyCode: 49, isMultiSelectionEnabled: true))
         XCTAssertEqual(command(keyCode: 8, modifiers: [.command, .shift]), .copyCombinedSelection)
         XCTAssertEqual(command(keyCode: 36, modifiers: [.command, .shift]), .pasteCombinedSelection)
     }
 
-    func testSpaceOnlyTogglesSelectionOutsideTextEditingInMultiSelectMode() {
-        XCTAssertEqual(command(keyCode: 49, isMultiSelectionEnabled: true), .toggleFocusedSelection)
+    func testSpaceRemainsAvailableForSearchInMultiSelectMode() {
         XCTAssertNil(command(keyCode: 49))
+        XCTAssertNil(command(keyCode: 49, isMultiSelectionEnabled: true))
         XCTAssertNil(command(keyCode: 49, isEditingText: true, isMultiSelectionEnabled: true))
         XCTAssertNil(command(keyCode: 49, modifiers: .shift, isMultiSelectionEnabled: true))
         XCTAssertNil(command(keyCode: 49, hasMarkedText: true, isMultiSelectionEnabled: true))

@@ -6256,6 +6256,21 @@
         }
       }
     },
+    "common.paste": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لصق" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Einfügen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Paste" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Pegar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Coller" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ペースト" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "붙여넣기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Colar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Вставить" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "粘贴" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "貼上" } }
+      }
+    },
     "common.delete": {
       "localizations": {
         "ar": {
@@ -13524,6 +13539,51 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "Shift 保留用於反向切換。請錄製不含 Shift 的正向快速鍵。" } }
       }
     },
+    "panel.shortcuts.fixedConflict": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يستخدم اختصار لوحة الحافظة هذا المفتاح من أجل %@." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Dieses Tastenkürzel wird im Zwischenablagefenster für %@ verwendet." } },
+        "en": { "stringUnit": { "state": "translated", "value": "This key is used by the Clipboard window for %@." } },
+        "es": { "stringUnit": { "state": "translated", "value": "La ventana del portapapeles usa esta tecla para %@." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Cette touche est utilisée par la fenêtre Presse-papiers pour %@." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "このキーはクリップボードウインドウで「%@」に使用されています。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 키는 클립보드 윈도우에서 %@에 사용됩니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Esta tecla é usada pela janela da área de transferência para %@." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Эта клавиша используется в окне буфера обмена для действия «%@»." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板窗口已将此按键用于“%@”。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼板視窗已將此按鍵用於「%@」。" } }
+      }
+    },
+    "panel.shortcuts.quickPaste": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لصق سريع" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Schnell einfügen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Quick Paste" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Pegado rápido" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Collage rapide" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クイックペースト" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "빠른 붙여넣기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Colagem rápida" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Быстрая вставка" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "快速粘贴" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "快速貼上" } }
+      }
+    },
+    "panel.shortcuts.reverseCycleConflict": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "هذا المفتاح محجوز للتنقل بين عوامل التصفية للخلف بواسطة %@." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Diese Taste ist durch %@ für das Rückwärtswechseln der Filter reserviert." } },
+        "en": { "stringUnit": { "state": "translated", "value": "This key is reserved for cycling filters backward by %@." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Esta tecla está reservada por %@ para recorrer los filtros hacia atrás." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Cette touche est réservée par %@ pour parcourir les filtres en sens inverse." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "このキーは「%@」によるフィルタの逆方向切り替え用に予約されています。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 키는 %@의 필터 뒤로 전환에 사용됩니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Esta tecla é reservada por %@ para alternar os filtros para trás." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Эта клавиша зарезервирована действием «%@» для обратного переключения фильтров." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "此按键由“%@”保留用于反向切换筛选条件。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此按鍵由「%@」保留用於反向切換篩選條件。" } }
+      }
+    },
     "panel.shortcuts.actions": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "إظهار الإجراءات أو إخفاؤها" } },
@@ -13582,6 +13642,21 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Изменить сочетание клавиш…" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "更改快捷键…" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "更改快速鍵…" } }
+      }
+    },
+    "panel.shortcuts.chooseFilter": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "اختيار عامل تصفية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Filter auswählen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Choose Filter" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir filtro" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir un filtre" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "フィルタを選択" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "필터 선택" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Escolher filtro" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выбрать фильтр" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择筛选条件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇篩選條件" } }
       }
     },
     "panel.shortcuts.copyCombined": {

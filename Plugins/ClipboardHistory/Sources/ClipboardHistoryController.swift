@@ -100,6 +100,8 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
     private nonisolated let pasteboardName: NSPasteboard.Name
     private nonisolated let payloadReader: ClipboardPasteboardReaderProcess
 
+    nonisolated var payloadReaderForTesting: ClipboardPasteboardReaderProcess { payloadReader }
+
     init(
         pasteboard: NSPasteboard = .general,
         resourceBundle: Bundle = .main,
@@ -498,14 +500,23 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     struct ItemsUpdate {
         let items: [ClipboardHistoryItem]
+        let revision: UInt64
         /// Nil requests full reconciliation (load, deletion, retention or recovery).
         let changedIDs: Set<UUID>?
     }
 
     let itemUpdates = PassthroughSubject<ItemsUpdate, Never>()
     private var publicationChangedIDs: Set<UUID>?
+    private(set) var presentationRevision: UInt64 = 0
     @Published private(set) var items: [ClipboardHistoryItem] = [] {
-        didSet { itemUpdates.send(ItemsUpdate(items: items, changedIDs: publicationChangedIDs)) }
+        didSet {
+            presentationRevision &+= 1
+            itemUpdates.send(ItemsUpdate(
+                items: items,
+                revision: presentationRevision,
+                changedIDs: publicationChangedIDs
+            ))
+        }
     }
     @Published private(set) var errorMessage: String?
     @Published private(set) var storageError: ClipboardHistoryStoreError?
@@ -1434,16 +1445,6 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return updated
         }) else { return nil }
         return items.first { $0.id == draft.id }
-    }
-
-    @discardableResult
-    func toggleSavedFavorite(id: UUID) async -> Bool {
-        await mutateItemsDurably(targetIDs: [id]) { items in
-            guard let index = items.firstIndex(where: { $0.id == id }), items[index].isSaved else { return nil }
-            var updated = items
-            updated[index].toggleSavedFavorite(updatedAt: Date())
-            return updated
-        }
     }
 
     @discardableResult
