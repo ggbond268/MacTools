@@ -6,6 +6,15 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryWindowStyleTests: XCTestCase {
+    func testHistoryWindowMovesOnlyThroughItsExplicitDragHandle() {
+        let panel = NSPanel()
+        panel.isMovableByWindowBackground = true
+
+        ClipboardHistoryPanelController.restrictMovementToExplicitDragRegions(panel)
+
+        XCTAssertFalse(panel.isMovableByWindowBackground)
+    }
+
     func testContentChangesCannotResizePanelOrOverrideItsMinimumSize() async {
         let panel = NSPanel(contentRect: NSRect(x: 100, y: 100, width: 900, height: 620),
             styleMask: ClipboardHistoryPanelController.panelStyleMask, backing: .buffered, defer: false)

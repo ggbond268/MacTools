@@ -1363,6 +1363,9 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         .resizable,
         .fullSizeContentView,
     ]
+    static func restrictMovementToExplicitDragRegions(_ window: NSWindow) {
+        window.isMovableByWindowBackground = false
+    }
 
     enum KeyboardCommand: Equatable {
         case close
@@ -1670,7 +1673,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.isReleasedWhenClosed = false
-        panel.isMovableByWindowBackground = true
+        Self.restrictMovementToExplicitDragRegions(panel)
         panel.animationBehavior = .utilityWindow
         panel.level = .floating
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
