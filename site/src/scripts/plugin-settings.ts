@@ -7,9 +7,28 @@ if (settingsWindow) {
   const marketSearch = settingsWindow.querySelector<HTMLInputElement>("[data-market-search]");
   const filterButtons = [...settingsWindow.querySelectorAll<HTMLButtonElement>("[data-market-filter]")];
   const pluginRows = [...settingsWindow.querySelectorAll<HTMLElement>("[data-market-plugin]")];
+  const marketList = settingsWindow.querySelector<HTMLElement>(".market-list");
   const resultCounts = [...settingsWindow.querySelectorAll<HTMLElement>("[data-result-count]")];
   const marketEmpty = settingsWindow.querySelector<HTMLElement>("[data-market-empty]");
   let activeFilter = "all";
+
+  const sortMarketRows = () => {
+    if (!marketList) return;
+
+    const language = root.dataset.lang === "en" ? "en" : "zh";
+    const nameKey = language === "en" ? "pluginNameEn" : "pluginNameZh";
+    const collator = new Intl.Collator(language === "en" ? "en" : "zh-CN", {
+      numeric: true,
+      sensitivity: "base",
+    });
+    const sortedRows = [...pluginRows].sort((left, right) => {
+      const byName = collator.compare(left.dataset[nameKey] ?? "", right.dataset[nameKey] ?? "");
+      return byName || collator.compare(left.dataset.pluginId ?? "", right.dataset.pluginId ?? "");
+    });
+
+    for (const row of sortedRows) marketList.append(row);
+    if (marketEmpty) marketList.append(marketEmpty);
+  };
 
   const syncLocalizedFields = () => {
     const language = root.dataset.lang === "en" ? "en" : "zh";
@@ -27,6 +46,7 @@ if (settingsWindow) {
         language === "en" ? item.dataset.ariaLabelEn ?? "" : item.dataset.ariaLabelZh ?? "",
       );
     });
+    sortMarketRows();
   };
 
   const showPanel = (id: string, updateHash = true) => {
