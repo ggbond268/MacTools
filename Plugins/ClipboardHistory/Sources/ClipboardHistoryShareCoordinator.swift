@@ -50,7 +50,8 @@ final class ClipboardHistoryShareCoordinator {
                 preparedShare = await Self.prepareSingleShare(for: items[0])
             }
             let sharingItems = Self.sharingItems(from: preparedShare)
-            guard !Task.isCancelled, !sharingItems.isEmpty else {
+            guard !Task.isCancelled else { return }
+            guard !sharingItems.isEmpty else {
                 self.hudPresenter?.showFailure(self.localization.string(
                     "share.unavailable",
                     defaultValue: "This clipboard item can’t be shared"
@@ -76,7 +77,8 @@ final class ClipboardHistoryShareCoordinator {
             guard let self, let anchorView else { return }
             let preparedShare = await Self.prepareSingleShare(for: presentation)
             let sharingItems = Self.sharingItems(from: preparedShare)
-            guard !Task.isCancelled, !sharingItems.isEmpty else {
+            guard !Task.isCancelled else { return }
+            guard !sharingItems.isEmpty else {
                 self.hudPresenter?.showFailure(self.localization.string(
                     "share.unavailable",
                     defaultValue: "This clipboard item can’t be shared"
@@ -96,6 +98,8 @@ final class ClipboardHistoryShareCoordinator {
 
     func share(text: String, from anchorView: NSView?) {
         guard let anchorView, !text.isEmpty else { return }
+        task?.cancel()
+        task = nil
         picker = NSSharingServicePicker(items: [text])
         PluginPresentationSafety.prepareForWindowOrdering(anchorView.window)
         picker?.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY)
@@ -109,7 +113,7 @@ final class ClipboardHistoryShareCoordinator {
         }
         defer { item.discardCachedPayloadIfReloadable() }
         if !payload.fileURLs.isEmpty { return .URLs(payload.fileURLs) }
-        if let link = payload.linkURLs.first { return .URLs([link]) }
+        if !payload.linkURLs.isEmpty { return .URLs(payload.linkURLs) }
         if item.kind == .pdf,
            let pdf = payload.representations.first(where: {
                $0.typeIdentifier == ClipboardRepresentationType.pdf

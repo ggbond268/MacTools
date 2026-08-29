@@ -435,6 +435,10 @@ struct ClipboardHistorySettingsView: View {
                     ), isOn: $settings.isKeywordExpansionEnabled)
                         .labelsHidden()
                         .toggleStyle(.switch)
+                        .accessibilityLabel(Text(localization.string(
+                            "settings.saved.expansion.title",
+                            defaultValue: "Expand Snippet Keywords"
+                        )))
                 }
                 .pluginSettingsListRowPadding(interactive: true)
                 if let diagnostic = keywordExpansionDiagnosticTitle {
@@ -762,6 +766,10 @@ struct ClipboardHistorySettingsView: View {
                     ), isOn: $settings.hidesSequentialHUDPreview)
                         .labelsHidden()
                         .toggleStyle(.switch)
+                        .accessibilityLabel(Text(localization.string(
+                            "settings.sequentialPaste.hidePreview.title",
+                            defaultValue: "Hide Content Preview"
+                        )))
                 }
                 .pluginSettingsListRowPadding(interactive: true)
                 if let context = settingsContext {
