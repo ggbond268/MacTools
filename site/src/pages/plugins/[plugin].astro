@@ -2,6 +2,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteNav from "@/components/SiteNav.astro";
+import LocalizedText from "@/components/LocalizedText.astro";
 import { loadPluginCatalog, localizedPluginText, type Plugin } from "@/lib/plugins";
 
 export async function getStaticPaths() {
@@ -32,7 +33,11 @@ const product = plugin.product as {
     dynamicTemplates?: Array<{ id: string; title: Record<string, string>; description: Record<string, string>; parameterSummary?: Record<string, string> }>;
   }> };
 } | undefined;
-const localized = (value?: Record<string, string>) => value?.["zh-Hans"] ?? value?.en ?? "";
+const localized = (value?: Record<string, string>) => ({
+  zh: value?.["zh-Hans"] ?? value?.en ?? "",
+  en: value?.en ?? value?.["zh-Hans"] ?? "",
+});
+const ui = (zh: string, en: string) => ({ zh, en });
 const detailURL = plugin.openInMacToolsURL;
 const actionCount = product?.actions?.providers?.reduce((count, provider) => count + provider.staticActions.length, 0) ?? 0;
 const dynamicTemplates = product?.actions?.providers?.flatMap((provider) =>
@@ -48,58 +53,58 @@ const relatedPluginIDs = product?.relationships?.relatedPluginIDs ?? [];
   <SiteNav />
   <main class="plugin-detail-page">
     <section class="plugin-detail-hero" aria-labelledby="plugin-title">
-      <p class="plugin-detail-eyebrow">MacTools Plugin</p>
-      <h1 id="plugin-title">{text.en.displayName}</h1>
-      <p class="plugin-detail-lead">{text.en.summary}</p>
+      <p class="plugin-detail-eyebrow"><LocalizedText {...ui("MacTools 插件", "MacTools Plugin")} /></p>
+      <h1 id="plugin-title"><LocalizedText zh={text.zh.displayName} en={text.en.displayName} /></h1>
+      <p class="plugin-detail-lead"><LocalizedText zh={text.zh.summary} en={text.en.summary} /></p>
       <div class="plugin-detail-actions">
-        <a class="button primary" href={detailURL} aria-label={`Open ${text.en.displayName} in MacTools`}>Open in MacTools</a>
-        <a class="button subtle" href="#deep-link">View deep link</a>
+        <a class="button primary" href={detailURL} aria-label={`Open ${text.en.displayName} in MacTools`}><LocalizedText {...ui("在 MacTools 中打开", "Open in MacTools")} /></a>
+        <a class="button subtle" href="#deep-link"><LocalizedText {...ui("查看深层链接", "View deep link")} /></a>
       </div>
       <div class="plugin-deep-link" id="deep-link">
-        <span class="plugin-deep-link-label">Navigation-only deep link</span>
+        <span class="plugin-deep-link-label"><LocalizedText {...ui("仅用于导航的深层链接", "Navigation-only deep link")} /></span>
         <a href={detailURL}><code>{detailURL}</code></a>
       </div>
     </section>
 
     <div class="plugin-detail-grid">
       <section class="plugin-detail-card plugin-detail-summary">
-        <h2>About this plugin</h2>
-        <p>{product?.presentation?.longDescription ? localized(product.presentation.longDescription) : text.en.summary}</p>
+        <h2><LocalizedText {...ui("关于此插件", "About this plugin")} /></h2>
+        <p>{product?.presentation?.longDescription ? <LocalizedText {...localized(product.presentation.longDescription)} /> : <LocalizedText zh={text.zh.summary} en={text.en.summary} />}</p>
       </section>
       <section class="plugin-detail-card plugin-detail-stats" aria-label="Plugin overview">
-        <strong>{plugin.version}</strong><span>Version</span>
-        <strong>{actionCount}</strong><span>Static actions</span>
+        <strong>{plugin.version}</strong><span><LocalizedText {...ui("版本", "Version")} /></span>
+        <strong>{actionCount}</strong><span><LocalizedText {...ui("静态操作", "Static actions")} /></span>
       </section>
     </div>
 
-    {(product?.presentation?.publisher || product?.presentation?.license || product?.presentation?.documentationURL || product?.presentation?.supportURL) ? <section class="plugin-detail-section"><h2>Plugin information</h2><dl class="plugin-metadata-grid">
-      {product?.presentation?.publisher ? <><dt>Publisher</dt><dd>{product.presentation.publisher}</dd></> : null}
-      {product?.presentation?.license ? <><dt>License</dt><dd>{product.presentation.license}</dd></> : null}
-      {product?.presentation?.documentationURL ? <><dt>Documentation</dt><dd><a href={product.presentation.documentationURL}>Read documentation</a></dd></> : null}
-      {product?.presentation?.supportURL ? <><dt>Support</dt><dd><a href={product.presentation.supportURL}>Get support</a></dd></> : null}
+    {(product?.presentation?.publisher || product?.presentation?.license || product?.presentation?.documentationURL || product?.presentation?.supportURL) ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("插件信息", "Plugin information")} /></h2><dl class="plugin-metadata-grid">
+      {product?.presentation?.publisher ? <><dt><LocalizedText {...ui("发布者", "Publisher")} /></dt><dd>{product.presentation.publisher}</dd></> : null}
+      {product?.presentation?.license ? <><dt><LocalizedText {...ui("许可证", "License")} /></dt><dd>{product.presentation.license}</dd></> : null}
+      {product?.presentation?.documentationURL ? <><dt><LocalizedText {...ui("文档", "Documentation")} /></dt><dd><a href={product.presentation.documentationURL}><LocalizedText {...ui("阅读文档", "Read documentation")} /></a></dd></> : null}
+      {product?.presentation?.supportURL ? <><dt><LocalizedText {...ui("支持", "Support")} /></dt><dd><a href={product.presentation.supportURL}><LocalizedText {...ui("获得支持", "Get support")} /></a></dd></> : null}
     </dl></section> : null}
 
-    {product?.discovery?.useCases?.length ? <section class="plugin-detail-section"><h2>Use cases</h2><ul class="plugin-detail-list">{product.discovery.useCases.map((item) => <li>{localized(item.title)}</li>)}</ul></section> : null}
-    {product?.presentation?.examples?.length ? <section class="plugin-detail-section"><h2>Examples</h2><ul class="plugin-detail-list">{product.presentation.examples.map((example) => <li>{localized(example.text)}</li>)}</ul></section> : null}
-    {product?.actions?.providers?.length ? <section class="plugin-detail-section"><h2>Discoverable actions</h2><p class="plugin-detail-muted">Open an action page to view its navigation-only MacTools link. These links never run an action.</p><div class="plugin-action-grid">{product.actions.providers.flatMap((provider) => provider.staticActions.map((action) => <article class="plugin-action-card"><p class="plugin-action-provider">{provider.id}</p><h3><a href={`/plugins/${plugin.id}/actions/${provider.id}/${action.id}`}>{localized(action.title)}</a></h3><p>{localized(action.description)}</p><a class="plugin-action-link" href={`/plugins/${plugin.id}/actions/${provider.id}/${action.id}`}>View action details</a></article>))}</div></section> : null}
-    {dynamicTemplates.length ? <section class="plugin-detail-section"><h2>Dynamic action templates</h2><p class="plugin-detail-muted">Entries are discovered locally after installation; this page shows templates only.</p><div class="plugin-action-grid">{dynamicTemplates.map(({ providerID, template }) => <article class="plugin-action-card"><p class="plugin-action-provider">{providerID}</p><h3>{localized(template.title)}</h3><p>{localized(template.description)}</p>{template.parameterSummary ? <p class="plugin-detail-muted">Uses: {localized(template.parameterSummary)}</p> : null}</article>)}</div></section> : null}
-    {requirements ? <section class="plugin-detail-section"><h2>Requirements</h2><dl class="plugin-metadata-grid">
-      {requirements.minimumMacOSVersion ? <><dt>macOS</dt><dd>{requirements.minimumMacOSVersion} or later</dd></> : null}
-      {requirements.architectures?.length ? <><dt>Architecture</dt><dd>{requirements.architectures.join(", ")}</dd></> : null}
-      {requirements.hardware?.length ? <><dt>Hardware</dt><dd>{requirements.hardware.join(", ")}</dd></> : null}
-      {requirements.permissionIDs?.length ? <><dt>Permissions</dt><dd>{requirements.permissionIDs.join(", ")}</dd></> : null}
-      {requirements.setupComplexity ? <><dt>Setup</dt><dd>{requirements.setupComplexity}</dd></> : null}
-      <dt>Restart</dt><dd>{requirements.requiresRelaunch ? "Required after installation" : "Not required"}</dd>
+    {product?.discovery?.useCases?.length ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("使用场景", "Use cases")} /></h2><ul class="plugin-detail-list">{product.discovery.useCases.map((item) => <li><LocalizedText {...localized(item.title)} /></li>)}</ul></section> : null}
+    {product?.presentation?.examples?.length ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("示例", "Examples")} /></h2><ul class="plugin-detail-list">{product.presentation.examples.map((example) => <li><LocalizedText {...localized(example.text)} /></li>)}</ul></section> : null}
+    {product?.actions?.providers?.length ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("可发现的操作", "Discoverable actions")} /></h2><p class="plugin-detail-muted"><LocalizedText {...ui("打开操作页面即可查看仅用于导航的 MacTools 链接。这些链接不会执行操作。", "Open an action page to view its navigation-only MacTools link. These links never run an action.")} /></p><div class="plugin-action-grid">{product.actions.providers.flatMap((provider) => provider.staticActions.map((action) => <article class="plugin-action-card"><p class="plugin-action-provider">{provider.id}</p><h3><a href={`/plugins/${plugin.id}/actions/${provider.id}/${action.id}`}><LocalizedText {...localized(action.title)} /></a></h3><p><LocalizedText {...localized(action.description)} /></p><a class="plugin-action-link" href={`/plugins/${plugin.id}/actions/${provider.id}/${action.id}`}><LocalizedText {...ui("查看操作详情", "View action details")} /></a></article>))}</div></section> : null}
+    {dynamicTemplates.length ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("动态操作模板", "Dynamic action templates")} /></h2><p class="plugin-detail-muted"><LocalizedText {...ui("安装后才会在本机发现具体条目；此页面仅展示模板。", "Entries are discovered locally after installation; this page shows templates only.")} /></p><div class="plugin-action-grid">{dynamicTemplates.map(({ providerID, template }) => <article class="plugin-action-card"><p class="plugin-action-provider">{providerID}</p><h3><LocalizedText {...localized(template.title)} /></h3><p><LocalizedText {...localized(template.description)} /></p>{template.parameterSummary ? <p class="plugin-detail-muted"><LocalizedText {...ui("使用：", "Uses: ")} /><LocalizedText {...localized(template.parameterSummary)} /></p> : null}</article>)}</div></section> : null}
+    {requirements ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("要求", "Requirements")} /></h2><dl class="plugin-metadata-grid">
+      {requirements.minimumMacOSVersion ? <><dt>macOS</dt><dd>{requirements.minimumMacOSVersion} <LocalizedText {...ui("或更高版本", "or later")} /></dd></> : null}
+      {requirements.architectures?.length ? <><dt><LocalizedText {...ui("架构", "Architecture")} /></dt><dd>{requirements.architectures.join(", ")}</dd></> : null}
+      {requirements.hardware?.length ? <><dt><LocalizedText {...ui("硬件", "Hardware")} /></dt><dd>{requirements.hardware.join(", ")}</dd></> : null}
+      {requirements.permissionIDs?.length ? <><dt><LocalizedText {...ui("权限", "Permissions")} /></dt><dd>{requirements.permissionIDs.join(", ")}</dd></> : null}
+      {requirements.setupComplexity ? <><dt><LocalizedText {...ui("设置", "Setup")} /></dt><dd>{requirements.setupComplexity}</dd></> : null}
+      <dt><LocalizedText {...ui("重启", "Restart")} /></dt><dd><LocalizedText {...ui(requirements.requiresRelaunch ? "安装后需要重启" : "无需重启", requirements.requiresRelaunch ? "Required after installation" : "Not required")} /></dd>
     </dl></section> : null}
-    {setupSteps.length ? <section class="plugin-detail-section"><h2>Get started</h2><ol class="plugin-setup-list">{setupSteps.map((step) => <li><strong>{localized(step.title)}</strong><span>{localized(step.description)}</span></li>)}</ol>{product?.setup?.optionalSurfaces?.length ? <p class="plugin-detail-muted">Also available in: {product.setup.optionalSurfaces.join(", ")}</p> : null}</section> : null}
-    {privacy ? <section class="plugin-detail-section"><h2>Privacy</h2><dl class="plugin-metadata-grid">
-      <dt>Data observed</dt><dd>{privacy.dataObserved?.join(", ") || "None listed"}</dd>
-      <dt>Data stored</dt><dd>{privacy.dataPersisted?.join(", ") || "None listed"}</dd>
-      <dt>Network</dt><dd>{privacy.networkUse ?? "None listed"}</dd>
-      <dt>Telemetry</dt><dd>{privacy.telemetry ?? "None listed"}</dd>
-      {privacy.retention?.policy ? <><dt>Retention</dt><dd>{privacy.retention.policy}</dd></> : null}
+    {setupSteps.length ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("开始使用", "Get started")} /></h2><ol class="plugin-setup-list">{setupSteps.map((step) => <li><strong><LocalizedText {...localized(step.title)} /></strong><span><LocalizedText {...localized(step.description)} /></span></li>)}</ol>{product?.setup?.optionalSurfaces?.length ? <p class="plugin-detail-muted"><LocalizedText {...ui("也可在以下位置使用：", "Also available in: ")} />{product.setup.optionalSurfaces.join(", ")}</p> : null}</section> : null}
+    {privacy ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("隐私", "Privacy")} /></h2><dl class="plugin-metadata-grid">
+      <dt><LocalizedText {...ui("观察的数据", "Data observed")} /></dt><dd>{privacy.dataObserved?.join(", ") || <LocalizedText {...ui("未列出", "None listed")} />}</dd>
+      <dt><LocalizedText {...ui("存储的数据", "Data stored")} /></dt><dd>{privacy.dataPersisted?.join(", ") || <LocalizedText {...ui("未列出", "None listed")} />}</dd>
+      <dt><LocalizedText {...ui("网络", "Network")} /></dt><dd>{privacy.networkUse ?? <LocalizedText {...ui("未列出", "None listed")} />}</dd>
+      <dt><LocalizedText {...ui("遥测", "Telemetry")} /></dt><dd>{privacy.telemetry ?? <LocalizedText {...ui("未列出", "None listed")} />}</dd>
+      {privacy.retention?.policy ? <><dt><LocalizedText {...ui("保留", "Retention")} /></dt><dd>{privacy.retention.policy}</dd></> : null}
     </dl></section> : null}
-    {relatedPluginIDs.length ? <section class="plugin-detail-section"><h2>Related plugins</h2><div class="plugin-related-links">{relatedPluginIDs.map((id) => <a href={`/plugins/${id}`}>{id}</a>)}</div></section> : null}
+    {relatedPluginIDs.length ? <section class="plugin-detail-section"><h2><LocalizedText {...ui("相关插件", "Related plugins")} /></h2><div class="plugin-related-links">{relatedPluginIDs.map((id) => <a href={`/plugins/${id}`}>{id}</a>)}</div></section> : null}
   </main>
   <SiteFooter />
 </BaseLayout>
