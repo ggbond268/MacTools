@@ -5,6 +5,21 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
+    func testVisibleRowHitAreaFocusesExceptForMultiSelectCheckbox() {
+        XCTAssertTrue(ClipboardHistoryRowHitTesting.targetsFocus(
+            atX: 0,
+            isMultiSelectionEnabled: false
+        ))
+        XCTAssertFalse(ClipboardHistoryRowHitTesting.targetsFocus(
+            atX: ClipboardHistoryRowHitTesting.multiSelectionLeadingControlWidth - 1,
+            isMultiSelectionEnabled: true
+        ))
+        XCTAssertTrue(ClipboardHistoryRowHitTesting.targetsFocus(
+            atX: ClipboardHistoryRowHitTesting.multiSelectionLeadingControlWidth,
+            isMultiSelectionEnabled: true
+        ))
+    }
+
     func testActionContextRejectsRemovedTargetBeforeAndAfterSearchRetargetsSelection() async throws {
         let first = item(text: "First", pinned: false)
         let second = item(text: "Second", pinned: false)

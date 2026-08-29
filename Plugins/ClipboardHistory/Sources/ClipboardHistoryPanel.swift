@@ -258,6 +258,16 @@ enum ClipboardImagePreviewLayout {
     }
 }
 
+enum ClipboardHistoryRowHitTesting {
+    static let multiSelectionLeadingControlWidth = PluginPaletteMetrics.rowHorizontalPadding
+        + 36
+        + PluginPaletteMetrics.rowContentSpacing
+
+    static func targetsFocus(atX x: CGFloat, isMultiSelectionEnabled: Bool) -> Bool {
+        !isMultiSelectionEnabled || x >= multiSelectionLeadingControlWidth
+    }
+}
+
 struct ClipboardEmbeddedPreviewResult: @unchecked Sendable {
     let image: NSImage?
 }
@@ -3220,74 +3230,94 @@ private struct ClipboardHistoryPanelView: View {
 
     private var panelToolbar: some View {
         VStack(alignment: .leading, spacing: 8) {
-            PluginPaletteSearchToolbar(
-                text: searchText,
-                placeholder: searchPlaceholder,
-                accessibilityLabel: searchPlaceholder,
-                accessibilityIdentifier: "mactools.clipboard-history.search",
-                clearAccessibilityLabel: localization.string(
-                    "common.clear",
-                    defaultValue: "清除"
-                ),
-                focusRequestID: model.focusRequestID,
-                alternateSubmitModifier: .shift,
-                onCommand: handleSearchFieldCommand
-            ) {
-                if settings.isPaused {
-                    Label(
-                        localization.string("panel.badge.paused", defaultValue: "已暂停"),
-                        systemImage: "pause.fill"
-                    )
-                    .font(PluginSettingsTheme.Typography.statusBadge)
-                    .foregroundStyle(.orange)
-                }
-                if controller.isIgnoringNextCopy {
-                    Button {
-                        controller.cancelNextCaptureSuppression()
-                    } label: {
+            HStack(spacing: 10) {
+                clipboardIdentityLabel
+
+                PluginPaletteSearchToolbar(
+                    text: searchText,
+                    placeholder: searchPlaceholder,
+                    accessibilityLabel: searchPlaceholder,
+                    accessibilityIdentifier: "mactools.clipboard-history.search",
+                    clearAccessibilityLabel: localization.string(
+                        "common.clear",
+                        defaultValue: "清除"
+                    ),
+                    focusRequestID: model.focusRequestID,
+                    alternateSubmitModifier: .shift,
+                    onCommand: handleSearchFieldCommand
+                ) {
+                    if settings.isPaused {
                         Label(
-                            localization.string("panel.status.ignoreNext", defaultValue: "下次复制不会保存"),
-                            systemImage: "eye.slash.fill"
+                            localization.string("panel.badge.paused", defaultValue: "已暂停"),
+                            systemImage: "pause.fill"
+                        )
+                        .font(PluginSettingsTheme.Typography.statusBadge)
+                        .foregroundStyle(.orange)
+                    }
+                    if controller.isIgnoringNextCopy {
+                        Button {
+                            controller.cancelNextCaptureSuppression()
+                        } label: {
+                            Label(
+                                localization.string("panel.status.ignoreNext", defaultValue: "下次复制不会保存"),
+                                systemImage: "eye.slash.fill"
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .font(PluginSettingsTheme.Typography.statusBadge)
+                        .foregroundStyle(.secondary)
+                        .help(
+                            localization.string(
+                                "panel.action.cancelIgnore",
+                                defaultValue: "取消忽略下一次复制"
+                            )
                         )
                     }
-                    .buttonStyle(.plain)
-                    .font(PluginSettingsTheme.Typography.statusBadge)
-                    .foregroundStyle(.secondary)
-                    .help(
-                        localization.string(
-                            "panel.action.cancelIgnore",
-                            defaultValue: "取消忽略下一次复制"
-                        )
-                    )
-                }
 
-                if model.mode != .snippets {
-                    Button {
-                        settings.setPaused(!settings.isPaused)
-                    } label: {
-                        Image(systemName: settings.isPaused ? "play.fill" : "pause.fill")
+                    if model.mode != .snippets {
+                        Button {
+                            settings.setPaused(!settings.isPaused)
+                        } label: {
+                            Image(systemName: settings.isPaused ? "play.fill" : "pause.fill")
+                        }
+                        .buttonStyle(PluginPaletteToolbarControlStyle())
+                        .disabled(!controller.isCollectionOperational)
+                        .help(
+                            settings.isPaused
+                                ? localization.string("common.resume", defaultValue: "恢复")
+                                : localization.string("common.pause", defaultValue: "暂停")
+                        )
+                    }
+
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
                     }
                     .buttonStyle(PluginPaletteToolbarControlStyle())
-                    .disabled(!controller.isCollectionOperational)
-                    .help(
-                        settings.isPaused
-                            ? localization.string("common.resume", defaultValue: "恢复")
-                            : localization.string("common.pause", defaultValue: "暂停")
-                    )
+                    .help(localization.string("panel.close.help", defaultValue: "关闭（Esc）"))
+                    .accessibilityLabel(localization.string("panel.close.help", defaultValue: "关闭（Esc）"))
                 }
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(PluginPaletteToolbarControlStyle())
-                .help(localization.string("panel.close.help", defaultValue: "关闭（Esc）"))
-                .accessibilityLabel(localization.string("panel.close.help", defaultValue: "关闭（Esc）"))
+                .frame(maxWidth: .infinity)
             }
 
             if showsFilterControlBar {
                 filterControlBar
             }
         }
+    }
+
+    private var clipboardIdentityLabel: some View {
+        let title = localization.string("panel.identity.title", defaultValue: "Clipboard")
+        return ViewThatFits(in: .horizontal) {
+            Label(title, systemImage: "clipboard")
+                .fixedSize()
+            Image(systemName: "clipboard")
+                .accessibilityLabel(title)
+        }
+        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+        .foregroundStyle(.secondary)
+        .frame(minWidth: 28, minHeight: PluginPaletteMetrics.toolbarControlSize.height)
+        .accessibilityIdentifier("mactools.clipboard-history.identity")
+        .help(title)
     }
 
     private var showsFilterControlBar: Bool {
@@ -3726,24 +3756,31 @@ private struct ClipboardHistoryPanelView: View {
                 .font(PluginSettingsTheme.Typography.rowDescription)
                 .foregroundStyle(isSelected ? Color.white.opacity(0.78) : Color.secondary)
             }
-            .contentShape(Rectangle())
-            .simultaneousGesture(
-            TapGesture(count: 1)
-                .onEnded {
-                    model.selectedItemID = item.id
-                }
-        )
-            .simultaneousGesture(
-            TapGesture(count: 2)
-                .onEnded {
-                    guard !model.isMultiSelectionEnabled else { return }
-                    pastePanelItem(item.id, asPlainText: false)
-                }
-        )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .pluginPaletteSelectableRow(isSelected: isSelected)
         .contentShape(Rectangle())
+        .simultaneousGesture(
+            SpatialTapGesture(count: 1)
+                .onEnded { value in
+                    guard ClipboardHistoryRowHitTesting.targetsFocus(
+                        atX: value.location.x,
+                        isMultiSelectionEnabled: model.isMultiSelectionEnabled
+                    ) else { return }
+                    model.selectedItemID = item.id
+                }
+        )
+        .simultaneousGesture(
+            SpatialTapGesture(count: 2)
+                .onEnded { value in
+                    guard !model.isMultiSelectionEnabled,
+                          ClipboardHistoryRowHitTesting.targetsFocus(
+                              atX: value.location.x,
+                              isMultiSelectionEnabled: false
+                          ) else { return }
+                    pastePanelItem(item.id, asPlainText: false)
+                }
+        )
         .help(ClipboardHistoryTimestampFormatting.exactString(for: item.capturedAt, locale: locale))
         .contextMenu {
             Button(localization.string("panel.footer.paste", defaultValue: "粘贴")) {
@@ -3830,7 +3867,6 @@ private struct ClipboardHistoryPanelView: View {
                 .frame(width: PluginPaletteMetrics.rowIconWidth, height: 20)
                 .help(detailKindTitle(item))
                 .accessibilityLabel(detailKindTitle(item))
-                .onTapGesture { model.selectedItemID = item.id }
         }
     }
 
