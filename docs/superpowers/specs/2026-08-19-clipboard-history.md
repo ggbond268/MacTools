@@ -46,7 +46,7 @@ Snippet templates expand `{{date}}`, `{{time}}`, `{{datetime}}`, `{{clipboard}}`
 
 ### Sequential Paste
 
-An explicit queue is an immutable ordered snapshot of selected History items. The Paste Next shortcut can also create a bounded implicit snapshot of recent History. Rapid shortcut presses are buffered and processed in order. A movable transient HUD shows progress, the pasted and next items, image previews when applicable, previous, skip, restart, close, and separate cancel controls.
+An explicit queue is an immutable ordered snapshot of the selected History, Saved clips, and Snippets. The Paste Next shortcut can also create a bounded implicit snapshot of recent History. Snippet variables resolve when their queue step is pasted. Rapid shortcut presses are buffered and processed in order. A movable transient HUD shows progress, the pasted and next items, image previews when applicable, previous, skip, restart, close, and separate cancel controls.
 
 ## Panel and Actions
 
@@ -92,10 +92,10 @@ Grouped files remain references rather than copied file contents. Unsupported ap
 - `IncrementalEncryptedClipboardHistoryStore` persists captured History/Saved state; `IncrementalEncryptedClipboardSavedLibraryStore` persists only authored snippets in the same encrypted database.
 - `ClipboardSnippetKeywordExpander` observes key-down events only while enabled and replaces text through Accessibility without using clipboard round trips.
 - `ClipboardHistoryPanelController` owns the floating History/Saved panel and restores the previous application for paste.
-- `ClipboardSequentialPasteCoordinator` owns immutable explicit and implicit History snapshots and protects queued History rows from retention until completion or cancellation.
+- `ClipboardSequentialPasteCoordinator` owns immutable explicit mixed-item snapshots and implicit History snapshots, and protects queued History rows from retention until completion or cancellation.
 
 ## Deferred Work
 
 - Snippet collection import/export and sync need a separate portability and privacy design; exporting individual snippet text is supported.
 - Shell, network, AppleScript, AI, and MCP template variables remain intentionally unsupported.
-- Saved-item participation in sequential queues can be designed later with typed queue references; the first release keeps queues History-only.
+- Explicit queues preserve ordered mixed selections of History, Saved clips, and Snippets. Implicit queues remain bounded snapshots of recent History.

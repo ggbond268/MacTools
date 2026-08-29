@@ -4,4 +4,6 @@ type: fixed
 area: Clipboard
 ---
 
-Speed up reopening unchanged clipboard history and updating saved items, reuse bounded image previews, and keep visible rows stationary when selecting them.
+Speed up Clipboard opening by preparing large history indexes off the main thread, avoiding transient loading flashes, and reusing bounded image previews.
+
+Keep the Clipboard layout stable while selecting rows, and allow choices to appear inside an already-visible filter strip without adding or moving filter rows.

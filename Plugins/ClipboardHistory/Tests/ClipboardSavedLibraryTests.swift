@@ -68,6 +68,41 @@ final class ClipboardSavedLibraryTests: XCTestCase {
     }
 
     @MainActor
+    func testSensitiveClipboardIsUnavailableToCopyResolvedTextAndKeywordExpansion() async throws {
+        let template = "Hello {{clipboard}}"
+        let item = ClipboardSavedItem(
+            title: "Sensitive template",
+            keyword: ";sensitive",
+            savedKind: .snippet,
+            payload: .plainText(template),
+            templateText: template
+        )
+        let board = SavedLibraryTestPasteboard()
+        board.text = "secret"
+        board.typeNames = ["org.nspasteboard.ConcealedType"]
+        board.onAsynchronousPlainTextRead = { .changed }
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: board,
+            persistence: SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [item])
+        )
+        await startSavedLibrary(controller)
+
+        let resolved = await controller.resolvedPlainText(id: item.id)
+        let copied = await controller.copy(id: item.id)
+        XCTAssertNil(resolved)
+        XCTAssertNil(copied)
+        XCTAssertNil(board.payload)
+        do {
+            _ = try await controller.expansionContext(for: template)
+            XCTFail("Keyword expansion must not receive sensitive clipboard text")
+        } catch is CancellationError {
+            // Sensitive content is intentionally treated as unavailable.
+        }
+        XCTAssertEqual(board.asynchronousPlainTextReadCount, 3)
+        controller.stop()
+    }
+
+    @MainActor
     func testClipboardVariableCannotWriteAfterVersionChangeOrCancellation() async throws {
         for cancel in [false, true] {
             let template = "{{clipboard}}"
@@ -234,19 +269,6 @@ final class ClipboardSavedLibraryTests: XCTestCase {
 
         XCTAssertEqual(inserted.text, "Hello {{date}}")
         XCTAssertEqual(inserted.selectedRange, NSRange(location: 14, length: 0))
-    }
-
-    func testSavedPreviewIsVisibleOnlyForItsOwningItem() {
-        let ownerID = UUID()
-        let otherID = UUID()
-        let image = NSImage(size: NSSize(width: 10, height: 10))
-        let imageState = ClipboardSavedPreviewState(itemID: ownerID, image: image, text: nil)
-        let textState = ClipboardSavedPreviewState(itemID: ownerID, image: nil, text: "body")
-
-        XCTAssertTrue(imageState.image(for: ownerID) === image)
-        XCTAssertNil(imageState.image(for: otherID))
-        XCTAssertEqual(textState.text(for: ownerID), "body")
-        XCTAssertNil(textState.text(for: otherID))
     }
 
     func testKeywordMatcherUsesBoundariesAndLongestMatch() {
@@ -1010,13 +1032,15 @@ final class ClipboardSavedLibraryTests: XCTestCase {
     }
 
     @MainActor
-    func testPreviewClipboardRefusesSensitiveProducerContent() {
+    func testPreviewClipboardRefusesSensitiveProducerContent() async {
         let pasteboard = SavedLibraryTestPasteboard()
         pasteboard.text = "name"
-        XCTAssertEqual(ClipboardSnippetPreviewClipboard.readText(from: pasteboard), "name")
+        let text = await ClipboardSnippetPreviewClipboard.readText(from: pasteboard)
+        XCTAssertEqual(text, "name")
         for type in ClipboardCapturePolicy.ignoredProducerTypes {
             pasteboard.typeNames = [type]
-            XCTAssertNil(ClipboardSnippetPreviewClipboard.readText(from: pasteboard))
+            let sensitiveText = await ClipboardSnippetPreviewClipboard.readText(from: pasteboard)
+            XCTAssertNil(sensitiveText)
         }
     }
 

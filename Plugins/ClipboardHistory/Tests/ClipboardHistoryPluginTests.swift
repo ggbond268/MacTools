@@ -9,6 +9,113 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPluginTests: XCTestCase {
+    func testDeactivationStopsSnippetPasteboardReaderWithoutRelaunching() async {
+        let reader = ClipboardPasteboardReaderProcess(
+            helperURL: { URL(fileURLWithPath: "/bin/sleep") },
+            helperArguments: ["60"],
+            requestTimeout: .seconds(5)
+        )
+        let plugin = makePlugin(snippetPasteboardReader: reader)
+        let request = ClipboardPasteboardReaderRequest(
+            kind: .plainText,
+            pasteboardName: NSPasteboard.Name.general.rawValue,
+            maximumByteCount: 1_024,
+            expectedChangeCount: NSPasteboard.general.changeCount
+        )
+        let readTask = Task { try? await reader.read(request) }
+        var launched = false
+        for _ in 0..<200 {
+            if await reader.hasLiveSessionForTesting {
+                launched = true
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(launched)
+
+        plugin.deactivate(reason: .hostShutdown)
+        _ = await readTask.value
+        let hasLiveSession = await reader.hasLiveSessionForTesting
+        let launchCount = await reader.launchCountForTesting
+        XCTAssertFalse(hasLiveSession)
+        XCTAssertEqual(launchCount, 1)
+    }
+
+    func testExplicitQueueRejectsOnlyUnavailableItemsAtPluginBoundary() async {
+        let historyItem = ClipboardHistoryItem(
+            id: UUID(),
+            text: "History",
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+        let persistence = BlockingClipboardHistoryPersistence(items: [historyItem])
+        persistence.allowSaveToFinish()
+        let hud = FakeClipboardPrivacyHUDPresenter()
+        let plugin = makePlugin(persistence: persistence, privacyHUDPresenter: hud)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        plugin.controller.stop()
+
+        XCTAssertFalse(plugin.startSequentialQueueForTesting(itemIDs: [historyItem.id, UUID()]))
+        XCTAssertEqual(hud.failures.count, 1)
+        XCTAssertTrue(plugin.startSequentialQueueForTesting(itemIDs: [historyItem.id]))
+    }
+
+    func testExplicitQueuePastesHistoryAndSnippetInSelectionOrder() async throws {
+        let historyItem = ClipboardHistoryItem(
+            id: UUID(),
+            text: "History value",
+            capturedAt: Date(),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+        let snippet = ClipboardSavedItem(
+            title: "Template",
+            savedKind: .snippet,
+            payload: .plainText("Snippet {{clipboard}}"),
+            templateText: "Snippet {{clipboard}}"
+        )
+        let historyPersistence = BlockingClipboardHistoryPersistence(items: [historyItem])
+        historyPersistence.allowSaveToFinish()
+        let savedPersistence = InMemoryClipboardSavedLibraryPersistence()
+        try savedPersistence.save(snippet, payloadChanged: true)
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardPasteCommandSender()
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            persistence: historyPersistence,
+            savedPersistence: savedPersistence,
+            pasteCommandSender: sender,
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.controller.start()
+        plugin.savedLibraryController.start()
+        await waitUntilLoaded(plugin.controller)
+        let savedLibraryLoaded = await waitUntil { plugin.savedLibraryController.isLoaded }
+        XCTAssertTrue(savedLibraryLoaded)
+
+        XCTAssertTrue(plugin.startSequentialQueueForTesting(itemIDs: [historyItem.id, snippet.id]))
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let pastedHistory = await waitUntil {
+            sender.sendCount == 1 && !plugin.hasPendingSequentialPasteForTesting
+        }
+        XCTAssertTrue(pastedHistory)
+        XCTAssertEqual(pasteboard.text, "History value")
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let pastedSnippet = await waitUntil {
+            sender.sendCount == 2 && !plugin.hasPendingSequentialPasteForTesting
+        }
+        XCTAssertTrue(pastedSnippet)
+        XCTAssertEqual(pasteboard.text, "Snippet History value")
+    }
+
     func testSnippetClipboardWriteResetsImplicitQueueBeforeBlockedUsageSaveAndPreservesExplicitQueue() async throws {
         for usesExplicitQueue in [false, true] {
             let first = ClipboardHistoryItem(id: UUID(), text: "First", capturedAt: Date(),
@@ -1415,7 +1522,8 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         accessibilityRequester: @escaping (Bool) -> Bool = { _ in true },
         frontmostProcessIdentifier: @escaping () -> pid_t? = { 1234 },
         sequentialPasteStabilizationDelay: Duration = .milliseconds(120),
-        initialExplicitSession: ClipboardSequentialPasteSession? = nil
+        initialExplicitSession: ClipboardSequentialPasteSession? = nil,
+        snippetPasteboardReader: ClipboardPasteboardReaderProcess? = nil
     ) -> ClipboardHistoryPlugin {
         let suiteName = "ClipboardHistoryPluginTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -1447,7 +1555,8 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             accessibilityTrusted: accessibilityTrusted,
             accessibilityRequester: accessibilityRequester,
             frontmostProcessIdentifier: frontmostProcessIdentifier,
-            sequentialPasteStabilizationDelay: sequentialPasteStabilizationDelay
+            sequentialPasteStabilizationDelay: sequentialPasteStabilizationDelay,
+            snippetPasteboardReader: snippetPasteboardReader
         )
     }
 

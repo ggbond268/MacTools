@@ -45,12 +45,18 @@ final class ClipboardHistoryWindowStyleTests: XCTestCase {
     }
 
     func testSettingsDisclosureKeepsFullWidthHeaderAndDoesNotAddAnOuterCard() {
-        let collapsed = NSHostingView(rootView: ClipboardSettingsDisclosure(isExpanded: .constant(false)) {
+        let collapsed = NSHostingView(rootView: ClipboardSettingsDisclosure(
+            isExpanded: .constant(false),
+            accessibilityValue: "Collapsed"
+        ) {
             Text("Advanced controls").frame(height: 180)
         } label: {
             Text("Shortcuts")
         }.frame(width: 400))
-        let expanded = NSHostingView(rootView: ClipboardSettingsDisclosure(isExpanded: .constant(true)) {
+        let expanded = NSHostingView(rootView: ClipboardSettingsDisclosure(
+            isExpanded: .constant(true),
+            accessibilityValue: "Expanded"
+        ) {
             Text("Advanced controls").frame(height: 180)
         } label: {
             Text("Shortcuts")

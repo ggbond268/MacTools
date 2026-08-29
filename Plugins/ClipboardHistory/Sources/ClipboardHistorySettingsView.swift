@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 enum ClipboardHistorySettingsContentSection: Hashable {
     case essentials
     case queue
-    case saved
     case snippets
     case additionalShortcuts
     case retention
@@ -65,9 +64,6 @@ struct ClipboardHistorySettingsView: View {
             }
             if contentSections.contains(.queue) {
                 sequentialPasteSection
-            }
-            if contentSections.contains(.saved) {
-                savedLibrarySection
             }
             if contentSections.contains(.snippets) {
                 snippetsSection
@@ -160,19 +156,25 @@ struct ClipboardHistorySettingsView: View {
                 Alert(
                     title: Text(localization.string(
                         "settings.storage.reset.title",
-                        defaultValue: "删除无法读取的历史记录？"
+                        defaultValue: "Delete Unreadable Clipboard Data?"
                     )),
                     message: Text(localization.string(
                         "settings.storage.reset.message",
-                        defaultValue: "This deletes the encrypted Clipboard database and its Keychain key. History and Saved items cannot be recovered."
+                        defaultValue: "This deletes the encrypted Clipboard database and its Keychain key. History, Saved clips, and snippets cannot be recovered."
                     )),
                     primaryButton: .destructive(Text(localization.string(
                         "settings.storage.reset.confirm",
                         defaultValue: "删除并重新开始"
                     ))) {
                         Task {
+                            // Drain snippet reads and writes before the shared database/key reset.
+                            // The stores also share a database coordinator, so no queued operation
+                            // can recreate the database inside the reset boundary.
+                            savedLibraryController.stop()
                             if await controller.resetUnreadablePersistentHistory() {
                                 savedLibraryController.reloadAfterExternalDatabaseReset()
+                            } else {
+                                savedLibraryController.start()
                             }
                         }
                     },
@@ -290,48 +292,9 @@ struct ClipboardHistorySettingsView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(localization.string(
-            "settings.collection.section",
-            defaultValue: "Collection & Security"
+            "settings.privacyOverview.section",
+            defaultValue: "Privacy & Storage"
         ))
-    }
-
-    private var savedLibrarySection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            sectionHeader(
-                localization.string("settings.saved.section", defaultValue: "Saved Clips"),
-                systemImage: "bookmark"
-            )
-            VStack(spacing: 0) {
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Text(localization.format(
-                            "settings.saved.count",
-                            defaultValue: "%d saved clips",
-                            controller.savedItems.count
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(localization.string(
-                            "settings.saved.description",
-                            defaultValue: "Saved clips remain searchable outside History retention. Snippets are managed separately."
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Button(
-                        localization.string("settings.saved.clear", defaultValue: "Clear Saved Clips"),
-                        role: .destructive
-                    ) {
-                        clearRequest = .savedClips
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(controller.savedItems.isEmpty)
-                }
-                .pluginSettingsListRowPadding(interactive: true)
-            }
-            .pluginSettingsCardBackground(.standard)
-        }
     }
 
     private var snippetsSection: some View {
@@ -446,7 +409,9 @@ struct ClipboardHistorySettingsView: View {
                         .pluginSettingsListRowPadding()
                 }
                 PluginSettingsListDivider()
-                ClipboardSettingsDisclosure(isExpanded: $isSnippetAdvancedExpanded,
+                ClipboardSettingsDisclosure(
+                    isExpanded: $isSnippetAdvancedExpanded,
+                    accessibilityValue: disclosureAccessibilityValue(isSnippetAdvancedExpanded),
                     headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal) {
                     settingPickerRow(
                         title: localization.string("settings.snippets.expandedLimit.title", defaultValue: "Expanded Text Limit"),
@@ -565,6 +530,7 @@ struct ClipboardHistorySettingsView: View {
             VStack(spacing: 0) {
                 ClipboardSettingsDisclosure(
                     isExpanded: $isWindowShortcutsExpanded,
+                    accessibilityValue: disclosureAccessibilityValue(isWindowShortcutsExpanded),
                     headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
                 ) {
                     VStack(spacing: 0) {
@@ -608,6 +574,7 @@ struct ClipboardHistorySettingsView: View {
 
                 ClipboardSettingsDisclosure(
                     isExpanded: $isCollectionShortcutsExpanded,
+                    accessibilityValue: disclosureAccessibilityValue(isCollectionShortcutsExpanded),
                     headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
                 ) {
                     VStack(spacing: 0) {
@@ -723,6 +690,9 @@ struct ClipboardHistorySettingsView: View {
     private var sequentialPasteAdvancedOptions: some View {
         ClipboardSettingsDisclosure(
             isExpanded: advancedSectionBinding(.queue),
+            accessibilityValue: disclosureAccessibilityValue(
+                expandedAdvancedSections.contains(.queue)
+            ),
             headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
         ) {
             VStack(spacing: 0) {
@@ -869,7 +839,12 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var retentionSection: some View {
-        ClipboardSettingsDisclosure(isExpanded: advancedSectionBinding(.retention)) {
+        ClipboardSettingsDisclosure(
+            isExpanded: advancedSectionBinding(.retention),
+            accessibilityValue: disclosureAccessibilityValue(
+                expandedAdvancedSections.contains(.retention)
+            )
+        ) {
             VStack(spacing: 0) {
                 settingPickerRow(
                     title: localization.string("settings.retention.maximum.title", defaultValue: "最多保留"),
@@ -968,7 +943,12 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var exclusionsSection: some View {
-        ClipboardSettingsDisclosure(isExpanded: advancedSectionBinding(.exclusions)) {
+        ClipboardSettingsDisclosure(
+            isExpanded: advancedSectionBinding(.exclusions),
+            accessibilityValue: disclosureAccessibilityValue(
+                expandedAdvancedSections.contains(.exclusions)
+            )
+        ) {
             VStack(spacing: 0) {
                 HStack {
                     Text(exclusionsSummary)
@@ -1090,6 +1070,7 @@ struct ClipboardHistorySettingsView: View {
                 PluginSettingsListDivider()
                 ClipboardSettingsDisclosure(
                     isExpanded: $isMaintenanceExpanded,
+                    accessibilityValue: disclosureAccessibilityValue(isMaintenanceExpanded),
                     headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
                 ) {
                     VStack(spacing: 0) {
@@ -1147,7 +1128,7 @@ struct ClipboardHistorySettingsView: View {
                         if controller.canResetUnreadablePersistentHistory {
                             Button(localization.string(
                                 "settings.storage.resetUnreadable",
-                                defaultValue: "删除无法读取的历史…"
+                                defaultValue: "Delete Unreadable Clipboard Data…"
                             ), role: .destructive) {
                                 clearRequest = .resetUnreadable
                             }
@@ -1225,6 +1206,13 @@ struct ClipboardHistorySettingsView: View {
                     expandedAdvancedSections.remove(section)
                 }
             }
+        )
+    }
+
+    private func disclosureAccessibilityValue(_ isExpanded: Bool) -> String {
+        ClipboardHistorySetupAccessibility.disclosureValue(
+            isExpanded: isExpanded,
+            localization: localization
         )
     }
 
@@ -1520,17 +1508,20 @@ private final class ClipboardAccessibleSwitch: NSSwitch {
 
 struct ClipboardSettingsDisclosure<Label: View, Content: View>: View {
     @Binding var isExpanded: Bool
+    private let accessibilityValue: String
     private let headerHorizontalPadding: CGFloat
     private let label: Label
     private let content: Content
 
     init(
         isExpanded: Binding<Bool>,
+        accessibilityValue: String,
         headerHorizontalPadding: CGFloat = 0,
         @ViewBuilder content: () -> Content,
         @ViewBuilder label: () -> Label
     ) {
         _isExpanded = isExpanded
+        self.accessibilityValue = accessibilityValue
         self.headerHorizontalPadding = headerHorizontalPadding
         self.content = content()
         self.label = label()
@@ -1542,11 +1533,15 @@ struct ClipboardSettingsDisclosure<Label: View, Content: View>: View {
         } label: {
             label
         }
-        .disclosureGroupStyle(ClipboardSettingsDisclosureStyle(headerHorizontalPadding: headerHorizontalPadding))
+        .disclosureGroupStyle(ClipboardSettingsDisclosureStyle(
+            accessibilityValue: accessibilityValue,
+            headerHorizontalPadding: headerHorizontalPadding
+        ))
     }
 }
 
 private struct ClipboardSettingsDisclosureStyle: DisclosureGroupStyle {
+    let accessibilityValue: String
     let headerHorizontalPadding: CGFloat
 
     func makeBody(configuration: Configuration) -> some View {
@@ -1573,7 +1568,7 @@ private struct ClipboardSettingsDisclosureStyle: DisclosureGroupStyle {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityAddTraits(configuration.isExpanded ? .isSelected : [])
+            .accessibilityValue(Text(accessibilityValue))
 
             if configuration.isExpanded {
                 configuration.content

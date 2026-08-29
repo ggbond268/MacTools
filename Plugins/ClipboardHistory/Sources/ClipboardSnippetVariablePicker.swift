@@ -4,11 +4,21 @@ import SwiftUI
 
 @MainActor
 enum ClipboardSnippetPreviewClipboard {
-    static func readText(from pasteboard: any ClipboardPasteboardAccess = GeneralClipboardPasteboard()) -> String? {
+    static func readText(
+        from pasteboard: any ClipboardPasteboardAccess,
+        maximumByteCount: Int = ClipboardSnippetExpansionContext.defaultMaximumUTF8ByteCount
+    ) async -> String? {
         let changeCount = pasteboard.changeCount
         guard pasteboard.typeNames.isDisjoint(with: ClipboardCapturePolicy.ignoredProducerTypes) else { return nil }
-        let text = pasteboard.readPlainText()
-        return pasteboard.changeCount == changeCount ? text : nil
+        let result = await pasteboard.readPlainTextAsynchronously(
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: changeCount
+        )
+        guard !Task.isCancelled, pasteboard.changeCount == changeCount,
+              case let .payload(payload) = result else {
+            return nil
+        }
+        return payload.plainText
     }
 }
 
@@ -77,6 +87,7 @@ struct ClipboardSnippetVariablePicker: View {
     let text: String
     let selection: NSRange
     let localization: PluginLocalization
+    let previewPasteboard: any ClipboardPasteboardAccess
     let onInsert: (String) -> Void
     var maximumExpandedTextByteCount: Int = ClipboardSnippetExpansionContext.defaultMaximumUTF8ByteCount
 
@@ -257,8 +268,14 @@ struct ClipboardSnippetVariablePicker: View {
         let template = currentOptions.previewTemplate(text: text, selection: selection)
         let needsClipboard = await Task.detached { ClipboardSnippetTemplateEngine.requiresClipboardText(template) }.value
         guard !Task.isCancelled else { return }
-        var context = ClipboardSnippetExpansionContext.current(clipboardText: needsClipboard
-            ? ClipboardSnippetPreviewClipboard.readText() : nil)
+        let clipboardText = needsClipboard
+            ? await ClipboardSnippetPreviewClipboard.readText(
+                from: previewPasteboard,
+                maximumByteCount: maximumExpandedTextByteCount
+            )
+            : nil
+        guard !Task.isCancelled else { return }
+        var context = ClipboardSnippetExpansionContext.current(clipboardText: clipboardText)
         context.maximumUTF8ByteCount = maximumExpandedTextByteCount
         context.uuid = { uuid }
         do {

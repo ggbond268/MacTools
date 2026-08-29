@@ -151,6 +151,29 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         print("Clipboard 50k warm reopen: \(reopen); targeted metadata patch: \(patch)")
     }
 
+    func testLargeColdPresentationPreparationReturnsWithoutBlockingTheUI() async {
+        let items = makeItems(50_000)
+        let model = ClipboardHistoryPanelModel()
+
+        let start = ContinuousClock.now
+        model.prepareForPresentationAsynchronously(items: items)
+        let scheduling = ContinuousClock.now - start
+
+        XCTAssertTrue(model.isPreparingPresentation)
+        XCTAssertLessThan(
+            scheduling,
+            .milliseconds(100),
+            "Cold presentation analysis must be scheduled off the main actor"
+        )
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+
+        XCTAssertFalse(model.isPreparingPresentation)
+        XCTAssertEqual(model.scopedItemCount, items.count)
+        XCTAssertEqual(model.visibleItems.count, ClipboardHistoryPanelModel.resultPageSize)
+        print("Clipboard 50k cold presentation scheduling: \(scheduling)")
+    }
+
     private func makeItems(_ count: Int) -> [ClipboardHistoryItem] {
         (0..<count).map { index in
             ClipboardHistoryItem(id: UUID(), text: "MT88 tripod \(index)",

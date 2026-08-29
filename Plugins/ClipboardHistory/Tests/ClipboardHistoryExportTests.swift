@@ -291,6 +291,64 @@ final class ClipboardHistoryExportTests: XCTestCase {
         XCTAssertNotNil(CGImageSourceCreateWithData(data as CFData, nil))
     }
 
+    func testImageExportRejectsOversizedDeclaredDimensionsBeforeDecode() async throws {
+        let data = try imageData(declaringWidth: 40_000, height: 1)
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+        XCTAssertEqual(ClipboardImageExportPolicy.dimensions(of: source)?.width, 40_000)
+        let payload = imagePayload(data: data)
+        let item = item(payload: payload)
+        let plan = try ClipboardHistoryExportPlanner.makePlan(
+            item: item,
+            payload: payload,
+            format: .png,
+            baseName: "Unsafe Image"
+        )
+
+        do {
+            _ = try await ClipboardHistoryExportService.makeArtifacts(
+                item: item,
+                payload: payload,
+                plan: plan,
+                baseName: "Unsafe Image"
+            )
+            XCTFail("An oversized declared dimension must be rejected before bitmap decoding")
+        } catch {
+            XCTAssertEqual(error as? ClipboardExportError, .invalidPayload)
+        }
+    }
+
+    func testImageExportRejectsAggregateDecodedMemoryBudgetBeforeDecode() async throws {
+        let first = try imageData(declaringWidth: 9_000, height: 4_000)
+        let second = try imageData(declaringWidth: 9_000, height: 4_000)
+        let payload = ClipboardHistoryPayload(pasteboardItems: [first, second].map { data in
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.png,
+                    data: data
+                ),
+            ])
+        })
+        let item = item(payload: payload)
+        let plan = try ClipboardHistoryExportPlanner.makePlan(
+            item: item,
+            payload: payload,
+            format: .png,
+            baseName: "Unsafe Images"
+        )
+
+        do {
+            _ = try await ClipboardHistoryExportService.makeArtifacts(
+                item: item,
+                payload: payload,
+                plan: plan,
+                baseName: "Unsafe Images"
+            )
+            XCTFail("Aggregate decoded memory must be bounded before any image is decoded")
+        } catch {
+            XCTAssertEqual(error as? ClipboardExportError, .invalidPayload)
+        }
+    }
+
     func testLinkExportCreatesWebLocationPropertyList() async throws {
         let payload = ClipboardHistoryPayload(pasteboardItems: [
             ClipboardStoredPasteboardItem(representations: [
@@ -1050,7 +1108,11 @@ final class ClipboardHistoryExportTests: XCTestCase {
             bitsPerPixel: 0
         )!
         let data = bitmap.representation(using: .png, properties: [:])!
-        return ClipboardHistoryPayload(pasteboardItems: [
+        return imagePayload(data: data)
+    }
+
+    private func imagePayload(data: Data) -> ClipboardHistoryPayload {
+        ClipboardHistoryPayload(pasteboardItems: [
             ClipboardStoredPasteboardItem(representations: [
                 ClipboardStoredRepresentation(
                     typeIdentifier: ClipboardRepresentationType.png,
@@ -1058,6 +1120,36 @@ final class ClipboardHistoryExportTests: XCTestCase {
                 ),
             ]),
         ])
+    }
+
+    private func imageData(declaringWidth width: UInt32, height: UInt32) throws -> Data {
+        var data = try XCTUnwrap(imagePayload().representations.first?.data)
+        guard data.count >= 33,
+              String(data: data[12..<16], encoding: .ascii) == "IHDR" else {
+            throw ClipboardExportError.invalidPayload
+        }
+        data.replaceSubrange(16..<20, with: bytes(of: width.bigEndian))
+        data.replaceSubrange(20..<24, with: bytes(of: height.bigEndian))
+        let checksum = crc32(data[12..<29]).bigEndian
+        data.replaceSubrange(29..<33, with: bytes(of: checksum))
+        return data
+    }
+
+    private func bytes<T>(of value: T) -> [UInt8] {
+        withUnsafeBytes(of: value) { Array($0) }
+    }
+
+    private func crc32(_ bytes: Data.SubSequence) -> UInt32 {
+        var checksum = UInt32.max
+        for byte in bytes {
+            checksum ^= UInt32(byte)
+            for _ in 0..<8 {
+                checksum = checksum & 1 == 1
+                    ? (checksum >> 1) ^ 0xEDB8_8320
+                    : checksum >> 1
+            }
+        }
+        return checksum ^ UInt32.max
     }
 
     private func singleFilePlan(destination: URL) -> ClipboardExportPlan {

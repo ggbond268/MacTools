@@ -168,7 +168,7 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
         second.setData(Data([4, 5, 6]), forType: .png)
         board.writeObjects([first, second])
         var writes = 0
-        let lease = try XCTUnwrap(ClipboardSnippetPasteboardLease(pasteboard: board, onWrite: { writes += 1 }))
+        let lease = try XCTUnwrap(makeLease(pasteboard: board, onWrite: { writes += 1 }))
         XCTAssertTrue(lease.write("replacement"))
         XCTAssertEqual(board.string(forType: .string), "replacement")
         XCTAssertTrue(board.types!.contains(ClipboardSnippetPasteboardLease.generatedType))
@@ -185,7 +185,7 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
         board.setString("old", forType: .string)
-        let lease = try XCTUnwrap(ClipboardSnippetPasteboardLease(pasteboard: board, onWrite: {}))
+        let lease = try XCTUnwrap(makeLease(pasteboard: board))
         XCTAssertTrue(lease.write("snippet"))
         board.clearContents()
         board.setString("new user copy", forType: .string)
@@ -199,7 +199,7 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
         for type in ["org.nspasteboard.ConcealedType", "com.apple.filepromise"] {
             board.clearContents()
             board.setData(Data(), forType: .init(type))
-            XCTAssertNil(ClipboardSnippetPasteboardLease(pasteboard: board, onWrite: {}))
+            XCTAssertNil(makeLease(pasteboard: board))
             XCTAssertEqual(board.types, [.init(type)])
         }
     }
@@ -208,15 +208,104 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
         board.clearContents()
-        let lease = try XCTUnwrap(ClipboardSnippetPasteboardLease(pasteboard: board, onWrite: {}))
+        let lease = try XCTUnwrap(makeLease(pasteboard: board))
         XCTAssertTrue(lease.write("snippet"))
         lease.restore()
         XCTAssertTrue(board.pasteboardItems?.isEmpty ?? true)
-        let stale = try XCTUnwrap(ClipboardSnippetPasteboardLease(pasteboard: board, onWrite: {}))
+        let stale = try XCTUnwrap(makeLease(pasteboard: board))
         board.clearContents()
         board.setString("new", forType: .string)
         XCTAssertFalse(stale.write("snippet"))
         XCTAssertEqual(board.string(forType: .string), "new")
+    }
+
+    func testLeasePreparationTimesOutStalledLazyOwnerAndRecovers() async throws {
+        let helperURL = try XCTUnwrap(Self.helperURL)
+        let board = NSPasteboard.withUniqueName()
+        let owner = Process()
+        let readinessPipe = Pipe()
+        owner.executableURL = helperURL
+        owner.arguments = ["--stall-plain-text-owner", board.name.rawValue]
+        owner.standardOutput = readinessPipe
+        owner.standardError = FileHandle.nullDevice
+        try owner.run()
+        defer {
+            if owner.isRunning { owner.terminate() }
+            board.clearContents()
+            board.releaseGlobally()
+        }
+        let readiness = try readinessPipe.fileHandleForReading.read(upToCount: 6)
+        XCTAssertEqual(readiness.flatMap { String(data: $0, encoding: .utf8) }, "ready\n")
+
+        let reader = ClipboardPasteboardReaderProcess(
+            helperURL: { helperURL },
+            requestTimeout: .milliseconds(75)
+        )
+        defer { Task { await reader.stop() } }
+        let preparation = Task { @MainActor in
+            await ClipboardSnippetPasteboardLease.prepare(
+                pasteboard: board,
+                reader: reader,
+                onWrite: {}
+            )
+        }
+        await Task.yield()
+        let mainActorRemainedResponsive = await Task { @MainActor in true }.value
+        let stalledLease = await preparation.value
+        let hasLiveSession = await reader.hasLiveSessionForTesting
+        XCTAssertTrue(mainActorRemainedResponsive)
+        XCTAssertNil(stalledLease)
+        XCTAssertFalse(hasLiveSession)
+
+        if owner.isRunning { owner.terminate() }
+        owner.waitUntilExit()
+        board.clearContents()
+        XCTAssertTrue(board.setString("original", forType: .string))
+        let recovered = await ClipboardSnippetPasteboardLease.prepare(
+            pasteboard: board,
+            reader: reader,
+            onWrite: {}
+        )
+        let lease = try XCTUnwrap(recovered)
+        XCTAssertTrue(lease.write("snippet"))
+        lease.restore()
+        XCTAssertEqual(board.string(forType: .string), "original")
+        let launchCount = await reader.launchCountForTesting
+        XCTAssertEqual(launchCount, 2)
+    }
+
+    private func makeLease(
+        pasteboard: NSPasteboard,
+        onWrite: @escaping () -> Void = {}
+    ) -> ClipboardSnippetPasteboardLease? {
+        let changeCount = pasteboard.changeCount
+        let response = ClipboardPasteboardReaderWire.read(.init(
+            kind: .completeSnapshot,
+            pasteboardName: pasteboard.name.rawValue,
+            maximumByteCount: ClipboardSnippetPasteboardLease.maximumBackupByteCount,
+            expectedChangeCount: changeCount
+        ))
+        return ClipboardSnippetPasteboardLease.makeForTesting(
+            pasteboard: pasteboard,
+            response: response,
+            originalChangeCount: changeCount,
+            onWrite: onWrite
+        )
+    }
+
+    private static var helperURL: URL? {
+        var directory = Bundle(for: Self.self).bundleURL
+        while directory.path != "/" {
+            let candidate = directory
+                .appendingPathComponent("ClipboardHistory.bundle", isDirectory: true)
+                .appendingPathComponent("Contents/Resources/PasteboardReaderHelper", isDirectory: true)
+                .appendingPathComponent("mactools-clipboard-pasteboard-reader-helper")
+            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
+            directory.deleteLastPathComponent()
+        }
+        return nil
     }
 }
 
@@ -237,7 +326,7 @@ private final class FakeSnippetReplacementAccess: ClipboardSnippetReplacementAcc
     func keywordIsSelected() -> Bool { ownsSelection && selectionReady && !expanded }
     func replacementIsPresent() -> Bool { ownsSelection && expanded }
     func replaceUsingAccessibility() { nativeAttempts += 1; expanded = nativeWorks }
-    func pasteReplacement() -> Bool { pastes += 1; expanded = pasteWorks; return canPost || pasteWorks }
+    func pasteReplacement() async -> Bool { pastes += 1; expanded = pasteWorks; return canPost || pasteWorks }
     func restoreClipboard() { clipboardRestores += 1 }
     func restoreSelection() { selectionRestores += 1; selectionReady = false }
     func positionCursor() { cursorPlacements += 1 }

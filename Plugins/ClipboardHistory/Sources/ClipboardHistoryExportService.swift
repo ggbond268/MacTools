@@ -4,6 +4,41 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
+enum ClipboardImageExportPolicy {
+    static let maximumSourceDimension = 32_768
+    static let maximumSourcePixelCount = 64_000_000
+    static let estimatedDecodedBytesPerPixel = 8
+    static let maximumAggregateDecodedByteCount = maximumSourcePixelCount * estimatedDecodedBytesPerPixel
+
+    static func estimatedDecodedByteCount(width: Int, height: Int) -> Int? {
+        guard width > 0, height > 0,
+              width <= maximumSourceDimension,
+              height <= maximumSourceDimension,
+              width <= maximumSourcePixelCount / height else {
+            return nil
+        }
+        let pixelCount = width * height
+        guard pixelCount <= maximumSourcePixelCount,
+              pixelCount <= Int.max / estimatedDecodedBytesPerPixel else {
+            return nil
+        }
+        return pixelCount * estimatedDecodedBytesPerPixel
+    }
+
+    static func dimensions(of source: CGImageSource) -> (width: Int, height: Int)? {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(
+            source,
+            0,
+            [kCGImageSourceShouldCache: false] as CFDictionary
+        ) as? [CFString: Any],
+        let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
+        let height = properties[kCGImagePropertyPixelHeight] as? NSNumber else {
+            return nil
+        }
+        return (width.intValue, height.intValue)
+    }
+}
+
 enum ClipboardHistoryExportService {
     static func loadPayload(for item: ClipboardHistoryItem) async throws -> ClipboardHistoryPayload {
         try await ClipboardHistoryExportAsyncWork.run {
@@ -277,12 +312,36 @@ enum ClipboardHistoryExportService {
             ClipboardRepresentationType.isImage($0.typeIdentifier)
         }
         guard !items.isEmpty else { throw ClipboardExportError.unavailable }
-        return try items.enumerated().map { index, storedItem in
+        var aggregateDecodedByteCount = 0
+        let preparedSources: [CGImageSource] = try items.map { storedItem in
             guard let representation = storedItem.representations.first(where: {
                 ClipboardRepresentationType.isImage($0.typeIdentifier)
-            }), let source = CGImageSourceCreateWithData(representation.data as CFData, nil),
-                  CGImageSourceGetCount(source) > 0,
-                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            }), let source = CGImageSourceCreateWithData(
+                representation.data as CFData,
+                [kCGImageSourceShouldCache: false] as CFDictionary
+            ), CGImageSourceGetCount(source) > 0,
+            let dimensions = ClipboardImageExportPolicy.dimensions(of: source),
+            let decodedByteCount = ClipboardImageExportPolicy.estimatedDecodedByteCount(
+                width: dimensions.width,
+                height: dimensions.height
+            ) else {
+                throw ClipboardExportError.invalidPayload
+            }
+            let (newAggregate, overflow) = aggregateDecodedByteCount.addingReportingOverflow(decodedByteCount)
+            guard !overflow,
+                  newAggregate <= ClipboardImageExportPolicy.maximumAggregateDecodedByteCount else {
+                throw ClipboardExportError.invalidPayload
+            }
+            aggregateDecodedByteCount = newAggregate
+            return source
+        }
+
+        return try preparedSources.enumerated().map { index, source in
+            guard let cgImage = CGImageSourceCreateImageAtIndex(
+                source,
+                0,
+                [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+            ) else {
                 throw ClipboardExportError.invalidPayload
             }
             let bitmap = NSBitmapImageRep(cgImage: cgImage)

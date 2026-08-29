@@ -198,6 +198,7 @@ final class ClipboardSnippetKeywordExpander {
     var onDiagnostic: ((ClipboardSnippetExpansionDiagnostic) -> Void)?
     private let savedLibraryController: ClipboardSavedLibraryController
     private let onPasteboardWrite: () -> Void
+    private let pasteboardReader: ClipboardPasteboardReaderProcess
     private var replacementTask: Task<Void, Never>?
     private var replacementTransaction: ClipboardSnippetReplacementTransaction?
     private var matcher = ClipboardSnippetKeywordMatcher()
@@ -210,9 +211,11 @@ final class ClipboardSnippetKeywordExpander {
     init(
         savedLibraryController: ClipboardSavedLibraryController,
         pasteboard _: any ClipboardPasteboardAccess,
+        pasteboardReader: ClipboardPasteboardReaderProcess,
         onPasteboardWrite: @escaping () -> Void = {}
     ) {
         self.savedLibraryController = savedLibraryController
+        self.pasteboardReader = pasteboardReader
         self.onPasteboardWrite = onPasteboardWrite
     }
 
@@ -496,7 +499,8 @@ final class ClipboardSnippetKeywordExpander {
         let access = SystemClipboardSnippetReplacementAccess(
             element: focusedElement, processIdentifier: processIdentifier, context: replacementContext,
             replacement: expansion.text + match.delimiter, cursorLocation: cursorLocation,
-            onPasteboardWrite: onPasteboardWrite
+            onPasteboardWrite: onPasteboardWrite,
+            pasteboardReader: pasteboardReader
         )
         let transaction = ClipboardSnippetReplacementTransaction(access: access)
         replacementTransaction = transaction

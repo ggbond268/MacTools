@@ -57,6 +57,11 @@
     "project": "../../MacTools.xcodeproj",
     "scheme": "ClipboardHistoryPlugin"
   },
+  "package": {
+    "signPaths": [
+      "ClipboardHistory.bundle/Contents/Resources/PasteboardReaderHelper/mactools-clipboard-pasteboard-reader-helper"
+    ]
+  },
   "capabilities": {
     "primaryPanel": true,
     "componentPanel": false,

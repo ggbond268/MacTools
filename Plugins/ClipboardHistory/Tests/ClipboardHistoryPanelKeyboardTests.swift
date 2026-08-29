@@ -635,6 +635,39 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(model.filterOptionCount, 0)
     }
 
+    func testVisibleFilterRowAppendsNewOptionsWithoutReorderingExistingOptions() {
+        let email = item(text: "person@example.com", pinned: false)
+        let ordinary = item(text: "ordinary", pinned: false)
+        let link = item(text: "https://example.com", pinned: false)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [email, ordinary])
+
+        XCTAssertEqual(model.availableFilterFamilies, [.content])
+        XCTAssertEqual(model.availableSemanticFilters, [.email])
+
+        model.updateItems([link, email, ordinary])
+
+        XCTAssertEqual(model.availableFilterFamilies, [.content])
+        XCTAssertEqual(model.availableSemanticFilters, [.email, .link])
+    }
+
+    func testHiddenFilterFamilyDoesNotAddANewRowUntilReopen() {
+        let plain = item(text: "plain", pinned: false)
+        let image = item(
+            payload: payload(typeIdentifier: NSPasteboard.PasteboardType.png.rawValue),
+            pinned: false
+        )
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [plain])
+
+        model.updateItems([image, plain])
+        XCTAssertTrue(model.availableFilterFamilies.isEmpty)
+
+        model.prepareForPresentation(items: [image, plain])
+        XCTAssertEqual(model.availableFilterFamilies, [.type])
+        XCTAssertEqual(model.availableContentFilters, [.text, .image])
+    }
+
     func testFilterOptionNumbersFollowTheVisibleStripWithoutGaps() async {
         let plain = item(text: "plain", pinned: false)
         let email = item(text: "person@example.com", pinned: false)
@@ -868,10 +901,19 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
 
         model.selectedItemID = savedItem.id
         model.setMultiSelectionEnabled(true)
+        XCTAssertTrue(model.canStartSequentialQueue)
         model.toggleMultiSelection(for: captured.id)
 
         XCTAssertTrue(model.isMultiSelectionEnabled)
         XCTAssertEqual(model.selectedItemIDs, [savedItem.id, captured.id])
+        XCTAssertTrue(model.canStartSequentialQueue)
+
+        model.clearMultiSelection()
+        XCTAssertFalse(model.canStartSequentialQueue)
+        model.selectedItemID = captured.id
+        model.toggleFocusedSelection()
+        XCTAssertEqual(model.selectedItemIDs, [captured.id])
+        XCTAssertTrue(model.canStartSequentialQueue)
     }
 
     func testHistoryPanelUsesNativeResizableTitlelessWindowMask() {

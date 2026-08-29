@@ -375,6 +375,35 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testExcludedApplicationAlreadyFrontmostAtStartupIsSeededBeforeClipboardBaseline() async {
+        let fixture = makeFixture()
+        let secret = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Secret",
+            name: "Secret"
+        )
+        fixture.settings.addExcludedApplications([
+            ClipboardExcludedApplication(
+                bundleIdentifier: secret.bundleIdentifier,
+                name: secret.name
+            ),
+        ])
+        fixture.source.application = secret
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        fixture.source.application = ClipboardSourceApplication(
+            bundleIdentifier: "com.example.Editor",
+            name: "Editor"
+        )
+        fixture.pasteboard.simulateCopy("startup secret")
+        fixture.controller.processPasteboardChange()
+
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
+        fixture.controller.stop()
+    }
+
     func testExcludedApplicationRoundTripBetweenPollsIsNotRead() async throws {
         let fixture = makeFixture()
         let editor = ClipboardSourceApplication(
@@ -539,6 +568,12 @@ final class ClipboardHistoryControllerTests: XCTestCase {
     func testCapturedImageIsIndexedForSearchAndPersisted() async throws {
         let recognizer = FakeClipboardImageTextRecognizer(text: "Invoice total 42 dollars")
         let fixture = makeFixture(imageTextRecognizer: recognizer)
+        var indexedChangedIDs: Set<UUID>?
+        let subscription = fixture.controller.itemUpdates.sink { update in
+            if update.items.contains(where: { $0.hasCompletedImageTextIndexing }) {
+                indexedChangedIDs = update.changedIDs
+            }
+        }
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
         let payload = ClipboardHistoryPayload(pasteboardItems: [
@@ -558,13 +593,16 @@ final class ClipboardHistoryControllerTests: XCTestCase {
 
         XCTAssertEqual(fixture.controller.matchingItems(query: "inv tot").count, 1)
         XCTAssertEqual(fixture.controller.items.first?.imageSearchText, "Invoice total 42 dollars")
-        XCTAssertEqual(fixture.controller.rewriteCurrentClipboardAsPlainText(), .succeeded)
+        XCTAssertEqual(indexedChangedIDs, Set(fixture.controller.items.prefix(1).map(\.id)))
+        let rewriteResult = await fixture.controller.rewriteCurrentClipboardAsPlainText()
+        XCTAssertEqual(rewriteResult, .succeeded)
         XCTAssertEqual(
             fixture.pasteboard.lastWrittenPayload,
             .plainText("Invoice total 42 dollars")
         )
         fixture.controller.stop()
         XCTAssertEqual(fixture.persistence.savedItems.first?.imageSearchText, "Invoice total 42 dollars")
+        withExtendedLifetime(subscription) {}
     }
 
     func testImageIndexingContinuesAfterPayloadLoadFailureAndBatchesPersistence() async {
@@ -773,6 +811,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let fixture = makeFixture(captureSuppressionSettlingInterval: 0.2)
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
+        let sourceReadBaseline = fixture.source.readCount
 
         XCTAssertTrue(fixture.controller.ignoreNextCopy(expiringAfter: 0.1))
         try await Task.sleep(nanoseconds: 80_000_000)
@@ -792,7 +831,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(fixture.controller.items.isEmpty)
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
         XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
-        XCTAssertEqual(fixture.source.readCount, 0)
+        XCTAssertEqual(fixture.source.readCount, sourceReadBaseline)
 
         try await Task.sleep(nanoseconds: 220_000_000)
         for _ in 0..<100 where fixture.controller.isIgnoringNextCopy {
@@ -847,7 +886,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
 
         fixture.pasteboard.simulateCopy(imagePayload(data: Data([0x02])))
 
-        XCTAssertEqual(fixture.controller.rewriteCurrentClipboardAsPlainText(), .unavailable)
+        let rewriteResult = await fixture.controller.rewriteCurrentClipboardAsPlainText()
+        XCTAssertEqual(rewriteResult, .unavailable)
         XCTAssertNil(fixture.pasteboard.lastWrittenPayload)
         fixture.controller.stop()
     }
@@ -859,10 +899,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.pasteboard.simulateCopy(imagePayload(data: Data([0x01])))
         fixture.controller.processPasteboardChange()
 
-        XCTAssertEqual(
-            fixture.controller.rewriteCurrentClipboardAsPlainText(),
-            .imageTextRecognitionPending
-        )
+        let rewriteResult = await fixture.controller.rewriteCurrentClipboardAsPlainText()
+        XCTAssertEqual(rewriteResult, .imageTextRecognitionPending)
         fixture.controller.stop()
     }
 
@@ -1181,6 +1219,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.onCaptureSuppressionEvent = { suppressionEvents.append($0) }
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
+        let sourceReadBaseline = fixture.source.readCount
 
         fixture.controller.ignoreNextCopy(expiringAfter: 60)
         XCTAssertTrue(fixture.controller.isIgnoringNextCopy)
@@ -1192,7 +1231,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(fixture.controller.items.isEmpty)
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
         XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
-        XCTAssertEqual(fixture.source.readCount, 0)
+        XCTAssertEqual(fixture.source.readCount, sourceReadBaseline)
         XCTAssertEqual(suppressionEvents, [
             .armed(mode: .ignoreNextCopy, timeout: 60),
             .consumed(mode: .ignoreNextCopy),
@@ -1203,7 +1242,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(fixture.controller.items.isEmpty)
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
         XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
-        XCTAssertEqual(fixture.source.readCount, 0)
+        XCTAssertEqual(fixture.source.readCount, sourceReadBaseline)
 
         fixture.controller.cancelNextCaptureSuppression()
         fixture.pasteboard.simulateCopy("ordinary value")
@@ -1212,7 +1251,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertEqual(fixture.controller.items.map(\.text), ["ordinary value"])
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 1)
         XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 1)
-        XCTAssertEqual(fixture.source.readCount, 1)
+        XCTAssertEqual(fixture.source.readCount, sourceReadBaseline + 1)
         fixture.controller.stop()
     }
 
@@ -1273,6 +1312,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.onCaptureSuppressionEvent = { suppressionEvents.append($0) }
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
+        let sourceReadBaseline = fixture.source.readCount
 
         XCTAssertTrue(fixture.controller.ignoreNextCopy(expiringAfter: 0.5))
         fixture.pasteboard.simulateCopy("private first write")
@@ -1296,7 +1336,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(fixture.controller.items.isEmpty)
         XCTAssertEqual(fixture.pasteboard.typeNamesReadCount, 0)
         XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
-        XCTAssertEqual(fixture.source.readCount, 0)
+        XCTAssertEqual(fixture.source.readCount, sourceReadBaseline)
 
         fixture.pasteboard.simulateCopy("ordinary value after hard deadline")
         fixture.controller.processPasteboardChange()
@@ -1625,7 +1665,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.start()
         await waitUntilLoaded(fixture.controller)
 
-        fixture.controller.processPasteboardChange(
+        fixture.controller.processRetentionExpiration(
             now: referenceDate.addingTimeInterval(120)
         )
         let didPersistPruning = await waitUntil {
@@ -1742,7 +1782,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         controller.start()
         await waitUntilLoaded(controller)
 
-        controller.processPasteboardChange(now: referenceDate.addingTimeInterval(120))
+        controller.processRetentionExpiration(now: referenceDate.addingTimeInterval(120))
         for _ in 0..<100 where controller.errorMessage == nil { await Task.yield() }
 
         XCTAssertEqual(controller.items, [existing])
@@ -1964,6 +2004,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         )
         controller.start()
         await waitUntilLoaded(controller)
+        let sourceReadBaseline = source.readCount
 
         XCTAssertNotNil(controller.errorMessage)
         XCTAssertFalse(controller.isCollectionOperational)
@@ -1972,7 +2013,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         XCTAssertTrue(controller.items.isEmpty)
         XCTAssertEqual(pasteboard.typeNamesReadCount, 0)
         XCTAssertEqual(pasteboard.plainTextReadCount, 0)
-        XCTAssertEqual(source.readCount, 0)
+        XCTAssertEqual(source.readCount, sourceReadBaseline)
         controller.stop()
     }
 

@@ -64,6 +64,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
 
     private let keyStore: any ClipboardHistoryKeyStoring
     private let fileManager: FileManager
+    private let databaseAccess: ClipboardDatabaseAccessCoordinator
     private let postCommitMaintenance: (@Sendable () throws -> Void)?
     private let lock = NSLock()
     private var cachedItems: [UUID: ClipboardHistoryItem] = [:]
@@ -74,23 +75,23 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         legacyFileURL: URL? = nil,
         keyStore: any ClipboardHistoryKeyStoring = ClipboardHistoryKeychainStore(),
         fileManager: FileManager = .default,
+        databaseAccess: ClipboardDatabaseAccessCoordinator = ClipboardDatabaseAccessCoordinator(),
         postCommitMaintenance: (@Sendable () throws -> Void)? = nil
     ) {
         self.databaseURL = databaseURL
         self.legacyFileURL = legacyFileURL
         self.keyStore = keyStore
         self.fileManager = fileManager
+        self.databaseAccess = databaseAccess
         self.postCommitMaintenance = postCommitMaintenance
     }
 
     func prepare() throws {
-        try lock.withLock {
-            try prepareLocked()
-        }
+        try databaseAccess.withAccess { try lock.withLock { try prepareLocked() } }
     }
 
     func load() throws -> [ClipboardHistoryItem] {
-        try lock.withLock {
+        try databaseAccess.withAccess { try lock.withLock {
             guard !isInvalidated else { return [] }
             try prepareLocked()
             try migrateLegacyHistoryIfNeededLocked()
@@ -137,20 +138,23 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             loaded.sort { $0.capturedAt > $1.capturedAt }
             cachedItems = Dictionary(uniqueKeysWithValues: loaded.map { ($0.id, $0) })
             return loaded
-        }
+        } }
     }
 
     func save(_ items: [ClipboardHistoryItem]) throws {
-        try lock.withLock {
-            try saveLocked(items)
+        try databaseAccess.withAccess { try lock.withLock { try saveLocked(items) } }
+    }
+
+    func saveChanges(
+        _: [ClipboardHistoryItem],
+        applying mutation: ClipboardHistoryMutation
+    ) throws {
+        try databaseAccess.withAccess {
+            try lock.withLock { try saveChangesLocked(applying: mutation) }
         }
     }
 
-    func saveChanges(_ items: [ClipboardHistoryItem], changedIDs: Set<UUID>) throws {
-        try lock.withLock { try saveLocked(items, changedIDs: changedIDs) }
-    }
-
-    private func saveLocked(_ items: [ClipboardHistoryItem], changedIDs: Set<UUID>? = nil) throws {
+    private func saveLocked(_ items: [ClipboardHistoryItem]) throws {
         guard !isInvalidated else { return }
         try prepareLocked()
         let key = try encryptionKeyLocked()
@@ -160,10 +164,9 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         try execute("BEGIN IMMEDIATE TRANSACTION", database: database)
         do {
             let requestedIDs = Set(items.map(\.id))
-            let existingIDs = try changedIDs == nil ? itemIDs(database: database) : Set(cachedItems.keys)
-            let affectedItems = changedIDs.map { ids in items.filter { ids.contains($0.id) } } ?? items
-            let removedIDs = existingIDs.subtracting(requestedIDs).intersection(changedIDs ?? existingIDs)
-            let additionalPayloadBytes = affectedItems.reduce(into: 0) { total, item in
+            let existingIDs = try itemIDs(database: database)
+            let removedIDs = existingIDs.subtracting(requestedIDs)
+            let additionalPayloadBytes = items.reduce(into: 0) { total, item in
                 if !existingIDs.contains(item.id)
                     || cachedItems[item.id]?.payloadDigest != item.payloadDigest {
                     total += item.payloadByteCount + 64
@@ -176,7 +179,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
                 try deleteItem(id: removedID, database: database)
             }
 
-            for item in affectedItems {
+            for item in items {
                 let previous = cachedItems[item.id]
                 if previous == item {
                     continue
@@ -233,7 +236,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             }
             // Recapture can replace the in-memory reference even when the durable
             // payload is unchanged. Every committed reference must remain evictable.
-            for item in affectedItems {
+            for item in items {
                 let id = item.id
                 item.configurePayloadLoader({ [weak self] in
                     guard let self else {
@@ -249,8 +252,115 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         }
     }
 
+    private func saveChangesLocked(applying mutation: ClipboardHistoryMutation) throws {
+        guard !isInvalidated, !mutation.changes.isEmpty else { return }
+        try prepareLocked()
+        let key = try encryptionKeyLocked()
+        let database = try openDatabaseLocked()
+        defer { sqlite3_close(database) }
+
+        var affectedItemsByID: [UUID: ClipboardHistoryItem] = [:]
+        var removedIDs = Set<UUID>()
+        var originallyPresentIDs = Set<UUID>()
+        for change in mutation.changes {
+            let id = change.id
+            let original = cachedItems[id]
+            if original != nil { originallyPresentIDs.insert(id) }
+            let current = removedIDs.contains(id) ? nil : affectedItemsByID[id] ?? original
+            if let updated = change.applying(to: current) {
+                affectedItemsByID[id] = updated
+                removedIDs.remove(id)
+            } else {
+                affectedItemsByID.removeValue(forKey: id)
+                removedIDs.insert(id)
+            }
+        }
+        removedIDs.formIntersection(originallyPresentIDs)
+        let affectedItems = Array(affectedItemsByID.values)
+        let additionalPayloadBytes = affectedItems.reduce(into: 0) { total, item in
+            if cachedItems[item.id]?.payloadDigest != item.payloadDigest {
+                total += item.payloadByteCount + 64
+            }
+        }
+        if additionalPayloadBytes > 0 {
+            try requireAvailableDiskCapacity(forAdditionalBytes: additionalPayloadBytes)
+        }
+
+        try execute("BEGIN IMMEDIATE TRANSACTION", database: database)
+        do {
+            for removedID in removedIDs {
+                try deleteItem(id: removedID, database: database)
+            }
+            for item in affectedItems {
+                let previous = cachedItems[item.id]
+                if previous == item { continue }
+                let metadata = try JSONEncoder().encode(StoredMetadata(item: item))
+                let encryptedMetadata = try Self.seal(
+                    metadata,
+                    magic: Self.metadataMagic,
+                    key: key,
+                    authenticatedID: item.id
+                )
+                if let previous {
+                    if previous.payloadDigest != item.payloadDigest {
+                        let encryptedPayload = try encryptedPayloadData(
+                            item.loadPayload(),
+                            id: item.id,
+                            key: key
+                        )
+                        try updateItem(
+                            id: item.id,
+                            metadata: encryptedMetadata,
+                            payload: encryptedPayload,
+                            database: database
+                        )
+                    } else {
+                        try updateMetadata(
+                            id: item.id,
+                            metadata: encryptedMetadata,
+                            database: database
+                        )
+                    }
+                } else {
+                    let encryptedPayload = try encryptedPayloadData(
+                        item.loadPayload(),
+                        id: item.id,
+                        key: key
+                    )
+                    try insertItem(
+                        id: item.id,
+                        metadata: encryptedMetadata,
+                        payload: encryptedPayload,
+                        database: database
+                    )
+                }
+            }
+            try execute("COMMIT", database: database)
+            if !removedIDs.isEmpty {
+                try? execute("PRAGMA incremental_vacuum", database: database)
+                try? postCommitMaintenance?()
+            }
+            for removedID in removedIDs {
+                cachedItems.removeValue(forKey: removedID)
+            }
+            for item in affectedItems {
+                let id = item.id
+                item.configurePayloadLoader({ [weak self] in
+                    guard let self else {
+                        throw ClipboardHistoryPayloadAccessError.unavailable
+                    }
+                    return try self.loadPayload(id: id)
+                }, discardCachedPayload: true)
+                cachedItems[id] = item
+            }
+        } catch {
+            try? execute("ROLLBACK", database: database)
+            throw error
+        }
+    }
+
     func reset() throws {
-        try lock.withLock {
+        try databaseAccess.withExclusiveAccess { try lock.withLock {
             // Delete the key first so a partially completed reset can never leave an empty store
             // that silently continues using the pre-reset encryption key.
             try keyStore.deleteKey()
@@ -258,11 +368,11 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             try removeLegacyFileLocked()
             cachedItems = [:]
             isInvalidated = false
-        }
+        } }
     }
 
     func removeAll() throws {
-        try lock.withLock {
+        try databaseAccess.withExclusiveAccess { try lock.withLock {
             isInvalidated = true
             var firstError: Error?
             do {
@@ -280,7 +390,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             if let firstError {
                 throw firstError
             }
-        }
+        } }
     }
 
     private func makeItem(metadata: StoredMetadata) -> ClipboardHistoryItem {
@@ -344,7 +454,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
     }
 
     private func loadPayload(id: UUID) throws -> ClipboardHistoryPayload {
-        try lock.withLock {
+        try databaseAccess.withAccess { try lock.withLock {
             guard !isInvalidated else {
                 throw ClipboardHistoryPayloadAccessError.unavailable
             }
@@ -372,7 +482,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
             } catch {
                 throw ClipboardHistoryStoreError.invalidEnvelope
             }
-        }
+        } }
     }
 
     private func prepareLocked() throws {

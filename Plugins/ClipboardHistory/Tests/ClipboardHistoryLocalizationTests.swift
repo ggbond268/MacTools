@@ -91,6 +91,9 @@ final class ClipboardHistoryLocalizationTests: XCTestCase {
             "settings.retention.maximum.description": "When the item limit is reached, the oldest History items are removed automatically. Saved items are unaffected.",
             "settings.retention.expiration.description": "Never disables age-based expiration; capacity limits may still remove the oldest History items. Saved items are unaffected.",
             "settings.retention.storageLimit.description": "When the storage limit is reached, the oldest History items are removed. Saved items are unaffected; actual storage remains subject to available disk space.",
+            "settings.storage.resetUnreadable": "Delete Unreadable Clipboard Data…",
+            "settings.storage.reset.title": "Delete Unreadable Clipboard Data?",
+            "settings.storage.reset.message": "This deletes the encrypted Clipboard database and its Keychain key. History, Saved clips, and snippets cannot be recovered.",
         ]
 
         for (key, expectedValue) in expectedValues {

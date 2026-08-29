@@ -3254,6 +3254,7 @@ private struct PluginFormPage: View {
 }
 
 private struct SettingsFullWidthDisclosure<Label: View, Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Binding var isExpanded: Bool
     private let label: Label
     private let content: Content
@@ -3271,8 +3272,12 @@ private struct SettingsFullWidthDisclosure<Label: View, Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
             Button {
-                withAnimation(.easeInOut(duration: 0.16)) {
+                if accessibilityReduceMotion {
                     isExpanded.toggle()
+                } else {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isExpanded.toggle()
+                    }
                 }
             } label: {
                 HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
@@ -3287,10 +3292,18 @@ private struct SettingsFullWidthDisclosure<Label: View, Content: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityValue(Text(AppL10n.settings(
+                isExpanded
+                    ? "plugins.configuration.disclosure.expanded"
+                    : "plugins.configuration.disclosure.collapsed",
+                defaultValue: isExpanded ? "Expanded" : "Collapsed"
+            )))
 
             if isExpanded {
                 content
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(accessibilityReduceMotion
+                        ? .identity
+                        : .opacity.combined(with: .move(edge: .top)))
             }
         }
     }

@@ -11,6 +11,35 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         case sqlite(Int32)
     }
 
+    func testSharedDatabaseCoordinatorBlocksExclusiveResetUntilActiveAccessFinishes() {
+        let coordinator = ClipboardDatabaseAccessCoordinator()
+        let sharedAccessEntered = expectation(description: "shared access entered")
+        let releaseSharedAccess = DispatchSemaphore(value: 0)
+        let exclusiveAccessEntered = DispatchSemaphore(value: 0)
+
+        DispatchQueue.global().async {
+            coordinator.withAccess {
+                sharedAccessEntered.fulfill()
+                releaseSharedAccess.wait()
+            }
+        }
+        wait(for: [sharedAccessEntered], timeout: 1)
+
+        DispatchQueue.global().async {
+            _ = coordinator.withExclusiveAccess {
+                exclusiveAccessEntered.signal()
+            }
+        }
+        XCTAssertEqual(
+            exclusiveAccessEntered.wait(timeout: .now() + 0.05),
+            .timedOut,
+            "Exclusive reset must wait for an active database operation"
+        )
+
+        releaseSharedAccess.signal()
+        XCTAssertEqual(exclusiveAccessEntered.wait(timeout: .now() + 1), .success)
+    }
+
     func testRoundTripKeepsMetadataAndPayloadEncryptedAndLoadsPayloadLazily() throws {
         let fixture = try makeFixture()
         let secret = "multi-gigabyte-ready-secret"
@@ -90,7 +119,7 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         var loaded = try fixture.store.load()
         let editedID = loaded[0].id
         let untouchedID = loaded[1].id
-        let removedID = loaded[2].id
+        let previous = loaded
         var database: OpaquePointer?
         XCTAssertEqual(sqlite3_open_v2(fixture.databaseURL.path, &database, SQLITE_OPEN_READONLY, nil), SQLITE_OK)
         let connection = try XCTUnwrap(database)
@@ -98,7 +127,10 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         let untouchedMetadata = try metadata(for: untouchedID, database: connection)
         loaded[0].setSavedMetadata(ClipboardHistorySavedMetadata(title: "Keep", savedAt: Date()))
         loaded.removeLast()
-        try fixture.store.saveChanges(loaded, changedIDs: [editedID, removedID])
+        try fixture.store.saveChanges(
+            loaded,
+            applying: ClipboardHistoryMutation.between(previous, loaded)
+        )
         XCTAssertEqual(try metadata(for: untouchedID, database: connection), untouchedMetadata)
         XCTAssertTrue(loaded.allSatisfy { $0.payload == nil })
         let reopened = IncrementalEncryptedClipboardHistoryStore(databaseURL: fixture.databaseURL, keyStore: fixture.keyStore)
@@ -106,6 +138,72 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(Set(verified.map(\.id)), [editedID, untouchedID])
         XCTAssertTrue(try XCTUnwrap(verified.first { $0.id == editedID }).isSaved)
         XCTAssertTrue(verified.allSatisfy { $0.payload == nil })
+    }
+
+    func testTargetedSaveResolvesRepeatedChangesInMutationOrder() throws {
+        let fixture = try makeFixture()
+        let original = sampleItem(index: 1)
+        try fixture.store.save([original])
+        let loaded = try XCTUnwrap(fixture.store.load().first)
+        var saved = loaded
+        saved.setSavedMetadata(ClipboardHistorySavedMetadata(
+            title: "Reusable",
+            savedAt: Date(timeIntervalSince1970: 200)
+        ))
+        var used = saved
+        used.lastUsedAt = Date(timeIntervalSince1970: 300)
+        let mutation = ClipboardHistoryMutation(changes: [
+            .init(id: loaded.id, before: loaded, after: saved),
+            .init(id: loaded.id, before: saved, after: used),
+        ])
+        let expected = mutation.applying(to: [loaded])
+
+        try fixture.store.saveChanges(expected, applying: mutation)
+
+        let verified = try XCTUnwrap(fixture.store.load().first)
+        XCTAssertEqual(verified.savedMetadata?.title, "Reusable")
+        XCTAssertEqual(verified.lastUsedAt, used.lastUsedAt)
+    }
+
+    func testTargetedSaveDoesNotRecreateDeletedItemFromStaleMetadata() throws {
+        let fixture = try makeFixture()
+        let original = sampleItem(index: 1)
+        try fixture.store.save([original])
+        let loaded = try XCTUnwrap(fixture.store.load().first)
+        var staleUsage = loaded
+        staleUsage.lastUsedAt = Date(timeIntervalSince1970: 500)
+        let mutation = ClipboardHistoryMutation(changes: [
+            .init(id: loaded.id, before: loaded, after: nil),
+            .init(id: loaded.id, before: loaded, after: staleUsage),
+        ])
+        let expected = mutation.applying(to: [loaded])
+
+        try fixture.store.saveChanges(expected, applying: mutation)
+
+        XCTAssertTrue(try fixture.store.load().isEmpty)
+    }
+
+    func testTargetedRecaptureKeepsSameDigestPayloadEvictable() throws {
+        let fixture = try makeFixture()
+        let original = sampleItem(index: 1)
+        try fixture.store.save([original])
+        let loaded = try XCTUnwrap(fixture.store.load().first)
+        let incoming = ClipboardHistoryItem(
+            id: UUID(),
+            text: loaded.text,
+            capturedAt: loaded.capturedAt.addingTimeInterval(10),
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+        let recaptured = try XCTUnwrap(loaded.recaptured(from: incoming))
+        let mutation = ClipboardHistoryMutation.between([loaded], [recaptured])
+
+        try fixture.store.saveChanges([recaptured], applying: mutation)
+        recaptured.discardCachedPayloadIfReloadable()
+
+        XCTAssertNil(recaptured.payload)
+        XCTAssertEqual(try recaptured.loadPayload().plainText, loaded.text)
     }
 
     func testRoundTripPreservesUnifiedHistoryAndSavedRolesOnOneItem() throws {

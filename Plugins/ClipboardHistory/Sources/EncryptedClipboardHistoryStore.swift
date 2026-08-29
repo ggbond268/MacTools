@@ -7,7 +7,10 @@ protocol ClipboardHistoryPersisting: Sendable {
     func prepare() throws
     func load() throws -> [ClipboardHistoryItem]
     func save(_ items: [ClipboardHistoryItem]) throws
-    func saveChanges(_ items: [ClipboardHistoryItem], changedIDs: Set<UUID>) throws
+    func saveChanges(
+        _ items: [ClipboardHistoryItem],
+        applying mutation: ClipboardHistoryMutation
+    ) throws
     func reset() throws
     func removeAll() throws
 }
@@ -15,7 +18,10 @@ protocol ClipboardHistoryPersisting: Sendable {
 extension ClipboardHistoryPersisting {
     /// Legacy stores/test doubles can persist the worker's merged collection. Production SQLite
     /// writes only the affected rows; neither path accepts an obsolete controller snapshot.
-    func saveChanges(_ items: [ClipboardHistoryItem], changedIDs: Set<UUID>) throws {
+    func saveChanges(
+        _ items: [ClipboardHistoryItem],
+        applying _: ClipboardHistoryMutation
+    ) throws {
         try save(items)
     }
 }
@@ -28,6 +34,21 @@ protocol ClipboardHistoryKeyStoring: Sendable {
 
 enum ClipboardHistoryKeyInitializationLock {
     static let shared = NSLock()
+}
+
+/// Serializes access to the Clipboard plugin's shared SQLite database and encryption key.
+/// History and snippets keep independent controllers and worker queues, but destructive
+/// database lifecycle operations must never race ordinary reads or writes from either store.
+final class ClipboardDatabaseAccessCoordinator: @unchecked Sendable {
+    private let lock = NSRecursiveLock()
+
+    func withAccess<Result>(_ operation: () throws -> Result) rethrows -> Result {
+        try lock.withLock(operation)
+    }
+
+    func withExclusiveAccess<Result>(_ operation: () throws -> Result) rethrows -> Result {
+        try lock.withLock(operation)
+    }
 }
 
 enum ClipboardHistoryStoreError: Error, Equatable, Sendable {

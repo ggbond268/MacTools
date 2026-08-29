@@ -133,9 +133,11 @@ final class ClipboardHistoryPlugin:
     private let accessibilityRequester: (Bool) -> Bool
     private let frontmostProcessIdentifier: () -> pid_t?
     private let sequentialPasteStabilizationDelay: Duration
+    private let snippetPasteboardReader: ClipboardPasteboardReaderProcess
     private lazy var keywordExpander = ClipboardSnippetKeywordExpander(
         savedLibraryController: savedLibraryController,
         pasteboard: pasteboard,
+        pasteboardReader: snippetPasteboardReader,
         onPasteboardWrite: { [weak self] in self?.controller.markCurrentPasteboardChangeAsInternal() }
     )
     private let privacyHUDPresenter: any ClipboardPrivacyHUDPresenting
@@ -151,6 +153,7 @@ final class ClipboardHistoryPlugin:
     }
     var isKeywordExpansionRunningForTesting: Bool { keywordExpander.isRunning }
     var hasConfiguredKeywordExpansionForTesting: Bool { keywordExpander.hasConfiguredKeywords }
+    var snippetPasteboardReaderForTesting: ClipboardPasteboardReaderProcess { snippetPasteboardReader }
     private lazy var sequentialPasteHUD: ClipboardSequentialPasteHUDController = {
         let hud = ClipboardSequentialPasteHUDController(localization: localization)
         hud.onPasteNext = { [weak self] in
@@ -191,6 +194,7 @@ final class ClipboardHistoryPlugin:
     private lazy var panelController = ClipboardHistoryPanelController(
         historyController: controller,
         savedLibraryController: savedLibraryController,
+        previewPasteboard: pasteboard,
         localization: localization,
         onIgnoreNextCopy: { [weak self] in
             self?.armIgnoreNextCopy()
@@ -230,14 +234,17 @@ final class ClipboardHistoryPlugin:
         frontmostProcessIdentifier: @escaping () -> pid_t? = {
             NSWorkspace.shared.frontmostApplication?.processIdentifier
         },
-        sequentialPasteStabilizationDelay: Duration = .milliseconds(120)
+        sequentialPasteStabilizationDelay: Duration = .milliseconds(120),
+        snippetPasteboardReader: ClipboardPasteboardReaderProcess? = nil
     ) {
         let localization = PluginLocalization(bundle: context.resourceBundle)
         let settingsStore = ClipboardHistorySettingsStore(storage: context.storage)
         let sequentialPasteCoordinator = ClipboardSequentialPasteCoordinator(
             store: PluginStorageClipboardSequentialPasteStore(storage: context.storage)
         )
-        let resolvedPasteboard = pasteboard ?? GeneralClipboardPasteboard()
+        let resolvedPasteboard = pasteboard ?? GeneralClipboardPasteboard(
+            resourceBundle: context.resourceBundle
+        )
         let databaseURL = context.supportDirectory?.appendingPathComponent(
             "clipboard.sqlite3",
             isDirectory: false
@@ -245,13 +252,15 @@ final class ClipboardHistoryPlugin:
         let keyStore = ClipboardHistoryKeychainStore(
             service: PluginPrivateDataKeychainIdentity.service(pluginID: Self.pluginID)
         )
+        let databaseAccess = ClipboardDatabaseAccessCoordinator()
         let resolvedPersistence: any ClipboardHistoryPersisting
         if let persistence {
             resolvedPersistence = persistence
         } else if let databaseURL {
             resolvedPersistence = IncrementalEncryptedClipboardHistoryStore(
                 databaseURL: databaseURL,
-                keyStore: keyStore
+                keyStore: keyStore,
+                databaseAccess: databaseAccess
             )
         } else {
             resolvedPersistence = UnavailableClipboardHistoryStore()
@@ -262,7 +271,8 @@ final class ClipboardHistoryPlugin:
         } else if let databaseURL {
             resolvedSavedPersistence = IncrementalEncryptedClipboardSavedLibraryStore(
                 databaseURL: databaseURL,
-                keyStore: keyStore
+                keyStore: keyStore,
+                databaseAccess: databaseAccess
             )
         } else {
             resolvedSavedPersistence = UnavailableClipboardSavedLibraryStore()
@@ -279,6 +289,14 @@ final class ClipboardHistoryPlugin:
         self.accessibilityRequester = accessibilityRequester
         self.frontmostProcessIdentifier = frontmostProcessIdentifier
         self.sequentialPasteStabilizationDelay = sequentialPasteStabilizationDelay
+        let snippetPasteboardReaderHelperURL = context.resourceBundle.url(
+            forResource: "mactools-clipboard-pasteboard-reader-helper",
+            withExtension: nil,
+            subdirectory: "PasteboardReaderHelper"
+        )
+        self.snippetPasteboardReader = snippetPasteboardReader ?? ClipboardPasteboardReaderProcess {
+            snippetPasteboardReaderHelperURL
+        }
         self.controller = ClipboardHistoryController(
             settings: settingsStore,
             pasteboard: resolvedPasteboard,
@@ -1188,6 +1206,7 @@ final class ClipboardHistoryPlugin:
         sequentialHUDPreviewTask = nil
         sequentialPasteHUD.dismiss()
         keywordExpander.stop()
+        snippetPasteboardReader.stopImmediately()
         controller.stop()
         savedLibraryController.stop(invalidatePersistence: reason == .uninstalling)
     }
@@ -1226,6 +1245,10 @@ final class ClipboardHistoryPlugin:
 
     func setKeywordExpansionEnabledForTesting(_ enabled: Bool) {
         settingsStore.isKeywordExpansionEnabled = enabled
+    }
+
+    func startSequentialQueueForTesting(itemIDs: [UUID]) -> Bool {
+        startSequentialQueue(itemIDs: itemIDs)
     }
 
     private func performPrivateCopy(targetProcessIdentifier: pid_t?) async {
@@ -1296,7 +1319,7 @@ final class ClipboardHistoryPlugin:
             ))
             return
         }
-        switch controller.rewriteCurrentClipboardAsPlainText() {
+        switch await controller.rewriteCurrentClipboardAsPlainText() {
         case .succeeded:
             resetImplicitQueueForManualClipboardWrite()
             break
@@ -1438,39 +1461,33 @@ final class ClipboardHistoryPlugin:
             ? pasteboard.changeCount : nil
         synchronizeSequentialPasteProtection()
 
-        let didPreparePayload = await controller.preparePayloadForUse(id: itemID)
-        guard isCurrentSequentialPasteWorker(generation: workerGeneration),
-              sequentialPasteCoordinator.session?.matches(operation) == true,
-              revalidateImplicitClipboardVersion(implicitClipboardVersion) else {
-            return false
-        }
-        guard didPreparePayload else {
-            _ = sequentialPasteCoordinator.markCurrentUnavailable(operation: operation)
-            synchronizeSequentialPasteProtection()
-            privacyHUDPresenter.showFailure(localization.string(
-                "hud.sequentialPaste.unavailable",
-                defaultValue: "This queued item is no longer available"
-            ))
-            return false
-        }
-        let preparedClipboardVersion = await controller.copyItemForPaste(id: itemID) { [weak self] in
-            guard let self else { return false }
-            return self.isCurrentSequentialPasteWorker(generation: workerGeneration)
-                && self.sequentialPasteCoordinator.session?.matches(operation) == true
-                && self.revalidateImplicitClipboardVersion(implicitClipboardVersion)
+        let preparedClipboardVersion: Int?
+        if controller.items.contains(where: { $0.id == itemID }) {
+            let didPreparePayload = await controller.preparePayloadForUse(id: itemID)
+            guard isCurrentSequentialPasteWorker(generation: workerGeneration),
+                  sequentialPasteCoordinator.session?.matches(operation) == true,
+                  revalidateImplicitClipboardVersion(implicitClipboardVersion),
+                  didPreparePayload else {
+                return markSequentialItemUnavailable(operation)
+            }
+            preparedClipboardVersion = await controller.copyItemForPaste(id: itemID) { [weak self] in
+                guard let self else { return false }
+                return self.isCurrentSequentialPasteWorker(generation: workerGeneration)
+                    && self.sequentialPasteCoordinator.session?.matches(operation) == true
+                    && self.revalidateImplicitClipboardVersion(implicitClipboardVersion)
+            }
+        } else if savedLibraryController.items.contains(where: { $0.id == itemID }) {
+            // Resolve snippet variables at paste time so every queue step sees current values.
+            preparedClipboardVersion = await savedLibraryController.copyForPaste(id: itemID)?.pasteboardVersion
+        } else {
+            return markSequentialItemUnavailable(operation)
         }
         guard isCurrentSequentialPasteWorker(generation: workerGeneration),
               sequentialPasteCoordinator.session?.matches(operation) == true else {
             return false
         }
         guard let preparedClipboardVersion else {
-            _ = sequentialPasteCoordinator.markCurrentUnavailable(operation: operation)
-            synchronizeSequentialPasteProtection()
-            privacyHUDPresenter.showFailure(localization.string(
-                "hud.sequentialPaste.unavailable",
-                defaultValue: "This queued item is no longer available"
-            ))
-            return false
+            return markSequentialItemUnavailable(operation)
         }
         let didSendPaste = await pasteCommandSender.sendPasteCommand(to: targetProcessIdentifier) { [weak self] in
             guard let self,
@@ -1509,6 +1526,18 @@ final class ClipboardHistoryPlugin:
         isSequentialPasteInFlight || !pendingSequentialPasteTargets.isEmpty
     }
 
+    private func markSequentialItemUnavailable(
+        _ operation: ClipboardSequentialPasteOperation
+    ) -> Bool {
+        _ = sequentialPasteCoordinator.markCurrentUnavailable(operation: operation)
+        synchronizeSequentialPasteProtection()
+        privacyHUDPresenter.showFailure(localization.string(
+            "hud.sequentialPaste.unavailable",
+            defaultValue: "This queued item is no longer available"
+        ))
+        return false
+    }
+
     private func isCurrentSequentialPasteWorker(generation: Int) -> Bool {
         sequentialPasteWorkerGeneration == generation && !Task.isCancelled
     }
@@ -1539,6 +1568,15 @@ final class ClipboardHistoryPlugin:
 
     @discardableResult
     private func startSequentialQueue(itemIDs: [UUID]) -> Bool {
+        let availableItemIDs = Set(controller.items.map(\.id))
+            .union(savedLibraryController.items.map(\.id))
+        guard !itemIDs.isEmpty, itemIDs.allSatisfy(availableItemIDs.contains) else {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.sequentialPaste.unavailable",
+                defaultValue: "This queued item is no longer available"
+            ))
+            return false
+        }
         do {
             try sequentialPasteCoordinator.startExplicitQueue(itemIDs: itemIDs)
             cancelPendingSequentialPastes()
@@ -1646,9 +1684,11 @@ final class ClipboardHistoryPlugin:
     }
 
     private func itemTitle(id: UUID?) -> String? {
-        guard let id, let item = controller.items.first(where: { $0.id == id }) else {
-            return nil
+        guard let id else { return nil }
+        if let savedItem = savedLibraryController.items.first(where: { $0.id == id }) {
+            return String(savedItem.title.prefix(100))
         }
+        guard let item = controller.items.first(where: { $0.id == id }) else { return nil }
         let rawTitle = item.text.isEmpty
             ? Self.localizedContentKindTitle(item.kind, localization: localization)
             : item.text
@@ -1684,10 +1724,22 @@ final class ClipboardHistoryPlugin:
     }
 
     private func loadItemPreviewImageData(id: UUID?) async -> Data? {
-        guard let id,
-              let item = controller.items.first(where: { $0.id == id }),
-              item.filterContentKinds.contains(.image) else { return nil }
-        guard let payload = try? await item.loadPayloadAsync() else { return nil }
+        guard let id else { return nil }
+        let payload: ClipboardHistoryPayload
+        let discardPayload: () -> Void
+        if let item = controller.items.first(where: { $0.id == id }),
+           item.filterContentKinds.contains(.image),
+           let loaded = try? await item.loadPayloadAsync() {
+            payload = loaded
+            discardPayload = { item.discardCachedPayloadIfReloadable() }
+        } else if let item = savedLibraryController.items.first(where: { $0.id == id }),
+                  item.contentKind == .image,
+                  let loaded = try? await item.loadPayloadAsync() {
+            payload = loaded
+            discardPayload = { item.discardCachedPayloadIfReloadable() }
+        } else {
+            return nil
+        }
         let worker = Task.detached(priority: .utility) { () -> Data? in
             guard !Task.isCancelled,
                   let data = payload.representations.first(where: {
@@ -1700,7 +1752,7 @@ final class ClipboardHistoryPlugin:
         } onCancel: {
             worker.cancel()
         }
-        item.discardCachedPayloadIfReloadable()
+        discardPayload()
         return imageData
     }
 
