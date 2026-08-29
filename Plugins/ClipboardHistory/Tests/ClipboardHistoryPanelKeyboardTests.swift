@@ -56,6 +56,21 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertFalse(model.canPerformAction(in: both))
     }
 
+    func testMixedSnippetActionContextCanStartAnOrderedQueue() {
+        let clipID = UUID()
+        let snippetID = UUID()
+        let context = ClipboardHistoryPanelActionContext(
+            itemIDs: [snippetID, clipID],
+            snippetIDs: [snippetID],
+            savedClipIDs: [],
+            focusedItemID: snippetID,
+            isMultiSelectionEnabled: true
+        )
+
+        XCTAssertTrue(context.canStartSequentialQueue)
+        XCTAssertEqual(context.itemIDs, [snippetID, clipID])
+    }
+
     func testActionContextSurvivesUnrelatedCaptureButRejectsDeletedSnippet() async throws {
         let history = item(text: "History", pinned: false)
         let snippet = ClipboardSavedItem(title: "Template", savedKind: .snippet,
@@ -707,6 +722,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertTrue(model.availableFilterFamilies.isEmpty)
 
         model.refreshFiltersForReactivation(items: [image, plain])
+        await model.waitForFilterRefreshForTesting()
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.availableFilterFamilies, [.type])
         XCTAssertEqual(model.availableContentFilters, [.text, .image])
@@ -728,6 +744,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.updateItems([plain, image])
         XCTAssertEqual(model.availableFilterFamilies, [.type])
         model.refreshFiltersForReactivation(items: [plain, image])
+        await model.waitForFilterRefreshForTesting()
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.availableFilterFamilies, [.type, .content])
         XCTAssertEqual(model.selectedFilterFamily, .type)
@@ -742,6 +759,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.prepareForPresentation(items: [plain, image])
         model.contentFilter = .image
         model.refreshFiltersForReactivation(items: [plain])
+        await model.waitForFilterRefreshForTesting()
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.contentFilter, .image)
         XCTAssertEqual(model.availableFilterFamilies, [.type])
@@ -883,7 +901,10 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(command(keyCode: 36, isMultiSelectionEnabled: true), .pasteCombinedSelection)
         XCTAssertEqual(command(keyCode: 36, modifiers: .shift, isMultiSelectionEnabled: true), .pasteCombinedSelection)
         XCTAssertEqual(command(keyCode: 8, modifiers: .command, isMultiSelectionEnabled: true), .copyCombinedSelection)
-        XCTAssertNil(command(keyCode: 8, modifiers: .command, isEditingText: true, isMultiSelectionEnabled: true))
+        XCTAssertEqual(command(keyCode: 8, modifiers: .command, isEditingText: true,
+                               isMultiSelectionEnabled: true), .copyCombinedSelection)
+        XCTAssertNil(command(keyCode: 8, modifiers: .command, isEditingText: true,
+                             hasSelectedText: true, isMultiSelectionEnabled: true))
         XCTAssertEqual(command(keyCode: 36), .pasteSelection(asPlainText: false))
     }
 
@@ -1272,7 +1293,9 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(command(keyCode: 53), .close)
         XCTAssertEqual(command(keyCode: 35, modifiers: .command), .saveSelection)
         XCTAssertEqual(command(keyCode: 8, modifiers: .command), .copySelection)
-        XCTAssertNil(command(keyCode: 8, modifiers: .command, isEditingText: true))
+        XCTAssertEqual(command(keyCode: 8, modifiers: .command, isEditingText: true), .copySelection)
+        XCTAssertNil(command(keyCode: 8, modifiers: .command,
+                             isEditingText: true, hasSelectedText: true))
         XCTAssertEqual(command(keyCode: 14, modifiers: .command), .showExportMenu)
         XCTAssertEqual(command(keyCode: 14, modifiers: [.command, .shift]), .shareSelection)
         XCTAssertEqual(command(keyCode: 48, modifiers: .control), .cycleFilterFamily(offset: 1))
@@ -1915,6 +1938,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         isPanelKeyWindow: Bool = true,
         hasAttachedSheet: Bool = false,
         isEditingText: Bool = false,
+        hasSelectedText: Bool = false,
         hasMarkedText: Bool = false,
         isMultiSelectionEnabled: Bool = false,
         isActionPalettePresented: Bool = false,
@@ -1957,6 +1981,10 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
                 keyCode: 36,
                 modifiers: [.command]
             ),
+            ClipboardHistoryPlugin.ShortcutID.panelSelectAll: ShortcutBinding(
+                keyCode: 0,
+                modifiers: [.command, .option]
+            ),
             ClipboardHistoryPlugin.ShortcutID.panelCopyCombined: ShortcutBinding(
                 keyCode: 8,
                 modifiers: [.command, .shift]
@@ -1973,6 +2001,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
             isPanelKeyWindow: isPanelKeyWindow,
             hasAttachedSheet: hasAttachedSheet,
             isEditingText: isEditingText,
+            hasSelectedText: hasSelectedText,
             hasMarkedText: hasMarkedText,
             isMultiSelectionEnabled: isMultiSelectionEnabled,
             isActionPalettePresented: isActionPalettePresented,
@@ -2051,11 +2080,15 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertNil(command(keyCode: 49, hasMarkedText: true, isMultiSelectionEnabled: true))
     }
 
-    func testCommandASelectsSearchTextInsteadOfItemsWhileEditing() {
+    func testSelectAllUsesAConfigurableNonEditingShortcut() {
         XCTAssertNil(command(keyCode: 0, modifiers: .command,
                              isEditingText: true, isMultiSelectionEnabled: true))
-        XCTAssertEqual(command(keyCode: 0, modifiers: .command,
+        XCTAssertEqual(command(keyCode: 0, modifiers: [.command, .option],
+                               isEditingText: true, isMultiSelectionEnabled: true), .selectAllVisible)
+        XCTAssertEqual(command(keyCode: 0, modifiers: [.command, .option],
                                isMultiSelectionEnabled: true), .selectAllVisible)
+        XCTAssertNil(command(keyCode: 0, modifiers: .command,
+                             isMultiSelectionEnabled: true))
         XCTAssertNil(command(keyCode: 0, modifiers: .command))
         XCTAssertNil(command(keyCode: 0, modifiers: [.command, .shift],
                              isMultiSelectionEnabled: true))

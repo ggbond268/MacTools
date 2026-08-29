@@ -326,6 +326,17 @@ struct ClipboardHistorySettingsView: View {
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
 
+                            if savedLibraryController.fatalErrorMessage != nil {
+                                Button(localization.string(
+                                    "settings.snippets.clear",
+                                    defaultValue: "Delete Snippets"
+                                ) + "…", role: .destructive) {
+                                    clearRequest = .snippets
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1092,7 +1103,9 @@ struct ClipboardHistorySettingsView: View {
                             title: localization.string("settings.snippets.clear", defaultValue: "Delete Snippets"),
                             description: localization.string("settings.snippets.clear.message", defaultValue: "Permanently deletes all snippets and their keywords. History and Saved clips are kept. This cannot be undone."),
                             request: .snippets,
-                            disabled: savedLibraryController.items.isEmpty || savedLibraryController.errorMessage != nil
+                            disabled: (savedLibraryController.items.isEmpty
+                                && savedLibraryController.fatalErrorMessage == nil)
+                                || savedLibraryController.errorMessage != nil
                         )
                     }
                 } label: {

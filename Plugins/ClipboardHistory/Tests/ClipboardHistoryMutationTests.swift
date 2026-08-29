@@ -234,6 +234,39 @@ final class ClipboardHistoryMutationTests: XCTestCase {
         XCTAssertEqual(fixture.store.items, fixture.controller.items)
     }
 
+    func testEveryAcceptedQueuedMutationProtectsItsTargetFromRetention() async throws {
+        let now = Date()
+        let firstTarget = textItem("first target", capturedAt: now)
+        let filler = textItem("unprotected filler", capturedAt: now.addingTimeInterval(-30))
+        let secondTarget = textItem("second target", capturedAt: now.addingTimeInterval(-60))
+        let fixture = makeFixture(items: [firstTarget, filler, secondTarget])
+        defer { fixture.store.releaseSave(); fixture.controller.stop() }
+        fixture.controller.start()
+        try await waitUntil { fixture.controller.isLoaded }
+
+        let first = Task { await fixture.controller.toggleSaved(id: firstTarget.id) }
+        try await waitUntil { fixture.store.saveStarted }
+        let second = Task { await fixture.controller.toggleSaved(id: secondTarget.id) }
+        try await waitUntil {
+            fixture.controller.pendingDurableItemIDsForTesting == [firstTarget.id, secondTarget.id]
+        }
+
+        fixture.controller.settings.maximumItemCount = 2
+        fixture.controller.settingsDidChange()
+        XCTAssertEqual(
+            Set(fixture.controller.items.map(\.id)),
+            [firstTarget.id, secondTarget.id],
+            "Retention must not evict a mutation target that was already accepted behind another write"
+        )
+
+        fixture.store.releaseSave()
+        let firstResult = await first.value
+        let secondResult = await second.value
+        XCTAssertTrue(firstResult)
+        XCTAssertTrue(secondResult)
+        XCTAssertTrue(fixture.controller.items.allSatisfy(\.isSaved))
+    }
+
     func testFailedSavedMutationPreservesLaterCaptureAndDoesNotSaveMetadata() async throws {
         let original = textItem("original")
         let fixture = makeFixture(items: [original], failsBlockedSave: true)

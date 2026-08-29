@@ -71,6 +71,7 @@ final class ClipboardHistoryPlugin:
         static let panelDelete = "panel-delete"
         static let panelMultiSelect = "panel-multi-select"
         static let panelToggleSelection = "panel-toggle-selection"
+        static let panelSelectAll = "panel-select-all"
         static let panelCopyCombined = "panel-copy-combined"
         static let panelPasteCombined = "panel-paste-combined"
         // Keep the stored binding ID stable while cycling filter families instead of scope values.
@@ -754,6 +755,17 @@ final class ClipboardHistoryPlugin:
                 systemImage: "checkmark.square"
             ),
             panelShortcut(
+                id: ShortcutID.panelSelectAll,
+                title: localization.string("panel.selection.selectAll", defaultValue: "Select All Visible"),
+                description: localization.string(
+                    "panel.shortcuts.selectAll.description",
+                    defaultValue: "In multi-select mode, select every item currently shown without taking focus from search."
+                ),
+                keyCode: 0,
+                modifiers: [.command, .option],
+                systemImage: "checkmark.square.fill"
+            ),
+            panelShortcut(
                 id: ShortcutID.panelCopyCombined,
                 title: localization.string("panel.shortcuts.copyCombined", defaultValue: "Copy Combined Selection"),
                 description: localization.string("panel.shortcuts.copyCombined.description", defaultValue: "Copy selected entries together in their selected order."),
@@ -822,6 +834,8 @@ final class ClipboardHistoryPlugin:
             ShortcutBinding(keyCode: 37, modifiers: [.command])
         case ShortcutID.panelToggleSelection:
             ShortcutBinding(keyCode: 36, modifiers: [.command])
+        case ShortcutID.panelSelectAll:
+            ShortcutBinding(keyCode: 0, modifiers: [.command, .option])
         case ShortcutID.panelCopyCombined:
             ShortcutBinding(keyCode: 8, modifiers: [.command, .shift])
         case ShortcutID.panelPasteCombined:
@@ -881,6 +895,7 @@ final class ClipboardHistoryPlugin:
                     ShortcutID.panelDelete,
                     ShortcutID.panelMultiSelect,
                     ShortcutID.panelToggleSelection,
+                    ShortcutID.panelSelectAll,
                     ShortcutID.panelCopyCombined,
                     ShortcutID.panelPasteCombined,
                 ],

@@ -480,15 +480,20 @@ final class ClipboardHistoryPluginTests: XCTestCase {
                 "panel-delete",
                 "panel-multi-select",
                 "panel-toggle-selection",
+                "panel-select-all",
                 "panel-copy-combined",
                 "panel-paste-combined",
             ]
         )
-        XCTAssertEqual(shortcuts.filter { $0.scope == .whilePluginActive }.count, 11)
+        XCTAssertEqual(shortcuts.filter { $0.scope == .whilePluginActive }.count, 12)
         let selectionShortcut = shortcuts.first { $0.id == ClipboardHistoryPlugin.ShortcutID.panelToggleSelection }
         XCTAssertEqual(selectionShortcut?.defaultBinding, ShortcutBinding(keyCode: 36, modifiers: [.command]))
         XCTAssertEqual(selectionShortcut?.defaultBinding,
                        ClipboardHistoryPlugin.defaultPanelShortcutBinding(ClipboardHistoryPlugin.ShortcutID.panelToggleSelection))
+        XCTAssertEqual(
+            ClipboardHistoryPlugin.defaultPanelShortcutBinding(ClipboardHistoryPlugin.ShortcutID.panelSelectAll),
+            ShortcutBinding(keyCode: 0, modifiers: [.command, .option])
+        )
         XCTAssertTrue(shortcuts.filter { $0.scope == .whilePluginActive }.allSatisfy {
             $0.settingsGroupID == "clipboard-window-shortcuts"
         })

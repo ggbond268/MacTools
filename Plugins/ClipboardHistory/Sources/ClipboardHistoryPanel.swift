@@ -127,6 +127,10 @@ struct ClipboardHistoryPanelActionContext: Equatable {
     let savedClipIDs: Set<UUID>
     let focusedItemID: UUID?
     let isMultiSelectionEnabled: Bool
+
+    var canStartSequentialQueue: Bool {
+        isMultiSelectionEnabled && !itemIDs.isEmpty
+    }
 }
 
 enum ClipboardHistoryPanelClipboardWrite {
@@ -591,8 +595,11 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     private var searchProgressTask: Task<Void, Never>?
     private var presentationPreparationTask: Task<Void, Never>?
     private var presentationPreparationGeneration: UInt64 = 0
+    private var filterRefreshTask: Task<Void, Never>?
+    private var filterRefreshGeneration: UInt64 = 0
     private let searchProgressDelayNanoseconds: UInt64
     private var initialPage: InitialPage?
+    private let presentationPreparationCheckpointForTesting: (@Sendable () -> Void)?
 
     private struct InitialPage {
         let sourceItems: [ClipboardHistoryItem]
@@ -622,8 +629,12 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let filterFamilies: [ClipboardHistoryFilterFamily]
     }
 
-    init(searchProgressDelayNanoseconds: UInt64 = 180_000_000) {
+    init(
+        searchProgressDelayNanoseconds: UInt64 = 180_000_000,
+        presentationPreparationCheckpointForTesting: (@Sendable () -> Void)? = nil
+    ) {
         self.searchProgressDelayNanoseconds = searchProgressDelayNanoseconds
+        self.presentationPreparationCheckpointForTesting = presentationPreparationCheckpointForTesting
     }
 
     // Count the collection, not the current query results: users can select
@@ -757,6 +768,9 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     ) {
         presentationPreparationTask?.cancel()
         presentationPreparationTask = nil
+        filterRefreshGeneration &+= 1
+        filterRefreshTask?.cancel()
+        filterRefreshTask = nil
         presentationPreparationGeneration &+= 1
         searchTask?.cancel()
         searchProgressTask?.cancel()
@@ -789,10 +803,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             return
         }
         query = ""
-        let preparation = Self.preparePresentationSnapshot(
+        guard let preparation = Self.preparePresentationSnapshot(
             items: items,
             savedItems: savedItems
-        )
+        ) else { return }
         applyFilterAvailability(preparation)
         mode = availableScopeModes.first ?? .history
         contentFilter = .all
@@ -824,6 +838,9 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         presentationPreparationGeneration &+= 1
         presentationPreparationTask?.cancel()
         presentationPreparationTask = nil
+        filterRefreshGeneration &+= 1
+        filterRefreshTask?.cancel()
+        filterRefreshTask = nil
         searchProgressTask?.cancel()
         showsSearchProgress = false
         isPreparingPresentation = false
@@ -834,6 +851,9 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         savedItems: [ClipboardSavedItem] = []
     ) {
         presentationPreparationTask?.cancel()
+        filterRefreshGeneration &+= 1
+        filterRefreshTask?.cancel()
+        filterRefreshTask = nil
         presentationPreparationGeneration &+= 1
         let generation = presentationPreparationGeneration
 
@@ -869,16 +889,22 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             self.showsSearchProgress = true
         }
 
+        let preparationCheckpoint = presentationPreparationCheckpointForTesting
         presentationPreparationTask = Task { [weak self] in
             let worker = Task.detached(priority: .userInitiated) {
-                Self.preparePresentationSnapshot(items: items, savedItems: savedItems)
+                Self.preparePresentationSnapshot(
+                    items: items,
+                    savedItems: savedItems,
+                    cancelsWhenTaskIsCancelled: true,
+                    checkpoint: preparationCheckpoint
+                )
             }
             let preparation = await withTaskCancellationHandler {
                 await worker.value
             } onCancel: {
                 worker.cancel()
             }
-            guard let self, !Task.isCancelled,
+            guard let self, let preparation, !Task.isCancelled,
                   generation == self.presentationPreparationGeneration else { return }
             self.searchProgressTask?.cancel()
             self.showsSearchProgress = false
@@ -899,7 +925,40 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let previousFamily = selectedFilterFamily
         updateItems(items)
         updateSavedItems(savedItems)
-        lockAvailableFilters(items: items, savedItems: savedItems)
+        filterRefreshTask?.cancel()
+        filterRefreshGeneration &+= 1
+        let generation = filterRefreshGeneration
+        let preparationCheckpoint = presentationPreparationCheckpointForTesting
+        filterRefreshTask = Task { [weak self] in
+            let worker = Task.detached(priority: .userInitiated) {
+                Self.preparePresentationSnapshot(
+                    items: items,
+                    savedItems: savedItems,
+                    cancelsWhenTaskIsCancelled: true,
+                    checkpoint: preparationCheckpoint
+                )
+            }
+            let preparation = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: {
+                worker.cancel()
+            }
+            guard let self, let preparation, !Task.isCancelled,
+                  generation == self.filterRefreshGeneration else { return }
+            self.applyReactivatedFilterAvailability(
+                preparation,
+                previousFamily: previousFamily
+            )
+            self.filterRefreshTask = nil
+            self.scheduleSearch(debounced: false)
+        }
+    }
+
+    private func applyReactivatedFilterAvailability(
+        _ preparation: PresentationPreparationSnapshot,
+        previousFamily: ClipboardHistoryFilterFamily
+    ) {
+        applyFilterAvailability(preparation)
         // Keep active filters available even if their last matching item disappeared,
         // so the user can see and clear them instead of silently broadening the query.
         if mode != .all, !availableScopeModes.contains(mode) {
@@ -924,7 +983,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         selectedFilterFamily = ClipboardHistoryFilterFamily.resolvedSelection(
             current: previousFamily, available: availableFilterFamilies
         ) ?? .scope
-        scheduleSearch(debounced: false)
     }
 
     func savedItem(forPresentationID itemID: UUID) -> ClipboardSavedItem? {
@@ -1196,6 +1254,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         await presentationPreparationTask?.value
     }
 
+    func waitForFilterRefreshForTesting() async {
+        await filterRefreshTask?.value
+    }
+
     func moveSelection(by offset: Int, wraps: Bool = true) {
         guard !visibleItems.isEmpty else { return }
         let currentIndex = selectedItemID.flatMap { selectedID in
@@ -1219,10 +1281,11 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     ) {
         // Snapshot per active interaction. Background changes must not move the toolbar;
         // opening or returning from another app refreshes these choices.
-        applyFilterAvailability(Self.preparePresentationSnapshot(
+        guard let preparation = Self.preparePresentationSnapshot(
             items: items,
             savedItems: savedItems
-        ))
+        ) else { return }
+        applyFilterAvailability(preparation)
     }
 
     private func applyFilterAvailability(_ snapshot: PresentationPreparationSnapshot) {
@@ -1305,8 +1368,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
 
     private nonisolated static func preparePresentationSnapshot(
         items: [ClipboardHistoryItem],
-        savedItems: [ClipboardSavedItem]
-    ) -> PresentationPreparationSnapshot {
+        savedItems: [ClipboardSavedItem],
+        cancelsWhenTaskIsCancelled: Bool = false,
+        checkpoint: (@Sendable () -> Void)? = nil
+    ) -> PresentationPreparationSnapshot? {
         var itemIndexByID: [UUID: Int] = [:]
         itemIndexByID.reserveCapacity(items.count)
         var historyItemCount = 0
@@ -1342,6 +1407,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         }
 
         for (index, item) in items.enumerated() {
+            if index.isMultiple(of: 64) {
+                checkpoint?()
+                if cancelsWhenTaskIsCancelled, Task.isCancelled { return nil }
+            }
             itemIndexByID[item.id] = index
             availableClipItemIDs.insert(item.id)
             if item.isInHistory {
@@ -1359,7 +1428,11 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         }
 
         var availableSnippetIDs = Set<UUID>()
-        for item in savedItems {
+        for (index, item) in savedItems.enumerated() {
+            if index.isMultiple(of: 64) {
+                checkpoint?()
+                if cancelsWhenTaskIsCancelled, Task.isCancelled { return nil }
+            }
             activityAtByItemID[item.id] = item.lastUsedAt ?? item.updatedAt
             guard item.isSnippet else { continue }
             availableSnippetIDs.insert(item.id)
@@ -1386,6 +1459,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             typeCounts: orderedTypeCounts.map(\.1),
             contentCounts: orderedContentCounts.map(\.1)
         )
+        guard !cancelsWhenTaskIsCancelled || !Task.isCancelled else { return nil }
         return PresentationPreparationSnapshot(
             itemIndexByID: itemIndexByID,
             historyItemCount: historyItemCount,
@@ -2224,6 +2298,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 isPanelKeyWindow: panel.isKeyWindow || isActionPaletteEvent,
                 hasAttachedSheet: panel.attachedSheet != nil || event.window?.attachedSheet != nil,
                 isEditingText: textEditor?.isFieldEditor == true,
+                hasSelectedText: (textEditor?.selectedRange().length ?? 0) > 0,
                 hasMarkedText: textEditor?.hasMarkedText() == true,
                 isMultiSelectionEnabled: self.model.isMultiSelectionEnabled,
                 isActionPalettePresented: self.model.isActionPalettePresented,
@@ -2367,6 +2442,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         isPanelKeyWindow: Bool,
         hasAttachedSheet: Bool,
         isEditingText: Bool,
+        hasSelectedText: Bool = false,
         hasMarkedText: Bool,
         isMultiSelectionEnabled: Bool = false,
         isActionPalettePresented: Bool = false,
@@ -2413,6 +2489,9 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         if panelShortcutBindings[ClipboardHistoryPlugin.ShortcutID.panelToggleSelection] == candidate {
             return isMultiSelectionEnabled ? .toggleFocusedSelection : nil
         }
+        if panelShortcutBindings[ClipboardHistoryPlugin.ShortcutID.panelSelectAll] == candidate {
+            return isMultiSelectionEnabled ? .selectAllVisible : nil
+        }
         if panelShortcutBindings[ClipboardHistoryPlugin.ShortcutID.panelCopyCombined] == candidate {
             return .copyCombinedSelection
         }
@@ -2435,14 +2514,12 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             return isMultiSelectionEnabled ? .pasteCombinedSelection : .pasteSelection(asPlainText: false)
         case 36 where flags == .shift:
             return isMultiSelectionEnabled ? .pasteCombinedSelection : .pasteSelection(asPlainText: true)
-        case 8 where flags == .command && !isEditingText:
+        case 8 where flags == .command && (!isEditingText || !hasSelectedText):
             return isMultiSelectionEnabled ? .copyCombinedSelection : .copySelection
         case 35 where flags == .control:
             return .moveSelection(offset: -1)
         case 45 where flags == .control:
             return .moveSelection(offset: 1)
-        case 0 where flags == .command && isMultiSelectionEnabled && !isEditingText:
-            return .selectAllVisible
         case 49 where flags.isEmpty && !isEditingText && isMultiSelectionEnabled:
             return .toggleFocusedSelection
         case 125 where flags.isEmpty:
@@ -2510,6 +2587,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         ClipboardHistoryPlugin.ShortcutID.panelDelete,
         ClipboardHistoryPlugin.ShortcutID.panelMultiSelect,
         ClipboardHistoryPlugin.ShortcutID.panelToggleSelection,
+        ClipboardHistoryPlugin.ShortcutID.panelSelectAll,
         ClipboardHistoryPlugin.ShortcutID.panelCopyCombined,
         ClipboardHistoryPlugin.ShortcutID.panelPasteCombined,
     ]
@@ -3568,6 +3646,11 @@ private struct ClipboardHistoryPanelView: View {
                                 ? localization.string("common.resume", defaultValue: "恢复")
                                 : localization.string("common.pause", defaultValue: "暂停")
                         )
+                        .accessibilityLabel(
+                            settings.isPaused
+                                ? localization.string("common.resume", defaultValue: "恢复")
+                                : localization.string("common.pause", defaultValue: "暂停")
+                        )
                     }
 
                     Button(action: onClose) {
@@ -4108,24 +4191,28 @@ private struct ClipboardHistoryPanelView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(rowAccessibilityLabel(item))
-        .accessibilityValue(Text(rowAccessibilityValue(selectionNumber: selectionNumber)))
-        .accessibilityHint(
-            model.isMultiSelectionEnabled
-                ? (isMarked
-                    ? localization.string("panel.selection.remove", defaultValue: "Remove from Selection")
-                    : localization.string("panel.selection.add", defaultValue: "Add to Selection"))
-                : localization.string("panel.footer.paste", defaultValue: "粘贴")
-        )
+        .accessibilityValue(Text(rowAccessibilityValue(item: item, selectionNumber: selectionNumber)))
         .accessibilityIdentifier("mactools.clipboard-history.item.\(item.id.uuidString)")
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(
             (model.isMultiSelectionEnabled ? isMarked : isSelected) ? .isSelected : []
         )
         .accessibilityAction {
+            model.selectedItemID = item.id
+        }
+        .accessibilityActions {
             if model.isMultiSelectionEnabled {
-                model.toggleMultiSelection(for: item.id)
+                Button(
+                    isMarked
+                        ? localization.string("panel.selection.remove", defaultValue: "Remove from Selection")
+                        : localization.string("panel.selection.add", defaultValue: "Add to Selection")
+                ) {
+                    model.toggleMultiSelection(for: item.id)
+                }
             } else {
-                pastePanelItem(item.id, asPlainText: false)
+                Button(localization.string("panel.footer.paste", defaultValue: "粘贴")) {
+                    pastePanelItem(item.id, asPlainText: false)
+                }
             }
         }
     }
@@ -4200,14 +4287,23 @@ private struct ClipboardHistoryPanelView: View {
         return parts.joined(separator: ", ")
     }
 
-    private func rowAccessibilityValue(selectionNumber: Int?) -> String {
-        guard let selectionNumber else { return "" }
-        return localization.format(
-            "panel.selection.position",
-            defaultValue: "Position %lld of %lld in selection",
-            selectionNumber,
-            model.actionItemIDs.count
-        )
+    private func rowAccessibilityValue(
+        item: ClipboardHistoryItem,
+        selectionNumber: Int?
+    ) -> String {
+        var values: [String] = []
+        if item.isSaved {
+            values.append(localization.string("saved.kind.clip", defaultValue: "Saved Item"))
+        }
+        if let selectionNumber {
+            values.append(localization.format(
+                "panel.selection.position",
+                defaultValue: "Position %lld of %lld in selection",
+                selectionNumber,
+                model.actionItemIDs.count
+            ))
+        }
+        return values.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -4671,7 +4767,10 @@ private struct ClipboardHistoryPanelView: View {
             hints.append(hint(filterOptionShortcutTitle, "⌃1–\(model.filterOptionCount)"))
         }
         if model.isMultiSelectionEnabled {
-            hints.append(hint(localization.string("panel.selection.selectAll", defaultValue: "Select All Visible"), "⌘A"))
+            hints.append(hint(
+                localization.string("panel.selection.selectAll", defaultValue: "Select All Visible"),
+                panelShortcutText(ClipboardHistoryPlugin.ShortcutID.panelSelectAll, fallback: "⌥⌘A")
+            ))
             hints.append(hint(localization.string("panel.selection.extend", defaultValue: "Extend Selection"), "⇧↑↓"))
         }
         return hints
@@ -5290,9 +5389,7 @@ private struct ClipboardHistoryPanelView: View {
             exportPanelItems(ids, format: format, combining: true)
         case .startQueue:
             guard let context = expectedContext ?? model.actionContext,
-                  context.isMultiSelectionEnabled,
-                  !context.itemIDs.isEmpty,
-                  context.snippetIDs.isEmpty else { return }
+                  context.canStartSequentialQueue else { return }
             _ = onStartSequentialQueue(ids)
         case .requestExport:
             model.requestExportMenu()

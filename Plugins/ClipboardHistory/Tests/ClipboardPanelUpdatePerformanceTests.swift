@@ -174,11 +174,69 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         print("Clipboard 50k cold presentation scheduling: \(scheduling)")
     }
 
+    func testLargeReactivationFilterRefreshReturnsWithoutBlockingTheUI() async {
+        let items = makeItems(50_000)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: items)
+        await model.waitForSearchForTesting()
+
+        let start = ContinuousClock.now
+        model.refreshFiltersForReactivation(items: items)
+        let scheduling = ContinuousClock.now - start
+
+        XCTAssertLessThan(
+            scheduling,
+            .milliseconds(100),
+            "Returning to Clipboard must schedule collection-wide filter analysis off the main actor"
+        )
+        await model.waitForFilterRefreshForTesting()
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.scopedItemCount, items.count)
+        print("Clipboard 50k reactivation filter scheduling: \(scheduling)")
+    }
+
+    func testCancelledPresentationPreparationStopsDetachedCollectionScan() async throws {
+        let checkpoints = ClipboardPreparationCheckpointCounter()
+        let model = ClipboardHistoryPanelModel(
+            presentationPreparationCheckpointForTesting: {
+                checkpoints.increment()
+                Thread.sleep(forTimeInterval: 0.001)
+            }
+        )
+        model.prepareForPresentationAsynchronously(items: makeItems(50_000))
+        for _ in 0..<200 where checkpoints.value < 3 {
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertGreaterThanOrEqual(checkpoints.value, 3)
+
+        model.cancelPresentationPreparation()
+        try await Task.sleep(for: .milliseconds(30))
+        let stoppedCount = checkpoints.value
+        try await Task.sleep(for: .milliseconds(30))
+
+        XCTAssertEqual(
+            checkpoints.value,
+            stoppedCount,
+            "Cancelling the panel preparation must stop its detached scan, not only discard its result"
+        )
+    }
+
     private func makeItems(_ count: Int) -> [ClipboardHistoryItem] {
         (0..<count).map { index in
             ClipboardHistoryItem(id: UUID(), text: "MT88 tripod \(index)",
                 capturedAt: Date(timeIntervalSince1970: TimeInterval(count - index)),
                 sourceApplication: nil, isPinned: false, lastUsedAt: nil)
         }
+    }
+}
+
+private final class ClipboardPreparationCheckpointCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int { lock.withLock { count } }
+
+    func increment() {
+        lock.withLock { count += 1 }
     }
 }

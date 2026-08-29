@@ -721,6 +721,21 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "全選可見項目" } }
       }
     },
+    "panel.shortcuts.selectAll.description": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "في وضع التحديد المتعدد، حدّد كل العناصر المعروضة من دون نقل التركيز من البحث." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Wählt im Mehrfachauswahlmodus alle sichtbaren Objekte aus, ohne den Suchfokus zu ändern." } },
+        "en": { "stringUnit": { "state": "translated", "value": "In multi-select mode, select every item currently shown without taking focus from search." } },
+        "es": { "stringUnit": { "state": "translated", "value": "En el modo de selección múltiple, selecciona todos los elementos visibles sin quitar el foco de la búsqueda." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "En mode de sélection multiple, sélectionnez tous les éléments visibles sans quitter la recherche." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "複数選択モードで、検索からフォーカスを移さずに表示中の項目をすべて選択します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "다중 선택 모드에서 검색 포커스를 유지한 채 현재 표시된 모든 항목을 선택합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "No modo de seleção múltipla, seleciona todos os itens visíveis sem retirar o foco da pesquisa." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "В режиме множественного выбора выбирает все видимые элементы, не снимая фокус с поиска." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在多选模式中全选当前显示的项目，同时保持搜索栏焦点。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在多選模式中全選目前顯示的項目，同時保留搜尋列焦點。" } }
+      }
+    },
     "panel.selection.extend": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "توسيع التحديد" } },

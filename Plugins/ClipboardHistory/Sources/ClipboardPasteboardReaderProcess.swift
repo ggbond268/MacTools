@@ -213,6 +213,13 @@ actor ClipboardPasteboardReaderProcess {
         let process = Process()
         let inputPipe = Pipe()
         let outputPipe = Pipe()
+        let inputFileDescriptor = inputPipe.fileHandleForWriting.fileDescriptor
+        guard fcntl(inputFileDescriptor, F_SETNOSIGPIPE, 1) != -1 else {
+            let code = POSIXErrorCode(rawValue: errno) ?? .EIO
+            try? inputPipe.fileHandleForWriting.close()
+            try? outputPipe.fileHandleForReading.close()
+            throw POSIXError(code)
+        }
         process.executableURL = helperURL
         process.arguments = helperArguments
         process.standardInput = inputPipe

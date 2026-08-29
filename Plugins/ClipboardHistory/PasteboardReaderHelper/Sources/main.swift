@@ -211,6 +211,12 @@ let maximumRequests: Int? = {
     }
     return value
 }()
+let lingerAfterMaximumRequestsMicroseconds: useconds_t = {
+    guard let milliseconds = argumentValue(after: "--linger-after-maximum-requests-milliseconds")
+        .flatMap(UInt32.init),
+        milliseconds <= 5_000 else { return 0 }
+    return milliseconds * 1_000
+}()
 var completedRequestCount = 0
 
 while maximumRequests.map({ completedRequestCount < $0 }) ?? true {
@@ -252,4 +258,11 @@ while maximumRequests.map({ completedRequestCount < $0 }) ?? true {
     } catch {
         break
     }
+}
+
+if maximumRequests != nil, lingerAfterMaximumRequestsMicroseconds > 0 {
+    // Keep the process alive after closing stdin so the parent deterministically exercises the
+    // stale-session write boundary instead of depending on Process.isRunning propagation timing.
+    try? input.close()
+    usleep(lingerAfterMaximumRequestsMicroseconds)
 }

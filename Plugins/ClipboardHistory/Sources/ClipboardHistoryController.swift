@@ -569,7 +569,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private var pendingMutations: [(revision: UInt64, mutation: ClipboardHistoryMutation, isPublished: Bool)] = []
     private var durableMutationTask: Task<Bool, Never>?
     private var durableMutationSequence: UInt64 = 0
-    private var pendingDurableItemIDs = Set<UUID>()
+    private var pendingDurableItemIDReferenceCounts: [UUID: Int] = [:]
     private var pendingDeletedItemIDs = Set<UUID>()
     private var storageGeneration: UInt64 = 0
     private var reloadAfterStop = false
@@ -582,7 +582,15 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private var currentHistoryItemPasteboardState: (itemID: UUID, changeCount: Int)?
     private var retentionProtectedItemIDs = Set<UUID>()
     private var effectiveRetentionProtectedItemIDs: Set<UUID> {
-        retentionProtectedItemIDs.union(pendingDurableItemIDs)
+        retentionProtectedItemIDs.union(pendingDurableItemIDReferenceCounts.keys)
+    }
+
+    private var hasPendingDurableItemIDs: Bool {
+        !pendingDurableItemIDReferenceCounts.isEmpty
+    }
+
+    var pendingDurableItemIDsForTesting: Set<UUID> {
+        Set(pendingDurableItemIDReferenceCounts.keys)
     }
 
     init(
@@ -680,7 +688,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         reloadAfterStop = true
         durableMutationTask?.cancel()
         durableMutationTask = nil
-        pendingDurableItemIDs.removeAll()
+        pendingDurableItemIDReferenceCounts.removeAll()
         pendingDeletedItemIDs.removeAll()
         itemMutation = nil
         timer?.invalidate()
@@ -719,7 +727,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     func settingsDidChange() {
         capturePolicyRevision &+= 1
-        if !pendingDurableItemIDs.isEmpty { needsSettingsReconciliation = true }
+        if hasPendingDurableItemIDs { needsSettingsReconciliation = true }
         if settings.isPaused {
             cancelPendingCaptureProcessing()
             cancelPendingPasteboardPayloadRead()
@@ -757,7 +765,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         storageGeneration &+= 1
         durableMutationTask?.cancel()
         durableMutationTask = nil
-        pendingDurableItemIDs.removeAll()
+        pendingDurableItemIDReferenceCounts.removeAll()
         pendingDeletedItemIDs.removeAll()
         timer?.invalidate()
         timer = nil
@@ -1718,23 +1726,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         guard !isMutatingItems else { return false }
         let previous = durableMutationTask
         let generation = storageGeneration
+        retainPendingDurableItemIDs(targetIDs)
         durableMutationSequence &+= 1
         let sequence = durableMutationSequence
         let task = Task { @MainActor [weak self] in
-            _ = await previous?.value
-            guard let self, !Task.isCancelled, self.storageGeneration == generation,
-                  self.isLoaded, self.errorMessage == nil, !self.isMutatingItems else { return false }
-            if blocksCollection {
-                self.cancelPendingCaptureProcessing()
-                self.cancelPendingPasteboardPayloadRead()
-                self.cancelImageIndexing()
-                self.itemMutation = .content
-                self.notifyChanged()
-            }
-            self.pendingDurableItemIDs.formUnion(targetIDs)
+            guard let self else { return false }
             defer {
                 if self.storageGeneration == generation {
-                    self.pendingDurableItemIDs.subtract(targetIDs)
+                    self.releasePendingDurableItemIDs(targetIDs)
                     self.pendingDeletedItemIDs.subtract(targetIDs)
                     self.itemMutation = nil
                     self.reconcileSettingsIfNeeded()
@@ -1742,6 +1741,16 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                     self.startNextImageTextIndexingIfNeeded()
                     if blocksCollection { self.notifyChanged() }
                 }
+            }
+            _ = await previous?.value
+            guard !Task.isCancelled, self.storageGeneration == generation,
+                  self.isLoaded, self.errorMessage == nil, !self.isMutatingItems else { return false }
+            if blocksCollection {
+                self.cancelPendingCaptureProcessing()
+                self.cancelPendingPasteboardPayloadRead()
+                self.cancelImageIndexing()
+                self.itemMutation = .content
+                self.notifyChanged()
             }
             guard let replacement = transform(self.items) else { return false }
             // Flush prior OCR deltas before the user mutation; don't cancel their persistence.
@@ -1766,13 +1775,30 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         return result
     }
 
+    private func retainPendingDurableItemIDs(_ itemIDs: Set<UUID>) {
+        for itemID in itemIDs {
+            pendingDurableItemIDReferenceCounts[itemID, default: 0] += 1
+        }
+    }
+
+    private func releasePendingDurableItemIDs(_ itemIDs: Set<UUID>) {
+        for itemID in itemIDs {
+            guard let count = pendingDurableItemIDReferenceCounts[itemID] else { continue }
+            if count <= 1 {
+                pendingDurableItemIDReferenceCounts.removeValue(forKey: itemID)
+            } else {
+                pendingDurableItemIDReferenceCounts[itemID] = count - 1
+            }
+        }
+    }
+
     private func resetPersistentHistory() async -> Bool {
         guard !isMutatingItems else { return false }
         storageGeneration &+= 1
         let generation = storageGeneration
         durableMutationTask?.cancel()
         durableMutationTask = nil
-        pendingDurableItemIDs.removeAll()
+        pendingDurableItemIDReferenceCounts.removeAll()
         pendingDeletedItemIDs.removeAll()
         cancelPendingCaptureProcessing()
         cancelPendingPasteboardPayloadRead()

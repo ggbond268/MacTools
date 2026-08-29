@@ -3,4 +3,4 @@ release: plugin
 type: fixed
 ---
 
-Clipboard multi-selection now supports a customizable Command-Return shortcut while searching. Command-K opens and closes Actions, returning focus to the history search without losing the selection.
+Clipboard multi-selection adds customizable shortcuts to mark one item or select all visible items while searching. Command-K toggles Actions and restores search focus without losing the selection.

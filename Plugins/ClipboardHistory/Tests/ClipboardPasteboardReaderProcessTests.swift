@@ -216,7 +216,10 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         let pasteboard = NSPasteboard.withUniqueName()
         let reader = ClipboardPasteboardReaderProcess(
             helperURL: { helperURL },
-            helperArguments: ["--maximum-requests", "1"],
+            helperArguments: [
+                "--maximum-requests", "1",
+                "--linger-after-maximum-requests-milliseconds", "250",
+            ],
             requestTimeout: .seconds(2)
         )
         defer { Task { await reader.stop() } }
