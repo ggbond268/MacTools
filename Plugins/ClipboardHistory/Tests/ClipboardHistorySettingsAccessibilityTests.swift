@@ -77,7 +77,7 @@ final class ClipboardHistorySettingsAccessibilityTests: XCTestCase {
         for _ in 0..<100 {
             window.displayIfNeeded()
             hosting.layoutSubtreeIfNeeded()
-            namedSwitch = accessibilityElements(in: hosting).first { element in
+            namedSwitch = accessibilityElements(in: window).first { element in
                 let role = element.role
                 guard role == "AXCheckBox" || role == "AXSwitch" else { return false }
                 return element.label == title || element.title == title
@@ -85,7 +85,7 @@ final class ClipboardHistorySettingsAccessibilityTests: XCTestCase {
             if namedSwitch != nil { break }
             try? await Task.sleep(for: .milliseconds(10))
         }
-        let tree = accessibilityElements(in: hosting).map { element in
+        let tree = accessibilityElements(in: window).map { element in
             "\(type(of: element.object)): \(element.role ?? "no role") "
                 + "label=\(element.label ?? "nil") title=\(element.title ?? "nil") children=\(element.children.count)"
         }.joined(separator: "\n")
