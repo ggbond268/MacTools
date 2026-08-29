@@ -1008,6 +1008,10 @@ const structuredData = {
                           <span data-i18n-zh>{text.zh.summary} · {capability.zh}</span>
                           <span data-i18n-en>{text.en.summary} · {capability.en}</span>
                         </p>
+                        <a href={plugin.route ?? `/plugins/${plugin.id}/`}>
+                          <span data-i18n-zh>查看详情</span>
+                          <span data-i18n-en>View details</span>
+                        </a>
                       </div>
                       <div class="market-plugin-actions">
                         <button type="button" class="market-plugin-action" data-plugin-action>

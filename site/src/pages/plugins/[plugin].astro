@@ -1,0 +1,45 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteNav from "@/components/SiteNav.astro";
+import { loadPluginCatalog, localizedPluginText, type Plugin } from "@/lib/plugins";
+
+export async function getStaticPaths() {
+  const catalog = await loadPluginCatalog();
+  return catalog.plugins.map((plugin) => ({ params: { plugin: plugin.id }, props: { plugin } }));
+}
+
+const { plugin } = Astro.props as { plugin: Plugin };
+const text = localizedPluginText(plugin);
+const product = plugin.product as {
+  presentation?: { longDescription?: Record<string, string>; examples?: Array<{ id: string; text: Record<string, string> }> };
+  discovery?: { useCases?: Array<{ id: string; title: Record<string, string> }> };
+  requirements?: { permissionIDs?: string[]; hardware?: string[]; minimumMacOSVersion?: string };
+  privacy?: { dataObserved?: string[]; networkUse?: string; telemetry?: string };
+  actions?: { providers?: Array<{ id: string; staticActions: Array<{ id: string; title: Record<string, string>; description: Record<string, string> }> }> };
+} | undefined;
+const localized = (value?: Record<string, string>) => value?.["zh-Hans"] ?? value?.en ?? "";
+---
+
+<BaseLayout title={`${text.en.displayName} · MacTools`} description={text.en.summary} keywords={product?.discovery?.useCases?.map((item) => item.title.en ?? "") ?? []} page="plugins">
+  <SiteNav />
+  <main class="plugin-page">
+    <p class="eyebrow">MacTools Plugin</p>
+    <h1>{text.en.displayName}</h1>
+    <p class="lead">{text.en.summary}</p>
+    <a class="button" href={plugin.openInMacToolsURL}>Open in MacTools</a>
+    {product?.presentation?.longDescription ? <p>{localized(product.presentation.longDescription)}</p> : null}
+    {product?.discovery?.useCases?.length ? <section><h2>Use cases</h2><ul>{product.discovery.useCases.map((item) => <li>{localized(item.title)}</li>)}</ul></section> : null}
+    {product?.actions?.providers?.length ? <section><h2>Actions</h2>{product.actions.providers.flatMap((provider) => provider.staticActions.map((action) => <article><h3><a href={`/plugins/${plugin.id}/actions/${provider.id}/${action.id}/`}>{localized(action.title)}</a></h3><p>{localized(action.description)}</p></article>))}</section> : null}
+    {product?.requirements ? <section><h2>Requirements</h2><p>{[product.requirements.minimumMacOSVersion, ...(product.requirements.hardware ?? []), ...(product.requirements.permissionIDs ?? [])].filter(Boolean).join(" · ")}</p></section> : null}
+    {product?.privacy ? <section><h2>Privacy</h2><p>{[...(product.privacy.dataObserved ?? []), product.privacy.networkUse, product.privacy.telemetry].filter(Boolean).join(" · ")}</p></section> : null}
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .plugin-page { max-width: 880px; margin: 0 auto; padding: 7rem 1.5rem; }
+  .lead { font-size: 1.2rem; color: var(--text-secondary); }
+  .eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+  section { margin-top: 2.5rem; } article { margin: 1rem 0; }
+</style>

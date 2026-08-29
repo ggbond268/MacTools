@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - "site/**"
+      - "Plugins/*/plugin.json"
+      - "Plugins/*/MarketplaceAssets/**"
+      - "scripts/plugins/plugin_source_manifest.py"
+      - "scripts/plugins/generate_website_plugin_data.py"
       - "docs/app-release.json"
       - "docs/nightly/**"
   workflow_run:
@@ -54,6 +58,10 @@ jobs:
       - name: Install site dependencies
         working-directory: site
         run: npm ci
+
+      - name: Verify generated plugin data
+        working-directory: site
+        run: npm run check:generated-plugins
 
       - name: Build site
         working-directory: site

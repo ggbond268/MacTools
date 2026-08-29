@@ -1,0 +1,29 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteNav from "@/components/SiteNav.astro";
+import actionData from "@/generated/actions.json";
+
+export async function getStaticPaths() {
+  return actionData.actions.map((entry) => ({
+    params: { plugin: entry.pluginID, provider: entry.providerID, action: entry.action.id }, props: { entry },
+  }));
+}
+
+const { entry } = Astro.props as { entry: typeof actionData.actions[number] };
+const localized = (value: Record<string, string>) => value["zh-Hans"] ?? value.en ?? "";
+---
+
+<BaseLayout title={`${entry.action.title.en ?? entry.action.id} · MacTools`} description={entry.action.description.en ?? ""} page="plugins">
+  <SiteNav />
+  <main class="action-page">
+    <p class="eyebrow">{entry.pluginID}</p>
+    <h1>{localized(entry.action.title)}</h1>
+    <p class="lead">{localized(entry.action.description)}</p>
+    <p>{[entry.action.risk, ...entry.action.surfaces, ...entry.action.permissionIDs].join(" · ")}</p>
+    <a class="button" href={entry.openInMacToolsURL}>Open in MacTools</a>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>.action-page { max-width: 880px; margin: 0 auto; padding: 7rem 1.5rem; } .lead { font-size: 1.2rem; color: var(--text-secondary); } .eyebrow { color: var(--accent); }</style>

@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate:plugins": "python3 ../scripts/plugins/generate_website_plugin_data.py",
+    "check:generated-plugins": "python3 ../scripts/plugins/generate_website_plugin_data.py --check",
     "prepare:assets": "node scripts/prepare-assets.mjs",
     "dev": "npm run prepare:assets && astro dev",
     "build": "npm run prepare:assets && astro check && astro build",
