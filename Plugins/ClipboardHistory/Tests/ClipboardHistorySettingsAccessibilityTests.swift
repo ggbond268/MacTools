@@ -64,14 +64,18 @@ final class ClipboardHistorySettingsAccessibilityTests: XCTestCase {
         )
         window.isReleasedWhenClosed = false
         window.contentView = hosting
-        window.alphaValue = 0
-        window.ignoresMouseEvents = true
+        // AppKit omits actionable SwiftUI accessibility nodes for fully transparent,
+        // mouse-ignoring windows on some macOS/Xcode versions. Keep the test window
+        // normally interactive but place it off-screen so the real accessibility
+        // hierarchy and press action are exercised without flashing test UI.
+        window.setFrameOrigin(NSPoint(x: -10_000, y: -10_000))
         PluginPresentationSafety.prepareForWindowOrdering(window, windows: [window])
-        window.orderFront(nil)
+        window.makeKeyAndOrderFront(nil)
         defer { window.close() }
 
         var namedSwitch: AccessibilityTestElement?
         for _ in 0..<100 {
+            window.displayIfNeeded()
             hosting.layoutSubtreeIfNeeded()
             namedSwitch = accessibilityElements(in: hosting).first { element in
                 let role = element.role
