@@ -280,6 +280,65 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         ])))
     }
 
+    func testMiddleTipTapAdaptsToNaturalFixedFingerSpacing() {
+        var recognizer = TipTapRecognizer(fixedFingerCount: 2, region: .middle)
+        let fixedContacts = [(1, 0.47, 0.5), (2, 0.53, 0.5)]
+        _ = recognizer.process(frame(time: 0, contacts: []))
+        _ = recognizer.process(frame(time: 0.01, contacts: fixedContacts))
+        _ = recognizer.process(frame(time: 0.09, contacts: fixedContacts))
+        _ = recognizer.process(frame(time: 0.10, contacts: fixedContacts + [(3, 0.50, 0.5)]))
+
+        XCTAssertTrue(recognizer.process(frame(time: 0.15, contacts: fixedContacts)))
+    }
+
+    func testMiddleTipTapStillRejectsContactsNearFixedFingerEdges() {
+        var recognizer = TipTapRecognizer(fixedFingerCount: 2, region: .middle)
+        let fixedContacts = [(1, 0.47, 0.5), (2, 0.53, 0.5)]
+        _ = recognizer.process(frame(time: 0, contacts: []))
+        _ = recognizer.process(frame(time: 0.01, contacts: fixedContacts))
+        _ = recognizer.process(frame(time: 0.09, contacts: fixedContacts))
+        _ = recognizer.process(frame(time: 0.10, contacts: fixedContacts + [(3, 0.475, 0.5)]))
+
+        XCTAssertFalse(recognizer.process(frame(time: 0.15, contacts: fixedContacts)))
+    }
+
+    func testMiddleTipTapRejectsVerticallyAlignedFixedContacts() {
+        for fixedContacts in [
+            [(1, 0.50, 0.40), (2, 0.50, 0.60)],
+            [(1, 0.49, 0.40), (2, 0.51, 0.60)],
+        ] {
+            var recognizer = TipTapRecognizer(fixedFingerCount: 2, region: .middle)
+            _ = recognizer.process(frame(time: 0, contacts: []))
+            _ = recognizer.process(frame(time: 0.01, contacts: fixedContacts))
+            _ = recognizer.process(frame(time: 0.09, contacts: fixedContacts))
+            _ = recognizer.process(frame(
+                time: 0.10,
+                contacts: fixedContacts + [(3, 0.50, 0.50)]
+            ))
+
+            XCTAssertFalse(recognizer.process(frame(time: 0.15, contacts: fixedContacts)))
+        }
+    }
+
+    func testLateStaggeredThreeFingerTapOutsideTipTapRegionStillRecognizes() {
+        var engine = TrackpadGestureEngine(gestures: [
+            .tipTapMiddleTwoFixed,
+            .threeFingerTap,
+        ])
+        let fixedContacts = [(1, 0.30, 0.5), (2, 0.70, 0.5)]
+        _ = engine.process(frame(time: 0, contacts: []))
+        _ = engine.process(frame(time: 0.01, contacts: fixedContacts))
+        _ = engine.process(frame(
+            time: 0.09,
+            contacts: fixedContacts + [(3, 0.90, 0.5)]
+        ))
+
+        XCTAssertEqual(
+            engine.process(frame(time: 0.14, contacts: [])).recognized,
+            [.threeFingerTap]
+        )
+    }
+
     func testMultiFingerTapAllowsStaggeredReleaseAndPreventsCooldownDuplicate() {
         var recognizer = MultiFingerTapRecognizer(fingerCount: 3)
         _ = recognizer.process(frame(time: 0, contacts: []))

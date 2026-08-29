@@ -263,6 +263,15 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
                         section: .mappings
                     )
                 }
+            }
+            .headerAccessory { [weak self] _ in
+                if let self {
+                    TrackpadGestureTestingHeaderAccessory(
+                        store: self.store,
+                        localization: self.localization,
+                        onSetTesting: { [weak self] enabled in self?.setTesting(enabled) }
+                    )
+                }
             },
             PluginSettingsSection(
                 id: "typing-protection",
@@ -279,24 +288,6 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
                         onChange: { [weak self] in self?.configurationDidChange() },
                         onSetTesting: { [weak self] enabled in self?.setTesting(enabled) },
                         section: .typingProtection
-                    )
-                }
-            },
-            PluginSettingsSection(
-                id: "testing",
-                title: localization.string("settings.testing.title", defaultValue: "测试"),
-                systemImage: "waveform.path",
-                presentation: .edgeToEdge
-            ) { [weak self] _ in
-                if let self {
-                    TrackpadGesturesSettingsView(
-                        store: self.store,
-                        localization: self.localization,
-                        actionHostContext: self.trackpadActionHostContext,
-                        isGestureOwned: { self.isGestureOwned($0) },
-                        onChange: { [weak self] in self?.configurationDidChange() },
-                        onSetTesting: { [weak self] enabled in self?.setTesting(enabled) },
-                        section: .testing
                     )
                 }
             }
@@ -515,7 +506,11 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         if store.isTesting {
             clickResolutions = Dictionary(uniqueKeysWithValues: TrackpadGesture.allCases.compactMap {
                 gesture in
-                gesture.physicalClickFingerCount.map { _ in (gesture, .consume) }
+                guard gesture.physicalClickFingerCount != nil
+                    || gesture.tipTapConfiguration != nil else {
+                    return nil
+                }
+                return (gesture, .consume)
             })
         } else {
             let localResolutions: [TrackpadGesture: TrackpadNativeClickResolution] = Dictionary(

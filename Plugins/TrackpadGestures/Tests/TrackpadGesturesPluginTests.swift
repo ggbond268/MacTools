@@ -441,6 +441,44 @@ final class TrackpadGestureStoreTests: XCTestCase {
         XCTAssertNil(TrackpadGesture.threeFingerLongTouch.middleClickOverlapFingerCount)
     }
 
+    func testEnabledOverlappingTapFingerCountsRequireMatchingEnabledMappings() {
+        let store = TrackpadGestureStore(
+            storage: TrackpadGestureMemoryStorage(),
+            legacyMiddleClick: nil
+        )
+        let threeFingerTap = TrackpadGestureMapping(
+            gesture: .threeFingerTap,
+            action: .middleClick
+        )
+        let threeFingerDoubleTap = TrackpadGestureMapping(
+            gesture: .threeFingerDoubleTap,
+            action: .middleClick
+        )
+        let fourFingerTap = TrackpadGestureMapping(
+            gesture: .fourFingerTap,
+            action: .middleClick
+        )
+        var fourFingerDoubleTap = TrackpadGestureMapping(
+            gesture: .fourFingerDoubleTap,
+            action: .middleClick
+        )
+        fourFingerDoubleTap.isEnabled = false
+
+        XCTAssertTrue(store.save(threeFingerTap))
+        XCTAssertTrue(store.save(threeFingerDoubleTap))
+        XCTAssertTrue(store.save(fourFingerTap))
+        XCTAssertTrue(store.save(fourFingerDoubleTap))
+        XCTAssertEqual(store.enabledOverlappingTapFingerCounts, [3])
+        XCTAssertEqual(
+            store.enabledOverlappingTapFingerCounts { $0 != .threeFingerDoubleTap },
+            []
+        )
+
+        XCTAssertTrue(store.setEnabled(false, id: threeFingerTap.id))
+        XCTAssertTrue(store.setEnabled(true, id: fourFingerDoubleTap.id))
+        XCTAssertEqual(store.enabledOverlappingTapFingerCounts, [4])
+    }
+
     func testMappingViewPreferencesPersistWithoutChangingMappingOrder() throws {
         let storage = TrackpadGestureMemoryStorage()
         let store = TrackpadGestureStore(storage: storage, legacyMiddleClick: nil)
@@ -1190,6 +1228,34 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility", "input-monitoring"])
     }
 
+    func testSettingsPromoteGestureTestingIntoMappingsSection() throws {
+        let page = try XCTUnwrap(makePlugin().plugin.settingsPage)
+        guard case let .form(sections) = page.body else {
+            return XCTFail("Expected form settings")
+        }
+
+        XCTAssertEqual(sections.map(\.id), ["mappings", "typing-protection"])
+        XCTAssertNotNil(sections.first?.headerAccessory)
+    }
+
+    func testLeavingSettingsStopsGestureTesting() throws {
+        let fixture = makePlugin()
+        fixture.plugin.store.setTesting(true)
+        fixture.plugin.configurationDidChange(persistent: false)
+        fixture.plugin.store.recordTestGesture(.threeFingerTap)
+        let page = try XCTUnwrap(fixture.plugin.settingsPage)
+
+        XCTAssertEqual(fixture.session.activations.last, Set(TrackpadGesture.allCases))
+        let deactivateCount = fixture.session.deactivateCount
+
+        page.visibilityHandler?(false)
+
+        XCTAssertFalse(fixture.plugin.store.isTesting)
+        XCTAssertNil(fixture.plugin.store.lastTestGesture)
+        XCTAssertFalse(fixture.session.isActive)
+        XCTAssertEqual(fixture.session.deactivateCount, deactivateCount + 1)
+    }
+
     func testEnabledOverlappingMappingsPublishDeduplicatedSharedGestureClaims() {
         let fixture = makePlugin()
         XCTAssertTrue(fixture.plugin.store.save(TrackpadGestureMapping(
@@ -1492,6 +1558,10 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         )
         XCTAssertEqual(
             fixture.session.nativeClickResolutionUpdates.last?[.threeFingerClick],
+            .consume
+        )
+        XCTAssertEqual(
+            fixture.session.nativeClickResolutionUpdates.last?[.tipTapMiddleTwoFixed],
             .consume
         )
         fixture.session.recognize(.threeFingerTap)

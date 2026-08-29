@@ -220,6 +220,21 @@ final class TrackpadGestureStore: ObservableObject {
         Set(mappings.lazy.filter(\.isEnabled).map(\.gesture))
     }
 
+    var enabledOverlappingTapFingerCounts: [Int] {
+        enabledOverlappingTapFingerCounts { _ in true }
+    }
+
+    func enabledOverlappingTapFingerCounts(
+        where gestureIsActive: (TrackpadGesture) -> Bool
+    ) -> [Int] {
+        let enabled = Set(mappings
+            .filter { $0.isEnabled && gestureIsActive($0.gesture) }
+            .map(\.gesture))
+        let singleTapFingerCounts = Set(enabled.compactMap(\.fingerTapCount))
+        let doubleTapFingerCounts = Set(enabled.compactMap(\.doubleFingerTapCount))
+        return singleTapFingerCounts.intersection(doubleTapFingerCounts).sorted()
+    }
+
     func mapping(for gesture: TrackpadGesture) -> TrackpadGestureMapping? {
         mappings.first { $0.gesture == gesture }
     }

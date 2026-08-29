@@ -1344,67 +1344,67 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use Test below to practice without running configured actions."
+            "value": "Use “%@” to practice without running configured actions."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "可使用下方的“测试”练习，不会执行已配置的操作。"
+            "value": "可使用“%@”练习，不会执行已配置的操作。"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "استخدم الاختبار أدناه للتدرب من دون تشغيل الإجراءات المكوّنة."
+            "value": "استخدم «%@» للتدرّب دون تشغيل الإجراءات المكوّنة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Üben Sie unten mit „Test“, ohne konfigurierte Aktionen auszuführen."
+            "value": "Üben Sie mit „%@“, ohne konfigurierte Aktionen auszuführen."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usa la prueba de abajo para practicar sin ejecutar las acciones configuradas."
+            "value": "Usa «%@» para practicar sin ejecutar las acciones configuradas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Utilisez le test ci-dessous pour vous entraîner sans exécuter les actions configurées."
+            "value": "Utilisez « %@ » pour vous entraîner sans exécuter les actions configurées."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "下の「テスト」で、設定済みの操作を実行せずに練習できます。"
+            "value": "「%@」で、設定済みのアクションを実行せずに練習できます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "아래의 테스트를 사용하면 설정된 동작을 실행하지 않고 연습할 수 있습니다."
+            "value": "‘%@’를 사용하면 설정된 동작을 실행하지 않고 연습할 수 있습니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use o teste abaixo para praticar sem executar as ações configuradas."
+            "value": "Use “%@” para praticar sem executar as ações configuradas."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Используйте тест ниже, чтобы потренироваться без запуска настроенных действий."
+            "value": "Используйте «%@», чтобы потренироваться без запуска настроенных действий."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "可使用下方的「測試」練習，不會執行已設定的操作。"
+            "value": "可使用「%@」練習，不會執行已設定的操作。"
           }
         }
       }
@@ -1974,67 +1974,67 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recognizes gestures without executing actions."
+            "value": "Test mode is active. Configured actions will not run until you stop testing."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "识别手势但不执行操作。"
+            "value": "测试模式已开启。停止测试前，已配置的操作不会执行。"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يتعرف على الإيماءات دون تنفيذ الإجراءات."
+            "value": "وضع الاختبار نشط. لن تعمل الإجراءات المكوّنة حتى توقف الاختبار."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erkennt Gesten, ohne Aktionen auszuführen."
+            "value": "Der Testmodus ist aktiv. Konfigurierte Aktionen werden erst nach dem Stoppen des Tests ausgeführt."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reconoce gestos sin ejecutar acciones."
+            "value": "El modo de prueba está activo. Las acciones configuradas no se ejecutarán hasta que detengas la prueba."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reconnaît les gestes sans exécuter d'actions."
+            "value": "Le mode test est actif. Les actions configurées ne s’exécuteront pas avant l’arrêt du test."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アクションを実行せずにジェスチャを認識します。"
+            "value": "テストモードが有効です。テストを停止するまで、設定済みのアクションは実行されません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "작업을 실행하지 않고도 제스처를 인식합니다."
+            "value": "테스트 모드가 활성화되었습니다. 테스트를 중지할 때까지 설정된 동작이 실행되지 않습니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reconhece gestos sem executar ações."
+            "value": "O modo de teste está ativo. As ações configuradas não serão executadas até você parar o teste."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Распознает жесты без выполнения действий."
+            "value": "Режим тестирования активен. Настроенные действия не выполняются, пока вы не остановите тест."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "辨識手勢而不執行動作。"
+            "value": "測試模式已開啟。停止測試前，已設定的操作不會執行。"
           }
         }
       }
@@ -2044,67 +2044,67 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recognized: %@. Actions are disabled while testing."
+            "value": "Recognized: %@. Configured actions will not run until you stop testing."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已识别：%@。测试期间不会执行操作。"
+            "value": "已识别：%@。停止测试前，已配置的操作不会执行。"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم التعرف عليه: %@. يتم تعطيل الإجراءات أثناء الاختبار."
+            "value": "تم التعرف عليه: %@. لن تعمل الإجراءات المكوّنة حتى توقف الاختبار."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erkannt: %@. Aktionen sind während des Tests deaktiviert."
+            "value": "Erkannt: %@. Konfigurierte Aktionen werden erst nach dem Stoppen des Tests ausgeführt."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reconocido: %@. Las acciones están deshabilitadas durante la prueba."
+            "value": "Reconocido: %@. Las acciones configuradas no se ejecutarán hasta que detengas la prueba."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reconnu : %@. Les actions sont désactivées pendant les tests."
+            "value": "Reconnu : %@. Les actions configurées ne s’exécuteront pas avant l’arrêt du test."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "認識されました: %@。テスト中はアクションが無効になります。"
+            "value": "認識されました: %@。テストを停止するまで、設定済みのアクションは実行されません。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "인식됨: %@. 테스트 중에는 작업이 비활성화됩니다."
+            "value": "인식됨: %@. 테스트를 중지할 때까지 설정된 동작이 실행되지 않습니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reconhecido: %@. As ações são desativadas durante o teste."
+            "value": "Reconhecido: %@. As ações configuradas não serão executadas até você parar o teste."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Распознано: %@. Действия отключены во время тестирования."
+            "value": "Распознано: %@. Настроенные действия не выполняются, пока вы не остановите тест."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已識別：%@。測試時操作已停用。"
+            "value": "已識別：%@。停止測試前，已設定的操作不會執行。"
           }
         }
       }
@@ -4806,6 +4806,19 @@
       "ru": {"stringUnit": {"state": "translated", "value": "Параметры просмотра"}},
       "zh-Hans": {"stringUnit": {"state": "translated", "value": "查看选项"}},
       "zh-Hant": {"stringUnit": {"state": "translated", "value": "檢視選項"}}
+    }},
+    "settings.mappings.overlappingTapBehavior": {"localizations": {
+      "ar": {"stringUnit": {"state": "translated", "value": "عند تمكين النقر والنقر المزدوج لعدد الأصابع نفسه، ينفذ النقر المزدوج إجراء النقرة المفردة أولاً، ثم إجراء النقرة المزدوجة."}},
+      "de": {"stringUnit": {"state": "translated", "value": "Wenn Tippen und Doppeltippen mit gleicher Fingerzahl aktiviert sind, führt ein Doppeltippen zuerst die Aktion für Tippen und danach die Aktion für Doppeltippen aus."}},
+      "en": {"stringUnit": {"state": "translated", "value": "When matching single and double taps are enabled, a double tap runs the single-tap action first, followed by the double-tap action."}},
+      "es": {"stringUnit": {"state": "translated", "value": "Cuando están activados el toque y el doble toque con el mismo número de dedos, un doble toque ejecuta primero la acción del toque y después la del doble toque."}},
+      "fr": {"stringUnit": {"state": "translated", "value": "Lorsque le toucher et le double toucher avec le même nombre de doigts sont activés, un double toucher exécute d’abord l’action du toucher, puis celle du double toucher."}},
+      "ja": {"stringUnit": {"state": "translated", "value": "同じ指の本数のタップとダブルタップを有効にすると、ダブルタップでは最初にタップのアクションが実行され、続いてダブルタップのアクションが実行されます。"}},
+      "ko": {"stringUnit": {"state": "translated", "value": "같은 손가락 수의 탭과 이중 탭을 활성화하면 이중 탭 시 탭 동작이 먼저 실행된 후 이중 탭 동작이 실행됩니다."}},
+      "pt": {"stringUnit": {"state": "translated", "value": "Quando o toque e o toque duplo com o mesmo número de dedos estão ativados, um toque duplo executa primeiro a ação de toque e depois a ação de toque duplo."}},
+      "ru": {"stringUnit": {"state": "translated", "value": "Если включены касание и двойное касание с одинаковым числом пальцев, двойное касание сначала выполняет действие обычного касания, а затем действие двойного касания."}},
+      "zh-Hans": {"stringUnit": {"state": "translated", "value": "同时启用相同手指数量的轻点和双击时，双击会先执行轻点操作，再执行双击操作。"}},
+      "zh-Hant": {"stringUnit": {"state": "translated", "value": "同時啟用相同手指數量的輕點和雙擊時，雙擊會先執行輕點操作，再執行雙擊操作。"}}
     }},
     "settings.mapping.deleteMapping": {"localizations": {
       "ar": {"stringUnit": {"state": "translated", "value": "حذف التعيين"}},

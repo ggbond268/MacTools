@@ -25,6 +25,8 @@ struct TrackpadGestureRecognitionThresholds: Equatable, Sendable {
     var fixedFingerMovement: Double = 0.035
     var tappingFingerMovement: Double = 0.045
     var tipTapSeparation: Double = 0.04
+    var tipTapMiddleMinimumSpan: Double = 0.04
+    var tipTapMiddleInsetRatio: Double = 0.20
     var tipTapFixedMinimumDuration: TimeInterval = 0.08
     var tapMinimumDuration: TimeInterval = 0.015
     var tapMaximumDuration: TimeInterval = 0.22
@@ -63,6 +65,25 @@ struct TipTapRecognizer: Sendable {
 
     private var state: State = .waitingForZero
     private var lastRecognitionAt: TimeInterval = -.infinity
+
+    /// Whether the current contact episode contains an added finger that can complete this
+    /// recognizer's configured TipTap. The native click correlator reads this synchronously so a
+    /// click event emitted at the contact-count peak is not mistaken for a physical finger click.
+    var hasQualifiedAddedContact: Bool {
+        guard case let .fixed(_, addedContact) = state,
+              case .candidate? = addedContact
+        else {
+            return false
+        }
+        return true
+    }
+
+    var isAwaitingAddedContact: Bool {
+        guard case let .fixed(_, addedContact) = state else {
+            return false
+        }
+        return addedContact == nil
+    }
 
     init(
         fixedFingerCount: Int,
@@ -301,9 +322,11 @@ struct TipTapRecognizer: Sendable {
         if x >= maximumX + thresholds.tipTapSeparation {
             return .right
         }
+        let middleInset = (maximumX - minimumX) * thresholds.tipTapMiddleInsetRatio
         if fixedContacts.count >= 2,
-           x >= minimumX + thresholds.tipTapSeparation,
-           x <= maximumX - thresholds.tipTapSeparation {
+           maximumX - minimumX >= thresholds.tipTapMiddleMinimumSpan,
+           x >= minimumX + middleInset,
+           x <= maximumX - middleInset {
             return .middle
         }
         return nil
