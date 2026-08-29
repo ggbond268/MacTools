@@ -12,34 +12,94 @@ export async function getStaticPaths() {
 const { plugin } = Astro.props as { plugin: Plugin };
 const text = localizedPluginText(plugin);
 const product = plugin.product as {
-  presentation?: { longDescription?: Record<string, string>; examples?: Array<{ id: string; text: Record<string, string> }> };
+  presentation?: {
+    longDescription?: Record<string, string>;
+    examples?: Array<{ id: string; text: Record<string, string> }>;
+    publisher?: string;
+    license?: string;
+    documentationURL?: string;
+    supportURL?: string;
+  };
   discovery?: { useCases?: Array<{ id: string; title: Record<string, string> }> };
-  requirements?: { permissionIDs?: string[]; hardware?: string[]; minimumMacOSVersion?: string };
-  privacy?: { dataObserved?: string[]; networkUse?: string; telemetry?: string };
-  actions?: { providers?: Array<{ id: string; staticActions: Array<{ id: string; title: Record<string, string>; description: Record<string, string> }> }> };
+  requirements?: { permissionIDs?: string[]; hardware?: string[]; architectures?: string[]; minimumMacOSVersion?: string; setupComplexity?: string; requiresRelaunch?: boolean };
+  privacy?: { dataObserved?: string[]; dataPersisted?: string[]; networkUse?: string; telemetry?: string; retention?: { policy?: string } };
+  relationships?: { relatedPluginIDs?: string[] };
+  setup?: { steps?: Array<{ id: string; title: Record<string, string>; description: Record<string, string> }>; optionalSurfaces?: string[] };
+  actions?: { providers?: Array<{
+    id: string;
+    kind?: string;
+    staticActions: Array<{ id: string; title: Record<string, string>; description: Record<string, string> }>;
+    dynamicTemplates?: Array<{ id: string; title: Record<string, string>; description: Record<string, string>; parameterSummary?: Record<string, string> }>;
+  }> };
 } | undefined;
 const localized = (value?: Record<string, string>) => value?.["zh-Hans"] ?? value?.en ?? "";
+const detailURL = plugin.openInMacToolsURL;
+const actionCount = product?.actions?.providers?.reduce((count, provider) => count + provider.staticActions.length, 0) ?? 0;
+const dynamicTemplates = product?.actions?.providers?.flatMap((provider) =>
+  (provider.dynamicTemplates ?? []).map((template) => ({ providerID: provider.id, template })),
+) ?? [];
+const requirements = product?.requirements;
+const privacy = product?.privacy;
+const setupSteps = product?.setup?.steps ?? [];
+const relatedPluginIDs = product?.relationships?.relatedPluginIDs ?? [];
 ---
 
 <BaseLayout title={`${text.en.displayName} · MacTools`} description={text.en.summary} keywords={product?.discovery?.useCases?.map((item) => item.title.en ?? "") ?? []} page="plugins">
   <SiteNav />
-  <main class="plugin-page">
-    <p class="eyebrow">MacTools Plugin</p>
-    <h1>{text.en.displayName}</h1>
-    <p class="lead">{text.en.summary}</p>
-    <a class="button" href={plugin.openInMacToolsURL}>Open in MacTools</a>
-    {product?.presentation?.longDescription ? <p>{localized(product.presentation.longDescription)}</p> : null}
-    {product?.discovery?.useCases?.length ? <section><h2>Use cases</h2><ul>{product.discovery.useCases.map((item) => <li>{localized(item.title)}</li>)}</ul></section> : null}
-    {product?.actions?.providers?.length ? <section><h2>Actions</h2>{product.actions.providers.flatMap((provider) => provider.staticActions.map((action) => <article><h3><a href={`/plugins/${plugin.id}/actions/${provider.id}/${action.id}/`}>{localized(action.title)}</a></h3><p>{localized(action.description)}</p></article>))}</section> : null}
-    {product?.requirements ? <section><h2>Requirements</h2><p>{[product.requirements.minimumMacOSVersion, ...(product.requirements.hardware ?? []), ...(product.requirements.permissionIDs ?? [])].filter(Boolean).join(" · ")}</p></section> : null}
-    {product?.privacy ? <section><h2>Privacy</h2><p>{[...(product.privacy.dataObserved ?? []), product.privacy.networkUse, product.privacy.telemetry].filter(Boolean).join(" · ")}</p></section> : null}
+  <main class="plugin-detail-page">
+    <section class="plugin-detail-hero" aria-labelledby="plugin-title">
+      <p class="plugin-detail-eyebrow">MacTools Plugin</p>
+      <h1 id="plugin-title">{text.en.displayName}</h1>
+      <p class="plugin-detail-lead">{text.en.summary}</p>
+      <div class="plugin-detail-actions">
+        <a class="button primary" href={detailURL} aria-label={`Open ${text.en.displayName} in MacTools`}>Open in MacTools</a>
+        <a class="button subtle" href="#deep-link">View deep link</a>
+      </div>
+      <div class="plugin-deep-link" id="deep-link">
+        <span class="plugin-deep-link-label">Navigation-only deep link</span>
+        <a href={detailURL}><code>{detailURL}</code></a>
+      </div>
+    </section>
+
+    <div class="plugin-detail-grid">
+      <section class="plugin-detail-card plugin-detail-summary">
+        <h2>About this plugin</h2>
+        <p>{product?.presentation?.longDescription ? localized(product.presentation.longDescription) : text.en.summary}</p>
+      </section>
+      <section class="plugin-detail-card plugin-detail-stats" aria-label="Plugin overview">
+        <strong>{plugin.version}</strong><span>Version</span>
+        <strong>{actionCount}</strong><span>Static actions</span>
+      </section>
+    </div>
+
+    {(product?.presentation?.publisher || product?.presentation?.license || product?.presentation?.documentationURL || product?.presentation?.supportURL) ? <section class="plugin-detail-section"><h2>Plugin information</h2><dl class="plugin-metadata-grid">
+      {product?.presentation?.publisher ? <><dt>Publisher</dt><dd>{product.presentation.publisher}</dd></> : null}
+      {product?.presentation?.license ? <><dt>License</dt><dd>{product.presentation.license}</dd></> : null}
+      {product?.presentation?.documentationURL ? <><dt>Documentation</dt><dd><a href={product.presentation.documentationURL}>Read documentation</a></dd></> : null}
+      {product?.presentation?.supportURL ? <><dt>Support</dt><dd><a href={product.presentation.supportURL}>Get support</a></dd></> : null}
+    </dl></section> : null}
+
+    {product?.discovery?.useCases?.length ? <section class="plugin-detail-section"><h2>Use cases</h2><ul class="plugin-detail-list">{product.discovery.useCases.map((item) => <li>{localized(item.title)}</li>)}</ul></section> : null}
+    {product?.presentation?.examples?.length ? <section class="plugin-detail-section"><h2>Examples</h2><ul class="plugin-detail-list">{product.presentation.examples.map((example) => <li>{localized(example.text)}</li>)}</ul></section> : null}
+    {product?.actions?.providers?.length ? <section class="plugin-detail-section"><h2>Discoverable actions</h2><p class="plugin-detail-muted">Open an action page to view its navigation-only MacTools link. These links never run an action.</p><div class="plugin-action-grid">{product.actions.providers.flatMap((provider) => provider.staticActions.map((action) => <article class="plugin-action-card"><p class="plugin-action-provider">{provider.id}</p><h3><a href={`/plugins/${plugin.id}/actions/${provider.id}/${action.id}`}>{localized(action.title)}</a></h3><p>{localized(action.description)}</p><a class="plugin-action-link" href={`/plugins/${plugin.id}/actions/${provider.id}/${action.id}`}>View action details</a></article>))}</div></section> : null}
+    {dynamicTemplates.length ? <section class="plugin-detail-section"><h2>Dynamic action templates</h2><p class="plugin-detail-muted">Entries are discovered locally after installation; this page shows templates only.</p><div class="plugin-action-grid">{dynamicTemplates.map(({ providerID, template }) => <article class="plugin-action-card"><p class="plugin-action-provider">{providerID}</p><h3>{localized(template.title)}</h3><p>{localized(template.description)}</p>{template.parameterSummary ? <p class="plugin-detail-muted">Uses: {localized(template.parameterSummary)}</p> : null}</article>)}</div></section> : null}
+    {requirements ? <section class="plugin-detail-section"><h2>Requirements</h2><dl class="plugin-metadata-grid">
+      {requirements.minimumMacOSVersion ? <><dt>macOS</dt><dd>{requirements.minimumMacOSVersion} or later</dd></> : null}
+      {requirements.architectures?.length ? <><dt>Architecture</dt><dd>{requirements.architectures.join(", ")}</dd></> : null}
+      {requirements.hardware?.length ? <><dt>Hardware</dt><dd>{requirements.hardware.join(", ")}</dd></> : null}
+      {requirements.permissionIDs?.length ? <><dt>Permissions</dt><dd>{requirements.permissionIDs.join(", ")}</dd></> : null}
+      {requirements.setupComplexity ? <><dt>Setup</dt><dd>{requirements.setupComplexity}</dd></> : null}
+      <dt>Restart</dt><dd>{requirements.requiresRelaunch ? "Required after installation" : "Not required"}</dd>
+    </dl></section> : null}
+    {setupSteps.length ? <section class="plugin-detail-section"><h2>Get started</h2><ol class="plugin-setup-list">{setupSteps.map((step) => <li><strong>{localized(step.title)}</strong><span>{localized(step.description)}</span></li>)}</ol>{product?.setup?.optionalSurfaces?.length ? <p class="plugin-detail-muted">Also available in: {product.setup.optionalSurfaces.join(", ")}</p> : null}</section> : null}
+    {privacy ? <section class="plugin-detail-section"><h2>Privacy</h2><dl class="plugin-metadata-grid">
+      <dt>Data observed</dt><dd>{privacy.dataObserved?.join(", ") || "None listed"}</dd>
+      <dt>Data stored</dt><dd>{privacy.dataPersisted?.join(", ") || "None listed"}</dd>
+      <dt>Network</dt><dd>{privacy.networkUse ?? "None listed"}</dd>
+      <dt>Telemetry</dt><dd>{privacy.telemetry ?? "None listed"}</dd>
+      {privacy.retention?.policy ? <><dt>Retention</dt><dd>{privacy.retention.policy}</dd></> : null}
+    </dl></section> : null}
+    {relatedPluginIDs.length ? <section class="plugin-detail-section"><h2>Related plugins</h2><div class="plugin-related-links">{relatedPluginIDs.map((id) => <a href={`/plugins/${id}`}>{id}</a>)}</div></section> : null}
   </main>
   <SiteFooter />
 </BaseLayout>
-
-<style>
-  .plugin-page { max-width: 880px; margin: 0 auto; padding: 7rem 1.5rem; }
-  .lead { font-size: 1.2rem; color: var(--text-secondary); }
-  .eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
-  section { margin-top: 2.5rem; } article { margin: 1rem 0; }
-</style>
