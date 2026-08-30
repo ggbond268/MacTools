@@ -8,7 +8,7 @@ Source of truth: yes
 ## Summary
 
 - Separate plugin for remapping keyboard, mouse, and precise trackpad gestures.
-- Scope: keyboard keys, mouse click/double-click/long-press, scroll wheel, and the precise gestures already recognized by Trackpad Gestures.
+- Scope: keyboard keys, mouse click/double-click/long-press, scroll wheel, and the precise gestures already recognized by Trackpad Gestures. Outputs include shortcuts and atomic single-key taps with distinct left/right modifiers.
 - Out of scope: shell commands, macros, profiles, per-app or per-device conditions.
 
 ## User flow
@@ -20,6 +20,7 @@ Source of truth: yes
 - Recording first shows a brief preparation state so the click that opened the recorder cannot become the trigger; it then shows an explicit listening state.
 - A matching click, key, or scroll executes the action. Mouse double-click and long-press keep the original click available to avoid unsafe event replay.
 - When the action is a shortcut, the user can record the output combination directly; the recorded key-down and key-up are consumed.
+- When the action is a single key, the user chooses it from a categorized list without generating a physical key press that another global listener could intercept.
 - Each rule presents its Input, Output, and Context in three stable columns. Context is currently global; per-app and per-device conditions remain out of scope.
 - A missing rule, failed action, or event carrying the Input Remapping marker passes through unchanged.
 
@@ -31,9 +32,12 @@ Source of truth: yes
 | Capture accepts keyboard, mouse buttons, and scroll and consumes the recorded event | This document | `InputRemappingCapturedInput` | Settings editor, CGEvent tap |
 | Recording arms after its opening click and distinguishes preparation from active listening | This document | `InputRemappingButtonCaptureCoordinator` | Input and shortcut recorders |
 | Shortcut output can be recorded directly and consumes its key pair | This document | `InputRemappingButtonCaptureCoordinator` | Shortcut action editor, CGEvent tap |
+| Single-key output accepts ordinary macOS virtual keys except Caps Lock and system media keys while preserving left/right modifier identity | This document | `KeyboardKeyTap`, `KeyboardKeyTapEventPoster` | Trackpad Gestures, Custom Shortcuts, future plugins |
+| Single-key output is selected from a shared categorized picker instead of recorded from live input | This document | `PluginKeyTapPicker` | Trackpad Gestures, Custom Shortcuts, future plugins |
 | Exact modifier set required across a full compound mouse gesture | This document | `InputRemappingEventProcessor` | Event processor |
 | A consumed down consumes its matching up | This document | `InputRemappingEventProcessor` | CGEvent tap callback |
 | Events carrying the Input Remapping synthetic marker always pass through | This document | `InputRemappingEventProcessor` | CGEvent tap callback |
+| Current and legacy MacTools synthetic-input markers pass through mixed plugin versions | This document | `MacToolsSyntheticInputEvent` | Input Remapping and Trackpad Gestures event taps |
 | Failed or inapplicable actions fail open | This document | `InputRemappingEventProcessor` | CGEvent tap callback |
 | An unsafe trigger (a keyboard key without modifiers or primary mouse button) is saved disabled and requires explicit confirmation before it can be enabled | This document | `InputRemappingRule` | Rule editor, event processor |
 | Control-Option-Command-Escape always cancels recording and disables every unsafe trigger | This document | `InputRemappingEventTap`, `InputRemappingStore` | Global event tap, warning copy |

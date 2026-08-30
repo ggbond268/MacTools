@@ -146,16 +146,6 @@ fi
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-if [[ -z "$MINIMUM_HOST_VERSION" ]]; then
-    # This is the catalog schema compatibility floor, not the newest package's
-    # host requirement. Individual entries retain their manifest minimums.
-    MINIMUM_HOST_VERSION="1.2.1"
-fi
-if [[ -z "$MINIMUM_HOST_VERSION" ]]; then
-    echo "Unable to determine the catalog minimum host version." >&2
-    exit 1
-fi
-
 ASSETS_DIR="${ASSETS_DIR:-$DIST_DIR/Assets}"
 rm -rf "$ASSETS_DIR"
 mkdir -p "$ASSETS_DIR" "$(dirname "$CATALOG_OUTPUT")"
@@ -180,7 +170,8 @@ fi
 if [[ -n "$PRODUCTS_DIR" ]]; then
     build_args+=(--products-dir "$PRODUCTS_DIR")
 fi
-for plugin_filter in "${PLUGIN_FILTERS[@]}"; do
+for plugin_filter in "${PLUGIN_FILTERS[@]-}"; do
+    [[ -n "$plugin_filter" ]] || continue
     build_args+=(--plugin "$plugin_filter")
 done
 
@@ -206,8 +197,13 @@ catalog_args=(
     --base-url "$BASE_URL"
     --output "$CATALOG_OUTPUT"
     --plugins-root "$SOURCE_DIR"
-    --minimum-host-version "$MINIMUM_HOST_VERSION"
 )
+if [[ -n "$MINIMUM_HOST_VERSION" ]]; then
+    catalog_args+=(--minimum-host-version "$MINIMUM_HOST_VERSION")
+fi
+if [[ -n "$NIGHTLY_BUILD_NUMBER" ]]; then
+    catalog_args+=(--nightly-build-number "$NIGHTLY_BUILD_NUMBER")
+fi
 if [[ -n "$RELEASE_NOTES_URL" ]]; then
     catalog_args+=(--release-notes-url "$RELEASE_NOTES_URL")
 fi
@@ -218,10 +214,10 @@ done
 "$REPO_ROOT/scripts/plugins/generate-plugin-catalog.sh" "${catalog_args[@]}"
 
 if [[ -n "$SIGNED_CATALOG_OUTPUT" ]]; then
-    "$REPO_ROOT/scripts/plugins/sign-plugin-catalog.sh" \
+    PLUGIN_CATALOG_PRIVATE_KEY_BASE64="$CATALOG_PRIVATE_KEY_BASE64" \
+        "$REPO_ROOT/scripts/plugins/sign-plugin-catalog.sh" \
         --input "$CATALOG_OUTPUT" \
-        --output "$SIGNED_CATALOG_OUTPUT" \
-        --private-key-base64 "$CATALOG_PRIVATE_KEY_BASE64"
+        --output "$SIGNED_CATALOG_OUTPUT"
 fi
 
 echo "Built ${#asset_paths[@]} plugin release asset(s)."

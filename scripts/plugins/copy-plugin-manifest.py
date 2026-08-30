@@ -10,15 +10,17 @@ import re
 import shutil
 from typing import Optional
 
-from plugin_source_manifest import expand_localized_references, validate_runtime_envelope
+from plugin_source_manifest import (
+    apply_nightly_package_overrides,
+    expand_localized_references,
+    validate_runtime_envelope,
+)
 
 
 MARKETING_VERSION_PATTERN = re.compile(
     r"^\s*MARKETING_VERSION\s*=\s*(\S+)\s*$",
     re.MULTILINE,
 )
-PLUGIN_VERSION_PATTERN = re.compile(r"^([0-9]+)(?:\.[0-9]+){0,2}$")
-NIGHTLY_BUILD_PATTERN = re.compile(r"^([0-9]+)\.([0-9]+)$")
 
 
 def development_host_version(config_path: pathlib.Path) -> str:
@@ -51,26 +53,8 @@ def copy_manifest(
         allow_sparse_legacy=allow_sparse_legacy,
     )
 
-    if configuration == "Nightly" and manifest["id"] in {"fan-control", "battery-charge-limit"}:
-        helper_path = f"/Library/PrivilegedHelperTools/cc.ggbond.mactools.{manifest['id']}.smc-helper"
-        for step in manifest.get("setup", {}).get("steps", []):
-            if step.get("id") == "install-privileged-helper":
-                step["description"] = {
-                    locale: description.replace(helper_path, helper_path + ".nightly")
-                    for locale, description in step["description"].items()
-                }
-
-    if nightly_build_number is not None:
-        source_version = str(manifest["version"])
-        source_match = PLUGIN_VERSION_PATTERN.fullmatch(source_version)
-        build_match = NIGHTLY_BUILD_PATTERN.fullmatch(nightly_build_number)
-        if source_match is None:
-            raise ValueError("source plugin version must contain one to three numeric components")
-        if build_match is None:
-            raise ValueError("Nightly build number must use numeric run.attempt components")
-        manifest["version"] = (
-            f"{source_match.group(1)}.{build_match.group(1)}.{build_match.group(2)}"
-        )
+    if configuration == "Nightly":
+        apply_nightly_package_overrides(manifest, nightly_build_number)
 
     if (
         configuration not in {"Debug", "Nightly"}

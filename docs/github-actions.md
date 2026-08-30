@@ -21,6 +21,8 @@ Nightly 不需要新的发布证书或私钥。合并实现后，维护者只需
 
 手动输入的 ref 必须已经属于 `origin/main`，工作流才会接触发布凭据。Nightly 使用独立 bundle ID、显示名称、`mactools-nightly://` URL Scheme、Application Support 目录、Sparkle feed 和插件 catalog；稳定版 appcast、下载元数据和插件 catalog 在发布前后都会受到路径检查。每个 Nightly 的完整插件集与 app 来自同一个 source commit，插件版本使用合法且单调递增的 `source-major.run.attempt` 格式以避免缓存复用。工作流保留最近 14 个匹配 `nightly-<run>-<attempt>` 的 prerelease，并始终额外保护当前已提交或已部署 appcast 引用的构建；稳定版和其他 prerelease 不在清理范围内。
 
+Release assets are staged with their final public filenames before upload. A failed run deletes the draft release it created, while each successful run removes abandoned drafts in the workflow-owned `nightly-<run>-<attempt>` namespace. Published Nightly retention remains limited to matching prereleases and never selects stable releases or unrelated prereleases.
+
 手动 `Build` workflow 产生的 Debug artifact 仍然只是 CI 调试输出，不会发布到 GitHub Releases、官网或任何 Sparkle feed，也不是第二个 Nightly 渠道。
 
 ### Nightly isolation and unchanged-run verification
@@ -115,6 +117,8 @@ PY
 ```
 
 不要复用 Sparkle 私钥。Sparkle key 只负责 app 更新包，插件 catalog key 只负责插件列表。
+
+The Nightly and plugin release workflows verify this private key against the public key embedded in the app before starting expensive build or signing work. Catalog signing uses Swift/CryptoKit and the same Foundation JSON canonicalization as runtime verification, so no Python signing dependency is installed during a release.
 
 ## App 发布方式
 

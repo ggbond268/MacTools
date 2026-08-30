@@ -5,6 +5,8 @@ import MacToolsCLIProtocol
 @MainActor
 final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
     private let serviceController: CLIBrokerServiceController
+    private let discovery: CLIActionDiscovery?
+    private let readinessTimeout: Duration
     private let identityValidator = CLIPeerIdentityValidator()
     nonisolated private let callerIsBroker: @Sendable () -> Bool
     nonisolated private let requestState = CLIHostRequestState()
@@ -28,12 +30,16 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
 
     init(
         serviceController: CLIBrokerServiceController = .shared,
+        discovery: CLIActionDiscovery? = nil,
+        readinessTimeout: Duration = .seconds(8),
         callerIsBroker: @escaping @Sendable () -> Bool = {
             guard let connection = NSXPCConnection.current() else { return false }
             return CLIPeerIdentityValidator().accepts(connection, as: .broker)
         }
     ) {
         self.serviceController = serviceController
+        self.discovery = discovery
+        self.readinessTimeout = readinessTimeout
         self.callerIsBroker = callerIsBroker
         super.init()
         serviceStatusObservation = serviceController.$status
@@ -101,7 +107,7 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
                     startedAt: .now
                 )
             } else {
-                response = Self.response(to: request)
+                response = await self.response(to: request)
             }
             reply.call(response)
         }
@@ -115,13 +121,12 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
         reply(requestState.cancel(requestID))
     }
 
-    private static func response(to request: CLIRequestEnvelope) -> Data {
+    private func response(to request: CLIRequestEnvelope) async -> Data {
         let startedAt = Date()
-        guard request.operation == .doctor,
-              request.payload == nil,
+        guard request.protocolVersion >= request.operation.minimumProtocolVersion,
               (CLIProtocolVersion.minimum...CLIProtocolVersion.current)
                 .contains(request.protocolVersion) else {
-            return encodedFailure(
+            return Self.encodedFailure(
                 request: request,
                 outcome: .protocolIncompatible,
                 category: "protocolIncompatible",
@@ -129,14 +134,45 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
                 startedAt: startedAt
             )
         }
-        let record = CLIDoctorRecord(
-            hostVersion: AppMetadata.shortVersion ?? "unknown",
-            hostBuild: AppMetadata.buildNumber ?? "unknown",
-            protocolVersion: request.protocolVersion,
-            brokerServiceStatus: CLIBrokerServiceController.shared.status.rawValue
-        )
         do {
-            let payload = try CLIProtocolCodec.encodeResponse(record)
+            let payload: Data
+            if request.operation == .doctor {
+                guard request.payload == nil else { throw CLIProtocolCodecError.invalidObject }
+                payload = try CLIProtocolCodec.encodeResponse(CLIDoctorRecord(
+                    hostVersion: AppMetadata.shortVersion ?? "unknown",
+                    hostBuild: AppMetadata.buildNumber ?? "unknown",
+                    protocolVersion: request.protocolVersion,
+                    brokerServiceStatus: serviceController.status.rawValue
+                ))
+            } else {
+                guard let data = request.payload else { throw CLIProtocolCodecError.invalidObject }
+                // Validate before waiting; malformed requests must not consume the readiness budget.
+                if request.operation == .actionsList {
+                    try CLIDiscoveryValidation.validate(CLIDiscoveryValidation.decode(CLIActionListRequest.self, from: data))
+                } else {
+                    try CLIDiscoveryValidation.validate(CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data))
+                }
+                guard let discovery else { throw CLIActionDiscoveryError.notReady }
+                let deadline = ContinuousClock.now.advanced(by: readinessTimeout)
+                while !discovery.isReady && ContinuousClock.now < deadline {
+                    guard !requestState.isCancelled(request.requestID) else { throw CancellationError() }
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+                guard !requestState.isCancelled(request.requestID) else { throw CancellationError() }
+                switch request.operation {
+                case .actionsList:
+                    payload = try CLIProtocolCodec.encodeResponse(discovery.list(
+                        CLIDiscoveryValidation.decode(CLIActionListRequest.self, from: data)))
+                case .actionsDescribe:
+                    payload = try CLIProtocolCodec.encodeResponse(discovery.describe(
+                        CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data)))
+                case .actionsAvailability:
+                    payload = try CLIProtocolCodec.encodeResponse(discovery.availability(
+                        CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data)))
+                case .doctor:
+                    throw CLIProtocolCodecError.invalidObject
+                }
+            }
             return try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope(
                 protocolVersion: request.protocolVersion,
                 requestID: request.requestID,
@@ -149,13 +185,23 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
                 payload: payload
             ))
         } catch {
-            return encodedFailure(
-                request: request,
-                outcome: .hostUnavailable,
-                category: "responseEncodingFailed",
-                message: "MacTools could not encode the doctor response.",
-                startedAt: startedAt
-            )
+            let failure: (CLIOutcome, String, String)
+            switch error {
+            case is CancellationError:
+                failure = (.cancelled, "cancelled", "The request was cancelled.")
+            case CLIActionDiscoveryError.notReady:
+                failure = (.hostUnavailable, "registryNotReady", "The action registry is not ready. Try again after MacTools finishes starting.")
+            case CLIActionDiscoveryError.unknownTarget:
+                failure = (.unknownTarget, "unknownAction", "The requested action is not discoverable.")
+            case CLIActionDiscoveryError.staleCursor:
+                failure = (.invalidInput, "staleCursor", "The catalog changed. Restart actions list without a cursor.")
+            case CLIActionDiscoveryError.catalogTooLarge, CLIProtocolCodecError.responseTooLarge:
+                failure = (.hostUnavailable, "catalogLimitExceeded", "The action catalog exceeds the discovery limits.")
+            default:
+                failure = (.invalidInput, "invalidRequest", "The discovery request is invalid.")
+            }
+            return Self.encodedFailure(request: request, outcome: failure.0, category: failure.1,
+                                       message: failure.2, startedAt: startedAt)
         }
     }
 

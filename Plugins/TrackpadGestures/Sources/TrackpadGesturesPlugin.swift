@@ -527,10 +527,13 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
                 case .action where mapping.gesture.tipTapConfiguration != nil
                     || mapping.gesture.physicalClickFingerCount != nil:
                     return (mapping.gesture, .consume)
-                case .keyboardShortcut where mapping.gesture.tipTapConfiguration != nil
-                    || mapping.gesture.physicalClickFingerCount != nil:
+                case .keyboardShortcut, .keyTap:
+                    guard mapping.gesture.tipTapConfiguration != nil
+                        || mapping.gesture.physicalClickFingerCount != nil else {
+                        return nil
+                    }
                     return (mapping.gesture, .consume)
-                case .action, .keyboardShortcut:
+                case .action:
                     return nil
                 }
                 }

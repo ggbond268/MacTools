@@ -7,7 +7,7 @@ final class CLIExecutableTests: XCTestCase {
         XCTAssertEqual(help.status, CLIExitCode.success.rawValue)
         XCTAssertTrue(help.output.contains("version [--json]"))
         XCTAssertTrue(help.output.contains("doctor [--json]"))
-        XCTAssertFalse(help.output.contains("actions"))
+        XCTAssertTrue(help.output.contains("actions list"))
 
         let version = try runCLI(["version", "--json"])
         XCTAssertEqual(version.status, CLIExitCode.success.rawValue)
@@ -23,8 +23,8 @@ final class CLIExecutableTests: XCTestCase {
         XCTAssertNotEqual(data["cliBuild"] as? String, "unknown")
     }
 
-    func testCommandsBeyondPhaseZeroAreRejectedWithStableJSON() throws {
-        let result = try runCLI(["actions", "list", "--json"])
+    func testExecutionIsRejectedWithStableJSON() throws {
+        let result = try runCLI(["actions", "run", "test/run", "--json"])
         XCTAssertEqual(result.status, CLIExitCode.invalidInput.rawValue)
         XCTAssertTrue(result.error.isEmpty)
         let object = try XCTUnwrap(

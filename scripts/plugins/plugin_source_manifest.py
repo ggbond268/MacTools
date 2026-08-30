@@ -205,6 +205,7 @@ PLUGIN_IDENTIFIER_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]{1,126}[A-Za-z0-9]$"
 )
 VERSION_PATTERN = re.compile(r"^[0-9]+(?:\.[0-9]+){0,2}$")
+NIGHTLY_BUILD_PATTERN = re.compile(r"^([0-9]+)\.([0-9]+)$")
 DOMAIN_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
     r"[A-Za-z]{2,63}$"
@@ -219,6 +220,51 @@ class ManifestValidationError(ValueError):
 class AssetProjection:
     source: Path
     catalog: dict
+
+
+def validate_nightly_build_number(value: str) -> tuple[str, str]:
+    match = NIGHTLY_BUILD_PATTERN.fullmatch(value)
+    if match is None:
+        raise ManifestValidationError(
+            "Nightly build number must use numeric run.attempt components"
+        )
+    return match.group(1), match.group(2)
+
+
+def apply_nightly_package_overrides(
+    manifest: dict,
+    nightly_build_number: str | None = None,
+) -> None:
+    plugin_id = manifest.get("id")
+    if plugin_id in {"fan-control", "battery-charge-limit"}:
+        stable_path = (
+            "/Library/PrivilegedHelperTools/cc.ggbond.mactools."
+            f"{plugin_id}.smc-helper"
+        )
+        nightly_path = stable_path + ".nightly"
+        for step in manifest.get("setup", {}).get("steps", []):
+            if step.get("id") != "install-privileged-helper":
+                continue
+            step["description"] = {
+                locale: (
+                    description
+                    if nightly_path in description
+                    else description.replace(stable_path, nightly_path)
+                )
+                for locale, description in step["description"].items()
+            }
+
+    if nightly_build_number is None:
+        return
+
+    source_version = str(manifest.get("version", ""))
+    if VERSION_PATTERN.fullmatch(source_version) is None:
+        raise ManifestValidationError(
+            "source plugin version must contain one to three numeric components"
+        )
+    run_number, run_attempt = validate_nightly_build_number(nightly_build_number)
+    source_major = source_version.split(".", 1)[0]
+    manifest["version"] = f"{source_major}.{run_number}.{run_attempt}"
 
 
 def _localized_source_fields(manifest: dict):

@@ -65,7 +65,8 @@ nonisolated final class SystemWindowModifierDragEventMonitor: @unchecked Sendabl
         handler: WindowModifierDragEventHandler
     ) -> Result<Void, WindowModifierDragMonitorStartError> {
         if isRunning { return .success(()) }
-        if lock.withLock({ tap != nil || callbackPointer != nil }) {
+        // Explicit self avoids capturing the same-named locals declared below on Swift 6.3.
+        if lock.withLock({ self.tap != nil || self.callbackPointer != nil }) {
             stop()
         }
 

@@ -84,3 +84,51 @@ final class ComponentPanelLayoutTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+final class ComponentDetailCoordinatorTests: XCTestCase {
+    func testSwitchingDetailsWithinSameComponentPreservesAnchorFrame() {
+        let coordinator = ComponentDetailCoordinator()
+        let anchorFrame = CGRect(x: 20, y: 40, width: 300, height: 500)
+
+        coordinator.toggle(pluginID: "system-status", detailID: "cpu")
+        coordinator.updateCardFrame(pluginID: "system-status", frame: anchorFrame)
+        coordinator.toggle(pluginID: "system-status", detailID: "gpu")
+
+        XCTAssertEqual(
+            coordinator.state.selection,
+            ComponentDetailCoordinator.Selection(pluginID: "system-status", detailID: "gpu")
+        )
+        XCTAssertEqual(coordinator.state.selectedCardFrame, anchorFrame)
+    }
+
+    func testClickingSelectedDetailAgainDismissesSelectionAndAnchor() {
+        let coordinator = ComponentDetailCoordinator()
+        let anchorFrame = CGRect(x: 20, y: 40, width: 300, height: 500)
+
+        coordinator.toggle(pluginID: "system-status", detailID: "cpu")
+        coordinator.updateCardFrame(pluginID: "system-status", frame: anchorFrame)
+        coordinator.toggle(pluginID: "system-status", detailID: "cpu")
+
+        XCTAssertNil(coordinator.state.selection)
+        XCTAssertNil(coordinator.state.selectedCardFrame)
+    }
+
+    func testSwitchingComponentsClearsAnchorUntilNewComponentIsMeasured() {
+        let coordinator = ComponentDetailCoordinator()
+        let anchorFrame = CGRect(x: 20, y: 40, width: 300, height: 500)
+
+        coordinator.toggle(pluginID: "system-status", detailID: "cpu")
+        coordinator.updateCardFrame(pluginID: "system-status", frame: anchorFrame)
+        coordinator.toggle(pluginID: "another-component", detailID: "summary")
+
+        XCTAssertEqual(
+            coordinator.state.selection,
+            ComponentDetailCoordinator.Selection(
+                pluginID: "another-component",
+                detailID: "summary"
+            )
+        )
+        XCTAssertNil(coordinator.state.selectedCardFrame)
+    }
+}

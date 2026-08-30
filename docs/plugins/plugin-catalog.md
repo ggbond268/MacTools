@@ -317,13 +317,15 @@ scripts/plugins/generate-plugin-catalog.sh \
   --package dist/Demo.mactoolsplugin.zip \
   --release-notes-url https://github.com/ggbond268/MacTools/releases/tag/plugins-1.0.1
 
+PLUGIN_CATALOG_PRIVATE_KEY_BASE64="$PLUGIN_CATALOG_PRIVATE_KEY_BASE64" \
 scripts/plugins/sign-plugin-catalog.sh \
   --input build/PluginRelease/catalog.merged.json \
-  --output docs/plugins/v3/catalog.json \
-  --private-key-base64 "$PLUGIN_CATALOG_PRIVATE_KEY_BASE64"
+  --output docs/plugins/v3/catalog.json
 ```
 
 `--website-output` writes a package-URL-free deterministic projection for website builds. Referenced screenshots are copied beside it under `assets/` with checksum-based names. Use `--generated-at` in fixtures or reproducibility checks when the catalog timestamp must also be stable.
+
+Catalog signing and app verification both use Foundation's sorted JSON representation before applying Ed25519 through CryptoKit. Release workflows also verify that the private signing key matches the public key embedded in the app before building packages.
 
 Catalog generation rejects duplicate plugin IDs, malformed HTTPS URLs or timestamps, and packages larger than 200 MiB. ZIP packages are inspected from their central directory without extraction: archive paths and member types must be safe, symlinks must remain inside the package root, and member count and expanded size are bounded. Catalog projection of screenshots still requires the matching source assets.
 

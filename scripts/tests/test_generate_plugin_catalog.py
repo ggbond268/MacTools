@@ -138,6 +138,63 @@ class GeneratePluginCatalogTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("does not match its source manifest: releaseChannel", result.stderr)
 
+    def test_nightly_catalog_accepts_only_the_expected_generated_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            package = root / "fan-control.mactoolsplugin"
+            package.mkdir()
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(COPY_MANIFEST),
+                    "copy",
+                    "--source", str(PLUGINS_ROOT / "FanControl/plugin.json"),
+                    "--destination", str(package / "plugin.json"),
+                    "--configuration", "Nightly",
+                    "--app-version-config", str(REPO_ROOT / "Configs/AppVersion.xcconfig"),
+                    "--nightly-build-number", "512.3",
+                ],
+                check=True,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(GENERATOR),
+                    "--mode", "release",
+                    "--output", str(root / "catalog.json"),
+                    "--package", str(package),
+                    "--plugins-root", str(PLUGINS_ROOT),
+                    "--base-url", "https://example.invalid/nightly",
+                    "--nightly-build-number", "512.3",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            catalog = json.loads((root / "catalog.json").read_text(encoding="utf-8"))
+            self.assertEqual(catalog["plugins"][0]["version"], "1.512.3")
+            setup = catalog["plugins"][0]["setup"]["steps"]
+            helper = next(step for step in setup if step["id"] == "install-privileged-helper")
+            self.assertTrue(all(
+                ".smc-helper.nightly" in text
+                for text in helper["description"].values()
+            ))
+
+            mismatched = subprocess.run(
+                [
+                    *result.args[:-2],
+                    "--nightly-build-number", "512.4",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(mismatched.returncode, 0)
+            self.assertIn("does not match its source manifest: version", mismatched.stderr)
+
     def test_duplicate_package_plugin_ids_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = pathlib.Path(temporary_directory)

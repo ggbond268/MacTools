@@ -17,10 +17,12 @@ from urllib.parse import urlparse
 
 from plugin_source_manifest import (
     ManifestValidationError,
+    apply_nightly_package_overrides,
     expand_localized_references,
     load_known_plugin_ids,
     validate_and_project_manifest,
     validate_https_url,
+    validate_nightly_build_number,
     validate_projected_manifest,
     validate_runtime_envelope,
 )
@@ -50,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--release-notes-url")
     parser.add_argument("--catalog-id", default="com.ggbond.mactools.plugins")
     parser.add_argument("--minimum-host-version")
+    parser.add_argument("--nightly-build-number")
     parser.add_argument("--plugin-kit-version", type=int)
     parser.add_argument("--plugins-root", type=Path, default=Path("Plugins"))
     parser.add_argument("--website-output", type=Path)
@@ -287,10 +290,13 @@ def _validate_source_package_parity(
     packaged: dict,
     packaged_path: Path,
     mode: str,
+    nightly_build_number: str | None,
 ) -> None:
     expected = _source_package_projection(source_manifest, source_path)
     if mode == "debug" and "minHostVersion" in packaged:
         expected["minHostVersion"] = packaged["minHostVersion"]
+    if nightly_build_number is not None:
+        apply_nightly_package_overrides(expected, nightly_build_number)
     differing = sorted(
         key for key in set(expected) | set(packaged)
         if key not in expected
@@ -357,6 +363,13 @@ def main() -> None:
         raise SystemExit("--base-url is required in release mode")
     if args.mode == "release" and args.allow_sparse_legacy:
         raise SystemExit("--allow-sparse-legacy is available only for local debug catalogs")
+    if args.nightly_build_number is not None:
+        if args.mode != "release":
+            raise SystemExit("--nightly-build-number is available only in release mode")
+        try:
+            validate_nightly_build_number(args.nightly_build_number)
+        except ManifestValidationError as error:
+            raise SystemExit(str(error)) from error
     if not args.catalog_id.strip():
         raise SystemExit("--catalog-id must not be blank")
     generated_at = _validated_generated_at(args.generated_at)
@@ -430,12 +443,18 @@ def main() -> None:
                     known_plugin_ids or {plugin_id},
                     allow_sparse_legacy=args.allow_sparse_legacy,
                 )
+                if args.nightly_build_number is not None:
+                    apply_nightly_package_overrides(
+                        projected,
+                        args.nightly_build_number,
+                    )
                 _validate_source_package_parity(
                     source_manifest,
                     source_path,
                     packaged,
                     packaged_manifest_path,
                     args.mode,
+                    args.nightly_build_number,
                 )
         except ManifestValidationError as error:
             raise SystemExit(str(error)) from error

@@ -22,6 +22,8 @@ Example.mactoolsplugin/
 
 `plugin.json` is read before loading executable code:
 
+Set `minHostVersion` to the first host that exports every PluginKit API used by the package. In PluginKit v5, `PluginDashboardPresenting`, `PluginComponentDetailPresenting`, and `PluginComponentDetailContent` require MacTools 1.2.1. System Status declares this floor so 1.2.0 hosts cannot install a package with unavailable symbols.
+
 ```json
 {
   "id": "com.example.mactools.demo",

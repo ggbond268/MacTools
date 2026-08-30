@@ -97,6 +97,30 @@ class NightlyConfigurationTests(unittest.TestCase):
             workflow,
         )
 
+    def test_ci_workflows_use_their_configured_build_products_and_have_sufficient_timeout(self) -> None:
+        build_workflow = (REPO_ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        nightly_workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")
+
+        self.assertIn("timeout-minutes: 60", build_workflow)
+        self.assertIn(
+            './scripts/plugins/verify-plugin-kit-v5-binary-compatibility.sh \\\n'
+            '            "$DERIVED_DATA/Build/Products/Debug"',
+            nightly_workflow,
+        )
+
+    def test_nightly_plugin_builder_accepts_an_empty_filter_list_on_system_bash(self) -> None:
+        script = (REPO_ROOT / "scripts/plugins/build-plugin-release-assets.sh").read_text(encoding="utf-8")
+
+        self.assertIn('for plugin_filter in "${PLUGIN_FILTERS[@]-}"; do', script)
+        self.assertIn('[[ -n "$plugin_filter" ]] || continue', script)
+
+    def test_nightly_catalog_uses_the_schema_generators_compatibility_floor(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")
+        builder = (REPO_ROOT / "scripts/plugins/build-plugin-release-assets.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn("PLUGIN_CATALOG_MINIMUM_HOST_VERSION", workflow)
+        self.assertIn('catalog_args+=(--nightly-build-number "$NIGHTLY_BUILD_NUMBER")', builder)
+
     def test_nightly_helpers_embed_distinct_signing_identifiers_without_changing_stable(self) -> None:
         for directory, plugin_id in [("FanControl", "fan-control"), ("BatteryChargeLimit", "battery-charge-limit")]:
             with self.subTest(plugin=plugin_id):
@@ -207,6 +231,18 @@ class NightlyConfigurationTests(unittest.TestCase):
 
     def test_nightly_workflow_is_gated_manual_and_fail_closed(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")
+        release_step = workflow.split(
+            "- name: Create immutable-by-workflow draft prerelease",
+            1,
+        )[1].split("\n      - name:", 1)[0]
+        publication_step = workflow.split(
+            "- name: Upload and publish verified Nightly assets",
+            1,
+        )[1].split("\n      - name:", 1)[0]
+        metadata_publication_step = workflow.split(
+            "- name: Publish dedicated Nightly catalog and appcast last",
+            1,
+        )[1].split("\n      - name:", 1)[0]
 
         self.assertIn("github.event_name == 'workflow_dispatch'", workflow)
         self.assertIn("vars.ENABLE_NIGHTLY_RELEASES == 'true'", workflow)
@@ -225,7 +261,27 @@ class NightlyConfigurationTests(unittest.TestCase):
         self.assertIn("NIGHTLY_APPCAST_RELATIVE_PATH", workflow)
         self.assertIn("unexpected publication state", workflow)
         self.assertIn("unexpectedly replaced the stable Latest release", workflow)
+        self.assertIn('echo "release_id=$NIGHTLY_RELEASE_ID" >> "$GITHUB_OUTPUT"', release_step)
+        self.assertIn('RELEASE_CATALOG_PATH="$RUNNER_TEMP/catalog.json"', publication_step)
+        self.assertIn('cp "$SIGNED_PLUGIN_CATALOG_PATH" "$RELEASE_CATALOG_PATH"', publication_step)
+        self.assertIn('"$RELEASE_CATALOG_PATH"', publication_step)
+        self.assertNotIn('#catalog.json', publication_step)
+        self.assertNotIn(
+            'cp "$NIGHTLY_APPCAST_PATH" "$RUNNER_TEMP/nightly-appcast.xml"',
+            metadata_publication_step,
+        )
+        self.assertIn(
+            'cp "$NIGHTLY_APPCAST_PATH" "$NIGHTLY_APPCAST_RELATIVE_PATH"',
+            metadata_publication_step,
+        )
+        self.assertIn("id: nightly_release", workflow)
+        self.assertIn("Cleanup incomplete Nightly draft", workflow)
+        self.assertIn("stale-draft-ids", workflow)
+        self.assertIn('gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$NIGHTLY_RELEASE_ID"', workflow)
         self.assertIn("preflight-app-plugin-catalog.swift", workflow)
+        self.assertIn("Verify plugin catalog signing key", workflow)
+        self.assertIn("verify-plugin-catalog-key-pair.sh", workflow)
+        self.assertNotIn("pip install cryptography", workflow)
         self.assertIn("scripts/nightly-release.py verify-helper-signatures", workflow)
         self.assertIn('--deployed-catalog "$SIGNED_PLUGIN_CATALOG_PATH"', workflow)
         self.assertIn(

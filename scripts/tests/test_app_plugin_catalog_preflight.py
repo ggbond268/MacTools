@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -11,7 +12,11 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = ROOT_DIR / "scripts/plugins/preflight-app-plugin-catalog.swift"
+SIGN_SCRIPT_PATH = ROOT_DIR / "scripts/plugins/sign-plugin-catalog.sh"
+VERIFY_KEY_PAIR_SCRIPT_PATH = ROOT_DIR / "scripts/plugins/verify-plugin-catalog-key-pair.sh"
 SIGNED_CATALOG = ROOT_DIR / "docs/plugins/v4/catalog.json"
+TEST_PRIVATE_KEY_BASE64 = "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="
+TEST_PUBLIC_KEY_BASE64 = "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
 
 
 @unittest.skipUnless(sys.platform == "darwin" and shutil.which("xcrun"), "requires macOS and Xcode")
@@ -69,6 +74,96 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Verified signed PluginKit 4 catalog", result.stdout)
+
+    def test_signer_matches_runtime_canonicalization_for_schema3_actions(self) -> None:
+        input_catalog = Path(self.temporary_directory.name) / "schema3-input.json"
+        signed_catalog = Path(self.temporary_directory.name) / "schema3-signed.json"
+        input_catalog.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 3,
+                    "catalogID": "com.ggbond.mactools.plugins",
+                    "generatedAt": "2026-08-28T00:00:00Z",
+                    "minimumHostVersion": "1.2.1",
+                    "pluginKitVersion": 5,
+                    "plugins": [
+                        {
+                            "id": "example",
+                            "pluginKitVersion": 5,
+                            "package": {
+                                "url": "https://example.invalid/example.mactoolsplugin.zip",
+                                "sha256": "0" * 64,
+                                "size": 1,
+                            },
+                            "actions": {
+                                "static": [
+                                    {
+                                        "id": "example.run",
+                                        "parameters": [{"id": "text", "type": "string"}],
+                                        "parameterSummary": {"en": "Text", "zh-Hans": "文本"},
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                    "revoked": [],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        environment = os.environ.copy()
+        environment["PLUGIN_CATALOG_PRIVATE_KEY_BASE64"] = TEST_PRIVATE_KEY_BASE64
+
+        key_result = subprocess.run(
+            [
+                str(VERIFY_KEY_PAIR_SCRIPT_PATH),
+                "--public-key-base64",
+                TEST_PUBLIC_KEY_BASE64,
+            ],
+            cwd=ROOT_DIR,
+            env=environment,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(key_result.returncode, 0, key_result.stderr)
+
+        sign_result = subprocess.run(
+            [
+                str(SIGN_SCRIPT_PATH),
+                "--input",
+                os.path.relpath(input_catalog, ROOT_DIR),
+                "--output",
+                os.path.relpath(signed_catalog, ROOT_DIR),
+            ],
+            cwd=ROOT_DIR,
+            env=environment,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(sign_result.returncode, 0, sign_result.stderr)
+
+        result = self.run_preflight(
+            "--required-plugin-kit-version",
+            "5",
+            "--required-schema-version",
+            "3",
+            "--app-version",
+            "1.2.1",
+            "--expected-catalog",
+            str(signed_catalog),
+            "--deployed-catalog",
+            str(signed_catalog),
+            "--catalog-url",
+            "https://example.invalid/catalog.json",
+            "--public-key-base64",
+            TEST_PUBLIC_KEY_BASE64,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Verified signed PluginKit 5 catalog", result.stdout)
 
     def test_schema3_hosts_derive_the_current_plugin_kit_compatibility_line(self) -> None:
         source = SCRIPT_PATH.read_text(encoding="utf-8")

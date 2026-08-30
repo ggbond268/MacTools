@@ -2,7 +2,7 @@ import Foundation
 
 public enum CLIProtocolVersion {
     public static let minimum = 1
-    public static let current = 1
+    public static let current = 2
     public static let maximumRequestBytes = 64 * 1_024
     public static let maximumResponseBytes = 4 * 1_024 * 1_024
     public static let maximumInFlightRequestsPerClient = 8
@@ -35,12 +35,18 @@ public enum CLIProtocolNegotiator {
 
 public enum CLIOperation: String, Codable, CaseIterable, Sendable {
     case doctor
+    case actionsList = "actions.list"
+    case actionsDescribe = "actions.describe"
+    case actionsAvailability = "actions.availability"
+
+    public var minimumProtocolVersion: Int { self == .doctor ? 1 : 2 }
 }
 
 public enum CLIOutcome: String, Codable, Sendable {
     case completed
     case cancelled
     case invalidInput
+    case unknownTarget
     case hostUnavailable
     case protocolIncompatible
 }
@@ -48,6 +54,7 @@ public enum CLIOutcome: String, Codable, Sendable {
 public enum CLIExitCode: Int32, Codable, Sendable {
     case success = 0
     case invalidInput = 2
+    case unknownTarget = 3
     case cancellation = 8
     case transportFailure = 9
     case protocolIncompatible = 10
@@ -272,6 +279,7 @@ public enum CLIProtocolSemanticValidator {
               response.protocolVersion == request.protocolVersion,
               response.requestID == request.requestID,
               response.operation == request.operation,
+              response.outcome != .unknownTarget || request.operation != .doctor,
               response.finishedAt >= response.startedAt
         else { throw CLIProtocolSemanticError.invalidResponse }
         switch response.outcome {
@@ -280,7 +288,7 @@ public enum CLIProtocolSemanticValidator {
                   response.rejection == nil,
                   response.message == nil
             else { throw CLIProtocolSemanticError.invalidResponse }
-        case .cancelled, .invalidInput, .hostUnavailable, .protocolIncompatible:
+        case .cancelled, .invalidInput, .unknownTarget, .hostUnavailable, .protocolIncompatible:
             guard response.payload == nil,
                   let rejection = response.rejection,
                   !rejection.category.isEmpty,

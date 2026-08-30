@@ -51,30 +51,16 @@ def discover_plugin_metadata(source_dir: pathlib.Path) -> Dict[str, str]:
         fail(f"No plugin manifests found under {source_dir}")
 
     versions = set()
-    minimum_host_versions = []
     for manifest_path in manifests:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         versions.add(int(manifest["pluginKitVersion"]))
-        minimum_host_versions.append(str(manifest["minHostVersion"]))
     if len(versions) != 1:
         fail("Nightly plugins must use exactly one PluginKit version")
 
     return {
         "PLUGIN_KIT_VERSION": str(next(iter(versions))),
         "PLUGIN_COUNT": str(len(manifests)),
-        "PLUGIN_CATALOG_MINIMUM_HOST_VERSION": min(
-            minimum_host_versions,
-            key=version_components,
-        ),
     }
-
-
-def version_components(value: str) -> List[int]:
-    components = []
-    for component in value.split("."):
-        match = re.match(r"^[0-9]+", component)
-        components.append(int(match.group(0)) if match else 0)
-    return components
 
 
 def make_metadata(
@@ -482,6 +468,20 @@ def stale_nightly_tags(
     ]
 
 
+def stale_nightly_draft_ids(releases: Iterable[Dict[str, Any]]) -> List[int]:
+    draft_ids: List[int] = []
+    for release in releases:
+        if release.get("isDraft") is not True or release.get("isPrerelease") is not True:
+            continue
+        if not NIGHTLY_TAG_PATTERN.fullmatch(str(release.get("tagName", ""))):
+            continue
+        release_id = release.get("databaseId")
+        if isinstance(release_id, bool) or not isinstance(release_id, int) or release_id <= 0:
+            fail("Nightly draft release ID must be a positive integer")
+        draft_ids.append(release_id)
+    return draft_ids
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser()
     subparsers = root.add_subparsers(dest="command", required=True)
@@ -537,6 +537,9 @@ def parser() -> argparse.ArgumentParser:
     stale_tags.add_argument("--input", type=pathlib.Path, required=True)
     stale_tags.add_argument("--keep", type=int, default=14)
     stale_tags.add_argument("--preserve-tag", action="append", default=[])
+
+    stale_drafts = subparsers.add_parser("stale-draft-ids")
+    stale_drafts.add_argument("--input", type=pathlib.Path, required=True)
 
     appcast_tag = subparsers.add_parser("appcast-tag")
     appcast_tag.add_argument("--input", type=pathlib.Path, required=True)
@@ -613,6 +616,10 @@ def main() -> None:
         releases = json.loads(args.input.read_text(encoding="utf-8"))
         for tag in stale_nightly_tags(releases, args.keep, args.preserve_tag):
             print(tag)
+    elif args.command == "stale-draft-ids":
+        releases = json.loads(args.input.read_text(encoding="utf-8"))
+        for release_id in stale_nightly_draft_ids(releases):
+            print(release_id)
     elif args.command == "appcast-tag":
         print(read_nightly_appcast_tag(args.input))
     elif args.command == "plugin-kit-version":

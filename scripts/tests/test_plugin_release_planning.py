@@ -58,6 +58,15 @@ class InteractiveReleasePlanningTests(unittest.TestCase):
         self.assertIn('echo "PLUGIN_RELEASE_REQUIRE_VERSION_BUMP=true"', workflow)
         self.assertIn("plan_args+=(--require-version-bump)", workflow)
 
+    def test_plugin_release_verifies_catalog_key_without_python_signing_dependency(self) -> None:
+        workflow = (release.ROOT_DIR / ".github/workflows/plugin-release.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Verify plugin catalog signing key", workflow)
+        self.assertIn("verify-plugin-catalog-key-pair.sh", workflow)
+        self.assertNotIn("pip install cryptography", workflow)
+
     def test_selected_mode_cannot_skip_same_abi_migration_rebuild(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

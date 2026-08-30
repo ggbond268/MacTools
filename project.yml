@@ -98,6 +98,7 @@ targets:
       - "../Plugins/**"
       - Plugins/**/CalendarPluginResources/**
     - path: Sources/MacToolsCLI/CLIArgumentParser.swift
+    - path: Sources/MacToolsCLI/CLIOutput.swift
     - path: Sources/MacToolsCLI/CLIStartupDeadline.swift
     - path: Sources/MacToolsCLI/CLISignalCoordinator.swift
     dependencies:

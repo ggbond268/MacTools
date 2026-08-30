@@ -55,7 +55,7 @@
     "setup.requirements.description": "@standardSetup.requirements.description"
   },
   "version": "1.0.2",
-  "minHostVersion": "1.2.0",
+  "minHostVersion": "1.2.1",
   "pluginKitVersion": 5,
   "bundleRelativePath": "TrackpadGestures.bundle",
   "factoryClass": "TrackpadGesturesPlugin.TrackpadGesturesPluginFactory",
