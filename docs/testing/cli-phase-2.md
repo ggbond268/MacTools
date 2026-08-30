@@ -2,6 +2,89 @@
 
 Phase 2 adds narrow action execution to the separately built development CLI. Follow the [Phase 2 contract](../superpowers/specs/2026-08-30-cli-phase-2-execution.md) and the [Phase 0 setup guide](cli-phase-0.md) for signed local installation. This is prototype evidence, not public-release readiness.
 
+## Clean-machine contributor smoke test
+
+Use a local Debug app, broker, and CLI built from the same checkout with the same development team. The prototype CLI will not authenticate against an arbitrary Stable, Nightly, or differently signed development app.
+
+### 1. Configure the checkout
+
+Install the normal repository prerequisites, including Xcode and XcodeGen. From the repository's default branch, initialize local configuration before switching to a feature branch or pull-request commit:
+
+```bash
+make setup
+```
+
+Set both values in the ignored `LocalConfig.xcconfig`:
+
+```xcconfig
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+BUNDLE_IDENTIFIER_PREFIX = your.unique.reverse.dns.prefix
+```
+
+The app, embedded broker, and standalone CLI must use this same team and prefix. If the desired branch is already checked out, do not rerun `make setup`, because it also initializes the local branch name; create `LocalConfig.xcconfig` from `LocalConfig.sample.xcconfig` instead.
+
+### 2. Build the app, CLI, and one harmless test plugin
+
+```bash
+make build
+make build-cli
+make build-plugin PLUGIN=NightShift
+make run PLUGIN=NightShift
+```
+
+`make run` installs the matching app at `~/Applications/MacTools Dev.app`, installs only the selected local plugin package, and stays attached until the app exits. Leave it running and use a second terminal, opened at the same repository root, for the remaining commands. On a machine with an existing `MacTools Dev.app`, preserve that installation or use a separate development account instead of replacing it.
+
+### 3. Enable the broker and verify readiness
+
+In **MacTools Dev > Settings > General > Command Line**, enable Command-Line Integration. If macOS asks for approval, allow the MacTools background item in **System Settings > General > Login Items**.
+
+Use the standalone product at its absolute checkout path; do not use a `mactools` binary from another build:
+
+```bash
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" version --json
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" doctor --json
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" actions list --json
+```
+
+`doctor` should report a completed request using protocol version 3. Copy IDs from the current `actions list` response instead of shortening, guessing, or reconstructing them.
+
+### 4. Exercise and restore Night Shift
+
+Record the current Night Shift state in System Settings before executing the action. Confirm that the exact parameterless ID `night-shift/toggle` appears in the current list, then run it twice:
+
+```bash
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" \
+  actions describe night-shift/toggle --json
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" \
+  actions availability night-shift/toggle --json
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" \
+  actions run night-shift/toggle --timeout 15 --json
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" \
+  actions run night-shift/toggle --timeout 15 --json
+```
+
+Both executions should exit 0. Verify that Night Shift returned to its recorded state. If either command is interrupted or fails, or if the final state differs from the recorded state, restore the recorded state manually in System Settings before continuing.
+
+### 5. Check bounded rejection paths
+
+These commands must not execute a system action:
+
+```bash
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" \
+  actions run missing/action --json
+echo "exit=$?" # expected: 3
+
+"$PWD/build/DerivedData/Build/Products/Debug/mactools" \
+  actions run night-shift/toggle --timeout 0 --json
+echo "exit=$?" # expected: 2
+```
+
+Also copy one complete `night-shift/set-enabled@…` ID from `actions list` and pass it to `actions run`; Phase 2 must reject that parameterized reference with exit 2. Do not test timeout or cancellation by invoking a destructive, privileged, privacy-sensitive, or disruptive real action; the fake-provider XCTest coverage is the acceptance evidence for those paths.
+
+### 6. Finish and clean up
+
+Disable Command-Line Integration before removing the development app. Quit MacTools Dev or press Control-C in the terminal running `make run`, then confirm that `doctor --json` fails in bounded time rather than hanging. Remove the development app and its application-support data only if they were created solely for this test; do not remove or overwrite another contributor's existing development installation.
+
 ## Sample commands
 
 Use an absolute path or a separately installed `mactools` on `PATH`. Always copy the complete ID from the current list output:
