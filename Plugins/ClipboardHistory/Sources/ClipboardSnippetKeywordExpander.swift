@@ -127,6 +127,24 @@ struct ClipboardSnippetKeywordMatcher: Sendable {
             reset()
             return nil
         }
+        let candidate = buffer + text
+        if text.allSatisfy(Self.isDelimiter),
+           snippetsByKeyword.keys.contains(where: { keyword in
+               keyword.hasPrefix(candidate)
+                   || candidate.hasSuffix(String(keyword.prefix(candidate.count)))
+           }) {
+            buffer = String(candidate.suffix(ClipboardSavedItem.maximumKeywordCharacterCount))
+            if let keyword = exactUnambiguousKeywordMatch(in: buffer),
+               let itemID = snippetsByKeyword[keyword] {
+                reset()
+                return ClipboardSnippetKeywordMatch(
+                    itemID: itemID,
+                    keyword: keyword,
+                    delimiter: ""
+                )
+            }
+            return nil
+        }
         guard text.allSatisfy(Self.isDelimiter) else {
             buffer.append(contentsOf: text)
             if buffer.count > ClipboardSavedItem.maximumKeywordCharacterCount {
@@ -154,7 +172,6 @@ struct ClipboardSnippetKeywordMatcher: Sendable {
             return ClipboardSnippetKeywordMatch(itemID: itemID, keyword: keyword, delimiter: text)
         }
 
-        let candidate = buffer + text
         if snippetsByKeyword.keys.contains(where: { keyword in
             keyword.hasPrefix(candidate) || candidate.hasSuffix(String(keyword.prefix(candidate.count)))
         }) {

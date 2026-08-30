@@ -371,6 +371,29 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         XCTAssertNil(matcher.consume(text: " ", keyCode: 49, modifiers: []))
     }
 
+    func testKeywordMatcherWaitsWhenPunctuationContinuesALongerKeyword() {
+        let shortID = UUID()
+        let longID = UUID()
+        var matcher = ClipboardSnippetKeywordMatcher(snippetsByKeyword: [
+            ";date": shortID,
+            ";date-extra": longID,
+        ])
+
+        for character in ";date" {
+            XCTAssertNil(matcher.consume(text: String(character), keyCode: 0, modifiers: []))
+        }
+        XCTAssertNil(matcher.consume(text: "-", keyCode: 27, modifiers: []))
+
+        var match: ClipboardSnippetKeywordMatch?
+        for character in "extra" {
+            match = matcher.consume(text: String(character), keyCode: 0, modifiers: []) ?? match
+        }
+        XCTAssertEqual(
+            match,
+            ClipboardSnippetKeywordMatch(itemID: longID, keyword: ";date-extra", delimiter: "")
+        )
+    }
+
     func testKeywordReplacementContextRejectsInterveningCursorOrTextChanges() {
         let context = ClipboardSnippetReplacementContext(
             selectionLocation: 12,

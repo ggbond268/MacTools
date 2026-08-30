@@ -223,6 +223,7 @@ final class ClipboardHistoryPlugin:
     ]
 
     private let settingsStore: ClipboardHistorySettingsStore
+    private let privateCopyLeaseStore: PluginStorageClipboardPrivateCopyLeaseStore
     private let pasteboard: any ClipboardPasteboardAccess
     private let localization: PluginLocalization
     private let copyCommandSender: any ClipboardCopyCommandSending
@@ -245,10 +246,13 @@ final class ClipboardHistoryPlugin:
     private var sequentialPasteWorkerTask: Task<Void, Never>?
     private var sequentialPasteWorkerGeneration = 0
     private var sequentialHUDPreviewTask: Task<Void, Never>?
+    private var privateCopyTask: Task<Void, Never>?
+    private var privateCopyGeneration: UInt64 = 0
     private(set) var keywordExpansionStartAttemptCountForTesting = 0
     var hasPendingSequentialPasteForTesting: Bool {
         sequentialPasteWorkerTask != nil || isSequentialPasteInFlight || !pendingSequentialPasteTargets.isEmpty
     }
+    var hasPrivateCopyOperationForTesting: Bool { privateCopyTask != nil }
     var isKeywordExpansionRunningForTesting: Bool { keywordExpander.isRunning }
     var hasConfiguredKeywordExpansionForTesting: Bool { keywordExpander.hasConfiguredKeywords }
     var snippetPasteboardReaderForTesting: ClipboardPasteboardReaderProcess { snippetPasteboardReader }
@@ -340,6 +344,7 @@ final class ClipboardHistoryPlugin:
     ) {
         let localization = PluginLocalization(bundle: context.resourceBundle)
         let settingsStore = ClipboardHistorySettingsStore(storage: context.storage)
+        let privateCopyLeaseStore = PluginStorageClipboardPrivateCopyLeaseStore(storage: context.storage)
         let sequentialPasteCoordinator = ClipboardSequentialPasteCoordinator(
             store: PluginStorageClipboardSequentialPasteStore(storage: context.storage)
         )
@@ -393,6 +398,7 @@ final class ClipboardHistoryPlugin:
 
         self.localization = localization
         self.settingsStore = settingsStore
+        self.privateCopyLeaseStore = privateCopyLeaseStore
         self.pasteboard = resolvedPasteboard
         self.copyCommandSender = copyCommandSender ?? SystemClipboardCopyCommandSender()
         self.pasteCommandSender = pasteCommandSender ?? SystemClipboardPasteCommandSender()
@@ -459,6 +465,16 @@ final class ClipboardHistoryPlugin:
         }
         controller.onCaptureSuppressionEvent = { [weak privacyHUDPresenter = self.privacyHUDPresenter] event in
             privacyHUDPresenter?.handleSuppressionEvent(event)
+        }
+        controller.onPrivateCopyLeaseChange = { [weak privateCopyLeaseStore] lease in
+            if let lease {
+                privateCopyLeaseStore?.save(
+                    baselineChangeCount: lease.baselineChangeCount,
+                    expiresAt: lease.expiresAt
+                )
+            } else {
+                privateCopyLeaseStore?.clear()
+            }
         }
         controller.onCaptureRejection = {
             [weak privacyHUDPresenter = self.privacyHUDPresenter, localization = self.localization]
@@ -1260,9 +1276,15 @@ final class ClipboardHistoryPlugin:
     func handleShortcutAction(id: String) {
         switch id {
         case ShortcutID.privateCopy:
+            guard privateCopyTask == nil, !controller.isIgnoringNextCopy else { return }
             let targetProcessIdentifier = frontmostProcessIdentifier()
-            Task { @MainActor [weak self] in
-                await self?.performPrivateCopy(targetProcessIdentifier: targetProcessIdentifier)
+            privateCopyGeneration &+= 1
+            let generation = privateCopyGeneration
+            privateCopyTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.performPrivateCopy(targetProcessIdentifier: targetProcessIdentifier)
+                guard !Task.isCancelled, self.privateCopyGeneration == generation else { return }
+                self.privateCopyTask = nil
             }
         case ShortcutID.ignoreNextCopy:
             armIgnoreNextCopy()
@@ -1311,12 +1333,18 @@ final class ClipboardHistoryPlugin:
     }
 
     func activate(context: PluginRuntimeContext) {
+        if let lease = privateCopyLeaseStore.load() {
+            _ = controller.restorePrivateCopySuppression(lease)
+        }
         controller.start()
         savedLibraryController.start()
         synchronizeKeywordExpansion()
     }
 
     func deactivate(reason: PluginDeactivationReason) {
+        privateCopyGeneration &+= 1
+        privateCopyTask?.cancel()
+        privateCopyTask = nil
         cancelPendingSequentialPastes()
         sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
         synchronizeSequentialPasteProtection()
@@ -1328,6 +1356,9 @@ final class ClipboardHistoryPlugin:
         keywordExpander.stop()
         snippetPasteboardReader.stopImmediately()
         controller.stop()
+        if reason == .uninstalling {
+            privateCopyLeaseStore.clear()
+        }
         savedLibraryController.stop(invalidatePersistence: reason == .uninstalling)
     }
 
@@ -1398,13 +1429,24 @@ final class ClipboardHistoryPlugin:
         let sent = await copyCommandSender.sendCopyCommand(
             to: targetProcessIdentifier
         ) { [weak controller] in
-            // A direct private copy should not leave a stale one-shot suppression behind when the
-            // target application has no selection or refuses Command-C.
-            controller?.ignoreNextCopy(expiringAfter: 15, mode: .privateCopy) == true
+            // There is no trustworthy completion acknowledgement after posting Command-C. Keep
+            // suppression fail-closed until the pasteboard transition is consumed or the original
+            // timeout expires; cancelling it after a short observation window can persist a slow
+            // application's sensitive copy.
+            return controller?.ignoreNextCopy(expiringAfter: 15, mode: .privateCopy) == true
         }
-        if !sent {
+        guard !Task.isCancelled else {
+            if privateCopyLeaseStore.load() == nil {
+                controller.cancelNextCaptureSuppression()
+            }
+            return
+        }
+        guard sent else {
             let hadPendingSuppression = controller.isIgnoringNextCopy
-            controller.cancelNextCaptureSuppression()
+            let mayHaveDispatchedCopy = privateCopyLeaseStore.load() != nil
+            if !mayHaveDispatchedCopy {
+                controller.cancelNextCaptureSuppression()
+            }
             if !controller.canSuppressNextCapture {
                 showClipboardUnavailableHUD()
             } else if !hadPendingSuppression {
@@ -1416,6 +1458,7 @@ final class ClipboardHistoryPlugin:
             if !accessibilityTrusted() {
                 requestPermissionGuidance?(PermissionID.accessibility)
             }
+            return
         }
     }
 

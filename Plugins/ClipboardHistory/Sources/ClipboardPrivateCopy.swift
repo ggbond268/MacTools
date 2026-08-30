@@ -3,6 +3,52 @@ import ApplicationServices
 import Carbon
 import CoreGraphics
 import Foundation
+import MacToolsPluginKit
+
+struct ClipboardPrivateCopyLease: Codable, Equatable, Sendable {
+    let baselineChangeCount: Int
+    let expiresAt: Date
+}
+
+@MainActor
+final class PluginStorageClipboardPrivateCopyLeaseStore {
+    private static let storageKey = "private-copy-suppression-lease"
+    private static let maximumRestoredDuration: TimeInterval = 30
+
+    private let storage: PluginStorage
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(storage: PluginStorage) {
+        self.storage = storage
+    }
+
+    func load(now: Date = Date()) -> ClipboardPrivateCopyLease? {
+        guard let data = storage.data(forKey: Self.storageKey),
+              let lease = try? decoder.decode(ClipboardPrivateCopyLease.self, from: data),
+              lease.expiresAt > now,
+              lease.expiresAt.timeIntervalSince(now) <= Self.maximumRestoredDuration else {
+            clear()
+            return nil
+        }
+        return lease
+    }
+
+    func save(baselineChangeCount: Int, expiresAt: Date) {
+        guard let data = try? encoder.encode(ClipboardPrivateCopyLease(
+            baselineChangeCount: baselineChangeCount,
+            expiresAt: expiresAt
+        )) else {
+            clear()
+            return
+        }
+        storage.set(data, forKey: Self.storageKey)
+    }
+
+    func clear() {
+        storage.removeObject(forKey: Self.storageKey)
+    }
+}
 
 @MainActor
 protocol ClipboardCopyCommandSending {

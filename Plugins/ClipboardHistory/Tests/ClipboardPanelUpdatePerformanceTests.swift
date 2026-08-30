@@ -173,6 +173,26 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         print("Clipboard 50k warm reopen: \(reopen); targeted metadata patch: \(patch)")
     }
 
+    func testRevisionedTailMetadataPatchStaysWithinInteractiveBudget() async {
+        var items = makeItems(50_000)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
+        await model.waitForSearchForTesting()
+        let tailIndex = items.index(before: items.endIndex)
+        items[tailIndex].lastUsedAt = .now
+
+        let start = ContinuousClock.now
+        model.updateItems(items, revision: 2, changedIDs: [items[tailIndex].id])
+        let duration = ContinuousClock.now - start
+
+        XCTAssertFalse(model.isSearching)
+        XCTAssertLessThan(
+            duration,
+            .milliseconds(50),
+            "A revisioned tail update must not compare every preceding item on the main actor"
+        )
+    }
+
     func testLargeColdPresentationPreparationReturnsWithoutBlockingTheUI() async {
         let items = makeItems(50_000)
         let model = ClipboardHistoryPanelModel()
@@ -243,6 +263,129 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         )
     }
 
+    func testHistoryMutationInvalidatesSuspendedPresentationPreparation() async throws {
+        let gate = ClipboardPreparationSuspensionGate()
+        let staleItems = makeItems(2_000)
+        let currentItems = makeItems(3)
+        let model = ClipboardHistoryPanelModel(
+            presentationPreparationCheckpointForTesting: { gate.pauseOnce() }
+        )
+
+        model.prepareForPresentationAsynchronously(
+            items: staleItems,
+            historyRevision: 1,
+            savedRevision: 1
+        )
+        try await waitUntilPaused(gate)
+        model.updateItems(currentItems, revision: 2)
+        gate.resume()
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+
+        XCTAssertEqual(model.scopedItemCount, currentItems.count)
+        XCTAssertEqual(Set(model.visibleItems.map(\.id)), Set(currentItems.map(\.id)))
+        XCTAssertTrue(Set(model.visibleItems.map(\.id)).isDisjoint(with: Set(staleItems.map(\.id))))
+    }
+
+    func testSnippetMutationInvalidatesSuspendedPresentationPreparation() async throws {
+        let gate = ClipboardPreparationSuspensionGate()
+        let staleSnippet = ClipboardSavedItem(
+            title: "Stale",
+            savedKind: .snippet,
+            payload: .plainText("stale")
+        )
+        let currentSnippet = ClipboardSavedItem(
+            title: "Current",
+            savedKind: .snippet,
+            payload: .plainText("current")
+        )
+        let model = ClipboardHistoryPanelModel(
+            presentationPreparationCheckpointForTesting: { gate.pauseOnce() }
+        )
+
+        model.prepareForPresentationAsynchronously(
+            items: [],
+            savedItems: [staleSnippet],
+            historyRevision: 1,
+            savedRevision: 1
+        )
+        try await waitUntilPaused(gate)
+        model.updateSavedItems([currentSnippet], revision: 2)
+        gate.resume()
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+
+        XCTAssertEqual(model.scopedItemCount, 1)
+        XCTAssertEqual(model.visibleSavedPresentationItemIDs, [currentSnippet.id])
+        XCTAssertFalse(model.visibleSavedPresentationItemIDs.contains(staleSnippet.id))
+    }
+
+    func testSourceMutationInvalidatesSuspendedReactivationFilterRefresh() async throws {
+        let gate = ClipboardPreparationSuspensionGate(initiallyArmed: false)
+        var initialItems = makeItems(1)
+        initialItems[0].setSavedMetadata(.init(title: "Saved", savedAt: .now))
+        initialItems.append(ClipboardHistoryItem(
+            id: UUID(),
+            text: "#fff000",
+            capturedAt: .now,
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        ))
+        let model = ClipboardHistoryPanelModel(
+            presentationPreparationCheckpointForTesting: { gate.pauseOnce() }
+        )
+        model.prepareForPresentation(
+            items: initialItems,
+            historyRevision: 1,
+            savedRevision: 1
+        )
+        await model.waitForSearchForTesting()
+        XCTAssertTrue(model.availableFilterFamilies.contains(.scope))
+        XCTAssertTrue(model.availableFilterFamilies.contains(.type))
+
+        gate.arm()
+        model.refreshFiltersForReactivation(items: initialItems)
+        try await waitUntilPaused(gate)
+
+        let imagePayload = ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.png,
+                    data: Data([0])
+                ),
+            ]),
+        ])
+        let imageItem = ClipboardHistoryItem(
+            id: UUID(),
+            payload: imagePayload,
+            capturedAt: .now,
+            sourceApplication: nil,
+            isPinned: false,
+            lastUsedAt: nil
+        )
+        let snippet = ClipboardSavedItem(
+            title: "Current snippet",
+            savedKind: .snippet,
+            payload: .plainText("body")
+        )
+        model.updateItems(initialItems + [imageItem], revision: 2)
+        model.updateSavedItems([snippet], revision: 2)
+        gate.resume()
+        await model.waitForFilterRefreshForTesting()
+        await model.waitForSearchForTesting()
+
+        XCTAssertTrue(model.availableContentFilters.contains(.image))
+        XCTAssertTrue(model.availableScopeModes.contains(.snippets))
+    }
+
+    private func waitUntilPaused(_ gate: ClipboardPreparationSuspensionGate) async throws {
+        for _ in 0..<200 where !gate.isPaused {
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertTrue(gate.isPaused)
+    }
+
     private func makeItems(_ count: Int) -> [ClipboardHistoryItem] {
         (0..<count).map { index in
             ClipboardHistoryItem(id: UUID(), text: "MT88 tripod \(index)",
@@ -260,5 +403,45 @@ private final class ClipboardPreparationCheckpointCounter: @unchecked Sendable {
 
     func increment() {
         lock.withLock { count += 1 }
+    }
+}
+
+private final class ClipboardPreparationSuspensionGate: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var isArmed: Bool
+    private var didPause = false
+    private var mayResume = false
+
+    init(initiallyArmed: Bool = true) {
+        isArmed = initiallyArmed
+    }
+
+    var isPaused: Bool {
+        condition.withLock { didPause }
+    }
+
+    func pauseOnce() {
+        condition.lock()
+        guard isArmed, !didPause else {
+            condition.unlock()
+            return
+        }
+        didPause = true
+        condition.broadcast()
+        while !mayResume {
+            condition.wait()
+        }
+        condition.unlock()
+    }
+
+    func arm() {
+        condition.withLock { isArmed = true }
+    }
+
+    func resume() {
+        condition.withLock {
+            mayResume = true
+            condition.broadcast()
+        }
     }
 }

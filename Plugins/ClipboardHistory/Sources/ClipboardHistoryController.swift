@@ -533,6 +533,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     var onChange: (() -> Void)?
     var onCaptureSuppressionEvent: ((ClipboardCaptureSuppressionEvent) -> Void)?
+    var onPrivateCopyLeaseChange: ((ClipboardPrivateCopyLease?) -> Void)?
     var onCaptureRejection: ((ClipboardCaptureIgnoreReason, Int) -> Void)?
     var onExternalPasteboardChange: (() -> Void)?
     var onItemCaptured: ((UUID) -> Void)?
@@ -681,7 +682,9 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         }
 
         seedSourceApplicationAttribution()
-        lastSeenChangeCount = pasteboard.changeCount
+        if !isIgnoringNextCopy {
+            lastSeenChangeCount = pasteboard.changeCount
+        }
         let worker = persistenceWorker
         loadTask = Task { [weak self] in
             do {
@@ -715,7 +718,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         storageGeneration &+= 1
         isLoaded = false
         currentHistoryItemPasteboardState = nil
-        clearCaptureSuppression(notifyCancellation: false)
+        clearCaptureSuppression(notifyCancellation: false, clearsPrivateCopyLease: false)
         discardSourceApplicationAttribution()
         persistenceWorker.flush()
     }
@@ -746,7 +749,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             timer = nil
             discardSourceApplicationAttribution()
         } else {
-            if timer == nil, isLoaded, errorMessage == nil {
+            if timer == nil, isLoaded, errorMessage == nil, !isIgnoringNextCopy {
                 // Resuming deliberately ignores changes made while collection was paused.
                 seedSourceApplicationAttribution()
                 lastSeenChangeCount = pasteboard.changeCount
@@ -1153,6 +1156,12 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         captureSuppressionMode = mode
         captureSuppressionHardDeadline = ProcessInfo.processInfo.systemUptime + max(0, timeout)
         isIgnoringNextCopy = true
+        if mode == .privateCopy {
+            onPrivateCopyLeaseChange?(ClipboardPrivateCopyLease(
+                baselineChangeCount: lastSeenChangeCount,
+                expiresAt: Date().addingTimeInterval(max(0, timeout))
+            ))
+        }
         notifyChanged()
         onCaptureSuppressionEvent?(.armed(mode: mode, timeout: timeout))
         scheduleCaptureSuppressionExpiration(after: timeout)
@@ -1163,7 +1172,44 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         clearCaptureSuppression(notifyCancellation: true)
     }
 
-    private func clearCaptureSuppression(notifyCancellation: Bool) {
+    @discardableResult
+    func restorePrivateCopySuppression(
+        _ lease: ClipboardPrivateCopyLease,
+        now: Date = Date()
+    ) -> Bool {
+        let remaining = lease.expiresAt.timeIntervalSince(now)
+        guard remaining > 0 else {
+            onPrivateCopyLeaseChange?(nil)
+            return false
+        }
+        let currentChangeCount = pasteboard.changeCount
+        lastSeenChangeCount = currentChangeCount
+        captureSuppressionMode = .privateCopy
+        isIgnoringNextCopy = true
+        if currentChangeCount != lease.baselineChangeCount {
+            hasObservedSuppressedChange = true
+            captureSuppressionHardDeadline = ProcessInfo.processInfo.systemUptime
+                + captureSuppressionSettlingInterval
+            let refreshedLease = ClipboardPrivateCopyLease(
+                baselineChangeCount: currentChangeCount,
+                expiresAt: now.addingTimeInterval(captureSuppressionSettlingInterval)
+            )
+            onPrivateCopyLeaseChange?(refreshedLease)
+            onCaptureSuppressionEvent?(.consumed(mode: .privateCopy))
+            scheduleCaptureSuppressionExpiration(after: captureSuppressionSettlingInterval)
+        } else {
+            hasObservedSuppressedChange = false
+            captureSuppressionHardDeadline = ProcessInfo.processInfo.systemUptime + remaining
+            scheduleCaptureSuppressionExpiration(after: remaining)
+        }
+        notifyChanged()
+        return true
+    }
+
+    private func clearCaptureSuppression(
+        notifyCancellation: Bool,
+        clearsPrivateCopyLease: Bool = true
+    ) {
         guard isIgnoringNextCopy || captureSuppressionTask != nil else { return }
         let mode = captureSuppressionMode
         let hadObservedSuppressedChange = hasObservedSuppressedChange
@@ -1174,6 +1220,9 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         hasObservedSuppressedChange = false
         captureSuppressionMode = nil
         isIgnoringNextCopy = false
+        if clearsPrivateCopyLease, mode == .privateCopy {
+            onPrivateCopyLeaseChange?(nil)
+        }
         discardSourceApplicationAttribution()
         notifyChanged()
         if notifyCancellation,
@@ -1611,6 +1660,12 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         // the no-read boundary until it settles or the user explicitly cancels suppression.
         captureSuppressionHardDeadline = ProcessInfo.processInfo.systemUptime
             + captureSuppressionSettlingInterval
+        if captureSuppressionMode == .privateCopy {
+            onPrivateCopyLeaseChange?(ClipboardPrivateCopyLease(
+                baselineChangeCount: lastSeenChangeCount,
+                expiresAt: Date().addingTimeInterval(captureSuppressionSettlingInterval)
+            ))
+        }
         if !hasObservedSuppressedChange {
             hasObservedSuppressedChange = true
             if let captureSuppressionMode {
@@ -1653,6 +1708,9 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             self.hasObservedSuppressedChange = false
             self.captureSuppressionMode = nil
             self.isIgnoringNextCopy = false
+            if mode == .privateCopy {
+                self.onPrivateCopyLeaseChange?(nil)
+            }
             self.discardSourceApplicationAttribution()
             self.notifyChanged()
             if !hadObservedSuppressedChange, let mode {

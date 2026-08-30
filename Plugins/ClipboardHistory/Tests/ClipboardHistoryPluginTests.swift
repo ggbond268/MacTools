@@ -964,6 +964,139 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         plugin.controller.stop()
     }
 
+    func testPrivateCopyKeepsSuppressionArmedUntilDelayedPasteboardChangeIsConsumed() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardCopyCommandSender()
+        let hud = FakeClipboardPrivacyHUDPresenter()
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            copyCommandSender: sender,
+            privacyHUDPresenter: hud,
+            accessibilityTrusted: { true }
+        )
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+
+        plugin.handleShortcutAction(id: "private-copy")
+        let didArmSuppression = await waitUntil {
+            sender.sendCount == 1 && plugin.controller.isIgnoringNextCopy
+        }
+
+        XCTAssertTrue(didArmSuppression)
+        XCTAssertTrue(hud.failures.isEmpty)
+
+        // Model a slow application publishing the sensitive selection after command dispatch.
+        pasteboard.simulateCopy("delayed sensitive copy")
+        plugin.controller.processPasteboardChange()
+        let didConsumeSuppression = await waitUntil {
+            !plugin.controller.isIgnoringNextCopy
+        }
+
+        XCTAssertTrue(didConsumeSuppression)
+        XCTAssertTrue(plugin.controller.items.isEmpty)
+        XCTAssertEqual(pasteboard.plainTextReadCount, 0)
+        plugin.controller.stop()
+    }
+
+    func testDeactivationCancelsInFlightPrivateCopyWithoutPresentingFailure() async {
+        let sender = FakeClipboardCopyCommandSender()
+        sender.waitUntilCancelled = true
+        let hud = FakeClipboardPrivacyHUDPresenter()
+        let plugin = makePlugin(
+            copyCommandSender: sender,
+            privacyHUDPresenter: hud,
+            accessibilityTrusted: { true }
+        )
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+
+        plugin.handleShortcutAction(id: "private-copy")
+        let didArmSuppression = await waitUntil {
+            sender.sendCount == 1 && plugin.controller.isIgnoringNextCopy
+        }
+        XCTAssertTrue(didArmSuppression)
+
+        plugin.deactivate(reason: .disabled)
+        let didFinish = await waitUntil { sender.didFinish }
+        XCTAssertTrue(didFinish)
+        XCTAssertFalse(plugin.controller.isIgnoringNextCopy)
+        XCTAssertTrue(hud.failures.isEmpty)
+    }
+
+    func testPrivateCopyLeaseSuppressesDelayedChangeAfterDeactivationAndReactivation() async {
+        let suiteName = "ClipboardHistoryPluginTests.PrivateCopyLease.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        let storage = UserDefaultsPluginStorage(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            userDefaults: defaults
+        )
+        let context = PluginRuntimeContext(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            storage: storage
+        )
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardCopyCommandSender()
+        sender.waitUntilCancelled = true
+        let firstPlugin = makePlugin(
+            pasteboard: pasteboard,
+            copyCommandSender: sender,
+            accessibilityTrusted: { true },
+            storage: storage
+        )
+        firstPlugin.activate(context: context)
+        await waitUntilLoaded(firstPlugin.controller)
+
+        firstPlugin.handleShortcutAction(id: "private-copy")
+        let didArm = await waitUntil {
+            sender.sendCount == 1 && firstPlugin.controller.isIgnoringNextCopy
+        }
+        XCTAssertTrue(didArm)
+        firstPlugin.deactivate(reason: .disabled)
+        let didFinish = await waitUntil { sender.didFinish }
+        XCTAssertTrue(didFinish)
+
+        // Model the target publishing its delayed sensitive selection while collection is off.
+        pasteboard.simulateCopy("delayed private selection")
+        let secondPlugin = makePlugin(
+            pasteboard: pasteboard,
+            accessibilityTrusted: { true },
+            storage: storage
+        )
+        secondPlugin.activate(context: context)
+        await waitUntilLoaded(secondPlugin.controller)
+        secondPlugin.controller.processPasteboardChange()
+
+        XCTAssertEqual(pasteboard.plainTextReadCount, 0)
+        XCTAssertTrue(secondPlugin.controller.items.isEmpty)
+        secondPlugin.deactivate(reason: .disabled)
+    }
+
+    func testRapidPrivateCopyRequestsDoNotOverlap() async {
+        let sender = FakeClipboardCopyCommandSender()
+        let plugin = makePlugin(
+            copyCommandSender: sender,
+            accessibilityTrusted: { true }
+        )
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+
+        plugin.handleShortcutAction(id: "private-copy")
+        let firstDispatchFinished = await waitUntil {
+            sender.sendCount == 1
+                && !plugin.hasPrivateCopyOperationForTesting
+                && plugin.controller.isIgnoringNextCopy
+        }
+        XCTAssertTrue(firstDispatchFinished)
+
+        plugin.handleShortcutAction(id: "private-copy")
+        for _ in 0..<20 { await Task.yield() }
+
+        XCTAssertEqual(sender.sendCount, 1)
+        plugin.controller.stop()
+    }
+
     func testPastePlainTextShortcutRewritesCurrentClipboardAndPastesWithoutOpeningHistory() async {
         let pasteboard = PluginTestClipboardPasteboard()
         pasteboard.simulateCopy("Styled website text")
@@ -1446,6 +1579,10 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             .armed(mode: .ignoreNextCopy, timeout: 60),
             .consumed(mode: .ignoreNextCopy),
         ])
+        // Suppression intentionally remains armed through a quiet interval after the consumed
+        // transition. End that separately verified privacy state before exercising the unrelated
+        // clear-in-progress rejection below.
+        plugin.controller.cancelNextCaptureSuppression()
 
         let didCopy = await plugin.controller.copyItem(id: originalItem.id)
         XCTAssertFalse(didCopy)
@@ -1579,18 +1716,24 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         frontmostProcessIdentifier: @escaping () -> pid_t? = { 1234 },
         sequentialPasteStabilizationDelay: Duration = .milliseconds(120),
         initialExplicitSession: ClipboardSequentialPasteSession? = nil,
-        snippetPasteboardReader: ClipboardPasteboardReaderProcess? = nil
+        snippetPasteboardReader: ClipboardPasteboardReaderProcess? = nil,
+        storage providedStorage: (any PluginStorage)? = nil
     ) -> ClipboardHistoryPlugin {
-        let suiteName = "ClipboardHistoryPluginTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        addTeardownBlock {
+        let storage: any PluginStorage
+        if let providedStorage {
+            storage = providedStorage
+        } else {
+            let suiteName = "ClipboardHistoryPluginTests.\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suiteName)!
             defaults.removePersistentDomain(forName: suiteName)
+            addTeardownBlock {
+                defaults.removePersistentDomain(forName: suiteName)
+            }
+            storage = UserDefaultsPluginStorage(
+                pluginID: ClipboardHistoryPlugin.pluginID,
+                userDefaults: defaults
+            )
         }
-        let storage = UserDefaultsPluginStorage(
-            pluginID: ClipboardHistoryPlugin.pluginID,
-            userDefaults: defaults
-        )
         storage.set(false, forKey: "collection-paused")
         if let initialExplicitSession {
             PluginStorageClipboardSequentialPasteStore(storage: storage).saveExplicitSession(initialExplicitSession)
@@ -2002,21 +2145,27 @@ private final class PluginTestClipboardPasteboard: ClipboardPasteboardAccess {
 private final class FakeClipboardCopyCommandSender: ClipboardCopyCommandSending {
     var onSend: (() -> Void)?
     var shouldSend: ((pid_t) -> Bool)?
+    var waitUntilCancelled = false
     private(set) var sendCount = 0
     private(set) var didArmBeforeSending = false
+    private(set) var didFinish = false
     private(set) var targetProcessIdentifiers: [pid_t] = []
 
     func sendCopyCommand(
         to processIdentifier: pid_t,
         beforeSending: () -> Bool
     ) async -> Bool {
+        defer { didFinish = true }
         sendCount += 1
         targetProcessIdentifiers.append(processIdentifier)
         guard shouldSend?(processIdentifier) ?? true else { return false }
         didArmBeforeSending = beforeSending()
         guard didArmBeforeSending else { return false }
         onSend?()
-        return true
+        while waitUntilCancelled, !Task.isCancelled {
+            await Task.yield()
+        }
+        return !Task.isCancelled
     }
 }
 

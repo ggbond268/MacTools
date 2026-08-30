@@ -652,6 +652,13 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         revision: UInt64? = nil,
         changedIDs: Set<UUID>? = nil
     ) {
+        if let revision {
+            guard revision != currentHistoryRevision else { return }
+            invalidatePresentationPreparationForSourceMutation()
+        } else {
+            guard items != allItems else { return }
+            invalidatePresentationPreparationForSourceMutation()
+        }
         let changes: [ClipboardHistoryMutation.Change]
         let hasKnownPositions = items.count == allItems.count && changedIDs?.allSatisfy({ id in
                itemIndexByID[id].map { items.indices.contains($0) && items[$0].id == id } == true
@@ -662,7 +669,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 return .init(id: id, before: allItems[index], after: items[index])
             }
         } else {
-            guard items != allItems else { return }
             changes = ClipboardHistoryMutation.between(allItems, items).changes
         }
         // Keep the canonical source order. Search owns presentation ordering; retaining a
@@ -748,8 +754,15 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     }
 
     func updateSavedItems(_ items: [ClipboardSavedItem], revision: UInt64? = nil) {
+        if let revision {
+            guard revision != currentSavedRevision else { return }
+            invalidatePresentationPreparationForSourceMutation()
+        } else {
+            guard items != allSavedItems else { return }
+            invalidatePresentationPreparationForSourceMutation()
+        }
         guard items != allSavedItems else {
-            if let revision { currentSavedRevision = revision }
+            currentSavedRevision = revision ?? currentSavedRevision
             return
         }
         initialPage = nil
@@ -862,6 +875,23 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         isPreparingPresentation = false
     }
 
+    private func invalidatePresentationPreparationForSourceMutation() {
+        if presentationPreparationTask != nil || isPreparingPresentation {
+            presentationPreparationGeneration &+= 1
+            presentationPreparationTask?.cancel()
+            presentationPreparationTask = nil
+            searchProgressTask?.cancel()
+            searchProgressTask = nil
+            showsSearchProgress = false
+            isPreparingPresentation = false
+        }
+        if filterRefreshTask != nil {
+            filterRefreshGeneration &+= 1
+            filterRefreshTask?.cancel()
+            filterRefreshTask = nil
+        }
+    }
+
     func prepareForPresentationAsynchronously(
         items: [ClipboardHistoryItem],
         savedItems: [ClipboardSavedItem] = [],
@@ -902,6 +932,8 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         focusRequestID &+= 1
         currentHistoryRevision = historyRevision ?? (currentHistoryRevision &+ 1)
         currentSavedRevision = savedRevision ?? (currentSavedRevision &+ 1)
+        let preparedHistoryRevision = currentHistoryRevision
+        let preparedSavedRevision = currentSavedRevision
 
         let progressDelay = searchProgressDelayNanoseconds
         searchProgressTask = Task { [weak self] in
@@ -928,7 +960,9 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 worker.cancel()
             }
             guard let self, let preparation, !Task.isCancelled,
-                  generation == self.presentationPreparationGeneration else { return }
+                  generation == self.presentationPreparationGeneration,
+                  preparedHistoryRevision == self.currentHistoryRevision,
+                  preparedSavedRevision == self.currentSavedRevision else { return }
             self.searchProgressTask?.cancel()
             self.showsSearchProgress = false
             self.applyPreparedPresentation(
@@ -951,6 +985,8 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         filterRefreshTask?.cancel()
         filterRefreshGeneration &+= 1
         let generation = filterRefreshGeneration
+        let preparedHistoryRevision = currentHistoryRevision
+        let preparedSavedRevision = currentSavedRevision
         let preparationCheckpoint = presentationPreparationCheckpointForTesting
         filterRefreshTask = Task { [weak self] in
             let worker = Task.detached(priority: .userInitiated) {
@@ -967,7 +1003,9 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 worker.cancel()
             }
             guard let self, let preparation, !Task.isCancelled,
-                  generation == self.filterRefreshGeneration else { return }
+                  generation == self.filterRefreshGeneration,
+                  preparedHistoryRevision == self.currentHistoryRevision,
+                  preparedSavedRevision == self.currentSavedRevision else { return }
             self.applyReactivatedFilterAvailability(
                 preparation,
                 previousFamily: previousFamily
