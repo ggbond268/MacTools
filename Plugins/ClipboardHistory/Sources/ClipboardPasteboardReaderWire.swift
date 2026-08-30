@@ -6,6 +6,7 @@ struct ClipboardPasteboardReaderRequest: Codable, Sendable {
     enum Kind: String, Codable, Sendable {
         case payload
         case plainText
+        case semanticText
         case completeSnapshot
     }
 
@@ -88,6 +89,12 @@ enum ClipboardPasteboardReaderWire {
         "com.apple.cocoa.pasteboard.color",
         "com.apple.cocoa.pasteboard.sound",
     ]
+    private static let semanticTextTypes: Set<String> = [
+        "public.utf8-plain-text",
+        "public.rtf",
+        "com.apple.flat-rtfd",
+        "public.html",
+    ]
 
     static func read(_ request: ClipboardPasteboardReaderRequest) -> ClipboardPasteboardReaderResponse {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name(request.pasteboardName))
@@ -96,6 +103,9 @@ enum ClipboardPasteboardReaderWire {
         }
         if request.kind == .plainText {
             return readPlainText(from: pasteboard, request: request)
+        }
+        if request.kind == .semanticText {
+            return readSemanticText(from: pasteboard, request: request)
         }
         if request.kind == .completeSnapshot {
             return readCompleteSnapshot(from: pasteboard, request: request)
@@ -234,6 +244,66 @@ enum ClipboardPasteboardReaderWire {
                 .init(typeIdentifier: "public.utf8-plain-text", data: data),
             ])]
         )
+    }
+
+    private static func readSemanticText(
+        from pasteboard: NSPasteboard,
+        request: ClipboardPasteboardReaderRequest
+    ) -> ClipboardPasteboardReaderResponse {
+        guard let sourceItems = pasteboard.pasteboardItems, !sourceItems.isEmpty else {
+            return pasteboard.changeCount == request.expectedChangeCount
+                ? .status(.empty)
+                : .status(.changed)
+        }
+        guard captureComplexityIsWithinLimits(sourceItems) else {
+            return pasteboard.changeCount == request.expectedChangeCount
+                ? .status(.tooManyObjects)
+                : .status(.changed)
+        }
+        let sourceTypes = Set(sourceItems.flatMap(\.types).map(\.rawValue))
+        guard sourceTypes.isDisjoint(with: ignoredProducerTypes) else {
+            return .status(.unsafe)
+        }
+
+        var storedItems: [ClipboardPasteboardReaderResponse.Item] = []
+        var storedByteCount = 0
+        let maximumByteCount = max(0, request.maximumByteCount)
+        for sourceItem in sourceItems {
+            var representations: [ClipboardPasteboardReaderResponse.Representation] = []
+            var seenTypes = Set<String>()
+            let orderedTypes = sourceItem.types.sorted { lhs, rhs in
+                lhs.rawValue == "public.utf8-plain-text"
+                    && rhs.rawValue != "public.utf8-plain-text"
+            }
+            for type in orderedTypes where seenTypes.insert(type.rawValue).inserted {
+                let typeIdentifier = type.rawValue
+                guard semanticTextTypes.contains(typeIdentifier) else { continue }
+                let data: Data?
+                if typeIdentifier == "public.utf8-plain-text" {
+                    data = sourceItem.string(forType: type).map { Data($0.utf8) }
+                } else {
+                    data = sourceItem.data(forType: type)
+                }
+                guard let data, !data.isEmpty else { continue }
+                guard data.count <= maximumByteCount - storedByteCount else {
+                    if typeIdentifier == "public.utf8-plain-text" {
+                        return .status(.oversized)
+                    }
+                    continue
+                }
+                storedByteCount += data.count
+                representations.append(.init(typeIdentifier: typeIdentifier, data: data))
+            }
+            if !representations.isEmpty {
+                storedItems.append(.init(representations: representations))
+            }
+        }
+
+        guard pasteboard.changeCount == request.expectedChangeCount else {
+            return .status(.changed)
+        }
+        guard !storedItems.isEmpty else { return .status(.empty) }
+        return ClipboardPasteboardReaderResponse(status: .payload, items: storedItems)
     }
 
     static func captureComplexityIsWithinLimits(_ sourceItems: [NSPasteboardItem]) -> Bool {

@@ -10,6 +10,7 @@ protocol ClipboardPasteboardAccess: AnyObject {
     var typeNames: Set<String> { get }
     func readPlainText() -> String?
     func readPlainTextAsynchronously(maximumByteCount: Int, expectedChangeCount: Int) async -> ClipboardPasteboardReadResult
+    func readSemanticTextAsynchronously(maximumByteCount: Int, expectedChangeCount: Int) async -> ClipboardPasteboardReadResult
     func readPayload(maximumByteCount: Int) -> ClipboardPasteboardReadResult
     func readTypeNames(expectedChangeCount: Int) -> ClipboardPasteboardTypeReadResult
     func readPayload(
@@ -51,6 +52,16 @@ extension ClipboardPasteboardAccess {
         guard let text else { return .empty }
         guard text.utf8.count <= maximumByteCount else { return .oversized }
         return .payload(.plainText(text))
+    }
+
+    func readSemanticTextAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardReadResult {
+        await readPlainTextAsynchronously(
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: expectedChangeCount
+        )
     }
 
     func readTypeNames(expectedChangeCount: Int) -> ClipboardPasteboardTypeReadResult {
@@ -149,6 +160,25 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
     nonisolated func readPlainTextAsynchronously(maximumByteCount: Int, expectedChangeCount: Int) async -> ClipboardPasteboardReadResult {
         guard !Task.isCancelled else { return .changed }
         let request = ClipboardPlainTextReadWork.request(
+            pasteboardName: pasteboardName,
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: expectedChangeCount
+        )
+        do {
+            let response = try await payloadReader.read(request)
+            guard !Task.isCancelled else { return .changed }
+            return Self.readResult(from: response)
+        } catch {
+            return .changed
+        }
+    }
+
+    nonisolated func readSemanticTextAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardReadResult {
+        guard !Task.isCancelled else { return .changed }
+        let request = ClipboardPlainTextReadWork.semanticRequest(
             pasteboardName: pasteboardName,
             maximumByteCount: maximumByteCount,
             expectedChangeCount: expectedChangeCount
@@ -1386,13 +1416,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         notifyChanged()
     }
 
-    /// Replaces the current system clipboard with its native plain-text representation, or with
-    /// completed OCR from the history item captured from the same still-current pasteboard change.
-    /// Native text remains independent of history loading and collection state.
+    /// Replaces the current system clipboard with visible text derived from its safe rich-text
+    /// representations, falling back to native plain text or completed OCR from the history item
+    /// captured from the same still-current pasteboard change. Clipboard reading remains
+    /// independent of history loading and collection state.
     @discardableResult
     func rewriteCurrentClipboardAsPlainText() async -> ClipboardPlainTextRewriteResult {
         let expectedChangeCount = pasteboard.changeCount
-        let readResult = await pasteboard.readPlainTextAsynchronously(
+        let readResult = await pasteboard.readSemanticTextAsynchronously(
             maximumByteCount: settings.snapshot.maximumItemByteCount,
             expectedChangeCount: expectedChangeCount
         )
@@ -1400,8 +1431,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return .unavailable
         }
         if case let .payload(payload) = readResult,
-           let text = payload.plainText,
-           !text.isEmpty {
+           let text = ClipboardPlainTextConversion.visibleText(for: payload) {
             guard pasteboard.writePlainText(text) else { return .unavailable }
             currentHistoryItemPasteboardState = nil
             lastSeenChangeCount = pasteboard.changeCount

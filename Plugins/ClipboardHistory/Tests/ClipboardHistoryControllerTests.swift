@@ -904,6 +904,31 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testPlainTextRewritePrefersVisibleRichTextOverProducerPlainText() async {
+        let payload = ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.plainText,
+                    data: Data("\"CSV wrapped\"".utf8)
+                ),
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.html,
+                    data: Data("<meta charset='utf-8'><span>Visible text with “quotes”</span>".utf8)
+                ),
+            ]),
+        ])
+        let fixture = makeFixture()
+        fixture.pasteboard.simulateCopy(payload)
+
+        let rewriteResult = await fixture.controller.rewriteCurrentClipboardAsPlainText()
+
+        XCTAssertEqual(rewriteResult, .succeeded)
+        XCTAssertEqual(
+            fixture.pasteboard.lastWrittenPayload,
+            .plainText("Visible text with “quotes”")
+        )
+    }
+
     func testCopyingHistoryItemDoesNotRecapturePluginWrite() async throws {
         let existing = ClipboardHistoryItem(
             id: UUID(),
@@ -1008,7 +1033,7 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             ClipboardStoredPasteboardItem(representations: [
                 ClipboardStoredRepresentation(
                     typeIdentifier: ClipboardRepresentationType.plainText,
-                    data: Data("Formatted note".utf8)
+                    data: Data("\"CSV wrapped\"".utf8)
                 ),
                 ClipboardStoredRepresentation(
                     typeIdentifier: ClipboardRepresentationType.rtf,
@@ -2191,6 +2216,16 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
         onRead?()
         guard let payload else { return .empty }
         return payload.byteCount <= maximumByteCount ? .payload(payload) : .oversized
+    }
+
+    func readSemanticTextAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardReadResult {
+        readPayload(
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: expectedChangeCount
+        )
     }
 
     func readPayloadAsynchronously(

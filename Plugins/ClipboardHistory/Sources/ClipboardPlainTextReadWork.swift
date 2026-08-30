@@ -15,4 +15,17 @@ enum ClipboardPlainTextReadWork {
             expectedChangeCount: expectedChangeCount
         )
     }
+
+    static func semanticRequest(
+        pasteboardName: NSPasteboard.Name,
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) -> ClipboardPasteboardReaderRequest {
+        ClipboardPasteboardReaderRequest(
+            kind: .semanticText,
+            pasteboardName: pasteboardName.rawValue,
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: expectedChangeCount
+        )
+    }
 }

@@ -84,6 +84,55 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         XCTAssertEqual(plainText(in: response), "plain")
     }
 
+    func testSemanticTextRequestReadsRichAndPlainTextWithoutBinaryRepresentations() async throws {
+        let helperURL = try XCTUnwrap(Self.helperURL)
+        let pasteboard = NSPasteboard.withUniqueName()
+        let reader = ClipboardPasteboardReaderProcess(
+            helperURL: { helperURL },
+            requestTimeout: .seconds(2)
+        )
+        defer { Task { await reader.stop() } }
+
+        pasteboard.clearContents()
+        let item = NSPasteboardItem()
+        item.setString("\"CSV wrapped\"", forType: .string)
+        item.setData(Data("<span>Visible text</span>".utf8), forType: .html)
+        item.setData(Data([0x89, 0x50, 0x4e, 0x47]), forType: .png)
+        XCTAssertTrue(pasteboard.writeObjects([item]))
+
+        let response = try await reader.read(request(for: pasteboard, kind: .semanticText))
+        XCTAssertEqual(response.status, .payload)
+        XCTAssertEqual(response.items.count, 1)
+        XCTAssertEqual(
+            Set(response.items[0].representations.map(\.typeIdentifier)),
+            [ClipboardRepresentationType.plainText, ClipboardRepresentationType.html]
+        )
+        XCTAssertEqual(plainText(in: response), "\"CSV wrapped\"")
+    }
+
+    func testSemanticTextRequestKeepsPlainFallbackWhenRichDataExceedsLimit() async throws {
+        let helperURL = try XCTUnwrap(Self.helperURL)
+        let pasteboard = NSPasteboard.withUniqueName()
+        let reader = ClipboardPasteboardReaderProcess(
+            helperURL: { helperURL },
+            requestTimeout: .seconds(2)
+        )
+        defer { Task { await reader.stop() } }
+
+        pasteboard.clearContents()
+        let item = NSPasteboardItem()
+        item.setData(Data(repeating: 0x20, count: 4_096), forType: .rtf)
+        item.setString("plain fallback", forType: .string)
+        XCTAssertTrue(pasteboard.writeObjects([item]))
+
+        let response = try await reader.read(
+            request(for: pasteboard, kind: .semanticText, maximumByteCount: 64)
+        )
+        XCTAssertEqual(response.status, .payload)
+        XCTAssertEqual(response.items[0].representations.count, 1)
+        XCTAssertEqual(plainText(in: response), "plain fallback")
+    }
+
     func testPlainTextRequestRejectsSensitiveProducerTypesAndRecovers() async throws {
         let helperURL = try XCTUnwrap(Self.helperURL)
         let pasteboard = NSPasteboard.withUniqueName()

@@ -1821,6 +1821,49 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         )
     }
 
+    func testRichPlainTextConversionUsesVisibleTextAndPreservesVisibleQuotes() {
+        let payload = ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.plainText,
+                    data: Data("\"CSV wrapped\"".utf8)
+                ),
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.html,
+                    data: Data("<meta charset='utf-8'><span>Visible “quotation marks” remain</span>".utf8)
+                ),
+            ]),
+        ])
+        let item = item(payload: payload, pinned: false)
+
+        XCTAssertEqual(
+            ClipboardPlainTextConversion.text(for: item),
+            "Visible “quotation marks” remain"
+        )
+    }
+
+    func testOversizedRichPlainTextConversionFallsBackToCompleteNativeText() {
+        let nativeText = "\"Keep producer text\""
+        let payload = ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.plainText,
+                    data: Data(nativeText.utf8)
+                ),
+                ClipboardStoredRepresentation(
+                    typeIdentifier: ClipboardRepresentationType.rtf,
+                    data: Data(
+                        repeating: 0x20,
+                        count: ClipboardRichTextPreviewPolicy.maximumFormattedByteCount + 1
+                    )
+                ),
+            ]),
+        ])
+        let item = item(payload: payload, pinned: false)
+
+        XCTAssertEqual(ClipboardPlainTextConversion.text(for: item), nativeText)
+    }
+
     func testImagePlainTextConversionUsesCompletedOCRWithoutLoadingPayload() {
         let loadCounter = ClipboardPayloadLoadCounter()
         let item = ClipboardHistoryItem(

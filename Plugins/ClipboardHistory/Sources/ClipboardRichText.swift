@@ -147,6 +147,17 @@ enum ClipboardRichTextPreviewPolicy {
 }
 
 enum ClipboardPlainTextConversion {
+    /// Returns complete visible text from a safe rich representation when possible. Native plain
+    /// text remains the fallback for plain-only, oversized, or unreadable rich clipboard content.
+    static func visibleText(for payload: ClipboardHistoryPayload) -> String? {
+        if ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload),
+           let richText = ClipboardRichText.attributedString(for: payload)?.string,
+           let text = nonempty(richText) {
+            return text
+        }
+        return nonempty(payload.plainText ?? "")
+    }
+
     static func isAvailable(for item: ClipboardHistoryItem) -> Bool {
         switch item.kind {
         case .richText:
@@ -168,13 +179,7 @@ enum ClipboardPlainTextConversion {
         switch item.kind {
         case .richText:
             let payload = try? item.loadPayload()
-            if let nativeText = payload?.plainText, !nativeText.isEmpty {
-                candidate = nativeText
-            } else if let payload, ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload) {
-                candidate = ClipboardRichText.attributedString(for: payload)?.string ?? ""
-            } else {
-                candidate = item.text
-            }
+            candidate = payload.flatMap(visibleText(for:)) ?? item.text
         case .image:
             candidate = item.imageSearchText ?? ""
         case .files:
@@ -206,13 +211,7 @@ enum ClipboardPlainTextConversion {
         let candidate: String
         switch item.kind {
         case .richText:
-            if let nativeText = payload.plainText, !nativeText.isEmpty {
-                candidate = nativeText
-            } else if ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload) {
-                candidate = ClipboardRichText.attributedString(for: payload)?.string ?? ""
-            } else {
-                candidate = ""
-            }
+            candidate = visibleText(for: payload) ?? ""
         case .files:
             candidate = payload.fileURLs.map(\.path).joined(separator: "\n")
         case .link:

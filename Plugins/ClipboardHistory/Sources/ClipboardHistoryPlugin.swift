@@ -798,7 +798,7 @@ final class ClipboardHistoryPlugin:
                 ),
                 description: localization.string(
                     "shortcut.pastePlain.description",
-                    defaultValue: "不打开历史记录，直接粘贴纯文本；当前剪贴板为图片时使用已识别的文字。"
+                    defaultValue: "不打开历史记录，直接粘贴富文本的可见文字；当前剪贴板为图片时使用已识别的文字。"
                 ),
                 actionID: ShortcutID.pastePlainText,
                 scope: .global,
@@ -811,7 +811,7 @@ final class ClipboardHistoryPlugin:
                 ),
                 settingsGroupDescription: localization.string(
                     "shortcut.pastePlain.groupDescription",
-                    defaultValue: "用一个快捷键直接粘贴无格式文本或当前图片中已识别的文字，无需打开剪贴板历史。"
+                    defaultValue: "用一个快捷键直接粘贴富文本的可见文字或当前图片中已识别的文字，无需打开剪贴板历史。"
                 ),
                 settingsControlTitle: localization.string(
                     "shortcut.pastePlain.controlTitle",
