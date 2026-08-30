@@ -913,8 +913,14 @@ enum ClipboardSavedLibrarySearch {
 @MainActor
 final class ClipboardSavedLibraryController: ObservableObject {
     private(set) var presentationRevision: UInt64 = 0
+    private var itemIndicesByID: [UUID: Int] = [:]
     @Published private(set) var items: [ClipboardSavedItem] = [] {
-        didSet { presentationRevision &+= 1 }
+        didSet {
+            presentationRevision &+= 1
+            itemIndicesByID = Dictionary(
+                uniqueKeysWithValues: items.indices.map { (items[$0].id, $0) }
+            )
+        }
     }
     @Published private(set) var errorMessage: String?
     @Published private(set) var fatalErrorMessage: String?
@@ -923,6 +929,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
 
     var onChange: (() -> Void)?
     var onPasteboardWrite: (() -> Void)?
+    var persistenceSaveCheckpointForTesting: (() -> Void)?
     var maximumExpandedTextByteCount: () -> Int = { ClipboardSnippetExpansionContext.defaultMaximumUTF8ByteCount }
 
     func expansionContext(clipboardText: String?) -> ClipboardSnippetExpansionContext {
@@ -969,6 +976,8 @@ final class ClipboardSavedLibraryController: ObservableObject {
     private let errorMessageProvider: (Error) -> String
     private var loadTask: Task<Void, Never>?
     private var keywordTemplateLoadTask: Task<Void, Never>?
+    private var usageUpdateTask: Task<Void, Never>?
+    private var pendingUsageDates: [UUID: Date] = [:]
     private var keywordCacheRevision: UInt64 = 0
     private var keywordTemplatesByID: [UUID: String] = [:]
     private var reservedKeywordIdentities: Set<String> = []
@@ -1031,6 +1040,9 @@ final class ClipboardSavedLibraryController: ObservableObject {
         loadTask = nil
         keywordTemplateLoadTask?.cancel()
         keywordTemplateLoadTask = nil
+        usageUpdateTask?.cancel()
+        usageUpdateTask = nil
+        pendingUsageDates.removeAll()
         keywordCacheRevision &+= 1
         keywordTemplatesByID.removeAll()
         worker.invalidateAndFlush()
@@ -1203,7 +1215,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
         }
         guard await persistNewOrUpdated(item, payloadChanged: payloadChanged, generation: generation) else { return nil }
         reloadKeywordTemplateCache()
-        return item
+        return items.first(where: { $0.id == item.id })
     }
 
     func updateMetadata(_ draft: ClipboardSavedMetadataDraft) async -> ClipboardSavedItem? {
@@ -1218,7 +1230,12 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 templateText: item.templateText,
                 updatedAt: Date()
             )
-            return await self.persistNewOrUpdated(item, payloadChanged: false, generation: generation) ? item : nil
+            guard await self.persistNewOrUpdated(
+                item,
+                payloadChanged: false,
+                generation: generation
+            ) else { return nil }
+            return self.items.first(where: { $0.id == item.id })
         }
     }
 
@@ -1269,7 +1286,11 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     func copy(id: UUID, asPlainText: Bool = false) async -> ClipboardSnippetExpansion? {
-        await copyForPaste(id: id, asPlainText: asPlainText)?.expansion
+        guard let preparedCopy = await copyForPaste(id: id, asPlainText: asPlainText) else {
+            return nil
+        }
+        recordSuccessfulUse(id: id)
+        return preparedCopy.expansion
     }
 
     struct PreparedCopy {
@@ -1326,26 +1347,91 @@ final class ClipboardSavedLibraryController: ObservableObject {
         let pasteboardVersion = pasteboard.changeCount
         item.discardCachedPayloadIfReloadable()
         onPasteboardWrite?()
-
-        if items.contains(where: { $0.id == id }) {
-            let lastUsedAt = Date()
-            do {
-                try await worker.updateLastUsedAt(id: id, date: lastUsedAt, generation: generation)
-                guard isCurrentMutation(generation),
-                      let index = items.firstIndex(where: { $0.id == id }) else { return nil }
-                items[index].lastUsedAt = lastUsedAt
-                items = ClipboardSavedLibrarySearch.sorted(items)
-            } catch {
-                guard isCurrentMutation(generation) else { return nil }
-                errorMessage = errorMessageProvider(error)
-            }
-        }
-        onChange?()
         return PreparedCopy(
             expansion: expansion ?? ClipboardSnippetExpansion(text: payload.plainText ?? "", cursorOffsetFromEnd: nil),
             pasteboardVersion: pasteboardVersion
         )
     }
+
+    func recordSuccessfulUse(id: UUID, at date: Date = Date()) {
+        recordSuccessfulUse(ids: [id], at: date)
+    }
+
+    func recordSuccessfulUse(ids: [UUID], at date: Date = Date()) {
+        guard isActive, !ids.isEmpty else { return }
+        var seenIDs = Set<UUID>()
+        for id in ids where seenIDs.insert(id).inserted {
+            guard let index = itemIndicesByID[id] else { continue }
+            let item = items[index]
+            let newestDate = max(item.lastUsedAt ?? date, date)
+            if let pendingDate = pendingUsageDates[id] {
+                pendingUsageDates[id] = max(pendingDate, newestDate)
+            } else {
+                pendingUsageDates[id] = newestDate
+            }
+        }
+        startUsageUpdateDrainIfNeeded()
+    }
+
+    private func startUsageUpdateDrainIfNeeded() {
+        guard usageUpdateTask == nil, !pendingUsageDates.isEmpty else { return }
+        let generation = lifecycleGeneration
+        usageUpdateTask = Task { @MainActor [weak self] in
+            await self?.drainUsageUpdates(generation: generation)
+        }
+    }
+
+    private func nextPendingUsageUpdate() -> (id: UUID, lastUsedAt: Date)? {
+        while let entry = pendingUsageDates.first {
+            guard itemIndicesByID[entry.key] == nil else {
+                return (entry.key, entry.value)
+            }
+            pendingUsageDates.removeValue(forKey: entry.key)
+        }
+        return nil
+    }
+
+    private func drainUsageUpdates(generation: UInt64) async {
+        defer {
+            if lifecycleGeneration == generation {
+                usageUpdateTask = nil
+                startUsageUpdateDrainIfNeeded()
+            }
+        }
+        while isCurrentMutation(generation),
+              let update = nextPendingUsageUpdate() {
+            let id = update.id
+            let lastUsedAt = update.lastUsedAt
+            do {
+                try await worker.updateLastUsedAt(id: id, date: lastUsedAt, generation: generation)
+                guard isCurrentMutation(generation) else { return }
+                if let index = itemIndicesByID[id],
+                   items[index].lastUsedAt.map({ $0 >= lastUsedAt }) != true {
+                    items[index].lastUsedAt = lastUsedAt
+                    items = ClipboardSavedLibrarySearch.sorted(items)
+                    onChange?()
+                }
+                if pendingUsageDates[id] == lastUsedAt {
+                    pendingUsageDates.removeValue(forKey: id)
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard isCurrentMutation(generation) else { return }
+                if pendingUsageDates[id] == lastUsedAt {
+                    pendingUsageDates.removeValue(forKey: id)
+                }
+                errorMessage = errorMessageProvider(error)
+                onChange?()
+            }
+            // Only one optional metadata write is ever submitted at a time. Yielding here
+            // lets a foreground save or delete enter the serial worker before the next use.
+            await Task.yield()
+        }
+    }
+
+    var usageUpdateTaskCountForTesting: Int { usageUpdateTask == nil ? 0 : 1 }
+    var pendingUsageUpdateCountForTesting: Int { pendingUsageDates.count }
 
     func matchingItems(query: String) -> [ClipboardSavedItem] {
         ClipboardSavedLibrarySearch.result(
@@ -1406,12 +1492,24 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     private func persistNewOrUpdated(
-        _ item: ClipboardSavedItem,
+        _ proposedItem: ClipboardSavedItem,
         payloadChanged: Bool,
         generation: UInt64
     ) async -> Bool {
         guard isCurrentMutation(generation) else { return false }
+        var item = proposedItem
+        let currentUsageDate = items.first(where: { $0.id == item.id })?.lastUsedAt
+        let newestUsageDate = [currentUsageDate, pendingUsageDates[item.id]]
+            .compactMap { $0 }
+            .max()
+        if let newestUsageDate,
+           item.lastUsedAt.map({ $0 >= newestUsageDate }) != true {
+            // Usage metadata is intentionally persisted off the foreground path. Merge the
+            // newest live or in-flight value into a concurrent full save so it cannot be lost.
+            item.lastUsedAt = newestUsageDate
+        }
         do {
+            persistenceSaveCheckpointForTesting?()
             try await worker.save(item, payloadChanged: payloadChanged, generation: generation)
             guard isCurrentMutation(generation) else { return false }
             let reloadableItem = item.reloadingPayload(using: persistence)

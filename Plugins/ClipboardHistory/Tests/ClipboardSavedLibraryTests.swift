@@ -236,29 +236,255 @@ final class ClipboardSavedLibraryTests: XCTestCase {
     }
 
     @MainActor
-    func testSnippetPasteReceiptKeepsWriteVersionAcrossMetadataAwait() async throws {
+    func testSnippetPasteReceiptReturnsBeforeUsageMetadataAndKeepsWriteVersion() async throws {
         let item = ClipboardSavedItem(title: "Snippet", savedKind: .snippet,
                                       payload: .plainText("expanded text"), templateText: "expanded text")
+        let secondItem = ClipboardSavedItem(title: "Second", savedKind: .snippet,
+                                            payload: .plainText("second text"), templateText: "second text")
         let gate = SavedLibraryTestGate()
         defer { gate.open() }
-        let store = SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [item], lastUsedGate: gate)
+        let store = SlowSavedLibraryTestStore(
+            saveDelay: 0,
+            initialItems: [item, secondItem],
+            lastUsedGate: gate
+        )
         let pasteboard = SavedLibraryTestPasteboard()
         let controller = ClipboardSavedLibraryController(pasteboard: pasteboard, persistence: store)
         await startSavedLibrary(controller)
-        let pending = Task { @MainActor in await controller.copyForPaste(id: item.id) }
-        while !gate.hasEntered { await Task.yield() }
+        let result = await controller.copyForPaste(id: item.id)
+        let receipt = try XCTUnwrap(result)
         let writtenVersion = pasteboard.changeCount
+        XCTAssertFalse(gate.hasEntered)
+        XCTAssertEqual(receipt.pasteboardVersion, writtenVersion)
+        XCTAssertEqual(receipt.expansion.text, "expanded text")
+
+        controller.recordSuccessfulUse(id: item.id)
+        while !gate.hasEntered { await Task.yield() }
         XCTAssertEqual(pasteboard.text, "expanded text")
+
+        let nextCopy = Task { @MainActor in
+            await controller.copyForPaste(id: secondItem.id)
+        }
+        let deadline = ContinuousClock.now + .seconds(1)
+        while pasteboard.text != "second text", ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        let nextCopyDidNotWaitForMetadata = pasteboard.text == "second text"
+        if !nextCopyDidNotWaitForMetadata { gate.open() }
+        let nextReceipt = await nextCopy.value
+        XCTAssertTrue(nextCopyDidNotWaitForMetadata)
+        XCTAssertEqual(nextReceipt?.expansion.text, "second text")
+
         _ = pasteboard.writePlainText("external copy")
         gate.open()
-        let result = await pending.value
-        let receipt = try XCTUnwrap(result)
-        XCTAssertEqual(receipt.pasteboardVersion, writtenVersion)
+        for _ in 0..<200 where controller.items.first?.lastUsedAt == nil {
+            await Task.yield()
+        }
+
+        XCTAssertNotNil(controller.items.first?.lastUsedAt)
         XCTAssertNotEqual(receipt.pasteboardVersion, pasteboard.changeCount)
-        XCTAssertEqual(receipt.expansion.text, "expanded text")
         XCTAssertEqual(pasteboard.text, "external copy")
         controller.stop()
     }
+
+    @MainActor
+    func testRapidUsageUpdatesCoalesceWhilePersistenceIsBusy() async throws {
+        let item = ClipboardSavedItem(
+            title: "Snippet",
+            savedKind: .snippet,
+            payload: .plainText("expanded text"),
+            templateText: "expanded text"
+        )
+        let gate = SavedLibraryTestGate()
+        defer { gate.open() }
+        let store = SlowSavedLibraryTestStore(
+            saveDelay: 0,
+            initialItems: [item],
+            lastUsedGate: gate
+        )
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: SavedLibraryTestPasteboard(),
+            persistence: store
+        )
+        await startSavedLibrary(controller)
+        let first = Date(timeIntervalSince1970: 10)
+        let second = Date(timeIntervalSince1970: 20)
+        let latest = Date(timeIntervalSince1970: 30)
+
+        controller.recordSuccessfulUse(id: item.id, at: first)
+        while !gate.hasEntered { await Task.yield() }
+        controller.recordSuccessfulUse(id: item.id, at: second)
+        controller.recordSuccessfulUse(id: item.id, at: latest)
+        XCTAssertEqual(store.lastUsedUpdateCount, 1)
+        gate.open()
+        for _ in 0..<200 where controller.items.first?.lastUsedAt != latest {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        XCTAssertEqual(controller.items.first?.lastUsedAt, latest)
+        XCTAssertEqual(store.persistedItems.first?.lastUsedAt, latest)
+        XCTAssertEqual(store.lastUsedUpdateCount, 2)
+        controller.stop()
+    }
+
+    @MainActor
+    func testBatchSuccessfulUseDeduplicatesIDsAndReturnsBeforePersistence() async throws {
+        let first = ClipboardSavedItem(
+            title: "First",
+            savedKind: .snippet,
+            payload: .plainText("first"),
+            templateText: "first"
+        )
+        let second = ClipboardSavedItem(
+            title: "Second",
+            savedKind: .snippet,
+            payload: .plainText("second"),
+            templateText: "second"
+        )
+        let gate = SavedLibraryTestGate()
+        defer { gate.open() }
+        let store = SlowSavedLibraryTestStore(
+            saveDelay: 0,
+            initialItems: [first, second],
+            lastUsedGate: gate
+        )
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: SavedLibraryTestPasteboard(),
+            persistence: store
+        )
+        await startSavedLibrary(controller)
+        let usageDate = Date(timeIntervalSince1970: 2_000)
+
+        controller.recordSuccessfulUse(
+            ids: [first.id, first.id, UUID(), second.id],
+            at: usageDate
+        )
+        while !gate.hasEntered { await Task.yield() }
+
+        XCTAssertEqual(store.lastUsedUpdateCount, 1)
+        XCTAssertNil(controller.items.first(where: { $0.id == first.id })?.lastUsedAt)
+        XCTAssertNil(controller.items.first(where: { $0.id == second.id })?.lastUsedAt)
+
+        gate.open()
+        for _ in 0..<200 where controller.items.filter({ $0.lastUsedAt == usageDate }).count != 2 {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        XCTAssertEqual(store.lastUsedUpdateCount, 2)
+        XCTAssertEqual(
+            Set(store.persistedItems.compactMap { $0.lastUsedAt == usageDate ? $0.id : nil }),
+            [first.id, second.id]
+        )
+        controller.stop()
+    }
+
+    @MainActor
+    func testLargeSuccessfulUseBatchDoesNotBacklogFollowingSnippetSave() async throws {
+        let snippets = (0..<500).map { index in
+            ClipboardSavedItem(
+                title: "Snippet \(index)",
+                savedKind: .snippet,
+                payload: .plainText("body \(index)"),
+                templateText: "body \(index)"
+            )
+        }
+        let gate = SavedLibraryTestGate()
+        defer { gate.open() }
+        let store = SlowSavedLibraryTestStore(
+            saveDelay: 0,
+            initialItems: snippets,
+            lastUsedGate: gate
+        )
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: SavedLibraryTestPasteboard(),
+            persistence: store
+        )
+        await startSavedLibrary(controller)
+        let usageDate = Date(timeIntervalSince1970: 3_000)
+
+        controller.recordSuccessfulUse(
+            ids: snippets.map(\.id) + [snippets[0].id, UUID()],
+            at: usageDate
+        )
+        while !gate.hasEntered { await Task.yield() }
+
+        XCTAssertEqual(controller.usageUpdateTaskCountForTesting, 1)
+        XCTAssertEqual(controller.pendingUsageUpdateCountForTesting, snippets.count)
+        XCTAssertEqual(store.lastUsedUpdateCount, 1)
+
+        var saveReachedWorker = false
+        controller.persistenceSaveCheckpointForTesting = { saveReachedWorker = true }
+        let editedID = snippets.last!.id
+        let edit = Task { @MainActor in
+            await controller.saveSnippet(ClipboardSnippetDraft(
+                id: editedID,
+                title: "Edited",
+                content: "edited body",
+                tags: [],
+                keyword: nil
+            ))
+        }
+        while !saveReachedWorker { await Task.yield() }
+        gate.open()
+
+        let editResult = await edit.value
+        let edited = try XCTUnwrap(editResult)
+        XCTAssertEqual(edited.title, "Edited")
+        XCTAssertGreaterThanOrEqual(store.operationLog.count, 2)
+        XCTAssertTrue(store.operationLog[0].hasPrefix("usage:"))
+        XCTAssertEqual(store.operationLog[1], "save:\(editedID.uuidString)")
+        XCTAssertEqual(controller.usageUpdateTaskCountForTesting, 1)
+        controller.stop()
+    }
+
+    @MainActor
+    func testConcurrentSnippetEditPreservesPersistedUsageDate() async throws {
+        let item = ClipboardSavedItem(
+            title: "Original",
+            savedKind: .snippet,
+            payload: .plainText("original body"),
+            templateText: "original body"
+        )
+        let gate = SavedLibraryTestGate()
+        defer { gate.open() }
+        let store = SlowSavedLibraryTestStore(
+            saveDelay: 0,
+            initialItems: [item],
+            lastUsedGate: gate
+        )
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: SavedLibraryTestPasteboard(),
+            persistence: store
+        )
+        await startSavedLibrary(controller)
+        let usageDate = Date(timeIntervalSince1970: 1_000)
+
+        controller.recordSuccessfulUse(id: item.id, at: usageDate)
+        while !gate.hasEntered { await Task.yield() }
+        let edit = Task { @MainActor in
+            await controller.saveSnippet(ClipboardSnippetDraft(
+                id: item.id,
+                title: "Edited",
+                content: "edited body",
+                tags: ["updated"],
+                keyword: ";edited"
+            ))
+        }
+        for _ in 0..<20 { await Task.yield() }
+        gate.open()
+
+        let editResult = await edit.value
+        let edited = try XCTUnwrap(editResult)
+        XCTAssertEqual(edited.title, "Edited")
+        XCTAssertEqual(edited.lastUsedAt, usageDate, "edited result must preserve usage")
+        let persisted = try XCTUnwrap(store.persistedItems.first)
+        XCTAssertEqual(persisted.title, "Edited")
+        XCTAssertEqual(persisted.tags, ["updated"])
+        XCTAssertEqual(persisted.keyword, ";edited")
+        XCTAssertEqual(persisted.lastUsedAt, usageDate, "persisted item must preserve usage")
+        controller.stop()
+    }
+
     func testSnippetVariableInsertionUsesAndReplacesTheCurrentSelection() {
         let inserted = ClipboardSnippetEditorInsertion.insert(
             "{{date}}",
@@ -1124,6 +1350,10 @@ final class ClipboardSavedLibraryTests: XCTestCase {
 
         _ = await controller.copy(id: older.id)
 
+        for _ in 0..<200 where controller.items.first?.id != older.id {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
         XCTAssertEqual(controller.items.first?.id, older.id)
     }
 
@@ -1353,9 +1583,13 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
     var maximumConcurrentPayloadLoadCount: Int {
         lock.withLock { storedMaximumConcurrentPayloadLoadCount }
     }
+    var lastUsedUpdateCount: Int { lock.withLock { storedLastUsedUpdateCount } }
+    var operationLog: [String] { lock.withLock { storedOperationLog } }
     private var storedLoadPayloadCount = 0
     private var activePayloadLoadCount = 0
     private var storedMaximumConcurrentPayloadLoadCount = 0
+    private var storedLastUsedUpdateCount = 0
+    private var storedOperationLog: [String] = []
 
     init(
         saveDelay: TimeInterval,
@@ -1392,6 +1626,7 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
     }
 
     func save(_ item: ClipboardSavedItem, payloadChanged: Bool) throws {
+        lock.withLock { storedOperationLog.append("save:\(item.id.uuidString)") }
         Thread.sleep(forTimeInterval: saveDelay)
         let payload = payloadChanged || lock.withLock({ payloads[item.id] == nil })
             ? try item.loadPayload()
@@ -1428,6 +1663,10 @@ private final class SlowSavedLibraryTestStore: ClipboardSavedLibraryPersisting, 
     }
 
     func updateLastUsedAt(id: UUID, date: Date) throws {
+        lock.withLock {
+            storedLastUsedUpdateCount += 1
+            storedOperationLog.append("usage:\(id.uuidString)")
+        }
         lastUsedGate?.wait()
         Thread.sleep(forTimeInterval: lastUsedDelay)
         lock.withLock {

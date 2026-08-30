@@ -1673,6 +1673,9 @@ final class ClipboardHistoryPlugin:
             ))
             return false
         }
+        if savedLibraryController.items.contains(where: { $0.id == itemID }) {
+            savedLibraryController.recordSuccessfulUse(id: itemID)
+        }
         // Commit the exact item that was actually sent before yielding for pacing. Session-bound
         // operations prevent a late completion from advancing a replaced or cancelled queue.
         _ = sequentialPasteCoordinator.recordSuccessfulPaste(operation: operation)

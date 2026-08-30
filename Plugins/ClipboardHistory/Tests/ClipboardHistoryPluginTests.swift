@@ -162,11 +162,13 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             XCTAssertTrue(pastedFirst)
             XCTAssertEqual(pasteboard.text, "First")
 
-            let copyTask = Task { @MainActor in await plugin.savedLibraryController.copy(id: snippet.id) }
-            let writeCompleted = await waitUntil { savedPersistence.usageUpdateStarted }
-            XCTAssertTrue(writeCompleted)
+            let copiedSnippet = await plugin.savedLibraryController.copy(id: snippet.id)
+            XCTAssertNotNil(copiedSnippet)
+            let usageUpdateStarted = await waitUntil { savedPersistence.usageUpdateStarted }
+            XCTAssertTrue(usageUpdateStarted)
             XCTAssertEqual(pasteboard.text, "Snippet written")
-            // The copy has not returned: only the successful-write callback can reset the queue.
+            // The copy returns before usage bookkeeping, while the successful-write callback has
+            // already reset only the implicit queue.
             plugin.handleShortcutAction(id: "paste-sequentially")
             let pastedAfterSnippet = await waitUntil {
                 sender.sendCount == 2 && !plugin.hasPendingSequentialPasteForTesting
@@ -174,9 +176,47 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             XCTAssertTrue(pastedAfterSnippet)
             XCTAssertEqual(pasteboard.text, usesExplicitQueue ? "Second" : "First")
             savedPersistence.finishUsageUpdate()
-            _ = await copyTask.value
-            XCTAssertNotNil(plugin.savedLibraryController.errorMessage, "Usage persistence fails after the clipboard write")
+            let surfacedUsageError = await waitUntil {
+                plugin.savedLibraryController.errorMessage != nil
+            }
+            XCTAssertTrue(surfacedUsageError, "Usage persistence fails after the clipboard write")
         }
+    }
+
+    func testSequentialSnippetPasteDoesNotWaitForUsageMetadata() async throws {
+        let snippet = ClipboardSavedItem(
+            title: "Template",
+            savedKind: .snippet,
+            payload: .plainText("Snippet value"),
+            templateText: "Snippet value"
+        )
+        let savedPersistence = try BlockingUsageClipboardSavedPersistence(item: snippet)
+        defer { savedPersistence.finishUsageUpdate() }
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardPasteCommandSender()
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            savedPersistence: savedPersistence,
+            pasteCommandSender: sender,
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.savedLibraryController.start()
+        let loaded = await waitUntil { plugin.savedLibraryController.isLoaded }
+        XCTAssertTrue(loaded)
+        XCTAssertTrue(plugin.startSequentialQueueForTesting(itemIDs: [snippet.id]))
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let pasted = await waitUntil {
+            sender.sendCount == 1 && !plugin.hasPendingSequentialPasteForTesting
+        }
+
+        XCTAssertTrue(pasted)
+        XCTAssertEqual(pasteboard.text, "Snippet value")
+        let usageUpdateStarted = await waitUntil { savedPersistence.usageUpdateStarted }
+        XCTAssertTrue(usageUpdateStarted)
+        savedPersistence.finishUsageUpdate()
     }
 
     func testExternalCopyDuringPlainTextPasteWaitCancelsDispatch() async {

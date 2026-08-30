@@ -2226,7 +2226,12 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                               resolved.text, historyItemIDs: resolved.historyItemIDs
                           )
                       },
-                      didWrite: self.onManualClipboardWrite
+                      didWrite: {
+                          self.onManualClipboardWrite()
+                          self.savedLibraryController.recordSuccessfulUse(
+                              ids: resolved.snippetItemIDs
+                          )
+                      }
                   ),
                   self.commitItemAction(token) else {
                 return
@@ -2277,6 +2282,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 NSSound.beep()
                 return
             }
+            self.savedLibraryController.recordSuccessfulUse(ids: resolved.snippetItemIDs)
         }
     }
 
@@ -2290,13 +2296,14 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private func resolveCombinedPlainText(
         ids: [UUID],
         expandsSnippets: Bool = true
-    ) async -> (text: String, historyItemIDs: [UUID])? {
+    ) async -> (text: String, historyItemIDs: [UUID], snippetItemIDs: [UUID])? {
         let historyItemsByID = Dictionary(
             uniqueKeysWithValues: historyController.items.map { ($0.id, $0) }
         )
         let snippetIDs = Set(savedLibraryController.items.filter(\.isSnippet).map(\.id))
         var parts: [String] = []
         var historyItemIDs: [UUID] = []
+        var snippetItemIDs: [UUID] = []
         parts.reserveCapacity(ids.count)
         for id in ids {
             guard !Task.isCancelled else { return nil }
@@ -2318,12 +2325,13 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                       ),
                       !text.isEmpty {
                 parts.append(text)
+                snippetItemIDs.append(id)
             } else {
                 return nil
             }
         }
         guard parts.count == ids.count else { return nil }
-        return (parts.joined(separator: "\n\n"), historyItemIDs)
+        return (parts.joined(separator: "\n\n"), historyItemIDs, snippetItemIDs)
     }
 
     private func shareItems(ids: [UUID]) {
@@ -2855,6 +2863,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 NSSound.beep()
                 return
             }
+            self.savedLibraryController.recordSuccessfulUse(id: id)
             if let cursorAccess, let cursorContext {
                 await cursorContext.apply(access: cursorAccess)
             }
