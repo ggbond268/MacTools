@@ -1836,7 +1836,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private let exportCoordinator: ClipboardHistoryExportCoordinator
     private let shareCoordinator: ClipboardHistoryShareCoordinator
     private let combinedExportCoordinator: ClipboardCombinedExportCoordinator
-    private let onStartSequentialQueue: ([UUID]) -> Bool
+    private let onStartSequentialQueue: ([UUID]) async -> Bool
     private let shortcutBindingProvider: (String) -> ShortcutBinding?
     private let shortcutSettingsContextProvider: () -> PluginSettingsContext?
     private let model = ClipboardHistoryPanelModel()
@@ -1858,7 +1858,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         localization: PluginLocalization,
         onIgnoreNextCopy: @escaping () -> Void,
         onManualClipboardWrite: @escaping () -> Void = {},
-        onStartSequentialQueue: @escaping ([UUID]) -> Bool = { _ in false },
+        onStartSequentialQueue: @escaping ([UUID]) async -> Bool = { _ in false },
         hudPresenter: any ClipboardPrivacyHUDPresenting,
         pasteCommandSender: any ClipboardPasteCommandSending = SystemClipboardPasteCommandSender(),
         shortcutBindingProvider: @escaping (String) -> ShortcutBinding? = {
@@ -2170,7 +2170,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                     self?.exportCombinedItems(ids: itemIDs, format: format)
                 },
                 onStartSequentialQueue: { [weak self] itemIDs in
-                    guard let self, self.onStartSequentialQueue(itemIDs) else { return false }
+                    guard let self, await self.onStartSequentialQueue(itemIDs) else { return false }
                     self.close()
                     return true
                 },
@@ -3259,7 +3259,7 @@ private struct ClipboardHistoryPanelView: View {
     let onPasteCombined: ([UUID]) -> Void
     let onShare: ([UUID]) -> Void
     let onExportCombined: ([UUID], ClipboardExportFormat) -> Void
-    let onStartSequentialQueue: ([UUID]) -> Bool
+    let onStartSequentialQueue: ([UUID]) async -> Bool
     let onPasteSavedItem: (UUID, Bool) -> Void
     let onCopySavedItem: (UUID) -> Void
     let onPresentActionPalette: (
@@ -3300,7 +3300,7 @@ private struct ClipboardHistoryPanelView: View {
         onPasteCombined: @escaping ([UUID]) -> Void,
         onShare: @escaping ([UUID]) -> Void,
         onExportCombined: @escaping ([UUID], ClipboardExportFormat) -> Void,
-        onStartSequentialQueue: @escaping ([UUID]) -> Bool,
+        onStartSequentialQueue: @escaping ([UUID]) async -> Bool,
         onPasteSavedItem: @escaping (UUID, Bool) -> Void,
         onCopySavedItem: @escaping (UUID) -> Void,
         onPresentActionPalette: @escaping (
@@ -3475,6 +3475,9 @@ private struct ClipboardHistoryPanelView: View {
                     message: Text(localization.string(
                         "clear.all.message",
                         defaultValue: "All History items will be permanently deleted. Saved items are not affected."
+                    ) + "\n\n" + localization.string(
+                        "queue.explicit.retentionNotice",
+                        defaultValue: "An active explicit paste queue keeps its encrypted copies until the queue finishes or is canceled."
                     )),
                     primaryButton: .destructive(Text(localization.string("common.clearAll", defaultValue: "全部清除"))) {
                         Task { await controller.clearAllHistory() }
@@ -5527,7 +5530,7 @@ private struct ClipboardHistoryPanelView: View {
         case .startQueue:
             guard let context = expectedContext ?? model.actionContext,
                   context.canStartSequentialQueue else { return }
-            _ = onStartSequentialQueue(ids)
+            Task { _ = await onStartSequentialQueue(ids) }
         case .requestExport:
             model.requestExportMenu()
         case .saveToLibrary:

@@ -101,9 +101,61 @@ enum ClipboardSnippetTextElementClassification {
     }
 }
 
+struct ClipboardSnippetKeywordInputState: Sendable {
+    private(set) var matcher = ClipboardSnippetKeywordMatcher()
+
+    var snippetsByKeyword: [String: UUID] {
+        get { matcher.snippetsByKeyword }
+        set { matcher.snippetsByKeyword = newValue }
+    }
+
+    var bufferedTextForTesting: String { matcher.buffer }
+
+    mutating func reset() {
+        matcher.reset()
+    }
+
+    mutating func consume(
+        text: String,
+        keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags,
+        processIdentifier: pid_t,
+        classifyEditor: (pid_t) -> ClipboardSnippetSecureTextClassification
+    ) -> ClipboardSnippetKeywordMatch? {
+        let flags = modifiers.intersection(.deviceIndependentFlagsMask)
+        if flags.contains(.command) || flags.contains(.control) || keyCode == 48 {
+            reset()
+            return nil
+        }
+        if text.isEmpty, keyCode != 51 {
+            reset()
+            return nil
+        }
+
+        // Focus can move programmatically between ordinary and secure fields in one app.
+        // Classify before every buffered character. The listen-only event tap means this
+        // check cannot hold up delivery of the original keyboard event.
+        guard classifyEditor(processIdentifier) == .nonSecure else {
+            matcher.reset()
+            return nil
+        }
+        return matcher.consume(text: text, keyCode: keyCode, modifiers: modifiers)
+    }
+}
+
 struct ClipboardSnippetKeywordMatcher: Sendable {
     private(set) var buffer = ""
-    var snippetsByKeyword: [String: UUID] = [:]
+    var snippetsByKeyword: [String: UUID] = [:] {
+        didSet { rebuildIndex() }
+    }
+    private var keywordPrefixes: Set<String> = []
+    private var ambiguousKeywords: Set<String> = []
+    private var keywordsByDescendingLength: [String] = []
+
+    init(snippetsByKeyword: [String: UUID] = [:]) {
+        self.snippetsByKeyword = snippetsByKeyword
+        rebuildIndex()
+    }
 
     mutating func reset() {
         buffer.removeAll(keepingCapacity: true)
@@ -128,11 +180,7 @@ struct ClipboardSnippetKeywordMatcher: Sendable {
             return nil
         }
         let candidate = buffer + text
-        if text.allSatisfy(Self.isDelimiter),
-           snippetsByKeyword.keys.contains(where: { keyword in
-               keyword.hasPrefix(candidate)
-                   || candidate.hasSuffix(String(keyword.prefix(candidate.count)))
-           }) {
+        if text.allSatisfy(Self.isDelimiter), hasPotentialKeywordSuffix(in: candidate) {
             buffer = String(candidate.suffix(ClipboardSavedItem.maximumKeywordCharacterCount))
             if let keyword = exactUnambiguousKeywordMatch(in: buffer),
                let itemID = snippetsByKeyword[keyword] {
@@ -162,19 +210,14 @@ struct ClipboardSnippetKeywordMatcher: Sendable {
             return nil
         }
 
-        if let keyword = snippetsByKeyword.keys
-            .filter({ buffer.hasSuffix($0) })
-            .sorted(by: { $0.count > $1.count })
-            .first,
+        if let keyword = keywordsByDescendingLength.first(where: { buffer.hasSuffix($0) }),
             Self.isBoundaryMatch(keyword: keyword, in: buffer),
            let itemID = snippetsByKeyword[keyword] {
             reset()
             return ClipboardSnippetKeywordMatch(itemID: itemID, keyword: keyword, delimiter: text)
         }
 
-        if snippetsByKeyword.keys.contains(where: { keyword in
-            keyword.hasPrefix(candidate) || candidate.hasSuffix(String(keyword.prefix(candidate.count)))
-        }) {
+        if hasPotentialKeywordSuffix(in: candidate) {
             buffer = String(candidate.suffix(ClipboardSavedItem.maximumKeywordCharacterCount))
         } else {
             reset()
@@ -194,31 +237,62 @@ struct ClipboardSnippetKeywordMatcher: Sendable {
     }
 
     private func exactUnambiguousKeywordMatch(in buffer: String) -> String? {
-        let matches = snippetsByKeyword.keys.filter { keyword in
-            buffer.hasSuffix(keyword) && Self.isBoundaryMatch(keyword: keyword, in: buffer)
+        guard let exact = keywordsByDescendingLength.first(where: {
+            buffer.hasSuffix($0) && Self.isBoundaryMatch(keyword: $0, in: buffer)
+        }) else { return nil }
+        return ambiguousKeywords.contains(Self.normalized(exact)) ? nil : exact
+    }
+
+    private mutating func rebuildIndex() {
+        keywordsByDescendingLength = snippetsByKeyword.keys.sorted {
+            if $0.count == $1.count { return $0 < $1 }
+            return $0.count > $1.count
         }
-        guard let exact = matches.max(by: { $0.count < $1.count }) else { return nil }
-        let identity = exact.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        let hasLongerCandidate = snippetsByKeyword.keys.contains { keyword in
-            guard keyword.count > exact.count else { return false }
-            return keyword.folding(
-                options: [.caseInsensitive, .diacriticInsensitive],
-                locale: .current
-            ).hasPrefix(identity)
+        keywordPrefixes.removeAll(keepingCapacity: true)
+        var properNormalizedPrefixes: Set<String> = []
+        for keyword in snippetsByKeyword.keys {
+            var prefix = ""
+            for character in keyword {
+                prefix.append(character)
+                keywordPrefixes.insert(prefix)
+            }
+            let normalized = Self.normalized(keyword)
+            var normalizedPrefix = ""
+            for character in normalized.dropLast() {
+                normalizedPrefix.append(character)
+                properNormalizedPrefixes.insert(normalizedPrefix)
+            }
         }
-        return hasLongerCandidate ? nil : exact
+        ambiguousKeywords = Set(snippetsByKeyword.keys.lazy.map(Self.normalized))
+            .intersection(properNormalizedPrefixes)
+    }
+
+    private func hasPotentialKeywordSuffix(in candidate: String) -> Bool {
+        guard !keywordPrefixes.isEmpty else { return false }
+        var suffix = ""
+        for character in candidate.suffix(ClipboardSavedItem.maximumKeywordCharacterCount).reversed() {
+            suffix.insert(character, at: suffix.startIndex)
+            if keywordPrefixes.contains(suffix) { return true }
+        }
+        return false
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
     }
 }
 
 @MainActor
 final class ClipboardSnippetKeywordExpander {
+    nonisolated static let eventTapOptionsForTesting: CGEventTapOptions = .listenOnly
     var onDiagnostic: ((ClipboardSnippetExpansionDiagnostic) -> Void)?
     private let savedLibraryController: ClipboardSavedLibraryController
     private let onPasteboardWrite: () -> Void
     private let pasteboardReader: ClipboardPasteboardReaderProcess
     private var replacementTask: Task<Void, Never>?
     private var replacementTransaction: ClipboardSnippetReplacementTransaction?
-    private var matcher = ClipboardSnippetKeywordMatcher()
+    private var inputState = ClipboardSnippetKeywordInputState()
+    private let focusedEditorClassification: (pid_t) -> ClipboardSnippetSecureTextClassification
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var trackedElement: AXUIElement?
@@ -229,25 +303,32 @@ final class ClipboardSnippetKeywordExpander {
         savedLibraryController: ClipboardSavedLibraryController,
         pasteboard _: any ClipboardPasteboardAccess,
         pasteboardReader: ClipboardPasteboardReaderProcess,
-        onPasteboardWrite: @escaping () -> Void = {}
+        onPasteboardWrite: @escaping () -> Void = {},
+        focusedEditorClassification: @escaping (pid_t) -> ClipboardSnippetSecureTextClassification = { processIdentifier in
+            guard let element = ClipboardSnippetKeywordExpander.focusedElement(
+                processIdentifier: processIdentifier
+            ) else { return .unknown }
+            return ClipboardSnippetKeywordExpander.secureTextClassification(element)
+        }
     ) {
         self.savedLibraryController = savedLibraryController
         self.pasteboardReader = pasteboardReader
         self.onPasteboardWrite = onPasteboardWrite
+        self.focusedEditorClassification = focusedEditorClassification
     }
 
     var isRunning: Bool { eventTap != nil }
-    var hasConfiguredKeywords: Bool { !matcher.snippetsByKeyword.isEmpty }
+    var hasConfiguredKeywords: Bool { !inputState.snippetsByKeyword.isEmpty }
 
     func updateItems() {
-        matcher.snippetsByKeyword = Dictionary(
+        inputState.snippetsByKeyword = Dictionary(
             savedLibraryController.items.compactMap { item in
                 guard item.isSnippet, let keyword = item.keyword else { return nil }
                 return (keyword, item.id)
             },
             uniquingKeysWith: { first, _ in first }
         )
-        if matcher.snippetsByKeyword.isEmpty {
+        if inputState.snippetsByKeyword.isEmpty {
             stop()
         }
     }
@@ -262,7 +343,7 @@ final class ClipboardSnippetKeywordExpander {
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .defaultTap,
+            options: Self.eventTapOptionsForTesting,
             eventsOfInterest: mask,
             callback: Self.eventCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -281,7 +362,7 @@ final class ClipboardSnippetKeywordExpander {
     func stop() {
         cancelReplacementBeforeForwardingInput()
         expansionScheduler.cancel()
-        matcher.reset()
+        inputState.reset()
         trackedElement = nil
         guard let eventTap else { return }
         CGEvent.tapEnable(tap: eventTap, enable: false)
@@ -327,17 +408,18 @@ final class ClipboardSnippetKeywordExpander {
         }
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let text = Self.unicodeString(from: event)
-        guard let match = matcher.consume(
-            text: text,
-            keyCode: keyCode,
-            modifiers: NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue))
-        ) else {
-            return Unmanaged.passUnretained(event)
-        }
-
         guard let processIdentifier = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
             onDiagnostic?(.focusUnavailable)
             resetTracking()
+            return Unmanaged.passUnretained(event)
+        }
+        guard let match = inputState.consume(
+            text: text,
+            keyCode: keyCode,
+            modifiers: NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)),
+            processIdentifier: processIdentifier,
+            classifyEditor: focusedEditorClassification
+        ) else {
             return Unmanaged.passUnretained(event)
         }
         // Deliver even a disambiguating delimiter first. Expansion can be cancelled
@@ -380,10 +462,9 @@ final class ClipboardSnippetKeywordExpander {
         expectedElement: AXUIElement? = nil
     ) -> ClipboardSnippetExpansionOutcome {
 
-        // Accessibility calls are comparatively expensive and can make normal typing
-        // feel sluggish. Defer them until the in-memory matcher finds a keyword. The
-        // focused element and exact text range are still revalidated before mutation,
-        // so switching fields cannot expand stale buffered text.
+        // The cached focus classification prevents secure or unknown input from entering the
+        // matcher. Re-read the focused element and exact range before mutation so a field change
+        // after the match can never expand stale buffered text.
         guard let focusedElement = Self.focusedElement() else {
             onDiagnostic?(.focusUnavailable)
             resetTracking()
@@ -527,7 +608,7 @@ final class ClipboardSnippetKeywordExpander {
     }
 
     private func resetTracking() {
-        matcher.reset()
+        inputState.reset()
         trackedElement = nil
     }
 

@@ -123,7 +123,7 @@ final class PluginPanelControlLayoutTests: XCTestCase {
             Mirror(reflecting: context).children.compactMap(\.label),
             [
                 "pluginID",
-                "shortcutItems",
+                "allShortcutItems",
                 "recordShortcutHandler",
                 "beginShortcutRecordingHandler",
                 "clearShortcutHandler",
@@ -134,6 +134,39 @@ final class PluginPanelControlLayoutTests: XCTestCase {
             MemoryLayout<PluginSettingsContext>.size,
             MemoryLayout<PluginSettingsContextV5Layout>.size
         )
+    }
+
+    func testSettingsContextKeepsV5ShortcutsSeparateFromCanonicalActions() {
+        let ordinary = ShortcutSettingsItem(
+            id: "test.shortcut.open",
+            pluginID: "test",
+            pluginTitle: "Test",
+            title: "Open",
+            description: "Open the plugin",
+            bindingText: "⌘O",
+            isRequired: false,
+            canClear: true,
+            usesDefaultValue: false,
+            errorMessage: nil,
+            settingsGroupID: "test.shortcuts"
+        )
+        let action = PluginSettingsActionShortcutItem(
+            actionID: "run",
+            title: "Run",
+            description: "Run the action",
+            bindingText: "⌘R",
+            canAssign: true,
+            canClear: true
+        )
+
+        let context = PluginSettingsContext(
+            pluginID: "test",
+            shortcutItems: [ordinary],
+            actionShortcutItems: [action]
+        )
+
+        XCTAssertEqual(context.shortcutItems.map(\.id), [ordinary.id])
+        XCTAssertEqual(context.actionShortcutItems.map(\.actionID), [action.actionID])
     }
 
     @MainActor

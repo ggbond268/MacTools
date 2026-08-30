@@ -78,7 +78,7 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     }
 
     func prepare() throws {
-        try databaseAccess.withAccess { try lock.withLock { try prepareLocked() } }
+        try databaseAccess.withActiveAccess { try lock.withLock { try prepareLocked() } }
     }
 
     /// Uninstall permanently retires this instance, including escaped lazy payload loaders.
@@ -87,7 +87,7 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     }
 
     func load() throws -> [ClipboardSavedItem] {
-        try databaseAccess.withAccess { try lock.withLock {
+        try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated else { return [] }
             try prepareLocked()
             let key = try encryptionKeyLocked()
@@ -131,7 +131,7 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     }
 
     func save(_ item: ClipboardSavedItem, payloadChanged: Bool) throws {
-        try databaseAccess.withAccess { try lock.withLock {
+        try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated else { throw ClipboardHistoryStoreError.unavailableStorage }
             try prepareLocked()
             let key = try encryptionKeyLocked()
@@ -177,7 +177,7 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     }
 
     func updateLastUsedAt(id: UUID, date: Date) throws {
-        try databaseAccess.withAccess { try lock.withLock {
+        try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated else { throw ClipboardHistoryStoreError.unavailableStorage }
             try prepareLocked()
             let key = try encryptionKeyLocked()
@@ -226,7 +226,7 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     }
 
     func delete(id: UUID) throws {
-        try databaseAccess.withAccess { try lock.withLock {
+        try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated else { return }
             try prepareLocked()
             let database = try openDatabaseLocked()
@@ -242,7 +242,7 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     }
 
     func removeAll() throws {
-        try databaseAccess.withAccess { try lock.withLock {
+        try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated,
                   fileManager.fileExists(atPath: databaseURL.path) else { return }
             let database = try openDatabaseLocked()
@@ -285,7 +285,7 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     }
 
     func loadPayload(id: UUID) throws -> ClipboardHistoryPayload {
-        try databaseAccess.withAccess { try lock.withLock {
+        try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated else { throw ClipboardHistoryPayloadAccessError.unavailable }
             let key = try encryptionKeyLocked()
             let database = try openDatabaseLocked()

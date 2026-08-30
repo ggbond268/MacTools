@@ -472,7 +472,13 @@ public struct PluginSettingsActionShortcutItem: Identifiable {
 
 public struct PluginSettingsContext {
     public let pluginID: String
-    public let shortcutItems: [ShortcutSettingsItem]
+    private let allShortcutItems: [ShortcutSettingsItem]
+
+    /// Plugin-defined shortcuts exposed by the original PluginKit v5 API.
+    /// Host-owned canonical action shortcuts intentionally remain separate.
+    public var shortcutItems: [ShortcutSettingsItem] {
+        allShortcutItems.filter { $0.settingsGroupID != Self.actionShortcutSettingsGroupID }
+    }
 
     private let recordShortcutHandler: (String, ShortcutBinding) -> String?
     private let beginShortcutRecordingHandler: (String) -> Void
@@ -488,16 +494,16 @@ public struct PluginSettingsContext {
         resetShortcut: @escaping (String) -> Void = { _ in }
     ) {
         self.pluginID = pluginID
-        self.shortcutItems = shortcutItems
+        allShortcutItems = shortcutItems
         self.recordShortcutHandler = recordShortcut
         self.beginShortcutRecordingHandler = beginShortcutRecording
         self.clearShortcutHandler = clearShortcut
         self.resetShortcutHandler = resetShortcut
     }
 
-    /// Extends the v5 settings context without changing its stored layout. Action shortcuts are
-    /// encoded as private synthetic shortcut rows and surfaced through computed accessors below,
-    /// so plugins compiled against the original v5 value layout remain binary compatible.
+    /// Extends the v5 settings context without changing its stored size or field order. Action
+    /// shortcuts use private synthetic storage but are filtered from the original public array,
+    /// so legacy plugins continue to observe only their own shortcut definitions.
     public init(
         pluginID: String,
         shortcutItems: [ShortcutSettingsItem] = [],
@@ -584,7 +590,7 @@ public struct PluginSettingsContext {
     }
 
     public var actionShortcutItems: [PluginSettingsActionShortcutItem] {
-        shortcutItems.compactMap { item in
+        allShortcutItems.compactMap { item in
             guard item.settingsGroupID == Self.actionShortcutSettingsGroupID,
                   let actionID = Self.actionID(from: item.id, pluginID: pluginID) else {
                 return nil

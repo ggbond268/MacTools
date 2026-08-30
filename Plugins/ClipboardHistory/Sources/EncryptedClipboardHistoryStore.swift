@@ -41,13 +41,27 @@ enum ClipboardHistoryKeyInitializationLock {
 /// database lifecycle operations must never race ordinary reads or writes from either store.
 final class ClipboardDatabaseAccessCoordinator: @unchecked Sendable {
     private let lock = NSRecursiveLock()
+    private var isInvalidated = false
 
     func withAccess<Result>(_ operation: () throws -> Result) rethrows -> Result {
         try lock.withLock(operation)
     }
 
+    func withActiveAccess<Result>(_ operation: () throws -> Result) throws -> Result {
+        try lock.withLock {
+            guard !isInvalidated else { throw ClipboardHistoryStoreError.unavailableStorage }
+            return try operation()
+        }
+    }
+
     func withExclusiveAccess<Result>(_ operation: () throws -> Result) rethrows -> Result {
         try lock.withLock(operation)
+    }
+
+    /// Permanently rejects future database/key access for this plugin instance. Uninstall invokes
+    /// this synchronously before private-data cleanup, so a late task cannot recreate storage.
+    func invalidate() {
+        lock.withLock { isInvalidated = true }
     }
 }
 

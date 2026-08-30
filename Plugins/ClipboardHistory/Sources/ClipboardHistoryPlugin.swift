@@ -240,17 +240,24 @@ final class ClipboardHistoryPlugin:
         onPasteboardWrite: { [weak self] in self?.controller.markCurrentPasteboardChangeAsInternal() }
     )
     private let privacyHUDPresenter: any ClipboardPrivacyHUDPresenting
+    private let databaseAccess: ClipboardDatabaseAccessCoordinator
     private let sequentialPasteCoordinator: ClipboardSequentialPasteCoordinator
     private var pendingSequentialPasteTargets: [pid_t?] = []
     private var isSequentialPasteInFlight = false
     private var sequentialPasteWorkerTask: Task<Void, Never>?
     private var sequentialPasteWorkerGeneration = 0
+    private var sequentialQueueCreationTask: Task<Bool, Never>?
+    private var sequentialQueueCreationGeneration = 0
+    private var sequentialQueueRestoreTask: Task<Void, Never>?
     private var sequentialHUDPreviewTask: Task<Void, Never>?
     private var privateCopyTask: Task<Void, Never>?
     private var privateCopyGeneration: UInt64 = 0
     private(set) var keywordExpansionStartAttemptCountForTesting = 0
     var hasPendingSequentialPasteForTesting: Bool {
-        sequentialPasteWorkerTask != nil || isSequentialPasteInFlight || !pendingSequentialPasteTargets.isEmpty
+        sequentialQueueCreationTask != nil
+            || sequentialPasteWorkerTask != nil
+            || isSequentialPasteInFlight
+            || !pendingSequentialPasteTargets.isEmpty
     }
     var hasPrivateCopyOperationForTesting: Bool { privateCopyTask != nil }
     var isKeywordExpansionRunningForTesting: Bool { keywordExpander.isRunning }
@@ -269,26 +276,47 @@ final class ClipboardHistoryPlugin:
         }
         hud.onPrevious = { [weak self] in
             guard let self, !self.isSequentialQueueMutationLocked else { return }
-            self.sequentialPasteCoordinator.moveToPrevious()
-            self.sequentialQueueDidChange()
+            Task { @MainActor in
+                if await self.sequentialPasteCoordinator.moveToPrevious() {
+                    self.sequentialQueueDidChange()
+                } else {
+                    self.showSequentialPersistenceFailure()
+                }
+            }
         }
         hud.onSkip = { [weak self] in
             guard let self, !self.isSequentialQueueMutationLocked else { return }
-            self.sequentialPasteCoordinator.skip()
-            self.sequentialQueueDidChange()
+            Task { @MainActor in
+                if await self.sequentialPasteCoordinator.skip() {
+                    self.sequentialQueueDidChange()
+                } else {
+                    self.showSequentialPersistenceFailure()
+                }
+            }
         }
         hud.onRestart = { [weak self] in
             guard let self, !self.isSequentialQueueMutationLocked else { return }
-            self.sequentialPasteCoordinator.restart()
-            self.sequentialQueueDidChange()
+            Task { @MainActor in
+                if await self.sequentialPasteCoordinator.restart() {
+                    self.sequentialQueueDidChange()
+                } else {
+                    self.showSequentialPersistenceFailure()
+                }
+            }
         }
         hud.onCancel = { [weak self] in
             self?.cancelPendingSequentialPastes()
             self?.sequentialHUDPreviewTask?.cancel()
             self?.sequentialHUDPreviewTask = nil
-            self?.sequentialPasteCoordinator.cancel()
-            self?.synchronizeSequentialPasteProtection()
-            self?.sequentialPasteHUD.dismiss()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if await self.sequentialPasteCoordinator.cancel() {
+                    self.synchronizeSequentialPasteProtection()
+                    self.sequentialPasteHUD.dismiss()
+                } else {
+                    self.showSequentialPersistenceFailure()
+                }
+            }
         }
         hud.onClose = { [weak self] in
             self?.sequentialHUDPreviewTask?.cancel()
@@ -308,7 +336,8 @@ final class ClipboardHistoryPlugin:
             self?.resetImplicitQueueForManualClipboardWrite()
         },
         onStartSequentialQueue: { [weak self] itemIDs in
-            self?.startSequentialQueue(itemIDs: itemIDs) == true
+            guard let self else { return false }
+            return await self.requestSequentialQueueCreation(itemIDs: itemIDs)
         },
         hudPresenter: privacyHUDPresenter,
         pasteCommandSender: pasteCommandSender,
@@ -340,14 +369,13 @@ final class ClipboardHistoryPlugin:
             NSWorkspace.shared.frontmostApplication?.processIdentifier
         },
         sequentialPasteStabilizationDelay: Duration = .milliseconds(120),
-        snippetPasteboardReader: ClipboardPasteboardReaderProcess? = nil
+        snippetPasteboardReader: ClipboardPasteboardReaderProcess? = nil,
+        sequentialPasteStore: (any ClipboardSequentialPasteSessionPersisting)? = nil,
+        initialSequentialPasteSession: ClipboardSequentialPasteSession? = nil
     ) {
         let localization = PluginLocalization(bundle: context.resourceBundle)
         let settingsStore = ClipboardHistorySettingsStore(storage: context.storage)
         let privateCopyLeaseStore = PluginStorageClipboardPrivateCopyLeaseStore(storage: context.storage)
-        let sequentialPasteCoordinator = ClipboardSequentialPasteCoordinator(
-            store: PluginStorageClipboardSequentialPasteStore(storage: context.storage)
-        )
         let snippetPasteboardReaderHelperURL = context.resourceBundle.url(
             forResource: "mactools-clipboard-pasteboard-reader-helper",
             withExtension: nil,
@@ -371,6 +399,22 @@ final class ClipboardHistoryPlugin:
             service: PluginPrivateDataKeychainIdentity.service(pluginID: Self.pluginID)
         )
         let databaseAccess = ClipboardDatabaseAccessCoordinator()
+        let resolvedSequentialPasteStore: any ClipboardSequentialPasteSessionPersisting
+        if let sequentialPasteStore {
+            resolvedSequentialPasteStore = sequentialPasteStore
+        } else if let databaseURL {
+            resolvedSequentialPasteStore = EncryptedClipboardSequentialPasteStore(
+                databaseURL: databaseURL,
+                keyStore: keyStore,
+                databaseAccess: databaseAccess
+            )
+        } else {
+            resolvedSequentialPasteStore = ClipboardSequentialPasteMemoryStore()
+        }
+        let sequentialPasteCoordinator = ClipboardSequentialPasteCoordinator(
+            store: resolvedSequentialPasteStore,
+            initialSession: initialSequentialPasteSession
+        )
         let resolvedPersistence: any ClipboardHistoryPersisting
         if let persistence {
             resolvedPersistence = persistence
@@ -403,6 +447,7 @@ final class ClipboardHistoryPlugin:
         self.copyCommandSender = copyCommandSender ?? SystemClipboardCopyCommandSender()
         self.pasteCommandSender = pasteCommandSender ?? SystemClipboardPasteCommandSender()
         self.privacyHUDPresenter = privacyHUDPresenter ?? ClipboardPrivacyHUDController(localization: localization)
+        self.databaseAccess = databaseAccess
         self.sequentialPasteCoordinator = sequentialPasteCoordinator
         self.accessibilityTrusted = accessibilityTrusted
         self.accessibilityRequester = accessibilityRequester
@@ -505,6 +550,15 @@ final class ClipboardHistoryPlugin:
         controller.onExternalPasteboardChange = { [weak self] in
             guard let self else { return }
             self.resetImplicitQueueForManualClipboardWrite()
+        }
+        controller.onWillResetPersistentHistory = { [weak self] in
+            self?.cancelPendingSequentialPastes()
+            self?.cancelSequentialQueueCreation()
+            self?.sequentialQueueRestoreTask?.cancel()
+            self?.sequentialQueueRestoreTask = nil
+            self?.sequentialPasteCoordinator.prepareForStorageReset()
+            self?.synchronizeSequentialPasteProtection()
+            self?.sequentialPasteHUD.dismiss()
         }
         controller.updateSequentialPasteProtectedItemIDs(
             sequentialPasteCoordinator.protectedItemIDs()
@@ -1150,6 +1204,9 @@ final class ClipboardHistoryPlugin:
                     message: localization.string(
                         "clear.all.actionMessage",
                         defaultValue: "All History items will be permanently deleted. Saved items are not affected. This cannot be undone."
+                    ) + "\n\n" + localization.string(
+                        "queue.explicit.retentionNotice",
+                        defaultValue: "An active explicit paste queue keeps its encrypted copies until the queue finishes or is canceled."
                     ),
                     confirmButtonTitle: localization.string("common.clearAll", defaultValue: "全部清除")
                 )
@@ -1224,24 +1281,34 @@ final class ClipboardHistoryPlugin:
                 panelController.show()
             }
         case ActionID.previousSequentialQueueItem:
-            guard !isSequentialQueueMutationLocked else { break }
-            sequentialPasteCoordinator.moveToPrevious()
-            sequentialQueueDidChange()
+            return sequentialControlActionHandle { coordinator in
+                await coordinator.moveToPrevious()
+            }
         case ActionID.skipSequentialQueueItem:
-            guard !isSequentialQueueMutationLocked else { break }
-            sequentialPasteCoordinator.skip()
-            sequentialQueueDidChange()
+            return sequentialControlActionHandle { coordinator in
+                await coordinator.skip()
+            }
         case ActionID.restartSequentialQueue:
-            guard !isSequentialQueueMutationLocked else { break }
-            sequentialPasteCoordinator.restart()
-            sequentialQueueDidChange()
+            return sequentialControlActionHandle { coordinator in
+                await coordinator.restart()
+            }
         case ActionID.cancelSequentialQueue:
-            cancelPendingSequentialPastes()
-            sequentialHUDPreviewTask?.cancel()
-            sequentialHUDPreviewTask = nil
-            sequentialPasteCoordinator.cancel()
-            synchronizeSequentialPasteProtection()
-            sequentialPasteHUD.dismiss()
+            return ActionExecutionHandle { [weak self] in
+                guard let self else { return .cancelled }
+                cancelPendingSequentialPastes()
+                sequentialHUDPreviewTask?.cancel()
+                sequentialHUDPreviewTask = nil
+                guard await sequentialPasteCoordinator.cancel() else {
+                    showSequentialPersistenceFailure()
+                    return .failed(message: localization.string(
+                        "hud.sequentialPaste.persistenceFailed",
+                        defaultValue: "The paste queue couldn’t be saved. Try again."
+                    ))
+                }
+                synchronizeSequentialPasteProtection()
+                sequentialPasteHUD.dismiss()
+                return .succeeded()
+            }
         case ActionID.pauseCollection:
             settingsStore.setPaused(true)
         case ActionID.resumeCollection:
@@ -1266,6 +1333,24 @@ final class ClipboardHistoryPlugin:
             }
         }
         return ActionExecutionHandle { .succeeded() }
+    }
+
+    private func sequentialControlActionHandle(
+        _ operation: @escaping @MainActor (ClipboardSequentialPasteCoordinator) async -> Bool
+    ) -> ActionExecutionHandle {
+        ActionExecutionHandle { [weak self] in
+            guard let self else { return .cancelled }
+            guard !isSequentialQueueMutationLocked else { return .cancelled }
+            guard await operation(sequentialPasteCoordinator) else {
+                showSequentialPersistenceFailure()
+                return .failed(message: localization.string(
+                    "hud.sequentialPaste.persistenceFailed",
+                    defaultValue: "The paste queue couldn’t be saved. Try again."
+                ))
+            }
+            sequentialQueueDidChange()
+            return .succeeded()
+        }
     }
 
     func handleAction(_ action: PluginPanelAction) {
@@ -1338,14 +1423,42 @@ final class ClipboardHistoryPlugin:
         }
         controller.start()
         savedLibraryController.start()
+        sequentialQueueRestoreTask?.cancel()
+        sequentialQueueRestoreTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await sequentialPasteCoordinator.restoreExplicitQueue()
+            } catch is CancellationError {
+                return
+            } catch {
+                showSequentialPersistenceFailure()
+                return
+            }
+            guard !Task.isCancelled else { return }
+            synchronizeSequentialPasteProtection()
+        }
         synchronizeKeywordExpansion()
     }
 
     func deactivate(reason: PluginDeactivationReason) {
+        if reason == .uninstalling {
+            // Establish the storage barrier before cancellation. A task already queued behind a
+            // database operation will wake to an invalidated coordinator instead of recreating
+            // the database or Keychain key after package cleanup.
+            databaseAccess.invalidate()
+        }
         privateCopyGeneration &+= 1
         privateCopyTask?.cancel()
         privateCopyTask = nil
         cancelPendingSequentialPastes()
+        cancelSequentialQueueCreation()
+        sequentialQueueRestoreTask?.cancel()
+        sequentialQueueRestoreTask = nil
+        if reason == .uninstalling {
+            sequentialPasteCoordinator.prepareForStorageReset()
+        } else {
+            sequentialPasteCoordinator.invalidatePendingPersistence()
+        }
         sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
         synchronizeSequentialPasteProtection()
         panelController.close(restorePreviousApplication: false)
@@ -1398,8 +1511,8 @@ final class ClipboardHistoryPlugin:
         settingsStore.isKeywordExpansionEnabled = enabled
     }
 
-    func startSequentialQueueForTesting(itemIDs: [UUID]) -> Bool {
-        startSequentialQueue(itemIDs: itemIDs)
+    func startSequentialQueueForTesting(itemIDs: [UUID]) async -> Bool {
+        await requestSequentialQueueCreation(itemIDs: itemIDs)
     }
 
     private func performPrivateCopy(targetProcessIdentifier: pid_t?) async {
@@ -1524,12 +1637,9 @@ final class ClipboardHistoryPlugin:
     }
 
     private func enqueueSequentialPaste(targetProcessIdentifier: pid_t?) {
-        let remainingCount = sequentialPasteCoordinator.availablePasteRequestCount(
-            recentHistoryItemIDs: controller.recentItemIDsForSequentialPaste
-        )
-        let reservedRequestCount = pendingSequentialPasteTargets.count
-            + (isSequentialPasteInFlight ? 1 : 0)
-        guard reservedRequestCount < remainingCount else {
+        guard pendingSequentialPasteTargets.count
+                + (isSequentialPasteInFlight ? 1 : 0)
+                < ClipboardSequentialPasteSession.maximumItemCount else {
             showSequentialPasteHUD()
             return
         }
@@ -1587,6 +1697,12 @@ final class ClipboardHistoryPlugin:
         sequentialPasteWorkerTask = nil
     }
 
+    private func cancelSequentialQueueCreation() {
+        sequentialQueueCreationGeneration &+= 1
+        sequentialQueueCreationTask?.cancel()
+        sequentialQueueCreationTask = nil
+    }
+
     private func performSequentialPaste(
         targetProcessIdentifier: pid_t?,
         workerGeneration: Int
@@ -1610,13 +1726,22 @@ final class ClipboardHistoryPlugin:
             ))
             return false
         }
-        guard let operation = sequentialPasteCoordinator.nextOperation(
-            recentHistoryItemIDs: controller.recentItemIDsForSequentialPaste
-        ) else {
-            privacyHUDPresenter.showFailure(localization.string(
-                "hud.sequentialPaste.empty",
-                defaultValue: "No clipboard items are available to paste"
-            ))
+        let operation: ClipboardSequentialPasteOperation
+        do {
+            guard let next = try await sequentialPasteCoordinator.nextOperation(
+                recentHistoryItemIDs: controller.recentItemIDsForSequentialPaste
+            ) else {
+                privacyHUDPresenter.showFailure(localization.string(
+                    "hud.sequentialPaste.empty",
+                    defaultValue: "No clipboard items are available to paste"
+                ))
+                return false
+            }
+            operation = next
+        } catch is CancellationError {
+            return false
+        } catch {
+            showSequentialPersistenceFailure()
             return false
         }
         let itemID = operation.itemID
@@ -1625,13 +1750,18 @@ final class ClipboardHistoryPlugin:
         synchronizeSequentialPasteProtection()
 
         let preparedClipboardVersion: Int?
-        if controller.items.contains(where: { $0.id == itemID }) {
+        var preparedSnippetExpansion: ClipboardSnippetExpansion?
+        if operation.source == .explicitQueue, let snapshot = operation.snapshot {
+            let prepared = await savedLibraryController.copyQueuedSnapshotForPaste(snapshot)
+            preparedClipboardVersion = prepared?.pasteboardVersion
+            preparedSnippetExpansion = snapshot.expandsSnippetVariables ? prepared?.expansion : nil
+        } else if controller.items.contains(where: { $0.id == itemID }) {
             let didPreparePayload = await controller.preparePayloadForUse(id: itemID)
             guard isCurrentSequentialPasteWorker(generation: workerGeneration),
                   sequentialPasteCoordinator.session?.matches(operation) == true,
                   revalidateImplicitClipboardVersion(implicitClipboardVersion),
                   didPreparePayload else {
-                return markSequentialItemUnavailable(operation)
+                return await markSequentialItemUnavailable(operation)
             }
             preparedClipboardVersion = await controller.copyItemForPaste(id: itemID) { [weak self] in
                 guard let self else { return false }
@@ -1641,16 +1771,33 @@ final class ClipboardHistoryPlugin:
             }
         } else if savedLibraryController.items.contains(where: { $0.id == itemID }) {
             // Resolve snippet variables at paste time so every queue step sees current values.
-            preparedClipboardVersion = await savedLibraryController.copyForPaste(id: itemID)?.pasteboardVersion
+            let prepared = await savedLibraryController.copyForPaste(id: itemID)
+            preparedClipboardVersion = prepared?.pasteboardVersion
+            preparedSnippetExpansion = prepared?.expansion
         } else {
-            return markSequentialItemUnavailable(operation)
+            return await markSequentialItemUnavailable(operation)
         }
         guard isCurrentSequentialPasteWorker(generation: workerGeneration),
               sequentialPasteCoordinator.session?.matches(operation) == true else {
             return false
         }
         guard let preparedClipboardVersion else {
-            return markSequentialItemUnavailable(operation)
+            return await markSequentialItemUnavailable(operation)
+        }
+        var cursorAccess: SystemClipboardSnippetPasteCursorAccess?
+        var cursorContext: ClipboardSnippetPasteCursorContext?
+        defer { cursorAccess?.stop() }
+        if let expansion = preparedSnippetExpansion,
+           expansion.cursorUTF16OffsetFromEnd != nil,
+           let access = SystemClipboardSnippetPasteCursorAccess(
+               processIdentifier: targetProcessIdentifier
+           ),
+           let selection = access.selection {
+            cursorAccess = access
+            cursorContext = ClipboardSnippetPasteCursorContext(
+                selection: selection,
+                expansion: expansion
+            )
         }
         let didSendPaste = await pasteCommandSender.sendPasteCommand(to: targetProcessIdentifier) { [weak self] in
             guard let self,
@@ -1678,7 +1825,13 @@ final class ClipboardHistoryPlugin:
         }
         // Commit the exact item that was actually sent before yielding for pacing. Session-bound
         // operations prevent a late completion from advancing a replaced or cancelled queue.
-        _ = sequentialPasteCoordinator.recordSuccessfulPaste(operation: operation)
+        guard await sequentialPasteCoordinator.recordSuccessfulPaste(operation: operation) else {
+            showSequentialPersistenceFailure()
+            return false
+        }
+        if let cursorAccess, let cursorContext {
+            await cursorContext.apply(access: cursorAccess)
+        }
         synchronizeSequentialPasteProtection()
         isSequentialPasteInFlight = false
 
@@ -1694,8 +1847,11 @@ final class ClipboardHistoryPlugin:
 
     private func markSequentialItemUnavailable(
         _ operation: ClipboardSequentialPasteOperation
-    ) -> Bool {
-        _ = sequentialPasteCoordinator.markCurrentUnavailable(operation: operation)
+    ) async -> Bool {
+        guard await sequentialPasteCoordinator.markCurrentUnavailable(operation: operation) else {
+            showSequentialPersistenceFailure()
+            return false
+        }
         synchronizeSequentialPasteProtection()
         privacyHUDPresenter.showFailure(localization.string(
             "hud.sequentialPaste.unavailable",
@@ -1733,7 +1889,30 @@ final class ClipboardHistoryPlugin:
     }
 
     @discardableResult
-    private func startSequentialQueue(itemIDs: [UUID]) -> Bool {
+    private func requestSequentialQueueCreation(itemIDs: [UUID]) async -> Bool {
+        guard sequentialQueueCreationTask == nil else {
+            privacyHUDPresenter.showFailure(localization.string(
+                "hud.queue.active",
+                defaultValue: "Finish or cancel the current queue before creating another one"
+            ))
+            return false
+        }
+        sequentialQueueCreationGeneration &+= 1
+        let generation = sequentialQueueCreationGeneration
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return false }
+            return await self.startSequentialQueue(itemIDs: itemIDs)
+        }
+        sequentialQueueCreationTask = task
+        let created = await task.value
+        if sequentialQueueCreationGeneration == generation {
+            sequentialQueueCreationTask = nil
+        }
+        return created
+    }
+
+    @discardableResult
+    private func startSequentialQueue(itemIDs: [UUID]) async -> Bool {
         let availableItemIDs = Set(controller.items.map(\.id))
             .union(savedLibraryController.items.map(\.id))
         guard !itemIDs.isEmpty, itemIDs.allSatisfy(availableItemIDs.contains) else {
@@ -1744,7 +1923,39 @@ final class ClipboardHistoryPlugin:
             return false
         }
         do {
-            try sequentialPasteCoordinator.startExplicitQueue(itemIDs: itemIDs)
+            var snapshots: [ClipboardSequentialPasteSnapshot] = []
+            snapshots.reserveCapacity(itemIDs.count)
+            var totalPayloadByteCount = 0
+            for itemID in itemIDs {
+                try Task.checkCancellation()
+                let payload: ClipboardHistoryPayload
+                let expandsSnippetVariables: Bool
+                let discardPayload: () -> Void
+                if let item = controller.items.first(where: { $0.id == itemID }) {
+                    payload = try await item.loadPayloadAsync()
+                    expandsSnippetVariables = false
+                    discardPayload = { item.discardCachedPayloadIfReloadable() }
+                } else if let item = savedLibraryController.items.first(where: { $0.id == itemID }) {
+                    payload = try await item.loadPayloadAsync()
+                    expandsSnippetVariables = item.isSnippet
+                    discardPayload = { item.discardCachedPayloadIfReloadable() }
+                } else {
+                    throw ClipboardHistoryPayloadAccessError.unavailable
+                }
+                defer { discardPayload() }
+                totalPayloadByteCount += payload.byteCount
+                guard totalPayloadByteCount <= ClipboardSequentialPasteSession.maximumPayloadByteCount else {
+                    throw ClipboardSequentialQueueError.exceedsMaximumPayloadByteCount(
+                        maximum: ClipboardSequentialPasteSession.maximumPayloadByteCount
+                    )
+                }
+                snapshots.append(ClipboardSequentialPasteSnapshot(
+                    sourceItemID: itemID,
+                    payload: payload,
+                    expandsSnippetVariables: expandsSnippetVariables
+                ))
+            }
+            try await sequentialPasteCoordinator.startExplicitQueue(snapshots: snapshots)
             cancelPendingSequentialPastes()
             synchronizeSequentialPasteProtection()
             privacyHUDPresenter.showSuccess(localization.format(
@@ -1765,11 +1976,25 @@ final class ClipboardHistoryPlugin:
                 defaultValue: "A queue can contain up to %lld items",
                 ClipboardSequentialPasteSession.maximumItemCount
             ))
-        } catch {
-            privacyHUDPresenter.showFailure(localization.string(
-                "hud.queue.empty",
-                defaultValue: "Select at least one item for the queue"
+        } catch ClipboardSequentialQueueError.exceedsMaximumPayloadByteCount {
+            privacyHUDPresenter.showFailure(localization.format(
+                "hud.queue.tooLarge",
+                defaultValue: "A queue can contain up to %lld MB of clipboard data",
+                ClipboardSequentialPasteSession.maximumPayloadByteCount / 1_024 / 1_024
             ))
+        } catch is CancellationError {
+            return false
+        } catch {
+            let message = itemIDs.isEmpty
+                ? localization.string(
+                    "hud.queue.empty",
+                    defaultValue: "Select at least one item for the queue"
+                )
+                : localization.string(
+                    "hud.sequentialPaste.unavailable",
+                    defaultValue: "This queued item is no longer available"
+                )
+            privacyHUDPresenter.showFailure(message)
         }
         return false
     }
@@ -1777,6 +2002,13 @@ final class ClipboardHistoryPlugin:
     private func sequentialQueueDidChange() {
         synchronizeSequentialPasteProtection()
         showSequentialPasteHUD()
+    }
+
+    private func showSequentialPersistenceFailure() {
+        privacyHUDPresenter.showFailure(localization.string(
+            "hud.sequentialPaste.persistenceFailed",
+            defaultValue: "The paste queue couldn’t be saved. Try again."
+        ))
     }
 
     private func showSequentialPasteHUD() {

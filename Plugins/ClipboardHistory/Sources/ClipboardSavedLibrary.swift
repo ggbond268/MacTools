@@ -1304,6 +1304,49 @@ final class ClipboardSavedLibraryController: ObservableObject {
         }
     }
 
+    func copyQueuedSnapshotForPaste(
+        _ snapshot: ClipboardSequentialPasteSnapshot
+    ) async -> PreparedCopy? {
+        await withLibraryMutation(cancelledResult: nil) { generation in
+            guard self.isCurrentMutation(generation) else { return nil }
+            let expansion: ClipboardSnippetExpansion?
+            if snapshot.expandsSnippetVariables {
+                guard let template = snapshot.payload.plainText else { return nil }
+                do {
+                    expansion = try await ClipboardSnippetTemplateEngine.expandAsync(
+                        template,
+                        context: try await self.expansionContext(for: template)
+                    )
+                } catch is CancellationError {
+                    return nil
+                } catch {
+                    guard self.isCurrentMutation(generation) else { return nil }
+                    self.errorMessage = self.errorMessageProvider(error)
+                    self.onChange?()
+                    return nil
+                }
+            } else {
+                expansion = nil
+            }
+            guard self.isCurrentMutation(generation) else { return nil }
+            let wrote = if let expansion {
+                self.pasteboard.writePlainText(expansion.text)
+            } else {
+                self.pasteboard.writePayload(snapshot.payload)
+            }
+            guard wrote else { return nil }
+            let version = self.pasteboard.changeCount
+            self.onPasteboardWrite?()
+            return PreparedCopy(
+                expansion: expansion ?? ClipboardSnippetExpansion(
+                    text: snapshot.payload.plainText ?? "",
+                    cursorOffsetFromEnd: nil
+                ),
+                pasteboardVersion: version
+            )
+        }
+    }
+
     private func copyLocked(id: UUID, asPlainText: Bool, generation: UInt64) async -> PreparedCopy? {
         guard let item = items.first(where: { $0.id == id }) else { return nil }
         let payload = await loadPayload(for: item)

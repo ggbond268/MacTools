@@ -302,7 +302,10 @@ final class PluginPackageManifestTests: XCTestCase {
             setup: manifest.setup,
             relationships: manifest.relationships
         )
-        XCTAssertTrue(searchKeywords.contains("Toggle Appearance"))
+        let localizedActionTitle = try XCTUnwrap(
+            manifest.actions?.providers.first?.staticActions.first?.title.localizedValue()
+        )
+        XCTAssertTrue(searchKeywords.contains(localizedActionTitle))
         XCTAssertTrue(searchKeywords.contains("night-shift"))
     }
 

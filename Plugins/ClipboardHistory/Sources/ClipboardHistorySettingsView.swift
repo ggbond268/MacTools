@@ -110,7 +110,7 @@ struct ClipboardHistorySettingsView: View {
                     message: Text(localization.string(
                         "clear.all.message",
                         defaultValue: "Clears History. Saved clips and snippets are kept. This cannot be undone."
-                    )),
+                    ) + "\n\n" + queueRetentionNotice),
                     primaryButton: .destructive(Text(localization.string("settings.data.clearHistory", defaultValue: "Clear History"))) {
                         Task { await controller.clearAllHistory() }
                     },
@@ -125,7 +125,7 @@ struct ClipboardHistorySettingsView: View {
                     message: Text(localization.string(
                         "settings.saved.clear.message",
                         defaultValue: "Removes Saved status from clips in History and permanently deletes Saved-only clips. History and snippets are kept. This cannot be undone."
-                    )),
+                    ) + "\n\n" + queueRetentionNotice),
                     primaryButton: .destructive(Text(localization.string(
                         "settings.saved.clear.confirm",
                         defaultValue: "Clear Saved Clips"
@@ -143,7 +143,7 @@ struct ClipboardHistorySettingsView: View {
                     message: Text(localization.string(
                         "settings.snippets.clear.message",
                         defaultValue: "Permanently deletes all snippets and their keywords. History and Saved clips are kept. This cannot be undone."
-                    )),
+                    ) + "\n\n" + queueRetentionNotice),
                     primaryButton: .destructive(Text(localization.string(
                         "settings.snippets.clear.confirm",
                         defaultValue: "Delete Snippets"
@@ -182,6 +182,13 @@ struct ClipboardHistorySettingsView: View {
                 )
             }
         }
+    }
+
+    private var queueRetentionNotice: String {
+        localization.string(
+            "queue.explicit.retentionNotice",
+            defaultValue: "An active explicit paste queue keeps its encrypted copies until the queue finishes or is canceled."
+        )
     }
 
     private func revealShortcutGroup(_ target: PluginSettingsSearchTarget?) {

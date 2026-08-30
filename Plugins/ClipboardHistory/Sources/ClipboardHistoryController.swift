@@ -536,6 +536,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     var onPrivateCopyLeaseChange: ((ClipboardPrivateCopyLease?) -> Void)?
     var onCaptureRejection: ((ClipboardCaptureIgnoreReason, Int) -> Void)?
     var onExternalPasteboardChange: (() -> Void)?
+    var onWillResetPersistentHistory: (() -> Void)?
     var onItemCaptured: ((UUID) -> Void)?
 
     let settings: ClipboardHistorySettingsStore
@@ -1853,6 +1854,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     private func resetPersistentHistory() async -> Bool {
         guard !isMutatingItems else { return false }
+        onWillResetPersistentHistory?()
         storageGeneration &+= 1
         let generation = storageGeneration
         durableMutationTask?.cancel()

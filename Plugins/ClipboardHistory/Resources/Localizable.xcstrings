@@ -13119,6 +13119,21 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "佇列最多可包含 %lld 項" } }
       }
     },
+    "hud.queue.tooLarge": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يمكن أن تحتوي القائمة على ما يصل إلى %lld م.ب. من بيانات الحافظة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Eine Warteschlange kann bis zu %lld MB Zwischenablagedaten enthalten" } },
+        "en": { "stringUnit": { "state": "translated", "value": "A queue can contain up to %lld MB of clipboard data" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Una cola admite hasta %lld MB de datos del portapapeles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Une file peut contenir jusqu’à %lld Mo de données du presse-papiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "キューには最大%lld MBのクリップボードデータを含められます" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "대기열은 최대 %lldMB의 클립보드 데이터를 포함할 수 있습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Uma fila pode conter até %lld MB de dados da área de transferência" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "В очереди может быть до %lld МБ данных буфера обмена" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "队列最多可包含 %lld MB 剪贴板数据" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "佇列最多可包含 %lld MB 剪貼簿資料" } }
+      }
+    },
     "hud.sequentialPaste.accessibilityRequired": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "يتطلب اللصق المتتابع إذن تسهيلات الاستخدام" } },
@@ -13162,6 +13177,21 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Не удалось вставить следующий элемент" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法粘贴下一个剪贴板项目" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法貼上下個剪貼簿項目" } }
+      }
+    },
+    "hud.sequentialPaste.persistenceFailed": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذر حفظ تقدم قائمة اللصق" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Fortschritt der Einfügewarteschlange konnte nicht gesichert werden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Couldn’t save paste queue progress" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo guardar el progreso de la cola" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible d’enregistrer la progression de la file" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ペーストキューの進行状況を保存できませんでした" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "붙여넣기 대기열 진행 상태를 저장할 수 없습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não foi possível salvar o progresso da fila" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось сохранить состояние очереди вставки" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法保存粘贴队列进度" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法儲存貼上佇列進度" } }
       }
     },
     "hud.sequentialPaste.unavailable": {
@@ -14347,6 +14377,21 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Сочетания клавиш очереди вставки" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "粘贴队列快捷键" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "貼上佇列快速鍵" } }
+      }
+    },
+    "queue.explicit.retentionNotice": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تحتفظ قائمة اللصق الصريحة النشطة بنسخها المشفرة حتى تنتهي القائمة أو يتم إلغاؤها." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Eine aktive explizite Einfügewarteschlange behält ihre verschlüsselten Kopien, bis sie beendet oder abgebrochen wird." } },
+        "en": { "stringUnit": { "state": "translated", "value": "An active explicit paste queue keeps its encrypted copies until the queue finishes or is canceled." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Una cola de pegado explícita activa conserva sus copias cifradas hasta que termine o se cancele." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Une file de collage explicite active conserve ses copies chiffrées jusqu’à sa fin ou son annulation." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "明示的なペーストキューが有効な間、完了またはキャンセルまで暗号化されたコピーが保持されます。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "활성 명시적 붙여넣기 대기열은 완료되거나 취소될 때까지 암호화된 복사본을 유지합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Uma fila de colagem explícita ativa mantém suas cópias criptografadas até terminar ou ser cancelada." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Активная явная очередь вставки хранит зашифрованные копии до завершения или отмены очереди." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "活动的显式粘贴队列会保留加密副本，直到队列完成或取消。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "使用中的明確貼上佇列會保留加密副本，直到佇列完成或取消。" } }
       }
     },
     "settings.saved.clear": {

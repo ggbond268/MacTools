@@ -575,6 +575,90 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         )
     }
 
+    func testKeywordInputStateFailsClosedBeforeBufferingSecureOrUnknownText() {
+        for classification in [
+            ClipboardSnippetSecureTextClassification.secure,
+            .unknown,
+        ] {
+            var state = ClipboardSnippetKeywordInputState()
+            state.snippetsByKeyword = [";bb": UUID()]
+            for character in ";bb" {
+                XCTAssertNil(state.consume(
+                    text: String(character),
+                    keyCode: 0,
+                    modifiers: [],
+                    processIdentifier: 42,
+                    classifyEditor: { _ in classification }
+                ))
+            }
+            XCTAssertEqual(state.bufferedTextForTesting, "")
+        }
+    }
+
+    func testKeywordInputStateRevalidatesFocusAndUsesPassiveTap() {
+        var state = ClipboardSnippetKeywordInputState()
+        let itemID = UUID()
+        state.snippetsByKeyword = [";bb": itemID]
+        var classificationCount = 0
+        var match: ClipboardSnippetKeywordMatch?
+        for character in ";bb" {
+            match = state.consume(
+                text: String(character),
+                keyCode: 0,
+                modifiers: [],
+                processIdentifier: 42,
+                classifyEditor: { _ in
+                    classificationCount += 1
+                    return .nonSecure
+                }
+            ) ?? match
+        }
+        XCTAssertEqual(match?.itemID, itemID)
+        XCTAssertEqual(classificationCount, 3)
+        XCTAssertEqual(
+            ClipboardSnippetKeywordExpander.eventTapOptionsForTesting.rawValue,
+            CGEventTapOptions.listenOnly.rawValue
+        )
+    }
+
+    func testKeywordInputStateStopsBufferingWhenFocusMovesToSecureFieldInSameApp() {
+        var state = ClipboardSnippetKeywordInputState()
+        state.snippetsByKeyword = [";bb": UUID()]
+        var classifications: [ClipboardSnippetSecureTextClassification] = [
+            .nonSecure, .secure, .secure,
+        ]
+
+        for character in ";bb" {
+            XCTAssertNil(state.consume(
+                text: String(character),
+                keyCode: 0,
+                modifiers: [],
+                processIdentifier: 42,
+                classifyEditor: { _ in classifications.removeFirst() }
+            ))
+        }
+
+        XCTAssertEqual(state.bufferedTextForTesting, "")
+    }
+
+    func testKeywordMatcherRemainsResponsiveWithTenThousandKeywords() {
+        let itemID = UUID()
+        var keywords = Dictionary(uniqueKeysWithValues: (0..<10_000).map {
+            (";snippet\($0)", UUID())
+        })
+        keywords[";bb"] = itemID
+        var matcher = ClipboardSnippetKeywordMatcher(snippetsByKeyword: keywords)
+
+        measure(metrics: [XCTClockMetric()]) {
+            matcher.reset()
+            var match: ClipboardSnippetKeywordMatch?
+            for character in ";bb" {
+                match = matcher.consume(text: String(character), keyCode: 0, modifiers: []) ?? match
+            }
+            XCTAssertEqual(match?.itemID, itemID)
+        }
+    }
+
     func testKeywordMatcherHandlesBackspaceAndCommandBoundaries() {
         let itemID = UUID()
         var matcher = ClipboardSnippetKeywordMatcher(snippetsByKeyword: [

@@ -70,9 +70,13 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         await waitUntilLoaded(plugin.controller)
         plugin.controller.stop()
 
-        XCTAssertFalse(plugin.startSequentialQueueForTesting(itemIDs: [historyItem.id, UUID()]))
+        let rejectedUnavailable = await plugin.startSequentialQueueForTesting(
+            itemIDs: [historyItem.id, UUID()]
+        )
+        XCTAssertFalse(rejectedUnavailable)
         XCTAssertEqual(hud.failures.count, 1)
-        XCTAssertTrue(plugin.startSequentialQueueForTesting(itemIDs: [historyItem.id]))
+        let startedHistoryQueue = await plugin.startSequentialQueueForTesting(itemIDs: [historyItem.id])
+        XCTAssertTrue(startedHistoryQueue)
     }
 
     func testExplicitQueuePastesHistoryAndSnippetInSelectionOrder() async throws {
@@ -111,13 +115,21 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         let savedLibraryLoaded = await waitUntil { plugin.savedLibraryController.isLoaded }
         XCTAssertTrue(savedLibraryLoaded)
 
-        XCTAssertTrue(plugin.startSequentialQueueForTesting(itemIDs: [historyItem.id, snippet.id]))
+        let startedMixedQueue = await plugin.startSequentialQueueForTesting(
+            itemIDs: [historyItem.id, snippet.id]
+        )
+        XCTAssertTrue(startedMixedQueue)
         plugin.handleShortcutAction(id: "paste-sequentially")
         let pastedHistory = await waitUntil {
             sender.sendCount == 1 && !plugin.hasPendingSequentialPasteForTesting
         }
         XCTAssertTrue(pastedHistory)
         XCTAssertEqual(pasteboard.text, "History value")
+
+        // The explicit queue owns a frozen template snapshot. Removing the source item after
+        // queue creation must not change the queued content or its paste-time variables.
+        let deletedSourceSnippet = await plugin.savedLibraryController.delete(id: snippet.id)
+        XCTAssertTrue(deletedSourceSnippet)
 
         plugin.handleShortcutAction(id: "paste-sequentially")
         let pastedSnippet = await waitUntil {
@@ -142,7 +154,18 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             let pasteboard = PluginTestClipboardPasteboard()
             let sender = FakeClipboardPasteCommandSender()
             let initialSession = usesExplicitQueue
-                ? try ClipboardSequentialPasteSession(source: .explicitQueue, itemIDs: [first.id, second.id])
+                ? try ClipboardSequentialPasteSession(explicitSnapshots: [
+                    ClipboardSequentialPasteSnapshot(
+                        sourceItemID: first.id,
+                        payload: .plainText("First"),
+                        expandsSnippetVariables: false
+                    ),
+                    ClipboardSequentialPasteSnapshot(
+                        sourceItemID: second.id,
+                        payload: .plainText("Second"),
+                        expandsSnippetVariables: false
+                    ),
+                ])
                 : nil
             let plugin = makePlugin(pasteboard: pasteboard, persistence: persistence,
                 savedPersistence: savedPersistence, pasteCommandSender: sender,
@@ -205,7 +228,8 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         plugin.savedLibraryController.start()
         let loaded = await waitUntil { plugin.savedLibraryController.isLoaded }
         XCTAssertTrue(loaded)
-        XCTAssertTrue(plugin.startSequentialQueueForTesting(itemIDs: [snippet.id]))
+        let startedSnippetQueue = await plugin.startSequentialQueueForTesting(itemIDs: [snippet.id])
+        XCTAssertTrue(startedSnippetQueue)
 
         plugin.handleShortcutAction(id: "paste-sequentially")
         let pasted = await waitUntil {
@@ -1775,9 +1799,6 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             )
         }
         storage.set(false, forKey: "collection-paused")
-        if let initialExplicitSession {
-            PluginStorageClipboardSequentialPasteStore(storage: storage).saveExplicitSession(initialExplicitSession)
-        }
         let context = PluginRuntimeContext(
             pluginID: ClipboardHistoryPlugin.pluginID,
             storage: storage
@@ -1795,7 +1816,11 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             accessibilityRequester: accessibilityRequester,
             frontmostProcessIdentifier: frontmostProcessIdentifier,
             sequentialPasteStabilizationDelay: sequentialPasteStabilizationDelay,
-            snippetPasteboardReader: snippetPasteboardReader
+            snippetPasteboardReader: snippetPasteboardReader,
+            sequentialPasteStore: ClipboardSequentialPasteMemoryStore(
+                session: initialExplicitSession
+            ),
+            initialSequentialPasteSession: initialExplicitSession
         )
     }
 

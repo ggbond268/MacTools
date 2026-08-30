@@ -87,11 +87,11 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
     }
 
     func prepare() throws {
-        try databaseAccess.withAccess { try lock.withLock { try prepareLocked() } }
+        try databaseAccess.withActiveAccess { try lock.withLock { try prepareLocked() } }
     }
 
     func load() throws -> [ClipboardHistoryItem] {
-        try databaseAccess.withAccess { try lock.withLock {
+        try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated else { return [] }
             try prepareLocked()
             try migrateLegacyHistoryIfNeededLocked()
@@ -142,14 +142,14 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
     }
 
     func save(_ items: [ClipboardHistoryItem]) throws {
-        try databaseAccess.withAccess { try lock.withLock { try saveLocked(items) } }
+        try databaseAccess.withActiveAccess { try lock.withLock { try saveLocked(items) } }
     }
 
     func saveChanges(
         _: [ClipboardHistoryItem],
         applying mutation: ClipboardHistoryMutation
     ) throws {
-        try databaseAccess.withAccess {
+        try databaseAccess.withActiveAccess {
             try lock.withLock { try saveChangesLocked(applying: mutation) }
         }
     }
@@ -454,7 +454,7 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
     }
 
     private func loadPayload(id: UUID) throws -> ClipboardHistoryPayload {
-        try databaseAccess.withAccess { try lock.withLock {
+        try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated else {
                 throw ClipboardHistoryPayloadAccessError.unavailable
             }
