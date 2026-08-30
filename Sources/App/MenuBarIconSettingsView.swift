@@ -93,7 +93,7 @@ struct MenuBarIconSettingsView: View {
 
                 Text(AppL10n.settings(
                     "menuBarIcon.description",
-                    defaultValue: "统一设置浅色和深色菜单栏图标，导入时会保留原图。"
+                    defaultValue: "分别设置浅色和深色菜单栏图标，导入时会保留原图。"
                 ))
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
@@ -131,7 +131,7 @@ private struct MenuBarIconEditorControls: View {
             contentOnlyRow {
                 Text(AppL10n.settings(
                     "menuBarIcon.sourceDescription",
-                    defaultValue: "支持图片、轻量 GIF/MP4 和在线动态图标；导入时会保留原图。"
+                    defaultValue: "支持分别为浅色和深色模式导入图标，以及图片、轻量 GIF/MP4 和在线动态图标；导入时会保留原图。"
                 ))
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
@@ -180,34 +180,52 @@ private struct MenuBarIconEditorControls: View {
     }
 
     private var actionButtons: some View {
-        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-            Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-
-            currentIconPreview
-
-            Divider()
-                .frame(height: PluginSettingsTheme.Size.rowIcon)
-
-            Button {
-                selectMedia()
-            } label: {
-                MenuBarIconActionLabel(action: .upload)
+        VStack(alignment: .trailing, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            ForEach(MenuBarIconAppearance.allCases) { appearance in
+                appearanceControls(for: appearance)
             }
-            .buttonStyle(.borderedProminent)
 
-            MenuBarIconGalleryPicker(iconSettings: iconSettings, gallery: gallery)
+            HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+                MenuBarIconGalleryPicker(iconSettings: iconSettings, gallery: gallery)
+            }
         }
         .frame(
             maxWidth: contentMaxWidth,
-            minHeight: PluginSettingsTheme.Size.controlHeight,
+            minHeight: PluginSettingsTheme.Size.controlHeight * 2,
             alignment: .trailing
         )
         .controlSize(.regular)
     }
 
-    private var currentIconPreview: some View {
+    private func appearanceControls(for appearance: MenuBarIconAppearance) -> some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            Text(appearance.title)
+                .font(PluginSettingsTheme.Typography.secondaryLabel)
+                .foregroundStyle(.secondary)
+
+            iconPreview(for: appearance)
+
+            Button {
+                selectMedia(for: appearance)
+            } label: {
+                MenuBarIconActionLabel(action: .upload)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityLabel(AppL10n.settingsFormat(
+                "menuBarIcon.uploadAppearance",
+                defaultValue: "上传%@图标",
+                appearance.title
+            ))
+            .accessibilityIdentifier("mactools.menu-bar-icon.upload.\(appearance.rawValue)")
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func iconPreview(for appearance: MenuBarIconAppearance) -> some View {
         MenuBarIconThumbnail(
-            image: iconSettings.previewImage(for: .light),
+            image: iconSettings.previewImage(for: appearance),
             height: PluginSettingsTheme.Size.rowIcon,
             maxWidth: 26
         )
@@ -218,11 +236,11 @@ private struct MenuBarIconEditorControls: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
         )
-        .help(AppL10n.settings("menuBarIcon.title", defaultValue: "菜单栏图标"))
-        .accessibilityLabel(AppL10n.settings("menuBarIcon.title", defaultValue: "菜单栏图标"))
+        .help(appearance.title)
+        .accessibilityLabel(appearance.title)
     }
 
-    private func selectMedia() {
+    private func selectMedia(for appearance: MenuBarIconAppearance) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -243,10 +261,10 @@ private struct MenuBarIconEditorControls: View {
         if let contentType,
            MenuBarIconProcessing.supportedAnimationContentTypes.contains(where: { contentType.conforms(to: $0) }) {
             Task {
-                await iconSettings.importAnimation(from: url)
+                await iconSettings.importAnimation(from: url, for: appearance)
             }
         } else {
-            iconSettings.importIcon(from: url)
+            iconSettings.importIcon(from: url, for: appearance)
         }
     }
 }

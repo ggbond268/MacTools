@@ -5,7 +5,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-enum MenuBarIconAppearance: String, CaseIterable, Identifiable, Codable {
+enum MenuBarIconAppearance: String, CaseIterable, Identifiable, Codable, Sendable {
     case light
     case dark
 
@@ -410,10 +410,13 @@ final class MenuBarIconSettings: ObservableObject {
     }
 
     private struct StoredState: Codable, Equatable {
-        var localIconSelection: MenuBarIconLocalSelection?
+        var lightIconSelection: MenuBarIconLocalSelection?
+        var darkIconSelection: MenuBarIconLocalSelection?
         var remoteAssetSelection: MenuBarIconRemoteAssetSelection?
 
         private enum CodingKeys: String, CodingKey {
+            case lightIconSelection
+            case darkIconSelection
             case localIconSelection
             case remoteAssetSelection
             case lightIconFileName
@@ -422,48 +425,77 @@ final class MenuBarIconSettings: ObservableObject {
         }
 
         init(
-            localIconSelection: MenuBarIconLocalSelection? = nil,
+            lightIconSelection: MenuBarIconLocalSelection? = nil,
+            darkIconSelection: MenuBarIconLocalSelection? = nil,
             remoteAssetSelection: MenuBarIconRemoteAssetSelection? = nil
         ) {
-            self.localIconSelection = localIconSelection
+            self.lightIconSelection = lightIconSelection
+            self.darkIconSelection = darkIconSelection
             self.remoteAssetSelection = remoteAssetSelection
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            lightIconSelection = try container.decodeIfPresent(
+                MenuBarIconLocalSelection.self,
+                forKey: .lightIconSelection
+            )
+            darkIconSelection = try container.decodeIfPresent(
+                MenuBarIconLocalSelection.self,
+                forKey: .darkIconSelection
+            )
             remoteAssetSelection = try container.decodeIfPresent(
                 MenuBarIconRemoteAssetSelection.self,
                 forKey: .remoteAssetSelection
             )
-            localIconSelection = try container.decodeIfPresent(
+
+            guard remoteAssetSelection == nil else {
+                return
+            }
+
+            if let legacySelection = try container.decodeIfPresent(
                 MenuBarIconLocalSelection.self,
                 forKey: .localIconSelection
-            )
+            ) {
+                lightIconSelection = lightIconSelection ?? legacySelection
+                darkIconSelection = darkIconSelection ?? legacySelection
+            }
 
-            guard localIconSelection == nil, remoteAssetSelection == nil else {
+            guard lightIconSelection == nil, darkIconSelection == nil else {
                 return
             }
 
             let lightIconFileName = try container.decodeIfPresent(String.self, forKey: .lightIconFileName)
             let darkIconFileName = try container.decodeIfPresent(String.self, forKey: .darkIconFileName)
-            let selectedFileNames = [lightIconFileName, darkIconFileName].compactMap { $0 }
             let legacySelections = try container.decodeIfPresent(
                 [MenuBarIconLocalSelection].self,
                 forKey: .recentItems
             ) ?? []
-            localIconSelection = legacySelections.first { selectedFileNames.contains($0.fileName) }
-            if localIconSelection == nil, let fileName = lightIconFileName ?? darkIconFileName {
-                localIconSelection = MenuBarIconLocalSelection(
+
+            func selection(for fileName: String?) -> MenuBarIconLocalSelection? {
+                guard let fileName else {
+                    return nil
+                }
+
+                if let selection = legacySelections.first(where: { $0.fileName == fileName }) {
+                    return selection
+                }
+
+                return MenuBarIconLocalSelection(
                     fileName: fileName,
                     frameFileNames: [fileName],
                     frameDuration: 1.0 / MenuBarIconProcessing.animationFramesPerSecond
                 )
             }
+
+            lightIconSelection = selection(for: lightIconFileName)
+            darkIconSelection = selection(for: darkIconFileName)
         }
 
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encodeIfPresent(localIconSelection, forKey: .localIconSelection)
+            try container.encodeIfPresent(lightIconSelection, forKey: .lightIconSelection)
+            try container.encodeIfPresent(darkIconSelection, forKey: .darkIconSelection)
             try container.encodeIfPresent(remoteAssetSelection, forKey: .remoteAssetSelection)
         }
     }
@@ -510,24 +542,30 @@ final class MenuBarIconSettings: ObservableObject {
             fileManager: fileManager
         )
         self.storedState = Self.loadState(userDefaults: userDefaults)
-        pruneMissingLocalIconSelection()
+        pruneMissingLocalIconSelections()
         pruneMissingRemoteAssetSelection()
         pruneUnusedLocalIconFiles()
     }
 
     var hasCustomIcon: Bool {
-        storedState.localIconSelection != nil || storedState.remoteAssetSelection != nil
+        storedState.lightIconSelection != nil
+            || storedState.darkIconSelection != nil
+            || storedState.remoteAssetSelection != nil
     }
 
     var selectedRemoteAsset: MenuBarIconRemoteAssetSelection? {
         storedState.remoteAssetSelection
     }
 
-    func importIcon(from sourceURL: URL, for _: MenuBarIconAppearance) {
-        importIcon(from: sourceURL)
+    func importIcon(from sourceURL: URL, for appearance: MenuBarIconAppearance) {
+        importIcon(from: sourceURL, appearances: [appearance])
     }
 
     func importIcon(from sourceURL: URL) {
+        importIcon(from: sourceURL, appearances: MenuBarIconAppearance.allCases)
+    }
+
+    private func importIcon(from sourceURL: URL, appearances: [MenuBarIconAppearance]) {
         clearError()
 
         guard let sourceImage = NSImage(contentsOf: sourceURL) else {
@@ -543,22 +581,27 @@ final class MenuBarIconSettings: ObservableObject {
             return
         }
 
-        storedState.localIconSelection = MenuBarIconLocalSelection(
+        let selection = MenuBarIconLocalSelection(
             fileName: fileName,
             frameFileNames: [fileName],
             frameDuration: 1.0 / MenuBarIconProcessing.animationFramesPerSecond
         )
+        setLocalIconSelection(selection, for: appearances)
         clearRemoteAssetSelection()
         pruneUnusedLocalIconFiles()
         invalidateAllIconCaches()
         persist()
     }
 
-    func importAnimation(from sourceURL: URL, for _: MenuBarIconAppearance) async {
-        await importAnimation(from: sourceURL)
+    func importAnimation(from sourceURL: URL, for appearance: MenuBarIconAppearance) async {
+        await importAnimation(from: sourceURL, appearances: [appearance])
     }
 
     func importAnimation(from sourceURL: URL) async {
+        await importAnimation(from: sourceURL, appearances: MenuBarIconAppearance.allCases)
+    }
+
+    private func importAnimation(from sourceURL: URL, appearances: [MenuBarIconAppearance]) async {
         clearError()
 
         let sourceFrames: [NSImage]
@@ -582,11 +625,12 @@ final class MenuBarIconSettings: ObservableObject {
             return
         }
 
-        storedState.localIconSelection = MenuBarIconLocalSelection(
+        let selection = MenuBarIconLocalSelection(
             fileName: fileNames[0],
             frameFileNames: fileNames,
             frameDuration: 1.0 / MenuBarIconProcessing.animationFramesPerSecond
         )
+        setLocalIconSelection(selection, for: appearances)
         clearRemoteAssetSelection()
         pruneUnusedLocalIconFiles()
         invalidateAllIconCaches()
@@ -602,7 +646,7 @@ final class MenuBarIconSettings: ObservableObject {
         }
 
         storedState.remoteAssetSelection = selection
-        storedState.localIconSelection = nil
+        setLocalIconSelection(nil, for: MenuBarIconAppearance.allCases)
         pruneUnusedLocalIconFiles()
         invalidateAllIconCaches()
         remoteAssetStore.pruneRemoteAssets(keeping: selection)
@@ -610,7 +654,7 @@ final class MenuBarIconSettings: ObservableObject {
     }
 
     func resetToDefault() {
-        storedState.localIconSelection = nil
+        setLocalIconSelection(nil, for: MenuBarIconAppearance.allCases)
         storedState.remoteAssetSelection = nil
         pruneUnusedLocalIconFiles()
         remoteAssetStore.pruneRemoteAssets(keeping: nil)
@@ -641,8 +685,8 @@ final class MenuBarIconSettings: ObservableObject {
         return payload
     }
 
-    private func makeImagePayload(for _: MenuBarIconAppearance) -> MenuBarIconImagePayload {
-        if let selection = storedState.localIconSelection,
+    private func makeImagePayload(for resolvedAppearance: MenuBarIconAppearance) -> MenuBarIconImagePayload {
+        if let selection = fallbackLocalIconSelection(for: resolvedAppearance),
            let payload = customImagePayload(
                frames: renderedImages(for: selection),
                frameDuration: selection.frameDuration,
@@ -781,6 +825,42 @@ final class MenuBarIconSettings: ObservableObject {
         remoteAssetStore.pruneRemoteAssets(keeping: nil)
     }
 
+    private func localIconSelection(for appearance: MenuBarIconAppearance) -> MenuBarIconLocalSelection? {
+        switch appearance {
+        case .light:
+            return storedState.lightIconSelection
+        case .dark:
+            return storedState.darkIconSelection
+        }
+    }
+
+    private func fallbackLocalIconSelection(for appearance: MenuBarIconAppearance) -> MenuBarIconLocalSelection? {
+        localIconSelection(for: appearance) ?? localIconSelection(for: alternateAppearance(for: appearance))
+    }
+
+    private func alternateAppearance(for appearance: MenuBarIconAppearance) -> MenuBarIconAppearance {
+        switch appearance {
+        case .light:
+            return .dark
+        case .dark:
+            return .light
+        }
+    }
+
+    private func setLocalIconSelection(
+        _ selection: MenuBarIconLocalSelection?,
+        for appearances: [MenuBarIconAppearance]
+    ) {
+        for appearance in appearances {
+            switch appearance {
+            case .light:
+                storedState.lightIconSelection = selection
+            case .dark:
+                storedState.darkIconSelection = selection
+            }
+        }
+    }
+
     private func saveOriginalImage(_ image: NSImage, to destinationURL: URL) -> Bool {
         guard let data = MenuBarIconProcessing.pngData(from: image) else {
             return false
@@ -824,20 +904,30 @@ final class MenuBarIconSettings: ObservableObject {
         return bestMatch == .darkAqua ? .dark : .light
     }
 
-    private func pruneMissingLocalIconSelection() {
-        guard let selection = storedState.localIconSelection else {
-            return
-        }
+    private func pruneMissingLocalIconSelections() {
+        var didChange = false
 
-        let hasAllFrames = !selection.frameFileNames.isEmpty
-            && selection.frameFileNames.allSatisfy { fileName in
-                fileManager.fileExists(atPath: localIconsDirectory.appendingPathComponent(fileName).path)
+        for appearance in MenuBarIconAppearance.allCases {
+            guard let selection = localIconSelection(for: appearance) else {
+                continue
             }
-        guard !hasAllFrames else {
+
+            let hasAllFrames = !selection.frameFileNames.isEmpty
+                && selection.frameFileNames.allSatisfy { fileName in
+                    fileManager.fileExists(atPath: localIconsDirectory.appendingPathComponent(fileName).path)
+                }
+            guard !hasAllFrames else {
+                continue
+            }
+
+            setLocalIconSelection(nil, for: [appearance])
+            didChange = true
+        }
+
+        guard didChange else {
             return
         }
 
-        storedState.localIconSelection = nil
         invalidateAllIconCaches()
         persist()
     }
@@ -851,7 +941,11 @@ final class MenuBarIconSettings: ObservableObject {
             return
         }
 
-        let referencedFileNames = Set(storedState.localIconSelection?.frameFileNames ?? [])
+        let referencedFileNames = Set(
+            MenuBarIconAppearance.allCases.flatMap { appearance in
+                localIconSelection(for: appearance)?.frameFileNames ?? []
+            }
+        )
         for fileURL in fileURLs where !referencedFileNames.contains(fileURL.lastPathComponent) {
             try? fileManager.removeItem(at: fileURL)
         }

@@ -5,4 +5,5 @@
 - [Dock Icon for Settings Window](dock-icon-for-settings-window.md)
 - [App Reopen Recovery](app-reopen-recovery.md)
 - [Input Remapping](input-remapping.md)
+- [Appearance-specific Menu Bar Icons](menu-bar-icon-appearance.md)
 - [zsh Config Editor Stability](zsh-config-editor-stability.md)
