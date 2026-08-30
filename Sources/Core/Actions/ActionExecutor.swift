@@ -238,6 +238,12 @@ final class ActionExecutor {
         case cancelled
     }
 
+    private enum CLIExecutionDeadlineRace: Sendable {
+        case outcome(ActionExecutionOutcome)
+        case timedOut
+        case cancelled
+    }
+
     private struct PreparedExecution {
         let definition: ActionDefinition
         let handle: ActionExecutionHandle
@@ -283,6 +289,82 @@ final class ActionExecutor {
         ) {
         case let .prepared(execution):
             return await executionOutcome(for: execution)
+        case let .completed(result):
+            return .completed(result)
+        case let .rejected(rejection):
+            return .rejected(rejection)
+        }
+    }
+
+    /// Executes the narrow CLI surface with a caller-owned upper timeout.
+    /// CLI cancellation must be terminal even when a provider did not advertise
+    /// interactive cancellation, so the handle is always cancelled with the task.
+    func executeForCLI(
+        _ invocation: ActionInvocation,
+        expectedDefinition: ActionDefinition,
+        deadline: ContinuousClock.Instant
+    ) async -> ActionExecutionOutcome {
+        guard ContinuousClock.now < deadline else {
+            return .rejected(.executionTimedOut)
+        }
+        let operation = Task { @MainActor in
+            await self.cliExecutionOutcome(
+                invocation,
+                expectedDefinition: expectedDefinition,
+                deadline: deadline
+            )
+        }
+        let race = Race<CLIExecutionDeadlineRace>()
+        race.add(Task { @MainActor in
+            race.resolve(.outcome(await operation.value))
+        })
+        race.add(Task { @MainActor in
+            let remaining = ContinuousClock.now.duration(to: deadline)
+            guard remaining > .zero else {
+                race.resolve(.timedOut)
+                return
+            }
+            do {
+                try await Task.sleep(for: remaining)
+                race.resolve(.timedOut)
+            } catch {}
+        })
+        let result = await withTaskCancellationHandler {
+            await race.wait()
+        } onCancel: {
+            Task { @MainActor in race.resolve(.cancelled) }
+        }
+        switch result {
+        case let .outcome(outcome):
+            return outcome
+        case .timedOut:
+            operation.cancel()
+            _ = await operation.value
+            return .rejected(.executionTimedOut)
+        case .cancelled:
+            operation.cancel()
+            _ = await operation.value
+            return .completed(.cancelled)
+        }
+    }
+
+    private func cliExecutionOutcome(
+        _ invocation: ActionInvocation,
+        expectedDefinition: ActionDefinition,
+        deadline: ContinuousClock.Instant
+    ) async -> ActionExecutionOutcome {
+        switch await prepare(
+            invocation,
+            confirmationService: nil,
+            expectedDefinition: expectedDefinition
+        ) {
+        case let .prepared(execution):
+            let remaining = ContinuousClock.now.duration(to: deadline)
+            return await executionOutcome(
+                for: execution,
+                timeoutLimit: max(.zero, remaining),
+                forceTaskCancellation: true
+            )
         case let .completed(result):
             return .completed(result)
         case let .rejected(rejection):
@@ -571,11 +653,15 @@ final class ActionExecutor {
     }
 
     private func executionOutcome(
-        for execution: PreparedExecution
+        for execution: PreparedExecution,
+        timeoutLimit: Duration? = nil,
+        forceTaskCancellation: Bool = false
     ) async -> ActionExecutionOutcome {
         defer { execution.concurrencyLease.release() }
-        let isCancellable = execution.definition.capabilities.contains(.cancellable)
-        let timeout = Duration.seconds(execution.definition.executionTimeoutSeconds)
+        let isCancellable = forceTaskCancellation
+            || execution.definition.capabilities.contains(.cancellable)
+        let providerTimeout = Duration.seconds(execution.definition.executionTimeoutSeconds)
+        let timeout = timeoutLimit.map { min(providerTimeout, $0) } ?? providerTimeout
         switch await executionResult(
             handle: execution.handle,
             timeout: timeout,
@@ -607,7 +693,7 @@ final class ActionExecutor {
             break
         }
 
-        if invocation.source == .automaticRule {
+        if invocation.source == .automaticRule || invocation.source == .cli {
             guard definition.risk != .confirmationRequired else {
                 return .confirmationRequiredForAutomaticExecution
             }
@@ -635,6 +721,15 @@ final class ActionExecutor {
         switch invocation.source {
         case .appIntent:
             surface = .appIntents
+        case .cli:
+            guard invocation.reference.parameters.entries.isEmpty,
+                  case let .success(action) = registry.registeredAction(for: invocation.reference),
+                  action.catalogEntry != nil,
+                  action.definition.parameters.isEmpty,
+                  registry.portability(of: invocation.reference) == .portable else {
+                return .systemExposureUnavailable
+            }
+            surface = ActionExposureSurface(rawValue: "cli")
         default:
             return nil
         }

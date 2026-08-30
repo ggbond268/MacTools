@@ -9,6 +9,8 @@ enum CLIActionDiscoveryError: Error {
     case staleCursor
     case invalidCursor
     case unknownTarget
+    case executionUnsupported
+    case unavailable
 }
 
 /// The CLI never receives a registry reference, saved input, executor, or provider callback.
@@ -61,8 +63,32 @@ final class CLIActionDiscovery {
                                      reason: available ? nil : .providerUnavailable)
     }
 
+    struct ExecutionTarget {
+        let reference: ActionReference
+        let definition: ActionDefinition
+    }
+
+    /// Resolves only the current catalog snapshot. The executor independently
+    /// revalidates the provider revision, policy, exposure, and availability.
+    func executionTarget(_ request: CLIActionRunRequest) throws -> ExecutionTarget {
+        try CLIExecutionValidation.validate(request)
+        let item = try target(.init(id: request.id))
+        guard item.record.executionSupported else {
+            throw CLIActionDiscoveryError.executionUnsupported
+        }
+        guard registry.availability(for: item.reference).isAvailable else {
+            throw CLIActionDiscoveryError.unavailable
+        }
+        guard case let .success(action) = registry.registeredAction(for: item.reference),
+              action.definition == item.definition else {
+            throw CLIActionDiscoveryError.unknownTarget
+        }
+        return ExecutionTarget(reference: item.reference, definition: item.definition)
+    }
+
     private struct Item {
         let reference: ActionReference
+        let definition: ActionDefinition
         let record: CLIActionDescription
         let revision: String
     }
@@ -106,9 +132,15 @@ final class CLIActionDiscovery {
             let record = CLIActionDescription(id: id, title: sanitized(definition.title),
                                               description: sanitized(definition.description),
                                               parameterSchemaVersion: definition.parameterSchemaVersion,
-                                              parameters: parameters)
+                                              parameters: parameters,
+                                              executionSupported: executionEligible(
+                                                entry.reference,
+                                                workflows: byID,
+                                                visiting: [],
+                                                depth: 0
+                                              ))
             guard (try? CLIDiscoveryValidation.validate(record, id: id)) != nil else { continue }
-            items.append(Item(reference: entry.reference, record: record,
+            items.append(Item(reference: entry.reference, definition: definition, record: record,
                               revision: "\(action.providerGeneration):\(action.providerExecutionRevision)"))
         }
         guard budget >= 0 else { throw CLIActionDiscoveryError.catalogTooLarge }
@@ -123,6 +155,28 @@ final class CLIActionDiscovery {
             digest.update(data: Data(item.revision.utf8))
         }
         return (items, digest.finalize().map { String(format: "%02x", $0) }.joined())
+    }
+
+    private func executionEligible(
+        _ reference: ActionReference,
+        workflows: [UUID: WorkflowDefinition],
+        visiting: Set<UUID>,
+        depth: Int
+    ) -> Bool {
+        guard reference.parameters.entries.isEmpty,
+              case let .success(action) = registry.registeredAction(for: reference),
+              action.definition.parameters.isEmpty else { return false }
+        guard reference.key.providerID == AutomationController.providerID else { return true }
+        guard depth < WorkflowExecutionLimits.maximumDepth,
+              let id = WorkflowExecutionAnalysis.nestedWorkflowID(for: reference.key),
+              !visiting.contains(id), let workflow = workflows[id], workflow.isEnabled,
+              !workflow.steps.isEmpty,
+              workflow.steps.count <= CLIDiscoveryLimits.maximumCatalogSize else { return false }
+        var next = visiting
+        next.insert(id)
+        return workflow.steps.allSatisfy {
+            executionEligible($0.reference, workflows: workflows, visiting: next, depth: depth + 1)
+        }
     }
 
     private func eligible(_ reference: ActionReference, workflows: [UUID: WorkflowDefinition],

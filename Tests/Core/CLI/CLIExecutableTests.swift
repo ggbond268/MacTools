@@ -23,8 +23,8 @@ final class CLIExecutableTests: XCTestCase {
         XCTAssertNotEqual(data["cliBuild"] as? String, "unknown")
     }
 
-    func testExecutionIsRejectedWithStableJSON() throws {
-        let result = try runCLI(["actions", "run", "test/run", "--json"])
+    func testInvalidExecutionIsRejectedLocallyWithStableJSON() throws {
+        let result = try runCLI(["actions", "run", "test/run", "--timeout", "0", "--json"])
         XCTAssertEqual(result.status, CLIExitCode.invalidInput.rawValue)
         XCTAssertTrue(result.error.isEmpty)
         let object = try XCTUnwrap(

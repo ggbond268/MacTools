@@ -111,7 +111,7 @@ Activity Bar uses separate Nightly hook scripts and a separate socket, so instal
 
 ### Experimental command-line prototype
 
-The source tree includes a separately built `mactools` prototype for local testing. In addition to `help`, `version`, and `doctor`, Phase 1 provides read-only `actions list`, `actions describe`, and `actions availability`, with human-readable or `--json` output. Discovery uses the host's canonical action registry and independent CLI exposure policy; it never executes actions or accepts parameter values. The CLI is not embedded in the app or publicly packaged yet. Follow [the Phase 1 test guide](docs/testing/cli-phase-1.md) for signed local setup and sample commands.
+The source tree includes a separately built `mactools` prototype for local testing. It provides `help`, `version`, `doctor`, read-only action discovery, and Phase 2 execution with `actions run <id>`. Execution is limited to actions described as execution-supported: safe, background, automatic, portable, truly parameterless actions that the host revalidates immediately before running. Commands support human-readable or `--json` output, bounded timeouts, and Ctrl-C cancellation. Typed parameters and saved presets remain unsupported. The CLI is not embedded in the app or publicly packaged yet. Follow [the Phase 2 test guide](docs/testing/cli-phase-2.md) for signed local setup and sample commands.
 
 ## Upgrade
 

@@ -4,12 +4,28 @@ import XCTest
 @testable import MacTools
 
 final class CLIDiscoveryProtocolTests: XCTestCase {
-    func testVersionNegotiationKeepsV1DiagnosticsAndRequiresV2Discovery() {
-        XCTAssertEqual(CLIProtocolNegotiator.selectedVersion(clientMinimum: 1, clientMaximum: 2,
+    func testVersionNegotiationKeepsV1DiagnosticsV2DiscoveryAndRequiresV3Execution() {
+        XCTAssertEqual(CLIProtocolNegotiator.selectedVersion(clientMinimum: 1, clientMaximum: 3,
                                                              hostMinimum: 1, hostMaximum: 1), 1)
         XCTAssertEqual(CLIProtocolNegotiator.selectedVersion(clientMinimum: 1, clientMaximum: 1), 1)
         XCTAssertEqual(CLIOperation.doctor.minimumProtocolVersion, 1)
         XCTAssertEqual(CLIOperation.actionsList.minimumProtocolVersion, 2)
+        XCTAssertEqual(CLIOperation.actionsRun.minimumProtocolVersion, 3)
+    }
+
+    func testExecutionRequestAndResultValidation() throws {
+        let request = CLIActionRunRequest(id: "test/a", timeoutSeconds: 15)
+        try CLIExecutionValidation.validate(request)
+        for timeout in [0, 301] {
+            XCTAssertThrowsError(try CLIExecutionValidation.validate(
+                CLIActionRunRequest(id: "test/a", timeoutSeconds: timeout)
+            ))
+        }
+        let result = CLIActionRunResult(id: "test/a", message: "Done")
+        try CLIExecutionValidation.validate(result, request: request)
+        XCTAssertThrowsError(try CLIExecutionValidation.validate(
+            CLIActionRunResult(id: "test/other", message: nil), request: request
+        ))
     }
 
     func testStrictShapesRejectUnknownDuplicateAndMalformedNestedFields() throws {
@@ -94,6 +110,36 @@ final class CLIDiscoveryProtocolTests: XCTestCase {
         XCTAssertTrue(rendered.contains("currently unavailable"))
     }
 
+    func testExecutionHumanAndJSONRenderersValidateBeforeOutput() throws {
+        let request = CLIActionRunRequest(id: "test/a", timeoutSeconds: 3)
+        let requestData = try CLIProtocolCodec.encodeRequest(request)
+        let result = CLIActionRunResult(id: request.id, message: "Done")
+        let response = CLIResponseEnvelope(
+            protocolVersion: 3,
+            requestID: UUID(),
+            operation: .actionsRun,
+            startedAt: .distantPast,
+            finishedAt: .now,
+            outcome: .completed,
+            message: nil,
+            rejection: nil,
+            payload: try CLIProtocolCodec.encodeResponse(result)
+        )
+        XCTAssertEqual(
+            try CLIOutput().renderExecution(response, requestPayload: requestData, json: false),
+            "test/a: succeeded — Done"
+        )
+        let json = try CLIOutput().renderExecution(response, requestPayload: requestData, json: true)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(object["command"] as? String, "actions.run")
+        XCTAssertEqual((object["data"] as? [String: Any])?["status"] as? String, "succeeded")
+        XCTAssertThrowsError(try CLIOutput().renderExecution(
+            response,
+            requestPayload: CLIProtocolCodec.encodeRequest(CLIActionRunRequest(id: "test/b")),
+            json: false
+        ))
+    }
+
     func testResponseOutcomeAndTimestampSemantics() throws {
         let request = CLIRequestEnvelope(protocolVersion: 2, requestID: UUID(), operation: .actionsDescribe,
                                          sentAt: .now, payload: nil)
@@ -105,6 +151,84 @@ final class CLIDiscoveryProtocolTests: XCTestCase {
                                 startedAt: .distantPast, finishedAt: .now, outcome: .unknownTarget,
                                 message: nil, rejection: nil, payload: Data()),
         ] { XCTAssertThrowsError(try CLIProtocolSemanticValidator.validate(response: response, matching: request)) }
+    }
+
+    func testExecutionFailuresAreScopedToRunOperationAndStableCategories() throws {
+        let run = CLIRequestEnvelope(
+            protocolVersion: 3,
+            requestID: UUID(),
+            operation: .actionsRun,
+            sentAt: .now,
+            payload: nil
+        )
+        for (outcome, category) in [
+            (CLIOutcome.unavailable, "actionUnavailable"),
+            (.unavailable, "actionBusy"),
+            (.actionFailed, "actionFailed"),
+            (.timedOut, "executionTimedOut"),
+        ] {
+            let response = CLIResponseEnvelope.failure(
+                request: run,
+                outcome: outcome,
+                category: category,
+                message: "Stable"
+            )
+            XCTAssertNoThrow(
+                try CLIProtocolSemanticValidator.validate(response: response, matching: run)
+            )
+        }
+
+        let list = CLIRequestEnvelope(
+            protocolVersion: 3,
+            requestID: UUID(),
+            operation: .actionsList,
+            sentAt: .now,
+            payload: nil
+        )
+        for (outcome, category) in [
+            (CLIOutcome.unavailable, "actionUnavailable"),
+            (.actionFailed, "actionFailed"),
+            (.timedOut, "executionTimedOut"),
+            (.unknownTarget, "unknownAction"),
+        ] {
+            let response = CLIResponseEnvelope.failure(
+                request: list,
+                outcome: outcome,
+                category: category,
+                message: "Malformed"
+            )
+            XCTAssertThrowsError(
+                try CLIProtocolSemanticValidator.validate(response: response, matching: list)
+            )
+        }
+        let wrongCategory = CLIResponseEnvelope.failure(
+            request: run,
+            outcome: .actionFailed,
+            category: "providerSecret",
+            message: "Malformed"
+        )
+        XCTAssertThrowsError(
+            try CLIProtocolSemanticValidator.validate(response: wrongCategory, matching: run)
+        )
+
+        let doctor = CLIRequestEnvelope(
+            protocolVersion: 3,
+            requestID: UUID(),
+            operation: .doctor,
+            sentAt: .now,
+            payload: nil
+        )
+        for category in ["registryNotReady", "catalogLimitExceeded"] {
+            let response = CLIResponseEnvelope.failure(
+                request: doctor,
+                outcome: .hostUnavailable,
+                category: category,
+                message: "Impossible for doctor"
+            )
+            XCTAssertThrowsError(
+                try CLIProtocolSemanticValidator.validate(response: response, matching: doctor)
+            )
+        }
     }
 
     private func description() -> CLIActionDescription {

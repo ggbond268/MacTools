@@ -85,7 +85,8 @@ final class CLIBrokerClient: @unchecked Sendable {
         operation: CLIOperation,
         payload: Data?,
         requestID: UUID = UUID(),
-        deadline: CLIStartupDeadline
+        deadline: CLIStartupDeadline,
+        maximumResponseWait: Duration = .seconds(10)
     ) async throws -> CLIResponseEnvelope {
         guard let version = negotiatedProtocolVersion else {
             throw CLIBrokerClientError.unavailable("The host handshake has not completed.")
@@ -105,7 +106,7 @@ final class CLIBrokerClient: @unchecked Sendable {
         let responseData: Data
         guard let responseDeadline = requestCleanupPolicy.responseDeadline(
             within: deadline,
-            maximumWait: .seconds(10)
+            maximumWait: maximumResponseWait
         ) else {
             invalidateConnection()
             throw CLIBrokerClientError.unavailable(
