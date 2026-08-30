@@ -156,8 +156,8 @@ enum PluginListFilter {
             item.title,
             item.summary,
             item.id,
-            category.displayName
-        ])
+            category.displayName,
+        ] + item.productSearchKeywords)
     }
 
     static func matches(

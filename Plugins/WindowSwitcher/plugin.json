@@ -48,6 +48,112 @@
       "summary": "用可設定快速鍵快速切換正在執行的視窗"
     }
   },
+  "productStrings": {
+    "long-description": {
+      "ar": "بدّل بين نوافذ التطبيقات باستخدام اختصار عام قابل للتخصيص وطريقة عرض تفاعلية في المقدمة.",
+      "de": "Wechsle mit einem konfigurierbaren globalen Kurzbefehl und einer interaktiven Vordergrundansicht zwischen App-Fenstern.",
+      "en": "Switch between application windows with a configurable global shortcut and an interactive foreground picker.",
+      "es": "Cambia entre ventanas de aplicaciones con un atajo global configurable y un selector interactivo.",
+      "fr": "Passez d’une fenêtre d’app à l’autre avec un raccourci global configurable et un sélecteur interactif.",
+      "ja": "設定可能なグローバルショートカットと対話式の前面ピッカーでアプリのウインドウを切り替えます。",
+      "ko": "설정 가능한 전역 단축키와 대화형 전면 선택기로 앱 윈도우를 전환합니다.",
+      "pt": "Alterne entre janelas de apps com um atalho global configurável e um seletor interativo.",
+      "ru": "Переключайтесь между окнами приложений с помощью настраиваемого глобального сочетания и интерактивного выбора.",
+      "zh-Hans": "使用可配置的全局快捷键和前台交互选择器切换应用窗口。",
+      "zh-Hant": "使用可設定的全域快速鍵和前景互動選擇器切換 App 視窗。"
+    },
+    "example-keyboard-switching": {
+      "ar": "اضغط الاختصار مرارًا لاختيار نافذة من لوحة المفاتيح.",
+      "de": "Drücke den Kurzbefehl wiederholt, um ein Fenster per Tastatur auszuwählen.",
+      "en": "Press the shortcut repeatedly to choose a window from the keyboard.",
+      "es": "Pulsa el atajo varias veces para elegir una ventana con el teclado.",
+      "fr": "Appuyez plusieurs fois sur le raccourci pour choisir une fenêtre au clavier.",
+      "ja": "ショートカットを繰り返し押してキーボードからウインドウを選びます。",
+      "ko": "단축키를 반복해서 눌러 키보드로 윈도우를 선택합니다.",
+      "pt": "Prima repetidamente o atalho para escolher uma janela pelo teclado.",
+      "ru": "Нажимайте сочетание повторно, чтобы выбрать окно с клавиатуры.",
+      "zh-Hans": "重复按快捷键，通过键盘选择窗口。",
+      "zh-Hant": "重複按快速鍵，透過鍵盤選擇視窗。"
+    },
+    "use-case-switch-running-windows": {
+      "ar": "التبديل بين النوافذ المفتوحة",
+      "de": "Zwischen geöffneten Fenstern wechseln",
+      "en": "Switch running windows",
+      "es": "Cambiar entre ventanas abiertas",
+      "fr": "Changer de fenêtre ouverte",
+      "ja": "開いているウインドウを切り替える",
+      "ko": "실행 중인 윈도우 전환",
+      "pt": "Alternar janelas abertas",
+      "ru": "Переключать открытые окна",
+      "zh-Hans": "切换正在运行的窗口",
+      "zh-Hant": "切換正在執行的視窗"
+    },
+    "action-window-switcher-switch-title": {
+      "ar": "فتح مبدّل النوافذ",
+      "de": "Fensterwechsel öffnen",
+      "en": "Open Window Switcher",
+      "es": "Abrir cambiador de ventanas",
+      "fr": "Ouvrir le sélecteur de fenêtres",
+      "ja": "ウインドウ切り替えを開く",
+      "ko": "윈도우 전환기 열기",
+      "pt": "Abrir alternador de janelas",
+      "ru": "Открыть переключатель окон",
+      "zh-Hans": "打开窗口切换",
+      "zh-Hant": "開啟視窗切換"
+    },
+    "action-window-switcher-switch-description": {
+      "ar": "يعرض منتقيًا تفاعليًا للتبديل بين نوافذ التطبيقات.",
+      "de": "Zeigt einen interaktiven Auswahldialog zum Wechseln zwischen App-Fenstern.",
+      "en": "Show an interactive picker for switching between application windows.",
+      "es": "Muestra un selector interactivo para cambiar entre ventanas de aplicaciones.",
+      "fr": "Affiche un sélecteur interactif pour changer de fenêtre d’app.",
+      "ja": "アプリのウインドウを切り替える対話式ピッカーを表示します。",
+      "ko": "앱 윈도우를 전환하는 대화형 선택기를 표시합니다.",
+      "pt": "Mostra um seletor interativo para alternar entre janelas de apps.",
+      "ru": "Показывает интерактивный выбор для переключения между окнами приложений.",
+      "zh-Hans": "显示用于切换应用窗口的交互选择器。",
+      "zh-Hant": "顯示用於切換 App 視窗的互動選擇器。"
+    },
+    "setup-grant-accessibility-title": {
+      "ar": "السماح بإمكانية الوصول",
+      "de": "Bedienungshilfen erlauben",
+      "en": "Allow Accessibility",
+      "es": "Permitir Accesibilidad",
+      "fr": "Autoriser l’accessibilité",
+      "ja": "アクセシビリティを許可",
+      "ko": "손쉬운 사용 허용",
+      "pt": "Permitir Acessibilidade",
+      "ru": "Разрешить Универсальный доступ",
+      "zh-Hans": "允许辅助功能",
+      "zh-Hant": "允許輔助使用"
+    },
+    "setup-grant-accessibility-description": {
+      "ar": "اسمح لـ MacTools بعرض النوافذ والتبديل إليها عبر الاختصار العام.",
+      "de": "Erlaube MacTools, Fenster über den globalen Kurzbefehl anzuzeigen und zu wechseln.",
+      "en": "Allow MacTools to list and switch windows from the global shortcut.",
+      "es": "Permite que MacTools enumere y cambie ventanas con el atajo global.",
+      "fr": "Autorisez MacTools à lister et changer les fenêtres avec le raccourci global.",
+      "ja": "グローバルショートカットからウインドウを一覧表示して切り替えることを許可します。",
+      "ko": "MacTools가 전역 단축키로 윈도우를 나열하고 전환하도록 허용합니다.",
+      "pt": "Permita que o MacTools liste e alterne janelas pelo atalho global.",
+      "ru": "Разрешите MacTools показывать и переключать окна глобальным сочетанием.",
+      "zh-Hans": "允许 MacTools 通过全局快捷键列出并切换窗口。",
+      "zh-Hant": "允許 MacTools 透過全域快速鍵列出並切換視窗。"
+    },
+    "setup-missing-dependency-help": {
+      "ar": "فعّل إذن إمكانية الوصول واختصار مبدّل النوافذ.",
+      "de": "Aktiviere die Bedienungshilfe-Berechtigung und den Fensterwechsel-Kurzbefehl.",
+      "en": "Enable Accessibility permission and the Window Switcher shortcut.",
+      "es": "Activa el permiso de Accesibilidad y el atajo del cambiador de ventanas.",
+      "fr": "Activez l’autorisation d’accessibilité et le raccourci du sélecteur de fenêtres.",
+      "ja": "アクセシビリティ権限とウインドウ切り替えショートカットを有効にしてください。",
+      "ko": "손쉬운 사용 권한과 윈도우 전환기 단축키를 활성화하십시오.",
+      "pt": "Ative a permissão de Acessibilidade e o atalho do alternador de janelas.",
+      "ru": "Включите разрешение Универсального доступа и сочетание переключателя окон.",
+      "zh-Hans": "启用辅助功能权限和窗口切换快捷键。",
+      "zh-Hant": "啟用輔助使用權限和視窗切換快速鍵。"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -65,5 +171,185 @@
   "permissions": [
     "accessibility"
   ],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.long-description",
+    "examples": [
+      {
+        "id": "keyboard-switching",
+        "text": "@productStrings.example-keyboard-switching"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "window switcher",
+      "application switcher",
+      "keyboard",
+      "shortcut"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "تبديل النوافذ",
+        "اختصار النوافذ"
+      ],
+      "de": [
+        "Fensterwechsel",
+        "Fensterkurzbefehl"
+      ],
+      "en": [
+        "window switcher",
+        "window shortcut"
+      ],
+      "es": [
+        "cambiador de ventanas",
+        "atajo de ventanas"
+      ],
+      "fr": [
+        "sélecteur de fenêtres",
+        "raccourci de fenêtre"
+      ],
+      "ja": [
+        "ウインドウ切り替え",
+        "ウインドウショートカット"
+      ],
+      "ko": [
+        "윈도우 전환",
+        "윈도우 단축키"
+      ],
+      "pt": [
+        "alternador de janelas",
+        "atalho de janelas"
+      ],
+      "ru": [
+        "переключатель окон",
+        "сочетание для окон"
+      ],
+      "zh-Hans": [
+        "窗口切换",
+        "窗口快捷键"
+      ],
+      "zh-Hant": [
+        "視窗切換",
+        "視窗快速鍵"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "switch-running-windows",
+        "title": "@productStrings.use-case-switch-running-windows"
+      }
+    ],
+    "goalCategories": [
+      "productivity",
+      "keyboard-navigation"
+    ],
+    "relatedPluginIDs": [
+      "app-hotkey"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [
+      "keyboard"
+    ],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "running-applications",
+      "application-windows",
+      "window-titles"
+    ],
+    "dataPersisted": [
+      "switcher-configuration",
+      "shortcut-bindings"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "window-switcher",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "switch",
+            "title": "@productStrings.action-window-switcher-switch-title",
+            "description": "@productStrings.action-window-switcher-switch-description",
+            "keywords": [
+              "window switcher",
+              "keyboard",
+              "shortcut"
+            ],
+            "systemImage": "rectangle.2.swap",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "grant-accessibility",
+        "title": "@productStrings.setup-grant-accessibility-title",
+        "description": "@productStrings.setup-grant-accessibility-description"
+      }
+    ],
+    "suggestedTestAction": {
+      "providerID": "window-switcher",
+      "actionID": "switch"
+    },
+    "optionalSurfaces": [
+      "action-grid",
+      "trackpad-gesture"
+    ],
+    "missingDependencyHelp": "@productStrings.setup-missing-dependency-help"
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "app-hotkey"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

@@ -22,6 +22,8 @@ Example.mactoolsplugin/
 
 `plugin.json` is read before loading executable code:
 
+Set `minHostVersion` to the first host that exports every PluginKit API used by the package. In PluginKit v5, `PluginDashboardPresenting`, `PluginComponentDetailPresenting`, and `PluginComponentDetailContent` require MacTools 1.2.1. System Status declares this floor so 1.2.0 hosts cannot install a package with unavailable symbols.
+
 ```json
 {
   "id": "com.example.mactools.demo",
@@ -75,6 +77,8 @@ Only `plugin.json` and the built `.bundle` are copied into a `.mactoolsplugin` p
 In this repository, plugin Xcode targets are generated before XcodeGen runs. The generator scans `Plugins/*/plugin.json` and applies a shared target template for `Sources/`, `Bundle/`, `Tests/`, plugin schemes, and the host test target. Most plugins do not need any root project changes. Add `Plugins/<PluginName>/project.yml` only for plugin-local build differences such as `OTHER_LDFLAGS`, `SWIFT_INCLUDE_PATHS`, extra bundle resources, helper/tool targets, or additional target dependencies. A helper/tool target can declare `bundleResourcePath` to have the generated bundle target copy its built executable into `Contents/Resources/<bundleResourcePath>/`.
 
 The manifest ID is the stable identity of the package. It must match the runtime `PluginMetadata.id`, and a package must return exactly one plugin instance. Use lower-case, readable IDs such as `display-brightness` unless there is a strong reason to use a reverse-DNS identifier. The ID `marketplace` is reserved for the host-owned URL route and is not a valid plugin ID.
+
+The same source manifest may add optional product metadata for pre-install discovery, requirements, privacy, actions, setup, and plugin relationships. Follow [`plugin-manifest.schema.json`](plugin-manifest.schema.json); do not create a second marketplace metadata file. Declare localized product copy under the source-only `productStrings` table. Each entry either reuses `@displayName` or `@summary`, imports an existing `Resources/Localizable.xcstrings` key with `@localizable.<key>`, uses a standard localized toggle or enabled-state label with `@standardAction.<key>`, renders declared requirements with `@standardSetup.requirements.title` or `@standardSetup.requirements.description`, or supplies all 11 supported locale values; localized product fields uniformly reference `@productStrings.<key>`. Packaging and catalog generation expand the references and remove the source table before distribution. Keep screenshots under `MarketplaceAssets/`, and describe dynamic machine-local action entries with templates instead of enumerating local values. The catalog generator validates localization, identifiers, permission and surface values, references, domains, assets, and action completeness before projection.
 
 When a plugin uses a private Apple framework, it must load that framework dynamically at runtime and validate every required class and selector before use. Do not add a static framework link: unsupported systems must present a clear plugin error instead of crashing.
 

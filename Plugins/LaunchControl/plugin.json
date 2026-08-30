@@ -48,6 +48,76 @@
       "summary": "查看和管理 launchctl 啟動項"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "action.start-favorite.title": "@localizable.managedAction.start.title",
+    "action.start-favorite.description": {
+      "ar": "ابدأ عنصر التشغيل المفضل المحدد.", "de": "Startet das ausgewählte favorisierte Startelement.",
+      "en": "Start the selected favorite launch item.", "es": "Inicia el elemento de inicio favorito seleccionado.",
+      "fr": "Démarre l’élément de lancement favori sélectionné.", "ja": "選択したお気に入りの起動項目を開始します。",
+      "ko": "선택한 즐겨찾기 시작 항목을 시작합니다.", "pt": "Inicia o item de inicialização favorito selecionado.",
+      "ru": "Запускает выбранный избранный элемент запуска.", "zh-Hans": "启动所选的收藏启动项。",
+      "zh-Hant": "啟動所選的收藏啟動項目。"
+    },
+    "action.start-favorite.parameter-summary": {
+      "ar": "اختر عنصر التشغيل المفضل المخزن على هذا الـ Mac لبدئه.",
+      "de": "Wähle das auf diesem Mac gespeicherte favorisierte Startelement aus, das gestartet werden soll.",
+      "en": "Select the favorite launch item stored on this Mac to start.",
+      "es": "Selecciona el elemento de inicio favorito guardado en este Mac que quieres iniciar.",
+      "fr": "Sélectionnez l’élément de lancement favori enregistré sur ce Mac à démarrer.",
+      "ja": "この Mac に保存されているお気に入りの起動項目から、開始する項目を選択します。",
+      "ko": "이 Mac에 저장된 즐겨찾기 시작 항목 중 시작할 항목을 선택하세요.",
+      "pt": "Selecione o item de inicialização favorito salvo neste Mac para iniciar.",
+      "ru": "Выберите сохранённый на этом Mac избранный элемент запуска, который нужно запустить.",
+      "zh-Hans": "选择存储在此 Mac 上、要启动的收藏启动项。",
+      "zh-Hant": "選擇儲存在此 Mac 上、要啟動的收藏啟動項目。"
+    },
+    "action.stop-favorite.title": "@localizable.managedAction.stop.title",
+    "action.stop-favorite.description": {
+      "ar": "أوقف عنصر التشغيل المفضل المحدد.", "de": "Stoppt das ausgewählte favorisierte Startelement.",
+      "en": "Stop the selected favorite launch item.", "es": "Detiene el elemento de inicio favorito seleccionado.",
+      "fr": "Arrête l’élément de lancement favori sélectionné.", "ja": "選択したお気に入りの起動項目を停止します。",
+      "ko": "선택한 즐겨찾기 시작 항목을 중지합니다.", "pt": "Interrompe o item de inicialização favorito selecionado.",
+      "ru": "Останавливает выбранный избранный элемент запуска.", "zh-Hans": "停止所选的收藏启动项。",
+      "zh-Hant": "停止所選的收藏啟動項目。"
+    },
+    "action.stop-favorite.parameter-summary": {
+      "ar": "اختر عنصر التشغيل المفضل المخزن على هذا الـ Mac لإيقافه.",
+      "de": "Wähle das auf diesem Mac gespeicherte favorisierte Startelement aus, das gestoppt werden soll.",
+      "en": "Select the favorite launch item stored on this Mac to stop.",
+      "es": "Selecciona el elemento de inicio favorito guardado en este Mac que quieres detener.",
+      "fr": "Sélectionnez l’élément de lancement favori enregistré sur ce Mac à arrêter.",
+      "ja": "この Mac に保存されているお気に入りの起動項目から、停止する項目を選択します。",
+      "ko": "이 Mac에 저장된 즐겨찾기 시작 항목 중 중지할 항목을 선택하세요.",
+      "pt": "Selecione o item de inicialização favorito salvo neste Mac para interromper.",
+      "ru": "Выберите сохранённый на этом Mac избранный элемент запуска, который нужно остановить.",
+      "zh-Hans": "选择存储在此 Mac 上、要停止的收藏启动项。",
+      "zh-Hant": "選擇儲存在此 Mac 上、要停止的收藏啟動項目。"
+    },
+    "action.restart-favorite.title": "@localizable.managedAction.restart.title",
+    "action.restart-favorite.description": {
+      "ar": "أعد تشغيل عنصر التشغيل المفضل المحدد.", "de": "Startet das ausgewählte favorisierte Startelement neu.",
+      "en": "Restart the selected favorite launch item.", "es": "Reinicia el elemento de inicio favorito seleccionado.",
+      "fr": "Redémarre l’élément de lancement favori sélectionné.", "ja": "選択したお気に入りの起動項目を再起動します。",
+      "ko": "선택한 즐겨찾기 시작 항목을 다시 시작합니다.", "pt": "Reinicia o item de inicialização favorito selecionado.",
+      "ru": "Перезапускает выбранный избранный элемент запуска.", "zh-Hans": "重新启动所选的收藏启动项。",
+      "zh-Hant": "重新啟動所選的收藏啟動項目。"
+    },
+    "action.restart-favorite.parameter-summary": {
+      "ar": "اختر عنصر التشغيل المفضل المخزن على هذا الـ Mac لإعادة تشغيله.",
+      "de": "Wähle das auf diesem Mac gespeicherte favorisierte Startelement aus, das neu gestartet werden soll.",
+      "en": "Select the favorite launch item stored on this Mac to restart.",
+      "es": "Selecciona el elemento de inicio favorito guardado en este Mac que quieres reiniciar.",
+      "fr": "Sélectionnez l’élément de lancement favori enregistré sur ce Mac à redémarrer.",
+      "ja": "この Mac に保存されているお気に入りの起動項目から、再起動する項目を選択します。",
+      "ko": "이 Mac에 저장된 즐겨찾기 시작 항목 중 다시 시작할 항목을 선택하세요.",
+      "pt": "Selecione o item de inicialização favorito salvo neste Mac para reiniciar.",
+      "ru": "Выберите сохранённый на этом Mac избранный элемент запуска, который нужно перезапустить.",
+      "zh-Hans": "选择存储在此 Mac 上、要重新启动的收藏启动项。",
+      "zh-Hant": "選擇儲存在此 Mac 上、要重新啟動的收藏啟動項目。"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +133,230 @@
     "settings": "workspace"
   },
   "permissions": [],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "launch",
+      "control",
+      "items",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "عناصر التشغيل"
+      ],
+      "de": [
+        "Startelemente"
+      ],
+      "en": [
+        "Launch Items"
+      ],
+      "es": [
+        "Elementos de inicio"
+      ],
+      "fr": [
+        "Éléments de lancement"
+      ],
+      "ja": [
+        "起動項目"
+      ],
+      "ko": [
+        "시작 항목"
+      ],
+      "pt": [
+        "Itens de inicialização"
+      ],
+      "ru": [
+        "Элементы запуска"
+      ],
+      "zh-Hans": [
+        "启动项"
+      ],
+      "zh-Hant": [
+        "啟動項目"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "productivity-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "launch-control",
+        "kind": "dynamic",
+        "staticActions": [],
+        "dynamicTemplates": [
+          {
+            "id": "start-favorite",
+            "title": "@productStrings.action.start-favorite.title",
+            "description": "@productStrings.action.start-favorite.description",
+            "entrySource": "favorite-launch-items",
+            "parameters": [
+              {
+                "id": "item-id",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "localOnly"
+              }
+            ],
+            "parameterSummary": "@productStrings.action.start-favorite.parameter-summary",
+            "localOnlyIdentity": true,
+            "keywords": [
+              "launch",
+              "control",
+              "start",
+              "favorite",
+              "items"
+            ],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "automatic-rule",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "stop-favorite",
+            "title": "@productStrings.action.stop-favorite.title",
+            "description": "@productStrings.action.stop-favorite.description",
+            "entrySource": "favorite-launch-items",
+            "parameters": [
+              {
+                "id": "item-id",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "localOnly"
+              }
+            ],
+            "parameterSummary": "@productStrings.action.stop-favorite.parameter-summary",
+            "localOnlyIdentity": true,
+            "keywords": [
+              "launch",
+              "control",
+              "stop",
+              "favorite",
+              "items"
+            ],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "restart-favorite",
+            "title": "@productStrings.action.restart-favorite.title",
+            "description": "@productStrings.action.restart-favorite.description",
+            "entrySource": "favorite-launch-items",
+            "parameters": [
+              {
+                "id": "item-id",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "localOnly"
+              }
+            ],
+            "parameterSummary": "@productStrings.action.restart-favorite.parameter-summary",
+            "localOnlyIdentity": true,
+            "keywords": [
+              "launch",
+              "control",
+              "restart",
+              "favorite",
+              "items"
+            ],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          }
+        ]
+      }
+    ]
+  }
 }

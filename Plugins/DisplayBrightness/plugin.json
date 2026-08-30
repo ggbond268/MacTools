@@ -48,6 +48,20 @@
       "summary": "快速調節每個顯示器的亮度"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description",
+    "action.display-brightness.decrease.title": "@localizable.shortcut.direction.decrease",
+    "action.display-brightness.decrease.description": "@localizable.shortcut.direction.decrease",
+    "action.display-brightness.increase.title": "@localizable.shortcut.direction.increase",
+    "action.display-brightness.increase.description": "@localizable.shortcut.direction.increase",
+    "action.disable-built-in-display.title": "@localizable.displayDisable.action.disable",
+    "action.disable-built-in-display.description": "@localizable.displayDisable.action.disable",
+    "action.restore-built-in-display.title": "@localizable.displayDisable.action.restore",
+    "action.restore-built-in-display.description": "@localizable.displayDisable.action.restore"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +77,244 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "display"
+  "category": "display",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "display",
+      "brightness"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "سطوع الشاشة"
+      ],
+      "de": [
+        "Displayhelligkeit"
+      ],
+      "en": [
+        "Display Brightness"
+      ],
+      "es": [
+        "Brillo de pantalla"
+      ],
+      "fr": [
+        "Luminosité de l’écran"
+      ],
+      "ja": [
+        "ディスプレイの明るさ"
+      ],
+      "ko": [
+        "디스플레이 밝기"
+      ],
+      "pt": [
+        "Brilho da tela"
+      ],
+      "ru": [
+        "Яркость дисплея"
+      ],
+      "zh-Hans": [
+        "显示器亮度"
+      ],
+      "zh-Hant": [
+        "顯示器亮度"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "display"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [
+      "connected display"
+    ],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "display-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "display-brightness",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "display-brightness.decrease",
+            "title": "@productStrings.action.display-brightness.decrease.title",
+            "description": "@productStrings.action.display-brightness.decrease.description",
+            "keywords": [
+              "显示器亮度",
+              "降低",
+              "display",
+              "brightness",
+              "decrease"
+            ],
+            "systemImage": "sun.min.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "display-brightness.increase",
+            "title": "@productStrings.action.display-brightness.increase.title",
+            "description": "@productStrings.action.display-brightness.increase.description",
+            "keywords": [
+              "显示器亮度",
+              "增加",
+              "display",
+              "brightness",
+              "increase"
+            ],
+            "systemImage": "sun.max.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "disable-built-in-display",
+            "title": "@productStrings.action.disable-built-in-display.title",
+            "description": "@productStrings.action.disable-built-in-display.description",
+            "keywords": [
+              "显示器亮度",
+              "display",
+              "disable",
+              "brightness",
+              "built",
+              "in"
+            ],
+            "systemImage": "display",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "restore-built-in-display",
+            "title": "@productStrings.action.restore-built-in-display.title",
+            "description": "@productStrings.action.restore-built-in-display.description",
+            "keywords": [
+              "显示器亮度",
+              "display",
+              "restore",
+              "brightness",
+              "built",
+              "in"
+            ],
+            "systemImage": "display",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "automatic-rule",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

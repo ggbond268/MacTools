@@ -2323,6 +2323,172 @@
           }
         }
       }
+    },
+    "permission.automation.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "يتطلب تحميل أيقونات الاختصارات التحكم في تطبيق الاختصارات من Apple." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zum Laden von Kurzbefehlssymbolen muss Apple Kurzbefehle gesteuert werden." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Para cargar los iconos de los atajos es necesario controlar Atajos de Apple." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le chargement des icônes de raccourcis nécessite de contrôler Raccourcis d’Apple." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ショートカットのアイコンを読み込むには、Appleの「ショートカット」の制御が必要です。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "단축어 아이콘을 불러오려면 Apple 단축어 앱을 제어해야 합니다." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Carregar ícones de atalhos requer o controlo da app Atalhos da Apple." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Для загрузки значков команд требуется управление приложением Apple «Команды»." } },
+
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading shortcut icons requires controlling Apple Shortcuts."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取快捷指令图标时需要控制 Apple“快捷指令”。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讀取捷徑圖示時需要控制 Apple「捷徑」。"
+          }
+        }
+      }
+    },
+    "permission.automation.footnote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "سيطلب macOS إذن الأتمتة عند تحميل أيقونات الاختصارات لأول مرة." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "macOS fragt beim ersten Laden von Kurzbefehlssymbolen nach der Automation-Berechtigung." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "macOS solicitará acceso de automatización la primera vez que se carguen los iconos de los atajos." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "macOS demandera l’accès à l’automatisation lors du premier chargement des icônes de raccourcis." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ショートカットのアイコンを初めて読み込むときに、macOS がオートメーションの許可を求めます。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "단축어 아이콘을 처음 불러올 때 macOS가 자동화 권한을 요청합니다." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "O macOS pedirá acesso à Automação quando os ícones de atalhos forem carregados pela primeira vez." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "При первой загрузке значков команд macOS запросит доступ к автоматизации." } },
+
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS will request Automation access the first time shortcut icons are loaded."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 会在首次读取快捷指令图标时请求自动化授权。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 會在首次讀取捷徑圖示時要求自動化授權。"
+          }
+        }
+      }
+    },
+    "permission.automation.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الأتمتة" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Automation" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Automatización" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Automatisation" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "オートメーション" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "자동화" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Automação" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Автоматизация" } },
+
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动化"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動化"
+          }
+        }
+      }
+    },
+    "permission.automation.status": {
+        "localizations": {
+            "ar": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "تأكيد عند الاستخدام"
+                }
+            },
+            "de": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Bestätigung bei Verwendung"
+                }
+            },
+            "en": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Confirm on Use"
+                }
+            },
+            "es": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Confirmar al usar"
+                }
+            },
+            "fr": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Confirmation à l’utilisation"
+                }
+            },
+            "ja": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "使用時に確認"
+                }
+            },
+            "ko": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "사용 시 확인"
+                }
+            },
+            "pt": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Confirmar ao usar"
+                }
+            },
+            "ru": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "Подтверждение при использовании"
+                }
+            },
+            "zh-Hans": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "按需确认"
+                }
+            },
+            "zh-Hant": {
+                "stringUnit": {
+                    "state": "translated",
+                    "value": "按需確認"
+                }
+            }
+        }
     }
   },
   "version": "1.0"

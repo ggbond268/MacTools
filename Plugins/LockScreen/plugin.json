@@ -48,6 +48,10 @@
       "summary": "一鍵立即鎖定螢幕，進入密碼解鎖界面"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +67,150 @@
     "settings": "none"
   },
   "permissions": [],
-  "category": "system"
+  "category": "system",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "lock",
+      "screen",
+      "system"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "قفل الشاشة"
+      ],
+      "de": [
+        "Bildschirm sperren"
+      ],
+      "en": [
+        "Lock Screen"
+      ],
+      "es": [
+        "Bloquear pantalla"
+      ],
+      "fr": [
+        "Verrouiller l’écran"
+      ],
+      "ja": [
+        "画面をロック"
+      ],
+      "ko": [
+        "화면 잠그기"
+      ],
+      "pt": [
+        "Bloquear tela"
+      ],
+      "ru": [
+        "Заблокировать экран"
+      ],
+      "zh-Hans": [
+        "锁定屏幕"
+      ],
+      "zh-Hant": [
+        "鎖定螢幕"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "system"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "system-state"
+    ],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "lock-screen",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "execute",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "锁定屏幕",
+              "立即锁定屏幕",
+              "lock",
+              "screen",
+              "execute"
+            ],
+            "systemImage": "lock",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "confirmAlways"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

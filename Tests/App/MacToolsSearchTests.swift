@@ -938,6 +938,68 @@ final class MacToolsSearchTests: XCTestCase {
         )
     }
 
+    func testAvailablePluginIsDiscoverableByCatalogOnlyKeywords() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "MacToolsSearchTests-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let defaults = UserDefaults(
+            suiteName: "MacToolsSearchTests-\(UUID().uuidString)"
+        )!
+        let store = PluginPackageStore(
+            rootDirectory: root,
+            userDefaults: defaults,
+            hostVersion: "1.2.1"
+        )
+        let manager = DynamicPluginManager(packageStore: store)
+        let entry = PluginCatalogEntry(
+            id: "com.example.presentation",
+            displayName: "Presentation Helper",
+            summary: "Keeps a Mac ready for presenting",
+            version: "1.0.0",
+            minimumHostVersion: "1.2.0",
+            package: PluginCatalogPackage(
+                url: URL(fileURLWithPath: "/tmp/PresentationHelper.mactoolsplugin"),
+                sha256: String(repeating: "a", count: 64),
+                size: 42
+            ),
+            discovery: PluginProductMetadata.Discovery(
+                keywords: ["caffeine"],
+                localizedSynonyms: [:],
+                useCases: [],
+                goalCategories: [],
+                relatedPluginIDs: [],
+                alternativePluginIDs: []
+            )
+        )
+        manager.rebuildManagementItems(
+            catalogSnapshot: PluginCatalogSnapshot(
+                catalog: PluginCatalog(
+                    catalogID: "com.example.catalog",
+                    generatedAt: Date(timeIntervalSince1970: 0),
+                    minimumHostVersion: "1.2.1",
+                    plugins: [entry]
+                ),
+                sourceURL: URL(fileURLWithPath: "/tmp/catalog.json"),
+                sourceKind: .production,
+                loadedAt: Date(timeIntervalSince1970: 0)
+            )
+        )
+        let host = makePluginHostForTests(
+            plugins: [],
+            dynamicPluginManager: manager,
+            loadDynamicPluginsOnInit: false
+        )
+
+        let results = MacToolsSearchIndexBuilder.build(pluginHost: host)
+            .results(matching: "caffeine")
+
+        XCTAssertEqual(results.map(\.id), ["plugin.marketplace.com.example.presentation"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .available)
+    }
+
     func testInstalledIncompatiblePluginIsDiscoverableInMarketplace() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(

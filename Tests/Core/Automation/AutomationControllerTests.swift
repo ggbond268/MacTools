@@ -664,14 +664,10 @@ final class AutomationControllerTests: XCTestCase {
         let workflow = try XCTUnwrap(controller.createWorkflow())
         controller.addStep(workflowID: workflow.id, reference: provider.reference)
         let runID = try XCTUnwrap(controller.startWorkflow(id: workflow.id))
-        for _ in 0 ..< 100 where controller.activeRunIDs(for: workflow.id).isEmpty {
-            await Task.yield()
-        }
+        await waitUntil { controller.activeRunIDs(for: workflow.id) == [runID] }
 
         XCTAssertTrue(controller.deleteWorkflow(id: workflow.id))
-        for _ in 0 ..< 100 where controller.activeRunIDs.contains(runID) {
-            await Task.yield()
-        }
+        await waitUntil { !controller.activeRunIDs.contains(runID) }
 
         XCTAssertNil(controller.workflows.first { $0.id == workflow.id })
         XCTAssertEqual(provider.cancelCount, 1)
@@ -704,6 +700,19 @@ final class AutomationControllerTests: XCTestCase {
         XCTAssertFalse(controller.activeRunIDs.contains(runID))
         XCTAssertEqual(provider.beginCount, 0)
         XCTAssertEqual(provider.cancelCount, 0)
+    }
+
+    private func waitUntil(
+        _ condition: @MainActor () -> Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while !condition(), clock.now < deadline {
+            await Task.yield()
+        }
+        XCTAssertTrue(condition(), file: file, line: line)
     }
 }
 

@@ -3,18 +3,61 @@
   "displayName": "锁定程序坞",
   "summary": "防止程序坞在多显示器之间意外移动",
   "localizedMetadata": {
+    "ar": {
+      "displayName": "قفل Dock",
+      "summary": "امنع انتقال Dock بين الشاشات عن طريق الخطأ."
+    },
+    "de": {
+      "displayName": "Dock-Sperre",
+      "summary": "Verhindert, dass das Dock versehentlich zwischen Displays verschoben wird."
+    },
     "en": {
       "displayName": "Dock Lock",
       "summary": "Prevent the Dock from moving between displays accidentally."
+    },
+    "es": {
+      "displayName": "Bloqueo del Dock",
+      "summary": "Evita que el Dock se mueva accidentalmente entre pantallas."
     },
     "fr": {
       "displayName": "Verrouillage du Dock",
       "summary": "Empêche le Dock de passer accidentellement d’un écran à l’autre."
     },
+    "ja": {
+      "displayName": "Dockの固定",
+      "summary": "Dockが誤ってディスプレイ間を移動しないようにします。"
+    },
+    "ko": {
+      "displayName": "Dock 잠금",
+      "summary": "Dock이 실수로 디스플레이 사이를 이동하지 않도록 합니다."
+    },
+    "pt": {
+      "displayName": "Bloqueio do Dock",
+      "summary": "Impeça que o Dock se mova acidentalmente entre monitores."
+    },
+    "ru": {
+      "displayName": "Блокировка Dock",
+      "summary": "Не позволяет Dock случайно перемещаться между дисплеями."
+    },
     "zh-Hans": {
       "displayName": "锁定程序坞",
       "summary": "防止程序坞在多显示器之间意外移动"
+    },
+    "zh-Hant": {
+      "displayName": "鎖定 Dock",
+      "summary": "防止 Dock 意外移動到其他顯示器。"
     }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description",
+    "action.toggle.title": "@standardAction.toggle.title",
+    "action.toggle.description": "@standardAction.toggle.description",
+    "action.set-enabled.title": "@standardAction.set-enabled.title",
+    "action.set-enabled.description": "@standardAction.set-enabled.description",
+    "action.set-enabled.parameter-summary": "@standardAction.set-enabled.description"
   },
   "version": "1.0.1",
   "minHostVersion": "1.2.0",
@@ -33,5 +76,204 @@
   "permissions": [
     "accessibility"
   ],
-  "category": "display"
+  "category": "display",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "dock",
+      "lock",
+      "display"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "قفل Dock"
+      ],
+      "de": [
+        "Dock-Sperre"
+      ],
+      "en": [
+        "Dock Lock"
+      ],
+      "es": [
+        "Bloqueo del Dock"
+      ],
+      "fr": [
+        "Verrouillage du Dock"
+      ],
+      "ja": [
+        "Dockの固定"
+      ],
+      "ko": [
+        "Dock 잠금"
+      ],
+      "pt": [
+        "Bloqueio do Dock"
+      ],
+      "ru": [
+        "Блокировка Dock"
+      ],
+      "zh-Hans": [
+        "锁定程序坞"
+      ],
+      "zh-Hant": [
+        "鎖定 Dock"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "display"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "display-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "dock-lock",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "toggle",
+            "title": "@productStrings.action.toggle.title",
+            "description": "@productStrings.action.toggle.description",
+            "keywords": [
+              "锁定程序坞",
+              "防止程序坞在多显示器之间意外移动",
+              "Dock",
+              "dock",
+              "lock",
+              "toggle"
+            ],
+            "systemImage": "lock.rectangle",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "set-enabled",
+            "title": "@productStrings.action.set-enabled.title",
+            "description": "@productStrings.action.set-enabled.description",
+            "keywords": [
+              "锁定程序坞",
+              "防止程序坞在多显示器之间意外移动",
+              "Dock",
+              "dock",
+              "lock",
+              "set",
+              "enabled"
+            ],
+            "systemImage": "lock.rectangle",
+            "parameters": [
+              {
+                "id": "enabled",
+                "kind": "boolean",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "parameterSummary": "@productStrings.action.set-enabled.parameter-summary",
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

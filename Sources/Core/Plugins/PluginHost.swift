@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import SwiftUI
@@ -506,6 +507,7 @@ final class PluginHost: ObservableObject {
     /// The app shell installs this while the application is running. The host
     /// emits typed requests but never manipulates windows or popovers directly.
     var appPresentationHandler: ((AppPresentationRequest) -> Void)?
+    var componentDetailPresentationHandler: ((String, String) -> Void)?
 
     /// The app shell installs this to present source-appropriate feedback for actions invoked from
     /// headless surfaces such as global shortcuts and trackpad gestures.
@@ -873,11 +875,11 @@ final class PluginHost: ObservableObject {
         let automationSnapshot = automationController.preferencesBackupSnapshot()
         let portableWorkflowIDs = WorkflowPortabilityAnalysis.portableWorkflowIDs(
             in: automationSnapshot.workflows,
-            referencePortability: { [weak self] reference in
-                self?.leafActionReferenceBackupPortability(
+            referencePortability: { reference in
+                self.leafActionReferenceBackupPortability(
                     reference,
                     selection: dependencySelection
-                ) ?? .unknown
+                )
             }
         )
         let portableWorkflows = automationSnapshot.workflows.filter {
@@ -886,8 +888,10 @@ final class PluginHost: ObservableObject {
         let selectedPortablePreferences = proposedPortablePreferences.filter {
             selection.pluginPreferenceIDs.contains($0.key)
         }
-        let referenceIsPortable: (ActionReference) -> Bool = { [weak self] reference in
-            self?.actionReferenceBackupPortability(
+        // These predicates never escape this synchronous export. Keep a strong
+        // capture to avoid the premature weak-storage destruction in optimized builds.
+        let referenceIsPortable: (ActionReference) -> Bool = { reference in
+            self.actionReferenceBackupPortability(
                 reference,
                 workflows: automationSnapshot.workflows,
                 portableWorkflowIDs: portableWorkflowIDs,
@@ -2006,6 +2010,32 @@ final class PluginHost: ObservableObject {
         return item
     }
 
+    func componentDetailContent(
+        pluginID: String,
+        detailID: String,
+        dismiss: @escaping () -> Void
+    ) -> PluginComponentDetailContent? {
+        guard
+            let plugin = corePlugin(for: pluginID),
+            let presenting = plugin as? any PluginComponentDetailPresenting
+        else {
+            return nil
+        }
+
+        guard let content = presenting.makeComponentDetailContent(
+            detailID: detailID,
+            dismiss: dismiss
+        ) else {
+            return nil
+        }
+
+        return guardedValue(
+            for: plugin,
+            operation: "make component detail",
+            content
+        )
+    }
+
     func setPanelSurface(_ surface: PluginPanelSurface, visible isVisible: Bool) {
         if isVisible {
             visiblePanelSurfaces.insert(surface)
@@ -2837,6 +2867,16 @@ final class PluginHost: ObservableObject {
             if let settingsPresenting = plugin as? any PluginSettingsPresenting {
                 settingsPresenting.requestSettingsPresentation = { [weak self] in
                     self?.presentPluginSettings(pluginID: pluginID)
+                }
+            }
+            if let dashboardPresenting = plugin as? any PluginDashboardPresenting {
+                dashboardPresenting.requestDashboardPresentation = { [weak self] in
+                    self?.appPresentationHandler?(.showDashboard)
+                }
+            }
+            if let componentDetailPresenting = plugin as? any PluginComponentDetailPresenting {
+                componentDetailPresenting.requestComponentDetailPresentation = { [weak self] detailID in
+                    self?.componentDetailPresentationHandler?(pluginID, detailID)
                 }
             }
             if let actionGridConsumer = plugin as? any ActionGridHostContextConsuming {
@@ -4178,6 +4218,8 @@ final class PluginHost: ObservableObject {
             transactionApplying.performActionShortcutReplacementTransaction = nil
         }
         (plugin as? any PluginSettingsPresenting)?.requestSettingsPresentation = nil
+        (plugin as? any PluginDashboardPresenting)?.requestDashboardPresentation = nil
+        (plugin as? any PluginComponentDetailPresenting)?.requestComponentDetailPresentation = nil
         (plugin as? any ActionGridHostContextConsuming)?.actionGridHostContext = nil
         (plugin as? any TrackpadActionHostContextConsuming)?.trackpadActionHostContext = nil
         syncGlobalShortcuts()
@@ -5583,18 +5625,26 @@ final class PluginHost: ObservableObject {
     }
 
     private func requestPermissionGuidance(forPluginID pluginID: String, permissionID: String) {
-        guard activePlugins.contains(where: { plugin in
-            plugin.metadata.id == pluginID
-                && (guardedValue(
-                    for: plugin,
-                    operation: "read permission requirements",
-                    plugin.permissionRequirements
-                ) ?? []).contains(where: { $0.id == permissionID })
-        }) else {
+        guard let plugin = activePlugins.first(where: { $0.metadata.id == pluginID }),
+              let requirement = (guardedValue(
+                  for: plugin,
+                  operation: "read permission requirements",
+                  plugin.permissionRequirements
+              ) ?? []).first(where: { $0.id == permissionID }) else {
             return
         }
 
-        presentPluginSettings(pluginID: pluginID)
+        switch requirement.kind {
+        case .automation:
+            guard let url = URL(
+                string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
+            ) else {
+                return
+            }
+            NSWorkspace.shared.open(url)
+        default:
+            presentPluginSettings(pluginID: pluginID)
+        }
     }
 
     private func permissionActionTitle(
@@ -5616,6 +5666,8 @@ final class PluginHost: ObservableObject {
                 : AppL10n.plugins("plugin.permission.requestAuthorization", defaultValue: "请求授权")
         case .automation:
             return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
+        case .finderExtension:
+            return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
         case .screenRecording:
             return isGranted
                 ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
@@ -5633,6 +5685,8 @@ final class PluginHost: ObservableObject {
             return "calendar"
         case .automation:
             return "cursorarrow.click.2"
+        case .finderExtension:
+            return "puzzlepiece.extension"
         case .screenRecording:
             return "rectangle.dashed.badge.record"
         }

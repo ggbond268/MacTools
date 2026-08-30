@@ -25,7 +25,7 @@ final class AppURLRouterTests: XCTestCase {
         )
     }
 
-    func testParserAcceptsDocumentedReleaseAndDebugRoutes() throws {
+    func testParserAcceptsDocumentedReleaseDebugAndNightlyRoutes() throws {
         let routes: [(String, AppDeepLink)] = [
             ("settings", .settings(.root)),
             ("settings/general", .settings(.general)),
@@ -39,7 +39,7 @@ final class AppURLRouterTests: XCTestCase {
             ("search", .search)
         ]
 
-        for scheme in ["mactools", "mactools-dev"] {
+        for scheme in ["mactools", "mactools-dev", "mactools-nightly"] {
             for (path, expected) in routes {
                 let parsed = AppDeepLinkParser.parse(
                     try XCTUnwrap(URL(string: "\(scheme)://app/\(path)")),
@@ -50,10 +50,10 @@ final class AppURLRouterTests: XCTestCase {
         }
     }
 
-    func testParserAcceptsDocumentedActionAndPresetRoutesInBothSchemes() throws {
+    func testParserAcceptsDocumentedActionAndPresetRoutesInAllSchemes() throws {
         let presetID = UUID(uuidString: "7B420000-0000-0000-0000-000000000001")!
 
-        for scheme in ["mactools", "mactools-dev"] {
+        for scheme in ["mactools", "mactools-dev", "mactools-nightly"] {
             XCTAssertEqual(
                 AppDeepLinkParser.parseRoute(
                     try XCTUnwrap(

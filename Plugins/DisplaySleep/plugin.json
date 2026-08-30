@@ -48,6 +48,10 @@
       "summary": "一鍵讓所有顯示器立即進入休眠"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +67,149 @@
     "settings": "none"
   },
   "permissions": [],
-  "category": "display"
+  "category": "display",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "display",
+      "sleep"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إسبات الشاشات"
+      ],
+      "de": [
+        "Display-Ruhezustand"
+      ],
+      "en": [
+        "Display Sleep"
+      ],
+      "es": [
+        "Reposo de pantallas"
+      ],
+      "fr": [
+        "Mise en veille des écrans"
+      ],
+      "ja": [
+        "ディスプレイをスリープ"
+      ],
+      "ko": [
+        "디스플레이 잠자기"
+      ],
+      "pt": [
+        "Repouso das telas"
+      ],
+      "ru": [
+        "Сон дисплеев"
+      ],
+      "zh-Hans": [
+        "显示器休眠"
+      ],
+      "zh-Hant": [
+        "顯示器睡眠"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "display"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "display-state"
+    ],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "display-sleep",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "execute",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "显示器休眠",
+              "立即让显示器休眠",
+              "display",
+              "sleep",
+              "execute"
+            ],
+            "systemImage": "display",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "confirmAlways"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

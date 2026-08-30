@@ -64,6 +64,7 @@ final class DockAccessibilityResolver: DockApplicationResolving, @unchecked Send
 
     private static let dockBundleIdentifier = "com.apple.dock"
     private static let maximumParentDepth = 4
+    private static let messagingTimeout: Float = 0.2
 
     private let bundleIdentifierForURL: (URL) -> String?
     private let dockProcessIdentifierProvider: () -> pid_t?
@@ -74,28 +75,14 @@ final class DockAccessibilityResolver: DockApplicationResolving, @unchecked Send
 
     init(
         bundleIdentifierForURL: @escaping (URL) -> String? = { Bundle(url: $0)?.bundleIdentifier },
-        dockProcessIdentifierProvider: @escaping () -> pid_t? = {
-            NSRunningApplication
-                .runningApplications(withBundleIdentifier: DockAccessibilityResolver.dockBundleIdentifier)
-                .first?
-                .processIdentifier
-        },
-        accessibilityElementAtPosition: @escaping (pid_t, CGPoint) -> AXUIElement? = { processIdentifier, location in
-            var element: AXUIElement?
-            let result = AXUIElementCopyElementAtPosition(
-                AXUIElementCreateApplication(processIdentifier),
-                Float(location.x),
-                Float(location.y),
-                &element
-            )
-            return result == .success ? element : nil
-        },
-        workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter
+        workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
+        dockProcessIdentifierProvider: @escaping () -> pid_t? = DockAccessibilityResolver.resolveDockProcessIdentifier,
+        accessibilityElementAtPosition: @escaping (pid_t, CGPoint) -> AXUIElement? = DockAccessibilityResolver.accessibilityElement
     ) {
         self.bundleIdentifierForURL = bundleIdentifierForURL
+        self.workspaceNotificationCenter = workspaceNotificationCenter
         self.dockProcessIdentifierProvider = dockProcessIdentifierProvider
         self.accessibilityElementAtPosition = accessibilityElementAtPosition
-        self.workspaceNotificationCenter = workspaceNotificationCenter
         observeDockLifecycle()
     }
 
@@ -104,9 +91,7 @@ final class DockAccessibilityResolver: DockApplicationResolving, @unchecked Send
     }
 
     func resolveApplication(at location: CGPoint) -> DockApplicationTarget? {
-        guard let dockProcessIdentifier = dockProcessCache.cachedOrResolve(
-            dockProcessIdentifierProvider
-        ),
+        guard let dockProcessIdentifier = dockProcessCache.cachedOrResolve(dockProcessIdentifierProvider),
               let element = accessibilityElementAtPosition(dockProcessIdentifier, location)
         else {
             return nil
@@ -115,6 +100,14 @@ final class DockAccessibilityResolver: DockApplicationResolving, @unchecked Send
             return nil
         }
         return applicationTarget(from: element, dockProcessIdentifier: dockProcessIdentifier)
+    }
+
+    private static func resolveDockProcessIdentifier() -> pid_t? {
+        let processIdentifier = NSRunningApplication
+            .runningApplications(withBundleIdentifier: Self.dockBundleIdentifier)
+            .first?
+            .processIdentifier
+        return processIdentifier
     }
 
     private func observeDockLifecycle() {
@@ -144,6 +137,7 @@ final class DockAccessibilityResolver: DockApplicationResolving, @unchecked Send
             guard let resolvedElement = currentElement else {
                 return nil
             }
+            AXUIElementSetMessagingTimeout(resolvedElement, Self.messagingTimeout)
             if let target = DockClickResolver.applicationTarget(
                 from: snapshot(of: resolvedElement),
                 dockProcessIdentifier: dockProcessIdentifier,
@@ -154,6 +148,27 @@ final class DockAccessibilityResolver: DockApplicationResolving, @unchecked Send
             currentElement = elementAttributeValue(kAXParentAttribute, of: resolvedElement)
         }
         return nil
+    }
+
+    private static func accessibilityElement(
+        dockProcessIdentifier: pid_t,
+        location: CGPoint
+    ) -> AXUIElement? {
+        let dockApplication = AXUIElementCreateApplication(dockProcessIdentifier)
+        AXUIElementSetMessagingTimeout(dockApplication, messagingTimeout)
+
+        var element: AXUIElement?
+        let result = AXUIElementCopyElementAtPosition(
+            dockApplication,
+            Float(location.x),
+            Float(location.y),
+            &element
+        )
+        guard result == .success, let element else {
+            return nil
+        }
+        AXUIElementSetMessagingTimeout(element, messagingTimeout)
+        return element
     }
 
     private func snapshot(of element: AXUIElement) -> DockItemSnapshot {

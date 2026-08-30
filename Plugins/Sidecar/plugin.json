@@ -48,6 +48,31 @@
       "summary": "連接附近可用的 Sidecar 顯示器作為延伸顯示器"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description",
+    "action.connect-first-available.title": "@localizable.panel.action.connect",
+    "action.connect-first-available.description": "@localizable.shortcut.connectFirstAvailable.target",
+    "action.disconnect-all.title": "@localizable.panel.action.disconnect",
+    "action.disconnect-all.description": "@localizable.shortcut.disconnectAll.target",
+    "action.device.title": "@localizable.device.unnamed",
+    "action.device.description": "@localizable.panel.device.subtitle",
+    "action.device.parameter-summary": {
+      "ar": "اختر شاشة Sidecar القريبة المخزنة على هذا الـ Mac.",
+      "de": "Wähle das auf diesem Mac gespeicherte Sidecar-Display in der Nähe aus.",
+      "en": "Select the nearby Sidecar display stored on this Mac.",
+      "es": "Selecciona la pantalla Sidecar cercana guardada en este Mac.",
+      "fr": "Sélectionnez l’écran Sidecar à proximité enregistré sur ce Mac.",
+      "ja": "この Mac に保存されている近くの Sidecar ディスプレイを選択します。",
+      "ko": "이 Mac에 저장된 주변 Sidecar 디스플레이를 선택하세요.",
+      "pt": "Selecione o monitor Sidecar próximo salvo neste Mac.",
+      "ru": "Выберите ближайший дисплей Sidecar, сохранённый на этом Mac.",
+      "zh-Hans": "选择存储在此 Mac 上的附近 Sidecar 显示器。",
+      "zh-Hant": "選擇儲存在此 Mac 上的附近 Sidecar 顯示器。"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +88,217 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "display"
+  "category": "display",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "sidecar",
+      "display"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "Sidecar"
+      ],
+      "de": [
+        "Sidecar"
+      ],
+      "en": [
+        "Sidecar"
+      ],
+      "es": [
+        "Sidecar"
+      ],
+      "fr": [
+        "Sidecar"
+      ],
+      "ja": [
+        "Sidecar"
+      ],
+      "ko": [
+        "Sidecar"
+      ],
+      "pt": [
+        "Sidecar"
+      ],
+      "ru": [
+        "Sidecar"
+      ],
+      "zh-Hans": [
+        "Sidecar"
+      ],
+      "zh-Hant": [
+        "Sidecar"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "display"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [
+      "Sidecar-compatible Mac and display"
+    ],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "display-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "sidecar",
+        "kind": "mixed",
+        "staticActions": [
+          {
+            "id": "connect-first-available",
+            "title": "@productStrings.action.connect-first-available.title",
+            "description": "@productStrings.action.connect-first-available.description",
+            "keywords": [
+              "Sidecar",
+              "sidecar",
+              "connect",
+              "first",
+              "available"
+            ],
+            "systemImage": "rectangle.badge.plus",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "confirmAlways"
+          },
+          {
+            "id": "disconnect-all",
+            "title": "@productStrings.action.disconnect-all.title",
+            "description": "@productStrings.action.disconnect-all.description",
+            "keywords": [
+              "Sidecar",
+              "sidecar",
+              "disconnect",
+              "all"
+            ],
+            "systemImage": "rectangle.badge.minus",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "confirmAlways"
+          }
+        ],
+        "dynamicTemplates": [
+          {
+            "id": "device",
+            "title": "@productStrings.action.device.title",
+            "description": "@productStrings.action.device.description",
+            "entrySource": "configured-sidecar-devices",
+            "parameters": [],
+            "parameterSummary": "@productStrings.action.device.parameter-summary",
+            "localOnlyIdentity": true,
+            "keywords": [
+              "sidecar",
+              "device",
+              "configured",
+              "devices"
+            ],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "confirmAlways"
+          }
+        ]
+      }
+    ]
+  }
 }

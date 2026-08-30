@@ -249,7 +249,8 @@ final class DockLockPlugin:
     MacToolsPlugin,
     PluginPrimaryPanel,
     AccessibilityPermissionRefreshing,
-    PluginActionProviding
+    PluginActionProviding,
+    PluginActionPermissionProviding
 {
     private enum ActionID {
         static let toggle = "toggle"
@@ -383,6 +384,15 @@ final class DockLockPlugin:
                 capabilities: [.automatic, .background, .foregroundInteractive]
             ),
         ]
+    }
+
+    func permissionRequirementIDs(for actionKey: ActionKey) -> [String] {
+        guard actionKey.providerID == metadata.id,
+              actionKey.actionID == ActionID.toggle || actionKey.actionID == ActionID.setEnabled
+        else {
+            return []
+        }
+        return [PermissionID.accessibility]
     }
 
     var actionCatalogEntries: [ActionCatalogEntry] {

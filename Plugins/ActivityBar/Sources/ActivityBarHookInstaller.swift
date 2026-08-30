@@ -18,9 +18,9 @@ struct ActivityBarHookInstallerPaths: Equatable, Sendable {
     let codexConfigPath: URL
     let codexHooksPath: URL
 
-    init(homeDirectory: URL, hookScriptsDirectory: URL? = nil) {
+    init(homeDirectory: URL, hookScriptsDirectory: URL? = nil, namespace: ActivityBarNamespace = .init()) {
         self.hookScriptsDirectory = hookScriptsDirectory
-            ?? homeDirectory.appendingPathComponent(".mactools/activity-bar/hooks")
+            ?? homeDirectory.appendingPathComponent(namespace.fallbackHooksDirectory)
         self.claudeSettingsPath = homeDirectory.appendingPathComponent(".claude/settings.json")
         self.cursorHooksPath = homeDirectory.appendingPathComponent(".cursor/hooks.json")
         self.codexConfigPath = homeDirectory.appendingPathComponent(".codex/config.toml")
@@ -29,11 +29,13 @@ struct ActivityBarHookInstallerPaths: Equatable, Sendable {
 
     static func defaults(
         supportDirectory: URL?,
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        namespace: ActivityBarNamespace = .init()
     ) -> ActivityBarHookInstallerPaths {
         ActivityBarHookInstallerPaths(
             homeDirectory: homeDirectory,
-            hookScriptsDirectory: supportDirectory?.appendingPathComponent("hooks")
+            hookScriptsDirectory: supportDirectory?.appendingPathComponent("hooks"),
+            namespace: namespace
         )
     }
 }
@@ -54,30 +56,39 @@ enum ActivityBarHookInstallerError: LocalizedError, Equatable {
 }
 
 struct ActivityBarHookInstaller {
-    private enum FileName {
-        static let claude = "mactools-activity-claude-hook.sh"
-        static let cursor = "mactools-activity-cursor-hook.sh"
-        static let codex = "mactools-activity-codex-hook.sh"
+    private struct FileNames {
+        let claude: String
+        let cursor: String
+        let codex: String
+
+        init(namespace: ActivityBarNamespace) {
+            claude = namespace.hookFileName(tool: "claude")
+            cursor = namespace.hookFileName(tool: "cursor")
+            codex = namespace.hookFileName(tool: "codex")
+        }
     }
 
+    private let fileNames: FileNames
     private let paths: ActivityBarHookInstallerPaths
     private let socketPath: String
     private let fileManager: FileManager
 
     init(
         paths: ActivityBarHookInstallerPaths,
-        socketPath: String = ActivityBarConstants.defaultSocketPath,
+        socketPath: String? = nil,
+        namespace: ActivityBarNamespace = .init(),
         fileManager: FileManager = .default
     ) {
         self.paths = paths
-        self.socketPath = socketPath
+        self.socketPath = socketPath ?? namespace.socketPath
+        self.fileNames = FileNames(namespace: namespace)
         self.fileManager = fileManager
     }
 
     func install() throws -> ActivityBarHookInstallSummary {
-        try installScript(fileName: FileName.claude, content: claudeHookScript)
-        try installScript(fileName: FileName.cursor, content: cursorHookScript)
-        try installScript(fileName: FileName.codex, content: codexHookScript)
+        try installScript(fileName: fileNames.claude, content: claudeHookScript)
+        try installScript(fileName: fileNames.cursor, content: cursorHookScript)
+        try installScript(fileName: fileNames.codex, content: codexHookScript)
 
         try registerClaudeHooks()
         try registerCursorHooks()
@@ -103,15 +114,15 @@ struct ActivityBarHookInstaller {
     }
 
     private var claudeScriptURL: URL {
-        paths.hookScriptsDirectory.appendingPathComponent(FileName.claude)
+        paths.hookScriptsDirectory.appendingPathComponent(fileNames.claude)
     }
 
     private var cursorScriptURL: URL {
-        paths.hookScriptsDirectory.appendingPathComponent(FileName.cursor)
+        paths.hookScriptsDirectory.appendingPathComponent(fileNames.cursor)
     }
 
     private var codexScriptURL: URL {
-        paths.hookScriptsDirectory.appendingPathComponent(FileName.codex)
+        paths.hookScriptsDirectory.appendingPathComponent(fileNames.codex)
     }
 
     private func installScript(fileName: String, content: String) throws {
@@ -154,7 +165,7 @@ struct ActivityBarHookInstaller {
                     return false
                 }
                 return groupHooks.contains { hook in
-                    (hook["command"] as? String)?.contains(FileName.claude) == true
+                    containsHookCommand(hook["command"], scriptFileName: fileNames.claude)
                 }
             }
 
@@ -177,7 +188,7 @@ struct ActivityBarHookInstaller {
     }
 
     private func unregisterClaudeHooks() throws {
-        try unregisterGroupedHooks(at: paths.claudeSettingsPath, scriptFileName: FileName.claude)
+        try unregisterGroupedHooks(at: paths.claudeSettingsPath, scriptFileName: fileNames.claude)
     }
 
     private func registerCursorHooks() throws {
@@ -196,7 +207,7 @@ struct ActivityBarHookInstaller {
         for event in events {
             var entries = hooks[event] as? [[String: Any]] ?? []
             let alreadyRegistered = entries.contains { entry in
-                (entry["command"] as? String)?.contains(FileName.cursor) == true
+                containsHookCommand(entry["command"], scriptFileName: fileNames.cursor)
             }
 
             if !alreadyRegistered {
@@ -234,7 +245,7 @@ struct ActivityBarHookInstaller {
             }
 
             let filteredEntries = entries.filter { entry in
-                !containsHookCommand(entry["command"], scriptFileName: FileName.cursor)
+                !containsHookCommand(entry["command"], scriptFileName: fileNames.cursor)
             }
 
             guard filteredEntries.count != entries.count else {
@@ -322,7 +333,7 @@ struct ActivityBarHookInstaller {
                     return false
                 }
                 return groupHooks.contains { hook in
-                    (hook["command"] as? String)?.contains(FileName.codex) == true
+                    containsHookCommand(hook["command"], scriptFileName: fileNames.codex)
                 }
             }
 
@@ -345,7 +356,7 @@ struct ActivityBarHookInstaller {
     }
 
     private func unregisterCodexHooks() throws {
-        try unregisterGroupedHooks(at: paths.codexHooksPath, scriptFileName: FileName.codex)
+        try unregisterGroupedHooks(at: paths.codexHooksPath, scriptFileName: fileNames.codex)
     }
 
     private func unregisterGroupedHooks(at url: URL, scriptFileName: String) throws {
@@ -460,7 +471,9 @@ struct ActivityBarHookInstaller {
     }
 
     private func containsHookCommand(_ value: Any?, scriptFileName: String) -> Bool {
-        (value as? String)?.contains(scriptFileName) == true
+        guard let command = value as? String else { return false }
+        let ownedCommand = shellQuoted(paths.hookScriptsDirectory.appendingPathComponent(scriptFileName).path)
+        return command == ownedCommand || command.hasPrefix(ownedCommand + " ")
     }
 }
 

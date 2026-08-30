@@ -3,7 +3,28 @@ import MacToolsPluginKit
 
 enum ActivityBarConstants {
     static let pluginID = "activity-bar"
-    static let defaultSocketPath = "/tmp/mactools-activity-bar.sock"
+    static let defaultSocketPath = ActivityBarNamespace().socketPath
+}
+
+struct ActivityBarNamespace {
+    private let isNightly: Bool
+
+    init(releaseChannel: String? = Bundle.main.object(forInfoDictionaryKey: "MTReleaseChannel") as? String) {
+        isNightly = releaseChannel == "nightly"
+    }
+
+    var socketPath: String {
+        isNightly ? "/tmp/mactools-nightly-activity-bar.sock" : "/tmp/mactools-activity-bar.sock"
+    }
+
+    var fallbackHooksDirectory: String {
+        isNightly ? ".mactools-nightly/activity-bar/hooks" : ".mactools/activity-bar/hooks"
+    }
+
+    func hookFileName(tool: String) -> String {
+        // Do not contain the old full filename: older Stable releases remove hooks by that substring.
+        "\(isNightly ? "mactools-nightly" : "mactools")-activity-\(tool)-hook.sh"
+    }
 }
 
 enum ActivityBarInputEvent: Equatable, Sendable {

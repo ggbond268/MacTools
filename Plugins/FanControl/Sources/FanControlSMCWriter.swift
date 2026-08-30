@@ -19,17 +19,20 @@ final class FanControlSMCWriter: FanControlSMCWriting {
     private let fileManager: FileManager
     private let resourceBundle: Bundle
     private let localization: PluginLocalization
+    let helperInstallPath: String
 
     private var resolvedHelperPath: String?
 
     init(
         resourceBundle: Bundle = .main,
         fileManager: FileManager = .default,
-        localization: PluginLocalization? = nil
+        localization: PluginLocalization? = nil,
+        releaseChannel: String? = Bundle.main.object(forInfoDictionaryKey: "MTReleaseChannel") as? String
     ) {
         self.resourceBundle = resourceBundle
         self.fileManager = fileManager
         self.localization = localization ?? PluginLocalization(bundle: resourceBundle)
+        self.helperInstallPath = Helper.installPath + (releaseChannel == "nightly" ? ".nightly" : "")
     }
 
     // MARK: - Public API
@@ -125,14 +128,14 @@ final class FanControlSMCWriter: FanControlSMCWriting {
             return cached
         }
 
-        guard isExecutable(at: Helper.installPath),
-              installedHelperMatchesBundled(installedPath: Helper.installPath, bundledURL: bundledHelperURL)
+        guard isExecutable(at: helperInstallPath),
+              installedHelperMatchesBundled(installedPath: helperInstallPath, bundledURL: bundledHelperURL)
         else {
             return nil
         }
 
-        resolvedHelperPath = Helper.installPath
-        return Helper.installPath
+        resolvedHelperPath = helperInstallPath
+        return helperInstallPath
     }
 
     private var bundledHelperURL: URL? {
@@ -246,9 +249,9 @@ final class FanControlSMCWriter: FanControlSMCWriting {
 
         let command = [
             "/bin/mkdir -p \(shellQuoted(Helper.installDirectory))",
-            "/usr/bin/install -o root -g wheel -m 4755 \(shellQuoted(sourceURL.path)) \(shellQuoted(Helper.installPath))",
-            "/usr/bin/touch -r \(shellQuoted(sourceURL.path)) \(shellQuoted(Helper.installPath))",
-            "/bin/chmod 4755 \(shellQuoted(Helper.installPath))"
+            "/usr/bin/install -o root -g wheel -m 4755 \(shellQuoted(sourceURL.path)) \(shellQuoted(helperInstallPath))",
+            "/usr/bin/touch -r \(shellQuoted(sourceURL.path)) \(shellQuoted(helperInstallPath))",
+            "/bin/chmod 4755 \(shellQuoted(helperInstallPath))"
         ].joined(separator: " && ")
 
         let script = "do shell script \"\(appleScriptEscaped(command))\" with administrator privileges"

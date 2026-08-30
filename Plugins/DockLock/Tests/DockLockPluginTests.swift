@@ -297,6 +297,13 @@ final class DockLockPluginTests: XCTestCase {
         XCTAssertEqual(plugin.actionCatalogEntries.count, 3)
         XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .inactive)
         XCTAssertEqual(plugin.actionDefinitions.map(\.externalInvocationPolicy), [.allowed, .allowed])
+        XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility"])
+        for definition in plugin.actionDefinitions {
+            XCTAssertEqual(
+                plugin.permissionRequirementIDs(for: definition.key),
+                ["accessibility"]
+            )
+        }
     }
 
     func testCanonicalEnableAndDisableActionsUseTheSharedMutationPath() async throws {

@@ -70,6 +70,7 @@ public enum PluginPermissionKind {
     case calendarFullAccess
     case automation
     case screenRecording
+    case finderExtension
 }
 
 public enum SettingsDestination: Hashable {

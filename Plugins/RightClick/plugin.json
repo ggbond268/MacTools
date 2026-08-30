@@ -48,8 +48,25 @@
       "summary": "為 Finder 右鍵菜單添加新建資料夾和路徑複製"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup-finder-extension": {
+      "ar": "فعّل ملحق Finder الخاص بـ MacTools في إعدادات النظام ضمن عام > عناصر تسجيل الدخول والملحقات > ملحقات Finder.",
+      "de": "Aktiviere die MacTools Finder-Erweiterung unter Systemeinstellungen > Allgemein > Anmeldeobjekte & Erweiterungen > Finder-Erweiterungen.",
+      "en": "Enable the MacTools Finder extension in System Settings under General > Login Items & Extensions > Finder Extensions.",
+      "es": "Activa la extensión de Finder de MacTools en Ajustes del Sistema, en General > Ítems de inicio y extensiones > Extensiones de Finder.",
+      "fr": "Activez l’extension Finder de MacTools dans Réglages Système, sous Général > Ouverture et extensions > Extensions Finder.",
+      "ja": "システム設定の「一般」>「ログイン項目と機能拡張」>「Finder機能拡張」でMacToolsのFinder機能拡張を有効にします。",
+      "ko": "시스템 설정의 일반 > 로그인 항목 및 확장 프로그램 > Finder 확장 프로그램에서 MacTools Finder 확장 프로그램을 켜십시오.",
+      "pt": "Ative a extensão do Finder do MacTools em Ajustes do Sistema > Geral > Itens de Início de Sessão e Extensões > Extensões do Finder.",
+      "ru": "Включите расширение Finder для MacTools в разделе «Системные настройки» > «Основные» > «Объекты входа и расширения» > «Расширения Finder».",
+      "zh-Hans": "在“系统设置 > 通用 > 登录项与扩展 > Finder 扩展”中启用 MacTools 右键工具。",
+      "zh-Hant": "在「系統設定 > 一般 > 登入項目與延伸功能 > Finder 延伸功能」中啟用 MacTools 右鍵工具。"
+    }
+  },
   "version": "1.1.0",
-  "minHostVersion": "1.2.0",
+  "minHostVersion": "1.2.1",
   "pluginKitVersion": 5,
   "bundleRelativePath": "RightClick.bundle",
   "factoryClass": "RightClickPlugin.RightClickPluginFactory",
@@ -63,5 +80,118 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "right",
+      "click",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "النقر بزر الماوس الأيمن"
+      ],
+      "de": [
+        "Rechtsklick"
+      ],
+      "en": [
+        "Right Click"
+      ],
+      "es": [
+        "Clic derecho"
+      ],
+      "fr": [
+        "Clic droit"
+      ],
+      "ja": [
+        "右クリック"
+      ],
+      "ko": [
+        "오른쪽 클릭"
+      ],
+      "pt": [
+        "Clique direito"
+      ],
+      "ru": [
+        "Правый клик"
+      ],
+      "zh-Hans": [
+        "右键工具"
+      ],
+      "zh-Hant": [
+        "右鍵工具"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "selected-files"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "enable-finder-extension",
+        "title": "@productStrings.display-name",
+        "description": "@productStrings.setup-finder-extension"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

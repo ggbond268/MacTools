@@ -48,6 +48,13 @@
       "summary": "為常用應用綁定全局快速鍵，快速打開或切換到前臺"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "action.launch.title": "@localizable.action.launch.title",
+    "action.launch.description": "@localizable.action.launch.description",
+    "action.launch.parameter-summary": "@localizable.action.launch.app"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +70,162 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "app",
+      "hotkey",
+      "hotkeys",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "اختصارات التطبيقات"
+      ],
+      "de": [
+        "App-Kurzbefehle"
+      ],
+      "en": [
+        "App Hotkeys"
+      ],
+      "es": [
+        "Atajos de apps"
+      ],
+      "fr": [
+        "Raccourcis d’apps"
+      ],
+      "ja": [
+        "アプリショートカット"
+      ],
+      "ko": [
+        "앱 단축키"
+      ],
+      "pt": [
+        "Atalhos de apps"
+      ],
+      "ru": [
+        "Горячие клавиши приложений"
+      ],
+      "zh-Hans": [
+        "应用快捷键"
+      ],
+      "zh-Hant": [
+        "應用程式快速鍵"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "installed-applications",
+      "foreground-application"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "app-hotkey",
+        "kind": "dynamic",
+        "staticActions": [],
+        "dynamicTemplates": [
+          {
+            "id": "launch",
+            "title": "@productStrings.action.launch.title",
+            "description": "@productStrings.action.launch.description",
+            "entrySource": "installed-applications",
+            "parameters": [
+              {
+                "id": "entryID",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "localOnly"
+              }
+            ],
+            "parameterSummary": "@productStrings.action.launch.parameter-summary",
+            "localOnlyIdentity": true,
+            "keywords": [
+              "app",
+              "hotkey",
+              "launch",
+              "installed",
+              "applications"
+            ],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          }
+        ]
+      }
+    ]
+  }
 }

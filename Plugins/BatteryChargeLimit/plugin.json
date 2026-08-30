@@ -48,6 +48,74 @@
       "summary": "設定電池充電上限，達到上限後停止充電；不自動恢復，由用戶決定何時繼續充電"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.install-helper.title": {
+      "ar": "تثبيت أداة مساعدة ذات صلاحيات مميّزة",
+      "de": "Privilegiertes Hilfsprogramm installieren",
+      "en": "Install Privileged Helper",
+      "es": "Instalar herramienta auxiliar con privilegios",
+      "fr": "Installer l’utilitaire privilégié",
+      "ja": "特権ヘルパーをインストール",
+      "ko": "권한 있는 도우미 설치",
+      "pt": "Instalar auxiliar privilegiado",
+      "ru": "Установить привилегированную службу",
+      "zh-Hans": "安装特权辅助工具",
+      "zh-Hant": "安裝特權輔助工具"
+    },
+    "setup.install-helper.description": {
+      "ar": "عند الاستخدام الأول، يطلب MacTools تفويض المسؤول لتثبيت أداة مساعدة يملكها root وبوضع 4755 في /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper. تغيّر الأداة حالة شحن البطارية.",
+      "de": "Bei der ersten Verwendung fordert MacTools eine Administratorautorisierung an, um unter /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper ein root-eigenes Hilfsprogramm mit Modus 4755 zu installieren. Es ändert den Ladezustand der Batterie.",
+      "en": "On first use, MacTools requests administrator authorization to install a root-owned, mode-4755 helper at /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper. The helper changes battery charging state.",
+      "es": "En el primer uso, MacTools solicita autorización de administrador para instalar en /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper una herramienta auxiliar propiedad de root y con modo 4755. La herramienta cambia el estado de carga de la batería.",
+      "fr": "Lors de la première utilisation, MacTools demande une autorisation d’administrateur pour installer dans /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper un utilitaire appartenant à root et doté du mode 4755. Cet utilitaire modifie l’état de charge de la batterie.",
+      "ja": "初回使用時に、MacTools は管理者認証を求め、root 所有かつモード 4755 のヘルパーを /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper にインストールします。このヘルパーはバッテリーの充電状態を変更します。",
+      "ko": "처음 사용할 때 MacTools는 관리자 인증을 요청하고 root 소유의 모드 4755 도우미를 /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper에 설치합니다. 이 도우미는 배터리 충전 상태를 변경합니다.",
+      "pt": "No primeiro uso, o MacTools solicita autorização de administrador para instalar em /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper um auxiliar pertencente ao root e com modo 4755. O auxiliar altera o estado de carregamento da bateria.",
+      "ru": "При первом использовании MacTools запрашивает авторизацию администратора, чтобы установить в /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper принадлежащую root службу с режимом 4755. Она изменяет состояние зарядки батареи.",
+      "zh-Hans": "首次使用时，MacTools 会请求管理员授权，在 /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper 安装 root 所有且权限模式为 4755 的辅助工具，用于更改电池充电状态。",
+      "zh-Hant": "首次使用時，MacTools 會要求管理員授權，在 /Library/PrivilegedHelperTools/cc.ggbond.mactools.battery-charge-limit.smc-helper 安裝 root 所有且權限模式為 4755 的輔助工具，用於更改電池充電狀態。"
+    },
+    "setup.verify-hardware.title": {
+      "ar": "التحقق من توافق البطارية",
+      "de": "Kompatible Batterie prüfen",
+      "en": "Verify Compatible Battery",
+      "es": "Comprobar la compatibilidad de la batería",
+      "fr": "Vérifier la compatibilité de la batterie",
+      "ja": "対応バッテリーを確認",
+      "ko": "호환 배터리 확인",
+      "pt": "Verificar bateria compatível",
+      "ru": "Проверить совместимость батареи",
+      "zh-Hans": "确认电池兼容性",
+      "zh-Hant": "確認電池相容性"
+    },
+    "setup.verify-hardware.description": {
+      "ar": "يتطلب جهاز Mac ببطارية مدمجة يمكن التحكم في حالة شحنها عبر SMC.",
+      "de": "Erfordert einen Mac mit integrierter Batterie, deren Ladezustand über den SMC gesteuert werden kann.",
+      "en": "Requires a Mac with a built-in battery whose charging state can be controlled through the SMC.",
+      "es": "Requiere un Mac con una batería integrada cuyo estado de carga pueda controlarse mediante el SMC.",
+      "fr": "Nécessite un Mac doté d’une batterie intégrée dont l’état de charge peut être contrôlé via le SMC.",
+      "ja": "SMC 経由で充電状態を制御できる内蔵バッテリーを搭載した Mac が必要です。",
+      "ko": "SMC를 통해 충전 상태를 제어할 수 있는 내장 배터리가 탑재된 Mac이 필요합니다.",
+      "pt": "Requer um Mac com bateria integrada cujo estado de carregamento possa ser controlado pelo SMC.",
+      "ru": "Требуется Mac со встроенной батареей, состоянием зарядки которой можно управлять через SMC.",
+      "zh-Hans": "需要配备内置电池，且可通过 SMC 控制充电状态的 Mac。",
+      "zh-Hant": "需要配備內建電池，且可透過 SMC 控制充電狀態的 Mac。"
+    },
+    "action.set-enabled.title": "@standardAction.set-enabled.title",
+    "action.set-enabled.description": "@standardAction.set-enabled.description",
+    "action.set-enabled.parameter-summary": "@standardAction.set-enabled.description",
+    "action.hold.title": "@localizable.panel.action.stopCharging",
+    "action.hold.description": "@localizable.panel.action.stopCharging",
+    "action.resume.title": "@localizable.panel.action.startCharging",
+    "action.resume.description": "@localizable.panel.action.startCharging",
+    "action.discharge.title": "@localizable.action.manifest.discharge.title",
+    "action.discharge.description": "@localizable.action.manifest.discharge.title",
+    "action.set-limit.title": "@localizable.settings.limit.title",
+    "action.set-limit.description": "@localizable.settings.limit.description",
+    "action.set-limit.parameter-summary": "@localizable.settings.limit.target"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -68,5 +136,295 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "system"
+  "category": "system",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "battery",
+      "charge",
+      "limit",
+      "system"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "حد شحن البطارية"
+      ],
+      "de": [
+        "Batterieladelimit"
+      ],
+      "en": [
+        "Battery Charge Limit"
+      ],
+      "es": [
+        "Límite de carga de batería"
+      ],
+      "fr": [
+        "Limite de charge de la batterie"
+      ],
+      "ja": [
+        "バッテリー充電上限"
+      ],
+      "ko": [
+        "배터리 충전 한도"
+      ],
+      "pt": [
+        "Limite de carga da bateria"
+      ],
+      "ru": [
+        "Лимит заряда батареи"
+      ],
+      "zh-Hans": [
+        "电池充电上限"
+      ],
+      "zh-Hant": [
+        "電池充電上限"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "system"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [
+      "built-in battery"
+    ],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "advanced",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "system-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "install-privileged-helper",
+        "title": "@productStrings.setup.install-helper.title",
+        "description": "@productStrings.setup.install-helper.description"
+      },
+      {
+        "id": "verify-compatible-hardware",
+        "title": "@productStrings.setup.verify-hardware.title",
+        "description": "@productStrings.setup.verify-hardware.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "battery-charge-limit",
+        "kind": "mixed",
+        "staticActions": [
+          {
+            "id": "set-enabled",
+            "title": "@productStrings.action.set-enabled.title",
+            "description": "@productStrings.action.set-enabled.description",
+            "keywords": [
+              "电池充电上限",
+              "限制电池充电至指定上限",
+              "battery",
+              "charge",
+              "limit",
+              "set",
+              "enabled"
+            ],
+            "systemImage": "battery.100.bolt",
+            "parameters": [
+              {
+                "id": "enabled",
+                "kind": "boolean",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "parameterSummary": "@productStrings.action.set-enabled.parameter-summary",
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "confirmAlways"
+          },
+          {
+            "id": "hold",
+            "title": "@productStrings.action.hold.title",
+            "description": "@productStrings.action.hold.description",
+            "keywords": [
+              "电池充电上限",
+              "停止充电",
+              "battery",
+              "charge",
+              "limit",
+              "hold"
+            ],
+            "systemImage": "bolt.slash.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "confirmAlways"
+          },
+          {
+            "id": "resume",
+            "title": "@productStrings.action.resume.title",
+            "description": "@productStrings.action.resume.description",
+            "keywords": [
+              "电池充电上限",
+              "开始充电",
+              "battery",
+              "charge",
+              "limit",
+              "resume"
+            ],
+            "systemImage": "bolt.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "confirmAlways"
+          },
+          {
+            "id": "discharge",
+            "title": "@productStrings.action.discharge.title",
+            "description": "@productStrings.action.discharge.description",
+            "keywords": [
+              "电池充电上限",
+              "强制放电至 80%",
+              "battery",
+              "charge",
+              "limit",
+              "discharge"
+            ],
+            "systemImage": "minus.circle",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "confirmAlways"
+          }
+        ],
+        "dynamicTemplates": [
+          {
+            "id": "set-limit",
+            "title": "@productStrings.action.set-limit.title",
+            "description": "@productStrings.action.set-limit.description",
+            "entrySource": "charge-limit-presets",
+            "parameters": [
+              {
+                "id": "limit",
+                "kind": "integer",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "parameterSummary": "@productStrings.action.set-limit.parameter-summary",
+            "localOnlyIdentity": false,
+            "keywords": [
+              "battery",
+              "charge",
+              "limit",
+              "set",
+              "presets"
+            ],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "confirmAlways"
+          }
+        ]
+      }
+    ]
+  }
 }

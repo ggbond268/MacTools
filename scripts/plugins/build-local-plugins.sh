@@ -25,7 +25,11 @@ Conventions:
     passed as a comma-separated list.
   - Set --sign-identity or PLUGIN_CODE_SIGN_IDENTITY to sign packaged bundles.
   - Set --unsigned-build when a later packaging step will sign the bundle.
+  - Set --nightly-build-number to derive valid, monotonic source-major.run.attempt
+    plugin versions without modifying source plugin.json files.
   - Set --xcodebuild or XCODEBUILD to override the xcodebuild executable.
+  - Set --products-dir to reuse bundles from an existing same-configuration
+    aggregate build instead of invoking xcodebuild once per plugin.
 
 Generated output:
   build/LocalPlugins/
@@ -43,6 +47,8 @@ XCODEBUILD_COMMAND="${XCODEBUILD:-}"
 SIGN_IDENTITY="${PLUGIN_CODE_SIGN_IDENTITY:-}"
 SKIP_CATALOG=0
 UNSIGNED_BUILD=0
+NIGHTLY_BUILD_NUMBER=""
+PRODUCTS_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -87,6 +93,14 @@ while [[ $# -gt 0 ]]; do
             UNSIGNED_BUILD=1
             shift
             ;;
+        --nightly-build-number)
+            NIGHTLY_BUILD_NUMBER="${2:-}"
+            shift 2
+            ;;
+        --products-dir)
+            PRODUCTS_DIR="${2:-}"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -98,6 +112,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$CONFIGURATION" == "Nightly" && -z "$NIGHTLY_BUILD_NUMBER" ]]; then
+    echo "--nightly-build-number is required for Nightly plugin packaging." >&2
+    exit 1
+fi
+if [[ "$CONFIGURATION" != "Nightly" && -n "$NIGHTLY_BUILD_NUMBER" ]]; then
+    echo "--nightly-build-number is only valid with --configuration Nightly." >&2
+    exit 1
+fi
 
 if [[ -z "$SOURCE_DIR" || -z "$OUTPUT_DIR" ]]; then
     usage >&2
@@ -150,11 +173,17 @@ PY
 copy_manifest_for_configuration() {
     local source="$1"
     local destination="$2"
-    "$PYTHON3" "$REPO_ROOT/scripts/plugins/copy-plugin-manifest.py" copy \
-        --source "$source" \
-        --destination "$destination" \
-        --configuration "$CONFIGURATION" \
+    local copy_args=(
+        copy
+        --source "$source"
+        --destination "$destination"
+        --configuration "$CONFIGURATION"
         --app-version-config "$REPO_ROOT/Configs/AppVersion.xcconfig"
+    )
+    if [[ -n "$NIGHTLY_BUILD_NUMBER" ]]; then
+        copy_args+=(--nightly-build-number "$NIGHTLY_BUILD_NUMBER")
+    fi
+    "$PYTHON3" "$REPO_ROOT/scripts/plugins/copy-plugin-manifest.py" "${copy_args[@]}"
 }
 
 discover_candidates() {
@@ -269,6 +298,11 @@ build_bundle_if_needed() {
 
     if [[ -d "$root/$bundle_relative_path" ]]; then
         printf -v "$output_var" '%s' "$root/$bundle_relative_path"
+        return
+    fi
+
+    if [[ -n "$PRODUCTS_DIR" && -d "$PRODUCTS_DIR/$bundle_name" ]]; then
+        printf -v "$output_var" '%s' "$PRODUCTS_DIR/$bundle_name"
         return
     fi
 
@@ -411,6 +445,8 @@ if [[ "$SKIP_CATALOG" != "1" ]]; then
     "$REPO_ROOT/scripts/plugins/generate-plugin-catalog.sh" \
         --mode debug \
         --output "$CATALOG_PATH" \
+        --plugins-root "$SOURCE_DIR" \
+        --allow-sparse-legacy \
         "${catalog_args[@]}"
 fi
 

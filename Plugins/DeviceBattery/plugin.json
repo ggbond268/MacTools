@@ -48,6 +48,10 @@
       "summary": "查看 Mac、Apple 行動裝置、藍牙外設和雷柏滑鼠電量"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -62,5 +66,117 @@
     "componentPanel": true,
     "settings": "form"
   },
-  "permissions": []
+  "permissions": [
+    "inputMonitoring"
+  ],
+  "category": "monitoring",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "device",
+      "battery",
+      "monitoring"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "بطارية الأجهزة"
+      ],
+      "de": [
+        "Gerätebatterie"
+      ],
+      "en": [
+        "Device Battery"
+      ],
+      "es": [
+        "Batería de dispositivos"
+      ],
+      "fr": [
+        "Batterie des appareils"
+      ],
+      "ja": [
+        "デバイスのバッテリー"
+      ],
+      "ko": [
+        "기기 배터리"
+      ],
+      "pt": [
+        "Bateria dos dispositivos"
+      ],
+      "ru": [
+        "Батарея устройств"
+      ],
+      "zh-Hans": [
+        "设备电量"
+      ],
+      "zh-Hant": [
+        "裝置電量"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "monitoring"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "inputMonitoring"
+    ],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "connected-device-battery-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

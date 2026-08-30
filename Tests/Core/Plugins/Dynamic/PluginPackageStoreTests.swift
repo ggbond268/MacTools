@@ -242,6 +242,27 @@ final class PluginPackageStoreTests: XCTestCase {
         )
     }
 
+    func testApplicationSupportScopeUsesConfiguredNightlyDirectory() {
+        XCTAssertEqual(
+            AppStorageScope.applicationSupportDirectoryName(
+                infoDictionary: ["MTApplicationSupportDirectoryName": "MacTools Nightly"]
+            ),
+            "MacTools Nightly"
+        )
+    }
+
+    func testApplicationSupportScopeRejectsUnexpandedBuildSetting() {
+        let name = AppStorageScope.applicationSupportDirectoryName(
+            infoDictionary: ["MTApplicationSupportDirectoryName": "$(APPLICATION_SUPPORT_DIRECTORY_NAME)"]
+        )
+
+        #if DEBUG
+        XCTAssertEqual(name, "MacTools Dev")
+        #else
+        XCTAssertEqual(name, "MacTools")
+        #endif
+    }
+
     private func makeStore(
         now: @escaping () -> Date = { Date() }
     ) -> PluginPackageStore {

@@ -48,6 +48,23 @@
       "summary": "حرّر ~/.zshrc وملفات إعداد zsh الأخرى بسرعة، مع تحرير مدمج ومقتطفات شائعة."
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "retention-description": {
+      "ar": "يُحفظ محتوى ملفات shell ونسخة احتياطية واحدة بلاحقة .bak لكل ملف shell مُحرَّر. يستبدل الحفظ التالي لذلك الملف نسخته الاحتياطية، وتبقى النسخ الاحتياطية حتى تحذفها.",
+      "de": "Der Inhalt von Shell-Dateien und je eine .bak-Sicherung pro bearbeiteter Shell-Datei werden gespeichert. Beim nächsten Speichern derselben Datei wird ihre Sicherung ersetzt; andernfalls bleibt sie bestehen, bis du sie löschst.",
+      "en": "Shell file contents and one .bak backup per edited shell file are stored. The next save of that file replaces its backup; backups otherwise remain until you remove them.",
+      "es": "Se guardan el contenido de los archivos de shell y una copia .bak por cada archivo de shell editado. Al volver a guardar ese archivo se reemplaza su copia; las copias permanecen hasta que las elimines.",
+      "fr": "Le contenu des fichiers shell et une sauvegarde .bak par fichier shell modifié sont conservés. Le prochain enregistrement de ce fichier remplace sa sauvegarde ; les sauvegardes restent sinon jusqu’à leur suppression.",
+      "ja": "シェルファイルの内容と、編集したシェルファイルごとに 1 つの .bak バックアップを保存します。そのファイルを次回保存するとバックアップが置き換えられ、削除するまで保持されます。",
+      "ko": "셸 파일 내용과 편집한 셸 파일마다 하나의 .bak 백업을 저장합니다. 해당 파일을 다음에 저장하면 그 백업을 교체하며, 직접 삭제할 때까지 유지됩니다.",
+      "pt": "O conteúdo dos arquivos de shell e um backup .bak por arquivo de shell editado são armazenados. O próximo salvamento desse arquivo substitui seu backup; os backups permanecem até serem removidos.",
+      "ru": "Содержимое файлов оболочки и одна резервная копия .bak для каждого изменённого файла сохраняются. При следующем сохранении этого файла его копия заменяется; резервные копии хранятся до удаления пользователем.",
+      "zh-Hans": "会保存 Shell 文件内容，并为每个编辑过的 Shell 文件保留一个 .bak 备份。再次保存该文件时会替换它的备份；这些备份会保留到你手动删除为止。",
+      "zh-Hant": "會儲存 Shell 檔案內容，並為每個編輯過的 Shell 檔案保留一個 .bak 備份。再次儲存該檔案時會取代它的備份；這些備份會保留到你手動刪除為止。"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -62,6 +79,120 @@
     "componentPanel": false,
     "settings": "workspace"
   },
-  "permissions": [],
-  "category": "productivity"
+  "permissions": [
+    "automation"
+  ],
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "zsh",
+      "config",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إعدادات zsh"
+      ],
+      "de": [
+        "zsh-Konfig."
+      ],
+      "en": [
+        "zsh Config"
+      ],
+      "es": [
+        "Config. zsh"
+      ],
+      "fr": [
+        "Config. zsh"
+      ],
+      "ja": [
+        "zsh 設定"
+      ],
+      "ko": [
+        "zsh 설정"
+      ],
+      "pt": [
+        "Config. zsh"
+      ],
+      "ru": [
+        "Настройки zsh"
+      ],
+      "zh-Hans": [
+        "zsh 配置"
+      ],
+      "zh-Hant": [
+        "zsh 設定"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "automation"
+    ],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "shell-configuration"
+    ],
+    "dataPersisted": [
+      "plugin-configuration",
+      "shell-configuration",
+      "shell-configuration-backup"
+    ],
+    "retention": {
+      "policy": "user-controlled",
+      "description": "@productStrings.retention-description"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

@@ -65,6 +65,7 @@
 - GitHub 页面发包优先使用 `Actions` → `Prepare Release`。输入 `type`、目标 `version` 和是否 `release`；勾选 `release` 时会在 bump、提交和创建 tag 后继续触发实际发包 workflow。
 - 快速发包优先使用 `make release`。命令会交互选择 `app` 或 `plugin`，先分析下一版本的 `patch`/`minor`/`major` 并预览 bump；确认后才 `git pull --rebase`、执行轻量检查、更新并提交版本 bump、创建并推送对应 tag。
 - App 发布会更新 `Configs/AppVersion.xcconfig` 的 `MARKETING_VERSION` 和 `CURRENT_PROJECT_VERSION`，推送 `v*.*.*` tag 后由 `Release` workflow 构建、签名、公证、上传 DMG，将稳定 App Release 标记为 GitHub Latest，并更新 Appcast 和官网下载元数据。
+- 公开 Nightly 发布是由维护者执行的 `main` 快照，使用独立的应用身份、存储范围、更新源和同一提交构建的完整插件 catalog。Nightly 插件版本由流水线生成为 `source-major.run.attempt`，功能贡献不应因 Nightly 预先 bump 源 manifest。两次手动更新验证通过后，维护者可设置 `ENABLE_NIGHTLY_RELEASES=true` 启用每日计划。
 - 插件发布会推送 `plugins-*` 批次 tag。默认 `auto` 模式会按生产 catalog 找出新插件、已 bump 插件和包相关变更插件；需要时自动更新对应 `plugin.json.version`，然后由 `Plugin Release` workflow 构建并合并签名 catalog。插件批次 Release 不会标记为 GitHub Latest。
 - 新版 App 首次启动时会先检查已安装插件，并从签名后的生产 catalog 自动更新到最新版；不会自动安装用户未安装的新插件。
 - 非交互用法示例：`make release ARGS="--type app --version 1.0.7 --yes"`，或 `make release ARGS="--type plugin --version 1.0.10 --plugin-mode selected --plugin calendar --yes"`。

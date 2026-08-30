@@ -2,41 +2,37 @@ import MacToolsPluginKit
 import SwiftUI
 
 struct PanelPluginEmptyState: View {
-    let title: String
-    let systemImage: String
-    let iconTint: Color
+    let tab: MenuBarPanelTab
     let onInstall: () -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
 
     var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(iconTint.opacity(0.14))
+        VStack(spacing: 10) {
+            VStack(spacing: 6) {
+                Image(systemName: PluginSystemImage.resolvedName(tab.systemImage))
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(theme.text.secondary)
 
-                Image(systemName: PluginSystemImage.resolvedName(systemImage))
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(iconTint)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(spacing: 4) {
-                Text(title)
+                Text(AppL10n.plugins("plugin.panel.empty.title", defaultValue: "暂无插件"))
                     .font(.system(size: 14, weight: .semibold))
-
-                actionLinks
             }
+
+            installButton
         }
         .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
-    private var actionLinks: some View {
-        Button(AppL10n.plugins("plugin.empty.install", defaultValue: "安装插件"), action: onInstall)
+    private var installButton: some View {
+        Button(action: onInstall) {
+            Text(AppL10n.plugins("plugin.empty.install", defaultValue: "去安装"))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.accent)
+        }
             .buttonStyle(.link)
             .help(AppL10n.plugins("plugin.empty.openMarketplace", defaultValue: "打开插件市场"))
-        .font(.system(size: 12, weight: .medium))
-        .multilineTextAlignment(.center)
-        .lineLimit(1)
-        .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.center)
+            .lineLimit(1)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

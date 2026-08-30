@@ -9,7 +9,8 @@ Usage:
 Builds selected plugin packages, signs their bundles, zips them as release assets,
 generates a release catalog for those assets, and optionally writes a signed catalog.
 Without --plugin it builds all discovered plugins. --plugin can be repeated or
-passed as a comma-separated list.
+passed as a comma-separated list. --nightly-build-number derives valid,
+monotonic source-major.run.attempt versions without changing source manifests.
 USAGE
 }
 
@@ -27,6 +28,8 @@ DESTINATION=""
 XCODEBUILD_COMMAND="${XCODEBUILD:-}"
 MINIMUM_HOST_VERSION=""
 RELEASE_NOTES_URL=""
+NIGHTLY_BUILD_NUMBER=""
+PRODUCTS_DIR=""
 PLUGIN_FILTERS=()
 
 while [[ $# -gt 0 ]]; do
@@ -87,6 +90,14 @@ while [[ $# -gt 0 ]]; do
             RELEASE_NOTES_URL="${2:-}"
             shift 2
             ;;
+        --nightly-build-number)
+            NIGHTLY_BUILD_NUMBER="${2:-}"
+            shift 2
+            ;;
+        --products-dir)
+            PRODUCTS_DIR="${2:-}"
+            shift 2
+            ;;
         --plugin)
             IFS=',' read -r -a raw_plugin_filters <<< "${2:-}"
             for raw_plugin_filter in "${raw_plugin_filters[@]}"; do
@@ -108,6 +119,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ "$CONFIGURATION" == "Nightly" && -z "$NIGHTLY_BUILD_NUMBER" ]]; then
+    echo "--nightly-build-number is required for Nightly plugin release assets." >&2
+    exit 1
+fi
+if [[ "$CONFIGURATION" != "Nightly" && -n "$NIGHTLY_BUILD_NUMBER" ]]; then
+    echo "--nightly-build-number is only valid with --configuration Nightly." >&2
+    exit 1
+fi
+
 if [[ -z "$BASE_URL" || -z "$CATALOG_OUTPUT" ]]; then
     usage >&2
     exit 1
@@ -125,16 +145,6 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
-
-if [[ -z "$MINIMUM_HOST_VERSION" ]]; then
-    # This is the catalog schema compatibility floor, not the newest package's
-    # host requirement. Individual entries retain their manifest minimums.
-    MINIMUM_HOST_VERSION="1.1.6"
-fi
-if [[ -z "$MINIMUM_HOST_VERSION" ]]; then
-    echo "Unable to determine the catalog minimum host version." >&2
-    exit 1
-fi
 
 ASSETS_DIR="${ASSETS_DIR:-$DIST_DIR/Assets}"
 rm -rf "$ASSETS_DIR"
@@ -154,7 +164,14 @@ fi
 if [[ -n "$XCODEBUILD_COMMAND" ]]; then
     build_args+=(--xcodebuild "$XCODEBUILD_COMMAND")
 fi
-for plugin_filter in "${PLUGIN_FILTERS[@]}"; do
+if [[ -n "$NIGHTLY_BUILD_NUMBER" ]]; then
+    build_args+=(--nightly-build-number "$NIGHTLY_BUILD_NUMBER")
+fi
+if [[ -n "$PRODUCTS_DIR" ]]; then
+    build_args+=(--products-dir "$PRODUCTS_DIR")
+fi
+for plugin_filter in "${PLUGIN_FILTERS[@]-}"; do
+    [[ -n "$plugin_filter" ]] || continue
     build_args+=(--plugin "$plugin_filter")
 done
 
@@ -179,8 +196,14 @@ catalog_args=(
     --mode release
     --base-url "$BASE_URL"
     --output "$CATALOG_OUTPUT"
-    --minimum-host-version "$MINIMUM_HOST_VERSION"
+    --plugins-root "$SOURCE_DIR"
 )
+if [[ -n "$MINIMUM_HOST_VERSION" ]]; then
+    catalog_args+=(--minimum-host-version "$MINIMUM_HOST_VERSION")
+fi
+if [[ -n "$NIGHTLY_BUILD_NUMBER" ]]; then
+    catalog_args+=(--nightly-build-number "$NIGHTLY_BUILD_NUMBER")
+fi
 if [[ -n "$RELEASE_NOTES_URL" ]]; then
     catalog_args+=(--release-notes-url "$RELEASE_NOTES_URL")
 fi
@@ -191,10 +214,10 @@ done
 "$REPO_ROOT/scripts/plugins/generate-plugin-catalog.sh" "${catalog_args[@]}"
 
 if [[ -n "$SIGNED_CATALOG_OUTPUT" ]]; then
-    "$REPO_ROOT/scripts/plugins/sign-plugin-catalog.sh" \
+    PLUGIN_CATALOG_PRIVATE_KEY_BASE64="$CATALOG_PRIVATE_KEY_BASE64" \
+        "$REPO_ROOT/scripts/plugins/sign-plugin-catalog.sh" \
         --input "$CATALOG_OUTPUT" \
-        --output "$SIGNED_CATALOG_OUTPUT" \
-        --private-key-base64 "$CATALOG_PRIVATE_KEY_BASE64"
+        --output "$SIGNED_CATALOG_OUTPUT"
 fi
 
 echo "Built ${#asset_paths[@]} plugin release asset(s)."

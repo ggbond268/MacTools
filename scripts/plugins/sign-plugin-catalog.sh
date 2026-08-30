@@ -4,10 +4,13 @@ set -euo pipefail
 usage() {
     cat <<'USAGE'
 Usage:
-  sign-plugin-catalog.sh --input catalog.json --output catalog.signed.json --private-key-base64 "$KEY"
+  PLUGIN_CATALOG_PRIVATE_KEY_BASE64="$KEY" sign-plugin-catalog.sh \
+    --input catalog.json --output catalog.signed.json
 
 The private key must be an Ed25519 raw private key encoded as base64. Keep it in CI
-secrets or a local env file; do not commit it.
+secrets or a local env file; do not commit it. --private-key-base64 remains available
+for compatibility, but the environment variable avoids forwarding the secret as a
+child-process argument.
 USAGE
 }
 
@@ -46,28 +49,8 @@ if [[ -z "$INPUT" || -z "$OUTPUT" || -z "$PRIVATE_KEY_BASE64" ]]; then
     exit 1
 fi
 
-python3 - "$INPUT" "$OUTPUT" "$PRIVATE_KEY_BASE64" <<'PY'
-import base64
-import json
-import pathlib
-import sys
-
-try:
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-except Exception as exc:
-    raise SystemExit("Python package 'cryptography' is required to sign catalogs.") from exc
-
-input_path, output_path, private_key_b64 = sys.argv[1:]
-catalog = json.loads(pathlib.Path(input_path).read_text())
-catalog.pop("signature", None)
-payload = json.dumps(catalog, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
-private_key = Ed25519PrivateKey.from_private_bytes(base64.b64decode(private_key_b64))
-signature = private_key.sign(payload)
-catalog["signature"] = {
-    "algorithm": "ed25519",
-    "value": base64.b64encode(signature).decode("ascii"),
-}
-output = pathlib.Path(output_path)
-output.parent.mkdir(parents=True, exist_ok=True)
-output.write_text(json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
-PY
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_CATALOG_PRIVATE_KEY_BASE64="$PRIVATE_KEY_BASE64" \
+    xcrun swift "$SCRIPT_DIR/plugin-catalog-crypto.swift" sign \
+        --input "$INPUT" \
+        --output "$OUTPUT"

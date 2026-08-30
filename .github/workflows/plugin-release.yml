@@ -89,19 +89,20 @@ jobs:
           print(next(iter(versions)))
           PY
           )"
-          if [[ "$PLUGIN_KIT_VERSION" == "2" ]]; then
-            PLUGIN_CATALOG_RELATIVE_PATH="docs/plugins/catalog.json"
-            PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.1.6"
+          if (( PLUGIN_KIT_VERSION < 5 )); then
+            echo "PluginKit versions below 5 use immutable legacy catalogs and cannot be released by the schema-3 workflow." >&2
+            exit 1
           elif [[ "$PLUGIN_KIT_VERSION" == "5" ]]; then
-            PLUGIN_CATALOG_RELATIVE_PATH="docs/plugins/v5/catalog.json"
-            PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.2.0"
+            PLUGIN_CATALOG_RELATIVE_PATH="docs/plugins/v5/schema3/catalog.json"
+            PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.2.1"
           else
             PLUGIN_CATALOG_RELATIVE_PATH="docs/plugins/v${PLUGIN_KIT_VERSION}/catalog.json"
-            PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.1.6"
+            PLUGIN_CATALOG_MINIMUM_HOST_VERSION="1.2.1"
           fi
           {
             echo "TAG=$TAG"
             echo "PLUGIN_RELEASE_MODE=$MODE"
+            echo "PLUGIN_RELEASE_REQUIRE_VERSION_BUMP=false"
             echo "PLUGIN_RELEASE_SELECTION=$PLUGIN_SELECTION"
             echo "PLUGIN_RELEASE_TITLE=MacTools Plugins ${RELEASE_SUFFIX}"
             echo "PLUGIN_RELEASE_NOTES_URL=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
@@ -119,6 +120,11 @@ jobs:
           git fetch --force --tags origin +refs/heads/main:refs/remotes/origin/main
           if git show "origin/main:${PLUGIN_CATALOG_RELATIVE_PATH}" > "$PLUGIN_PREVIOUS_CATALOG_PATH" 2>/dev/null; then
             echo "Using ${PLUGIN_CATALOG_RELATIVE_PATH} from origin/main as the previous production catalog."
+          elif [[ "$PLUGIN_KIT_VERSION" == "5" ]] && \
+               git show origin/main:docs/plugins/v5/catalog.json > "$PLUGIN_PREVIOUS_CATALOG_PATH" 2>/dev/null; then
+            echo "Using docs/plugins/v5/catalog.json from origin/main as the same-ABI schema migration baseline."
+            echo "PLUGIN_RELEASE_MODE=all" >> "$GITHUB_ENV"
+            echo "PLUGIN_RELEASE_REQUIRE_VERSION_BUMP=true" >> "$GITHUB_ENV"
           elif PREVIOUS_VERSIONED_CATALOG="$(git ls-tree -r --name-only origin/main docs/plugins | \
                python3 -c 'import re,sys; current=int(sys.argv[1]); paths=[path.strip() for path in sys.stdin if re.fullmatch(r"docs/plugins/v\d+/catalog\.json", path.strip())]; candidates=[(int(re.search(r"/v(\d+)/", path).group(1)), path) for path in paths if int(re.search(r"/v(\d+)/", path).group(1)) < current]; print(max(candidates)[1] if candidates else "")' \
                "$PLUGIN_KIT_VERSION")" && \
@@ -146,6 +152,9 @@ jobs:
           )
           if [[ -n "$PLUGIN_RELEASE_SELECTION" ]]; then
             plan_args+=(--plugins "$PLUGIN_RELEASE_SELECTION")
+          fi
+          if [[ "$PLUGIN_RELEASE_REQUIRE_VERSION_BUMP" == "true" ]]; then
+            plan_args+=(--require-version-bump)
           fi
 
           scripts/plugins/plan-plugin-release.py "${plan_args[@]}"
@@ -228,6 +237,16 @@ jobs:
 
           exit "$missing"
 
+      - name: Verify plugin catalog signing key
+        if: env.PLUGIN_RELEASE_REQUIRED == 'true'
+        env:
+          PLUGIN_CATALOG_PRIVATE_KEY_BASE64: ${{ secrets.PLUGIN_CATALOG_PRIVATE_KEY_BASE64 }}
+        run: |
+          PLUGIN_CATALOG_PUBLIC_KEY="$(sed -n 's/^[[:space:]]*PLUGIN_CATALOG_PUBLIC_KEY[[:space:]]*=[[:space:]]*//p' Configs/Release.xcconfig | head -n 1)"
+          [[ -n "$PLUGIN_CATALOG_PUBLIC_KEY" ]] || { echo "Plugin catalog public key is missing." >&2; exit 1; }
+          scripts/plugins/verify-plugin-catalog-key-pair.sh \
+            --public-key-base64 "$PLUGIN_CATALOG_PUBLIC_KEY"
+
       - name: Show Xcode version
         if: env.PLUGIN_RELEASE_REQUIRED == 'true' && env.PLUGIN_CHANGED_COUNT != '0'
         run: xcodebuild -version
@@ -238,14 +257,6 @@ jobs:
           if ! command -v xcodegen >/dev/null 2>&1; then
             brew install xcodegen
           fi
-
-      - name: Install catalog signing dependency
-        if: env.PLUGIN_RELEASE_REQUIRED == 'true'
-        run: |
-          python3 -m venv "$RUNNER_TEMP/plugin-signing-venv"
-          "$RUNNER_TEMP/plugin-signing-venv/bin/python" -m pip install --upgrade pip
-          "$RUNNER_TEMP/plugin-signing-venv/bin/python" -m pip install cryptography
-          echo "$RUNNER_TEMP/plugin-signing-venv/bin" >> "$GITHUB_PATH"
 
       - name: Write release local config
         if: env.PLUGIN_RELEASE_REQUIRED == 'true' && env.PLUGIN_CHANGED_COUNT != '0'
@@ -351,8 +362,7 @@ jobs:
 
           scripts/plugins/sign-plugin-catalog.sh \
             --input "$PLUGIN_CATALOG_PATH" \
-            --output "$SIGNED_PLUGIN_CATALOG_PATH" \
-            --private-key-base64 "$PLUGIN_CATALOG_PRIVATE_KEY_BASE64"
+            --output "$SIGNED_PLUGIN_CATALOG_PATH"
 
       - name: Generate plugin release notes
         if: env.PLUGIN_RELEASE_REQUIRED == 'true'

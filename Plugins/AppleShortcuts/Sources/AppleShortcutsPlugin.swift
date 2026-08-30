@@ -31,6 +31,10 @@ final class AppleShortcutsPlugin:
     PluginActionExposureProviding,
     PluginSettingsSearchFocusing
 {
+    private enum PermissionID {
+        static let automation = "automation"
+    }
+
     let metadata: PluginMetadata
     let store: AppleShortcutsStore
     let controller: AppleShortcutsController
@@ -106,6 +110,42 @@ final class AppleShortcutsPlugin:
         .onVisibilityChange { [weak self] visible in
             self?.controller.setSettingsVisible(visible)
         }
+    }
+
+    var permissionRequirements: [PluginPermissionRequirement] {
+        [
+            PluginPermissionRequirement(
+                id: PermissionID.automation,
+                kind: .automation,
+                title: localization.string("permission.automation.title", defaultValue: "自动化"),
+                description: localization.string(
+                    "permission.automation.description",
+                    defaultValue: "读取快捷指令图标时需要控制 Apple“快捷指令”。"
+                )
+            ),
+        ]
+    }
+
+    func permissionState(for permissionID: String) -> PluginPermissionState {
+        PluginPermissionState(
+            isGranted: false,
+            footnote: permissionID == PermissionID.automation
+                ? localization.string(
+                    "permission.automation.footnote",
+                    defaultValue: "macOS 会在首次读取快捷指令图标时请求自动化授权。"
+                )
+                : nil,
+            statusText: permissionID == PermissionID.automation
+                ? localization.string("permission.automation.status", defaultValue: "按需确认")
+                : nil,
+            statusSystemImage: permissionID == PermissionID.automation ? "cursorarrow.click.2" : nil,
+            statusTone: permissionID == PermissionID.automation ? .neutral : nil
+        )
+    }
+
+    func handlePermissionAction(id: String) {
+        guard id == PermissionID.automation else { return }
+        requestPermissionGuidance?(PermissionID.automation)
     }
 
     func focusSettingsSearch() {

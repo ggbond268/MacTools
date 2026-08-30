@@ -314,24 +314,38 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
         guard isEnabled,
               isAccessibilityGranted,
               isInputMonitoringGranted,
-              target.bundleIdentifier == frontmostApplication.bundleIdentifier,
-              applicationHider.hasVisibleWindow(for: frontmostApplication.processIdentifier),
-              DockClickDecision.shouldScheduleHide(
-                  target: target,
-                  frontmostApplication: frontmostApplication,
-                  hasVisibleWindow: true
-              )
+              target.bundleIdentifier == frontmostApplication.bundleIdentifier
         else {
             return
         }
 
         let expectedGeneration = actionGeneration
-        scheduleDelayedAction { [weak self] in
-            self?.hideAfterDockClick(
-                target: target,
-                expectedFrontmostApplication: frontmostApplication,
-                expectedGeneration: expectedGeneration
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let hasVisibleWindow = await applicationHider.hasVisibleWindow(
+                for: frontmostApplication.processIdentifier
             )
+            guard expectedGeneration == actionGeneration,
+                  isEnabled,
+                  isAccessibilityGranted,
+                  isInputMonitoringGranted,
+                  frontmostApplicationProvider.frontmostApplication() == frontmostApplication,
+                  DockClickDecision.shouldScheduleHide(
+                      target: target,
+                      frontmostApplication: frontmostApplication,
+                      hasVisibleWindow: hasVisibleWindow
+                  )
+            else {
+                return
+            }
+
+            scheduleDelayedAction { [weak self] in
+                self?.hideAfterDockClick(
+                    target: target,
+                    expectedFrontmostApplication: frontmostApplication,
+                    expectedGeneration: expectedGeneration
+                )
+            }
         }
     }
 

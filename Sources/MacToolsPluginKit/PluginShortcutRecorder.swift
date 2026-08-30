@@ -236,6 +236,10 @@ private struct PluginShortcutRecorderButton: View {
         }
         .help(PluginKitLocalization.shortcutRecorderHelp(title: title))
         .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(
+            isPresented ? PluginKitLocalization.shortcutRecorderPreviewPlaceholder : displayText
+        ))
+        .accessibilityHint(Text(PluginKitLocalization.shortcutRecorderHelp(title: title)))
         .onHover { hovering in
             isHovered = hovering
             (hovering ? NSCursor.pointingHand : NSCursor.arrow).set()

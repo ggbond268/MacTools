@@ -48,6 +48,10 @@
       "summary": "選擇並退出正在運行的App，或一鍵退出全部"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +67,147 @@
     "settings": "none"
   },
   "permissions": [],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "quit",
+      "apps",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إنهاء التطبيقات"
+      ],
+      "de": [
+        "Apps beenden"
+      ],
+      "en": [
+        "Quit Apps"
+      ],
+      "es": [
+        "Salir de apps"
+      ],
+      "fr": [
+        "Quitter les apps"
+      ],
+      "ja": [
+        "アプリを終了"
+      ],
+      "ko": [
+        "앱 종료"
+      ],
+      "pt": [
+        "Encerrar apps"
+      ],
+      "ru": [
+        "Закрыть приложения"
+      ],
+      "zh-Hans": [
+        "退出应用"
+      ],
+      "zh-Hant": [
+        "結束 App"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "productivity-state"
+    ],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "quit-apps",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "choose-apps",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "退出应用",
+              "选择并退出正在运行的应用",
+              "quit",
+              "apps",
+              "choose"
+            ],
+            "systemImage": "power",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

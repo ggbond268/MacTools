@@ -36,7 +36,7 @@ actor SystemStatusSampler: SystemStatusSampling {
     private var lastPrimaryInterfaceDate: Date?
     private var didCachePrimaryInterfaceName = false
 
-    private static let systemPowerHealthCacheInterval: TimeInterval = 30
+    private static let systemPowerHealthCacheInterval: TimeInterval = 60 * 60
     private static let networkMetadataCacheInterval: TimeInterval = 10
 
     init(localization: PluginLocalization = PluginLocalization(bundle: .main)) {
@@ -887,7 +887,7 @@ actor SystemStatusSampler: SystemStatusSampling {
             adapterWatts: Self.adapterWatts(),
             batteryPowerWatts: registryInfo.batteryPowerWatts,
             temperatureCelsius: registryInfo.temperatureCelsius,
-            healthPercent: systemPowerHealthPercent(referenceDate: Date()) ?? registryInfo.healthPercent,
+            healthPercent: registryInfo.healthPercent ?? systemPowerHealthPercent(referenceDate: Date()),
             cycleCount: registryInfo.cycleCount
         )
     }
@@ -969,8 +969,29 @@ actor SystemStatusSampler: SystemStatusSampling {
         }
         defer { IOObjectRelease(service) }
 
-        let temperature = registryIntValue(service: service, key: "Temperature")
-            .map { Double($0) / 100 }
+        let batteryData = registryDictionaryValue(service: service, key: "BatteryData")
+        let batteryPackService = IOServiceGetMatchingService(
+            kIOMainPortDefault,
+            IOServiceMatching("AppleSmartBatteryPack")
+        )
+        defer {
+            if batteryPackService != 0 {
+                IOObjectRelease(batteryPackService)
+            }
+        }
+        let batteryPackData = batteryPackService == 0
+            ? nil
+            : registryDictionaryValue(service: batteryPackService, key: "BatteryData")
+        let temperature = batteryTemperatureCelsius(rawValues: [
+            registryIntValue(service: service, key: "Temperature"),
+            dictionaryIntValue(batteryData, key: "Temperature"),
+            batteryPackService == 0 ? nil : registryIntValue(service: batteryPackService, key: "Temperature"),
+            dictionaryIntValue(batteryPackData, key: "Temperature"),
+            registryIntValue(service: service, key: "VirtualTemperature"),
+            dictionaryIntValue(batteryData, key: "VirtualTemperature"),
+            batteryPackService == 0 ? nil : registryIntValue(service: batteryPackService, key: "VirtualTemperature"),
+            dictionaryIntValue(batteryPackData, key: "VirtualTemperature"),
+        ])
 
         let healthPercent = optionalBatteryHealthPercent(
             designCapacity: registryIntValue(service: service, key: "DesignCapacity"),
@@ -1105,6 +1126,30 @@ actor SystemStatusSampler: SystemStatusSampling {
         }
         if let numberValue = rawValue as? NSNumber {
             return numberValue.intValue
+        }
+        return nil
+    }
+
+    private static func dictionaryIntValue(_ dictionary: NSDictionary?, key: String) -> Int? {
+        guard let rawValue = dictionary?[key] else {
+            return nil
+        }
+
+        if let intValue = rawValue as? Int {
+            return intValue
+        }
+        if let numberValue = rawValue as? NSNumber {
+            return numberValue.intValue
+        }
+        return nil
+    }
+
+    nonisolated static func batteryTemperatureCelsius(rawValues: [Int?]) -> Double? {
+        for rawValue in rawValues.compactMap({ $0 }) {
+            let celsius = Double(rawValue) / 100
+            if celsius.isFinite, (0 ... 100).contains(celsius) {
+                return celsius
+            }
         }
         return nil
     }
@@ -1531,7 +1576,7 @@ actor SystemStatusSampler: SystemStatusSampling {
             return []
         }
 
-        return SystemStatusProcessParser.parsePSOutput(output, limit: limit)
+        return SystemStatusProcessParser.parsePSOutputCandidates(output, limitPerSort: limit)
     }
 
     private static func runCommand(path: String, arguments: [String], timeout: TimeInterval = 1) -> String? {
@@ -1679,25 +1724,57 @@ actor SystemStatusSampler: SystemStatusSampling {
 }
 
 enum SystemStatusProcessParser {
+    static func parsePSOutputCandidates(
+        _ rawOutput: String,
+        limitPerSort: Int
+    ) -> [SystemStatusTopProcess] {
+        guard limitPerSort > 0 else {
+            return []
+        }
+
+        let processes = parsedProcesses(rawOutput)
+        let cpuLeaders = processes.sorted(by: cpuSort).prefix(limitPerSort)
+        let memoryLeaders = processes.sorted(by: memorySort).prefix(limitPerSort)
+        let candidatesByPID = (Array(cpuLeaders) + Array(memoryLeaders)).reduce(
+            into: [Int: SystemStatusTopProcess]()
+        ) { result, process in
+            result[process.pid] = process
+        }
+        return candidatesByPID.values.sorted(by: cpuSort)
+    }
+
     static func parsePSOutput(_ rawOutput: String, limit: Int) -> [SystemStatusTopProcess] {
         guard limit > 0 else {
             return []
         }
 
-        let processes = rawOutput
+        return Array(parsedProcesses(rawOutput).sorted(by: cpuSort).prefix(limit))
+    }
+
+    private static func parsedProcesses(_ rawOutput: String) -> [SystemStatusTopProcess] {
+        rawOutput
             .split(whereSeparator: \.isNewline)
             .compactMap { parseLine(String($0)) }
-            .sorted { lhs, rhs in
-                if lhs.cpuPercent != rhs.cpuPercent {
-                    return lhs.cpuPercent > rhs.cpuPercent
-                }
-                if lhs.memoryPercent != rhs.memoryPercent {
-                    return lhs.memoryPercent > rhs.memoryPercent
-                }
-                return lhs.pid < rhs.pid
-            }
+    }
 
-        return Array(processes.prefix(limit))
+    private static func cpuSort(_ lhs: SystemStatusTopProcess, _ rhs: SystemStatusTopProcess) -> Bool {
+        if lhs.cpuPercent != rhs.cpuPercent {
+            return lhs.cpuPercent > rhs.cpuPercent
+        }
+        if lhs.memoryBytes != rhs.memoryBytes {
+            return (lhs.memoryBytes ?? 0) > (rhs.memoryBytes ?? 0)
+        }
+        return lhs.pid < rhs.pid
+    }
+
+    private static func memorySort(_ lhs: SystemStatusTopProcess, _ rhs: SystemStatusTopProcess) -> Bool {
+        if lhs.memoryBytes != rhs.memoryBytes {
+            return (lhs.memoryBytes ?? 0) > (rhs.memoryBytes ?? 0)
+        }
+        if lhs.cpuPercent != rhs.cpuPercent {
+            return lhs.cpuPercent > rhs.cpuPercent
+        }
+        return lhs.pid < rhs.pid
     }
 
     private static func parseLine(_ line: String) -> SystemStatusTopProcess? {

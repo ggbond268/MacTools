@@ -48,6 +48,112 @@
       "summary": "查看出口 IP、本地 IP、歸屬地與網路測速摘要"
     }
   },
+  "productStrings": {
+    "long-description": {
+      "ar": "اعرض عناوين IP المحلية والعامة والموقع وجودة الشبكة، وانسخ العناوين الحالية بسرعة.",
+      "de": "Zeige lokale und öffentliche IP-Adressen, Standort und Netzwerkqualität an und kopiere aktuelle Adressen schnell.",
+      "en": "Inspect local and public IP addresses, location, and network quality, then quickly copy current addresses.",
+      "es": "Consulta las IP locales y públicas, la ubicación y la calidad de red, y copia rápidamente las direcciones actuales.",
+      "fr": "Consultez les adresses IP locales et publiques, la localisation et la qualité du réseau, puis copiez les adresses actuelles.",
+      "ja": "ローカル／パブリック IP、所在地、ネットワーク品質を確認し、現在のアドレスをすばやくコピーします。",
+      "ko": "로컬 및 공인 IP 주소, 위치와 네트워크 품질을 확인하고 현재 주소를 빠르게 복사합니다.",
+      "pt": "Consulte IPs locais e públicos, localização e qualidade da rede e copie rapidamente os endereços atuais.",
+      "ru": "Просматривайте локальные и публичные IP-адреса, местоположение и качество сети и быстро копируйте текущие адреса.",
+      "zh-Hans": "查看本地与公网 IP、归属地和网络质量，并快速复制当前地址。",
+      "zh-Hant": "查看本機與公網 IP、歸屬地和網路品質，並快速複製目前位址。"
+    },
+    "example-copy-public-address": {
+      "ar": "حدّث عنوان IP العام وانسخه قبل إعداد قائمة سماح.",
+      "de": "Aktualisiere und kopiere deine öffentliche IP vor dem Einrichten einer Zulassungsliste.",
+      "en": "Refresh and copy your public IP before configuring an allowlist.",
+      "es": "Actualiza y copia tu IP pública antes de configurar una lista de permitidos.",
+      "fr": "Actualisez et copiez votre IP publique avant de configurer une liste d’autorisation.",
+      "ja": "許可リストを設定する前にパブリック IP を更新してコピーします。",
+      "ko": "허용 목록을 설정하기 전에 공인 IP를 새로 고치고 복사합니다.",
+      "pt": "Atualize e copie o IP público antes de configurar uma lista de permissões.",
+      "ru": "Обновите и скопируйте публичный IP перед настройкой списка разрешений.",
+      "zh-Hans": "配置允许列表前刷新并复制公网 IP。",
+      "zh-Hant": "設定允許清單前重新整理並複製公網 IP。"
+    },
+    "use-case-inspect-connectivity": {
+      "ar": "فحص اتصال الشبكة",
+      "de": "Netzwerkverbindung prüfen",
+      "en": "Inspect network connectivity",
+      "es": "Comprobar la conectividad de red",
+      "fr": "Examiner la connectivité réseau",
+      "ja": "ネットワーク接続を確認",
+      "ko": "네트워크 연결 확인",
+      "pt": "Verificar conectividade da rede",
+      "ru": "Проверить сетевое подключение",
+      "zh-Hans": "检查网络连接",
+      "zh-Hant": "檢查網路連線"
+    },
+    "action-ip-overview-copy-local-ipv4-title": {
+      "ar": "نسخ IPv4 المحلي",
+      "de": "Lokale IPv4 kopieren",
+      "en": "Copy Local IPv4",
+      "es": "Copiar IPv4 local",
+      "fr": "Copier l’IPv4 locale",
+      "ja": "ローカル IPv4 をコピー",
+      "ko": "로컬 IPv4 복사",
+      "pt": "Copiar IPv4 local",
+      "ru": "Скопировать локальный IPv4",
+      "zh-Hans": "复制本地 IPv4",
+      "zh-Hant": "複製本機 IPv4"
+    },
+    "action-ip-overview-copy-local-ipv4-description": {
+      "ar": "حدّث وانسخ عنوان IPv4 المحلي المفضل.",
+      "de": "Aktualisiert und kopiert die bevorzugte lokale IPv4-Adresse.",
+      "en": "Refresh and copy the preferred local IPv4 address.",
+      "es": "Actualiza y copia la dirección IPv4 local preferida.",
+      "fr": "Actualise et copie l’adresse IPv4 locale préférée.",
+      "ja": "優先ローカル IPv4 アドレスを更新してコピーします。",
+      "ko": "기본 로컬 IPv4 주소를 새로 고치고 복사합니다.",
+      "pt": "Atualiza e copia o endereço IPv4 local preferido.",
+      "ru": "Обновляет и копирует предпочтительный локальный IPv4-адрес.",
+      "zh-Hans": "刷新并复制首选本地 IPv4 地址。",
+      "zh-Hant": "重新整理並複製偏好的本機 IPv4 位址。"
+    },
+    "action-ip-overview-copy-public-ipv4-title": {
+      "ar": "نسخ IPv4 العام",
+      "de": "Öffentliche IPv4 kopieren",
+      "en": "Copy Public IPv4",
+      "es": "Copiar IPv4 pública",
+      "fr": "Copier l’IPv4 publique",
+      "ja": "パブリック IPv4 をコピー",
+      "ko": "공인 IPv4 복사",
+      "pt": "Copiar IPv4 público",
+      "ru": "Скопировать публичный IPv4",
+      "zh-Hans": "复制公网 IPv4",
+      "zh-Hant": "複製公網 IPv4"
+    },
+    "action-ip-overview-copy-public-ipv4-description": {
+      "ar": "حدّث وانسخ عنوان IPv4 العام الحالي.",
+      "de": "Aktualisiert und kopiert die aktuelle öffentliche IPv4-Adresse.",
+      "en": "Refresh and copy the current public IPv4 address.",
+      "es": "Actualiza y copia la dirección IPv4 pública actual.",
+      "fr": "Actualise et copie l’adresse IPv4 publique actuelle.",
+      "ja": "現在のパブリック IPv4 アドレスを更新してコピーします。",
+      "ko": "현재 공인 IPv4 주소를 새로 고치고 복사합니다.",
+      "pt": "Atualiza e copia o endereço IPv4 público atual.",
+      "ru": "Обновляет и копирует текущий публичный IPv4-адрес.",
+      "zh-Hans": "刷新并复制当前公网 IPv4 地址。",
+      "zh-Hant": "重新整理並複製目前公網 IPv4 位址。"
+    },
+    "setup-missing-dependency-help": {
+      "ar": "يتطلب اكتشاف عنوان IP العام اتصالًا بالشبكة.",
+      "de": "Die Ermittlung der öffentlichen IP erfordert eine Netzwerkverbindung.",
+      "en": "Public IP detection requires a network connection.",
+      "es": "La detección de la IP pública requiere conexión de red.",
+      "fr": "La détection de l’IP publique nécessite une connexion réseau.",
+      "ja": "パブリック IP の検出にはネットワーク接続が必要です。",
+      "ko": "공인 IP를 감지하려면 네트워크 연결이 필요합니다.",
+      "pt": "A deteção do IP público requer uma ligação de rede.",
+      "ru": "Для определения публичного IP требуется подключение к сети.",
+      "zh-Hans": "检测公网 IP 需要网络连接。",
+      "zh-Hant": "偵測公網 IP 需要網路連線。"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +169,241 @@
     "settings": "workspace"
   },
   "permissions": [],
-  "category": "monitoring"
+  "category": "monitoring",
+  "presentation": {
+    "longDescription": "@productStrings.long-description",
+    "examples": [
+      {
+        "id": "copy-public-address",
+        "text": "@productStrings.example-copy-public-address"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "IP address",
+      "network diagnostics",
+      "public IP",
+      "local IP"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "عنوان IP",
+        "تشخيص الشبكة"
+      ],
+      "de": [
+        "IP-Adresse",
+        "Netzwerkdiagnose"
+      ],
+      "en": [
+        "IP address",
+        "network check"
+      ],
+      "es": [
+        "dirección IP",
+        "diagnóstico de red"
+      ],
+      "fr": [
+        "adresse IP",
+        "diagnostic réseau"
+      ],
+      "ja": [
+        "IP アドレス",
+        "ネットワーク診断"
+      ],
+      "ko": [
+        "IP 주소",
+        "네트워크 진단"
+      ],
+      "pt": [
+        "endereço IP",
+        "diagnóstico de rede"
+      ],
+      "ru": [
+        "IP-адрес",
+        "диагностика сети"
+      ],
+      "zh-Hans": [
+        "IP 地址",
+        "网络诊断"
+      ],
+      "zh-Hant": [
+        "IP 位址",
+        "網路診斷"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "inspect-connectivity",
+        "title": "@productStrings.use-case-inspect-connectivity"
+      }
+    ],
+    "goalCategories": [
+      "networking",
+      "diagnostics",
+      "privacy"
+    ],
+    "relatedPluginIDs": [
+      "system-status"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [
+      "network-connection"
+    ],
+    "applications": [],
+    "executables": [
+      "/usr/bin/networkQuality"
+    ],
+    "permissionIDs": [],
+    "setupComplexity": "simple",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "local-network-addresses",
+      "public-network-addresses",
+      "network-location",
+      "connectivity-results",
+      "custom-test-targets"
+    ],
+    "dataPersisted": [
+      "cached-network-state",
+      "privacy-display-preference",
+      "custom-test-targets"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "required",
+    "networkDomains": [
+      "api.live.bilibili.com",
+      "cip.cc",
+      "myip.ipip.net",
+      "ipv4.netart.cn",
+      "ipv6.ddnspod.com",
+      "ipv6.netart.cn",
+      "4.ipcheck.ing",
+      "api4.ipify.org",
+      "ifconfig.me",
+      "6.ipcheck.ing",
+      "api6.ipify.org",
+      "ipapi.co",
+      "ipwho.is",
+      "res.wx.qq.com",
+      "www.google.com",
+      "www.cloudflare.com",
+      "www.youtube.com",
+      "github.com",
+      "chatgpt.com",
+      "edns.ip-api.com",
+      "ipv4.surfsharkdns.com",
+      "stun.l.google.com",
+      "stun.voip.blackberry.com",
+      "global.stun.twilio.com",
+      "stun.cloudflare.com",
+      "mensura.cdn-apple.com"
+    ],
+    "allowsUserConfiguredDomains": true,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": true
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "ip-overview",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "copy-local-ipv4",
+            "title": "@productStrings.action-ip-overview-copy-local-ipv4-title",
+            "description": "@productStrings.action-ip-overview-copy-local-ipv4-description",
+            "keywords": [
+              "IP",
+              "local address",
+              "copy"
+            ],
+            "systemImage": "doc.on.doc",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "copy-public-ipv4",
+            "title": "@productStrings.action-ip-overview-copy-public-ipv4-title",
+            "description": "@productStrings.action-ip-overview-copy-public-ipv4-description",
+            "keywords": [
+              "IP",
+              "public address",
+              "copy"
+            ],
+            "systemImage": "doc.on.doc",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  },
+  "setup": {
+    "steps": [],
+    "suggestedTestAction": {
+      "providerID": "ip-overview",
+      "actionID": "copy-public-ipv4"
+    },
+    "optionalSurfaces": [
+      "global-shortcut",
+      "workflow",
+      "automatic-rule",
+      "action-grid"
+    ],
+    "missingDependencyHelp": "@productStrings.setup-missing-dependency-help"
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "system-status"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

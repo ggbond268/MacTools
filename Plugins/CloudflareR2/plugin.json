@@ -48,6 +48,23 @@
       "summary": "ارفع الملفات إلى Cloudflare R2."
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup-configure-r2-credentials-description": {
+      "ar": "أدخل معرّف الحساب والحاوية ومفتاح الوصول والسر المحفوظ في سلسلة المفاتيح قبل أول رفع.",
+      "de": "Gib vor dem ersten Upload Konto-ID, Bucket, Zugriffsschlüssel und das im Schlüsselbund gespeicherte Geheimnis ein.",
+      "en": "Before the first upload, enter the account ID, bucket, access key, and Keychain-stored secret.",
+      "es": "Antes de la primera carga, introduce el ID de cuenta, el bucket, la clave de acceso y el secreto guardado en el llavero.",
+      "fr": "Avant le premier envoi, saisissez l’identifiant du compte, le bucket, la clé d’accès et le secret stocké dans le trousseau.",
+      "ja": "初回アップロード前に、アカウント ID、バケット、アクセスキー、キーチェーンに保存するシークレットを入力します。",
+      "ko": "처음 업로드하기 전에 계정 ID, 버킷, 액세스 키와 키체인에 저장할 비밀 키를 입력하세요.",
+      "pt": "Antes do primeiro envio, introduza o ID da conta, o bucket, a chave de acesso e o segredo guardado no Porta‑Chaves.",
+      "ru": "Перед первой загрузкой укажите ID учётной записи, бакет, ключ доступа и секрет, сохранённый в Связке ключей.",
+      "zh-Hans": "首次上传前，请填写账户 ID、存储桶、访问密钥，并将密钥安全地存入钥匙串。",
+      "zh-Hant": "首次上傳前，請填寫帳戶 ID、儲存貯體、存取金鑰，並將密鑰安全地存入鑰匙圈。"
+    }
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +80,160 @@
     "settings": "workspace"
   },
   "permissions": [],
-  "category": "productivity"
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "cloudflare",
+      "r2",
+      "upload",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "الرفع إلى Cloudflare R2"
+      ],
+      "de": [
+        "Cloudflare R2-Upload"
+      ],
+      "en": [
+        "Cloudflare R2 Upload"
+      ],
+      "es": [
+        "Carga en Cloudflare R2"
+      ],
+      "fr": [
+        "Envoi vers Cloudflare R2"
+      ],
+      "ja": [
+        "Cloudflare R2 アップロード"
+      ],
+      "ko": [
+        "Cloudflare R2 업로드"
+      ],
+      "pt": [
+        "Upload para o Cloudflare R2"
+      ],
+      "ru": [
+        "Загрузка в Cloudflare R2"
+      ],
+      "zh-Hans": [
+        "Cloudflare R2 上传"
+      ],
+      "zh-Hant": [
+        "Cloudflare R2 上傳"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "advanced",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "selected-files",
+      "upload-configuration"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "required",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": true,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "configure-r2-credentials",
+        "title": "@productStrings.display-name",
+        "description": "@productStrings.setup-configure-r2-credentials-description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "cloudflare-r2",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "upload-file",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "R2",
+              "S3",
+              "Cloudflare",
+              "上传",
+              "cloudflare",
+              "r2",
+              "upload",
+              "file"
+            ],
+            "systemImage": "icloud.and.arrow.up.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

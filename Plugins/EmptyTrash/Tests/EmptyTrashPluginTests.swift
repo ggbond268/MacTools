@@ -70,6 +70,11 @@ final class EmptyTrashPluginTests: XCTestCase {
         XCTAssertEqual(definition.externalInvocationPolicy, .confirmAlways)
         XCTAssertFalse(definition.capabilities.contains(.cancellable))
         XCTAssertEqual(definition.executionTimeoutSeconds, 600)
+        XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["automation"])
+        XCTAssertEqual(
+            plugin.permissionRequirementIDs(for: definition.key),
+            ["automation"]
+        )
 
         let result = try await plugin.beginAction(
             ActionInvocation(reference: reference, source: .test, mode: .background)

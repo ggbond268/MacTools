@@ -48,6 +48,12 @@
       "summary": "螢幕全黑並臨時禁用鍵盤輸入"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -65,5 +71,162 @@
   "permissions": [
     "accessibility"
   ],
-  "category": "display"
+  "category": "display",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "physical",
+      "clean",
+      "mode",
+      "display"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "وضع التنظيف"
+      ],
+      "de": [
+        "Reinigungsmodus"
+      ],
+      "en": [
+        "Clean Mode"
+      ],
+      "es": [
+        "Modo limpieza"
+      ],
+      "fr": [
+        "Mode nettoyage"
+      ],
+      "ja": [
+        "クリーニングモード"
+      ],
+      "ko": [
+        "청소 모드"
+      ],
+      "pt": [
+        "Modo de limpeza"
+      ],
+      "ru": [
+        "Режим очистки"
+      ],
+      "zh-Hans": [
+        "清洁模式"
+      ],
+      "zh-Hant": [
+        "清潔模式"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "display"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "display-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "physical-clean-mode",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "enter",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "清洁模式",
+              "屏幕全黑并临时禁用键盘输入",
+              "clean",
+              "keyboard",
+              "physical",
+              "mode",
+              "enter"
+            ],
+            "systemImage": "sparkles",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

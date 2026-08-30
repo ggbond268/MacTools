@@ -27,6 +27,34 @@ final class WindowLayoutsStoreTests: XCTestCase {
         XCTAssertFalse(WindowLayoutsStore(storage: storage).showsCommandFeedback)
     }
 
+    func testPersistsAndResetsModifierDragConfiguration() {
+        let storage = StoreMemoryStorage()
+        let store = WindowLayoutsStore(storage: storage)
+
+        XCTAssertFalse(store.modifierDragEnabled)
+        XCTAssertEqual(store.modifierDragModifiers, [.control, .option])
+
+        store.setModifierDragModifiers([.shift, .command])
+        store.setModifierDragEnabled(true)
+
+        let reloaded = WindowLayoutsStore(storage: storage)
+        XCTAssertTrue(reloaded.modifierDragEnabled)
+        XCTAssertEqual(reloaded.modifierDragModifiers, [.shift, .command])
+
+        reloaded.reset()
+        let reset = WindowLayoutsStore(storage: storage)
+        XCTAssertFalse(reset.modifierDragEnabled)
+        XCTAssertEqual(reset.modifierDragModifiers, [.control, .option])
+    }
+
+    func testRejectsEmptyModifierDragCombination() {
+        let store = WindowLayoutsStore(storage: StoreMemoryStorage())
+
+        store.setModifierDragModifiers([])
+
+        XCTAssertEqual(store.modifierDragModifiers, [.control, .option])
+    }
+
     func testMigratesLegacyBrandedShortcutPresetNames() {
         let raycastStorage = StoreMemoryStorage()
         raycastStorage.set("raycast", forKey: "shortcut-preset")

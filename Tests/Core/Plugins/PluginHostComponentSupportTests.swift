@@ -23,6 +23,33 @@ final class PluginHostComponentSupportTests: XCTestCase {
         XCTAssertEqual(host.featureManagementItems.map(\.presentation), [.componentPanel])
     }
 
+    func testOptionalDashboardAndComponentDetailPresentationsRouteThroughHost() throws {
+        let plugin = MockComponentPanelPlugin(id: "component")
+        let host = makeHost(plugins: [plugin])
+        var presentationRequests: [AppPresentationRequest] = []
+        var componentDetailRequests: [(pluginID: String, detailID: String)] = []
+        host.appPresentationHandler = { presentationRequests.append($0) }
+        host.componentDetailPresentationHandler = { pluginID, detailID in
+            componentDetailRequests.append((pluginID, detailID))
+        }
+
+        plugin.requestDashboardPresentation?()
+        plugin.requestComponentDetailPresentation?("cpu")
+
+        XCTAssertEqual(presentationRequests, [.showDashboard])
+        XCTAssertEqual(componentDetailRequests.map(\.pluginID), ["component"])
+        XCTAssertEqual(componentDetailRequests.map(\.detailID), ["cpu"])
+
+        let content = try XCTUnwrap(
+            host.componentDetailContent(pluginID: "component", detailID: "cpu", dismiss: {})
+        )
+        XCTAssertEqual(content.id, "cpu")
+        XCTAssertEqual(content.title, "CPU")
+        XCTAssertNil(
+            host.componentDetailContent(pluginID: "component", detailID: "unknown", dismiss: {})
+        )
+    }
+
     func testRefreshingLocalizationDiscardsCachedComponentViewsWithoutRefreshingPlugin() {
         let plugin = MockComponentPanelPlugin(id: "component")
         let host = makeHost(plugins: [plugin])
@@ -848,7 +875,9 @@ private final class StubDynamicPluginLoader: DynamicPluginLoading {
 
 @MainActor
 private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPanel,
-    PluginPanelSurfaceLifecycleHandling, PluginRuntimeLocalizationRefreshing, PluginShortcutBindingChangeHandling {
+    PluginPanelSurfaceLifecycleHandling, PluginRuntimeLocalizationRefreshing,
+    PluginShortcutBindingChangeHandling, PluginDashboardPresenting,
+    PluginComponentDetailPresenting {
     struct ShortcutBindingChange: Equatable {
         let id: String
         let binding: ShortcutBinding?
@@ -866,6 +895,8 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var requestDashboardPresentation: (() -> Void)?
+    var requestComponentDetailPresentation: ((String) -> Void)?
     private let isActive: Bool
     private(set) var makeViewCallCount = 0
     private(set) var refreshCallCount = 0
@@ -912,6 +943,20 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
         makeViewCallCount += 1
         receivedPanelVisibilityValues.append(context.isPanelVisible)
         return AnyView(Text(context.pluginID))
+    }
+
+    func makeComponentDetailContent(
+        detailID: String,
+        dismiss: @escaping () -> Void
+    ) -> PluginComponentDetailContent? {
+        guard detailID == "cpu" else {
+            return nil
+        }
+        return PluginComponentDetailContent(
+            id: detailID,
+            title: "CPU",
+            content: AnyView(Text("CPU detail"))
+        )
     }
 
     func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {

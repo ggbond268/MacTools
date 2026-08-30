@@ -3,17 +3,56 @@
   "displayName": "点击程序坞隐藏活跃 App",
   "summary": "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。",
   "localizedMetadata": {
-    "ar": { "displayName": "إخفاء التطبيق النشط بالنقر على Dock", "summary": "أخفِ التطبيق النشط بالنقر على أيقونته في Dock (كما في Windows)." },
-    "de": { "displayName": "Aktive App per Dock-Klick ausblenden", "summary": "Blendet die aktive App durch Klick auf ihr Dock-Symbol aus (wie unter Windows)." },
-    "en": { "displayName": "Hide Active App on Dock Click", "summary": "Hide the active app by clicking its Dock icon (like on Windows)." },
-    "es": { "displayName": "Ocultar la app activa al hacer clic en el Dock", "summary": "Oculta la app activa al hacer clic en su icono del Dock (como en Windows)." },
-    "fr": { "displayName": "Masquer l’app active par clic dans le Dock", "summary": "Masque l’app active en cliquant sur son icône dans le Dock (comme sous Windows)." },
-    "ja": { "displayName": "DockクリックでアクティブなAppを隠す", "summary": "DockのアイコンをクリックしてアクティブなAppを隠します（Windowsと同様）。" },
-    "ko": { "displayName": "Dock 클릭으로 활성 앱 가리기", "summary": "Dock 아이콘을 클릭해 활성 앱을 가립니다(Windows처럼)." },
-    "pt": { "displayName": "Ocultar app ativa com clique no Dock", "summary": "Oculta o app ativo ao clicar no ícone dele no Dock (como no Windows)." },
-    "ru": { "displayName": "Скрыть активное приложение щелчком по Dock", "summary": "Скрывает активное приложение щелчком по его значку в Dock (как в Windows)." },
-    "zh-Hans": { "displayName": "点击程序坞隐藏活跃 App", "summary": "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。" },
-    "zh-Hant": { "displayName": "點擊 Dock 隱藏使用中 App", "summary": "點擊使用中 App 的 Dock 圖示即可將其隱藏（如 Windows）。" }
+    "ar": {
+      "displayName": "إخفاء التطبيق النشط بالنقر على Dock",
+      "summary": "أخفِ التطبيق النشط بالنقر على أيقونته في Dock (كما في Windows)."
+    },
+    "de": {
+      "displayName": "Aktive App per Dock-Klick ausblenden",
+      "summary": "Blendet die aktive App durch Klick auf ihr Dock-Symbol aus (wie unter Windows)."
+    },
+    "en": {
+      "displayName": "Hide Active App on Dock Click",
+      "summary": "Hide the active app by clicking its Dock icon (like on Windows)."
+    },
+    "es": {
+      "displayName": "Ocultar la app activa al hacer clic en el Dock",
+      "summary": "Oculta la app activa al hacer clic en su icono del Dock (como en Windows)."
+    },
+    "fr": {
+      "displayName": "Masquer l’app active par clic dans le Dock",
+      "summary": "Masque l’app active en cliquant sur son icône dans le Dock (comme sous Windows)."
+    },
+    "ja": {
+      "displayName": "DockクリックでアクティブなAppを隠す",
+      "summary": "DockのアイコンをクリックしてアクティブなAppを隠します（Windowsと同様）。"
+    },
+    "ko": {
+      "displayName": "Dock 클릭으로 활성 앱 가리기",
+      "summary": "Dock 아이콘을 클릭해 활성 앱을 가립니다(Windows처럼)."
+    },
+    "pt": {
+      "displayName": "Ocultar app ativa com clique no Dock",
+      "summary": "Oculta o app ativo ao clicar no ícone dele no Dock (como no Windows)."
+    },
+    "ru": {
+      "displayName": "Скрыть активное приложение щелчком по Dock",
+      "summary": "Скрывает активное приложение щелчком по его значку в Dock (как в Windows)."
+    },
+    "zh-Hans": {
+      "displayName": "点击程序坞隐藏活跃 App",
+      "summary": "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。"
+    },
+    "zh-Hant": {
+      "displayName": "點擊 Dock 隱藏使用中 App",
+      "summary": "點擊使用中 App 的 Dock 圖示即可將其隱藏（如 Windows）。"
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description"
   },
   "version": "1.0.0",
   "minHostVersion": "1.2.0",
@@ -29,6 +68,130 @@
     "componentPanel": false,
     "settings": "form"
   },
-  "permissions": ["accessibility", "inputMonitoring"],
-  "category": "productivity"
+  "permissions": [
+    "accessibility",
+    "inputMonitoring"
+  ],
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "dock",
+      "click",
+      "minimize",
+      "hide",
+      "active",
+      "app",
+      "on",
+      "productivity"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إخفاء التطبيق النشط بالنقر على Dock"
+      ],
+      "de": [
+        "Aktive App per Dock-Klick ausblenden"
+      ],
+      "en": [
+        "Hide Active App on Dock Click"
+      ],
+      "es": [
+        "Ocultar la app activa al hacer clic en el Dock"
+      ],
+      "fr": [
+        "Masquer l’app active par clic dans le Dock"
+      ],
+      "ja": [
+        "DockクリックでアクティブなAppを隠す"
+      ],
+      "ko": [
+        "Dock 클릭으로 활성 앱 가리기"
+      ],
+      "pt": [
+        "Ocultar app ativa com clique no Dock"
+      ],
+      "ru": [
+        "Скрыть активное приложение щелчком по Dock"
+      ],
+      "zh-Hans": [
+        "点击程序坞隐藏活跃 App"
+      ],
+      "zh-Hant": [
+        "點擊 Dock 隱藏使用中 App"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility",
+      "inputMonitoring"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "productivity-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -11,7 +12,11 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = ROOT_DIR / "scripts/plugins/preflight-app-plugin-catalog.swift"
+SIGN_SCRIPT_PATH = ROOT_DIR / "scripts/plugins/sign-plugin-catalog.sh"
+VERIFY_KEY_PAIR_SCRIPT_PATH = ROOT_DIR / "scripts/plugins/verify-plugin-catalog-key-pair.sh"
 SIGNED_CATALOG = ROOT_DIR / "docs/plugins/v4/catalog.json"
+TEST_PRIVATE_KEY_BASE64 = "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="
+TEST_PUBLIC_KEY_BASE64 = "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
 
 
 @unittest.skipUnless(sys.platform == "darwin" and shutil.which("xcrun"), "requires macOS and Xcode")
@@ -38,6 +43,8 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
                 str(self.executable),
                 "--required-plugin-kit-version",
                 "4",
+                "--required-schema-version",
+                "2",
                 *arguments,
             ],
             cwd=ROOT_DIR,
@@ -46,16 +53,17 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
             capture_output=True,
         )
 
-    def test_versions_before_1_2_do_not_require_the_new_catalog(self) -> None:
-        result = self.run_preflight("--app-version", "1.1.6")
+    def test_schema3_source_cannot_reuse_the_released_1_2_version(self) -> None:
+        result = self.run_preflight("--app-version", "1.2.0")
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("not required", result.stdout)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cannot be released as MacTools 1.2.0", result.stderr)
+        self.assertIn("Raise the app version to 1.2.1", result.stderr)
 
     def test_matching_committed_and_deployed_signed_catalog_passes(self) -> None:
         result = self.run_preflight(
             "--app-version",
-            "1.2.0",
+            "1.2.1",
             "--expected-catalog",
             str(SIGNED_CATALOG),
             "--deployed-catalog",
@@ -67,16 +75,141 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Verified signed PluginKit 4 catalog", result.stdout)
 
-    def test_mac_tools_1_2_defaults_to_plugin_kit5_catalog(self) -> None:
+    def test_signer_matches_runtime_canonicalization_for_schema3_actions(self) -> None:
+        input_catalog = Path(self.temporary_directory.name) / "schema3-input.json"
+        signed_catalog = Path(self.temporary_directory.name) / "schema3-signed.json"
+        input_catalog.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 3,
+                    "catalogID": "com.ggbond.mactools.plugins",
+                    "generatedAt": "2026-08-28T00:00:00Z",
+                    "minimumHostVersion": "1.2.1",
+                    "pluginKitVersion": 5,
+                    "plugins": [
+                        {
+                            "id": "example",
+                            "pluginKitVersion": 5,
+                            "package": {
+                                "url": "https://example.invalid/example.mactoolsplugin.zip",
+                                "sha256": "0" * 64,
+                                "size": 1,
+                            },
+                            "actions": {
+                                "static": [
+                                    {
+                                        "id": "example.run",
+                                        "parameters": [{"id": "text", "type": "string"}],
+                                        "parameterSummary": {"en": "Text", "zh-Hans": "文本"},
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                    "revoked": [],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        environment = os.environ.copy()
+        environment["PLUGIN_CATALOG_PRIVATE_KEY_BASE64"] = TEST_PRIVATE_KEY_BASE64
+
+        key_result = subprocess.run(
+            [
+                str(VERIFY_KEY_PAIR_SCRIPT_PATH),
+                "--public-key-base64",
+                TEST_PUBLIC_KEY_BASE64,
+            ],
+            cwd=ROOT_DIR,
+            env=environment,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(key_result.returncode, 0, key_result.stderr)
+
+        sign_result = subprocess.run(
+            [
+                str(SIGN_SCRIPT_PATH),
+                "--input",
+                os.path.relpath(input_catalog, ROOT_DIR),
+                "--output",
+                os.path.relpath(signed_catalog, ROOT_DIR),
+            ],
+            cwd=ROOT_DIR,
+            env=environment,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(sign_result.returncode, 0, sign_result.stderr)
+
+        result = self.run_preflight(
+            "--required-plugin-kit-version",
+            "5",
+            "--required-schema-version",
+            "3",
+            "--app-version",
+            "1.2.1",
+            "--expected-catalog",
+            str(signed_catalog),
+            "--deployed-catalog",
+            str(signed_catalog),
+            "--catalog-url",
+            "https://example.invalid/catalog.json",
+            "--public-key-base64",
+            TEST_PUBLIC_KEY_BASE64,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Verified signed PluginKit 5 catalog", result.stdout)
+
+    def test_schema3_hosts_derive_the_current_plugin_kit_compatibility_line(self) -> None:
         source = SCRIPT_PATH.read_text(encoding="utf-8")
-        self.assertIn('pluginKitVersion: 5', source)
-        self.assertIn('plugins/v5/catalog.json', source)
+        self.assertIn('sourcePluginKitVersion()', source)
+        self.assertIn('v5/schema3/catalog.json', source)
+        self.assertIn('requiredSchemaVersion ?? 3', source)
+
+    def test_future_plugin_kit_defaults_to_its_own_catalog(self) -> None:
+        result = subprocess.run(
+            [
+                str(self.executable),
+                "--required-plugin-kit-version", "6",
+                "--app-version", "1.3.0",
+            ],
+            cwd=ROOT_DIR,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("docs/plugins/v6/catalog.json", result.stderr)
+
+    def test_default_preflight_rejects_schema2_on_the_schema3_line(self) -> None:
+        result = subprocess.run(
+            [
+                str(self.executable),
+                "--required-plugin-kit-version", "4",
+                "--app-version", "1.2.1",
+                "--expected-catalog", str(SIGNED_CATALOG),
+                "--deployed-catalog", str(SIGNED_CATALOG),
+            ],
+            cwd=ROOT_DIR,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must use catalog schema 3", result.stderr)
 
     def test_missing_catalog_fails_with_release_order_guidance(self) -> None:
         missing = Path(self.temporary_directory.name) / "missing.json"
         result = self.run_preflight(
             "--app-version",
-            "1.2.0",
+            "1.2.1",
             "--expected-catalog",
             str(missing),
             "--deployed-catalog",
@@ -94,7 +227,7 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
         tampered.write_text(json.dumps(catalog), encoding="utf-8")
         result = self.run_preflight(
             "--app-version",
-            "1.2.0",
+            "1.2.1",
             "--expected-catalog",
             str(tampered),
             "--deployed-catalog",
@@ -111,7 +244,7 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
         invalid.write_text(json.dumps(catalog), encoding="utf-8")
         result = self.run_preflight(
             "--app-version",
-            "1.2.0",
+            "1.2.1",
             "--expected-catalog",
             str(invalid),
             "--deployed-catalog",
@@ -128,7 +261,7 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
         invalid.write_text(json.dumps(catalog), encoding="utf-8")
         result = self.run_preflight(
             "--app-version",
-            "1.2.0",
+            "1.2.1",
             "--expected-catalog",
             str(invalid),
             "--deployed-catalog",
@@ -145,7 +278,7 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
         invalid.write_text(json.dumps(catalog), encoding="utf-8")
         result = self.run_preflight(
             "--app-version",
-            "1.2.0",
+            "1.2.1",
             "--expected-catalog",
             str(invalid),
             "--deployed-catalog",
@@ -154,7 +287,7 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("requires MacTools 1.3.0", result.stderr)
-        self.assertIn("target app 1.2.0", result.stderr)
+        self.assertIn("target app 1.2.1", result.stderr)
 
 
 if __name__ == "__main__":

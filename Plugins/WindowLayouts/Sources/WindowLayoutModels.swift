@@ -223,6 +223,7 @@ enum WindowLayoutError: Error, Equatable {
     case executionQueueFull
     case accessibilityRequired
     case noFocusedWindow
+    case noWindowUnderPointer
     case windowUnavailable
     case windowCannotMove
     case windowCannotResize

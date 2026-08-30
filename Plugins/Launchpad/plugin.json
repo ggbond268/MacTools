@@ -48,6 +48,10 @@
       "summary": "用全域快速鍵或選單列打開 App 網格，搜尋並啟動。"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
   "version": "1.2.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +67,149 @@
     "settings": "form"
   },
   "permissions": [],
-  "category": "system"
+  "category": "system",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "launchpad",
+      "system"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "Launchpad"
+      ],
+      "de": [
+        "Launchpad"
+      ],
+      "en": [
+        "Launchpad"
+      ],
+      "es": [
+        "Launchpad"
+      ],
+      "fr": [
+        "Launchpad"
+      ],
+      "ja": [
+        "Launchpad"
+      ],
+      "ko": [
+        "Launchpad"
+      ],
+      "pt": [
+        "Launchpad"
+      ],
+      "ru": [
+        "Launchpad"
+      ],
+      "zh-Hans": [
+        "启动台"
+      ],
+      "zh-Hant": [
+        "啟動台"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "system"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "system-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "launchpad",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "toggleLaunchpad",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "启动台",
+              "打开启动台",
+              "Launchpad",
+              "launchpad",
+              "togglelaunchpad"
+            ],
+            "systemImage": "square.grid.3x3.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

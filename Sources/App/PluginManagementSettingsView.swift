@@ -164,9 +164,10 @@ struct PluginManagementSettingsView: View {
         .onChange(of: pluginHost.pluginManagementItems) { _, items in
             guard
                 let activeSearchTarget,
-                !items.contains(where: {
-                    $0.id == activeSearchTarget.pluginID && $0.canUninstall
-                })
+                !MarketplacePluginSearchAvailability.contains(
+                    pluginID: activeSearchTarget.pluginID,
+                    in: items
+                )
             else {
                 return
             }
@@ -205,9 +206,10 @@ struct PluginManagementSettingsView: View {
             return
         }
 
-        guard pluginHost.pluginManagementItems.contains(where: {
-            $0.id == target.pluginID && $0.canUninstall
-        }) else {
+        guard MarketplacePluginSearchAvailability.contains(
+            pluginID: target.pluginID,
+            in: pluginHost.pluginManagementItems
+        ) else {
             navigationCoordinator.clearSearchRevealRequest(request)
             return
         }

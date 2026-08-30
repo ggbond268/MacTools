@@ -48,6 +48,12 @@
       "summary": "分類清理 Xcode DerivedData、裝置支援、封存與快取"
     }
   },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description"
+  },
   "version": "1.1.0",
   "minHostVersion": "1.2.0",
   "pluginKitVersion": 5,
@@ -63,5 +69,165 @@
     "settings": "workspace"
   },
   "permissions": [],
-  "category": "storage"
+  "category": "storage",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "xcode",
+      "clean",
+      "cleanup",
+      "storage"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "تنظيف Xcode"
+      ],
+      "de": [
+        "Xcode-Bereinigung"
+      ],
+      "en": [
+        "Xcode Cleanup"
+      ],
+      "es": [
+        "Limpieza de Xcode"
+      ],
+      "fr": [
+        "Nettoyage Xcode"
+      ],
+      "ja": [
+        "Xcode クリーンアップ"
+      ],
+      "ko": [
+        "Xcode 정리"
+      ],
+      "pt": [
+        "Limpeza do Xcode"
+      ],
+      "ru": [
+        "Очистка Xcode"
+      ],
+      "zh-Hans": [
+        "Xcode 清理"
+      ],
+      "zh-Hant": [
+        "Xcode 清理"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "storage"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [
+      {
+        "bundleID": "com.apple.dt.Xcode",
+        "name": "Xcode"
+      }
+    ],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "developer-cache-paths",
+      "file-sizes"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "xcode-clean",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "scan-and-review",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "Xcode 清理",
+              "扫描",
+              "Xcode",
+              "xcode",
+              "clean",
+              "scan",
+              "and",
+              "review"
+            ],
+            "systemImage": "magnifyingglass",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
 }

@@ -44,9 +44,10 @@ struct OpenAICompatibleSecretStore: TranslatorSecretStoring {
 
     init(
         service: String = Self.defaultService,
-        account: String = Self.defaultAccount
+        account: String = Self.defaultAccount,
+        releaseChannel: String? = Bundle.main.object(forInfoDictionaryKey: "MTReleaseChannel") as? String
     ) {
-        self.service = service
+        self.service = service + (releaseChannel == "nightly" ? ".nightly" : "")
         self.account = account
     }
 

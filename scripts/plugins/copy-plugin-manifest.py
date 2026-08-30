@@ -8,6 +8,13 @@ import json
 import pathlib
 import re
 import shutil
+from typing import Optional
+
+from plugin_source_manifest import (
+    apply_nightly_package_overrides,
+    expand_localized_references,
+    validate_runtime_envelope,
+)
 
 
 MARKETING_VERSION_PATTERN = re.compile(
@@ -28,13 +35,38 @@ def copy_manifest(
     destination: pathlib.Path,
     configuration: str,
     app_version_config: pathlib.Path,
+    nightly_build_number: Optional[str] = None,
+    allow_sparse_legacy: bool = False,
 ) -> None:
-    if configuration != "Debug":
+    if nightly_build_number is not None and configuration != "Nightly":
+        raise ValueError("Nightly build number is only valid for the Nightly configuration")
+
+    manifest = json.loads(source.read_text(encoding="utf-8"))
+    had_build_metadata = "build" in manifest
+    manifest.pop("build", None)
+    expanded_manifest = expand_localized_references(manifest, source)
+    had_localization_references = expanded_manifest != manifest
+    manifest = expanded_manifest
+    validate_runtime_envelope(
+        manifest,
+        source,
+        allow_sparse_legacy=allow_sparse_legacy,
+    )
+
+    if configuration == "Nightly":
+        apply_nightly_package_overrides(manifest, nightly_build_number)
+
+    if (
+        configuration not in {"Debug", "Nightly"}
+        and nightly_build_number is None
+        and not had_build_metadata
+        and not had_localization_references
+    ):
         shutil.copy2(source, destination)
         return
 
-    manifest = json.loads(source.read_text(encoding="utf-8"))
-    manifest["minHostVersion"] = development_host_version(app_version_config)
+    if configuration == "Debug":
+        manifest["minHostVersion"] = development_host_version(app_version_config)
     destination.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -50,6 +82,8 @@ def main() -> None:
     copy_parser.add_argument("--destination", type=pathlib.Path, required=True)
     copy_parser.add_argument("--configuration", required=True)
     copy_parser.add_argument("--app-version-config", type=pathlib.Path, required=True)
+    copy_parser.add_argument("--nightly-build-number")
+    copy_parser.add_argument("--allow-sparse-legacy", action="store_true")
 
     version_parser = subparsers.add_parser("host-version")
     version_parser.add_argument("--app-version-config", type=pathlib.Path, required=True)
@@ -64,6 +98,8 @@ def main() -> None:
         destination=args.destination,
         configuration=args.configuration,
         app_version_config=args.app_version_config,
+        nightly_build_number=args.nightly_build_number,
+        allow_sparse_legacy=args.allow_sparse_legacy,
     )
 
 

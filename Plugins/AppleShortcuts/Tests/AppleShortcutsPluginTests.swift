@@ -5,6 +5,16 @@ import XCTest
 
 @MainActor
 final class AppleShortcutsPluginTests: XCTestCase {
+    func testPublishesOptionalAutomationRequirement() {
+        let plugin = makePlugin(runner: AppleShortcutsRunnerStub(shortcuts: []))
+
+        XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["automation"])
+        let state = plugin.permissionState(for: "automation")
+        XCTAssertFalse(state.isGranted)
+        XCTAssertEqual(state.statusText, "按需确认")
+        XCTAssertEqual(state.statusTone, .neutral)
+    }
+
     func testPublishesEveryDiscoveredShortcutAcrossRename() async throws {
         let id = UUID()
         let runner = AppleShortcutsRunnerStub(shortcuts: [AppleShortcutItem(id: id, name: "Old")])
@@ -63,14 +73,26 @@ final class AppleShortcutsPluginTests: XCTestCase {
         await plugin.controller.performRefresh()
 
         var definition = try XCTUnwrap(plugin.actionDefinitions.first)
+        let template = try PluginManifestActionAssertions.dynamicTemplate(
+            pluginDirectoryName: "AppleShortcuts",
+            id: "run-shortcut"
+        )
+        XCTAssertEqual(template["riskVariesByEntry"] as? Bool, true)
+        XCTAssertNil(template["automaticEligibilityVariesByEntry"])
+        XCTAssertEqual(template["automaticEligible"] as? Bool, false)
+        let surfaces = Set(template["surfaces"] as? [String] ?? [])
+        XCTAssertFalse(surfaces.contains("automatic-rule"))
+        XCTAssertFalse(surfaces.contains("app-intent"))
         XCTAssertEqual(definition.risk, .confirmationRequired)
         XCTAssertEqual(definition.externalInvocationPolicy, .confirmAlways)
+        XCTAssertFalse(definition.capabilities.contains(.automatic))
         XCTAssertNotNil(definition.confirmation)
 
         try plugin.store.setRequiresConfirmation(false, for: id).get()
         definition = try XCTUnwrap(plugin.actionDefinitions.first)
         XCTAssertEqual(definition.risk, .safe)
         XCTAssertEqual(definition.externalInvocationPolicy, .confirmAlways)
+        XCTAssertFalse(definition.capabilities.contains(.automatic))
         XCTAssertNotNil(definition.confirmation)
     }
 

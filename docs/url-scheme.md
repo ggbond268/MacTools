@@ -4,6 +4,9 @@ MacTools exposes a guarded URL API for navigation and explicitly eligible Run Li
 
 - Release app: `mactools://`
 - Debug app: `mactools-dev://`
+- Nightly app: `mactools-nightly://`
+
+The three schemes route to the matching installation. Stable, development, and Nightly builds can coexist without one build intercepting another build's links.
 
 ## Public routes
 

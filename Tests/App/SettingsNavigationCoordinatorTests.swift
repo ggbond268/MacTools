@@ -446,6 +446,26 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         )
     }
 
+    func testAvailableManagementItemCanBeRevealedFromMarketplaceSearch() {
+        let item = PluginManagementItem(
+            id: "available-plugin",
+            title: "Available Plugin",
+            summary: nil,
+            version: "1.0.0",
+            state: .available,
+            packageURL: nil,
+            requiresRestartToFullyUnload: false,
+            releaseNotesURL: nil
+        )
+
+        XCTAssertTrue(
+            MarketplacePluginSearchAvailability.contains(
+                pluginID: item.id,
+                in: [item]
+            )
+        )
+    }
+
     func testSearchNavigationDismissesPaletteAndPublishesExactRevealTarget() throws {
         let coordinator = SettingsNavigationCoordinator(
             isPluginConfigurationAvailable: { $0 == "keep-awake" }
