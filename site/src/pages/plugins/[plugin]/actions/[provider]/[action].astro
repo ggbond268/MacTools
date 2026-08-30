@@ -3,6 +3,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteNav from "@/components/SiteNav.astro";
 import LocalizedText from "@/components/LocalizedText.astro";
+import { localizedTokenList } from "@/lib/plugin-presentation";
 import actionData from "@/generated/actions.json";
 
 export async function getStaticPaths() {
@@ -37,7 +38,7 @@ const ui = (zh: string, en: string) => ({ zh, en });
     </section>
     <section class="plugin-detail-section">
       <h2><LocalizedText {...ui("操作详情", "Action details")} /></h2>
-      <p class="plugin-detail-muted">{[entry.action.risk, ...entry.action.surfaces, ...entry.action.permissionIDs].filter(Boolean).join(" · ") || <LocalizedText {...ui("未列出其他详情。", "No additional details listed.")} />}</p>
+      <p class="plugin-detail-muted">{entry.action.risk ? <LocalizedText {...localizedTokenList([entry.action.risk, ...entry.action.surfaces, ...entry.action.permissionIDs])} /> : <LocalizedText {...ui("未列出其他详情。", "No additional details listed.")} />}</p>
     </section>
   </main>
   <SiteFooter />

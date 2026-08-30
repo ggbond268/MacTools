@@ -53,6 +53,18 @@ class GenerateWebsitePluginDataTests(unittest.TestCase):
             mac_tools_url("appearance"),
             "mactools://app/settings/plugins/marketplace/appearance",
         )
+        with self.assertRaises(ValueError):
+            mac_tools_url("appearance", provider_id="appearance")
+        with self.assertRaises(ValueError):
+            mac_tools_url("appearance", action_id="toggle")
+
+    def test_plugin_search_projection_contains_every_supported_locale(self) -> None:
+        projection = project_manifests(REPO_ROOT / "Plugins")
+        entry = next(item for item in projection["search"] if item["kind"] == "plugin")
+        self.assertIn("localized", entry)
+        self.assertIn("en", entry["localized"])
+        self.assertIn("zh-Hans", entry["localized"])
+        self.assertTrue(entry["localized"]["en"]["title"])
 
     def test_generator_check_detects_stale_or_missing_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -69,3 +81,19 @@ class GenerateWebsitePluginDataTests(unittest.TestCase):
             plugins_path.write_text(json.dumps(plugins), encoding="utf-8")
 
             self.assertFalse(generate(REPO_ROOT, output, assets, check=True))
+
+    def test_generator_check_detects_and_generation_removes_orphaned_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            output = root / "generated"
+            assets = root / "assets"
+
+            self.assertTrue(generate(REPO_ROOT, output, assets, check=False))
+            assets.mkdir(parents=True, exist_ok=True)
+            orphan = assets / "orphan.png"
+            orphan.write_bytes(b"obsolete")
+
+            self.assertFalse(generate(REPO_ROOT, output, assets, check=True))
+            self.assertTrue(orphan.exists())
+            self.assertTrue(generate(REPO_ROOT, output, assets, check=False))
+            self.assertFalse(orphan.exists())

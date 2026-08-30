@@ -774,6 +774,9 @@ const settingsModels: Record<string, SettingSection[]> = {
   ],
 };
 
+void iconByPlugin;
+void settingsModels;
+
 const catalog = await loadPluginCatalog();
 const plugins = catalog.plugins.filter((plugin) => plugin.id !== "menu-bar-hidden").sort((a, b) =>
   localizedPluginText(a).zh.displayName.localeCompare(localizedPluginText(b).zh.displayName, "zh-CN")
@@ -913,7 +916,7 @@ const structuredData = {
                   >
                     <span
                       class="sidebar-icon"
-                      style={`--sidebar-icon: url("${symbol(iconByPlugin[plugin.id] ?? "slider.horizontal.3.png")}"); --sidebar-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
+                      style={`--sidebar-icon: url("${symbol(categoryIcons[plugin.category ?? "other"])}"); --sidebar-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
                     ></span>
                     <span>
                       <span data-i18n-zh>{text.zh.displayName}</span>
@@ -1061,7 +1064,7 @@ const structuredData = {
 
             {settingsPlugins.map((plugin) => {
               const text = localizedPluginText(plugin);
-              const sections = settingsModels[plugin.id] ?? fallbackSections({
+              const sections = fallbackSections({
                 zh: text.zh.displayName,
                 en: text.en.displayName,
               });
@@ -1070,7 +1073,7 @@ const structuredData = {
                   <header class="plugin-settings-header">
                     <span
                       class="plugin-settings-icon"
-                      style={`--plugin-icon: url("${symbol(iconByPlugin[plugin.id] ?? "slider.horizontal.3.png")}"); --plugin-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
+                      style={`--plugin-icon: url("${symbol(categoryIcons[plugin.category ?? "other"])}"); --plugin-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
                     ></span>
                     <div>
                       <h2>

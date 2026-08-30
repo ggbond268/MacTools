@@ -6,6 +6,13 @@ const applyLanguage = (lang: "zh" | "en") => {
   root.lang = lang === "zh" ? "zh-CN" : "en";
 };
 
+const syncLocalizedAttributes = () => {
+  const language = root.dataset.lang === "en" ? "en" : "zh";
+  document.querySelectorAll<HTMLElement>("[data-aria-label-zh][data-aria-label-en]").forEach((element) => {
+    element.setAttribute("aria-label", language === "en" ? element.dataset.ariaLabelEn ?? "" : element.dataset.ariaLabelZh ?? "");
+  });
+};
+
 if (storedTheme === "dark" || storedTheme === "light") {
   root.dataset.theme = storedTheme;
 } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
@@ -19,6 +26,9 @@ if (storedLang === "zh" || storedLang === "en") {
   const prefersChinese = browserLanguages.some((language) => language.toLowerCase().startsWith("zh"));
   applyLanguage(prefersChinese ? "zh" : "en");
 }
+
+syncLocalizedAttributes();
+new MutationObserver(syncLocalizedAttributes).observe(root, { attributes: true, attributeFilter: ["data-lang"] });
 
 document.querySelectorAll<HTMLElement>("[data-copy]").forEach((button) => {
   const initialMarkup = button.innerHTML;

@@ -4071,6 +4071,118 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "action",
+            "grid",
+            "system",
+            "شبكة الإجراءات"
+          ],
+          "summary": "افتح شبكة إجراءات مفضلة يحددها المستخدم بالقرب من المؤشر.",
+          "title": "شبكة الإجراءات"
+        },
+        "de": {
+          "keywords": [
+            "Aktionsraster",
+            "action",
+            "grid",
+            "system"
+          ],
+          "summary": "Öffnet ein benutzerdefiniertes Raster bevorzugter Aktionen neben dem Zeiger.",
+          "title": "Aktionsraster"
+        },
+        "en": {
+          "keywords": [
+            "Action Grid",
+            "action",
+            "grid",
+            "system"
+          ],
+          "summary": "Open a user-configured grid of favorite actions near the pointer.",
+          "title": "Action Grid"
+        },
+        "es": {
+          "keywords": [
+            "Cuadrícula de acciones",
+            "action",
+            "grid",
+            "system"
+          ],
+          "summary": "Abre una cuadrícula de acciones favoritas configurada por el usuario junto al puntero.",
+          "title": "Cuadrícula de acciones"
+        },
+        "fr": {
+          "keywords": [
+            "Grille d’actions",
+            "action",
+            "grid",
+            "system"
+          ],
+          "summary": "Ouvrez près du pointeur une grille d’actions favorites configurée par l’utilisateur.",
+          "title": "Grille d’actions"
+        },
+        "ja": {
+          "keywords": [
+            "action",
+            "grid",
+            "system",
+            "アクショングリッド"
+          ],
+          "summary": "ポインタの近くに、ユーザーが設定したお気に入りのアクションを表示します。",
+          "title": "アクショングリッド"
+        },
+        "ko": {
+          "keywords": [
+            "action",
+            "grid",
+            "system",
+            "동작 그리드"
+          ],
+          "summary": "포인터 근처에 사용자가 구성한 즐겨찾기 동작 그리드를 엽니다.",
+          "title": "동작 그리드"
+        },
+        "pt": {
+          "keywords": [
+            "Grade de ações",
+            "action",
+            "grid",
+            "system"
+          ],
+          "summary": "Abra perto do cursor uma grade de ações favoritas configurada pelo usuário.",
+          "title": "Grade de ações"
+        },
+        "ru": {
+          "keywords": [
+            "action",
+            "grid",
+            "system",
+            "Сетка действий"
+          ],
+          "summary": "Открывает рядом с указателем настроенную пользователем сетку избранных действий.",
+          "title": "Сетка действий"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "action",
+            "grid",
+            "system",
+            "操作网格"
+          ],
+          "summary": "在指针附近打开用户配置的常用操作网格。",
+          "title": "操作网格"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "action",
+            "grid",
+            "system",
+            "操作網格"
+          ],
+          "summary": "在指標附近開啟使用者設定的常用操作網格。",
+          "title": "操作網格"
+        }
+      },
       "pluginID": "action-grid",
       "route": "/plugins/action-grid/",
       "summary": "在指针附近打开用户配置的常用操作网格。",
@@ -4085,6 +4197,129 @@
         "stats"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "activity",
+            "bar",
+            "monitoring",
+            "stats",
+            "إحصاءات النشاط"
+          ],
+          "summary": "تتبع الإدخال ووقت استخدام التطبيق الأمامي ونشاط ترميز الذكاء الاصطناعي.",
+          "title": "إحصاءات النشاط"
+        },
+        "de": {
+          "keywords": [
+            "Aktivitätsstatistik",
+            "activity",
+            "bar",
+            "monitoring",
+            "stats"
+          ],
+          "summary": "Verfolgen Sie Eingaben, Nutzungsdauer der Vordergrund-App und KI-Codierungsaktivitäten.",
+          "title": "Aktivitätsstatistik"
+        },
+        "en": {
+          "keywords": [
+            "Activity Stats",
+            "activity",
+            "bar",
+            "monitoring",
+            "stats"
+          ],
+          "summary": "Track input, foreground app usage time, and AI coding activity.",
+          "title": "Activity Stats"
+        },
+        "es": {
+          "keywords": [
+            "Estadísticas de actividad",
+            "activity",
+            "bar",
+            "monitoring",
+            "stats"
+          ],
+          "summary": "Seguimiento de la entrada, el tiempo de uso de la aplicación en primer plano y la actividad de codificación de IA.",
+          "title": "Estadísticas de actividad"
+        },
+        "fr": {
+          "keywords": [
+            "Statistiques d’activité",
+            "activity",
+            "bar",
+            "monitoring",
+            "stats"
+          ],
+          "summary": "Suivez les entrées, la durée d'utilisation de l'application au premier plan et l'activité de codage de l'IA.",
+          "title": "Statistiques d’activité"
+        },
+        "ja": {
+          "keywords": [
+            "activity",
+            "bar",
+            "monitoring",
+            "stats",
+            "アクティビティ統計"
+          ],
+          "summary": "入力、フォアグラウンド アプリの使用時間、AI コーディング アクティビティを追跡します。",
+          "title": "アクティビティ統計"
+        },
+        "ko": {
+          "keywords": [
+            "activity",
+            "bar",
+            "monitoring",
+            "stats",
+            "활동 통계"
+          ],
+          "summary": "입력, 포그라운드 앱 사용 시간 및 AI 코딩 활동을 추적합니다.",
+          "title": "활동 통계"
+        },
+        "pt": {
+          "keywords": [
+            "Estatísticas de atividade",
+            "activity",
+            "bar",
+            "monitoring",
+            "stats"
+          ],
+          "summary": "Rastreie a entrada, o tempo de uso do aplicativo em primeiro plano e a atividade de codificação de IA.",
+          "title": "Estatísticas de atividade"
+        },
+        "ru": {
+          "keywords": [
+            "activity",
+            "bar",
+            "monitoring",
+            "stats",
+            "Статистика активности"
+          ],
+          "summary": "Отслеживайте ввод данных, время использования приложений на переднем плане и активность ИИ-кодирования.",
+          "title": "Статистика активности"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "activity",
+            "bar",
+            "monitoring",
+            "stats",
+            "活动统计"
+          ],
+          "summary": "统计输入、前台应用使用时长和 AI 编程活动",
+          "title": "活动统计"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "activity",
+            "bar",
+            "monitoring",
+            "stats",
+            "活動統計"
+          ],
+          "summary": "統計輸入、前臺應用使用時長和 AI 編程活動",
+          "title": "活動統計"
+        }
+      },
       "pluginID": "activity-bar",
       "route": "/plugins/activity-bar/",
       "summary": "统计输入、前台应用使用时长和 AI 编程活动",
@@ -4099,6 +4334,129 @@
         "productivity"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity",
+            "اختصارات التطبيقات"
+          ],
+          "summary": "قم بربط الاختصارات العالمية بالتطبيقات الشائعة للتشغيل أو التبديل السريع.",
+          "title": "اختصارات التطبيقات"
+        },
+        "de": {
+          "keywords": [
+            "App-Kurzbefehle",
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity"
+          ],
+          "summary": "Binden Sie globale Verknüpfungen an gängige Apps, um sie schnell zu starten oder zu wechseln.",
+          "title": "App-Kurzbefehle"
+        },
+        "en": {
+          "keywords": [
+            "App Hotkeys",
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity"
+          ],
+          "summary": "Bind global shortcuts to common apps for quick launch or switching.",
+          "title": "App Hotkeys"
+        },
+        "es": {
+          "keywords": [
+            "Atajos de apps",
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity"
+          ],
+          "summary": "Vincule accesos directos globales a aplicaciones comunes para iniciar o cambiar rápidamente.",
+          "title": "Atajos de apps"
+        },
+        "fr": {
+          "keywords": [
+            "Raccourcis d’apps",
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity"
+          ],
+          "summary": "Liez des raccourcis globaux aux applications courantes pour un lancement ou une commutation rapide.",
+          "title": "Raccourcis d’apps"
+        },
+        "ja": {
+          "keywords": [
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity",
+            "アプリショートカット"
+          ],
+          "summary": "グローバル ショートカットを一般的なアプリにバインドして、すばやく起動したり切り替えたりできます。",
+          "title": "アプリショートカット"
+        },
+        "ko": {
+          "keywords": [
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity",
+            "앱 단축키"
+          ],
+          "summary": "빠른 실행 또는 전환을 위해 일반 앱에 전역 바로가기를 바인딩합니다.",
+          "title": "앱 단축키"
+        },
+        "pt": {
+          "keywords": [
+            "Atalhos de apps",
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity"
+          ],
+          "summary": "Vincule atalhos globais a aplicativos comuns para inicialização ou troca rápida.",
+          "title": "Atalhos de apps"
+        },
+        "ru": {
+          "keywords": [
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity",
+            "Горячие клавиши приложений"
+          ],
+          "summary": "Привяжите глобальные ярлыки к общим приложениям для быстрого запуска или переключения.",
+          "title": "Горячие клавиши приложений"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity",
+            "应用快捷键"
+          ],
+          "summary": "为常用应用绑定全局快捷键，快速打开或切换到前台",
+          "title": "应用快捷键"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "app",
+            "hotkey",
+            "hotkeys",
+            "productivity",
+            "應用程式快速鍵"
+          ],
+          "summary": "為常用應用綁定全局快速鍵，快速打開或切換到前臺",
+          "title": "應用程式快速鍵"
+        }
+      },
       "pluginID": "app-hotkey",
       "route": "/plugins/app-hotkey/",
       "summary": "为常用应用绑定全局快捷键，快速打开或切换到前台",
@@ -4114,6 +4472,140 @@
         "mute"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "application volume",
+            "audio",
+            "mixer",
+            "mute",
+            "خالط الصوت",
+            "صوت التطبيقات"
+          ],
+          "summary": "اضبط مستوى صوت كل تطبيق يشغّل الصوت على حدة.",
+          "title": "مستوى صوت التطبيقات"
+        },
+        "de": {
+          "keywords": [
+            "App-Lautstärke",
+            "Audiomixer",
+            "application volume",
+            "audio",
+            "mixer",
+            "mute"
+          ],
+          "summary": "Lautstärke aktiver Audio-Apps einzeln anpassen.",
+          "title": "App-Lautstärke"
+        },
+        "en": {
+          "keywords": [
+            "app volume",
+            "application volume",
+            "audio",
+            "audio mixer",
+            "mixer",
+            "mute"
+          ],
+          "summary": "Adjust the volume of each app currently playing audio.",
+          "title": "App Volume"
+        },
+        "es": {
+          "keywords": [
+            "application volume",
+            "audio",
+            "mezclador",
+            "mixer",
+            "mute",
+            "volumen por aplicación"
+          ],
+          "summary": "Ajusta por separado el volumen de cada aplicación con audio.",
+          "title": "Volumen por aplicación"
+        },
+        "fr": {
+          "keywords": [
+            "application volume",
+            "audio",
+            "mixer",
+            "mute",
+            "mélangeur audio",
+            "volume des apps"
+          ],
+          "summary": "Réglez séparément le volume de chaque app qui diffuse du son.",
+          "title": "Volume des apps"
+        },
+        "ja": {
+          "keywords": [
+            "application volume",
+            "audio",
+            "mixer",
+            "mute",
+            "アプリ音量",
+            "オーディオミキサー"
+          ],
+          "summary": "再生中のアプリごとに音量を調整します。",
+          "title": "アプリ音量"
+        },
+        "ko": {
+          "keywords": [
+            "application volume",
+            "audio",
+            "mixer",
+            "mute",
+            "앱 음량",
+            "오디오 믹서"
+          ],
+          "summary": "오디오를 재생 중인 앱별로 음량을 조절합니다.",
+          "title": "앱 음량"
+        },
+        "pt": {
+          "keywords": [
+            "application volume",
+            "audio",
+            "misturador de áudio",
+            "mixer",
+            "mute",
+            "volume por app"
+          ],
+          "summary": "Ajuste separadamente o volume de cada app que reproduz áudio.",
+          "title": "Volume por app"
+        },
+        "ru": {
+          "keywords": [
+            "application volume",
+            "audio",
+            "mixer",
+            "mute",
+            "аудиомикшер",
+            "громкость приложений"
+          ],
+          "summary": "Настраивайте громкость каждого приложения с активным звуком.",
+          "title": "Громкость приложений"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "application volume",
+            "audio",
+            "mixer",
+            "mute",
+            "应用音量",
+            "音频混音"
+          ],
+          "summary": "分别调节正在播放音频的应用音量",
+          "title": "应用音量"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "App 音量",
+            "application volume",
+            "audio",
+            "mixer",
+            "mute",
+            "音訊混音"
+          ],
+          "summary": "分別調整正在播放音訊的應用程式音量",
+          "title": "應用程式音量"
+        }
+      },
       "pluginID": "app-volume",
       "route": "/plugins/app-volume/",
       "summary": "分别调节正在播放音频的应用音量",
@@ -4127,6 +4619,138 @@
         "theme"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "appearance",
+            "dark mode",
+            "light mode",
+            "theme",
+            "المظهر",
+            "الوضع الداكن"
+          ],
+          "summary": "تبديل النظام بين المظهر الفاتح والداكن.",
+          "title": "الوضع الداكن"
+        },
+        "de": {
+          "keywords": [
+            "Darstellung",
+            "Dunkelmodus",
+            "appearance",
+            "dark mode",
+            "light mode",
+            "theme"
+          ],
+          "summary": "Schalten Sie das System zwischen heller und dunkler Darstellung um.",
+          "title": "Dunkelmodus"
+        },
+        "en": {
+          "keywords": [
+            "appearance",
+            "dark mode",
+            "light mode",
+            "theme"
+          ],
+          "summary": "Switch the system between light and dark appearance.",
+          "title": "Dark Mode"
+        },
+        "es": {
+          "keywords": [
+            "apariencia",
+            "appearance",
+            "dark mode",
+            "light mode",
+            "modo oscuro",
+            "theme"
+          ],
+          "summary": "Cambie el sistema entre apariencia clara y oscura.",
+          "title": "Modo oscuro"
+        },
+        "fr": {
+          "keywords": [
+            "apparence",
+            "appearance",
+            "dark mode",
+            "light mode",
+            "mode sombre",
+            "theme"
+          ],
+          "summary": "Basculez le système entre l’apparence claire et sombre.",
+          "title": "Mode sombre"
+        },
+        "ja": {
+          "keywords": [
+            "appearance",
+            "dark mode",
+            "light mode",
+            "theme",
+            "ダークモード",
+            "外観"
+          ],
+          "summary": "システムの外観を明暗で切り替えます。",
+          "title": "ダークモード"
+        },
+        "ko": {
+          "keywords": [
+            "appearance",
+            "dark mode",
+            "light mode",
+            "theme",
+            "다크 모드",
+            "화면 모드"
+          ],
+          "summary": "밝은 화면과 어두운 화면 간에 시스템을 전환합니다.",
+          "title": "다크 모드"
+        },
+        "pt": {
+          "keywords": [
+            "aparência",
+            "appearance",
+            "dark mode",
+            "light mode",
+            "modo escuro",
+            "theme"
+          ],
+          "summary": "Alterne o sistema entre aparência clara e escura.",
+          "title": "Modo escuro"
+        },
+        "ru": {
+          "keywords": [
+            "appearance",
+            "dark mode",
+            "light mode",
+            "theme",
+            "оформление",
+            "тёмный режим"
+          ],
+          "summary": "Переключение системы между светлым и темным внешним видом.",
+          "title": "Тёмный режим"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "appearance",
+            "dark mode",
+            "light mode",
+            "theme",
+            "外观",
+            "深色模式"
+          ],
+          "summary": "切换系统亮色与深色外观",
+          "title": "深色模式"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "appearance",
+            "dark mode",
+            "light mode",
+            "theme",
+            "外觀",
+            "深色模式"
+          ],
+          "summary": "切換系統亮色與深色外觀",
+          "title": "深色模式"
+        }
+      },
       "pluginID": "appearance",
       "route": "/plugins/appearance/",
       "summary": "切换系统亮色与深色外观",
@@ -4140,6 +4764,118 @@
         "shortcuts"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "apple",
+            "productivity",
+            "shortcuts",
+            "اختصارات Apple"
+          ],
+          "summary": "اكتشف اختصارات Apple الحالية وشغّلها.",
+          "title": "اختصارات Apple"
+        },
+        "de": {
+          "keywords": [
+            "Apple-Kurzbefehle",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "Vorhandene Apple-Kurzbefehle entdecken und ausführen.",
+          "title": "Apple-Kurzbefehle"
+        },
+        "en": {
+          "keywords": [
+            "Apple Shortcuts",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "Discover and run existing Apple Shortcuts.",
+          "title": "Apple Shortcuts"
+        },
+        "es": {
+          "keywords": [
+            "Atajos de Apple",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "Descubre y ejecuta atajos de Apple existentes.",
+          "title": "Atajos de Apple"
+        },
+        "fr": {
+          "keywords": [
+            "Raccourcis Apple",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "Découvrez et exécutez vos raccourcis Apple.",
+          "title": "Raccourcis Apple"
+        },
+        "ja": {
+          "keywords": [
+            "Appleショートカット",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "既存のAppleショートカットを見つけて実行します。",
+          "title": "Appleショートカット"
+        },
+        "ko": {
+          "keywords": [
+            "Apple 단축어",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "기존 Apple 단축어를 찾아 실행합니다.",
+          "title": "Apple 단축어"
+        },
+        "pt": {
+          "keywords": [
+            "Atalhos da Apple",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "Descubra e execute atalhos existentes da Apple.",
+          "title": "Atalhos da Apple"
+        },
+        "ru": {
+          "keywords": [
+            "apple",
+            "productivity",
+            "shortcuts",
+            "Быстрые команды Apple"
+          ],
+          "summary": "Находите и запускайте существующие быстрые команды Apple.",
+          "title": "Быстрые команды Apple"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "Apple 快捷指令",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "发现并运行现有的 Apple 快捷指令。",
+          "title": "Apple 快捷指令"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "Apple 捷徑",
+            "apple",
+            "productivity",
+            "shortcuts"
+          ],
+          "summary": "探索並執行現有的 Apple 捷徑。",
+          "title": "Apple 捷徑"
+        }
+      },
       "pluginID": "apple-shortcuts",
       "route": "/plugins/apple-shortcuts/",
       "summary": "发现并运行现有的 Apple 快捷指令。",
@@ -4154,6 +4890,129 @@
         "hide"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "auto",
+            "display",
+            "dock",
+            "hide",
+            "إخفاء Dock تلقائيًا"
+          ],
+          "summary": "قم بإخفاء Dock تلقائيًا للحصول على سطح مكتب أكثر نظافة.",
+          "title": "إخفاء Dock تلقائيًا"
+        },
+        "de": {
+          "keywords": [
+            "Dock automatisch ausblenden",
+            "auto",
+            "display",
+            "dock",
+            "hide"
+          ],
+          "summary": "Blenden Sie Dock automatisch aus, um den Desktop übersichtlicher zu gestalten.",
+          "title": "Dock automatisch ausblenden"
+        },
+        "en": {
+          "keywords": [
+            "Auto-hide Dock",
+            "auto",
+            "display",
+            "dock",
+            "hide"
+          ],
+          "summary": "Hide the Dock automatically for a cleaner desktop.",
+          "title": "Auto-hide Dock"
+        },
+        "es": {
+          "keywords": [
+            "Ocultar Dock automáticamente",
+            "auto",
+            "display",
+            "dock",
+            "hide"
+          ],
+          "summary": "Oculte Dock automáticamente para tener un escritorio más limpio.",
+          "title": "Ocultar Dock automáticamente"
+        },
+        "fr": {
+          "keywords": [
+            "Masquer le Dock automatiquement",
+            "auto",
+            "display",
+            "dock",
+            "hide"
+          ],
+          "summary": "Masquez automatiquement le Dock pour un bureau plus propre.",
+          "title": "Masquer le Dock automatiquement"
+        },
+        "ja": {
+          "keywords": [
+            "Dockを自動的に隠す",
+            "auto",
+            "display",
+            "dock",
+            "hide"
+          ],
+          "summary": "デスクトップをすっきりさせるために、Dock を自動的に非表示にします。",
+          "title": "Dockを自動的に隠す"
+        },
+        "ko": {
+          "keywords": [
+            "Dock 자동 숨기기",
+            "auto",
+            "display",
+            "dock",
+            "hide"
+          ],
+          "summary": "더 깔끔한 데스크탑을 위해 Dock을 자동으로 숨깁니다.",
+          "title": "Dock 자동 숨기기"
+        },
+        "pt": {
+          "keywords": [
+            "Ocultar Dock automaticamente",
+            "auto",
+            "display",
+            "dock",
+            "hide"
+          ],
+          "summary": "Oculte o Dock automaticamente para uma área de trabalho mais limpa.",
+          "title": "Ocultar Dock automaticamente"
+        },
+        "ru": {
+          "keywords": [
+            "auto",
+            "display",
+            "dock",
+            "hide",
+            "Автоскрытие Dock"
+          ],
+          "summary": "Скройте Dock автоматически, чтобы рабочий стол стал чище.",
+          "title": "Автоскрытие Dock"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "auto",
+            "display",
+            "dock",
+            "hide",
+            "自动隐藏程序坞"
+          ],
+          "summary": "自动隐藏程序坞，提供更干净的桌面环境",
+          "title": "自动隐藏程序坞"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "auto",
+            "display",
+            "dock",
+            "hide",
+            "自動隱藏 Dock"
+          ],
+          "summary": "自動隱藏Dock，提供更乾淨的桌面環境",
+          "title": "自動隱藏 Dock"
+        }
+      },
       "pluginID": "auto-hide-dock",
       "route": "/plugins/auto-hide-dock/",
       "summary": "自动隐藏程序坞，提供更干净的桌面环境",
@@ -4169,6 +5028,140 @@
         "menu"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu",
+            "إخفاء شريط القوائم تلقائيًا"
+          ],
+          "summary": "إخفاء شريط القائمة تلقائيًا لتوفير مساحة أكبر على الشاشة.",
+          "title": "إخفاء شريط القوائم تلقائيًا"
+        },
+        "de": {
+          "keywords": [
+            "Menüleiste automatisch ausblenden",
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu"
+          ],
+          "summary": "Blenden Sie die Menüleiste automatisch aus, um mehr Platz auf dem Bildschirm zu schaffen.",
+          "title": "Menüleiste automatisch ausblenden"
+        },
+        "en": {
+          "keywords": [
+            "Auto-hide Menu Bar",
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu"
+          ],
+          "summary": "Hide the menu bar automatically for more screen space.",
+          "title": "Auto-hide Menu Bar"
+        },
+        "es": {
+          "keywords": [
+            "Ocultar barra de menús automáticamente",
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu"
+          ],
+          "summary": "Oculte la barra de menú automáticamente para obtener más espacio en la pantalla.",
+          "title": "Ocultar barra de menús automáticamente"
+        },
+        "fr": {
+          "keywords": [
+            "Masquer la barre des menus automatiquement",
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu"
+          ],
+          "summary": "Masquez automatiquement la barre de menus pour plus d'espace sur l'écran.",
+          "title": "Masquer la barre des menus automatiquement"
+        },
+        "ja": {
+          "keywords": [
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu",
+            "メニューバーを自動的に隠す"
+          ],
+          "summary": "画面スペースを増やすために、メニュー バーを自動的に非表示にします。",
+          "title": "メニューバーを自動的に隠す"
+        },
+        "ko": {
+          "keywords": [
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu",
+            "메뉴 막대 자동 숨기기"
+          ],
+          "summary": "더 많은 화면 공간을 위해 메뉴 표시줄을 자동으로 숨깁니다.",
+          "title": "메뉴 막대 자동 숨기기"
+        },
+        "pt": {
+          "keywords": [
+            "Ocultar barra de menus automaticamente",
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu"
+          ],
+          "summary": "Oculte a barra de menu automaticamente para obter mais espaço na tela.",
+          "title": "Ocultar barra de menus automaticamente"
+        },
+        "ru": {
+          "keywords": [
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu",
+            "Автоскрытие строки меню"
+          ],
+          "summary": "Автоматически скрывайте строку меню, чтобы освободить больше места на экране.",
+          "title": "Автоскрытие строки меню"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu",
+            "自动隐藏菜单栏"
+          ],
+          "summary": "自动隐藏菜单栏，提供更完整的屏幕显示空间",
+          "title": "自动隐藏菜单栏"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "auto",
+            "bar",
+            "display",
+            "hide",
+            "menu",
+            "自動隱藏選單列"
+          ],
+          "summary": "自動隱藏選單列，提供更完整的螢幕顯示空間",
+          "title": "自動隱藏選單列"
+        }
+      },
       "pluginID": "auto-hide-menu-bar",
       "route": "/plugins/auto-hide-menu-bar/",
       "summary": "自动隐藏菜单栏，提供更完整的屏幕显示空间",
@@ -4182,6 +5175,118 @@
         "productivity"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "auto",
+            "input",
+            "productivity",
+            "تبديل مصادر الإدخال تلقائيًا"
+          ],
+          "summary": "تذكّر مصادر الإدخال وبدّلها تلقائيًا لكل تطبيق.",
+          "title": "تبديل مصادر الإدخال تلقائيًا"
+        },
+        "de": {
+          "keywords": [
+            "Eingabequelle automatisch wechseln",
+            "auto",
+            "input",
+            "productivity"
+          ],
+          "summary": "Eingabequellen pro App merken und automatisch wechseln.",
+          "title": "Eingabequelle automatisch wechseln"
+        },
+        "en": {
+          "keywords": [
+            "Auto Input",
+            "auto",
+            "input",
+            "productivity"
+          ],
+          "summary": "Remember and automatically switch input sources for each app.",
+          "title": "Auto Input"
+        },
+        "es": {
+          "keywords": [
+            "Cambio automático de entrada",
+            "auto",
+            "input",
+            "productivity"
+          ],
+          "summary": "Recuerde y cambie automáticamente las fuentes de entrada de cada app.",
+          "title": "Cambio automático de entrada"
+        },
+        "fr": {
+          "keywords": [
+            "Changement automatique de saisie",
+            "auto",
+            "input",
+            "productivity"
+          ],
+          "summary": "Mémorisez et changez automatiquement la source de saisie pour chaque app.",
+          "title": "Changement automatique de saisie"
+        },
+        "ja": {
+          "keywords": [
+            "auto",
+            "input",
+            "productivity",
+            "入力ソースの自動切り替え"
+          ],
+          "summary": "アプリごとに入力ソースを記憶して自動的に切り替えます。",
+          "title": "入力ソースの自動切り替え"
+        },
+        "ko": {
+          "keywords": [
+            "auto",
+            "input",
+            "productivity",
+            "입력 소스 자동 전환"
+          ],
+          "summary": "앱별 입력 소스를 기억하고 자동으로 전환합니다.",
+          "title": "입력 소스 자동 전환"
+        },
+        "pt": {
+          "keywords": [
+            "Troca automática de entrada",
+            "auto",
+            "input",
+            "productivity"
+          ],
+          "summary": "Lembre e alterne automaticamente as fontes de entrada de cada app.",
+          "title": "Troca automática de entrada"
+        },
+        "ru": {
+          "keywords": [
+            "auto",
+            "input",
+            "productivity",
+            "Автопереключение источника ввода"
+          ],
+          "summary": "Запоминайте и автоматически переключайте источники ввода для приложений.",
+          "title": "Автопереключение источника ввода"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "auto",
+            "input",
+            "productivity",
+            "自动切换输入法"
+          ],
+          "summary": "按应用记住并自动切换输入法",
+          "title": "自动切换输入法"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "auto",
+            "input",
+            "productivity",
+            "自動切換輸入法"
+          ],
+          "summary": "按應用程式記住並自動切換輸入法",
+          "title": "自動切換輸入法"
+        }
+      },
       "pluginID": "auto-input",
       "route": "/plugins/auto-input/",
       "summary": "按应用记住并自动切换输入法",
@@ -4196,6 +5301,129 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "battery",
+            "charge",
+            "limit",
+            "system",
+            "حد شحن البطارية"
+          ],
+          "summary": "تعيين حد شحن البطارية وإيقاف الشحن عند الوصول إليه؛ يتم استئناف الشحن فقط عندما تختار ذلك.",
+          "title": "حد شحن البطارية"
+        },
+        "de": {
+          "keywords": [
+            "Batterieladelimit",
+            "battery",
+            "charge",
+            "limit",
+            "system"
+          ],
+          "summary": "Legen Sie ein Batterieladelimit fest und stoppen Sie den Ladevorgang, wenn es erreicht ist. Der Ladevorgang wird erst fortgesetzt, wenn Sie dies wünschen.",
+          "title": "Batterieladelimit"
+        },
+        "en": {
+          "keywords": [
+            "Battery Charge Limit",
+            "battery",
+            "charge",
+            "limit",
+            "system"
+          ],
+          "summary": "Set a battery charge limit and stop charging when it is reached; charging resumes only when you choose.",
+          "title": "Battery Charge Limit"
+        },
+        "es": {
+          "keywords": [
+            "Límite de carga de batería",
+            "battery",
+            "charge",
+            "limit",
+            "system"
+          ],
+          "summary": "Establezca un límite de carga de la batería y detenga la carga cuando lo alcance; la carga se reanuda solo cuando usted elige.",
+          "title": "Límite de carga de batería"
+        },
+        "fr": {
+          "keywords": [
+            "Limite de charge de la batterie",
+            "battery",
+            "charge",
+            "limit",
+            "system"
+          ],
+          "summary": "Fixez une limite de charge de la batterie et arrêtez la charge lorsqu'elle est atteinte ; la charge ne reprend que lorsque vous le souhaitez.",
+          "title": "Limite de charge de la batterie"
+        },
+        "ja": {
+          "keywords": [
+            "battery",
+            "charge",
+            "limit",
+            "system",
+            "バッテリー充電上限"
+          ],
+          "summary": "バッテリー充電制限を設定し、その制限に達したら充電を停止します。選択した場合にのみ充電が再開されます。",
+          "title": "バッテリー充電上限"
+        },
+        "ko": {
+          "keywords": [
+            "battery",
+            "charge",
+            "limit",
+            "system",
+            "배터리 충전 한도"
+          ],
+          "summary": "배터리 충전 한도를 설정하고 한도에 도달하면 충전을 중지합니다. 선택한 경우에만 충전이 재개됩니다.",
+          "title": "배터리 충전 한도"
+        },
+        "pt": {
+          "keywords": [
+            "Limite de carga da bateria",
+            "battery",
+            "charge",
+            "limit",
+            "system"
+          ],
+          "summary": "Defina um limite de carga da bateria e pare de carregar quando ele for atingido; o carregamento é retomado somente quando você escolher.",
+          "title": "Limite de carga da bateria"
+        },
+        "ru": {
+          "keywords": [
+            "battery",
+            "charge",
+            "limit",
+            "system",
+            "Лимит заряда батареи"
+          ],
+          "summary": "Установите лимит заряда аккумулятора и прекращайте зарядку при его достижении; зарядка возобновляется только тогда, когда вы выберете.",
+          "title": "Лимит заряда батареи"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "battery",
+            "charge",
+            "limit",
+            "system",
+            "电池充电上限"
+          ],
+          "summary": "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电",
+          "title": "电池充电上限"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "battery",
+            "charge",
+            "limit",
+            "system",
+            "電池充電上限"
+          ],
+          "summary": "設定電池充電上限，達到上限後停止充電；不自動恢復，由用戶決定何時繼續充電",
+          "title": "電池充電上限"
+        }
+      },
       "pluginID": "battery-charge-limit",
       "route": "/plugins/battery-charge-limit/",
       "summary": "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电",
@@ -4208,6 +5436,107 @@
         "productivity"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "calendar",
+            "productivity",
+            "التقويم"
+          ],
+          "summary": "عرض التواريخ والعطلات وأحداث التقويم.",
+          "title": "التقويم"
+        },
+        "de": {
+          "keywords": [
+            "Kalender",
+            "calendar",
+            "productivity"
+          ],
+          "summary": "Termine, Feiertage und Kalenderereignisse anzeigen.",
+          "title": "Kalender"
+        },
+        "en": {
+          "keywords": [
+            "Calendar",
+            "calendar",
+            "productivity"
+          ],
+          "summary": "View dates, holidays, and calendar events.",
+          "title": "Calendar"
+        },
+        "es": {
+          "keywords": [
+            "Calendario",
+            "calendar",
+            "productivity"
+          ],
+          "summary": "Ver fechas, días festivos y eventos del calendario.",
+          "title": "Calendario"
+        },
+        "fr": {
+          "keywords": [
+            "Calendrier",
+            "calendar",
+            "productivity"
+          ],
+          "summary": "Afficher les dates, les jours fériés et les événements du calendrier.",
+          "title": "Calendrier"
+        },
+        "ja": {
+          "keywords": [
+            "calendar",
+            "productivity",
+            "カレンダー"
+          ],
+          "summary": "日付、休日、カレンダーイベントを表示します。",
+          "title": "カレンダー"
+        },
+        "ko": {
+          "keywords": [
+            "calendar",
+            "productivity",
+            "캘린더"
+          ],
+          "summary": "날짜, 공휴일 및 달력 이벤트를 확인하세요.",
+          "title": "캘린더"
+        },
+        "pt": {
+          "keywords": [
+            "Calendário",
+            "calendar",
+            "productivity"
+          ],
+          "summary": "Veja datas, feriados e eventos da agenda.",
+          "title": "Calendário"
+        },
+        "ru": {
+          "keywords": [
+            "calendar",
+            "productivity",
+            "Календарь"
+          ],
+          "summary": "Просмотр дат, праздников и событий календаря.",
+          "title": "Календарь"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "calendar",
+            "productivity",
+            "日历"
+          ],
+          "summary": "查看日期、节假日和系统日程",
+          "title": "日历"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "calendar",
+            "productivity",
+            "行事曆"
+          ],
+          "summary": "查看日期、節假日和系統行程",
+          "title": "行事曆"
+        }
+      },
       "pluginID": "calendar",
       "route": "/plugins/calendar/",
       "summary": "查看日期、节假日和系统日程",
@@ -4221,6 +5550,118 @@
         "storage"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "clear",
+            "clipboard",
+            "storage",
+            "مسح الحافظة"
+          ],
+          "summary": "امسح محتويات الحافظة الحالية بنقرة واحدة.",
+          "title": "مسح الحافظة"
+        },
+        "de": {
+          "keywords": [
+            "Zwischenablage leeren",
+            "clear",
+            "clipboard",
+            "storage"
+          ],
+          "summary": "Löschen Sie den aktuellen Inhalt der Zwischenablage mit einem Klick.",
+          "title": "Zwischenablage leeren"
+        },
+        "en": {
+          "keywords": [
+            "Clear Clipboard",
+            "clear",
+            "clipboard",
+            "storage"
+          ],
+          "summary": "Clear the current clipboard contents with one click.",
+          "title": "Clear Clipboard"
+        },
+        "es": {
+          "keywords": [
+            "Borrar portapapeles",
+            "clear",
+            "clipboard",
+            "storage"
+          ],
+          "summary": "Borra el contenido actual del portapapeles con un solo clic.",
+          "title": "Borrar portapapeles"
+        },
+        "fr": {
+          "keywords": [
+            "Vider le presse-papiers",
+            "clear",
+            "clipboard",
+            "storage"
+          ],
+          "summary": "Effacez le contenu actuel du presse-papiers en un seul clic.",
+          "title": "Vider le presse-papiers"
+        },
+        "ja": {
+          "keywords": [
+            "clear",
+            "clipboard",
+            "storage",
+            "クリップボードを消去"
+          ],
+          "summary": "ワンクリックで現在のクリップボードの内容をクリアします。",
+          "title": "クリップボードを消去"
+        },
+        "ko": {
+          "keywords": [
+            "clear",
+            "clipboard",
+            "storage",
+            "클립보드 지우기"
+          ],
+          "summary": "한 번의 클릭으로 현재 클립보드 내용을 지웁니다.",
+          "title": "클립보드 지우기"
+        },
+        "pt": {
+          "keywords": [
+            "Limpar área de transferência",
+            "clear",
+            "clipboard",
+            "storage"
+          ],
+          "summary": "Limpe o conteúdo atual da área de transferência com um clique.",
+          "title": "Limpar área de transferência"
+        },
+        "ru": {
+          "keywords": [
+            "clear",
+            "clipboard",
+            "storage",
+            "Очистить буфер обмена"
+          ],
+          "summary": "Очистите текущее содержимое буфера обмена одним щелчком мыши.",
+          "title": "Очистить буфер обмена"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "clear",
+            "clipboard",
+            "storage",
+            "清空剪贴板"
+          ],
+          "summary": "一键清空当前剪贴板内容",
+          "title": "清空剪贴板"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "clear",
+            "clipboard",
+            "storage",
+            "清空剪貼簿"
+          ],
+          "summary": "一鍵清空當前剪貼板內容",
+          "title": "清空剪貼簿"
+        }
+      },
       "pluginID": "clipboard-clear",
       "route": "/plugins/clipboard-clear/",
       "summary": "一键清空当前剪贴板内容",
@@ -4235,6 +5676,129 @@
         "upload"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload",
+            "الرفع إلى Cloudflare R2"
+          ],
+          "summary": "ارفع الملفات إلى Cloudflare R2.",
+          "title": "الرفع إلى Cloudflare R2"
+        },
+        "de": {
+          "keywords": [
+            "Cloudflare R2-Upload",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "Dateien zu Cloudflare R2 hochladen.",
+          "title": "Cloudflare R2-Upload"
+        },
+        "en": {
+          "keywords": [
+            "Cloudflare R2 Upload",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "Upload files to Cloudflare R2.",
+          "title": "Cloudflare R2 Upload"
+        },
+        "es": {
+          "keywords": [
+            "Carga en Cloudflare R2",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "Sube archivos a Cloudflare R2.",
+          "title": "Carga en Cloudflare R2"
+        },
+        "fr": {
+          "keywords": [
+            "Envoi vers Cloudflare R2",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "Envoyez des fichiers vers Cloudflare R2.",
+          "title": "Envoi vers Cloudflare R2"
+        },
+        "ja": {
+          "keywords": [
+            "Cloudflare R2 アップロード",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "Cloudflare R2 にファイルをアップロードします。",
+          "title": "Cloudflare R2 アップロード"
+        },
+        "ko": {
+          "keywords": [
+            "Cloudflare R2 업로드",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "Cloudflare R2에 파일을 업로드합니다.",
+          "title": "Cloudflare R2 업로드"
+        },
+        "pt": {
+          "keywords": [
+            "Upload para o Cloudflare R2",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "Envie arquivos para o Cloudflare R2.",
+          "title": "Upload para o Cloudflare R2"
+        },
+        "ru": {
+          "keywords": [
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload",
+            "Загрузка в Cloudflare R2"
+          ],
+          "summary": "Загружайте файлы в Cloudflare R2.",
+          "title": "Загрузка в Cloudflare R2"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "Cloudflare R2 上传",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "上传文件到 Cloudflare R2",
+          "title": "Cloudflare R2 上传"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "Cloudflare R2 上傳",
+            "cloudflare",
+            "productivity",
+            "r2",
+            "upload"
+          ],
+          "summary": "將檔案上傳到 Cloudflare R2",
+          "title": "Cloudflare R2 上傳"
+        }
+      },
       "pluginID": "cloudflare-r2",
       "route": "/plugins/cloudflare-r2/",
       "summary": "上传文件到 Cloudflare R2",
@@ -4248,6 +5812,118 @@
         "monitoring"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "battery",
+            "device",
+            "monitoring",
+            "بطارية الأجهزة"
+          ],
+          "summary": "عرض مستويات البطارية لجهاز Mac وأجهزة Apple المحمولة وملحقات Bluetooth وأجهزة الماوس Rapoo.",
+          "title": "بطارية الأجهزة"
+        },
+        "de": {
+          "keywords": [
+            "Gerätebatterie",
+            "battery",
+            "device",
+            "monitoring"
+          ],
+          "summary": "Zeigen Sie den Akkustand Ihres Mac, mobiler Apple-Geräte, von Bluetooth-Zubehör und Rapoo-Mäusen an.",
+          "title": "Gerätebatterie"
+        },
+        "en": {
+          "keywords": [
+            "Device Battery",
+            "battery",
+            "device",
+            "monitoring"
+          ],
+          "summary": "View battery levels for your Mac, Apple mobile devices, Bluetooth accessories, and Rapoo mice.",
+          "title": "Device Battery"
+        },
+        "es": {
+          "keywords": [
+            "Batería de dispositivos",
+            "battery",
+            "device",
+            "monitoring"
+          ],
+          "summary": "Consulta la batería del Mac, dispositivos móviles Apple, accesorios Bluetooth y ratones Rapoo.",
+          "title": "Batería de dispositivos"
+        },
+        "fr": {
+          "keywords": [
+            "Batterie des appareils",
+            "battery",
+            "device",
+            "monitoring"
+          ],
+          "summary": "Affichez la batterie du Mac, des appareils mobiles Apple, des accessoires Bluetooth et des souris Rapoo.",
+          "title": "Batterie des appareils"
+        },
+        "ja": {
+          "keywords": [
+            "battery",
+            "device",
+            "monitoring",
+            "デバイスのバッテリー"
+          ],
+          "summary": "Mac、Apple モバイルデバイス、Bluetooth アクセサリ、Rapoo マウスのバッテリー残量を表示します。",
+          "title": "デバイスのバッテリー"
+        },
+        "ko": {
+          "keywords": [
+            "battery",
+            "device",
+            "monitoring",
+            "기기 배터리"
+          ],
+          "summary": "Mac, Apple 모바일 기기, Bluetooth 액세서리 및 Rapoo 마우스의 배터리를 확인합니다.",
+          "title": "기기 배터리"
+        },
+        "pt": {
+          "keywords": [
+            "Bateria dos dispositivos",
+            "battery",
+            "device",
+            "monitoring"
+          ],
+          "summary": "Veja a bateria do Mac, dispositivos móveis Apple, acessórios Bluetooth e mouses Rapoo.",
+          "title": "Bateria dos dispositivos"
+        },
+        "ru": {
+          "keywords": [
+            "battery",
+            "device",
+            "monitoring",
+            "Батарея устройств"
+          ],
+          "summary": "Просматривайте заряд Mac, мобильных устройств Apple, Bluetooth-аксессуаров и мышей Rapoo.",
+          "title": "Батарея устройств"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "battery",
+            "device",
+            "monitoring",
+            "设备电量"
+          ],
+          "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏鼠标电量",
+          "title": "设备电量"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "battery",
+            "device",
+            "monitoring",
+            "裝置電量"
+          ],
+          "summary": "查看 Mac、Apple 行動裝置、藍牙外設和雷柏滑鼠電量",
+          "title": "裝置電量"
+        }
+      },
       "pluginID": "device-battery",
       "route": "/plugins/device-battery/",
       "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏鼠标电量",
@@ -4262,6 +5938,129 @@
         "storage"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "clean",
+            "cleanup",
+            "disk",
+            "storage",
+            "تنظيف القرص"
+          ],
+          "summary": "يمسح ذاكرات التخزين المؤقت للنظام ومخرجات التطوير وبرامج التثبيت المتبقية؛ ينقل افتراضيًا إلى سلة المهملات مع فحوصات أمان المسار قبل الحذف.",
+          "title": "تنظيف القرص"
+        },
+        "de": {
+          "keywords": [
+            "Datenträgerbereinigung",
+            "clean",
+            "cleanup",
+            "disk",
+            "storage"
+          ],
+          "summary": "System-Caches, Entwicklerartefakte und übrig gebliebene Installer scannen; standardmäßig in den Papierkorb, mit Pfadsicherheitsprüfung vor dem Löschen.",
+          "title": "Datenträgerbereinigung"
+        },
+        "en": {
+          "keywords": [
+            "Disk Cleanup",
+            "clean",
+            "cleanup",
+            "disk",
+            "storage"
+          ],
+          "summary": "Scan system caches, developer artifacts, and leftover installers; move to Trash by default with path safety checks before deletion",
+          "title": "Disk Cleanup"
+        },
+        "es": {
+          "keywords": [
+            "Limpieza de disco",
+            "clean",
+            "cleanup",
+            "disk",
+            "storage"
+          ],
+          "summary": "Escanea cachés del sistema, artefactos de desarrollo e instaladores residuales; por defecto mueve a la Papelera, con comprobaciones de seguridad de ruta antes de borrar.",
+          "title": "Limpieza de disco"
+        },
+        "fr": {
+          "keywords": [
+            "Nettoyage du disque",
+            "clean",
+            "cleanup",
+            "disk",
+            "storage"
+          ],
+          "summary": "Analyse les caches système, les artefacts de développement et les installateurs restants ; met à la corbeille par défaut, avec contrôles de sécurité des chemins avant suppression.",
+          "title": "Nettoyage du disque"
+        },
+        "ja": {
+          "keywords": [
+            "clean",
+            "cleanup",
+            "disk",
+            "storage",
+            "ディスククリーンアップ"
+          ],
+          "summary": "システムキャッシュ、開発成果物、残留インストーラをスキャン。既定でゴミ箱へ移動し、削除前にパス安全性を確認します。",
+          "title": "ディスククリーンアップ"
+        },
+        "ko": {
+          "keywords": [
+            "clean",
+            "cleanup",
+            "disk",
+            "storage",
+            "디스크 정리"
+          ],
+          "summary": "시스템 캐시, 개발 산출물, 잔여 설치 패키지를 스캔합니다. 기본적으로 휴지통으로 옮기며 삭제 전 경로 안전성을 검사합니다.",
+          "title": "디스크 정리"
+        },
+        "pt": {
+          "keywords": [
+            "Limpeza de disco",
+            "clean",
+            "cleanup",
+            "disk",
+            "storage"
+          ],
+          "summary": "Analisa caches do sistema, artefactos de desenvolvimento e instaladores residuais; por predefinição move para o Lixo, com verificações de segurança do caminho antes de apagar.",
+          "title": "Limpeza de disco"
+        },
+        "ru": {
+          "keywords": [
+            "clean",
+            "cleanup",
+            "disk",
+            "storage",
+            "Очистка диска"
+          ],
+          "summary": "Сканирует системные кэши, артефакты разработки и оставшиеся установщики; по умолчанию перемещает в Корзину с проверкой безопасности пути перед удалением.",
+          "title": "Очистка диска"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "clean",
+            "cleanup",
+            "disk",
+            "storage",
+            "磁盘清理"
+          ],
+          "summary": "扫描系统缓存、开发产物与残留安装包，默认移到废纸篓，执行前校验路径安全",
+          "title": "磁盘清理"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "clean",
+            "cleanup",
+            "disk",
+            "storage",
+            "磁碟清理"
+          ],
+          "summary": "掃描系統快取、開發產物與殘留安裝包，預設移到廢紙簍，執行前校驗路徑安全",
+          "title": "磁碟清理"
+        }
+      },
       "pluginID": "disk-clean",
       "route": "/plugins/disk-clean/",
       "summary": "扫描系统缓存、开发产物与残留安装包，默认移到废纸篓，执行前校验路径安全",
@@ -4274,6 +6073,107 @@
         "display"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "brightness",
+            "display",
+            "سطوع الشاشة"
+          ],
+          "summary": "اضبط السطوع لكل شاشة بسرعة.",
+          "title": "سطوع الشاشة"
+        },
+        "de": {
+          "keywords": [
+            "Displayhelligkeit",
+            "brightness",
+            "display"
+          ],
+          "summary": "Passen Sie die Helligkeit für jedes Display schnell an.",
+          "title": "Displayhelligkeit"
+        },
+        "en": {
+          "keywords": [
+            "Display Brightness",
+            "brightness",
+            "display"
+          ],
+          "summary": "Adjust brightness for each display quickly.",
+          "title": "Display Brightness"
+        },
+        "es": {
+          "keywords": [
+            "Brillo de pantalla",
+            "brightness",
+            "display"
+          ],
+          "summary": "Ajuste el brillo de cada pantalla rápidamente.",
+          "title": "Brillo de pantalla"
+        },
+        "fr": {
+          "keywords": [
+            "Luminosité de l’écran",
+            "brightness",
+            "display"
+          ],
+          "summary": "Ajustez rapidement la luminosité de chaque écran.",
+          "title": "Luminosité de l’écran"
+        },
+        "ja": {
+          "keywords": [
+            "brightness",
+            "display",
+            "ディスプレイの明るさ"
+          ],
+          "summary": "各ディスプレイの明るさを素早く調整します。",
+          "title": "ディスプレイの明るさ"
+        },
+        "ko": {
+          "keywords": [
+            "brightness",
+            "display",
+            "디스플레이 밝기"
+          ],
+          "summary": "각 디스플레이의 밝기를 빠르게 조정하세요.",
+          "title": "디스플레이 밝기"
+        },
+        "pt": {
+          "keywords": [
+            "Brilho da tela",
+            "brightness",
+            "display"
+          ],
+          "summary": "Ajuste o brilho de cada tela rapidamente.",
+          "title": "Brilho da tela"
+        },
+        "ru": {
+          "keywords": [
+            "brightness",
+            "display",
+            "Яркость дисплея"
+          ],
+          "summary": "Быстро отрегулируйте яркость каждого дисплея.",
+          "title": "Яркость дисплея"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "brightness",
+            "display",
+            "显示器亮度"
+          ],
+          "summary": "快速调节每个显示器的亮度",
+          "title": "显示器亮度"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "brightness",
+            "display",
+            "顯示器亮度"
+          ],
+          "summary": "快速調節每個顯示器的亮度",
+          "title": "顯示器亮度"
+        }
+      },
       "pluginID": "display-brightness",
       "route": "/plugins/display-brightness/",
       "summary": "快速调节每个显示器的亮度",
@@ -4286,6 +6186,107 @@
         "resolution"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "display",
+            "resolution",
+            "دقة الشاشة"
+          ],
+          "summary": "عرض وتبديل القرارات لكل شاشة.",
+          "title": "دقة الشاشة"
+        },
+        "de": {
+          "keywords": [
+            "Displayauflösung",
+            "display",
+            "resolution"
+          ],
+          "summary": "Sehen Sie sich die Auflösungen für jede Anzeige an und wechseln Sie sie.",
+          "title": "Displayauflösung"
+        },
+        "en": {
+          "keywords": [
+            "Display Resolution",
+            "display",
+            "resolution"
+          ],
+          "summary": "View and switch resolutions for each display.",
+          "title": "Display Resolution"
+        },
+        "es": {
+          "keywords": [
+            "Resolución de pantalla",
+            "display",
+            "resolution"
+          ],
+          "summary": "Vea y cambie resoluciones para cada pantalla.",
+          "title": "Resolución de pantalla"
+        },
+        "fr": {
+          "keywords": [
+            "Résolution de l’écran",
+            "display",
+            "resolution"
+          ],
+          "summary": "Affichez et changez de résolution pour chaque écran.",
+          "title": "Résolution de l’écran"
+        },
+        "ja": {
+          "keywords": [
+            "display",
+            "resolution",
+            "ディスプレイ解像度"
+          ],
+          "summary": "各ディスプレイの解像度を表示および切り替えます。",
+          "title": "ディスプレイ解像度"
+        },
+        "ko": {
+          "keywords": [
+            "display",
+            "resolution",
+            "디스플레이 해상도"
+          ],
+          "summary": "각 디스플레이의 해상도를 보고 전환합니다.",
+          "title": "디스플레이 해상도"
+        },
+        "pt": {
+          "keywords": [
+            "Resolução da tela",
+            "display",
+            "resolution"
+          ],
+          "summary": "Visualize e alterne as resoluções para cada monitor.",
+          "title": "Resolução da tela"
+        },
+        "ru": {
+          "keywords": [
+            "display",
+            "resolution",
+            "Разрешение дисплея"
+          ],
+          "summary": "Просмотр и переключение разрешения для каждого дисплея.",
+          "title": "Разрешение дисплея"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "display",
+            "resolution",
+            "显示器分辨率"
+          ],
+          "summary": "查看并切换每个显示器的分辨率",
+          "title": "显示器分辨率"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "display",
+            "resolution",
+            "顯示器解析度"
+          ],
+          "summary": "查看並切換每個顯示器的分辨率",
+          "title": "顯示器解析度"
+        }
+      },
       "pluginID": "display-resolution",
       "route": "/plugins/display-resolution/",
       "summary": "查看并切换每个显示器的分辨率",
@@ -4298,6 +6299,107 @@
         "sleep"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "display",
+            "sleep",
+            "إسبات الشاشات"
+          ],
+          "summary": "ضع جميع شاشات العرض في وضع السكون على الفور.",
+          "title": "إسبات الشاشات"
+        },
+        "de": {
+          "keywords": [
+            "Display-Ruhezustand",
+            "display",
+            "sleep"
+          ],
+          "summary": "Versetzen Sie alle Displays sofort in den Ruhezustand.",
+          "title": "Display-Ruhezustand"
+        },
+        "en": {
+          "keywords": [
+            "Display Sleep",
+            "display",
+            "sleep"
+          ],
+          "summary": "Put all displays to sleep immediately.",
+          "title": "Display Sleep"
+        },
+        "es": {
+          "keywords": [
+            "Reposo de pantallas",
+            "display",
+            "sleep"
+          ],
+          "summary": "Ponga todas las pantallas a dormir inmediatamente.",
+          "title": "Reposo de pantallas"
+        },
+        "fr": {
+          "keywords": [
+            "Mise en veille des écrans",
+            "display",
+            "sleep"
+          ],
+          "summary": "Mettez immédiatement tous les écrans en veille.",
+          "title": "Mise en veille des écrans"
+        },
+        "ja": {
+          "keywords": [
+            "display",
+            "sleep",
+            "ディスプレイをスリープ"
+          ],
+          "summary": "すべてのディスプレイをすぐにスリープ状態にします。",
+          "title": "ディスプレイをスリープ"
+        },
+        "ko": {
+          "keywords": [
+            "display",
+            "sleep",
+            "디스플레이 잠자기"
+          ],
+          "summary": "모든 디스플레이를 즉시 절전 모드로 전환하세요.",
+          "title": "디스플레이 잠자기"
+        },
+        "pt": {
+          "keywords": [
+            "Repouso das telas",
+            "display",
+            "sleep"
+          ],
+          "summary": "Coloque todos os monitores em hibernação imediatamente.",
+          "title": "Repouso das telas"
+        },
+        "ru": {
+          "keywords": [
+            "display",
+            "sleep",
+            "Сон дисплеев"
+          ],
+          "summary": "Немедленно переведите все дисплеи в спящий режим.",
+          "title": "Сон дисплеев"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "display",
+            "sleep",
+            "显示器休眠"
+          ],
+          "summary": "一键让所有显示器立即进入休眠",
+          "title": "显示器休眠"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "display",
+            "sleep",
+            "顯示器睡眠"
+          ],
+          "summary": "一鍵讓所有顯示器立即進入休眠",
+          "title": "顯示器睡眠"
+        }
+      },
       "pluginID": "display-sleep",
       "route": "/plugins/display-sleep/",
       "summary": "一键让所有显示器立即进入休眠",
@@ -4312,6 +6414,129 @@
         "true"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "ضبط ألوان العرض تلقائيًا لتتناسب مع الإضاءة المحيطة.",
+          "title": "True Tone"
+        },
+        "de": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "Passen Sie die Displayfarben automatisch an das Umgebungslicht an.",
+          "title": "True Tone"
+        },
+        "en": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "Automatically adjust display colors to match ambient light.",
+          "title": "True Tone"
+        },
+        "es": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "Ajuste automáticamente los colores de la pantalla para que coincidan con la luz ambiental.",
+          "title": "True Tone"
+        },
+        "fr": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "Ajustez automatiquement les couleurs de l’affichage en fonction de la lumière ambiante.",
+          "title": "True Tone"
+        },
+        "ja": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "周囲の光に合わせてディスプレイの色を自動的に調整します。",
+          "title": "True Tone"
+        },
+        "ko": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "주변 조명에 맞게 디스플레이 색상을 자동으로 조정합니다.",
+          "title": "True Tone"
+        },
+        "pt": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "Ajuste automaticamente as cores da tela para corresponder à luz ambiente.",
+          "title": "True Tone"
+        },
+        "ru": {
+          "keywords": [
+            "True Tone",
+            "color",
+            "display",
+            "tone",
+            "true"
+          ],
+          "summary": "Автоматически настраивайте цвета дисплея в соответствии с окружающим освещением.",
+          "title": "True Tone"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "color",
+            "display",
+            "tone",
+            "true",
+            "原彩显示"
+          ],
+          "summary": "自动调节显示器颜色以适应环境光",
+          "title": "原彩显示"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "color",
+            "display",
+            "tone",
+            "true",
+            "原彩顯示"
+          ],
+          "summary": "自動調節顯示器顏色以適應環境光",
+          "title": "原彩顯示"
+        }
+      },
       "pluginID": "display-true-color",
       "route": "/plugins/display-true-color/",
       "summary": "自动调节显示器颜色以适应环境光",
@@ -4330,6 +6555,173 @@
         "productivity"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity",
+            "إخفاء التطبيق النشط بالنقر على Dock"
+          ],
+          "summary": "أخفِ التطبيق النشط بالنقر على أيقونته في Dock (كما في Windows).",
+          "title": "إخفاء التطبيق النشط بالنقر على Dock"
+        },
+        "de": {
+          "keywords": [
+            "Aktive App per Dock-Klick ausblenden",
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity"
+          ],
+          "summary": "Blendet die aktive App durch Klick auf ihr Dock-Symbol aus (wie unter Windows).",
+          "title": "Aktive App per Dock-Klick ausblenden"
+        },
+        "en": {
+          "keywords": [
+            "Hide Active App on Dock Click",
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity"
+          ],
+          "summary": "Hide the active app by clicking its Dock icon (like on Windows).",
+          "title": "Hide Active App on Dock Click"
+        },
+        "es": {
+          "keywords": [
+            "Ocultar la app activa al hacer clic en el Dock",
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity"
+          ],
+          "summary": "Oculta la app activa al hacer clic en su icono del Dock (como en Windows).",
+          "title": "Ocultar la app activa al hacer clic en el Dock"
+        },
+        "fr": {
+          "keywords": [
+            "Masquer l’app active par clic dans le Dock",
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity"
+          ],
+          "summary": "Masque l’app active en cliquant sur son icône dans le Dock (comme sous Windows).",
+          "title": "Masquer l’app active par clic dans le Dock"
+        },
+        "ja": {
+          "keywords": [
+            "DockクリックでアクティブなAppを隠す",
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity"
+          ],
+          "summary": "DockのアイコンをクリックしてアクティブなAppを隠します（Windowsと同様）。",
+          "title": "DockクリックでアクティブなAppを隠す"
+        },
+        "ko": {
+          "keywords": [
+            "Dock 클릭으로 활성 앱 가리기",
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity"
+          ],
+          "summary": "Dock 아이콘을 클릭해 활성 앱을 가립니다(Windows처럼).",
+          "title": "Dock 클릭으로 활성 앱 가리기"
+        },
+        "pt": {
+          "keywords": [
+            "Ocultar app ativa com clique no Dock",
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity"
+          ],
+          "summary": "Oculta o app ativo ao clicar no ícone dele no Dock (como no Windows).",
+          "title": "Ocultar app ativa com clique no Dock"
+        },
+        "ru": {
+          "keywords": [
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity",
+            "Скрыть активное приложение щелчком по Dock"
+          ],
+          "summary": "Скрывает активное приложение щелчком по его значку в Dock (как в Windows).",
+          "title": "Скрыть активное приложение щелчком по Dock"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity",
+            "点击程序坞隐藏活跃 App"
+          ],
+          "summary": "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。",
+          "title": "点击程序坞隐藏活跃 App"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "active",
+            "app",
+            "click",
+            "dock",
+            "hide",
+            "minimize",
+            "on",
+            "productivity",
+            "點擊 Dock 隱藏使用中 App"
+          ],
+          "summary": "點擊使用中 App 的 Dock 圖示即可將其隱藏（如 Windows）。",
+          "title": "點擊 Dock 隱藏使用中 App"
+        }
+      },
       "pluginID": "dock-click-minimize",
       "route": "/plugins/dock-click-minimize/",
       "summary": "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。",
@@ -4343,6 +6735,118 @@
         "lock"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "display",
+            "dock",
+            "lock",
+            "قفل Dock"
+          ],
+          "summary": "امنع انتقال Dock بين الشاشات عن طريق الخطأ.",
+          "title": "قفل Dock"
+        },
+        "de": {
+          "keywords": [
+            "Dock-Sperre",
+            "display",
+            "dock",
+            "lock"
+          ],
+          "summary": "Verhindert, dass das Dock versehentlich zwischen Displays verschoben wird.",
+          "title": "Dock-Sperre"
+        },
+        "en": {
+          "keywords": [
+            "Dock Lock",
+            "display",
+            "dock",
+            "lock"
+          ],
+          "summary": "Prevent the Dock from moving between displays accidentally.",
+          "title": "Dock Lock"
+        },
+        "es": {
+          "keywords": [
+            "Bloqueo del Dock",
+            "display",
+            "dock",
+            "lock"
+          ],
+          "summary": "Evita que el Dock se mueva accidentalmente entre pantallas.",
+          "title": "Bloqueo del Dock"
+        },
+        "fr": {
+          "keywords": [
+            "Verrouillage du Dock",
+            "display",
+            "dock",
+            "lock"
+          ],
+          "summary": "Empêche le Dock de passer accidentellement d’un écran à l’autre.",
+          "title": "Verrouillage du Dock"
+        },
+        "ja": {
+          "keywords": [
+            "Dockの固定",
+            "display",
+            "dock",
+            "lock"
+          ],
+          "summary": "Dockが誤ってディスプレイ間を移動しないようにします。",
+          "title": "Dockの固定"
+        },
+        "ko": {
+          "keywords": [
+            "Dock 잠금",
+            "display",
+            "dock",
+            "lock"
+          ],
+          "summary": "Dock이 실수로 디스플레이 사이를 이동하지 않도록 합니다.",
+          "title": "Dock 잠금"
+        },
+        "pt": {
+          "keywords": [
+            "Bloqueio do Dock",
+            "display",
+            "dock",
+            "lock"
+          ],
+          "summary": "Impeça que o Dock se mova acidentalmente entre monitores.",
+          "title": "Bloqueio do Dock"
+        },
+        "ru": {
+          "keywords": [
+            "display",
+            "dock",
+            "lock",
+            "Блокировка Dock"
+          ],
+          "summary": "Не позволяет Dock случайно перемещаться между дисплеями.",
+          "title": "Блокировка Dock"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "display",
+            "dock",
+            "lock",
+            "锁定程序坞"
+          ],
+          "summary": "防止程序坞在多显示器之间意外移动",
+          "title": "锁定程序坞"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "display",
+            "dock",
+            "lock",
+            "鎖定 Dock"
+          ],
+          "summary": "防止 Dock 意外移動到其他顯示器。",
+          "title": "鎖定 Dock"
+        }
+      },
       "pluginID": "dock-lock",
       "route": "/plugins/dock-lock/",
       "summary": "防止程序坞在多显示器之间意外移动",
@@ -4357,6 +6861,129 @@
         "storage"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "disk",
+            "disks",
+            "eject",
+            "storage",
+            "إخراج الأقراص"
+          ],
+          "summary": "أخرج كافة الأقراص القابلة للإزالة.",
+          "title": "إخراج الأقراص"
+        },
+        "de": {
+          "keywords": [
+            "Datenträger auswerfen",
+            "disk",
+            "disks",
+            "eject",
+            "storage"
+          ],
+          "summary": "Alle Wechseldatenträger auswerfen.",
+          "title": "Datenträger auswerfen"
+        },
+        "en": {
+          "keywords": [
+            "Eject Disks",
+            "disk",
+            "disks",
+            "eject",
+            "storage"
+          ],
+          "summary": "Eject all removable disks.",
+          "title": "Eject Disks"
+        },
+        "es": {
+          "keywords": [
+            "Expulsar discos",
+            "disk",
+            "disks",
+            "eject",
+            "storage"
+          ],
+          "summary": "Expulse todos los discos extraíbles.",
+          "title": "Expulsar discos"
+        },
+        "fr": {
+          "keywords": [
+            "disk",
+            "disks",
+            "eject",
+            "storage",
+            "Éjecter les disques"
+          ],
+          "summary": "Éjectez tous les disques amovibles.",
+          "title": "Éjecter les disques"
+        },
+        "ja": {
+          "keywords": [
+            "disk",
+            "disks",
+            "eject",
+            "storage",
+            "ディスクを取り出す"
+          ],
+          "summary": "すべてのリムーバブル ディスクを取り出します。",
+          "title": "ディスクを取り出す"
+        },
+        "ko": {
+          "keywords": [
+            "disk",
+            "disks",
+            "eject",
+            "storage",
+            "디스크 추출"
+          ],
+          "summary": "모든 이동식 디스크를 꺼냅니다.",
+          "title": "디스크 추출"
+        },
+        "pt": {
+          "keywords": [
+            "Ejetar discos",
+            "disk",
+            "disks",
+            "eject",
+            "storage"
+          ],
+          "summary": "Ejete todos os discos removíveis.",
+          "title": "Ejetar discos"
+        },
+        "ru": {
+          "keywords": [
+            "disk",
+            "disks",
+            "eject",
+            "storage",
+            "Извлечь диски"
+          ],
+          "summary": "Извлечь все съемные диски.",
+          "title": "Извлечь диски"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "disk",
+            "disks",
+            "eject",
+            "storage",
+            "推出磁盘"
+          ],
+          "summary": "推出所有可移动磁盘",
+          "title": "推出磁盘"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "disk",
+            "disks",
+            "eject",
+            "storage",
+            "退出磁碟"
+          ],
+          "summary": "推出所有可移動磁盤",
+          "title": "退出磁碟"
+        }
+      },
       "pluginID": "eject-disk",
       "route": "/plugins/eject-disk/",
       "summary": "推出所有可移动磁盘",
@@ -4370,6 +6997,118 @@
         "trash"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "empty",
+            "storage",
+            "trash",
+            "إفراغ سلة المهملات"
+          ],
+          "summary": "إفراغ كافة العناصر الموجودة في سلة المهملات.",
+          "title": "إفراغ سلة المهملات"
+        },
+        "de": {
+          "keywords": [
+            "Papierkorb leeren",
+            "empty",
+            "storage",
+            "trash"
+          ],
+          "summary": "Leeren Sie alle Elemente im Papierkorb.",
+          "title": "Papierkorb leeren"
+        },
+        "en": {
+          "keywords": [
+            "Empty Trash",
+            "empty",
+            "storage",
+            "trash"
+          ],
+          "summary": "Empty all items in the Trash.",
+          "title": "Empty Trash"
+        },
+        "es": {
+          "keywords": [
+            "Vaciar papelera",
+            "empty",
+            "storage",
+            "trash"
+          ],
+          "summary": "Vaciar todos los elementos de la Papelera.",
+          "title": "Vaciar papelera"
+        },
+        "fr": {
+          "keywords": [
+            "Vider la corbeille",
+            "empty",
+            "storage",
+            "trash"
+          ],
+          "summary": "Videz tous les éléments de la corbeille.",
+          "title": "Vider la corbeille"
+        },
+        "ja": {
+          "keywords": [
+            "empty",
+            "storage",
+            "trash",
+            "ゴミ箱を空にする"
+          ],
+          "summary": "ゴミ箱内のすべてのアイテムを空にします。",
+          "title": "ゴミ箱を空にする"
+        },
+        "ko": {
+          "keywords": [
+            "empty",
+            "storage",
+            "trash",
+            "휴지통 비우기"
+          ],
+          "summary": "휴지통의 모든 항목을 비웁니다.",
+          "title": "휴지통 비우기"
+        },
+        "pt": {
+          "keywords": [
+            "Esvaziar Lixo",
+            "empty",
+            "storage",
+            "trash"
+          ],
+          "summary": "Esvazie todos os itens da Lixeira.",
+          "title": "Esvaziar Lixo"
+        },
+        "ru": {
+          "keywords": [
+            "empty",
+            "storage",
+            "trash",
+            "Очистить корзину"
+          ],
+          "summary": "Очистить все элементы в корзине.",
+          "title": "Очистить корзину"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "empty",
+            "storage",
+            "trash",
+            "清空废纸篓"
+          ],
+          "summary": "清空废纸篓中的所有项目",
+          "title": "清空废纸篓"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "empty",
+            "storage",
+            "trash",
+            "清空垃圾桶"
+          ],
+          "summary": "清空垃圾桶中的所有項目",
+          "title": "清空垃圾桶"
+        }
+      },
       "pluginID": "empty-trash",
       "route": "/plugins/empty-trash/",
       "summary": "清空废纸篓中的所有项目",
@@ -4383,6 +7122,118 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "control",
+            "fan",
+            "system",
+            "التحكم بالمراوح"
+          ],
+          "summary": "قم بإدارة الإعدادات المسبقة لسرعة المروحة باستخدام إستراتيجيات تلقائية وكاملة السرعة ومخصصة.",
+          "title": "التحكم بالمراوح"
+        },
+        "de": {
+          "keywords": [
+            "Lüftersteuerung",
+            "control",
+            "fan",
+            "system"
+          ],
+          "summary": "Verwalten Sie Voreinstellungen für die Lüftergeschwindigkeit mit automatischen, Vollgeschwindigkeits- und benutzerdefinierten Strategien.",
+          "title": "Lüftersteuerung"
+        },
+        "en": {
+          "keywords": [
+            "Fan Control",
+            "control",
+            "fan",
+            "system"
+          ],
+          "summary": "Manage fan speed presets with automatic, full-speed, and custom strategies.",
+          "title": "Fan Control"
+        },
+        "es": {
+          "keywords": [
+            "Control de ventiladores",
+            "control",
+            "fan",
+            "system"
+          ],
+          "summary": "Administre los ajustes preestablecidos de velocidad del ventilador con estrategias automáticas, de velocidad máxima y personalizadas.",
+          "title": "Control de ventiladores"
+        },
+        "fr": {
+          "keywords": [
+            "Contrôle des ventilateurs",
+            "control",
+            "fan",
+            "system"
+          ],
+          "summary": "Gérez les préréglages de vitesse du ventilateur avec des stratégies automatiques, à pleine vitesse et personnalisées.",
+          "title": "Contrôle des ventilateurs"
+        },
+        "ja": {
+          "keywords": [
+            "control",
+            "fan",
+            "system",
+            "ファン制御"
+          ],
+          "summary": "自動、フルスピード、カスタム戦略を使用してファン速度のプリセットを管理します。",
+          "title": "ファン制御"
+        },
+        "ko": {
+          "keywords": [
+            "control",
+            "fan",
+            "system",
+            "팬 제어"
+          ],
+          "summary": "자동, 최대 속도 및 사용자 정의 전략을 사용하여 팬 속도 사전 설정을 관리합니다.",
+          "title": "팬 제어"
+        },
+        "pt": {
+          "keywords": [
+            "Controle de ventoinhas",
+            "control",
+            "fan",
+            "system"
+          ],
+          "summary": "Gerencie predefinições de velocidade do ventilador com estratégias automáticas, de velocidade total e personalizadas.",
+          "title": "Controle de ventoinhas"
+        },
+        "ru": {
+          "keywords": [
+            "control",
+            "fan",
+            "system",
+            "Управление вентиляторами"
+          ],
+          "summary": "Управляйте предустановками скорости вращения вентилятора с помощью автоматических, полноскоростных и пользовательских стратегий.",
+          "title": "Управление вентиляторами"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "control",
+            "fan",
+            "system",
+            "风扇控制"
+          ],
+          "summary": "管理风扇转速预设，支持自动、全速和自定义策略",
+          "title": "风扇控制"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "control",
+            "fan",
+            "system",
+            "風扇控制"
+          ],
+          "summary": "管理風扇轉速預設，支持自動、全速和自定義策略",
+          "title": "風扇控制"
+        }
+      },
       "pluginID": "fan-control",
       "route": "/plugins/fan-control/",
       "summary": "管理风扇转速预设，支持自动、全速和自定义策略",
@@ -4398,6 +7249,140 @@
         "productivity"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity",
+            "إصلاح التطبيقات التالفة"
+          ],
+          "summary": "قم بإزالة سمات العزل لحل تحذيرات التطبيقات التالفة أو غير الموثوقة.",
+          "title": "إصلاح التطبيقات التالفة"
+        },
+        "de": {
+          "keywords": [
+            "Beschädigte Apps reparieren",
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity"
+          ],
+          "summary": "Entfernen Sie Quarantäneattribute, um Warnungen zu beschädigten oder nicht vertrauenswürdigen Apps zu beheben.",
+          "title": "Beschädigte Apps reparieren"
+        },
+        "en": {
+          "keywords": [
+            "Fix Damaged Apps",
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity"
+          ],
+          "summary": "Remove quarantine attributes to resolve damaged or untrusted app warnings.",
+          "title": "Fix Damaged Apps"
+        },
+        "es": {
+          "keywords": [
+            "Reparar apps dañadas",
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity"
+          ],
+          "summary": "Elimine los atributos de cuarentena para resolver advertencias de aplicaciones dañadas o que no son de confianza.",
+          "title": "Reparar apps dañadas"
+        },
+        "fr": {
+          "keywords": [
+            "Réparer les apps endommagées",
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity"
+          ],
+          "summary": "Supprimez les attributs de quarantaine pour résoudre les avertissements d'applications endommagées ou non fiables.",
+          "title": "Réparer les apps endommagées"
+        },
+        "ja": {
+          "keywords": [
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity",
+            "破損したアプリを修復"
+          ],
+          "summary": "破損したアプリまたは信頼できないアプリの警告を解決するには、隔離属性を削除します。",
+          "title": "破損したアプリを修復"
+        },
+        "ko": {
+          "keywords": [
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity",
+            "손상된 앱 복구"
+          ],
+          "summary": "손상되었거나 신뢰할 수 없는 앱 경고를 해결하려면 격리 속성을 제거하세요.",
+          "title": "손상된 앱 복구"
+        },
+        "pt": {
+          "keywords": [
+            "Corrigir apps danificados",
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity"
+          ],
+          "summary": "Remova atributos de quarentena para resolver avisos de aplicativos danificados ou não confiáveis.",
+          "title": "Corrigir apps danificados"
+        },
+        "ru": {
+          "keywords": [
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity",
+            "Исправить повреждённые приложения"
+          ],
+          "summary": "Удалите атрибуты карантина, чтобы устранить предупреждения поврежденных или ненадежных приложений.",
+          "title": "Исправить повреждённые приложения"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity",
+            "修复损坏应用"
+          ],
+          "summary": "移除隔离属性，解决「已损坏」或「不受信任」提示",
+          "title": "修复损坏应用"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "app",
+            "apps",
+            "damaged",
+            "fix",
+            "productivity",
+            "修復損壞的 App"
+          ],
+          "summary": "移除隔離屬性，解決「已損壞」或「不受信任」提示",
+          "title": "修復損壞的 App"
+        }
+      },
       "pluginID": "fix-damaged-app",
       "route": "/plugins/fix-damaged-app/",
       "summary": "移除隔离属性，解决「已损坏」或「不受信任」提示",
@@ -4411,6 +7396,118 @@
         "notch"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "display",
+            "hide",
+            "notch",
+            "إخفاء النتوء"
+          ],
+          "summary": "قم بتغطية المنطقة العلوية تلقائيًا على الشاشات المسننة.",
+          "title": "إخفاء النتوء"
+        },
+        "de": {
+          "keywords": [
+            "Notch ausblenden",
+            "display",
+            "hide",
+            "notch"
+          ],
+          "summary": "Decken Sie automatisch den oberen Kerbbereich auf gekerbten Displays ab.",
+          "title": "Notch ausblenden"
+        },
+        "en": {
+          "keywords": [
+            "Hide Notch",
+            "display",
+            "hide",
+            "notch"
+          ],
+          "summary": "Automatically cover the top notch area on notched displays.",
+          "title": "Hide Notch"
+        },
+        "es": {
+          "keywords": [
+            "Ocultar muesca",
+            "display",
+            "hide",
+            "notch"
+          ],
+          "summary": "Cubra automáticamente el área de muesca superior en pantallas con muescas.",
+          "title": "Ocultar muesca"
+        },
+        "fr": {
+          "keywords": [
+            "Masquer l’encoche",
+            "display",
+            "hide",
+            "notch"
+          ],
+          "summary": "Couvrez automatiquement la zone supérieure sur les écrans à encoches.",
+          "title": "Masquer l’encoche"
+        },
+        "ja": {
+          "keywords": [
+            "display",
+            "hide",
+            "notch",
+            "ノッチを隠す"
+          ],
+          "summary": "ノッチ付きディスプレイの最上部のノッチ領域を自動的にカバーします。",
+          "title": "ノッチを隠す"
+        },
+        "ko": {
+          "keywords": [
+            "display",
+            "hide",
+            "notch",
+            "노치 숨기기"
+          ],
+          "summary": "노치 디스플레이의 상단 노치 영역을 자동으로 덮습니다.",
+          "title": "노치 숨기기"
+        },
+        "pt": {
+          "keywords": [
+            "Ocultar entalhe",
+            "display",
+            "hide",
+            "notch"
+          ],
+          "summary": "Cobre automaticamente a área superior em telas entalhadas.",
+          "title": "Ocultar entalhe"
+        },
+        "ru": {
+          "keywords": [
+            "display",
+            "hide",
+            "notch",
+            "Скрыть вырез"
+          ],
+          "summary": "Автоматически закрывать верхнюю область на дисплеях с вырезом.",
+          "title": "Скрыть вырез"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "display",
+            "hide",
+            "notch",
+            "隐藏刘海"
+          ],
+          "summary": "自动遮挡刘海屏顶部区域",
+          "title": "隐藏刘海"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "display",
+            "hide",
+            "notch",
+            "隱藏瀏海"
+          ],
+          "summary": "自動遮擋劉海螢幕頂部區域",
+          "title": "隱藏瀏海"
+        }
+      },
       "pluginID": "hide-notch",
       "route": "/plugins/hide-notch/",
       "summary": "自动遮挡刘海屏顶部区域",
@@ -4424,6 +7521,118 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "Homebrew",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "إدارة حزم Homebrew والمستودعات وتشغيل تشخيصات النظام.",
+          "title": "Homebrew"
+        },
+        "de": {
+          "keywords": [
+            "Homebrew",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "Homebrew-Pakete und Repositories verwalten sowie Systemdiagnosen ausführen.",
+          "title": "Homebrew"
+        },
+        "en": {
+          "keywords": [
+            "Homebrew Manager",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "Manage Homebrew packages, repositories, and perform system diagnostics",
+          "title": "Homebrew Manager"
+        },
+        "es": {
+          "keywords": [
+            "Homebrew",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "Administrar paquetes de Homebrew, repositorios y realizar diagnósticos del sistema.",
+          "title": "Homebrew"
+        },
+        "fr": {
+          "keywords": [
+            "Homebrew",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "Gérer les paquets Homebrew, les dépôts et effectuer des diagnostics système.",
+          "title": "Homebrew"
+        },
+        "ja": {
+          "keywords": [
+            "Homebrew",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "Homebrew パッケージ、リポジトリの管理、およびシステム診断の実行。",
+          "title": "Homebrew"
+        },
+        "ko": {
+          "keywords": [
+            "Homebrew",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "Homebrew 패키지와 저장소를 관리하고 시스템 진단을 실행합니다.",
+          "title": "Homebrew"
+        },
+        "pt": {
+          "keywords": [
+            "Homebrew",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "Gerenciar pacotes do Homebrew, repositórios e executar diagnósticos do sistema.",
+          "title": "Homebrew"
+        },
+        "ru": {
+          "keywords": [
+            "Homebrew",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "Управляйте пакетами и репозиториями Homebrew и запускайте диагностику системы.",
+          "title": "Homebrew"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "Homebrew 管理",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "管理 Homebrew 包、软件仓库并执行系统诊断",
+          "title": "Homebrew 管理"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "Homebrew 管理",
+            "homebrew",
+            "manager",
+            "system"
+          ],
+          "summary": "管理 Homebrew 包、軟體倉庫並執行系統診斷",
+          "title": "Homebrew 管理"
+        }
+      },
       "pluginID": "homebrew",
       "route": "/plugins/homebrew/",
       "summary": "管理 Homebrew 包、库仓库并执行系统诊断",
@@ -4442,6 +7651,173 @@
         "trackpad"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad",
+            "اختصارات مخصصة: لوحة المفاتيح، لوحة التتبع، الماوس"
+          ],
+          "summary": "اربط الإدخالات بالإجراءات.",
+          "title": "اختصارات مخصصة: لوحة المفاتيح، لوحة التتبع، الماوس"
+        },
+        "de": {
+          "keywords": [
+            "Eigene Kurzbefehle: Tastatur, Trackpad, Maus",
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad"
+          ],
+          "summary": "Eingaben Aktionen zuordnen.",
+          "title": "Eigene Kurzbefehle: Tastatur, Trackpad, Maus"
+        },
+        "en": {
+          "keywords": [
+            "Custom Shortcuts: Keyboard, Trackpad, Mouse",
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad"
+          ],
+          "summary": "Map inputs to actions",
+          "title": "Custom Shortcuts: Keyboard, Trackpad, Mouse"
+        },
+        "es": {
+          "keywords": [
+            "Atajos personalizados: Teclado, Panel táctil, Ratón",
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad"
+          ],
+          "summary": "Asigna entradas a acciones.",
+          "title": "Atajos personalizados: Teclado, Panel táctil, Ratón"
+        },
+        "fr": {
+          "keywords": [
+            "Raccourcis personnalisés : Clavier, Pavé tactile, Souris",
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad"
+          ],
+          "summary": "Associer les entrées aux actions.",
+          "title": "Raccourcis personnalisés : Clavier, Pavé tactile, Souris"
+        },
+        "ja": {
+          "keywords": [
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad",
+            "カスタムショートカット：キーボード、トラックパッド、マウス"
+          ],
+          "summary": "入力をアクションに割り当てます。",
+          "title": "カスタムショートカット：キーボード、トラックパッド、マウス"
+        },
+        "ko": {
+          "keywords": [
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad",
+            "사용자화 단축키: 키보드, 트랙패드, 마우스"
+          ],
+          "summary": "입력을 동작에 연결합니다.",
+          "title": "사용자화 단축키: 키보드, 트랙패드, 마우스"
+        },
+        "pt": {
+          "keywords": [
+            "Atalhos personalizados: Teclado, Trackpad, Rato",
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad"
+          ],
+          "summary": "Associe entradas a ações.",
+          "title": "Atalhos personalizados: Teclado, Trackpad, Rato"
+        },
+        "ru": {
+          "keywords": [
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad",
+            "Пользовательские сочетания: Клавиатура, Трекпад, Мышь"
+          ],
+          "summary": "Сопоставляйте ввод с действиями.",
+          "title": "Пользовательские сочетания: Клавиатура, Трекпад, Мышь"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad",
+            "自定义快捷操作：键盘、触控板、鼠标"
+          ],
+          "summary": "将输入映射为操作",
+          "title": "自定义快捷操作：键盘、触控板、鼠标"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "custom",
+            "input",
+            "keyboard",
+            "mouse",
+            "productivity",
+            "remapping",
+            "shortcuts",
+            "trackpad",
+            "自訂快速操作：鍵盤、觸控板、滑鼠"
+          ],
+          "summary": "將輸入對應至操作。",
+          "title": "自訂快速操作：鍵盤、觸控板、滑鼠"
+        }
+      },
       "pluginID": "input-remapping",
       "route": "/plugins/input-remapping/",
       "summary": "将输入映射为操作",
@@ -4456,6 +7832,139 @@
         "public IP"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "IP address",
+            "local IP",
+            "network diagnostics",
+            "public IP",
+            "تشخيص الشبكة",
+            "عنوان IP"
+          ],
+          "summary": "عرض IP الخروج وIP المحلي والموقع وجودة الشبكة.",
+          "title": "فحص IP"
+        },
+        "de": {
+          "keywords": [
+            "IP address",
+            "IP-Adresse",
+            "Netzwerkdiagnose",
+            "local IP",
+            "network diagnostics",
+            "public IP"
+          ],
+          "summary": "Zeigt Ausgangs-IP, lokale IP, Standort und Netzwerkqualität an.",
+          "title": "IP-Prüfung"
+        },
+        "en": {
+          "keywords": [
+            "IP address",
+            "local IP",
+            "network check",
+            "network diagnostics",
+            "public IP"
+          ],
+          "summary": "View egress IP, local IP, location, and network quality.",
+          "title": "IP Check"
+        },
+        "es": {
+          "keywords": [
+            "IP address",
+            "diagnóstico de red",
+            "dirección IP",
+            "local IP",
+            "network diagnostics",
+            "public IP"
+          ],
+          "summary": "Consulta la IP de salida, la IP local, la ubicación y la calidad de red.",
+          "title": "Comprobación de IP"
+        },
+        "fr": {
+          "keywords": [
+            "IP address",
+            "adresse IP",
+            "diagnostic réseau",
+            "local IP",
+            "network diagnostics",
+            "public IP"
+          ],
+          "summary": "Afficher l’IP de sortie, l’IP locale, la localisation et la qualité du réseau.",
+          "title": "Vérification IP"
+        },
+        "ja": {
+          "keywords": [
+            "IP address",
+            "IP アドレス",
+            "local IP",
+            "network diagnostics",
+            "public IP",
+            "ネットワーク診断"
+          ],
+          "summary": "出口 IP、ローカル IP、所在地、ネットワーク品質を表示します。",
+          "title": "IPチェック"
+        },
+        "ko": {
+          "keywords": [
+            "IP address",
+            "IP 주소",
+            "local IP",
+            "network diagnostics",
+            "public IP",
+            "네트워크 진단"
+          ],
+          "summary": "외부 IP, 로컬 IP, 위치 및 네트워크 품질을 확인합니다.",
+          "title": "IP 확인"
+        },
+        "pt": {
+          "keywords": [
+            "IP address",
+            "diagnóstico de rede",
+            "endereço IP",
+            "local IP",
+            "network diagnostics",
+            "public IP"
+          ],
+          "summary": "Veja IP de saída, IP local, localização e qualidade da rede.",
+          "title": "Verificação de IP"
+        },
+        "ru": {
+          "keywords": [
+            "IP address",
+            "IP-адрес",
+            "local IP",
+            "network diagnostics",
+            "public IP",
+            "диагностика сети"
+          ],
+          "summary": "Просмотр исходящего IP, локального IP, местоположения и качества сети.",
+          "title": "Проверка IP"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "IP address",
+            "IP 地址",
+            "local IP",
+            "network diagnostics",
+            "public IP",
+            "网络诊断"
+          ],
+          "summary": "查看出口 IP、本地 IP、归属地与网络测速摘要",
+          "title": "IP 检测"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "IP address",
+            "IP 位址",
+            "local IP",
+            "network diagnostics",
+            "public IP",
+            "網路診斷"
+          ],
+          "summary": "查看出口 IP、本地 IP、歸屬地與網路測速摘要",
+          "title": "IP 檢測"
+        }
+      },
       "pluginID": "ip-overview",
       "route": "/plugins/ip-overview/",
       "summary": "查看出口 IP、本地 IP、归属地与网络测速摘要",
@@ -4469,6 +7978,118 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "awake",
+            "keep",
+            "system",
+            "منع السكون"
+          ],
+          "summary": "أبقِ Mac مستيقظًا، مع خيار إبقاء الشاشة مضاءة أو إبقاء أدوات الشاشة قيد التشغيل. يتطلب تشغيل MacBook بغطاء مغلق توصيله بالطاقة.",
+          "title": "منع السكون"
+        },
+        "de": {
+          "keywords": [
+            "Wach halten",
+            "awake",
+            "keep",
+            "system"
+          ],
+          "summary": "Hält den Mac wach; optional bleibt das Display an oder Bildschirmtools funktionieren weiter. Der Betrieb eines MacBook mit geschlossenem Deckel erfordert Netzstrom.",
+          "title": "Wach halten"
+        },
+        "en": {
+          "keywords": [
+            "Keep Awake",
+            "awake",
+            "keep",
+            "system"
+          ],
+          "summary": "Keep the Mac awake; optionally keep the display on or keep screen-based tools working. Closed-lid MacBook operation requires a power connection.",
+          "title": "Keep Awake"
+        },
+        "es": {
+          "keywords": [
+            "Mantener activo",
+            "awake",
+            "keep",
+            "system"
+          ],
+          "summary": "Mantén el Mac activo; opcionalmente, conserva la pantalla encendida o las herramientas de pantalla funcionando. El uso del MacBook con la tapa cerrada requiere alimentación.",
+          "title": "Mantener activo"
+        },
+        "fr": {
+          "keywords": [
+            "Empêcher la suspension",
+            "awake",
+            "keep",
+            "system"
+          ],
+          "summary": "Garde le Mac actif ; permet aussi de garder l’écran allumé ou les outils liés à l’écran opérationnels. L’utilisation du MacBook couvercle fermé nécessite le secteur.",
+          "title": "Empêcher la suspension"
+        },
+        "ja": {
+          "keywords": [
+            "awake",
+            "keep",
+            "system",
+            "スリープを防止"
+          ],
+          "summary": "Macをスリープさせず、必要に応じてディスプレイをオンのままにするか画面ツールを動作させます。MacBookを閉じた状態で使用するには電源接続が必要です。",
+          "title": "スリープを防止"
+        },
+        "ko": {
+          "keywords": [
+            "awake",
+            "keep",
+            "system",
+            "잠자기 방지"
+          ],
+          "summary": "Mac을 깨운 상태로 두고, 선택적으로 디스플레이를 켜 두거나 화면 도구를 계속 작동시킵니다. MacBook을 덮개를 닫은 상태로 사용하려면 전원 연결이 필요합니다.",
+          "title": "잠자기 방지"
+        },
+        "pt": {
+          "keywords": [
+            "Manter ativo",
+            "awake",
+            "keep",
+            "system"
+          ],
+          "summary": "Mantenha o Mac ativo; opcionalmente, mantenha a tela ligada ou as ferramentas de tela funcionando. O uso do MacBook com a tampa fechada requer energia conectada.",
+          "title": "Manter ativo"
+        },
+        "ru": {
+          "keywords": [
+            "awake",
+            "keep",
+            "system",
+            "Не давать уснуть"
+          ],
+          "summary": "Не даёт Mac уснуть; при необходимости не гасит экран или сохраняет работу экранных инструментов. Для работы MacBook с закрытой крышкой требуется питание от сети.",
+          "title": "Не давать уснуть"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "awake",
+            "keep",
+            "system",
+            "阻止休眠"
+          ],
+          "summary": "保持 Mac 唤醒；可选保持屏幕常亮或让屏幕工具继续工作。MacBook 合盖运行要求连接电源",
+          "title": "阻止休眠"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "awake",
+            "keep",
+            "system",
+            "防止睡眠"
+          ],
+          "summary": "保持 Mac 喚醒；可選保持螢幕常亮或讓螢幕工具繼續運作。MacBook 闔蓋運作要求連接電源",
+          "title": "防止睡眠"
+        }
+      },
       "pluginID": "keep-awake",
       "route": "/plugins/keep-awake/",
       "summary": "保持 Mac 唤醒；可选保持屏幕常亮或让屏幕工具继续工作。MacBook 合盖运行要求连接电源",
@@ -4483,6 +8104,129 @@
         "productivity"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "control",
+            "items",
+            "launch",
+            "productivity",
+            "عناصر التشغيل"
+          ],
+          "summary": "عرض عناصر تشغيل launchctl وإدارتها.",
+          "title": "عناصر التشغيل"
+        },
+        "de": {
+          "keywords": [
+            "Startelemente",
+            "control",
+            "items",
+            "launch",
+            "productivity"
+          ],
+          "summary": "launchctl-Startelemente anzeigen und verwalten.",
+          "title": "Startelemente"
+        },
+        "en": {
+          "keywords": [
+            "Launch Items",
+            "control",
+            "items",
+            "launch",
+            "productivity"
+          ],
+          "summary": "View and manage launchctl launch items.",
+          "title": "Launch Items"
+        },
+        "es": {
+          "keywords": [
+            "Elementos de inicio",
+            "control",
+            "items",
+            "launch",
+            "productivity"
+          ],
+          "summary": "Ver y administrar elementos de inicio de launchctl.",
+          "title": "Elementos de inicio"
+        },
+        "fr": {
+          "keywords": [
+            "control",
+            "items",
+            "launch",
+            "productivity",
+            "Éléments de lancement"
+          ],
+          "summary": "Affichez et gérez les éléments de lancement launchctl.",
+          "title": "Éléments de lancement"
+        },
+        "ja": {
+          "keywords": [
+            "control",
+            "items",
+            "launch",
+            "productivity",
+            "起動項目"
+          ],
+          "summary": "launchctl 起動項目を表示および管理します。",
+          "title": "起動項目"
+        },
+        "ko": {
+          "keywords": [
+            "control",
+            "items",
+            "launch",
+            "productivity",
+            "시작 항목"
+          ],
+          "summary": "launchctl 시작 항목을 보고 관리합니다.",
+          "title": "시작 항목"
+        },
+        "pt": {
+          "keywords": [
+            "Itens de inicialização",
+            "control",
+            "items",
+            "launch",
+            "productivity"
+          ],
+          "summary": "Visualize e gerencie itens de inicialização do launchctl.",
+          "title": "Itens de inicialização"
+        },
+        "ru": {
+          "keywords": [
+            "control",
+            "items",
+            "launch",
+            "productivity",
+            "Элементы запуска"
+          ],
+          "summary": "Просмотр элементов запуска launchctl и управление ими.",
+          "title": "Элементы запуска"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "control",
+            "items",
+            "launch",
+            "productivity",
+            "启动项"
+          ],
+          "summary": "查看和管理 launchctl 启动项",
+          "title": "启动项"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "control",
+            "items",
+            "launch",
+            "productivity",
+            "啟動項目"
+          ],
+          "summary": "查看和管理 launchctl 啟動項",
+          "title": "啟動項目"
+        }
+      },
       "pluginID": "launch-control",
       "route": "/plugins/launch-control/",
       "summary": "查看和管理 launchctl 启动项",
@@ -4495,6 +8239,107 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "افتح شبكة التطبيقات من اختصار عام أو شريط القوائم، ثم ابحث وشغّل التطبيقات.",
+          "title": "Launchpad"
+        },
+        "de": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "Öffnet das App-Raster per globalem Kurzbefehl oder über die Menüleiste, sucht und startet Apps.",
+          "title": "Launchpad"
+        },
+        "en": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "Open the app grid from a global shortcut or the menu bar, then search and launch apps.",
+          "title": "Launchpad"
+        },
+        "es": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "Abre la cuadrícula de apps desde un atajo global o la barra de menús; busca y abre apps.",
+          "title": "Launchpad"
+        },
+        "fr": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "Ouvrez la grille d’apps avec un raccourci global ou la barre des menus, puis recherchez et lancez des apps.",
+          "title": "Launchpad"
+        },
+        "ja": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "グローバルショートカットまたはメニューバーからアプリグリッドを開き、検索して起動します。",
+          "title": "Launchpad"
+        },
+        "ko": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "전역 단축키나 메뉴 막대에서 앱 그리드를 열고, 검색해 실행합니다.",
+          "title": "Launchpad"
+        },
+        "pt": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "Abra a grade de apps por um atalho global ou pela barra de menus, depois pesquise e abra apps.",
+          "title": "Launchpad"
+        },
+        "ru": {
+          "keywords": [
+            "Launchpad",
+            "launchpad",
+            "system"
+          ],
+          "summary": "Открывайте сетку приложений глобальным сочетанием клавиш или из строки меню, ищите и запускайте приложения.",
+          "title": "Launchpad"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "launchpad",
+            "system",
+            "启动台"
+          ],
+          "summary": "用全局热键或菜单栏打开应用网格，搜索并启动。",
+          "title": "启动台"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "launchpad",
+            "system",
+            "啟動台"
+          ],
+          "summary": "用全域快速鍵或選單列打開 App 網格，搜尋並啟動。",
+          "title": "啟動台"
+        }
+      },
       "pluginID": "launchpad",
       "route": "/plugins/launchpad/",
       "summary": "用全局热键或菜单栏打开应用网格，搜索并启动。",
@@ -4508,6 +8353,118 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "lock",
+            "screen",
+            "system",
+            "قفل الشاشة"
+          ],
+          "summary": "قفل الشاشة على الفور ويتطلب فتح كلمة المرور.",
+          "title": "قفل الشاشة"
+        },
+        "de": {
+          "keywords": [
+            "Bildschirm sperren",
+            "lock",
+            "screen",
+            "system"
+          ],
+          "summary": "Sperren Sie den Bildschirm sofort und verlangen Sie eine Passwort-Entsperrung.",
+          "title": "Bildschirm sperren"
+        },
+        "en": {
+          "keywords": [
+            "Lock Screen",
+            "lock",
+            "screen",
+            "system"
+          ],
+          "summary": "Lock the screen immediately and require password unlock.",
+          "title": "Lock Screen"
+        },
+        "es": {
+          "keywords": [
+            "Bloquear pantalla",
+            "lock",
+            "screen",
+            "system"
+          ],
+          "summary": "Bloquee la pantalla inmediatamente y solicite el desbloqueo con contraseña.",
+          "title": "Bloquear pantalla"
+        },
+        "fr": {
+          "keywords": [
+            "Verrouiller l’écran",
+            "lock",
+            "screen",
+            "system"
+          ],
+          "summary": "Verrouillez l'écran immédiatement et exigez le déverrouillage par mot de passe.",
+          "title": "Verrouiller l’écran"
+        },
+        "ja": {
+          "keywords": [
+            "lock",
+            "screen",
+            "system",
+            "画面をロック"
+          ],
+          "summary": "すぐに画面をロックし、パスワードのロック解除を要求します。",
+          "title": "画面をロック"
+        },
+        "ko": {
+          "keywords": [
+            "lock",
+            "screen",
+            "system",
+            "화면 잠그기"
+          ],
+          "summary": "즉시 화면을 잠그고 비밀번호 잠금 해제를 요구합니다.",
+          "title": "화면 잠그기"
+        },
+        "pt": {
+          "keywords": [
+            "Bloquear tela",
+            "lock",
+            "screen",
+            "system"
+          ],
+          "summary": "Bloqueie a tela imediatamente e exija o desbloqueio por senha.",
+          "title": "Bloquear tela"
+        },
+        "ru": {
+          "keywords": [
+            "lock",
+            "screen",
+            "system",
+            "Заблокировать экран"
+          ],
+          "summary": "Немедленно заблокируйте экран и запросите разблокировку пароля.",
+          "title": "Заблокировать экран"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "lock",
+            "screen",
+            "system",
+            "锁定屏幕"
+          ],
+          "summary": "一键立即锁定屏幕，进入密码解锁界面",
+          "title": "锁定屏幕"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "lock",
+            "screen",
+            "system",
+            "鎖定螢幕"
+          ],
+          "summary": "一鍵立即鎖定螢幕，進入密碼解鎖界面",
+          "title": "鎖定螢幕"
+        }
+      },
       "pluginID": "lock-screen",
       "route": "/plugins/lock-screen/",
       "summary": "一键立即锁定屏幕，进入密码解锁界面",
@@ -4521,6 +8478,118 @@
         "mute"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "audio",
+            "microphone",
+            "mute",
+            "كتم الميكروفون"
+          ],
+          "summary": "كتم صوت إدخال الميكروفون الافتراضي أو استعادته بسرعة.",
+          "title": "كتم الميكروفون"
+        },
+        "de": {
+          "keywords": [
+            "Mikrofon stummschalten",
+            "audio",
+            "microphone",
+            "mute"
+          ],
+          "summary": "Schnell stummschalten oder den Standard-Mikrofoneingang wiederherstellen.",
+          "title": "Mikrofon stummschalten"
+        },
+        "en": {
+          "keywords": [
+            "Microphone Mute",
+            "audio",
+            "microphone",
+            "mute"
+          ],
+          "summary": "Quickly mute or restore the default microphone input.",
+          "title": "Microphone Mute"
+        },
+        "es": {
+          "keywords": [
+            "Silenciar micrófono",
+            "audio",
+            "microphone",
+            "mute"
+          ],
+          "summary": "Silencia o restablece rápidamente la entrada de micrófono predeterminada.",
+          "title": "Silenciar micrófono"
+        },
+        "fr": {
+          "keywords": [
+            "Couper le micro",
+            "audio",
+            "microphone",
+            "mute"
+          ],
+          "summary": "Mettez rapidement en sourdine ou restaurez l'entrée microphone par défaut.",
+          "title": "Couper le micro"
+        },
+        "ja": {
+          "keywords": [
+            "audio",
+            "microphone",
+            "mute",
+            "マイクをミュート"
+          ],
+          "summary": "デフォルトのマイク入力を素早くミュートまたは復元します。",
+          "title": "マイクをミュート"
+        },
+        "ko": {
+          "keywords": [
+            "audio",
+            "microphone",
+            "mute",
+            "마이크 음소거"
+          ],
+          "summary": "기본 마이크 입력을 빠르게 음소거하거나 복원합니다.",
+          "title": "마이크 음소거"
+        },
+        "pt": {
+          "keywords": [
+            "Silenciar microfone",
+            "audio",
+            "microphone",
+            "mute"
+          ],
+          "summary": "Silencie rapidamente ou restaure a entrada de microfone padrão.",
+          "title": "Silenciar microfone"
+        },
+        "ru": {
+          "keywords": [
+            "audio",
+            "microphone",
+            "mute",
+            "Отключить микрофон"
+          ],
+          "summary": "Быстро отключите звук или восстановите вход микрофона по умолчанию.",
+          "title": "Отключить микрофон"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "audio",
+            "microphone",
+            "mute",
+            "麦克风静音"
+          ],
+          "summary": "快速静音或恢复默认麦克风输入",
+          "title": "麦克风静音"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "audio",
+            "microphone",
+            "mute",
+            "麥克風靜音"
+          ],
+          "summary": "快速靜音或恢復預設麥克風輸入",
+          "title": "麥克風靜音"
+        }
+      },
       "pluginID": "microphone-mute",
       "route": "/plugins/microphone-mute/",
       "summary": "快速静音或恢复默认麦克风输入",
@@ -4534,6 +8603,118 @@
         "productivity"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "click",
+            "middle",
+            "productivity",
+            "النقر بالزر الأوسط"
+          ],
+          "summary": "حوّل نقرات لوحة التعقب إلى نقرات بالزر الأوسط.",
+          "title": "النقر بالزر الأوسط"
+        },
+        "de": {
+          "keywords": [
+            "Mittelklick",
+            "click",
+            "middle",
+            "productivity"
+          ],
+          "summary": "Trackpad-Tippen als Mittelklick verwenden.",
+          "title": "Mittelklick"
+        },
+        "en": {
+          "keywords": [
+            "Middle Click",
+            "click",
+            "middle",
+            "productivity"
+          ],
+          "summary": "Turn trackpad taps into middle clicks.",
+          "title": "Middle Click"
+        },
+        "es": {
+          "keywords": [
+            "Clic central",
+            "click",
+            "middle",
+            "productivity"
+          ],
+          "summary": "Convierte los toques del trackpad en clics centrales.",
+          "title": "Clic central"
+        },
+        "fr": {
+          "keywords": [
+            "Clic du milieu",
+            "click",
+            "middle",
+            "productivity"
+          ],
+          "summary": "Transformez les touchers du trackpad en clics du milieu.",
+          "title": "Clic du milieu"
+        },
+        "ja": {
+          "keywords": [
+            "click",
+            "middle",
+            "productivity",
+            "ミドルクリック"
+          ],
+          "summary": "トラックパッドのタップをミドルクリックに変換します。",
+          "title": "ミドルクリック"
+        },
+        "ko": {
+          "keywords": [
+            "click",
+            "middle",
+            "productivity",
+            "가운데 클릭"
+          ],
+          "summary": "트랙패드 탭을 가운데 클릭으로 전환합니다.",
+          "title": "가운데 클릭"
+        },
+        "pt": {
+          "keywords": [
+            "Clique do meio",
+            "click",
+            "middle",
+            "productivity"
+          ],
+          "summary": "Transforme toques no trackpad em cliques do meio.",
+          "title": "Clique do meio"
+        },
+        "ru": {
+          "keywords": [
+            "click",
+            "middle",
+            "productivity",
+            "Средний щелчок"
+          ],
+          "summary": "Преобразуйте касания трекпада в средние щелчки.",
+          "title": "Средний щелчок"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "click",
+            "middle",
+            "productivity",
+            "模拟鼠标中键"
+          ],
+          "summary": "触控板轻点 → 模拟鼠标中键",
+          "title": "模拟鼠标中键"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "click",
+            "middle",
+            "productivity",
+            "模擬滑鼠中鍵"
+          ],
+          "summary": "觸控板輕點 → 模擬滑鼠中鍵",
+          "title": "模擬滑鼠中鍵"
+        }
+      },
       "pluginID": "middle-click",
       "route": "/plugins/middle-click/",
       "summary": "触控板轻点 → 模拟鼠标中键",
@@ -4547,6 +8728,118 @@
         "productivity"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "enhancer",
+            "mouse",
+            "productivity",
+            "محسّن الماوس"
+          ],
+          "summary": "ضبط اتجاه تمرير الماوس ولوحة التتبع.",
+          "title": "محسّن الماوس"
+        },
+        "de": {
+          "keywords": [
+            "Maus-Erweiterung",
+            "enhancer",
+            "mouse",
+            "productivity"
+          ],
+          "summary": "Scrollrichtung für Maus und Trackpad getrennt anpassen.",
+          "title": "Maus-Erweiterung"
+        },
+        "en": {
+          "keywords": [
+            "Mouse Enhancer",
+            "enhancer",
+            "mouse",
+            "productivity"
+          ],
+          "summary": "Adjust mouse and trackpad scroll directions separately.",
+          "title": "Mouse Enhancer"
+        },
+        "es": {
+          "keywords": [
+            "Mejoras para el ratón",
+            "enhancer",
+            "mouse",
+            "productivity"
+          ],
+          "summary": "Ajusta por separado el desplazamiento del ratón y del trackpad.",
+          "title": "Mejoras para el ratón"
+        },
+        "fr": {
+          "keywords": [
+            "Amélioration de la souris",
+            "enhancer",
+            "mouse",
+            "productivity"
+          ],
+          "summary": "Réglez séparément le défilement de la souris et du trackpad.",
+          "title": "Amélioration de la souris"
+        },
+        "ja": {
+          "keywords": [
+            "enhancer",
+            "mouse",
+            "productivity",
+            "マウス機能拡張"
+          ],
+          "summary": "マウスとトラックパッドのスクロール方向を個別に調整します。",
+          "title": "マウス機能拡張"
+        },
+        "ko": {
+          "keywords": [
+            "enhancer",
+            "mouse",
+            "productivity",
+            "마우스 기능 향상"
+          ],
+          "summary": "마우스와 트랙패드의 스크롤 방향을 각각 조정합니다.",
+          "title": "마우스 기능 향상"
+        },
+        "pt": {
+          "keywords": [
+            "Aprimoramento do mouse",
+            "enhancer",
+            "mouse",
+            "productivity"
+          ],
+          "summary": "Ajuste separadamente a rolagem do mouse e do trackpad.",
+          "title": "Aprimoramento do mouse"
+        },
+        "ru": {
+          "keywords": [
+            "enhancer",
+            "mouse",
+            "productivity",
+            "Расширение мыши"
+          ],
+          "summary": "Настраивайте прокрутку мыши и трекпада отдельно.",
+          "title": "Расширение мыши"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "enhancer",
+            "mouse",
+            "productivity",
+            "鼠标增强"
+          ],
+          "summary": "分别调整鼠标与触控板的滚动方向",
+          "title": "鼠标增强"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "enhancer",
+            "mouse",
+            "productivity",
+            "滑鼠增強"
+          ],
+          "summary": "分別調整滑鼠與觸控板的捲動方向",
+          "title": "滑鼠增強"
+        }
+      },
       "pluginID": "mouse-enhancer",
       "route": "/plugins/mouse-enhancer/",
       "summary": "分别调整鼠标与触控板的滚动方向",
@@ -4560,6 +8853,118 @@
         "shift"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "قلل من الضوء الأزرق باستخدام ألوان الشاشة الأكثر دفئًا.",
+          "title": "Night Shift"
+        },
+        "de": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "Reduzieren Sie blaues Licht mit wärmeren Bildschirmfarben.",
+          "title": "Night Shift"
+        },
+        "en": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "Reduce blue light with warmer screen colors.",
+          "title": "Night Shift"
+        },
+        "es": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "Reduzca la luz azul con colores de pantalla más cálidos.",
+          "title": "Night Shift"
+        },
+        "fr": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "Réduisez la lumière bleue avec des couleurs d’écran plus chaudes.",
+          "title": "Night Shift"
+        },
+        "ja": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "暖色系の画面色でブルーライトを軽減します。",
+          "title": "Night Shift"
+        },
+        "ko": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "따뜻한 화면 색상으로 블루라이트를 줄이세요.",
+          "title": "Night Shift"
+        },
+        "pt": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "Reduza a luz azul com cores de tela mais quentes.",
+          "title": "Night Shift"
+        },
+        "ru": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "Уменьшите синий свет с помощью более теплых цветов экрана.",
+          "title": "Night Shift"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "display",
+            "night",
+            "shift",
+            "夜览"
+          ],
+          "summary": "降低蓝光，使屏幕颜色更暖",
+          "title": "夜览"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "Night Shift",
+            "display",
+            "night",
+            "shift"
+          ],
+          "summary": "降低藍光，使螢幕顏色更暖",
+          "title": "Night Shift"
+        }
+      },
       "pluginID": "night-shift",
       "route": "/plugins/night-shift/",
       "summary": "降低蓝光，使屏幕颜色更暖",
@@ -4574,6 +8979,129 @@
         "physical"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "clean",
+            "display",
+            "mode",
+            "physical",
+            "وضع التنظيف"
+          ],
+          "summary": "تحويل الشاشة إلى اللون الأسود وتعطيل إدخال لوحة المفاتيح مؤقتًا.",
+          "title": "وضع التنظيف"
+        },
+        "de": {
+          "keywords": [
+            "Reinigungsmodus",
+            "clean",
+            "display",
+            "mode",
+            "physical"
+          ],
+          "summary": "Schalten Sie den Bildschirm schwarz und deaktivieren Sie vorübergehend die Tastatureingabe.",
+          "title": "Reinigungsmodus"
+        },
+        "en": {
+          "keywords": [
+            "Clean Mode",
+            "clean",
+            "display",
+            "mode",
+            "physical"
+          ],
+          "summary": "Turn the screen black and temporarily disable keyboard input.",
+          "title": "Clean Mode"
+        },
+        "es": {
+          "keywords": [
+            "Modo limpieza",
+            "clean",
+            "display",
+            "mode",
+            "physical"
+          ],
+          "summary": "Ponga la pantalla en negro y desactive temporalmente la entrada del teclado.",
+          "title": "Modo limpieza"
+        },
+        "fr": {
+          "keywords": [
+            "Mode nettoyage",
+            "clean",
+            "display",
+            "mode",
+            "physical"
+          ],
+          "summary": "Rendez l'écran noir et désactivez temporairement la saisie au clavier.",
+          "title": "Mode nettoyage"
+        },
+        "ja": {
+          "keywords": [
+            "clean",
+            "display",
+            "mode",
+            "physical",
+            "クリーニングモード"
+          ],
+          "summary": "画面を黒くし、キーボード入力を一時的に無効にします。",
+          "title": "クリーニングモード"
+        },
+        "ko": {
+          "keywords": [
+            "clean",
+            "display",
+            "mode",
+            "physical",
+            "청소 모드"
+          ],
+          "summary": "화면을 검게 만들고 키보드 입력을 일시적으로 비활성화합니다.",
+          "title": "청소 모드"
+        },
+        "pt": {
+          "keywords": [
+            "Modo de limpeza",
+            "clean",
+            "display",
+            "mode",
+            "physical"
+          ],
+          "summary": "Deixe a tela preta e desative temporariamente a entrada do teclado.",
+          "title": "Modo de limpeza"
+        },
+        "ru": {
+          "keywords": [
+            "clean",
+            "display",
+            "mode",
+            "physical",
+            "Режим очистки"
+          ],
+          "summary": "Сделайте экран черным и временно отключите ввод с клавиатуры.",
+          "title": "Режим очистки"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "clean",
+            "display",
+            "mode",
+            "physical",
+            "清洁模式"
+          ],
+          "summary": "屏幕全黑并临时禁用键盘输入",
+          "title": "清洁模式"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "clean",
+            "display",
+            "mode",
+            "physical",
+            "清潔模式"
+          ],
+          "summary": "螢幕全黑並臨時禁用鍵盤輸入",
+          "title": "清潔模式"
+        }
+      },
       "pluginID": "physical-clean-mode",
       "route": "/plugins/physical-clean-mode/",
       "summary": "屏幕全黑并临时禁用键盘输入",
@@ -4587,6 +9115,118 @@
         "quit"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "apps",
+            "productivity",
+            "quit",
+            "إنهاء التطبيقات"
+          ],
+          "summary": "اختر إنهاء التطبيقات قيد التشغيل، أو قم بإنهاءها جميعًا مرة واحدة.",
+          "title": "إنهاء التطبيقات"
+        },
+        "de": {
+          "keywords": [
+            "Apps beenden",
+            "apps",
+            "productivity",
+            "quit"
+          ],
+          "summary": "Wählen Sie laufende Apps aus, die Sie beenden möchten, oder beenden Sie alle auf einmal.",
+          "title": "Apps beenden"
+        },
+        "en": {
+          "keywords": [
+            "Quit Apps",
+            "apps",
+            "productivity",
+            "quit"
+          ],
+          "summary": "Choose running apps to quit, or quit them all at once.",
+          "title": "Quit Apps"
+        },
+        "es": {
+          "keywords": [
+            "Salir de apps",
+            "apps",
+            "productivity",
+            "quit"
+          ],
+          "summary": "Elija aplicaciones en ejecución para cerrar o ciérrelas todas a la vez.",
+          "title": "Salir de apps"
+        },
+        "fr": {
+          "keywords": [
+            "Quitter les apps",
+            "apps",
+            "productivity",
+            "quit"
+          ],
+          "summary": "Choisissez les applications en cours d’exécution à quitter ou quittez-les toutes en même temps.",
+          "title": "Quitter les apps"
+        },
+        "ja": {
+          "keywords": [
+            "apps",
+            "productivity",
+            "quit",
+            "アプリを終了"
+          ],
+          "summary": "実行中のアプリを選択して終了するか、すべてを一度に終了します。",
+          "title": "アプリを終了"
+        },
+        "ko": {
+          "keywords": [
+            "apps",
+            "productivity",
+            "quit",
+            "앱 종료"
+          ],
+          "summary": "실행 중인 앱을 선택하여 종료하거나 한 번에 모두 종료하세요.",
+          "title": "앱 종료"
+        },
+        "pt": {
+          "keywords": [
+            "Encerrar apps",
+            "apps",
+            "productivity",
+            "quit"
+          ],
+          "summary": "Escolha os aplicativos em execução para encerrar ou feche todos de uma vez.",
+          "title": "Encerrar apps"
+        },
+        "ru": {
+          "keywords": [
+            "apps",
+            "productivity",
+            "quit",
+            "Закрыть приложения"
+          ],
+          "summary": "Выберите запущенные приложения, которые хотите закрыть, или закройте их все сразу.",
+          "title": "Закрыть приложения"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "apps",
+            "productivity",
+            "quit",
+            "退出应用"
+          ],
+          "summary": "选择并退出正在运行的应用，或一键退出全部",
+          "title": "退出应用"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "apps",
+            "productivity",
+            "quit",
+            "結束 App"
+          ],
+          "summary": "選擇並退出正在運行的App，或一鍵退出全部",
+          "title": "結束 App"
+        }
+      },
       "pluginID": "quit-apps",
       "route": "/plugins/quit-apps/",
       "summary": "选择并退出正在运行的应用，或一键退出全部",
@@ -4600,6 +9240,118 @@
         "right"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "click",
+            "productivity",
+            "right",
+            "النقر بزر الماوس الأيمن"
+          ],
+          "summary": "أضف إجراءات قائمة السياق Finder السريعة للمجلدات والمسارات.",
+          "title": "النقر بزر الماوس الأيمن"
+        },
+        "de": {
+          "keywords": [
+            "Rechtsklick",
+            "click",
+            "productivity",
+            "right"
+          ],
+          "summary": "Fügen Sie schnelle Finder-Kontextmenüaktionen für Ordner und Pfade hinzu.",
+          "title": "Rechtsklick"
+        },
+        "en": {
+          "keywords": [
+            "Right Click",
+            "click",
+            "productivity",
+            "right"
+          ],
+          "summary": "Add quick Finder context menu actions for folders and paths.",
+          "title": "Right Click"
+        },
+        "es": {
+          "keywords": [
+            "Clic derecho",
+            "click",
+            "productivity",
+            "right"
+          ],
+          "summary": "Agregue acciones rápidas del menú contextual Finder para carpetas y rutas.",
+          "title": "Clic derecho"
+        },
+        "fr": {
+          "keywords": [
+            "Clic droit",
+            "click",
+            "productivity",
+            "right"
+          ],
+          "summary": "Ajoutez des actions rapides de menu contextuel Finder pour les dossiers et les chemins.",
+          "title": "Clic droit"
+        },
+        "ja": {
+          "keywords": [
+            "click",
+            "productivity",
+            "right",
+            "右クリック"
+          ],
+          "summary": "フォルダーとパスに対するクイック Finder コンテキスト メニュー アクションを追加します。",
+          "title": "右クリック"
+        },
+        "ko": {
+          "keywords": [
+            "click",
+            "productivity",
+            "right",
+            "오른쪽 클릭"
+          ],
+          "summary": "폴더 및 경로에 대한 빠른 Finder 컨텍스트 메뉴 작업을 추가합니다.",
+          "title": "오른쪽 클릭"
+        },
+        "pt": {
+          "keywords": [
+            "Clique direito",
+            "click",
+            "productivity",
+            "right"
+          ],
+          "summary": "Adicione ações rápidas do menu de contexto Finder para pastas e caminhos.",
+          "title": "Clique direito"
+        },
+        "ru": {
+          "keywords": [
+            "click",
+            "productivity",
+            "right",
+            "Правый клик"
+          ],
+          "summary": "Добавьте быстрые действия контекстного меню Finder для папок и путей.",
+          "title": "Правый клик"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "click",
+            "productivity",
+            "right",
+            "右键工具"
+          ],
+          "summary": "为 Finder 右键菜单添加新建文件夹和路径复制",
+          "title": "右键工具"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "click",
+            "productivity",
+            "right",
+            "右鍵工具"
+          ],
+          "summary": "為 Finder 右鍵菜單添加新建資料夾和路徑複製",
+          "title": "右鍵工具"
+        }
+      },
       "pluginID": "right-click",
       "route": "/plugins/right-click/",
       "summary": "为 Finder 右键菜单添加新建文件夹和路径复制",
@@ -4613,6 +9365,118 @@
         "scripts"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "productivity",
+            "saved",
+            "scripts",
+            "البرامج النصية المحفوظة"
+          ],
+          "summary": "احفظ برامج AppleScript وبرامج shell النصية وشغّلها.",
+          "title": "البرامج النصية المحفوظة"
+        },
+        "de": {
+          "keywords": [
+            "Gespeicherte Skripte",
+            "productivity",
+            "saved",
+            "scripts"
+          ],
+          "summary": "AppleScript- und Shell-Skripte sichern und ausführen.",
+          "title": "Gespeicherte Skripte"
+        },
+        "en": {
+          "keywords": [
+            "Saved Scripts",
+            "productivity",
+            "saved",
+            "scripts"
+          ],
+          "summary": "Save and run AppleScript and shell scripts.",
+          "title": "Saved Scripts"
+        },
+        "es": {
+          "keywords": [
+            "Scripts guardados",
+            "productivity",
+            "saved",
+            "scripts"
+          ],
+          "summary": "Guarda y ejecuta scripts de AppleScript y shell.",
+          "title": "Scripts guardados"
+        },
+        "fr": {
+          "keywords": [
+            "Scripts enregistrés",
+            "productivity",
+            "saved",
+            "scripts"
+          ],
+          "summary": "Enregistrez et exécutez des scripts AppleScript et shell.",
+          "title": "Scripts enregistrés"
+        },
+        "ja": {
+          "keywords": [
+            "productivity",
+            "saved",
+            "scripts",
+            "保存済みスクリプト"
+          ],
+          "summary": "AppleScript とシェルスクリプトを保存して実行します。",
+          "title": "保存済みスクリプト"
+        },
+        "ko": {
+          "keywords": [
+            "productivity",
+            "saved",
+            "scripts",
+            "저장된 스크립트"
+          ],
+          "summary": "AppleScript 및 셸 스크립트를 저장하고 실행합니다.",
+          "title": "저장된 스크립트"
+        },
+        "pt": {
+          "keywords": [
+            "Scripts salvos",
+            "productivity",
+            "saved",
+            "scripts"
+          ],
+          "summary": "Salve e execute scripts AppleScript e shell.",
+          "title": "Scripts salvos"
+        },
+        "ru": {
+          "keywords": [
+            "productivity",
+            "saved",
+            "scripts",
+            "Сохранённые скрипты"
+          ],
+          "summary": "Сохраняйте и запускайте скрипты AppleScript и shell.",
+          "title": "Сохранённые скрипты"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "productivity",
+            "saved",
+            "scripts",
+            "已存脚本"
+          ],
+          "summary": "保存并运行 AppleScript 和 Shell 脚本。",
+          "title": "已存脚本"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "productivity",
+            "saved",
+            "scripts",
+            "已儲存腳本"
+          ],
+          "summary": "儲存並執行 AppleScript 和 Shell 腳本。",
+          "title": "已儲存腳本"
+        }
+      },
       "pluginID": "saved-scripts",
       "route": "/plugins/saved-scripts/",
       "summary": "保存并运行 AppleScript 和 Shell 脚本。",
@@ -4625,6 +9489,107 @@
         "sidecar"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "وصّل شاشة متوافقة مع Sidecar قريبة كشاشة ممتدة.",
+          "title": "Sidecar"
+        },
+        "de": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "Ein Sidecar-kompatibles Display in der Nähe als erweiterten Bildschirm verbinden.",
+          "title": "Sidecar"
+        },
+        "en": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "Connect a nearby Sidecar-compatible display as an extended display.",
+          "title": "Sidecar"
+        },
+        "es": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "Conecta una pantalla compatible con Sidecar cercana como pantalla ampliada.",
+          "title": "Sidecar"
+        },
+        "fr": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "Connecter un écran compatible avec Sidecar à proximité comme écran étendu.",
+          "title": "Sidecar"
+        },
+        "ja": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "近くのSidecar対応ディスプレイを拡張ディスプレイとして接続します。",
+          "title": "Sidecar"
+        },
+        "ko": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "근처의 Sidecar 호환 디스플레이를 확장 디스플레이로 연결합니다.",
+          "title": "Sidecar"
+        },
+        "pt": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "Ligue um ecrã compatível com Sidecar por perto como ecrã adicional.",
+          "title": "Sidecar"
+        },
+        "ru": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "Подключите ближайший совместимый с Sidecar дисплей как дополнительный экран.",
+          "title": "Sidecar"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "连接附近可用的 Sidecar 显示器作为扩展显示器",
+          "title": "Sidecar"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "Sidecar",
+            "display",
+            "sidecar"
+          ],
+          "summary": "連接附近可用的 Sidecar 顯示器作為延伸顯示器",
+          "title": "Sidecar"
+        }
+      },
       "pluginID": "sidecar",
       "route": "/plugins/sidecar/",
       "summary": "连接附近可用的 Sidecar 显示器作为扩展显示器",
@@ -4638,6 +9603,118 @@
         "stage"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "Stage Manager",
+            "display",
+            "manager",
+            "stage"
+          ],
+          "summary": "قم بتشغيل Stage Manager لتركيز النافذة الحالية وإبقاء النوافذ الأخرى جانبًا.",
+          "title": "Stage Manager"
+        },
+        "de": {
+          "keywords": [
+            "Stage Manager",
+            "display",
+            "manager",
+            "stage"
+          ],
+          "summary": "Aktivieren Sie Stage Manager, um das aktuelle Fenster zu fokussieren und andere auf der Seite zu halten.",
+          "title": "Stage Manager"
+        },
+        "en": {
+          "keywords": [
+            "Stage Manager",
+            "display",
+            "manager",
+            "stage"
+          ],
+          "summary": "Turn on Stage Manager to focus the current window and keep others on the side.",
+          "title": "Stage Manager"
+        },
+        "es": {
+          "keywords": [
+            "Organizador Visual",
+            "display",
+            "manager",
+            "stage"
+          ],
+          "summary": "Active Stage Manager para enfocar la ventana actual y mantener las demás a un lado.",
+          "title": "Organizador Visual"
+        },
+        "fr": {
+          "keywords": [
+            "Stage Manager",
+            "display",
+            "manager",
+            "stage"
+          ],
+          "summary": "Activez Stage Manager pour concentrer la fenêtre actuelle et garder les autres de côté.",
+          "title": "Stage Manager"
+        },
+        "ja": {
+          "keywords": [
+            "display",
+            "manager",
+            "stage",
+            "ステージマネージャ"
+          ],
+          "summary": "Stage Manager をオンにすると、現在のウィンドウに焦点が当てられ、他のウィンドウは脇に表示されます。",
+          "title": "ステージマネージャ"
+        },
+        "ko": {
+          "keywords": [
+            "display",
+            "manager",
+            "stage",
+            "스테이지 매니저"
+          ],
+          "summary": "현재 창에 초점을 맞추고 다른 창은 옆에 두려면 Stage Manager을 켜세요.",
+          "title": "스테이지 매니저"
+        },
+        "pt": {
+          "keywords": [
+            "Organizador Visual",
+            "display",
+            "manager",
+            "stage"
+          ],
+          "summary": "Ative Stage Manager para focar a janela atual e manter outras ao lado.",
+          "title": "Organizador Visual"
+        },
+        "ru": {
+          "keywords": [
+            "Stage Manager",
+            "display",
+            "manager",
+            "stage"
+          ],
+          "summary": "Включите Stage Manager, чтобы сфокусировать текущее окно и оставить другие в стороне.",
+          "title": "Stage Manager"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "display",
+            "manager",
+            "stage",
+            "台前调度"
+          ],
+          "summary": "开启台前调度，集中显示当前窗口并把其他窗口收纳到侧边",
+          "title": "台前调度"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "display",
+            "manager",
+            "stage",
+            "幕前調度"
+          ],
+          "summary": "開啟幕前調度，集中顯示當前窗口並把其他窗口收納到側邊",
+          "title": "幕前調度"
+        }
+      },
       "pluginID": "stage-manager",
       "route": "/plugins/stage-manager/",
       "summary": "开启台前调度，集中显示当前窗口并把其他窗口收纳到侧边",
@@ -4651,6 +9728,118 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "audio",
+            "mute",
+            "system",
+            "كتم صوت النظام"
+          ],
+          "summary": "كتم صوت إخراج صوت النظام أو استعادته بسرعة.",
+          "title": "كتم صوت النظام"
+        },
+        "de": {
+          "keywords": [
+            "System stummschalten",
+            "audio",
+            "mute",
+            "system"
+          ],
+          "summary": "System-Audioausgabe schnell stummschalten oder wiederherstellen.",
+          "title": "System stummschalten"
+        },
+        "en": {
+          "keywords": [
+            "System Mute",
+            "audio",
+            "mute",
+            "system"
+          ],
+          "summary": "Quickly mute or restore system audio output.",
+          "title": "System Mute"
+        },
+        "es": {
+          "keywords": [
+            "Silenciar sistema",
+            "audio",
+            "mute",
+            "system"
+          ],
+          "summary": "Silencia o restaura rápidamente la salida de audio del sistema.",
+          "title": "Silenciar sistema"
+        },
+        "fr": {
+          "keywords": [
+            "Couper le son du système",
+            "audio",
+            "mute",
+            "system"
+          ],
+          "summary": "Mettre ou restaurer rapidement la sortie audio du système.",
+          "title": "Couper le son du système"
+        },
+        "ja": {
+          "keywords": [
+            "audio",
+            "mute",
+            "system",
+            "システムをミュート"
+          ],
+          "summary": "システムオーディオ出力を素早くミュートまたは復元します。",
+          "title": "システムをミュート"
+        },
+        "ko": {
+          "keywords": [
+            "audio",
+            "mute",
+            "system",
+            "시스템 음소거"
+          ],
+          "summary": "시스템 오디오 출력을 빠르게 음소거하거나 복원합니다.",
+          "title": "시스템 음소거"
+        },
+        "pt": {
+          "keywords": [
+            "Silenciar sistema",
+            "audio",
+            "mute",
+            "system"
+          ],
+          "summary": "Silencie ou restaure rapidamente a saída de áudio do sistema.",
+          "title": "Silenciar sistema"
+        },
+        "ru": {
+          "keywords": [
+            "audio",
+            "mute",
+            "system",
+            "Отключить звук системы"
+          ],
+          "summary": "Быстро отключить или восстановить звук системы.",
+          "title": "Отключить звук системы"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "audio",
+            "mute",
+            "system",
+            "系统静音"
+          ],
+          "summary": "快速静音或恢复系统音频输出",
+          "title": "系统静音"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "audio",
+            "mute",
+            "system",
+            "系統靜音"
+          ],
+          "summary": "快速靜音或恢復系統音頻輸出",
+          "title": "系統靜音"
+        }
+      },
       "pluginID": "system-mute",
       "route": "/plugins/system-mute/",
       "summary": "快速静音或恢复系统音频输出",
@@ -4664,6 +9853,118 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "restart",
+            "soft",
+            "system",
+            "إعادة تشغيل النظام برمجيًا"
+          ],
+          "summary": "أعد تشغيل خدمات مستخدم macOS لمحاولة إصلاح مشكلات وقت التشغيل الشائعة.",
+          "title": "إعادة تشغيل النظام برمجيًا"
+        },
+        "de": {
+          "keywords": [
+            "System-Sanftneustart",
+            "restart",
+            "soft",
+            "system"
+          ],
+          "summary": "Startet macOS-Benutzerdienste neu, um häufige Laufzeitprobleme zu beheben.",
+          "title": "System-Sanftneustart"
+        },
+        "en": {
+          "keywords": [
+            "System Soft Restart",
+            "restart",
+            "soft",
+            "system"
+          ],
+          "summary": "Restart macOS user services to recover from common runtime issues.",
+          "title": "System Soft Restart"
+        },
+        "es": {
+          "keywords": [
+            "Reinicio suave del sistema",
+            "restart",
+            "soft",
+            "system"
+          ],
+          "summary": "Reinicia los servicios de usuario de macOS para resolver problemas habituales de ejecución.",
+          "title": "Reinicio suave del sistema"
+        },
+        "fr": {
+          "keywords": [
+            "Redémarrage logiciel du système",
+            "restart",
+            "soft",
+            "system"
+          ],
+          "summary": "Redémarrez les services utilisateur de macOS pour corriger les problèmes d’exécution courants.",
+          "title": "Redémarrage logiciel du système"
+        },
+        "ja": {
+          "keywords": [
+            "restart",
+            "soft",
+            "system",
+            "システムソフト再起動"
+          ],
+          "summary": "macOS のユーザーサービスを再起動し、一般的な実行時の問題から復旧します。",
+          "title": "システムソフト再起動"
+        },
+        "ko": {
+          "keywords": [
+            "restart",
+            "soft",
+            "system",
+            "시스템 소프트 재시작"
+          ],
+          "summary": "macOS 사용자 서비스를 재시작하여 일반적인 런타임 문제를 복구합니다.",
+          "title": "시스템 소프트 재시작"
+        },
+        "pt": {
+          "keywords": [
+            "Reinicialização suave do sistema",
+            "restart",
+            "soft",
+            "system"
+          ],
+          "summary": "Reinicie os serviços de usuário do macOS para corrigir problemas comuns de execução.",
+          "title": "Reinicialização suave do sistema"
+        },
+        "ru": {
+          "keywords": [
+            "restart",
+            "soft",
+            "system",
+            "Мягкий перезапуск системы"
+          ],
+          "summary": "Перезапускает пользовательские службы macOS для устранения типичных сбоев.",
+          "title": "Мягкий перезапуск системы"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "restart",
+            "soft",
+            "system",
+            "系统软重启"
+          ],
+          "summary": "重启 macOS 用户服务，尝试恢复常见运行时异常",
+          "title": "系统软重启"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "restart",
+            "soft",
+            "system",
+            "系統軟重啟"
+          ],
+          "summary": "重新啟動 macOS 使用者服務，嘗試恢復常見執行階段異常",
+          "title": "系統軟重啟"
+        }
+      },
       "pluginID": "system-soft-restart",
       "route": "/plugins/system-soft-restart/",
       "summary": "重启 macOS 用户服务，尝试恢复常见运行时异常",
@@ -4677,6 +9978,118 @@
         "system"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "monitoring",
+            "status",
+            "system",
+            "حالة النظام"
+          ],
+          "summary": "عرض حالة النظام المباشرة.",
+          "title": "حالة النظام"
+        },
+        "de": {
+          "keywords": [
+            "Systemstatus",
+            "monitoring",
+            "status",
+            "system"
+          ],
+          "summary": "Live-Systemstatus anzeigen.",
+          "title": "Systemstatus"
+        },
+        "en": {
+          "keywords": [
+            "System Status",
+            "monitoring",
+            "status",
+            "system"
+          ],
+          "summary": "View live system status.",
+          "title": "System Status"
+        },
+        "es": {
+          "keywords": [
+            "Estado del sistema",
+            "monitoring",
+            "status",
+            "system"
+          ],
+          "summary": "Ver el estado del sistema en vivo.",
+          "title": "Estado del sistema"
+        },
+        "fr": {
+          "keywords": [
+            "monitoring",
+            "status",
+            "system",
+            "État du système"
+          ],
+          "summary": "Afficher l'état du système en direct.",
+          "title": "État du système"
+        },
+        "ja": {
+          "keywords": [
+            "monitoring",
+            "status",
+            "system",
+            "システム状況"
+          ],
+          "summary": "ライブ システム ステータスを表示します。",
+          "title": "システム状況"
+        },
+        "ko": {
+          "keywords": [
+            "monitoring",
+            "status",
+            "system",
+            "시스템 상태"
+          ],
+          "summary": "실시간 시스템 상태를 확인하세요.",
+          "title": "시스템 상태"
+        },
+        "pt": {
+          "keywords": [
+            "Status do sistema",
+            "monitoring",
+            "status",
+            "system"
+          ],
+          "summary": "Ver o status do sistema ao vivo.",
+          "title": "Status do sistema"
+        },
+        "ru": {
+          "keywords": [
+            "monitoring",
+            "status",
+            "system",
+            "Состояние системы"
+          ],
+          "summary": "Просмотр текущего состояния системы.",
+          "title": "Состояние системы"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "monitoring",
+            "status",
+            "system",
+            "系统状态"
+          ],
+          "summary": "实时查看系统状态",
+          "title": "系统状态"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "monitoring",
+            "status",
+            "system",
+            "系統狀態"
+          ],
+          "summary": "實時查看系統狀態",
+          "title": "系統狀態"
+        }
+      },
       "pluginID": "system-status",
       "route": "/plugins/system-status/",
       "summary": "实时查看系统状态",
@@ -4690,6 +10103,118 @@
         "trackpad"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "gestures",
+            "productivity",
+            "trackpad",
+            "إيماءات لوحة التتبع"
+          ],
+          "summary": "تعيين إيماءات لوحة التتبع لإجراءات MacTools أو الاختصارات أو النقر الأوسط.",
+          "title": "إيماءات لوحة التتبع"
+        },
+        "de": {
+          "keywords": [
+            "Trackpad-Gesten",
+            "gestures",
+            "productivity",
+            "trackpad"
+          ],
+          "summary": "Trackpad-Gesten MacTools-Aktionen, Tastenkürzeln oder Mittelklicks zuordnen.",
+          "title": "Trackpad-Gesten"
+        },
+        "en": {
+          "keywords": [
+            "Trackpad Gestures",
+            "gestures",
+            "productivity",
+            "trackpad"
+          ],
+          "summary": "Map trackpad gestures to MacTools actions, shortcuts, or middle clicks.",
+          "title": "Trackpad Gestures"
+        },
+        "es": {
+          "keywords": [
+            "Gestos del trackpad",
+            "gestures",
+            "productivity",
+            "trackpad"
+          ],
+          "summary": "Asigna gestos del trackpad a acciones de MacTools, atajos o clics centrales.",
+          "title": "Gestos del trackpad"
+        },
+        "fr": {
+          "keywords": [
+            "Gestes du trackpad",
+            "gestures",
+            "productivity",
+            "trackpad"
+          ],
+          "summary": "Associez les gestes du trackpad à des actions MacTools, des raccourcis ou des clics du milieu.",
+          "title": "Gestes du trackpad"
+        },
+        "ja": {
+          "keywords": [
+            "gestures",
+            "productivity",
+            "trackpad",
+            "トラックパッドジェスチャ"
+          ],
+          "summary": "トラックパッドジェスチャをMacToolsアクション、ショートカット、または中クリックに割り当てます。",
+          "title": "トラックパッドジェスチャ"
+        },
+        "ko": {
+          "keywords": [
+            "gestures",
+            "productivity",
+            "trackpad",
+            "트랙패드 제스처"
+          ],
+          "summary": "트랙패드 제스처를 MacTools 동작, 단축키 또는 가운데 클릭에 매핑합니다.",
+          "title": "트랙패드 제스처"
+        },
+        "pt": {
+          "keywords": [
+            "Gestos do trackpad",
+            "gestures",
+            "productivity",
+            "trackpad"
+          ],
+          "summary": "Mapeie gestos do trackpad para ações do MacTools, atalhos ou cliques do meio.",
+          "title": "Gestos do trackpad"
+        },
+        "ru": {
+          "keywords": [
+            "gestures",
+            "productivity",
+            "trackpad",
+            "Жесты трекпада"
+          ],
+          "summary": "Назначайте жестам трекпада действия MacTools, сочетания клавиш или средний щелчок.",
+          "title": "Жесты трекпада"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "gestures",
+            "productivity",
+            "trackpad",
+            "触控板手势"
+          ],
+          "summary": "将自定义触控板手势映射为 MacTools 操作、快捷键或中键点击",
+          "title": "触控板手势"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "gestures",
+            "productivity",
+            "trackpad",
+            "觸控板手勢"
+          ],
+          "summary": "將自訂觸控板手勢對應為 MacTools 操作、快速鍵或中鍵點按",
+          "title": "觸控板手勢"
+        }
+      },
       "pluginID": "trackpad-gestures",
       "route": "/plugins/trackpad-gestures/",
       "summary": "将自定义触控板手势映射为 MacTools 操作、快捷键或中键点击",
@@ -4702,6 +10227,107 @@
         "translator"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "productivity",
+            "translator",
+            "المترجم"
+          ],
+          "summary": "ترجم النص المحدد أو مناطق لقطة الشاشة باستخدام اختصارات.",
+          "title": "المترجم"
+        },
+        "de": {
+          "keywords": [
+            "productivity",
+            "translator",
+            "Übersetzer"
+          ],
+          "summary": "Ausgewählten Text oder Screenshot-Bereiche per Kurzbefehl übersetzen.",
+          "title": "Übersetzer"
+        },
+        "en": {
+          "keywords": [
+            "Translator",
+            "productivity",
+            "translator"
+          ],
+          "summary": "Translate selected text or screenshot regions with shortcuts.",
+          "title": "Translator"
+        },
+        "es": {
+          "keywords": [
+            "Traductor",
+            "productivity",
+            "translator"
+          ],
+          "summary": "Traduce texto seleccionado o regiones de captura con atajos.",
+          "title": "Traductor"
+        },
+        "fr": {
+          "keywords": [
+            "Traducteur",
+            "productivity",
+            "translator"
+          ],
+          "summary": "Traduit le texte sélectionné ou des zones de capture d’écran avec des raccourcis.",
+          "title": "Traducteur"
+        },
+        "ja": {
+          "keywords": [
+            "productivity",
+            "translator",
+            "翻訳"
+          ],
+          "summary": "選択したテキストやスクリーンショット範囲をショートカットで翻訳します。",
+          "title": "翻訳"
+        },
+        "ko": {
+          "keywords": [
+            "productivity",
+            "translator",
+            "번역"
+          ],
+          "summary": "선택한 텍스트나 스크린샷 영역을 단축키로 번역합니다.",
+          "title": "번역"
+        },
+        "pt": {
+          "keywords": [
+            "Tradutor",
+            "productivity",
+            "translator"
+          ],
+          "summary": "Traduz texto selecionado ou regiões de captura de tela com atalhos.",
+          "title": "Tradutor"
+        },
+        "ru": {
+          "keywords": [
+            "productivity",
+            "translator",
+            "Переводчик"
+          ],
+          "summary": "Перевод выбранного текста или области снимка экрана по горячим клавишам.",
+          "title": "Переводчик"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "productivity",
+            "translator",
+            "翻译"
+          ],
+          "summary": "划词与截图快捷键翻译",
+          "title": "翻译"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "productivity",
+            "translator",
+            "翻譯"
+          ],
+          "summary": "透過快速鍵翻譯選取文字或截圖區域。",
+          "title": "翻譯"
+        }
+      },
       "pluginID": "translator",
       "route": "/plugins/translator/",
       "summary": "划词与截图快捷键翻译",
@@ -4715,6 +10341,118 @@
         "window"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "layouts",
+            "productivity",
+            "window",
+            "تخطيطات النوافذ"
+          ],
+          "summary": "نقل النافذة المركزة حاليًا وتغيير حجمها.",
+          "title": "تخطيطات النوافذ"
+        },
+        "de": {
+          "keywords": [
+            "Fensterlayouts",
+            "layouts",
+            "productivity",
+            "window"
+          ],
+          "summary": "Das aktuell fokussierte Fenster verschieben und skalieren.",
+          "title": "Fensterlayouts"
+        },
+        "en": {
+          "keywords": [
+            "Window Layouts",
+            "layouts",
+            "productivity",
+            "window"
+          ],
+          "summary": "Move and resize the focused window.",
+          "title": "Window Layouts"
+        },
+        "es": {
+          "keywords": [
+            "Diseños de ventanas",
+            "layouts",
+            "productivity",
+            "window"
+          ],
+          "summary": "Mueve y cambia el tamaño de la ventana enfocada.",
+          "title": "Diseños de ventanas"
+        },
+        "fr": {
+          "keywords": [
+            "Disposition des fenêtres",
+            "layouts",
+            "productivity",
+            "window"
+          ],
+          "summary": "Déplacez et redimensionnez la fenêtre active.",
+          "title": "Disposition des fenêtres"
+        },
+        "ja": {
+          "keywords": [
+            "layouts",
+            "productivity",
+            "window",
+            "ウインドウレイアウト"
+          ],
+          "summary": "現在フォーカスされているウインドウを移動、サイズ変更します。",
+          "title": "ウインドウレイアウト"
+        },
+        "ko": {
+          "keywords": [
+            "layouts",
+            "productivity",
+            "window",
+            "윈도우 레이아웃"
+          ],
+          "summary": "현재 포커스된 윈도우를 이동하고 크기를 조절합니다.",
+          "title": "윈도우 레이아웃"
+        },
+        "pt": {
+          "keywords": [
+            "Layouts de janelas",
+            "layouts",
+            "productivity",
+            "window"
+          ],
+          "summary": "Mova e redimensione a janela em foco.",
+          "title": "Layouts de janelas"
+        },
+        "ru": {
+          "keywords": [
+            "layouts",
+            "productivity",
+            "window",
+            "Расположение окон"
+          ],
+          "summary": "Перемещайте активное окно и изменяйте его размер.",
+          "title": "Расположение окон"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "layouts",
+            "productivity",
+            "window",
+            "窗口布局"
+          ],
+          "summary": "移动聚焦窗口并调整其大小",
+          "title": "窗口布局"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "layouts",
+            "productivity",
+            "window",
+            "視窗佈局"
+          ],
+          "summary": "移動聚焦視窗並調整其大小",
+          "title": "視窗佈局"
+        }
+      },
       "pluginID": "window-layouts",
       "route": "/plugins/window-layouts/",
       "summary": "移动聚焦窗口并调整其大小",
@@ -4729,6 +10467,139 @@
         "window switcher"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "application switcher",
+            "keyboard",
+            "shortcut",
+            "window switcher",
+            "اختصار النوافذ",
+            "تبديل النوافذ"
+          ],
+          "summary": "يمكنك التبديل سريعًا بين النوافذ المفتوحة باستخدام اختصار قابل للتخصيص.",
+          "title": "مبدّل النوافذ"
+        },
+        "de": {
+          "keywords": [
+            "Fensterkurzbefehl",
+            "Fensterwechsel",
+            "application switcher",
+            "keyboard",
+            "shortcut",
+            "window switcher"
+          ],
+          "summary": "Schnell zwischen geöffneten Fenstern mit einem anpassbaren Kurzbefehl wechseln.",
+          "title": "Fensterwechsel"
+        },
+        "en": {
+          "keywords": [
+            "application switcher",
+            "keyboard",
+            "shortcut",
+            "window shortcut",
+            "window switcher"
+          ],
+          "summary": "Quickly switch between running windows with a configurable shortcut.",
+          "title": "Window Switcher"
+        },
+        "es": {
+          "keywords": [
+            "application switcher",
+            "atajo de ventanas",
+            "cambiador de ventanas",
+            "keyboard",
+            "shortcut",
+            "window switcher"
+          ],
+          "summary": "Cambia rápidamente entre ventanas abiertas con un atajo configurable.",
+          "title": "Cambiador de ventanas"
+        },
+        "fr": {
+          "keywords": [
+            "application switcher",
+            "keyboard",
+            "raccourci de fenêtre",
+            "shortcut",
+            "sélecteur de fenêtres",
+            "window switcher"
+          ],
+          "summary": "Basculez rapidement entre les fenêtres ouvertes avec un raccourci configurable.",
+          "title": "Sélecteur de fenêtres"
+        },
+        "ja": {
+          "keywords": [
+            "application switcher",
+            "keyboard",
+            "shortcut",
+            "window switcher",
+            "ウインドウショートカット",
+            "ウインドウ切り替え"
+          ],
+          "summary": "設定可能なショートカットで実行中のウインドウをすばやく切り替えます。",
+          "title": "ウインドウ切り替え"
+        },
+        "ko": {
+          "keywords": [
+            "application switcher",
+            "keyboard",
+            "shortcut",
+            "window switcher",
+            "윈도우 단축키",
+            "윈도우 전환"
+          ],
+          "summary": "사용자 설정 단축키로 실행 중인 윈도우를 빠르게 전환합니다.",
+          "title": "윈도우 전환기"
+        },
+        "pt": {
+          "keywords": [
+            "alternador de janelas",
+            "application switcher",
+            "atalho de janelas",
+            "keyboard",
+            "shortcut",
+            "window switcher"
+          ],
+          "summary": "Alterne rapidamente entre janelas abertas com um atalho configurável.",
+          "title": "Alternador de janelas"
+        },
+        "ru": {
+          "keywords": [
+            "application switcher",
+            "keyboard",
+            "shortcut",
+            "window switcher",
+            "переключатель окон",
+            "сочетание для окон"
+          ],
+          "summary": "Быстро переключайтесь между открытыми окнами с помощью настраиваемого сочетания клавиш.",
+          "title": "Переключатель окон"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "application switcher",
+            "keyboard",
+            "shortcut",
+            "window switcher",
+            "窗口切换",
+            "窗口快捷键"
+          ],
+          "summary": "用可配置快捷键快速切换正在运行的窗口",
+          "title": "窗口切换"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "application switcher",
+            "keyboard",
+            "shortcut",
+            "window switcher",
+            "視窗切換",
+            "視窗快速鍵"
+          ],
+          "summary": "用可設定快速鍵快速切換正在執行的視窗",
+          "title": "視窗切換"
+        }
+      },
       "pluginID": "window-switcher",
       "route": "/plugins/window-switcher/",
       "summary": "用可配置快捷键快速切换正在运行的窗口",
@@ -4743,6 +10614,129 @@
         "xcode"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode",
+            "تنظيف Xcode"
+          ],
+          "summary": "تنظيف DerivedData ودعم الأجهزة والأرشيفات وذاكرات Xcode المؤقتة حسب الفئة.",
+          "title": "تنظيف Xcode"
+        },
+        "de": {
+          "keywords": [
+            "Xcode-Bereinigung",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "Xcode-DerivedData, Geräteunterstützung, Archive und Caches nach Kategorie bereinigen.",
+          "title": "Xcode-Bereinigung"
+        },
+        "en": {
+          "keywords": [
+            "Xcode Cleanup",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "Clean Xcode DerivedData, device support files, archives, and caches by category.",
+          "title": "Xcode Cleanup"
+        },
+        "es": {
+          "keywords": [
+            "Limpieza de Xcode",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "Limpia DerivedData, soporte de dispositivos, archivos y cachés de Xcode por categoría.",
+          "title": "Limpieza de Xcode"
+        },
+        "fr": {
+          "keywords": [
+            "Nettoyage Xcode",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "Nettoie DerivedData, la prise en charge d’appareils, les archives et les caches Xcode par catégorie.",
+          "title": "Nettoyage Xcode"
+        },
+        "ja": {
+          "keywords": [
+            "Xcode クリーンアップ",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "Xcode の DerivedData、デバイスサポート、アーカイブ、キャッシュをカテゴリ別に整理します。",
+          "title": "Xcode クリーンアップ"
+        },
+        "ko": {
+          "keywords": [
+            "Xcode 정리",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "Xcode DerivedData, 기기 지원 파일, 아카이브 및 캐시를 분류별로 정리합니다.",
+          "title": "Xcode 정리"
+        },
+        "pt": {
+          "keywords": [
+            "Limpeza do Xcode",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "Limpa DerivedData, suporte de dispositivos, arquivos e caches do Xcode por categoria.",
+          "title": "Limpeza do Xcode"
+        },
+        "ru": {
+          "keywords": [
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode",
+            "Очистка Xcode"
+          ],
+          "summary": "Очищает DerivedData, файлы поддержки устройств, архивы и кэши Xcode по категориям.",
+          "title": "Очистка Xcode"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "Xcode 清理",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "分类清理 Xcode DerivedData、设备支持、归档与缓存",
+          "title": "Xcode 清理"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "Xcode 清理",
+            "clean",
+            "cleanup",
+            "storage",
+            "xcode"
+          ],
+          "summary": "分類清理 Xcode DerivedData、裝置支援、封存與快取",
+          "title": "Xcode 清理"
+        }
+      },
       "pluginID": "xcode-clean",
       "route": "/plugins/xcode-clean/",
       "summary": "分类清理 Xcode DerivedData、设备支持、归档与缓存",
@@ -4756,6 +10750,118 @@
         "zsh Config"
       ],
       "kind": "plugin",
+      "localized": {
+        "ar": {
+          "keywords": [
+            "config",
+            "productivity",
+            "zsh",
+            "إعدادات zsh"
+          ],
+          "summary": "حرّر ~/.zshrc وملفات إعداد zsh الأخرى بسرعة، مع تحرير مدمج ومقتطفات شائعة.",
+          "title": "إعدادات zsh"
+        },
+        "de": {
+          "keywords": [
+            "config",
+            "productivity",
+            "zsh",
+            "zsh-Konfig."
+          ],
+          "summary": "~/.zshrc und andere zsh-Konfigurationsdateien mit integriertem Editor und häufigen Snippets bearbeiten.",
+          "title": "zsh-Konfig."
+        },
+        "en": {
+          "keywords": [
+            "config",
+            "productivity",
+            "zsh",
+            "zsh Config"
+          ],
+          "summary": "Edit ~/.zshrc and other zsh config files quickly, with inline editing and common snippets.",
+          "title": "zsh Config"
+        },
+        "es": {
+          "keywords": [
+            "Config. zsh",
+            "config",
+            "productivity",
+            "zsh"
+          ],
+          "summary": "Edita ~/.zshrc y otros archivos de config. zsh con edición integrada y fragmentos comunes.",
+          "title": "Config. zsh"
+        },
+        "fr": {
+          "keywords": [
+            "Config. zsh",
+            "config",
+            "productivity",
+            "zsh"
+          ],
+          "summary": "Modifiez ~/.zshrc et d’autres fichiers de config. zsh avec édition intégrée et extraits courants.",
+          "title": "Config. zsh"
+        },
+        "ja": {
+          "keywords": [
+            "config",
+            "productivity",
+            "zsh",
+            "zsh 設定"
+          ],
+          "summary": "~/.zshrc などの zsh 設定ファイルを、内蔵エディタとよく使うスニペットですばやく編集します。",
+          "title": "zsh 設定"
+        },
+        "ko": {
+          "keywords": [
+            "config",
+            "productivity",
+            "zsh",
+            "zsh 설정"
+          ],
+          "summary": "내장 편집기와 자주 쓰는 스니펫으로 ~/.zshrc 등 zsh 설정 파일을 빠르게 편집합니다.",
+          "title": "zsh 설정"
+        },
+        "pt": {
+          "keywords": [
+            "Config. zsh",
+            "config",
+            "productivity",
+            "zsh"
+          ],
+          "summary": "Edite ~/.zshrc e outros arquivos de config. zsh com edição integrada e trechos comuns.",
+          "title": "Config. zsh"
+        },
+        "ru": {
+          "keywords": [
+            "config",
+            "productivity",
+            "zsh",
+            "Настройки zsh"
+          ],
+          "summary": "Быстро редактируйте ~/.zshrc и другие файлы zsh со встроенным редактором и типовыми фрагментами.",
+          "title": "Настройки zsh"
+        },
+        "zh-Hans": {
+          "keywords": [
+            "config",
+            "productivity",
+            "zsh",
+            "zsh 配置"
+          ],
+          "summary": "快速编辑 ~/.zshrc 等 zsh 配置文件，支持内联编辑和常用片段快速插入",
+          "title": "zsh 配置"
+        },
+        "zh-Hant": {
+          "keywords": [
+            "config",
+            "productivity",
+            "zsh",
+            "zsh 設定"
+          ],
+          "summary": "快速編輯 ~/.zshrc 等 zsh 設定檔，支援內嵌編輯與常用片段快速插入",
+          "title": "zsh 設定"
+        }
+      },
       "pluginID": "zsh-config",
       "route": "/plugins/zsh-config/",
       "summary": "快速编辑 ~/.zshrc 等 zsh 配置文件，支持内联编辑和常用片段快速插入",

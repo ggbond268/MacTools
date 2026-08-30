@@ -21,6 +21,32 @@ env:
   CI_BUNDLE_IDENTIFIER_PREFIX: dev.mactools.ci
 
 jobs:
+  site:
+    name: Verify generated website
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Verify generated plugin data
+        working-directory: site
+        run: npm run check:generated-plugins
+
+      - name: Build site
+        working-directory: site
+        run: npm run build
+
   build:
     name: Build and test
     runs-on: macos-26

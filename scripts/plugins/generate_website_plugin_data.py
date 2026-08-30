@@ -14,6 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from plugin_source_manifest import (  # noqa: E402
     ManifestValidationError,
+    SUPPORTED_LOCALE_ORDER,
     load_known_plugin_ids,
     validate_and_project_manifest,
 )
@@ -26,6 +27,8 @@ def canonical_json(value: object) -> bytes:
 
 
 def mac_tools_url(plugin_id: str, provider_id: str | None = None, action_id: str | None = None) -> str:
+    if (provider_id is None) != (action_id is None):
+        raise ValueError("provider_id and action_id must be supplied together")
     url = f"mactools://app/settings/plugins/marketplace/{plugin_id}"
     if provider_id is not None and action_id is not None:
         return f"{url}?provider={provider_id}&action={action_id}"
@@ -67,11 +70,20 @@ def project_manifests(plugins_root: Path) -> dict[str, object]:
 
         discovery = product.get("discovery") or {}
         actions_metadata = product.get("actions") or {}
-        keywords = list(discovery.get("keywords", []))
-        keywords.extend(discovery.get("localizedSynonyms", {}).get("en", []))
+        localized_metadata = manifest["localizedMetadata"]
+        localized_synonyms = discovery.get("localizedSynonyms", {})
+        localized_search = {
+            locale: {
+                "title": localized_metadata.get(locale, {}).get("displayName", manifest["displayName"]),
+                "summary": localized_metadata.get(locale, {}).get("summary", manifest["summary"]),
+                "keywords": sorted(set(discovery.get("keywords", []) + localized_synonyms.get(locale, []))),
+            }
+            for locale in SUPPORTED_LOCALE_ORDER
+        }
         search.append({
             "kind": "plugin", "pluginID": plugin_id, "title": manifest["displayName"],
-            "summary": manifest["summary"], "keywords": sorted(set(keywords)), "route": plugin["route"],
+            "summary": manifest["summary"], "keywords": localized_search["en"]["keywords"],
+            "localized": localized_search, "route": plugin["route"],
         })
         for provider in actions_metadata.get("providers", []):
             for action in provider.get("staticActions", []):
@@ -125,6 +137,15 @@ def generate(repo_root: Path, output_dir: Path, assets_dir: Path, check: bool) -
         "assets.json": {"generatorVersion": GENERATOR_VERSION, "assets": [{k: v for k, v in asset.items() if k != "source"} for asset in data["assets"]]},
     }
     is_current = all(write_or_check(output_dir / name, canonical_json(value), check) for name, value in outputs.items())
+    expected_asset_names = {Path(asset["outputPath"]).name for asset in data["assets"]}
+    if assets_dir.exists():
+        unexpected_assets = sorted(path for path in assets_dir.iterdir() if path.is_file() and path.name not in expected_asset_names)
+        for path in unexpected_assets:
+            if check:
+                print(f"stale generated asset: {path}", file=sys.stderr)
+                is_current = False
+            else:
+                path.unlink()
     for asset in data["assets"]:
         destination = assets_dir / Path(asset["outputPath"]).name
         source = Path(asset["source"])
