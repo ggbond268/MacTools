@@ -116,7 +116,7 @@ enum ClipboardHistoryFilterFamily: String, CaseIterable, Identifiable, Sendable 
 struct ClipboardPanelSearchCandidate: Sendable {
     let item: ClipboardHistoryItem
     let isSnippet: Bool
-    let activityAt: Date
+    let sortDate: Date
 }
 
 /// The action companion must never retarget an operation when live results change.
@@ -195,7 +195,7 @@ enum ClipboardPanelBoundedSearch {
             _ lhs: ClipboardPanelSearchCandidate,
             _ rhs: ClipboardPanelSearchCandidate
         ) -> Bool {
-            if lhs.activityAt != rhs.activityAt { return lhs.activityAt > rhs.activityAt }
+            if lhs.sortDate != rhs.sortDate { return lhs.sortDate > rhs.sortDate }
             return lhs.item.id.uuidString < rhs.item.id.uuidString
         }
     }
@@ -586,7 +586,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     private var savedClipIDs: Set<UUID> = []
     private var selectedItemIDSet: Set<UUID> = []
     private var selectionNumberByItemID: [UUID: Int] = [:]
-    private var presentationActivityAtByItemID: [UUID: Date] = [:]
     private var visibleResultLimit = ClipboardHistoryPanelModel.resultPageSize
     private var searchGeneration: UInt64 = 0
     private var searchTask: Task<Void, Never>?
@@ -621,7 +620,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let availableClipItemIDs: Set<UUID>
         let availableSnippetIDs: Set<UUID>
         let savedClipIDs: Set<UUID>
-        let activityAtByItemID: [UUID: Date]
         let newestHistoryItemID: UUID?
         let scopeModes: [ClipboardPanelMode]
         let contentFilters: [ClipboardHistoryContentFilter]
@@ -690,13 +688,9 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             if let after = change.after {
                 availableClipItemIDs.insert(change.id)
                 if after.isSaved { savedClipIDs.insert(change.id) } else { savedClipIDs.remove(change.id) }
-                if change.before == nil {
-                    presentationActivityAtByItemID[change.id] = after.savedActivityAt ?? after.lastUsedAt ?? after.capturedAt
-                }
             } else {
                 availableClipItemIDs.remove(change.id)
                 savedClipIDs.remove(change.id)
-                presentationActivityAtByItemID.removeValue(forKey: change.id)
             }
         }
         allItems = items
@@ -769,9 +763,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         currentSavedRevision = revision ?? (currentSavedRevision &+ 1)
         let previousByID = Dictionary(uniqueKeysWithValues: allSavedItems.map { ($0.id, $0) })
         let changedItems = items.filter { previousByID[$0.id] != $0 }
-        for item in changedItems where previousByID[item.id] == nil {
-            presentationActivityAtByItemID[item.id] = item.lastUsedAt ?? item.updatedAt
-        }
         allSavedItems = items
         availableSnippetIDs = Set(items.lazy.filter(\.isSnippet).map(\.id))
         appendAvailableFilterOptions(for: changedItems.lazy.filter(\.isSnippet).map {
@@ -847,7 +838,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         availableClipItemIDs = preparation.availableClipItemIDs
         availableSnippetIDs = preparation.availableSnippetIDs
         savedClipIDs = preparation.savedClipIDs
-        presentationActivityAtByItemID = preparation.activityAtByItemID
         visibleResultLimit = Self.resultPageSize
         visibleItems = []
         visibleSavedPresentationItemIDs = []
@@ -1414,7 +1404,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         availableClipItemIDs = preparation.availableClipItemIDs
         availableSnippetIDs = preparation.availableSnippetIDs
         savedClipIDs = preparation.savedClipIDs
-        presentationActivityAtByItemID = preparation.activityAtByItemID
         visibleResultLimit = Self.resultPageSize
         visibleItems = []
         visibleSavedPresentationItemIDs = []
@@ -1439,8 +1428,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         var availableClipItemIDs = Set<UUID>()
         availableClipItemIDs.reserveCapacity(items.count)
         var savedClipIDs = Set<UUID>()
-        var activityAtByItemID: [UUID: Date] = [:]
-        activityAtByItemID.reserveCapacity(items.count + savedItems.count)
         var newestHistoryItemID: UUID?
         var newestHistoryCaptureDate: Date?
         var seenPresentationIDs = Set<UUID>()
@@ -1482,9 +1469,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 }
             }
             if item.isSaved { savedClipIDs.insert(item.id) }
-            activityAtByItemID[item.id] = item.savedActivityAt
-                ?? item.lastUsedAt
-                ?? item.capturedAt
             recordPresentation(item)
         }
 
@@ -1494,7 +1478,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 checkpoint?()
                 if cancelsWhenTaskIsCancelled, Task.isCancelled { return nil }
             }
-            activityAtByItemID[item.id] = item.lastUsedAt ?? item.updatedAt
             guard item.isSnippet else { continue }
             availableSnippetIDs.insert(item.id)
             recordPresentation(item.historyPresentationItem())
@@ -1527,7 +1510,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             availableClipItemIDs: availableClipItemIDs,
             availableSnippetIDs: availableSnippetIDs,
             savedClipIDs: savedClipIDs,
-            activityAtByItemID: activityAtByItemID,
             newestHistoryItemID: newestHistoryItemID,
             scopeModes: scopeModes,
             contentFilters: contentFilters,
@@ -1564,7 +1546,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let semanticFilter = semanticFilter
         let limit = visibleResultLimit
         let presentationAnchorItemID = requestedScrollItemID
-        let presentationActivityAtByItemID = presentationActivityAtByItemID
         searchTask?.cancel()
         isSearching = true
         searchProgressTask?.cancel()
@@ -1605,12 +1586,9 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                             continue
                         }
                         collector.consider(ClipboardPanelSearchCandidate(
-                        item: item,
-                        isSnippet: false,
-                        activityAt: presentationActivityAtByItemID[item.id]
-                            ?? (mode == .saved
-                                ? (item.savedActivityAt ?? item.capturedAt)
-                                : (item.lastUsedAt ?? item.capturedAt))
+                            item: item,
+                            isSnippet: false,
+                            sortDate: item.capturedAt
                         ))
                     }
                     guard mode == .all || mode == .snippets else { return }
@@ -1627,9 +1605,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                         collector.consider(ClipboardPanelSearchCandidate(
                             item: presentation,
                             isSnippet: true,
-                            activityAt: presentationActivityAtByItemID[savedItem.id]
-                                ?? savedItem.lastUsedAt
-                                ?? savedItem.updatedAt
+                            sortDate: savedItem.updatedAt
                         ))
                     }
                 }
@@ -1684,18 +1660,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 selectedItemID = visibleItems.first?.id
             }
         }
-    }
-
-    nonisolated private static func activityOrder(
-        _ lhs: ClipboardHistoryItem,
-        _ rhs: ClipboardHistoryItem
-    ) -> Bool {
-        let lhsActivity = lhs.lastUsedAt ?? lhs.capturedAt
-        let rhsActivity = rhs.lastUsedAt ?? rhs.capturedAt
-        if lhsActivity != rhsActivity {
-            return lhsActivity > rhsActivity
-        }
-        return lhs.capturedAt > rhs.capturedAt
     }
 
     nonisolated static func logicalItemCount(

@@ -873,6 +873,30 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testRecapturingOlderPayloadRefreshesExistingItemWithoutAddingDuplicate() async throws {
+        let fixture = makeFixture()
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        let firstCaptureDate = Date()
+        let secondCaptureDate = firstCaptureDate.addingTimeInterval(1)
+        let recaptureDate = secondCaptureDate.addingTimeInterval(1)
+
+        fixture.pasteboard.simulateCopy("first")
+        fixture.controller.processPasteboardChange(now: firstCaptureDate)
+        let originalFirstID = try XCTUnwrap(fixture.controller.items.first?.id)
+
+        fixture.pasteboard.simulateCopy("second")
+        fixture.controller.processPasteboardChange(now: secondCaptureDate)
+        fixture.pasteboard.simulateCopy("first")
+        fixture.controller.processPasteboardChange(now: recaptureDate)
+
+        XCTAssertEqual(fixture.controller.items.count, 2)
+        XCTAssertEqual(fixture.controller.items.map(\.text), ["first", "second"])
+        XCTAssertEqual(fixture.controller.items.first?.id, originalFirstID)
+        XCTAssertEqual(fixture.controller.items.first?.capturedAt, recaptureDate)
+        fixture.controller.stop()
+    }
+
     func testPlainTextRewriteDoesNotUseOCRAfterThePasteboardChanges() async {
         let recognizer = FakeClipboardImageTextRecognizer(text: "Stale recognized text")
         let fixture = makeFixture(imageTextRecognizer: recognizer)

@@ -667,7 +667,8 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         imageSearchText: String? = nil,
         hasCompletedImageTextIndexing: Bool = false,
         isInHistory: Bool = true,
-        savedMetadata: ClipboardHistorySavedMetadata? = nil
+        savedMetadata: ClipboardHistorySavedMetadata? = nil,
+        precomputedPayloadDigest: Data? = nil
     ) {
         self.id = id
         payloadReference = ClipboardHistoryPayloadReference(payload: payload)
@@ -683,7 +684,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         fileReferenceCount = completeFileURLs.count
         linkURLs = payload.metadataLinkURLs
         representationTypeIdentifiers = payload.metadataRepresentationTypeIdentifiers
-        payloadDigest = Self.digest(payload)
+        payloadDigest = precomputedPayloadDigest ?? Self.digest(payload)
         allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
         textCharacterCount = searchableText.count
         textLineCount = Self.lineCount(searchableText)
@@ -1145,7 +1146,9 @@ enum ClipboardCapturePolicy {
                 return .ignore(.empty)
             }
         }
-        if let newestItem, payloadsAreDuplicates(payload, newestItem) {
+        let payloadDigest = ClipboardHistoryItem.digest(payload)
+        if let newestItem,
+           payloadsAreDuplicates(payload, payloadDigest: payloadDigest, newestItem) {
             return .ignore(.duplicateNewestItem)
         }
         return .capture(ClipboardHistoryItem(
@@ -1154,7 +1157,8 @@ enum ClipboardCapturePolicy {
             capturedAt: now,
             sourceApplication: sourceApplication,
             isPinned: false,
-            lastUsedAt: nil
+            lastUsedAt: nil,
+            precomputedPayloadDigest: payloadDigest
         ))
     }
 
@@ -1187,6 +1191,7 @@ enum ClipboardCapturePolicy {
 
     private static func payloadsAreDuplicates(
         _ lhs: ClipboardHistoryPayload,
+        payloadDigest: Data,
         _ rhs: ClipboardHistoryItem
     ) -> Bool {
         if lhs.kind == .plainText,
@@ -1203,7 +1208,7 @@ enum ClipboardCapturePolicy {
             }
             return normalizedText(lhs.searchableText) == normalizedText(rhsText)
         }
-        return ClipboardHistoryItem.digest(lhs) == rhs.payloadDigest
+        return payloadDigest == rhs.payloadDigest
     }
 }
 
