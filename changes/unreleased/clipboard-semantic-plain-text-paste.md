@@ -4,4 +4,4 @@ type: changed
 area: Clipboard
 ---
 
-Clipboard plain-text paste now uses the visible text from rich clipboard content while normal paste preserves the original formats. History keeps newest captures first, so reusing an older item no longer makes copy timestamps appear out of order.
+Clipboard plain-text paste uses visible rich-text content while normal paste preserves original formats. History keeps newest captures first, so reusing an item cannot make timestamps appear out of order.
