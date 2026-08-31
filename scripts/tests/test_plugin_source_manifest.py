@@ -126,6 +126,7 @@ class PluginSourceManifestTests(unittest.TestCase):
             "EmptyTrash": ["automation"],
             "RightClick": [],
             "DeviceBattery": ["inputMonitoring"],
+            "DiskClean": ["full-disk-access"],
             "ZshConfig": ["automation"],
         }
         for directory, permissions in expected_permissions.items():

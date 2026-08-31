@@ -28,6 +28,7 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
             ),
             [
                 .general,
+                .permissions,
                 .plugins(.automation),
                 .about,
                 .plugins(.actionsAndShortcuts),

@@ -16,6 +16,7 @@ enum FeatureSettingsPane: Hashable {
 enum SettingsPresentationRequest: Equatable {
     case settings
     case general
+    case permissions
     case about
     case appUpdate
     case pluginMarketplace
@@ -481,6 +482,17 @@ final class PluginHost: ObservableObject {
     @Published private(set) var featurePanelHiddenLayoutItems: [PluginSurfaceLayoutItem] = []
     @Published private(set) var pluginSettingsItems: [PluginSettingsPageItem] = []
     @Published private(set) var permissionCards: [PluginPermissionCard] = []
+    private(set) lazy var permissionCoordinator = PermissionCoordinator(
+        specializedActionHandler: { [weak self] pluginID, permissionID in
+            self?.performSpecializedPermissionAction(
+                pluginID: pluginID,
+                permissionID: permissionID
+            )
+        },
+        refreshHandler: { [weak self] in
+            self?.refreshAll()
+        }
+    )
     @Published private(set) var shortcutItems: [ShortcutSettingsItem] = []
     private var shortcutMutationMetadataByRowID: [String: ShortcutMutationMetadata] = [:]
     @Published private(set) var appShortcutItems: [AppShortcutSettingsItem] = []
@@ -1474,6 +1486,22 @@ final class PluginHost: ObservableObject {
     }
 
     func performPermissionAction(pluginID: String, permissionID: String) {
+        if permissionCoordinator.performAction(
+            pluginID: pluginID,
+            permissionID: permissionID
+        ) {
+            return
+        }
+        performSpecializedPermissionAction(
+            pluginID: pluginID,
+            permissionID: permissionID
+        )
+    }
+
+    private func performSpecializedPermissionAction(
+        pluginID: String,
+        permissionID: String
+    ) {
         guard let plugin = corePlugin(for: pluginID) else {
             return
         }
@@ -1733,6 +1761,11 @@ final class PluginHost: ObservableObject {
 
     func presentPluginMarketplace() {
         appPresentationHandler?(.settings(.pluginMarketplace))
+    }
+
+    func presentPermissionCenter() {
+        rebuildDerivedState()
+        appPresentationHandler?(.settings(.permissions))
     }
 
     func presentActionsAndShortcutsSettings() {
@@ -3216,6 +3249,7 @@ final class PluginHost: ObservableObject {
             )
         }
 
+        var permissionCenterRequirements: [PermissionCenterRequirement] = []
         permissionCards = orderedCorePlugins().flatMap { plugin -> [PluginPermissionCard] in
             let requirements = guardedValue(
                 for: plugin,
@@ -3232,13 +3266,32 @@ final class PluginHost: ObservableObject {
                     return nil
                 }
 
+                let hostKind = HostPermissionKind.resolve(
+                    permissionID: requirement.id,
+                    pluginKind: requirement.kind
+                )
+                permissionCenterRequirements.append(
+                    PermissionCenterRequirement(
+                        pluginID: plugin.metadata.id,
+                        pluginTitle: plugin.metadata.title,
+                        permissionID: requirement.id,
+                        kind: hostKind,
+                        description: requirement.description,
+                        isGranted: state.isGranted,
+                        footnote: state.footnote,
+                        statusText: state.statusText,
+                        statusSystemImage: state.statusSystemImage,
+                        statusTone: state.statusTone
+                    )
+                )
+
                 return PluginPermissionCard(
                     id: "\(plugin.metadata.id).permission.\(requirement.id)",
                     pluginID: plugin.metadata.id,
                     permissionID: requirement.id,
                     title: requirement.title,
                     description: requirement.description,
-                    iconSystemImage: permissionIconName(for: requirement.kind),
+                    iconSystemImage: permissionIconName(for: hostKind),
                     statusText: state.statusText ?? (state.isGranted
                         ? AppL10n.plugins("plugin.permission.granted", defaultValue: "已授权")
                         : AppL10n.plugins("plugin.permission.notGranted", defaultValue: "未授权")),
@@ -3246,12 +3299,13 @@ final class PluginHost: ObservableObject {
                     statusTone: state.statusTone ?? (state.isGranted ? .positive : .caution),
                     footnote: state.footnote,
                     buttonTitle: permissionActionTitle(
-                        for: requirement.kind,
+                        for: hostKind,
                         isGranted: state.isGranted
                     )
                 )
             }
         }
+        permissionCoordinator.replaceRequirements(permissionCenterRequirements)
 
         synchronizeActionRegistry()
 
@@ -5584,30 +5638,16 @@ final class PluginHost: ObservableObject {
     }
 
     private func requestPermissionGuidance(forPluginID pluginID: String, permissionID: String) {
-        guard let plugin = activePlugins.first(where: { $0.metadata.id == pluginID }),
-              let requirement = (guardedValue(
-                  for: plugin,
-                  operation: "read permission requirements",
-                  plugin.permissionRequirements
-              ) ?? []).first(where: { $0.id == permissionID }) else {
-            return
-        }
-
-        switch requirement.kind {
-        case .automation:
-            guard let url = URL(
-                string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
-            ) else {
-                return
-            }
-            NSWorkspace.shared.open(url)
-        default:
+        if !permissionCoordinator.performAction(
+            pluginID: pluginID,
+            permissionID: permissionID
+        ) {
             presentPluginSettings(pluginID: pluginID)
         }
     }
 
     private func permissionActionTitle(
-        for kind: PluginPermissionKind,
+        for kind: HostPermissionKind,
         isGranted: Bool
     ) -> String {
         switch kind {
@@ -5627,14 +5667,18 @@ final class PluginHost: ObservableObject {
             return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
         case .finderExtension:
             return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
-        case .screenRecording:
+        case .screenRecording, .fullDiskAccess:
             return isGranted
                 ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
                 : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
+        case .systemAudioRecording:
+            return isGranted
+                ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
+                : AppL10n.plugins("plugin.permission.requestAuthorization", defaultValue: "请求授权")
         }
     }
 
-    private func permissionIconName(for kind: PluginPermissionKind) -> String {
+    private func permissionIconName(for kind: HostPermissionKind) -> String {
         switch kind {
         case .accessibility:
             return "accessibility"
@@ -5648,6 +5692,10 @@ final class PluginHost: ObservableObject {
             return "puzzlepiece.extension"
         case .screenRecording:
             return "rectangle.dashed.badge.record"
+        case .systemAudioRecording:
+            return "waveform.badge.mic"
+        case .fullDiskAccess:
+            return "externaldrive.badge.checkmark"
         }
     }
 }

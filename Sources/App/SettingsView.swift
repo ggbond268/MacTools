@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import MacToolsPluginKit
+import PermissionFlow
 
 enum GeneralSettingsCardLayout {
     static let horizontalPadding: CGFloat = 8
@@ -26,6 +27,8 @@ private func settingsNavigationTitle(
     switch destination {
     case .general:
         AppL10n.settings("tab.general", defaultValue: "通用")
+    case .permissions:
+        AppL10n.settings("tab.permissions", defaultValue: "权限")
     case .about:
         AppL10n.settings("tab.about", defaultValue: "关于")
     case .plugins(.actionsAndShortcuts):
@@ -288,6 +291,212 @@ private struct PermissionSettingsRow: View {
                 .buttonStyle(.bordered)
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct PermissionCenterSettingsView: View {
+    @ObservedObject var coordinator: PermissionCoordinator
+
+    var body: some View {
+        SettingsGroupedFormPageScaffold(
+            introduction: SettingsPageIntroductionConfiguration(
+                description: AppL10n.settings(
+                    "permissions.description",
+                    defaultValue: "集中查看已安装功能使用的 macOS 权限。MacTools 只能发起请求或打开系统设置，不能代替你授予权限。"
+                )
+            ),
+            introductionAccessory: {
+                Button {
+                    coordinator.refresh()
+                } label: {
+                    Label(
+                        AppL10n.settings("permissions.recheck", defaultValue: "重新检查"),
+                        systemImage: "arrow.clockwise"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        ) { widths in
+            if coordinator.items.isEmpty {
+                Section {
+                    ContentUnavailableView(
+                        AppL10n.settings("permissions.empty.title", defaultValue: "暂无相关权限"),
+                        systemImage: "checkmark.shield",
+                        description: Text(AppL10n.settings(
+                            "permissions.empty.description",
+                            defaultValue: "安装需要 macOS 权限的插件后，它们会显示在这里。"
+                        ))
+                    )
+                    .frame(width: widths.sectionLayout)
+                    .frame(minHeight: 180)
+                }
+            } else {
+                ForEach(coordinator.items) { item in
+                    Section {
+                        PermissionCenterRow(
+                            item: item,
+                            onAction: {
+                                if item.status == .granted {
+                                    coordinator.refresh()
+                                } else {
+                                    coordinator.performAction(
+                                        for: item,
+                                        sourceFrame: pointerSourceFrame()
+                                    )
+                                }
+                            }
+                        )
+                        .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    } header: {
+                        SettingsGroupedFormSectionHeader(
+                            title: permissionTitle(for: item.kind),
+                            systemImage: permissionSystemImage(for: item.kind),
+                            layoutWidth: widths.readableContent
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func pointerSourceFrame() -> CGRect {
+        let point = NSEvent.mouseLocation
+        return CGRect(x: point.x - 16, y: point.y - 16, width: 32, height: 32)
+    }
+}
+
+private struct PermissionCenterRow: View {
+    let item: PermissionCenterItem
+    let onAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    Label {
+                        Text(item.statusText)
+                    } icon: {
+                        Image(systemName: item.statusSystemImage)
+                    }
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                    .foregroundStyle(statusColor(for: item.statusTone))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button(permissionActionTitle(for: item), action: onAction)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowVertical) {
+                Text(AppL10n.settings(
+                    "permissions.affectedFeatures",
+                    defaultValue: "使用此权限的功能"
+                ))
+                .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                ForEach(item.affectedFeatures) { feature in
+                    HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                        Image(systemName: feature.isGranted
+                            ? "checkmark.circle.fill"
+                            : "circle.dashed")
+                            .foregroundStyle(feature.isGranted ? .green : .secondary)
+                            .frame(width: 16)
+
+                        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                            Text(feature.pluginTitle)
+                                .font(PluginSettingsTheme.Typography.rowTitle)
+                            Text(feature.description)
+                                .font(PluginSettingsTheme.Typography.rowDescription)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+
+            if let footnote = item.footnote {
+                Text(footnote)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+    }
+}
+
+private func permissionTitle(for kind: HostPermissionKind) -> String {
+    switch kind {
+    case .accessibility:
+        permissionFlowTitle(
+            key: PermissionFlowResources.accessibilityName(),
+            defaultValue: "辅助功能"
+        )
+    case .inputMonitoring:
+        permissionFlowTitle(
+            key: "permission_flow.pane.input_monitoring",
+            defaultValue: "输入监控"
+        )
+    case .screenRecording:
+        permissionFlowTitle(
+            key: "permission_flow.pane.screen_recording",
+            defaultValue: "屏幕录制"
+        )
+    case .calendarFullAccess:
+        permissionFlowTitle(
+            key: "permission_flow.pane.calendars",
+            defaultValue: "日历完全访问"
+        )
+    case .automation:
+        AppL10n.settings("permissions.kind.automation", defaultValue: "自动化")
+    case .systemAudioRecording:
+        AppL10n.settings("permissions.kind.systemAudio", defaultValue: "系统音频录制")
+    case .fullDiskAccess:
+        permissionFlowTitle(
+            key: "permission_flow.pane.full_disk_access",
+            defaultValue: "完全磁盘访问"
+        )
+    case .finderExtension:
+        AppL10n.settings("permissions.kind.finderExtension", defaultValue: "Finder 扩展")
+    }
+}
+
+private func permissionFlowTitle(key: String, defaultValue: String) -> String {
+    PermissionFlowResources.localizedString(
+        for: key,
+        defaultValue: defaultValue,
+        localeIdentifier: PluginRuntimeLocalization.locale.identifier
+    )
+}
+
+private func permissionSystemImage(for kind: HostPermissionKind) -> String {
+    switch kind {
+    case .accessibility: "accessibility"
+    case .inputMonitoring: "keyboard.badge.eye"
+    case .screenRecording: "rectangle.dashed.badge.record"
+    case .calendarFullAccess: "calendar"
+    case .automation: "cursorarrow.click.2"
+    case .systemAudioRecording: "waveform.badge.mic"
+    case .fullDiskAccess: "externaldrive.badge.checkmark"
+    case .finderExtension: "puzzlepiece.extension"
+    }
+}
+
+private func permissionActionTitle(for item: PermissionCenterItem) -> String {
+    if item.status == .granted {
+        return AppL10n.settings("permissions.recheck", defaultValue: "重新检查")
+    }
+    switch item.kind {
+    case .calendarFullAccess, .systemAudioRecording:
+        return AppL10n.plugins("plugin.permission.requestAuthorization", defaultValue: "请求授权")
+    case .automation, .finderExtension:
+        return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
+    default:
+        return AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
     }
 }
 
@@ -2108,7 +2317,7 @@ private struct SettingsSidebar: View {
     private var appDestinations: [SettingsNavigationDestination] {
         orderedDestinations.filter {
             switch $0 {
-            case .general, .plugins(.automation), .about:
+            case .general, .permissions, .plugins(.automation), .about:
                 true
             case .plugins:
                 false
@@ -2157,6 +2366,15 @@ private struct SettingsSidebar: View {
                 title: title,
                 systemImage: "gearshape",
                 iconTint: .gray,
+                shortcutNumber: shortcutNumber
+            )
+            .tag(destination)
+            .id(destination)
+        case .permissions:
+            SettingsSidebarRow(
+                title: title,
+                systemImage: "lock.shield",
+                iconTint: .teal,
                 shortcutNumber: shortcutNumber
             )
             .tag(destination)
@@ -2584,6 +2802,10 @@ private struct SettingsDetailPane: View {
                 launchAtLoginController: launchAtLoginController,
                 menuBarPanelThemeStore: menuBarPanelThemeStore,
                 appearanceUserDefaults: appearanceUserDefaults
+            )
+        case .permissions:
+            PermissionCenterSettingsView(
+                coordinator: pluginHost.permissionCoordinator
             )
         case .about:
             AboutSettingsView(

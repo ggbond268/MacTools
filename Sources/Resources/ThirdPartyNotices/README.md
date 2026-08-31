@@ -5,6 +5,7 @@ This directory records third-party assets, dependencies, and implementation refe
 - [Kyome22/menubar_runcat](https://github.com/Kyome22/menubar_runcat)
 - [tabler/tabler-icons](https://github.com/tabler/tabler-icons)
 - [sparkle-project/Sparkle](https://github.com/sparkle-project/Sparkle)
+- [jaywcjlove/PermissionFlow](https://github.com/jaywcjlove/PermissionFlow) — MIT License; Copyright (c) 2026 小弟调调
 - [LunarBar-app/LunarBar](https://github.com/LunarBar-app/LunarBar)
 - [MonitorControl/MonitorControl](https://github.com/MonitorControl/MonitorControl)
 - [artginzburg/MiddleClick](https://github.com/artginzburg/MiddleClick)

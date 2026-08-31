@@ -6,6 +6,7 @@ import MacToolsPluginKit
 /// subpage. Instances are scoped to a single Settings window.
 enum SettingsNavigationDestination: Hashable {
     case general
+    case permissions
     case about
     case plugins(FeatureSettingsPane)
 
@@ -13,6 +14,10 @@ enum SettingsNavigationDestination: Hashable {
         switch self {
         case .general:
             .general
+        case .permissions:
+            // Keep the PluginKit destination enum ABI-stable. Permissions is
+            // a host-owned Settings page within the broader plugin domain.
+            .pluginConfiguration
         case .about:
             .about
         case .plugins:
@@ -40,6 +45,7 @@ extension SettingsNavigationDestination {
 
         return [
             .general,
+            .permissions,
             .plugins(.automation),
             .about
         ] + pluginPanes

@@ -821,6 +821,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         case .general:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .general)
+        case .permissions:
+            pendingAppUpdateVersion = nil
+            settingsNavigationCoordinator?.navigate(to: .permissions)
         case .about:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .about)

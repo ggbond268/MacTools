@@ -5,6 +5,14 @@ import MacToolsPluginKit
 
 @MainActor
 final class DiskCleanPluginTests: XCTestCase {
+    func testDeclaresOptionalFullDiskAccessForHostPermissionCenter() throws {
+        let plugin = DiskCleanPlugin(controller: FakeDiskCleanPluginController())
+
+        let requirement = try XCTUnwrap(plugin.permissionRequirements.first)
+        XCTAssertEqual(requirement.id, "full-disk-access")
+        XCTAssertEqual(plugin.permissionRequirements.count, 1)
+    }
+
     func testExpandedPanelExposesOnlyScanCleanAndOpenDetailsActions() throws {
         let plugin = DiskCleanPlugin(controller: FakeDiskCleanPluginController())
 
