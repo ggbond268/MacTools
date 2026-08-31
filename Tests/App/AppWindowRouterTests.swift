@@ -752,13 +752,13 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(coordinator.destination, .plugins(.automation))
+        XCTAssertEqual(coordinator.destination, .permissions)
 
         XCTAssertTrue(
             window.performKeyEquivalent(
                 with: keyEvent(
-                    keyCode: UInt16(kVK_ANSI_4),
-                    characters: "$",
+                    keyCode: UInt16(kVK_ANSI_5),
+                    characters: "%",
                     windowNumber: window.windowNumber
                 )
             )
@@ -774,7 +774,7 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(coordinator.destination, .plugins(.automation))
+        XCTAssertEqual(coordinator.destination, .permissions)
 
         XCTAssertTrue(
             window.performKeyEquivalent(
@@ -786,7 +786,7 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(coordinator.destination, .about)
+        XCTAssertEqual(coordinator.destination, .plugins(.automation))
 
         window.close()
     }
