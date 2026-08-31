@@ -2,7 +2,7 @@
 
 Last verified: 2026-08-31
 
-Status: ready-for-review
+Status: in-review
 Source of truth: yes
 
 ## Summary
@@ -64,7 +64,7 @@ Source of truth: yes
 - [x] P003 — Implement helper key fallback and update plugin capability handling.
 - [x] P004 — Add focused regressions and update required documentation/localization.
 - [x] P005 — Run verification, independent standards/spec/security review, and resolve findings.
-- [ ] P006 — Commit only issue #341 changes and publish one focused PR.
+- [x] P006 — Commit only issue #341 changes and publish one focused PR.
 
 ## TODO
 
@@ -89,6 +89,7 @@ Source of truth: yes
 - 2026-08-31 — Final independent Sol review against base `9197035650b67f1c313960e8b1dded7a710264dd` returned `CLEAR` with no remaining P0–P3 findings; the only open validation item is compatible-hardware SMC acceptance.
 - 2026-08-31 — User authorized publication while unrelated WindowSwitcher WIP remains in the shared checkout. The issue branch will include only Battery Charge Limit hunks; the PR will explicitly retain the post-wiring XCTest and compatible-hardware SMC limitations.
 - 2026-08-31 — The post-wiring focused XCTest rerun passed all Battery Charge Limit, force-discharge policy, and writer tests. The latest `make ci` still exits 65 only on unrelated `FanControlPluginTests.testMonitoringOnlyPublishesMeaningfulSnapshotChanges`, `PluginPackageManifestTests.testRichProjectedManifestDecodesProductMetadata`, three `SystemStatusPluginTests` formatter/width tests, and three `DiskCleanPluginTests` action/subtitle tests; the runner duplicated one Fan Control failure.
+- 2026-08-31 — Commit `e8118b7abec3ae7378bda31a10e84ba499808a15` contains only the 13 planned Battery Charge Limit and documentation files; target comparison against `upstream/main` is clean. Draft PR #370 was opened to close issue #341, with compatible-hardware SMC acceptance explicitly left for review.
 
 ## Current files
 
@@ -145,4 +146,4 @@ Source of truth: yes
 
 | Date | Commit | Type | Notes |
 |---|---|---|---|
-| 2026-08-31 | `pending` | Bug fix | Reliable adapter-isolation writes for issue #341 |
+| 2026-08-31 | `e8118b7a` | Bug fix | Reliable adapter-isolation writes for issue #341; draft PR #370 |
