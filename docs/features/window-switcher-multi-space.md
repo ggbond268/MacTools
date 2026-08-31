@@ -2,7 +2,7 @@
 
 Last verified: 2026-08-31
 
-Status: ready-for-publish
+Status: published
 Source of truth: yes
 
 ## Summary
@@ -39,7 +39,7 @@ Source of truth: yes
 - [x] Targeted tests, plugin build, repository PR checks, whitespace checks, and the separate standards/spec/security reviews pass.
 - [x] Manual macOS acceptance is recorded, including any unavailable interaction evidence.
 - [x] README and the unreleased changelog describe the corrected user-visible behavior.
-- [ ] The change is published as one focused pull request closing issue #357.
+- [x] The change is published as one focused pull request closing issue #357.
 
 ## Business rules
 
@@ -78,7 +78,7 @@ Source of truth: yes
 - [x] P002 — Define the all-Space discovery, AX enrichment, fallback activation, and regression-test contract.
 - [x] P003 — Implement the catalog change and focused tests.
 - [x] P004 — Update README/changelog and complete targeted plus PR verification.
-- [ ] P005 — Publish one focused PR and confirm it remotely.
+- [x] P005 — Publish one focused PR and confirm it remotely.
 
 ## TODO
 
@@ -115,6 +115,7 @@ Source of truth: yes
 - 2026-08-31 — Added explicit reassignment coverage for an ambiguous legacy first-window shortcut. The focused class now contains 58 passing tests. `make ci` again passed all 196 script checks, while its global XCTest phase reported nine failures outside Window Switcher: `PluginPackageManifestTests` x1, `SystemStatusPluginTests` x4, `DiskCleanPluginTests` x3, and `DeviceBatteryCommandRunnerTests` x1. Whitespace and bounded Graphify checks pass; the final standards/spec review is clear, while the two final Sol review workers did not return a result after bounded waits and were stopped.
 - 2026-08-31 — Manual macOS acceptance used the installed Debug app with Accessibility granted. Its overlay listed two distinct Finder `Récents` entries while the live `.optionAll` CoreGraphics inventory identified one matching Finder record (`windowNumber 6617`) with `isOnScreen == false`; the active-Space record was `windowNumber 6681` with `isOnScreen == true`. The temporary `Control-Option-9` trigger was restored to the original `Command-Tab` binding. Selecting the exact inactive entry remains unverified through the accessibility driver, so it is recorded as a coverage limitation rather than a discovery-contract failure.
 - 2026-08-31 — Final local standards/spec review found no actionable divergence from issue #357 or repository conventions. Threat review of CoreGraphics/Accessibility metadata, process identity, activation, cancellation, and permission-loss boundaries found no actionable security vulnerability. The 58 focused Window Switcher tests, plugin build, script checks, and whitespace checks are green. Two bounded independent review workers did not return and were stopped without a verdict; their absence does not replace the completed local reviews.
+- 2026-08-31 — Published PR #376 from `codex/issue-357-window-switcher-spaces`; GitHub confirms its `main` base, open ready-for-review state, and `Closes #357` reference. GitButler `zz` is clean; concurrent stacks remain untouched.
 
 ## Acceptance evidence
 
@@ -171,4 +172,4 @@ Source of truth: yes
 
 | Date | Commit | Type | Notes |
 |---|---|---|---|
-| 2026-08-31 | `pending` | Bug fix | Cross-Space window discovery for issue #357 |
+| 2026-08-31 | `lsr` | Bug fix | Cross-Space window discovery for issue #357; published as PR #376 |
