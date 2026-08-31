@@ -2,7 +2,7 @@
 
 Last verified: 2026-08-31
 
-Status: ready-for-review
+Status: in-review
 Source of truth: yes
 
 ## Summary
@@ -48,7 +48,7 @@ Source of truth: yes
 - [x] P002 — Define the selected-day detail contract and scope boundaries.
 - [x] P003 — Add the detail view, full lunar date model field, and focused regression tests.
 - [x] P004 — Run available focused checks, record the global XCTest blocker, and complete a separate review.
-- [ ] P005 — Commit the isolated change and open one pull request.
+- [x] P005 — Commit the isolated change and open one pull request.
 
 ## TODO
 
@@ -56,7 +56,7 @@ Source of truth: yes
 - [x] F002 — Render selected-day date metadata and existing events below the grid — files: `Plugins/Calendar/Sources/CalendarComponentView.swift` — status: done
 - [x] F003 — Allocate component height for the detail area — files: `Plugins/Calendar/Sources/CalendarPlugin.swift`, `Plugins/Calendar/Tests/CalendarPluginIntegrationTests.swift` — status: done
 - [x] F004 — Add model and presentation regression coverage — files: `Plugins/Calendar/Tests/CalendarMonthModelBuilderTests.swift`, `Plugins/Calendar/Tests/CalendarComponentViewModelTests.swift` — status: done
-- [ ] F005 — Verify, review, and publish the isolated change — files: `Plugins/Calendar/`, this feature record
+- [x] F005 — Verify, review, and publish the isolated change — files: `Plugins/Calendar/`, this feature record — status: done
 
 ## Acceptance / DoD
 
@@ -68,7 +68,7 @@ Source of truth: yes
 - [ ] Focused Calendar XCTest passes; the global test target is currently blocked by unrelated TrackpadGestures compilation errors.
 - [x] The Calendar plugin build, script tests, changelog validation, JSON validation, and whitespace checks pass.
 - [x] Separate Standards and Specification reviews find no actionable issue after the layout/test follow-up.
-- [ ] One focused pull request closes issue #280.
+- [x] One focused draft pull request closes issue #280.
 
 ## Implementation journal
 
@@ -79,6 +79,7 @@ Source of truth: yes
 - 2026-08-31 — Verification passed: `make build-plugin PLUGIN=Calendar`, `make script-tests` (196 tests), `python3 scripts/changelog.py validate`, `jq empty`, `git diff --check`, and untracked-file whitespace validation. The focused Calendar XCTest invocation could not reach Calendar because the global target fails first on unrelated `TrackpadGestures` symbols (`MacToolsSyntheticInputEvent` and `KeyboardKeyTap`).
 - 2026-08-31 — Separate Standards and Specification reviews completed with no actionable findings after increasing the layout budget and adding presentation/selection regression coverage. Manual UI acceptance remains pending because the test target cannot build.
 - 2026-08-31 — Manual UI acceptance was attempted. The freshly generated Calendar package is present, but the local Debug app artifact has no executable after the global build interruption, so Computer Use could not open an app to inspect the component.
+- 2026-08-31 — Commit `2a8e138a` created and draft PR [#368](https://github.com/ggbond268/MacTools/pull/368) opened for issue #280. The branch contains only the Calendar implementation, tests, README entry, feature record, index entry, and changelog; focused XCTest and manual UI acceptance remain pending as recorded above.
 
 ## Files
 
