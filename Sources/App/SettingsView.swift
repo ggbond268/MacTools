@@ -316,6 +316,9 @@ private struct PermissionCenterSettingsView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
+                .help(AppL10n.settings("permissions.recheck", defaultValue: "重新检查"))
             }
         ) { widths in
             if coordinator.items.isEmpty {
@@ -342,7 +345,10 @@ private struct PermissionCenterSettingsView: View {
                                 } else {
                                     coordinator.performAction(
                                         for: item,
-                                        sourceFrame: pointerSourceFrame()
+                                        sourceFrame: permissionGuidanceSourceFrame(
+                                            eventType: NSApp.currentEvent?.type,
+                                            mouseLocation: NSEvent.mouseLocation
+                                        )
                                     )
                                 }
                             }
@@ -358,11 +364,29 @@ private struct PermissionCenterSettingsView: View {
                 }
             }
         }
+        .onAppear {
+            coordinator.setPermissionCenterVisible(true)
+        }
+        .onDisappear {
+            coordinator.setPermissionCenterVisible(false)
+        }
     }
+}
 
-    private func pointerSourceFrame() -> CGRect {
-        let point = NSEvent.mouseLocation
-        return CGRect(x: point.x - 16, y: point.y - 16, width: 32, height: 32)
+func permissionGuidanceSourceFrame(
+    eventType: NSEvent.EventType?,
+    mouseLocation: CGPoint
+) -> CGRect? {
+    switch eventType {
+    case .leftMouseDown, .leftMouseUp:
+        return CGRect(
+            x: mouseLocation.x - 16,
+            y: mouseLocation.y - 16,
+            width: 32,
+            height: 32
+        )
+    default:
+        return nil
     }
 }
 
@@ -400,19 +424,31 @@ private struct PermissionCenterRow: View {
 
                 ForEach(item.affectedFeatures) { feature in
                     HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.controlCluster) {
-                        Image(systemName: feature.isGranted
-                            ? "checkmark.circle.fill"
-                            : "circle.dashed")
-                            .foregroundStyle(feature.isGranted ? .green : .secondary)
+                        Image(systemName: featureStatusSystemImage(for: feature))
+                            .foregroundStyle(featureStatusColor(for: feature))
                             .frame(width: 16)
+                            .accessibilityHidden(true)
 
                         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                            Text(feature.pluginTitle)
-                                .font(PluginSettingsTheme.Typography.rowTitle)
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(feature.pluginTitle)
+                                    .font(PluginSettingsTheme.Typography.rowTitle)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Text(permissionFeatureStatusText(for: feature))
+                                    .font(PluginSettingsTheme.Typography.statusBadge)
+                                    .foregroundStyle(featureStatusColor(for: feature))
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
                             Text(feature.description)
                                 .font(PluginSettingsTheme.Typography.rowDescription)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if let footnote = feature.footnote {
+                                Text(footnote)
+                                    .font(PluginSettingsTheme.Typography.rowDescription)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
                 }
@@ -426,6 +462,49 @@ private struct PermissionCenterRow: View {
             }
         }
         .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+    }
+
+    private func featureStatusSystemImage(
+        for feature: PermissionCenterAffectedFeature
+    ) -> String {
+        if let statusSystemImage = feature.statusSystemImage {
+            return statusSystemImage
+        }
+        return switch feature.status {
+        case .attention: "exclamationmark.circle.fill"
+        case .onDemand: "circle.dashed"
+        case .granted: "checkmark.circle.fill"
+        }
+    }
+
+    private func featureStatusColor(
+        for feature: PermissionCenterAffectedFeature
+    ) -> Color {
+        if let statusTone = feature.statusTone {
+            return statusColor(for: statusTone)
+        }
+        return switch feature.status {
+        case .attention: .orange
+        case .onDemand: .secondary
+        case .granted: .green
+        }
+    }
+}
+
+func permissionFeatureStatusText(
+    for feature: PermissionCenterAffectedFeature
+) -> String {
+    if let statusText = feature.statusText, !statusText.isEmpty {
+        return statusText
+    }
+
+    return switch feature.status {
+    case .attention:
+        AppL10n.plugins("plugin.permission.notGranted", defaultValue: "未授权")
+    case .onDemand:
+        AppL10n.settings("permissions.status.onDemand", defaultValue: "按需请求")
+    case .granted:
+        AppL10n.plugins("plugin.permission.granted", defaultValue: "已授权")
     }
 }
 

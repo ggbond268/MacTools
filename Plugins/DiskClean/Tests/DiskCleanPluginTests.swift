@@ -13,6 +13,34 @@ final class DiskCleanPluginTests: XCTestCase {
         XCTAssertEqual(plugin.permissionRequirements.count, 1)
     }
 
+    func testFullDiskAccessPermissionCopyCoversEverySupportedLocale() throws {
+        let catalogURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources/Localizable.xcstrings")
+        let data = try Data(contentsOf: catalogURL)
+        let catalog = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        let expectedLocales: Set<String> = [
+            "ar", "de", "en", "es", "fr", "ja", "ko", "pt", "ru", "zh-Hans", "zh-Hant",
+        ]
+
+        for key in [
+            "permission.fullDiskAccess.title",
+            "permission.fullDiskAccess.description",
+            "detail.fda.footnote",
+        ] {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], "Missing \(key)")
+            let localizations = try XCTUnwrap(
+                entry["localizations"] as? [String: Any],
+                "Missing localizations for \(key)"
+            )
+            XCTAssertEqual(Set(localizations.keys), expectedLocales, key)
+        }
+    }
+
     func testExpandedPanelExposesOnlyScanCleanAndOpenDetailsActions() throws {
         let plugin = DiskCleanPlugin(controller: FakeDiskCleanPluginController())
 

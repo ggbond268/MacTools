@@ -330,8 +330,8 @@ final class DiskCleanPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSettingsP
         return PluginPermissionState(
             isGranted: isGranted,
             footnote: isGranted ? nil : localization.string(
-                "permission.fullDiskAccess.footnote",
-                defaultValue: "未授权时会跳过受保护的系统缓存；更改后可能需要重新打开 MacTools。"
+                "detail.fda.footnote",
+                defaultValue: "授权后请退出并重新打开 MacTools。"
             )
         )
     }

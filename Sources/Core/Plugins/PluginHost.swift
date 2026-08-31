@@ -489,8 +489,8 @@ final class PluginHost: ObservableObject {
                 permissionID: permissionID
             )
         },
-        refreshHandler: { [weak self] in
-            self?.refreshAll()
+        refreshHandler: { [weak self] targets in
+            self?.refreshPermissionState(targets: targets)
         }
     )
     @Published private(set) var shortcutItems: [ShortcutSettingsItem] = []
@@ -2971,6 +2971,87 @@ final class PluginHost: ObservableObject {
         pluginCatalogStatus = pluginCatalogManager?.status ?? .unavailable
     }
 
+    private func refreshPermissionState(targets: [PermissionCenterAffectedFeature]) {
+        var refreshedPluginIDs: Set<String> = []
+        for target in targets where refreshedPluginIDs.insert(target.pluginID).inserted {
+            guard let plugin = corePlugin(for: target.pluginID) else { continue }
+            handlePluginAction(rebuildAfterAction: false) {
+                if target.status == .granted,
+                   target.permissionID == "system-audio-recording" {
+                    guardPluginCall(plugin, operation: "recheck granted permission state") {
+                        plugin.handlePermissionAction(id: target.permissionID)
+                    }
+                } else {
+                    guardPluginCall(plugin, operation: "refresh permission state") {
+                        plugin.refresh()
+                    }
+                }
+            }
+        }
+
+        rebuildPermissionProjections()
+    }
+
+    private func rebuildPermissionProjections() {
+        var permissionCenterRequirements: [PermissionCenterRequirement] = []
+        permissionCards = orderedCorePlugins().flatMap { plugin -> [PluginPermissionCard] in
+            let requirements = guardedValue(
+                for: plugin,
+                operation: "read permission requirements",
+                plugin.permissionRequirements
+            ) ?? []
+
+            return requirements.compactMap { requirement -> PluginPermissionCard? in
+                guard let state = guardedValue(
+                    for: plugin,
+                    operation: "read permission state",
+                    plugin.permissionState(for: requirement.id)
+                ) else {
+                    return nil
+                }
+
+                let hostKind = HostPermissionKind.resolve(
+                    permissionID: requirement.id,
+                    pluginKind: requirement.kind
+                )
+                permissionCenterRequirements.append(
+                    PermissionCenterRequirement(
+                        pluginID: plugin.metadata.id,
+                        pluginTitle: plugin.metadata.title,
+                        permissionID: requirement.id,
+                        kind: hostKind,
+                        description: requirement.description,
+                        isGranted: state.isGranted,
+                        footnote: state.footnote,
+                        statusText: state.statusText,
+                        statusSystemImage: state.statusSystemImage,
+                        statusTone: state.statusTone
+                    )
+                )
+
+                return PluginPermissionCard(
+                    id: "\(plugin.metadata.id).permission.\(requirement.id)",
+                    pluginID: plugin.metadata.id,
+                    permissionID: requirement.id,
+                    title: requirement.title,
+                    description: requirement.description,
+                    iconSystemImage: permissionIconName(for: hostKind),
+                    statusText: state.statusText ?? (state.isGranted
+                        ? AppL10n.plugins("plugin.permission.granted", defaultValue: "已授权")
+                        : AppL10n.plugins("plugin.permission.notGranted", defaultValue: "未授权")),
+                    statusSystemImage: state.statusSystemImage ?? (state.isGranted ? "checkmark.shield.fill" : "exclamationmark.triangle.fill"),
+                    statusTone: state.statusTone ?? (state.isGranted ? .positive : .caution),
+                    footnote: state.footnote,
+                    buttonTitle: permissionActionTitle(
+                        for: hostKind,
+                        isGranted: state.isGranted
+                    )
+                )
+            }
+        }
+        permissionCoordinator.replaceRequirements(permissionCenterRequirements)
+    }
+
     private func rebuildDerivedState(dirtyPluginIDs: Set<String>? = nil) {
         if dirtyPluginIDs == nil {
             cancelScheduledPluginStateRebuild()
@@ -3249,63 +3330,7 @@ final class PluginHost: ObservableObject {
             )
         }
 
-        var permissionCenterRequirements: [PermissionCenterRequirement] = []
-        permissionCards = orderedCorePlugins().flatMap { plugin -> [PluginPermissionCard] in
-            let requirements = guardedValue(
-                for: plugin,
-                operation: "read permission requirements",
-                plugin.permissionRequirements
-            ) ?? []
-
-            return requirements.compactMap { requirement -> PluginPermissionCard? in
-                guard let state = guardedValue(
-                    for: plugin,
-                    operation: "read permission state",
-                    plugin.permissionState(for: requirement.id)
-                ) else {
-                    return nil
-                }
-
-                let hostKind = HostPermissionKind.resolve(
-                    permissionID: requirement.id,
-                    pluginKind: requirement.kind
-                )
-                permissionCenterRequirements.append(
-                    PermissionCenterRequirement(
-                        pluginID: plugin.metadata.id,
-                        pluginTitle: plugin.metadata.title,
-                        permissionID: requirement.id,
-                        kind: hostKind,
-                        description: requirement.description,
-                        isGranted: state.isGranted,
-                        footnote: state.footnote,
-                        statusText: state.statusText,
-                        statusSystemImage: state.statusSystemImage,
-                        statusTone: state.statusTone
-                    )
-                )
-
-                return PluginPermissionCard(
-                    id: "\(plugin.metadata.id).permission.\(requirement.id)",
-                    pluginID: plugin.metadata.id,
-                    permissionID: requirement.id,
-                    title: requirement.title,
-                    description: requirement.description,
-                    iconSystemImage: permissionIconName(for: hostKind),
-                    statusText: state.statusText ?? (state.isGranted
-                        ? AppL10n.plugins("plugin.permission.granted", defaultValue: "已授权")
-                        : AppL10n.plugins("plugin.permission.notGranted", defaultValue: "未授权")),
-                    statusSystemImage: state.statusSystemImage ?? (state.isGranted ? "checkmark.shield.fill" : "exclamationmark.triangle.fill"),
-                    statusTone: state.statusTone ?? (state.isGranted ? .positive : .caution),
-                    footnote: state.footnote,
-                    buttonTitle: permissionActionTitle(
-                        for: hostKind,
-                        isGranted: state.isGranted
-                    )
-                )
-            }
-        }
-        permissionCoordinator.replaceRequirements(permissionCenterRequirements)
+        rebuildPermissionProjections()
 
         synchronizeActionRegistry()
 

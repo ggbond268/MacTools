@@ -92,6 +92,10 @@ struct PermissionCenterAffectedFeature: Identifiable, Equatable, Sendable {
     let description: String
     let isGranted: Bool
     let footnote: String?
+    let status: PermissionCenterStatus
+    let statusText: String?
+    let statusSystemImage: String?
+    let statusTone: PluginStatusTone?
 
     var id: String {
         "\(pluginID).permission.\(permissionID)"
@@ -109,7 +113,7 @@ struct PermissionCenterItem: Identifiable, Equatable, Sendable {
 
     var id: String { kind.rawValue }
     var actionTarget: PermissionCenterAffectedFeature? {
-        affectedFeatures.first(where: { !$0.isGranted }) ?? affectedFeatures.first
+        affectedFeatures.first(where: { $0.status != .granted }) ?? affectedFeatures.first
     }
 }
 
@@ -119,7 +123,16 @@ enum PermissionCenterAggregator {
     ) -> [PermissionCenterItem] {
         Dictionary(grouping: requirements, by: \.kind)
             .map { kind, requirements in
-                let affectedFeatures = requirements
+                let sortedRequirements = requirements.sorted {
+                    if $0.pluginTitle.localizedStandardCompare($1.pluginTitle) == .orderedSame {
+                        if $0.pluginID == $1.pluginID {
+                            return $0.permissionID < $1.permissionID
+                        }
+                        return $0.pluginID < $1.pluginID
+                    }
+                    return $0.pluginTitle.localizedStandardCompare($1.pluginTitle) == .orderedAscending
+                }
+                let affectedFeatures = sortedRequirements
                     .map {
                         PermissionCenterAffectedFeature(
                             pluginID: $0.pluginID,
@@ -127,27 +140,38 @@ enum PermissionCenterAggregator {
                             permissionID: $0.permissionID,
                             description: $0.description,
                             isGranted: $0.isGranted,
-                            footnote: $0.footnote
+                            footnote: $0.footnote,
+                            status: featureStatus(for: $0),
+                            statusText: $0.statusText,
+                            statusSystemImage: $0.statusSystemImage,
+                            statusTone: $0.statusTone
                         )
                     }
-                    .sorted {
-                        if $0.pluginTitle.localizedStandardCompare($1.pluginTitle) == .orderedSame {
-                            return $0.id < $1.id
-                        }
-                        return $0.pluginTitle.localizedStandardCompare($1.pluginTitle) == .orderedAscending
-                    }
 
-                let unresolved = requirements.filter { !$0.isGranted }
+                let attentionRequirements = sortedRequirements.filter {
+                    featureStatus(for: $0) == .attention
+                }
+                let onDemandRequirements = sortedRequirements.filter {
+                    featureStatus(for: $0) == .onDemand
+                }
                 let status: PermissionCenterStatus
-                if unresolved.isEmpty {
-                    status = .granted
-                } else if unresolved.allSatisfy({ $0.statusTone == .neutral }) {
+                if !attentionRequirements.isEmpty {
+                    status = .attention
+                } else if !onDemandRequirements.isEmpty {
                     status = .onDemand
                 } else {
-                    status = .attention
+                    status = .granted
                 }
 
-                let representative = unresolved.first ?? requirements.first
+                let representative: PermissionCenterRequirement? = switch status {
+                case .attention:
+                    attentionRequirements.first(where: { $0.footnote != nil })
+                        ?? attentionRequirements.first
+                case .onDemand:
+                    onDemandRequirements.first
+                case .granted:
+                    sortedRequirements.first
+                }
                 let statusPresentation = statusPresentation(
                     status: status,
                     representative: representative
@@ -159,7 +183,9 @@ enum PermissionCenterAggregator {
                     statusText: statusPresentation.text,
                     statusSystemImage: statusPresentation.systemImage,
                     statusTone: statusPresentation.tone,
-                    footnote: centerFootnote(for: kind, requirements: requirements)
+                    footnote: centerFootnote(
+                        for: kind
+                    )
                 )
             }
             .sorted {
@@ -168,6 +194,15 @@ enum PermissionCenterAggregator {
                 }
                 return $0.kind.sortOrder < $1.kind.sortOrder
             }
+    }
+
+    private static func featureStatus(
+        for requirement: PermissionCenterRequirement
+    ) -> PermissionCenterStatus {
+        if requirement.statusTone == .neutral {
+            return .onDemand
+        }
+        return requirement.isGranted ? .granted : .attention
     }
 
     private static func statusPresentation(
@@ -199,8 +234,7 @@ enum PermissionCenterAggregator {
     }
 
     private static func centerFootnote(
-        for kind: HostPermissionKind,
-        requirements: [PermissionCenterRequirement]
+        for kind: HostPermissionKind
     ) -> String? {
         switch kind {
         case .fullDiskAccess:
@@ -219,7 +253,7 @@ enum PermissionCenterAggregator {
                 defaultValue: "系统音频录制由相关功能首次捕获音频时按需请求。"
             )
         default:
-            return requirements.lazy.compactMap(\.footnote).first
+            return nil
         }
     }
 }
@@ -227,7 +261,7 @@ enum PermissionCenterAggregator {
 @MainActor
 final class PermissionCoordinator: ObservableObject {
     typealias SpecializedActionHandler = (_ pluginID: String, _ permissionID: String) -> Void
-    typealias RefreshHandler = () -> Void
+    typealias RefreshHandler = (_ targets: [PermissionCenterAffectedFeature]) -> Void
     typealias GuidanceHandler = @MainActor (_ kind: HostPermissionKind, _ sourceFrame: CGRect?) -> Void
 
     @Published private(set) var items: [PermissionCenterItem] = []
@@ -236,6 +270,9 @@ final class PermissionCoordinator: ObservableObject {
     private let refreshHandler: RefreshHandler
     private let guidanceHandler: GuidanceHandler
     private var activationObserver: PermissionNotificationObserver?
+    private var isPermissionCenterVisible = false
+    private var pendingActivationRefreshCount = 0
+    private var activationRefreshTarget: PermissionCenterAffectedFeature?
 
     init(
         notificationCenter: NotificationCenter = .default,
@@ -252,7 +289,24 @@ final class PermissionCoordinator: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.refreshHandler()
+                guard let self,
+                      self.isPermissionCenterVisible || self.pendingActivationRefreshCount > 0 else {
+                    return
+                }
+                var targets = self.isPermissionCenterVisible
+                    ? self.visiblePermissionRefreshTargets()
+                    : []
+                if self.pendingActivationRefreshCount > 0 {
+                    if let target = self.activationRefreshTarget,
+                       !targets.contains(where: { $0.id == target.id }) {
+                        targets.append(target)
+                    }
+                    self.pendingActivationRefreshCount -= 1
+                    if self.pendingActivationRefreshCount == 0 {
+                        self.activationRefreshTarget = nil
+                    }
+                }
+                self.refreshHandler(targets)
             }
         }
         activationObserver = PermissionNotificationObserver(
@@ -263,6 +317,17 @@ final class PermissionCoordinator: ObservableObject {
 
     func replaceRequirements(_ requirements: [PermissionCenterRequirement]) {
         items = PermissionCenterAggregator.aggregate(requirements)
+        if let target = activationRefreshTarget,
+           items.lazy.flatMap(\.affectedFeatures).contains(where: {
+               $0.id == target.id && $0.status == .granted
+           }) {
+            pendingActivationRefreshCount = 0
+            activationRefreshTarget = nil
+        }
+    }
+
+    func setPermissionCenterVisible(_ isVisible: Bool) {
+        isPermissionCenterVisible = isVisible
     }
 
     @discardableResult
@@ -275,10 +340,16 @@ final class PermissionCoordinator: ObservableObject {
             item.affectedFeatures.contains {
                 $0.pluginID == pluginID && $0.permissionID == permissionID
             }
+        }), let target = item.affectedFeatures.first(where: {
+            $0.pluginID == pluginID && $0.permissionID == permissionID
         }) else {
             return false
         }
-        performAction(for: item, sourceFrame: sourceFrame)
+        guard target.status != .granted else {
+            refreshHandler([target])
+            return true
+        }
+        performAction(kind: item.kind, target: target, sourceFrame: sourceFrame)
         return true
     }
 
@@ -286,19 +357,43 @@ final class PermissionCoordinator: ObservableObject {
         for item: PermissionCenterItem,
         sourceFrame: CGRect? = nil
     ) {
-        switch item.kind {
-        case .accessibility, .inputMonitoring, .screenRecording, .fullDiskAccess:
-            guidanceHandler(item.kind, sourceFrame)
-        case .automation:
-            guidanceHandler(.automation, sourceFrame)
-        case .calendarFullAccess, .systemAudioRecording, .finderExtension:
-            guard let target = item.actionTarget else { return }
+        guard item.status != .granted else {
+            refreshHandler(item.affectedFeatures)
+            return
+        }
+        guard let target = item.actionTarget else { return }
+        performAction(kind: item.kind, target: target, sourceFrame: sourceFrame)
+    }
+
+    private func performAction(
+        kind: HostPermissionKind,
+        target: PermissionCenterAffectedFeature,
+        sourceFrame: CGRect?
+    ) {
+        switch kind {
+        case .accessibility, .inputMonitoring, .screenRecording, .automation:
+            pendingActivationRefreshCount = 1
+            activationRefreshTarget = nil
+            guidanceHandler(kind, sourceFrame)
+        case .calendarFullAccess,
+             .systemAudioRecording,
+             .fullDiskAccess,
+             .finderExtension:
+            pendingActivationRefreshCount = kind == .systemAudioRecording ? 2 : 1
+            activationRefreshTarget = target
             specializedActionHandler(target.pluginID, target.permissionID)
         }
     }
 
     func refresh() {
-        refreshHandler()
+        refreshHandler(visiblePermissionRefreshTargets())
+    }
+
+    private func visiblePermissionRefreshTargets() -> [PermissionCenterAffectedFeature] {
+        items
+            .filter { $0.kind == .systemAudioRecording }
+            .flatMap(\.affectedFeatures)
+            .filter { $0.status == .granted }
     }
 }
 
