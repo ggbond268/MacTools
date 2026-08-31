@@ -81,6 +81,8 @@
 | Menu Bar Icon Customization | Use local images or lightweight GIF/MP4 animations as the menu bar icon, choose static or animated icons from the online gallery with clear animation badges, preserve original colors and transparency on local import, automatically adapt monochrome gallery icons to the menu bar appearance, restore the default icon, and preview every source with the same standard icon height and content inset as the default. |
 | Localization | Follow the system language by default, or choose a fixed app language in Settings > General > Appearance; the picker shows each language in the system language and its native spelling, while menu-bar action buttons and the Actions, Run Links, Automation, and Action Grid surfaces adapt their copy, accessibility labels, and layout to the selected language. |
 
+> **Window Switcher:** The catalog includes eligible windows from inactive macOS Spaces, so switching does not depend on the current Space.
+
 > **Shortcut settings:** Plugin and app shortcut rows keep the action icon/name beside the recorder field, wrapping groups between rows without splitting an individual shortcut control.
 
 > **System Status:** Both dashboard entry points keep readings current while open. Detail statistics use all retained readings in the selected range, independent of chart simplification, and pinned readings stay fixed until they leave that range. Expanded metric settings adapt to narrower windows. An optional global shortcut shows the menu-bar overview when available and otherwise opens the dashboard. The updated plugin requires MacTools 1.2.1 or later.
