@@ -98,6 +98,39 @@ final class DockClickMinimizePluginTests: XCTestCase {
         XCTAssertFalse(plugin.permissionState(for: "input-monitoring").isGranted)
     }
 
+    func testMissingPermissionDoesNotRequestGuidanceDuringActivationOrRefresh() {
+        let permissions = PermissionState(
+            accessibilityGranted: false,
+            inputMonitoringStatus: .denied
+        )
+        let context = makeContext(isEnabled: true)
+        let plugin = makePlugin(context: context, permissions: permissions)
+        var requestedPermissionIDs: [String] = []
+        plugin.requestPermissionGuidance = { requestedPermissionIDs.append($0) }
+
+        plugin.activate(context: context)
+        plugin.refresh()
+
+        XCTAssertTrue(requestedPermissionIDs.isEmpty)
+        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+    }
+
+    func testExplicitEnableRequestsMissingPermissionGuidance() {
+        let permissions = PermissionState(
+            accessibilityGranted: false,
+            inputMonitoringStatus: .denied
+        )
+        let context = makeContext(isEnabled: false)
+        let plugin = makePlugin(context: context, permissions: permissions)
+        var requestedPermissionIDs: [String] = []
+        plugin.requestPermissionGuidance = { requestedPermissionIDs.append($0) }
+
+        plugin.handleAction(.setSwitch(true))
+
+        XCTAssertEqual(requestedPermissionIDs, ["accessibility"])
+        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+    }
+
     func testMonitorStartupFailureIsExposed() {
         let monitor = MockDockClickMonitor(startResult: false)
         let context = makeContext(isEnabled: true)

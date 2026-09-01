@@ -289,7 +289,7 @@ final class PermissionCoordinatorTests: XCTestCase {
         XCTAssertEqual(refreshCount, 1)
     }
 
-    func testActivationRefreshIsGatedByVisibilityOrPendingRoundTrip() async throws {
+    func testActivationRefreshRequiresPendingUserRoundTrip() async throws {
         let notificationCenter = NotificationCenter()
         var refreshCount = 0
         let coordinator = PermissionCoordinator(
@@ -303,12 +303,10 @@ final class PermissionCoordinatorTests: XCTestCase {
         await Task.yield()
         XCTAssertEqual(refreshCount, 0)
 
-        coordinator.setPermissionCenterVisible(true)
         notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
         await Task.yield()
-        XCTAssertEqual(refreshCount, 1)
+        XCTAssertEqual(refreshCount, 0)
 
-        coordinator.setPermissionCenterVisible(false)
         coordinator.replaceRequirements([
             requirement(
                 pluginID: "appearance",
@@ -321,7 +319,7 @@ final class PermissionCoordinatorTests: XCTestCase {
         notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
         await Task.yield()
 
-        XCTAssertEqual(refreshCount, 2)
+        XCTAssertEqual(refreshCount, 1)
         _ = coordinator
     }
 
@@ -354,11 +352,10 @@ final class PermissionCoordinatorTests: XCTestCase {
         XCTAssertEqual(refreshedTargets.flatMap { $0 }.map(\.pluginID), ["audio", "audio"])
     }
 
-    func testVisibleRefreshTargetsGrantedSystemAudioForRevocationCheck() async throws {
-        let notificationCenter = NotificationCenter()
+    func testPassiveRefreshDoesNotProbeGrantedSystemAudio() throws {
         var refreshedTargets: [[PermissionCenterAffectedFeature]] = []
         let coordinator = PermissionCoordinator(
-            notificationCenter: notificationCenter,
+            notificationCenter: NotificationCenter(),
             specializedActionHandler: { _, _ in },
             refreshHandler: { refreshedTargets.append($0) },
             guidanceHandler: { _, _ in }
@@ -371,14 +368,32 @@ final class PermissionCoordinatorTests: XCTestCase {
                 isGranted: true
             ),
         ])
-        coordinator.setPermissionCenterVisible(true)
-
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
-        await Task.yield()
         coordinator.refresh()
 
-        XCTAssertEqual(refreshedTargets.count, 2)
-        XCTAssertEqual(refreshedTargets.flatMap { $0 }.map(\.pluginID), ["audio", "audio"])
+        XCTAssertEqual(refreshedTargets, [[]])
+    }
+
+    func testExplicitGrantedSystemAudioActionRequestsTargetedRecheck() throws {
+        var refreshedTargets: [[PermissionCenterAffectedFeature]] = []
+        let coordinator = PermissionCoordinator(
+            notificationCenter: NotificationCenter(),
+            specializedActionHandler: { _, _ in },
+            refreshHandler: { refreshedTargets.append($0) },
+            guidanceHandler: { _, _ in }
+        )
+        coordinator.replaceRequirements([
+            requirement(
+                pluginID: "audio",
+                permissionID: "system-audio-recording",
+                kind: .systemAudioRecording,
+                isGranted: true
+            ),
+        ])
+
+        coordinator.performAction(for: try XCTUnwrap(coordinator.items.first))
+
+        XCTAssertEqual(refreshedTargets.count, 1)
+        XCTAssertEqual(refreshedTargets.first?.map(\.pluginID), ["audio"])
     }
 
     func testPermissionGuidanceSourceFrameOnlyUsesPointerActivation() throws {

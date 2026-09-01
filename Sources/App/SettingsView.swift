@@ -364,12 +364,6 @@ private struct PermissionCenterSettingsView: View {
                 }
             }
         }
-        .onAppear {
-            coordinator.setPermissionCenterVisible(true)
-        }
-        .onDisappear {
-            coordinator.setPermissionCenterVisible(false)
-        }
     }
 }
 

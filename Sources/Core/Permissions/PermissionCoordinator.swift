@@ -270,7 +270,6 @@ final class PermissionCoordinator: ObservableObject {
     private let refreshHandler: RefreshHandler
     private let guidanceHandler: GuidanceHandler
     private var activationObserver: PermissionNotificationObserver?
-    private var isPermissionCenterVisible = false
     private var pendingActivationRefreshCount = 0
     private var activationRefreshTarget: PermissionCenterAffectedFeature?
 
@@ -289,22 +288,13 @@ final class PermissionCoordinator: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self,
-                      self.isPermissionCenterVisible || self.pendingActivationRefreshCount > 0 else {
+                guard let self, self.pendingActivationRefreshCount > 0 else {
                     return
                 }
-                var targets = self.isPermissionCenterVisible
-                    ? self.visiblePermissionRefreshTargets()
-                    : []
-                if self.pendingActivationRefreshCount > 0 {
-                    if let target = self.activationRefreshTarget,
-                       !targets.contains(where: { $0.id == target.id }) {
-                        targets.append(target)
-                    }
-                    self.pendingActivationRefreshCount -= 1
-                    if self.pendingActivationRefreshCount == 0 {
-                        self.activationRefreshTarget = nil
-                    }
+                let targets = self.activationRefreshTarget.map { [$0] } ?? []
+                self.pendingActivationRefreshCount -= 1
+                if self.pendingActivationRefreshCount == 0 {
+                    self.activationRefreshTarget = nil
                 }
                 self.refreshHandler(targets)
             }
@@ -324,10 +314,6 @@ final class PermissionCoordinator: ObservableObject {
             pendingActivationRefreshCount = 0
             activationRefreshTarget = nil
         }
-    }
-
-    func setPermissionCenterVisible(_ isVisible: Bool) {
-        isPermissionCenterVisible = isVisible
     }
 
     @discardableResult
@@ -386,14 +372,7 @@ final class PermissionCoordinator: ObservableObject {
     }
 
     func refresh() {
-        refreshHandler(visiblePermissionRefreshTargets())
-    }
-
-    private func visiblePermissionRefreshTargets() -> [PermissionCenterAffectedFeature] {
-        items
-            .filter { $0.kind == .systemAudioRecording }
-            .flatMap(\.affectedFeatures)
-            .filter { $0.status == .granted }
+        refreshHandler([])
     }
 }
 
