@@ -288,7 +288,10 @@ final class ActionExecutor {
             expectedDefinition: nil
         ) {
         case let .prepared(execution):
-            return await executionOutcome(for: execution)
+            return await executionOutcome(
+                for: execution,
+                forceTaskCancellation: invocation.source == .cli
+            )
         case let .completed(result):
             return .completed(result)
         case let .rejected(rejection):
