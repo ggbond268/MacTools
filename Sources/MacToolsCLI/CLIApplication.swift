@@ -129,14 +129,15 @@ struct CLIApplication {
         json: Bool,
         responseTimeoutSeconds: Int?
     ) async throws -> Int32 {
-        let startupDeadline = CLIStartupDeadline(timeout: .seconds(10))
-        let handshake = try await client.prepareHost(deadline: startupDeadline)
-        let responseBudget = responseTimeoutSeconds.map { Duration.seconds($0 + 1) } ?? .seconds(10)
+        let deadlinePlan = CLIRequestDeadlinePolicy().makePlan(
+            responseTimeoutSeconds: responseTimeoutSeconds
+        )
+        let handshake = try await client.prepareHost(deadline: deadlinePlan.startupDeadline)
         let response = try await client.send(
             operation: operation,
             payload: payload,
-            deadline: CLIStartupDeadline(timeout: responseBudget),
-            maximumResponseWait: responseBudget
+            deadline: deadlinePlan.requestDeadline,
+            maximumResponseWait: deadlinePlan.responseBudget
         )
         let rendered: String
         if response.outcome == .completed {
