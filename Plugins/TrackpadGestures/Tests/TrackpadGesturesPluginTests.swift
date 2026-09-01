@@ -1746,7 +1746,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertTrue(fixture.executor.actions.isEmpty)
     }
 
-    func testTestModeShowsTipTapOnlyAfterSessionDeliversCommittedRecognition() {
+    func testTestModeDistinguishesTipTapContactPatternFromCommittedRecognition() {
         let fixture = makePlugin()
         fixture.plugin.store.setTesting(true)
         fixture.plugin.configurationDidChange()
@@ -1760,10 +1760,17 @@ final class TrackpadGesturesPluginTests: XCTestCase {
             recognition: nil
         ))
 
-        XCTAssertEqual(fixture.plugin.testingModel.selectedSnapshot?.recognized, [])
+        XCTAssertEqual(fixture.plugin.testingModel.selectedSnapshot?.recognized, [gesture])
+        XCTAssertEqual(
+            fixture.plugin.testingModel.selectedContactPatternGesture,
+            gesture
+        )
+        XCTAssertNil(fixture.plugin.testingModel.selectedRecognizedGesture)
         XCTAssertNil(fixture.plugin.store.lastTestGesture)
 
         fixture.session.recognize(gesture)
+        XCTAssertNil(fixture.plugin.testingModel.selectedContactPatternGesture)
+        XCTAssertEqual(fixture.plugin.testingModel.selectedRecognizedGesture, gesture)
         XCTAssertEqual(fixture.plugin.store.lastTestGesture, gesture)
         XCTAssertTrue(fixture.executor.actions.isEmpty)
     }

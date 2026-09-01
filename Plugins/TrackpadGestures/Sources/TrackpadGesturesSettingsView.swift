@@ -970,12 +970,20 @@ struct TrackpadGesturesSettingsView: View {
         let status = TrackpadGestureTestingStatusResolver.resolve(
             snapshot: testingModel.selectedSnapshot,
             retainedRecognition: testingModel.selectedRecognizedGesture,
+            retainedContactPattern: testingModel.selectedContactPatternGesture,
             retainedRejection: testingModel.selectedRejection
         )
         if case let .recognized(gesture) = status {
             return localization.format(
                 "settings.testing.recognizedFormat",
                 defaultValue: "已识别：%@。停止测试前，已配置的操作不会执行。",
+                gesture.title(localization: localization)
+            )
+        }
+        if case let .contactPatternDetected(gesture) = status {
+            return localization.format(
+                "settings.testing.contactPatternFormat",
+                defaultValue: "已检测到 %@ 的接触动作。实际映射仍需关联 macOS 轻点点击。",
                 gesture.title(localization: localization)
             )
         }

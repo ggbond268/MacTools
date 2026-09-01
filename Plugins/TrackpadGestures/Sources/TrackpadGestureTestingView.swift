@@ -34,19 +34,21 @@ struct TrackpadGestureTestingPanel: View {
                     isSelected: modeAccessibilityState.isAllGesturesSelected
                 )))
 
-                Picker(
-                    localization.string(
-                        "settings.testing.mode.practice",
-                        defaultValue: "练习一个手势"
-                    ),
-                    selection: practiceGestureBinding
-                ) {
-                    ForEach(TrackpadGesture.configurableCases) { gesture in
-                        Text(gesture.title(localization: localization)).tag(gesture)
-                    }
+                Button {
+                    onSetMode(.practice(practiceGestureBinding.wrappedValue))
+                } label: {
+                    Label(
+                        localization.string(
+                            "settings.testing.mode.practice",
+                            defaultValue: "练习一个手势"
+                        ),
+                        systemImage: model.mode?.practiceGesture != nil
+                            ? "checkmark.circle.fill"
+                            : "hand.tap"
+                    )
                 }
-                .pickerStyle(.menu)
-                .frame(minWidth: 180, idealWidth: 240, maxWidth: 300)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
                 .accessibilityAddTraits(
                     modeAccessibilityState.selectedPracticeGesture != nil ? .isSelected : []
                 )
@@ -56,31 +58,30 @@ struct TrackpadGestureTestingPanel: View {
 
                 Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
-                if model.orderedSnapshots.count > 1 {
-                    Picker(
-                        localization.string(
-                            "settings.testing.device",
-                            defaultValue: "触控板"
-                        ),
-                        selection: deviceBinding
-                    ) {
-                        ForEach(model.orderedSnapshots, id: \.deviceID) { snapshot in
-                            Text(deviceTitle(snapshot)).tag(snapshot.deviceID as UInt64?)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(minWidth: 140, idealWidth: 180, maxWidth: 220)
-                } else if let snapshot = model.selectedSnapshot {
-                    Text(deviceTitle(snapshot))
-                        .font(PluginSettingsTheme.Typography.statusBadge)
-                        .foregroundStyle(.secondary)
-                }
+                deviceSelector
             }
 
             if case let .practice(gesture) = model.mode {
-                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                    Text(gesture.title(localization: localization))
-                        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                VStack(
+                    alignment: .leading,
+                    spacing: PluginSettingsTheme.Spacing.rowTitleDescription
+                ) {
+                    HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                        Text(localization.string(
+                            "editor.gesture.title",
+                            defaultValue: "手势"
+                        ))
+                        .font(PluginSettingsTheme.Typography.rowTitle)
+
+                        Picker("", selection: practiceGestureBinding) {
+                            ForEach(TrackpadGesture.configurableCases) { option in
+                                Text(option.title(localization: localization)).tag(option)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     Text(practiceSubtitle(for: gesture))
                         .font(PluginSettingsTheme.Typography.rowDescription)
                         .foregroundStyle(.secondary)
@@ -158,6 +159,7 @@ struct TrackpadGestureTestingPanel: View {
         let presentation = TrackpadGestureTestingStatusPresentationResolver.resolve(
             snapshot: model.selectedSnapshot,
             retainedRecognition: model.selectedRecognizedGesture,
+            retainedContactPattern: model.selectedContactPatternGesture,
             retainedRejection: model.selectedRejection
         )
         switch presentation {
@@ -180,6 +182,12 @@ struct TrackpadGestureTestingPanel: View {
                 "settings.testing.surface.recognizedFormat",
                 defaultValue: "已识别：%@。可以继续测试下一个手势。",
                 recognized.title(localization: localization)
+            )
+        case let .contactPatternDetected(gesture):
+            return localization.format(
+                "settings.testing.surface.contactPatternFormat",
+                defaultValue: "已检测到 %@ 的接触动作。实际映射还需要 macOS 产生并关联轻点点击。",
+                gesture.title(localization: localization)
             )
         case .noContacts:
             return localization.string(
@@ -204,6 +212,29 @@ struct TrackpadGestureTestingPanel: View {
                 : "settings.testing.mode.accessibility.inactive",
             defaultValue: isSelected ? "当前模式" : "未启用"
         )
+    }
+
+    @ViewBuilder
+    private var deviceSelector: some View {
+        if model.orderedSnapshots.count > 1 {
+            Picker(
+                localization.string(
+                    "settings.testing.device",
+                    defaultValue: "触控板"
+                ),
+                selection: deviceBinding
+            ) {
+                ForEach(model.orderedSnapshots, id: \.deviceID) { snapshot in
+                    Text(deviceTitle(snapshot)).tag(snapshot.deviceID as UInt64?)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(minWidth: 140, idealWidth: 180, maxWidth: 220)
+        } else if let snapshot = model.selectedSnapshot {
+            Text(deviceTitle(snapshot))
+                .font(PluginSettingsTheme.Typography.statusBadge)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private func announceRejectedTestGesture(
@@ -287,7 +318,7 @@ private struct TrackpadVirtualTrackpadView: View {
 
                     ForEach(snapshot.contacts, id: \.identifier) { contact in
                         let role = contactRole(contact, recognition: snapshot.recognition)
-                        TrackpadContactDot(role: role, identifier: contact.identifier)
+                        TrackpadContactDot(role: role)
                             .position(TrackpadCoordinateProjector.project(contact, in: insetSize))
                             .accessibilityLabel(Text(contactAccessibilityLabel(
                                 contact,
@@ -523,7 +554,6 @@ extension TrackpadContactRole {
 
 private struct TrackpadContactDot: View {
     let role: TrackpadContactRole
-    let identifier: Int
 
     var body: some View {
         ZStack {
@@ -542,7 +572,6 @@ private struct TrackpadContactDot: View {
                 Diamond()
                     .fill(Color.accentColor)
                     .frame(width: 30, height: 30)
-                Text(String(identifier % 10))
             }
         }
         .font(.system(size: 11, weight: .bold, design: .rounded))

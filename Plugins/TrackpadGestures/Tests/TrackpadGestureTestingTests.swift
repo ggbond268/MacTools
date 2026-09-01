@@ -1207,6 +1207,15 @@ final class TrackpadGestureTestingModelTests: XCTestCase {
         ).preparingForDisplay(mode: .allGestures)
         model.apply(displayedRelease)
         XCTAssertEqual(model.selectedRecognizedGesture, .tipTapLeftOneFixed)
+        XCTAssertNil(model.selectedContactPatternGesture)
+        XCTAssertEqual(
+            TrackpadGestureTestingStatusResolver.resolve(
+                snapshot: model.selectedSnapshot,
+                retainedRecognition: model.selectedRecognizedGesture,
+                retainedContactPattern: model.selectedContactPatternGesture
+            ),
+            .recognized(.tipTapLeftOneFixed)
+        )
 
         let idle = TrackpadGestureTestSnapshot(
             deviceID: 1,
@@ -1235,6 +1244,52 @@ final class TrackpadGestureTestingModelTests: XCTestCase {
         ).preparingForDisplay(mode: .allGestures)
         model.apply(displayedNextEpisode)
         XCTAssertNil(model.selectedRecognizedGesture)
+    }
+
+    func testUncommittedTipTapContactPatternRemainsVisibleUntilNextAttempt() {
+        let model = TrackpadGestureTestingModel()
+        model.begin(.practice(.tipTapLeftOneFixed))
+        let fixed = TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)
+        let release = TrackpadGestureTestSnapshot(
+            deviceID: 1,
+            descriptor: nil,
+            timestamp: 1,
+            contacts: [fixed],
+            recognized: [.tipTapLeftOneFixed],
+            recognition: nil
+        ).preparingForDisplay(mode: .practice(.tipTapLeftOneFixed))
+
+        model.apply(release)
+        XCTAssertEqual(model.selectedContactPatternGesture, .tipTapLeftOneFixed)
+        XCTAssertNil(model.selectedRecognizedGesture)
+        XCTAssertEqual(
+            TrackpadGestureTestingStatusResolver.resolve(
+                snapshot: model.selectedSnapshot,
+                retainedRecognition: model.selectedRecognizedGesture,
+                retainedContactPattern: model.selectedContactPatternGesture
+            ),
+            .contactPatternDetected(.tipTapLeftOneFixed)
+        )
+
+        model.apply(TrackpadGestureTestSnapshot(
+            deviceID: 1,
+            descriptor: nil,
+            timestamp: 1.01,
+            contacts: [fixed],
+            recognized: [],
+            recognition: nil
+        ))
+        XCTAssertEqual(model.selectedContactPatternGesture, .tipTapLeftOneFixed)
+
+        model.apply(TrackpadGestureTestSnapshot(
+            deviceID: 1,
+            descriptor: nil,
+            timestamp: 1.02,
+            contacts: [fixed, .init(identifier: 2, x: 0.1, y: 0.5)],
+            recognized: [],
+            recognition: nil
+        ))
+        XCTAssertNil(model.selectedContactPatternGesture)
     }
 
     func testTestAllCommittedTapAndDoubleTapReconcileCoalescedReleaseUntilNextAttempt() throws {

@@ -110,8 +110,9 @@ struct TrackpadGestureTestSnapshot: Equatable, Sendable {
         )
     }
 
-    /// TipTap is not a production recognition until its native click has been correlated, and
-    /// Practice must not surface results from recognizers outside the selected gesture.
+    /// Practice must not surface results from recognizers outside the selected gesture. TipTap
+    /// contact-pattern matches remain visible here so Test Gestures can distinguish raw touch
+    /// recognition from the native-click correlation required before a production action runs.
     func preparingForDisplay(mode: TrackpadGestureTestingMode) -> Self {
         let scopedRecognitions: [TrackpadGesture]
         switch mode {
@@ -120,7 +121,7 @@ struct TrackpadGestureTestSnapshot: Equatable, Sendable {
         case let .practice(gesture):
             scopedRecognitions = recognized.filter { $0 == gesture }
         }
-        return withRecognized(scopedRecognitions.filter { $0.tipTapConfiguration == nil })
+        return withRecognized(scopedRecognitions)
     }
 }
 
@@ -522,6 +523,7 @@ final class TrackpadGestureTestingModel: ObservableObject {
     @Published private(set) var mode: TrackpadGestureTestingMode?
     @Published private(set) var snapshotsByDevice: [UInt64: TrackpadGestureTestSnapshot] = [:]
     @Published private(set) var recognizedGesturesByDevice: [UInt64: TrackpadGesture] = [:]
+    @Published private(set) var contactPatternGesturesByDevice: [UInt64: TrackpadGesture] = [:]
     @Published private(set) var rejectionsByDevice:
         [UInt64: TrackpadGestureTestingRejection] = [:]
     @Published private(set) var latestRejectionAnnouncement:
@@ -530,6 +532,7 @@ final class TrackpadGestureTestingModel: ObservableObject {
     private var isDeviceSelectionPinned = false
     private var recognizedAtByDevice: [UInt64: TimeInterval] = [:]
     private var recognizedContactIdentifiersByDevice: [UInt64: Set<Int>] = [:]
+    private var contactPatternContactIdentifiersByDevice: [UInt64: Set<Int>] = [:]
 
     var selectedSnapshot: TrackpadGestureTestSnapshot? {
         selectedDeviceID.flatMap { snapshotsByDevice[$0] }
@@ -537,6 +540,10 @@ final class TrackpadGestureTestingModel: ObservableObject {
 
     var selectedRecognizedGesture: TrackpadGesture? {
         selectedDeviceID.flatMap { recognizedGesturesByDevice[$0] }
+    }
+
+    var selectedContactPatternGesture: TrackpadGesture? {
+        selectedDeviceID.flatMap { contactPatternGesturesByDevice[$0] }
     }
 
     var selectedRejection: TrackpadGestureTestingRejection? {
@@ -564,6 +571,12 @@ final class TrackpadGestureTestingModel: ObservableObject {
 
     func apply(_ snapshot: TrackpadGestureTestSnapshot) {
         let deviceID = snapshot.deviceID
+        let contactIdentifiers = Set(snapshot.contacts.map(\.identifier))
+        if contactPatternGesturesByDevice[deviceID] != nil,
+           contactPatternContactIdentifiersByDevice[deviceID] != contactIdentifiers {
+            contactPatternGesturesByDevice.removeValue(forKey: deviceID)
+            contactPatternContactIdentifiersByDevice.removeValue(forKey: deviceID)
+        }
         if let recognizedAt = recognizedAtByDevice[deviceID],
            snapshot.timestamp == recognizedAt {
             // A recognition can reach the model before its coalesced recognition frame.
@@ -597,6 +610,12 @@ final class TrackpadGestureTestingModel: ObservableObject {
             rejectionsByDevice.removeValue(forKey: deviceID)
         }
         snapshotsByDevice[deviceID] = snapshot
+        if let contactPattern = snapshot.recognized.last(where: {
+            $0.tipTapConfiguration != nil
+        }), recognizedGesturesByDevice[deviceID] != contactPattern {
+            contactPatternGesturesByDevice[deviceID] = contactPattern
+            contactPatternContactIdentifiersByDevice[deviceID] = contactIdentifiers
+        }
         if !isDeviceSelectionPinned || selectedDeviceID == nil {
             selectedDeviceID = deviceID
         }
@@ -607,6 +626,8 @@ final class TrackpadGestureTestingModel: ObservableObject {
         deviceID: UInt64,
         at timestamp: TimeInterval? = nil
     ) {
+        contactPatternGesturesByDevice.removeValue(forKey: deviceID)
+        contactPatternContactIdentifiersByDevice.removeValue(forKey: deviceID)
         recognizedGesturesByDevice[deviceID] = gesture
         recognizedAtByDevice[deviceID] = timestamp
             ?? snapshotsByDevice[deviceID]?.timestamp
@@ -631,8 +652,10 @@ final class TrackpadGestureTestingModel: ObservableObject {
     func clearSnapshots() {
         snapshotsByDevice.removeAll()
         recognizedGesturesByDevice.removeAll()
+        contactPatternGesturesByDevice.removeAll()
         recognizedAtByDevice.removeAll()
         recognizedContactIdentifiersByDevice.removeAll()
+        contactPatternContactIdentifiersByDevice.removeAll()
         rejectionsByDevice.removeAll()
         latestRejectionAnnouncement = nil
         selectedDeviceID = nil
@@ -669,6 +692,7 @@ final class TrackpadGestureTestingModel: ObservableObject {
 
 enum TrackpadGestureTestingStatus: Equatable {
     case recognized(TrackpadGesture)
+    case contactPatternDetected(TrackpadGesture)
     case phase(TrackpadGestureRecognitionPhase, gesture: TrackpadGesture)
     case contactCount(Int)
     case noContacts
@@ -679,10 +703,12 @@ enum TrackpadGestureTestingStatusResolver {
     static func resolve(
         snapshot: TrackpadGestureTestSnapshot?,
         retainedRecognition: TrackpadGesture?,
+        retainedContactPattern: TrackpadGesture? = nil,
         retainedRejection: TrackpadGestureTestingRejection? = nil
     ) -> TrackpadGestureTestingStatus {
         guard let snapshot else { return .waiting }
-        if let recognized = snapshot.recognized.last {
+        if let recognized = snapshot.recognized.last,
+           recognized.tipTapConfiguration == nil {
             return .recognized(recognized)
         }
         if let recognition = snapshot.recognition,
@@ -691,6 +717,13 @@ enum TrackpadGestureTestingStatusResolver {
         }
         if let retainedRecognition {
             return .recognized(retainedRecognition)
+        }
+        if let contactPattern = snapshot.recognized.last,
+           contactPattern.tipTapConfiguration != nil {
+            return .contactPatternDetected(contactPattern)
+        }
+        if let retainedContactPattern {
+            return .contactPatternDetected(retainedContactPattern)
         }
         if let retainedRejection {
             return .phase(
@@ -720,11 +753,13 @@ enum TrackpadGestureTestingStatusPresentationResolver {
     static func resolve(
         snapshot: TrackpadGestureTestSnapshot?,
         retainedRecognition: TrackpadGesture?,
+        retainedContactPattern: TrackpadGesture? = nil,
         retainedRejection: TrackpadGestureTestingRejection? = nil
     ) -> TrackpadGestureTestingStatusPresentation {
         let status = TrackpadGestureTestingStatusResolver.resolve(
             snapshot: snapshot,
             retainedRecognition: retainedRecognition,
+            retainedContactPattern: retainedContactPattern,
             retainedRejection: retainedRejection
         )
         if status.takesPriorityOverPracticeGuide {
@@ -758,7 +793,7 @@ private extension TrackpadGestureRecognitionPhase {
 private extension TrackpadGestureTestingStatus {
     var takesPriorityOverPracticeGuide: Bool {
         switch self {
-        case .recognized:
+        case .recognized, .contactPatternDetected:
             true
         case let .phase(phase, _):
             switch phase {
