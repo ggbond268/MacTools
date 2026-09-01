@@ -4292,7 +4292,11 @@ private struct PluginFormPage: View {
                             onAction: {
                                 pluginHost.performPermissionAction(
                                     pluginID: card.pluginID,
-                                    permissionID: card.permissionID
+                                    permissionID: card.permissionID,
+                                    sourceFrame: permissionGuidanceSourceFrame(
+                                        eventType: NSApp.currentEvent?.type,
+                                        mouseLocation: NSEvent.mouseLocation
+                                    )
                                 )
                             }
                         )
@@ -4568,7 +4572,11 @@ private struct PluginWorkspacePage: View {
                             onAction: {
                                 pluginHost.performPermissionAction(
                                     pluginID: card.pluginID,
-                                    permissionID: card.permissionID
+                                    permissionID: card.permissionID,
+                                    sourceFrame: permissionGuidanceSourceFrame(
+                                        eventType: NSApp.currentEvent?.type,
+                                        mouseLocation: NSEvent.mouseLocation
+                                    )
                                 )
                             }
                         )

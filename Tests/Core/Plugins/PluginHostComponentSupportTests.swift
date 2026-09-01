@@ -224,7 +224,7 @@ final class PluginHostComponentSupportTests: XCTestCase {
         )
     }
 
-    func testExplicitAutomationPermissionButtonOpensSystemSettingsWithoutPassiveNavigation() {
+    func testExplicitAutomationPermissionButtonUsesCoordinatorWithoutPassiveGuidance() {
         let plugin = MockComponentPanelPlugin(
             id: "automation",
             permissionRequirements: [.init(
@@ -232,28 +232,68 @@ final class PluginHostComponentSupportTests: XCTestCase {
             )],
             isPermissionGranted: false
         )
-        var openedURLs: [URL] = []
-        let host = makeHost(plugins: [plugin], openPermissionSettings: { openedURLs.append($0) })
+        var guidedKinds: [HostPermissionKind] = []
+        let host = makeHost(
+            plugins: [plugin],
+            permissionGuidanceHandler: { kind, _ in guidedKinds.append(kind) }
+        )
         plugin.requestPermissionGuidance?("automation")
-        XCTAssertTrue(openedURLs.isEmpty)
+        XCTAssertTrue(guidedKinds.isEmpty)
         host.performPermissionAction(pluginID: "automation", permissionID: "automation")
-        XCTAssertEqual(openedURLs.map(\.absoluteString), [
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
-        ])
+        XCTAssertEqual(guidedKinds, [.automation])
     }
 
-    func testLegacyFullDiskAccessIsNotRoutedToAutomationSettings() {
+    func testLegacyFullDiskAccessUsesCoordinatorGuidanceWithSourceFrame() {
         let plugin = MockComponentPanelPlugin(
             id: "disk",
             permissionRequirements: [.init(
                 id: "full-disk-access", kind: .automation, title: "Full Disk Access", description: "Protected files"
-            )]
+            )],
+            isPermissionGranted: false
         )
-        var openedURLs: [URL] = []
-        let host = makeHost(plugins: [plugin], openPermissionSettings: { openedURLs.append($0) })
-        host.performPermissionAction(pluginID: "disk", permissionID: "full-disk-access")
-        XCTAssertTrue(openedURLs.isEmpty)
-        XCTAssertEqual(plugin.handledPermissionIDs, ["full-disk-access"])
+        var guidedKinds: [HostPermissionKind] = []
+        var sourceFrames: [CGRect?] = []
+        let host = makeHost(
+            plugins: [plugin],
+            permissionGuidanceHandler: { kind, sourceFrame in
+                guidedKinds.append(kind)
+                sourceFrames.append(sourceFrame)
+            }
+        )
+        let sourceFrame = CGRect(x: 10, y: 20, width: 32, height: 32)
+
+        host.performPermissionAction(
+            pluginID: "disk",
+            permissionID: "full-disk-access",
+            sourceFrame: sourceFrame
+        )
+
+        XCTAssertEqual(guidedKinds, [.fullDiskAccess])
+        XCTAssertEqual(sourceFrames, [sourceFrame])
+        XCTAssertTrue(plugin.handledPermissionIDs.isEmpty)
+    }
+
+    func testFinderExtensionPermissionStillUsesPluginAdapterThroughCoordinator() {
+        let plugin = MockComponentPanelPlugin(
+            id: "finder",
+            permissionRequirements: [.init(
+                id: "native-extension",
+                kind: .finderExtension,
+                title: "Finder Extension",
+                description: "Enable the Finder extension."
+            )],
+            isPermissionGranted: false
+        )
+        var guidedKinds: [HostPermissionKind] = []
+        let host = makeHost(
+            plugins: [plugin],
+            permissionGuidanceHandler: { kind, _ in guidedKinds.append(kind) }
+        )
+
+        host.performPermissionAction(pluginID: "finder", permissionID: "native-extension")
+
+        XCTAssertTrue(guidedKinds.isEmpty)
+        XCTAssertEqual(plugin.handledPermissionIDs, ["native-extension"])
     }
 
     func testShortcutsInSameSharedBindingGroupCanUseSameBinding() {
@@ -928,7 +968,8 @@ final class PluginHostComponentSupportTests: XCTestCase {
         displayConfigurationObserver: (any DisplayConfigurationObserving)? = nil,
         displayTopologyRefreshDelay: Duration = .milliseconds(180),
         pluginStateChangeRebuildDelay: Duration = .milliseconds(80),
-        openPermissionSettings: @escaping (URL) -> Void = { _ in }
+        openPermissionSettings: @escaping (URL) -> Void = { _ in },
+        permissionGuidanceHandler: @escaping PermissionCoordinator.GuidanceHandler = { _, _ in }
     ) -> PluginHost {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -943,7 +984,8 @@ final class PluginHostComponentSupportTests: XCTestCase {
             displayConfigurationObserver: displayConfigurationObserver,
             displayTopologyRefreshDelay: displayTopologyRefreshDelay,
             pluginStateChangeRebuildDelay: pluginStateChangeRebuildDelay,
-            openPermissionSettings: openPermissionSettings
+            openPermissionSettings: openPermissionSettings,
+            permissionGuidanceHandler: permissionGuidanceHandler
         )
     }
 

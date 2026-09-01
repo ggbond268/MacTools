@@ -492,6 +492,9 @@ final class PluginHost: ObservableObject {
         },
         refreshHandler: { [weak self] targets in
             self?.refreshPermissionState(targets: targets)
+        },
+        guidanceHandler: { [weak self] kind, sourceFrame in
+            self?.permissionGuidanceHandler(kind, sourceFrame)
         }
     )
     @Published private(set) var shortcutItems: [ShortcutSettingsItem] = []
@@ -523,6 +526,7 @@ final class PluginHost: ObservableObject {
     var componentDetailPresentationHandler: ((String, String) -> Void)?
 
     private let openPermissionSettings: (URL) -> Void
+    private let permissionGuidanceHandler: PermissionCoordinator.GuidanceHandler
 
     /// The app shell installs this to present source-appropriate feedback for actions invoked from
     /// headless surfaces such as global shortcuts and trackpad gestures.
@@ -596,7 +600,15 @@ final class PluginHost: ObservableObject {
         pluginStateChangeRebuildDelay: Duration = .milliseconds(80),
         loadDynamicPluginsOnInit: Bool = true,
         actionURLScheme: String = RightClickURLRouter.bundleURLSchemes().sorted().first ?? "mactools",
-        openPermissionSettings: @escaping (URL) -> Void = { _ = NSWorkspace.shared.open($0) }
+        openPermissionSettings: @escaping (URL) -> Void = { _ = NSWorkspace.shared.open($0) },
+        permissionGuidanceHandler: @escaping PermissionCoordinator.GuidanceHandler = {
+            kind,
+            sourceFrame in
+            PermissionFlowGuidancePresenter.shared.present(
+                kind: kind,
+                sourceFrame: sourceFrame
+            )
+        }
     ) {
         let preferencesBackupChangeReporter = providedPreferencesBackupChangeReporter
             ?? PreferencesBackupChangeReporter()
@@ -619,6 +631,7 @@ final class PluginHost: ObservableObject {
         self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         self.globalShortcutManager = globalShortcutManager
         self.openPermissionSettings = openPermissionSettings
+        self.permissionGuidanceHandler = permissionGuidanceHandler
         self.displayConfigurationObserver = displayConfigurationObserver
         self.accessibilityPermissionObserver = accessibilityPermissionObserver
         self.applicationActivityObserver = applicationActivityObserver
@@ -1493,28 +1506,15 @@ final class PluginHost: ObservableObject {
         return true
     }
 
-    func performPermissionAction(pluginID: String, permissionID: String) {
-        if let plugin = corePlugin(for: pluginID),
-           let requirement = guardedValue(
-               for: plugin,
-               operation: "read permission requirements",
-               plugin.permissionRequirements
-           )?.first(where: { $0.id == permissionID }) {
-            switch permissionPresentationRole(for: requirement) {
-            case .fullDiskAccess, .extensionManagement, .system(.automation):
-                performSpecializedPermissionAction(
-                    pluginID: pluginID,
-                    permissionID: permissionID
-                )
-                return
-            case .system:
-                break
-            }
-        }
-
+    func performPermissionAction(
+        pluginID: String,
+        permissionID: String,
+        sourceFrame: CGRect? = nil
+    ) {
         if permissionCoordinator.performAction(
             pluginID: pluginID,
-            permissionID: permissionID
+            permissionID: permissionID,
+            sourceFrame: sourceFrame
         ) {
             return
         }

@@ -363,9 +363,12 @@ final class PermissionCoordinator: ObservableObject {
             pendingActivationRefreshCount = 1
             activationRefreshTarget = nil
             guidanceHandler(kind, sourceFrame)
+        case .fullDiskAccess:
+            pendingActivationRefreshCount = 1
+            activationRefreshTarget = target
+            guidanceHandler(kind, sourceFrame)
         case .calendarFullAccess,
              .systemAudioRecording,
-             .fullDiskAccess,
              .finderExtension:
             pendingActivationRefreshCount = kind == .systemAudioRecording ? 2 : 1
             activationRefreshTarget = target

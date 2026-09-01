@@ -233,7 +233,9 @@ final class PermissionCoordinatorTests: XCTestCase {
             }
         )
         coordinator.replaceRequirements([
-            requirement(pluginID: "input", permissionID: "accessibility", kind: .accessibility),
+            requirement(pluginID: "accessibility", permissionID: "accessibility", kind: .accessibility),
+            requirement(pluginID: "input", permissionID: "input-monitoring", kind: .inputMonitoring),
+            requirement(pluginID: "screen", permissionID: "screen-recording", kind: .screenRecording),
             requirement(pluginID: "calendar", permissionID: "events", kind: .calendarFullAccess),
             requirement(pluginID: "audio", permissionID: "system-audio-recording", kind: .systemAudioRecording),
             requirement(pluginID: "finder", permissionID: "finder", kind: .finderExtension),
@@ -245,16 +247,60 @@ final class PermissionCoordinatorTests: XCTestCase {
             coordinator.performAction(for: item)
         }
 
-        XCTAssertEqual(Set(guidedKinds), [.accessibility, .automation])
+        XCTAssertEqual(
+            Set(guidedKinds),
+            [.accessibility, .inputMonitoring, .screenRecording, .automation, .fullDiskAccess]
+        )
         XCTAssertEqual(
             Set(specializedActions),
             [
                 "calendar:events",
                 "audio:system-audio-recording",
-                "disk-clean:full-disk-access",
                 "finder:finder",
             ]
         )
+    }
+
+    func testFullDiskAccessUsesGuidanceAndRefreshesSelectedTargetOnReturn() async throws {
+        let notificationCenter = NotificationCenter()
+        var guidedKinds: [HostPermissionKind] = []
+        var guidedSourceFrames: [CGRect?] = []
+        var specializedActions: [String] = []
+        var refreshedTargets: [[PermissionCenterAffectedFeature]] = []
+        let coordinator = PermissionCoordinator(
+            notificationCenter: notificationCenter,
+            specializedActionHandler: { pluginID, permissionID in
+                specializedActions.append("\(pluginID):\(permissionID)")
+            },
+            refreshHandler: { refreshedTargets.append($0) },
+            guidanceHandler: { kind, sourceFrame in
+                guidedKinds.append(kind)
+                guidedSourceFrames.append(sourceFrame)
+            }
+        )
+        coordinator.replaceRequirements([
+            requirement(
+                pluginID: "disk-clean",
+                permissionID: "full-disk-access",
+                kind: .fullDiskAccess
+            ),
+        ])
+        let sourceFrame = CGRect(x: 10, y: 20, width: 32, height: 32)
+
+        XCTAssertTrue(coordinator.performAction(
+            pluginID: "disk-clean",
+            permissionID: "full-disk-access",
+            sourceFrame: sourceFrame
+        ))
+        XCTAssertEqual(guidedKinds, [.fullDiskAccess])
+        XCTAssertEqual(guidedSourceFrames, [sourceFrame])
+        XCTAssertTrue(specializedActions.isEmpty)
+
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        await Task.yield()
+
+        XCTAssertEqual(refreshedTargets.count, 1)
+        XCTAssertEqual(refreshedTargets.first?.map(\.pluginID), ["disk-clean"])
     }
 
     func testDirectActionsUseTheSelectedFeatureAndRefreshGrantedTargets() {
