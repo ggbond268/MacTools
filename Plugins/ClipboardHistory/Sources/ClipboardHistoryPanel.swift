@@ -3659,8 +3659,6 @@ private struct ClipboardHistoryPanelView: View {
     private var panelToolbar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                clipboardIdentityLabel
-
                 PluginPaletteSearchToolbar(
                     text: searchText,
                     placeholder: searchPlaceholder,
@@ -3736,21 +3734,6 @@ private struct ClipboardHistoryPanelView: View {
                 filterControlBar
             }
         }
-    }
-
-    private var clipboardIdentityLabel: some View {
-        let title = localization.string("panel.identity.title", defaultValue: "Clipboard")
-        return ViewThatFits(in: .horizontal) {
-            Label(title, systemImage: "clipboard")
-                .fixedSize()
-            Image(systemName: "clipboard")
-                .accessibilityLabel(title)
-        }
-        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-        .foregroundStyle(.secondary)
-        .frame(minWidth: 28, minHeight: PluginPaletteMetrics.toolbarControlSize.height)
-        .accessibilityIdentifier("mactools.clipboard-history.identity")
-        .help(title)
     }
 
     private var showsFilterControlBar: Bool {

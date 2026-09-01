@@ -13374,21 +13374,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "全部" } }
       }
     },
-    "panel.identity.title": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "الحافظة" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablage" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Clipboard" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Portapapeles" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Presse-papiers" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "クリップボード" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Área de transferência" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Буфер обмена" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼簿" } }
-      }
-    },
     "panel.mode.history": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "السجل" } },
