@@ -2511,6 +2511,13 @@ enum SettingsSidebarPluginSearchPolicy {
     }
 }
 
+@MainActor
+enum SettingsSidebarPluginSearchRevealScheduler {
+    static func afterExpansion(_ reveal: @escaping @MainActor () -> Void) {
+        DispatchQueue.main.async(execute: reveal)
+    }
+}
+
 private struct SettingsSidebar: View {
     private enum Layout {
         static let sectionHeaderTrailingInset: CGFloat = 8
@@ -2634,7 +2641,7 @@ private struct SettingsSidebar: View {
                 }
                 .onChange(of: pluginSearchFocusRequestID) {
                     sidebarPreferences.setSection(.pluginSettings, expanded: true)
-                    DispatchQueue.main.async {
+                    SettingsSidebarPluginSearchRevealScheduler.afterExpansion {
                         withAnimation {
                             proxy.scrollTo(PluginSearchLayout.rowID, anchor: .center)
                         }

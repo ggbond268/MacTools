@@ -115,4 +115,21 @@ final class SettingsSidebarPluginSearchTests: XCTestCase {
             hasMarkedText: true
         ))
     }
+
+    @MainActor
+    func testPluginSearchRevealRunsAfterTheExpansionTurn() async {
+        var events = ["expanded"]
+
+        SettingsSidebarPluginSearchRevealScheduler.afterExpansion {
+            events.append("revealed")
+        }
+
+        XCTAssertEqual(events, ["expanded"])
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                continuation.resume()
+            }
+        }
+        XCTAssertEqual(events, ["expanded", "revealed"])
+    }
 }

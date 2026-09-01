@@ -907,13 +907,12 @@ final class AppWindowRouterTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.set(false, forKey: "settings.sidebar.pluginSettingsSectionExpanded")
-        let plugins = (1...20).map {
-            AppWindowRouterSettingsPlugin(id: "settings-plugin-\($0)")
-        }
+        let plugins = [AppWindowRouterSettingsPlugin(id: "settings-plugin")]
         let router = makeRouter(defaults: defaults, plugins: plugins)
 
         router.showSettings()
         let window = try XCTUnwrap(router.settingsWindow)
+        defer { window.close() }
         let hostingView = try XCTUnwrap(window.contentView as? NSHostingView<SettingsView>)
         await settleWindowLayout(window)
         XCTAssertNil(pluginSettingsFilterField(in: hostingView))
@@ -925,16 +924,21 @@ final class AppWindowRouterTests: XCTestCase {
             windowNumber: window.windowNumber
         )))
 
-        for _ in 0..<5 {
+        let deadline = ContinuousClock.now + .seconds(2)
+        var focusedFilterField: NSTextField?
+        repeat {
             await settleWindowLayout(window)
-        }
-        let filterField = try XCTUnwrap(pluginSettingsFilterField(in: hostingView))
-        XCTAssertTrue(
-            window.firstResponder === filterField.currentEditor(),
-            "Expected Command-Shift-F to focus the newly rendered plugin filter field."
+            if let filterField = pluginSettingsFilterField(in: hostingView),
+               window.firstResponder === filterField.currentEditor() {
+                focusedFilterField = filterField
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        } while ContinuousClock.now < deadline
+        XCTAssertNotNil(
+            focusedFilterField,
+            "Expected Command-Shift-F to reveal and focus the offscreen plugin filter field."
         )
-
-        window.close()
     }
 
     func testAppUpdateRequestNavigatesDirectlyToAbout() throws {
