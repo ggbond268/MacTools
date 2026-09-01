@@ -30,7 +30,7 @@ enum InputRemappingSystemDefinedEvent {
 }
 
 final class InputRemappingEventTap: InputRemappingEventTapping, @unchecked Sendable {
-    static let syntheticMarker: Int64 = 0x4D_54_49_52
+    static let syntheticMarker = MacToolsSyntheticInputEvent.marker
     private static let scrollCaptureQuiescence: TimeInterval = 0.25
     private static let emergencyStopKeyCode = UInt16(kVK_Escape)
     private static let emergencyStopModifiers: ShortcutModifiers = [.control, .option, .command]
@@ -90,6 +90,7 @@ final class InputRemappingEventTap: InputRemappingEventTapping, @unchecked Senda
             | (CGEventMask(1) << CGEventType.otherMouseUp.rawValue)
             | (CGEventMask(1) << CGEventType.keyDown.rawValue)
             | (CGEventMask(1) << CGEventType.keyUp.rawValue)
+            | (CGEventMask(1) << CGEventType.flagsChanged.rawValue)
             | (CGEventMask(1) << CGEventType.scrollWheel.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -290,7 +291,7 @@ final class InputRemappingEventTap: InputRemappingEventTapping, @unchecked Senda
     }
 
     static func isMarkedSynthetic(_ event: CGEvent) -> Bool {
-        event.getIntegerValueField(.eventSourceUserData) == syntheticMarker
+        MacToolsSyntheticInputEvent.isMarked(event)
     }
 
     private func shortcutCapture(from event: CGEvent) -> ShortcutBinding? {
@@ -448,25 +449,28 @@ final class InputRemappingEventTap: InputRemappingEventTapping, @unchecked Senda
     func execute(_ action: InputRemappingRule.Action) -> Bool {
         switch action {
         case let .shortcut(binding):
-            post(keyCode: binding.keyCode, modifiers: binding.modifiers)
+            return post(keyCode: binding.keyCode, modifiers: binding.modifiers)
+        case let .keyTap(keyTap):
+            guard let keyTap else { return false }
+            return KeyboardKeyTapEventPoster.post(keyTap)
         case .mouseBack:
-            postMouse(button: 3)
+            return postMouse(button: 3)
         case .mouseForward:
-            postMouse(button: 4)
+            return postMouse(button: 4)
         case .mouseMiddle:
-            postMouse(button: 2)
+            return postMouse(button: 2)
         case .missionControl:
-            post(keyCode: UInt16(kVK_UpArrow), modifiers: [.control])
+            return post(keyCode: UInt16(kVK_UpArrow), modifiers: [.control])
         case .spaceLeft:
-            post(keyCode: UInt16(kVK_LeftArrow), modifiers: [.control])
+            return post(keyCode: UInt16(kVK_LeftArrow), modifiers: [.control])
         case .spaceRight:
-            post(keyCode: UInt16(kVK_RightArrow), modifiers: [.control])
+            return post(keyCode: UInt16(kVK_RightArrow), modifiers: [.control])
         case .mediaPlayPause:
-            postSystemKey(NX_KEYTYPE_PLAY)
+            return postSystemKey(NX_KEYTYPE_PLAY)
         case .volumeDown:
-            postSystemKey(NX_KEYTYPE_SOUND_DOWN)
+            return postSystemKey(NX_KEYTYPE_SOUND_DOWN)
         case .volumeUp:
-            postSystemKey(NX_KEYTYPE_SOUND_UP)
+            return postSystemKey(NX_KEYTYPE_SOUND_UP)
         }
     }
 
@@ -556,7 +560,7 @@ final class InputRemappingEventTap: InputRemappingEventTapping, @unchecked Senda
     }
 
     private func postSynthetic(_ event: CGEvent) {
-        event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticMarker)
+        MacToolsSyntheticInputEvent.mark(event)
         event.post(tap: .cghidEventTap)
     }
 }

@@ -37,23 +37,27 @@ enum TrackpadGestureMappingActionFilter: String, CaseIterable, Sendable {
     case all
     case macToolsAction
     case keyboardShortcut
+    case singleKey
     case middleClick
 }
 
 enum TrackpadGestureAction: Codable, Equatable, Sendable {
     case action(ActionReference)
     case keyboardShortcut(ShortcutBinding)
+    case keyTap(KeyboardKeyTap)
     case middleClick
 
     private enum CodingKeys: String, CodingKey {
         case kind
         case reference
         case shortcut
+        case keyTap
     }
 
     private enum Kind: String, Codable {
         case action
         case keyboardShortcut
+        case keyTap
         case middleClick
     }
 
@@ -64,6 +68,8 @@ enum TrackpadGestureAction: Codable, Equatable, Sendable {
             self = .action(try container.decode(ActionReference.self, forKey: .reference))
         case .keyboardShortcut:
             self = .keyboardShortcut(try container.decode(ShortcutBinding.self, forKey: .shortcut))
+        case .keyTap:
+            self = .keyTap(try container.decode(KeyboardKeyTap.self, forKey: .keyTap))
         case .middleClick:
             self = .middleClick
         }
@@ -78,6 +84,9 @@ enum TrackpadGestureAction: Codable, Equatable, Sendable {
         case let .keyboardShortcut(shortcut):
             try container.encode(Kind.keyboardShortcut, forKey: .kind)
             try container.encode(shortcut, forKey: .shortcut)
+        case let .keyTap(keyTap):
+            try container.encode(Kind.keyTap, forKey: .kind)
+            try container.encode(keyTap, forKey: .keyTap)
         case .middleClick:
             try container.encode(Kind.middleClick, forKey: .kind)
         }
@@ -674,6 +683,8 @@ final class TrackpadGestureStore: ObservableObject {
             true
         case let .keyboardShortcut(binding):
             binding.isValid
+        case let .keyTap(keyTap):
+            keyTap.isSupported
         case .middleClick:
             true
         }

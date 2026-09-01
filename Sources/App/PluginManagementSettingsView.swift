@@ -81,7 +81,12 @@ struct PluginManagementSettingsView: View {
                                             onUpdate: { runOperation(id: item.id) { try await pluginHost.updatePluginFromCatalog(pluginID: item.id) } },
                                             onUninstall: { requestUninstall(item) },
                                             onOpenSettings: { pluginHost.presentPluginSettings(pluginID: item.id) },
-                                            onRelaunch: { appRelauncher.relaunch() }
+                                            onRelaunch: { appRelauncher.relaunch() },
+                                            onShowDetails: {
+                                                navigationCoordinator.navigate(
+                                                    to: .marketplaceDetail(.init(pluginID: item.id))
+                                                )
+                                            }
                                         )
                                         .marketplaceSearchAnchor(
                                             target: MarketplacePluginSearchTarget(
@@ -543,6 +548,7 @@ private struct PluginManagementRow: View {
     let onUninstall: () -> Void
     let onOpenSettings: () -> Void
     let onRelaunch: () -> Void
+    let onShowDetails: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -576,6 +582,20 @@ private struct PluginManagementRow: View {
         .padding(PluginSettingsTheme.Spacing.cardContent)
         .frame(maxWidth: .infinity, alignment: .leading)
         .pluginSettingsCardBackground(.standard)
+        .contentShape(RoundedRectangle(
+            cornerRadius: PluginSettingsTheme.Radius.hostCard,
+            style: .continuous
+        ))
+        .onTapGesture(perform: onShowDetails)
+        .focusable()
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: Text(AppL10n.plugins(
+            "plugin.marketplace.details.open",
+            defaultValue: "查看详情"
+        ))) {
+            onShowDetails()
+        }
+        .accessibilityIdentifier("mactools.marketplace.plugin.\(item.id)")
     }
 
     @ViewBuilder

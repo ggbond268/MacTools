@@ -22,11 +22,17 @@ private struct SystemStatusPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPanelSurfaceLifecycleHandling, PluginSettingsPresenting {
-    private enum SettingsControlID {
-        static let menuBarLayout = "menu-bar-layout"
-    }
-
+final class SystemStatusPlugin:
+    MacToolsPlugin,
+    PluginComponentPanel,
+    PluginPanelSurfaceLifecycleHandling,
+    PluginSettingsPresenting,
+    PluginDashboardPresenting,
+    PluginComponentDetailPresenting,
+    PluginPortablePreferencesProviding,
+    PluginPortablePreferencesRestorationReporting,
+    PluginPersistentPreferencesChangeSignaling
+{
     let metadata: PluginMetadata
 
     var descriptor: PluginComponentDescriptor {
@@ -46,6 +52,7 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
     private let settingsController: SystemStatusSettingsController
     private let menuBarMetricsController: SystemStatusMenuBarMetricsController
     private let localization: PluginLocalization
+    private let persistentPreferencesChanges = PluginPersistentPreferencesChangeEmitter()
     private var isActivated = true
 
     init(
@@ -81,10 +88,12 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
         )
         self.menuBarMetricsController = SystemStatusMenuBarMetricsController(
             viewModel: resolvedViewModel,
-            settingsController: resolvedSettingsController
+            settingsController: resolvedSettingsController,
+            localization: localization
         )
         resolvedSettingsController.onConfigurationChange = { [weak self] in
             self?.onStateChange?()
+            self?.persistentPreferencesChanges.didPersist()
         }
     }
 
@@ -95,6 +104,16 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
         didSet {
             menuBarMetricsController.requestConfigurationPresentation = requestSettingsPresentation
         }
+    }
+    var requestDashboardPresentation: (() -> Void)? {
+        didSet {
+            menuBarMetricsController.requestDashboardPresentation = requestDashboardPresentation
+        }
+    }
+    var requestComponentDetailPresentation: ((String) -> Void)?
+    var onPersistentPreferencesChange: (() -> Void)? {
+        get { persistentPreferencesChanges.onChange }
+        set { persistentPreferencesChanges.onChange = newValue }
     }
 
     var componentPanelState: PluginComponentState {
@@ -121,9 +140,10 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
                     defaultValue: "选择组件面板显示的内容，并拖拽调整顺序。"
                 ),
                 presentation: .edgeToEdge
-            ) { [settingsController, localization] _ in
+            ) { [settingsController, viewModel, localization] _ in
                 SystemStatusSettingsView(
                     controller: settingsController,
+                    viewModel: viewModel,
                     localization: localization,
                     section: .panel
                 )
@@ -137,55 +157,14 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
                     defaultValue: "选择要显示在菜单栏里的指标。"
                 ),
                 presentation: .edgeToEdge
-            ) { [settingsController, localization] _ in
+            ) { [settingsController, viewModel, localization] _ in
                 SystemStatusSettingsView(
                     controller: settingsController,
+                    viewModel: viewModel,
                     localization: localization,
                     section: .menuBar
                 )
-            },
-            PluginSettingsSection(
-                id: "menu-bar-layout",
-                title: localization.string(
-                    "settings.menuBarLayout.title",
-                    defaultValue: "菜单栏指标布局"
-                ),
-                systemImage: "rectangle.split.2x1",
-                rows: [
-                    PluginSettingsRow(
-                        id: SettingsControlID.menuBarLayout,
-                        title: localization.string(
-                            "settings.menuBarLayout.arrangement",
-                            defaultValue: "排列方式"
-                        ),
-                        description: localization.string(
-                            "settings.menuBarLayout.description",
-                            defaultValue: "水平保持现有样式；垂直时名称逐字竖排在左，数值在右侧上下左对齐。"
-                        ),
-                        systemImage: "rectangle.split.2x1",
-                        control: .picker(
-                            selectionID: settingsController.configuration.menuBarLayout.rawValue,
-                            options: [
-                                PluginSettingsOption(
-                                    id: SystemStatusMenuBarLayout.horizontal.rawValue,
-                                    title: localization.string(
-                                        "settings.menuBarLayout.horizontal",
-                                        defaultValue: "水平"
-                                    )
-                                ),
-                                PluginSettingsOption(
-                                    id: SystemStatusMenuBarLayout.vertical.rawValue,
-                                    title: localization.string(
-                                        "settings.menuBarLayout.vertical",
-                                        defaultValue: "垂直"
-                                    )
-                                )
-                            ],
-                            style: .segmented
-                        )
-                    )
-                ]
-            )
+            }
         ])
     }
 
@@ -194,7 +173,34 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
             SystemStatusComponentView(
                 viewModel: viewModel,
                 settingsController: settingsController,
-                localization: localization
+                localization: localization,
+                onMetricDetail: { [weak self] kind in
+                    self?.requestComponentDetailPresentation?(kind.rawValue)
+                }
+            )
+        )
+    }
+
+    func makeComponentDetailContent(
+        detailID: String,
+        dismiss: @escaping () -> Void
+    ) -> PluginComponentDetailContent? {
+        guard
+            let kind = SystemStatusMetricKind(rawValue: detailID),
+            kind != .topProcesses
+        else {
+            return nil
+        }
+
+        return PluginComponentDetailContent(
+            id: detailID,
+            title: kind.title(localization: localization),
+            content: AnyView(
+                SystemStatusMetricDetailView(
+                    viewModel: viewModel,
+                    kind: kind,
+                    localization: localization
+                )
             )
         )
     }
@@ -219,6 +225,18 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
         viewModel.stop()
     }
 
+    func makePortablePreferencesBackup() -> Data? {
+        settingsController.makePortablePreferencesBackup()
+    }
+
+    func restorePortablePreferences(from data: Data) {
+        _ = settingsController.restorePortablePreferences(from: data)
+    }
+
+    func restorePortablePreferencesReportingResult(from data: Data) -> Bool {
+        settingsController.restorePortablePreferences(from: data)
+    }
+
     func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
         guard surface == .component else {
             return
@@ -240,15 +258,7 @@ final class SystemStatusPlugin: MacToolsPlugin, PluginComponentPanel, PluginPane
     }
 
     func handlePermissionAction(id: String) {}
-    func handleSettingsAction(_ action: PluginSettingsAction) {
-        guard case let .setSelection(controlID, optionID) = action,
-              controlID == SettingsControlID.menuBarLayout,
-              let layout = SystemStatusMenuBarLayout(rawValue: optionID) else {
-            return
-        }
-
-        settingsController.setMenuBarLayout(layout)
-    }
+    func handleSettingsAction(_ action: PluginSettingsAction) {}
     func handleShortcutAction(id: String) {}
 }
 
@@ -281,6 +291,12 @@ struct SystemStatusSamplingSchedule: Sendable {
 
 @MainActor
 final class SystemStatusViewModel: ObservableObject {
+    enum ForegroundConsumer: Hashable {
+        case dashboard
+        case menuBarPopover
+    }
+
+    private static let processCandidateLimit = 6
     @Published private(set) var snapshot = SystemStatusSnapshot.empty
 
     private enum SamplingMode: Equatable {
@@ -335,6 +351,9 @@ final class SystemStatusViewModel: ObservableObject {
     private var samplingTask: Task<Void, Never>?
     private var mode: SamplingMode = .background
     private var menuBarMode: SamplingMode?
+    private(set) var foregroundConsumers: Set<ForegroundConsumer> = []
+
+    var isSamplingForeground: Bool { mode == .foreground }
     private var lastSlowDate: Date?
     private var lastProcessDate: Date?
     private var lastHistoryDate: Date?
@@ -342,8 +361,10 @@ final class SystemStatusViewModel: ObservableObject {
     private var didLoadHistory = false
     private var lastDisplayHistoryPublishDate: Date?
 
-    private static let displayHistoryRetention: TimeInterval = 30 * 60
-    private static let maximumDisplayHistoryCount = 1_800
+    private static let displayHistoryRetention: TimeInterval = 24 * 60 * 60
+    private static let highResolutionDisplayHistoryRetention: TimeInterval = 30 * 60
+    private static let historicalDisplayHistoryBucket: TimeInterval = 60
+    private static let maximumDisplayHistoryCount = SystemStatusHistoryStore.maximumSampleCount
     private static let foregroundDisplayHistoryInterval: TimeInterval = 2
     private static let backgroundDisplayHistoryInterval: TimeInterval = 30
 
@@ -363,7 +384,8 @@ final class SystemStatusViewModel: ObservableObject {
         startForeground()
     }
 
-    func startForeground() {
+    func startForeground(for consumer: ForegroundConsumer = .dashboard) {
+        guard foregroundConsumers.insert(consumer).inserted else { return }
         let previousMode = mode
         mode = .foreground
 
@@ -406,7 +428,9 @@ final class SystemStatusViewModel: ObservableObject {
         startSamplingIfNeeded()
     }
 
-    func returnToBackground() {
+    func returnToBackground(from consumer: ForegroundConsumer = .dashboard) {
+        foregroundConsumers.remove(consumer)
+        guard foregroundConsumers.isEmpty else { return }
         mode = menuBarMode ?? .background
     }
 
@@ -422,7 +446,7 @@ final class SystemStatusViewModel: ObservableObject {
         slowSnapshot.hardware = slowSample.hardware
         publishSnapshotIfChanged(slowSnapshot)
 
-        let processes = await sampler.collectTopProcesses(limit: 3)
+        let processes = await sampler.collectTopProcesses(limit: Self.processCandidateLimit)
         guard !Task.isCancelled else { return }
         var processSnapshot = snapshot
         processSnapshot.topProcesses = await Self.resolveApplicationNames(for: processes)
@@ -440,6 +464,7 @@ final class SystemStatusViewModel: ObservableObject {
         samplingTask = nil
         mode = .background
         menuBarMode = nil
+        foregroundConsumers.removeAll()
     }
 
     private func startSamplingIfNeeded() {
@@ -543,7 +568,7 @@ final class SystemStatusViewModel: ObservableObject {
         }
 
         lastProcessDate = referenceDate
-        let processes = await sampler.collectTopProcesses(limit: 3)
+        let processes = await sampler.collectTopProcesses(limit: Self.processCandidateLimit)
         guard !Task.isCancelled else { return }
         var updatedSnapshot = snapshot
         updatedSnapshot.topProcesses = await Self.resolveApplicationNames(for: processes)
@@ -648,16 +673,14 @@ final class SystemStatusViewModel: ObservableObject {
             currentIndex = points.index(after: currentIndex)
         }
 
-        let retainedCount = points.distance(from: startIndex, to: endIndex)
-        if retainedCount > maximumDisplayHistoryCount {
-            startIndex = points.index(endIndex, offsetBy: -maximumDisplayHistoryCount)
-        }
-
         guard startIndex < endIndex else {
             return []
         }
 
-        return Array(points[startIndex..<endIndex])
+        return compactedDisplayHistory(
+            points[startIndex..<endIndex],
+            referenceDate: referenceDate
+        )
     }
 
     static func prunedDisplayHistory(
@@ -669,11 +692,54 @@ final class SystemStatusViewModel: ObservableObject {
             .filter { $0.timestamp >= cutoff && $0.timestamp <= referenceDate.timeIntervalSince1970 + 60 }
             .sorted { $0.timestamp < $1.timestamp }
 
-        guard recentPoints.count > maximumDisplayHistoryCount else {
-            return recentPoints
+        return compactedDisplayHistory(recentPoints[...], referenceDate: referenceDate)
+    }
+
+    private static func compactedDisplayHistory(
+        _ points: ArraySlice<SystemStatusHistoryPoint>,
+        referenceDate: Date
+    ) -> [SystemStatusHistoryPoint] {
+        let highResolutionCutoff = referenceDate.timeIntervalSince1970 - highResolutionDisplayHistoryRetention
+        var compacted: [SystemStatusHistoryPoint] = []
+        compacted.reserveCapacity(min(points.count, maximumDisplayHistoryCount))
+        var pendingHistoricalPoint: SystemStatusHistoryPoint?
+        var pendingHistoricalBucket: Int?
+
+        for point in points {
+            guard point.timestamp < highResolutionCutoff else {
+                if let pendingHistoricalPoint {
+                    compacted.append(pendingHistoricalPoint)
+                    pendingHistoricalBucket = nil
+                }
+                compacted.append(point)
+                pendingHistoricalPoint = nil
+                continue
+            }
+
+            let bucket = Int(floor(point.timestamp / historicalDisplayHistoryBucket))
+            if bucket == pendingHistoricalBucket {
+                pendingHistoricalPoint = point
+            } else {
+                if let pendingHistoricalPoint {
+                    compacted.append(pendingHistoricalPoint)
+                }
+                pendingHistoricalBucket = bucket
+                pendingHistoricalPoint = point
+            }
         }
 
-        return Array(recentPoints.suffix(maximumDisplayHistoryCount))
+        if let pendingHistoricalPoint {
+            compacted.append(pendingHistoricalPoint)
+        }
+        enforceHistoryCapacity(&compacted)
+        return compacted
+    }
+
+    private static func enforceHistoryCapacity(_ points: inout [SystemStatusHistoryPoint]) {
+        guard points.count > maximumDisplayHistoryCount else {
+            return
+        }
+        points = Array(points.suffix(maximumDisplayHistoryCount))
     }
 
     private static func resolveApplicationNames(for processes: [SystemStatusTopProcess]) async -> [SystemStatusTopProcess] {
@@ -699,12 +765,16 @@ struct SystemStatusComponentView: View {
     @ObservedObject var viewModel: SystemStatusViewModel
     @ObservedObject var settingsController: SystemStatusSettingsController
     let localization: PluginLocalization
+    let onMetricDetail: (SystemStatusMetricKind) -> Void
 
     var body: some View {
         SystemStatusDashboardView(
             snapshot: viewModel.snapshot,
             visibleKinds: settingsController.configuration.visiblePanelMetricKinds,
-            localization: localization
+            processSort: settingsController.configuration.processSort,
+            onProcessSortChange: settingsController.setProcessSort,
+            localization: localization,
+            onMetricDetail: onMetricDetail
         )
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }

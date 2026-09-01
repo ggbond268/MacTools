@@ -1204,8 +1204,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging, @unchecked
         event: CGEvent
     ) -> Unmanaged<CGEvent>? {
         if type == .keyDown || type == .keyUp {
-            if event.getIntegerValueField(.eventSourceUserData)
-                == TrackpadGestureActionExecutor.keyboardEventMarker {
+            if MacToolsSyntheticInputEvent.isMarked(event) {
                 return Unmanaged.passUnretained(event)
             }
 

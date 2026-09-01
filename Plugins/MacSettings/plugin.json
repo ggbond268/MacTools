@@ -1,0 +1,594 @@
+{
+  "id": "mac-settings",
+  "displayName": "Mac 设置",
+  "summary": "搜索并集中调整当前 Mac 的常用设置",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "إعدادات Mac",
+      "summary": "ابحث عن إعدادات Mac الشائعة واضبطها في مكان واحد."
+    },
+    "de": {
+      "displayName": "Mac-Einstellungen",
+      "summary": "Häufige Mac-Einstellungen suchen und zentral anpassen."
+    },
+    "en": {
+      "displayName": "Mac Settings",
+      "summary": "Search and adjust common settings for this Mac in one place."
+    },
+    "es": {
+      "displayName": "Ajustes del Mac",
+      "summary": "Busca y ajusta opciones habituales del Mac en un solo lugar."
+    },
+    "fr": {
+      "displayName": "Réglages du Mac",
+      "summary": "Recherchez et ajustez les réglages courants du Mac au même endroit."
+    },
+    "ja": {
+      "displayName": "Mac 設定",
+      "summary": "この Mac のよく使う設定を検索して一か所で調整します。"
+    },
+    "ko": {
+      "displayName": "Mac 설정",
+      "summary": "이 Mac의 자주 쓰는 설정을 검색하고 한곳에서 조절합니다."
+    },
+    "pt": {
+      "displayName": "Ajustes do Mac",
+      "summary": "Pesquise e ajuste configurações comuns do Mac em um só lugar."
+    },
+    "ru": {
+      "displayName": "Настройки Mac",
+      "summary": "Ищите и меняйте основные настройки этого Mac в одном месте."
+    },
+    "zh-Hans": {
+      "displayName": "Mac 设置",
+      "summary": "搜索并集中调整当前 Mac 的常用设置"
+    },
+    "zh-Hant": {
+      "displayName": "Mac 設定",
+      "summary": "搜尋並集中調整目前 Mac 的常用設定"
+    }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.1",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "MacSettings.bundle",
+  "factoryClass": "MacSettingsPlugin.MacSettingsPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "MacSettingsPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "workspace"
+  },
+  "permissions": [],
+  "category": "system",
+  "productStrings": {
+    "summary": "@summary",
+    "setup.title": "@standardSetup.requirements.title",
+    "setup.description": {
+      "ar": "يتطلب حفظ حجم المؤشر وصولاً كاملاً إلى القرص ثم إعادة فتح MacTools. تعتمد بعض الإعدادات الأخرى على الأجهزة أو إضافات موفرات مفعّلة.",
+      "de": "Zum Speichern der Zeigergröße sind Festplattenvollzugriff und ein Neustart von MacTools erforderlich. Einige andere Einstellungen benötigen unterstützte Hardware oder aktivierte Anbieter-Plugins.",
+      "en": "Saving pointer size requires Full Disk Access and reopening MacTools. Some other settings depend on supported hardware or enabled provider plugins.",
+      "es": "Guardar el tamaño del puntero requiere acceso total al disco y volver a abrir MacTools. Otros ajustes dependen del hardware compatible o de plugins proveedores activados.",
+      "fr": "L’enregistrement de la taille du pointeur nécessite l’accès complet au disque et la réouverture de MacTools. Certains autres réglages dépendent du matériel compatible ou de modules fournisseurs activés.",
+      "ja": "ポインタのサイズを保存するにはフルディスクアクセスを許可し、MacToolsを開き直してください。一部の設定には対応ハードウェアや有効な提供元プラグインが必要です。",
+      "ko": "포인터 크기를 저장하려면 전체 디스크 접근을 허용하고 MacTools를 다시 열어야 합니다. 일부 설정은 지원되는 하드웨어 또는 활성화된 제공자 플러그인이 필요합니다.",
+      "pt": "Salvar o tamanho do cursor exige Acesso Total ao Disco e reabrir o MacTools. Alguns outros ajustes dependem de hardware compatível ou plugins provedores ativados.",
+      "ru": "Для сохранения размера указателя нужен полный доступ к диску и повторный запуск MacTools. Другие настройки могут требовать совместимое оборудование или включённые плагины-поставщики.",
+      "zh-Hans": "保存指针大小需要完全磁盘访问并重新打开 MacTools。部分其他设置需要受支持的硬件或已启用的提供方插件。",
+      "zh-Hant": "儲存指標大小需要完整磁碟存取權並重新開啟 MacTools。部分其他設定需要支援的硬體或已啟用的提供者外掛。"
+    },
+    "action.open": {
+      "ar": "فتح إعدادات Mac",
+      "de": "Mac-Einstellungen öffnen",
+      "en": "Open Mac Settings",
+      "es": "Abrir ajustes del Mac",
+      "fr": "Ouvrir les réglages du Mac",
+      "ja": "Mac設定を開く",
+      "ko": "Mac 설정 열기",
+      "pt": "Abrir ajustes do Mac",
+      "ru": "Открыть настройки Mac",
+      "zh-Hans": "打开 Mac 设置",
+      "zh-Hant": "開啟 Mac 設定"
+    },
+    "action.open-favorites": {
+      "ar": "فتح إعدادات Mac المثبتة",
+      "de": "Angeheftete Mac-Einstellungen öffnen",
+      "en": "Open Pinned Mac Settings",
+      "es": "Abrir ajustes fijados del Mac",
+      "fr": "Ouvrir les réglages Mac épinglés",
+      "ja": "固定したMac設定を開く",
+      "ko": "고정된 Mac 설정 열기",
+      "pt": "Abrir ajustes fixados do Mac",
+      "ru": "Открыть закреплённые настройки Mac",
+      "zh-Hans": "打开固定的 Mac 设置",
+      "zh-Hant": "開啟固定的 Mac 設定"
+    },
+    "action.open-category": {
+      "ar": "فتح فئة إعدادات Mac",
+      "de": "Mac-Einstellungskategorie öffnen",
+      "en": "Open a Mac Settings Category",
+      "es": "Abrir una categoría de ajustes del Mac",
+      "fr": "Ouvrir une catégorie de réglages du Mac",
+      "ja": "Mac設定のカテゴリを開く",
+      "ko": "Mac 설정 카테고리 열기",
+      "pt": "Abrir uma categoria de ajustes do Mac",
+      "ru": "Открыть категорию настроек Mac",
+      "zh-Hans": "打开 Mac 设置类别",
+      "zh-Hant": "開啟 Mac 設定類別"
+    },
+    "action.open-setting": {
+      "ar": "فتح إعداد Mac محدد",
+      "de": "Bestimmte Mac-Einstellung öffnen",
+      "en": "Open a Specific Mac Setting",
+      "es": "Abrir un ajuste concreto del Mac",
+      "fr": "Ouvrir un réglage précis du Mac",
+      "ja": "指定したMac設定を開く",
+      "ko": "특정 Mac 설정 열기",
+      "pt": "Abrir um ajuste específico do Mac",
+      "ru": "Открыть конкретную настройку Mac",
+      "zh-Hans": "打开指定的 Mac 设置",
+      "zh-Hant": "開啟指定的 Mac 設定"
+    },
+    "action.search": {
+      "ar": "البحث في إعدادات Mac",
+      "de": "Mac-Einstellungen durchsuchen",
+      "en": "Search Mac Settings",
+      "es": "Buscar ajustes del Mac",
+      "fr": "Rechercher dans les réglages du Mac",
+      "ja": "Mac設定を検索",
+      "ko": "Mac 설정 검색",
+      "pt": "Pesquisar ajustes do Mac",
+      "ru": "Поиск настроек Mac",
+      "zh-Hans": "搜索 Mac 设置",
+      "zh-Hant": "搜尋 Mac 設定"
+    },
+    "action.set-boolean": {
+      "ar": "تشغيل إعداد Mac أو إيقافه",
+      "de": "Mac-Einstellung ein- oder ausschalten",
+      "en": "Turn a Mac Setting On or Off",
+      "es": "Activar o desactivar un ajuste del Mac",
+      "fr": "Activer ou désactiver un réglage du Mac",
+      "ja": "Mac設定をオンまたはオフにする",
+      "ko": "Mac 설정 켜기 또는 끄기",
+      "pt": "Ativar ou desativar um ajuste do Mac",
+      "ru": "Включить или выключить настройку Mac",
+      "zh-Hans": "打开或关闭 Mac 设置",
+      "zh-Hant": "開啟或關閉 Mac 設定"
+    },
+    "action.apply-profile": {
+      "ar": "معاينة ملف إعدادات Mac محفوظ",
+      "de": "Gespeichertes Mac-Einstellungsprofil prüfen",
+      "en": "Preview a Saved Mac Settings Profile",
+      "es": "Previsualizar un perfil guardado de ajustes del Mac",
+      "fr": "Prévisualiser un profil de réglages Mac enregistré",
+      "ja": "保存済みのMac設定プロファイルをプレビュー",
+      "ko": "저장된 Mac 설정 프로필 미리보기",
+      "pt": "Pré-visualizar um perfil salvo de ajustes do Mac",
+      "ru": "Предпросмотр сохранённого профиля настроек Mac",
+      "zh-Hans": "预览已保存的 Mac 设置配置",
+      "zh-Hant": "預覽已儲存的 Mac 設定配置"
+    },
+    "action.undo-most-recent-change": {
+      "ar": "التراجع عن آخر تغيير في إعدادات Mac",
+      "de": "Letzte Mac-Einstellungsänderung rückgängig machen",
+      "en": "Undo the Latest Mac Settings Change",
+      "es": "Deshacer el último cambio en los ajustes del Mac",
+      "fr": "Annuler la dernière modification des réglages du Mac",
+      "ja": "Mac設定の直前の変更を取り消す",
+      "ko": "최근 Mac 설정 변경 취소",
+      "pt": "Desfazer a última alteração nos ajustes do Mac",
+      "ru": "Отменить последнее изменение настроек Mac",
+      "zh-Hans": "撤销最近的 Mac 设置更改",
+      "zh-Hant": "復原最近的 Mac 設定變更"
+    }
+  },
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "search-settings",
+        "text": "@productStrings.action.search"
+      },
+      {
+        "id": "preview-profile",
+        "text": "@productStrings.action.apply-profile"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools/blob/main/docs/plugins/mac-settings.md",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "Mac",
+      "settings",
+      "preferences",
+      "profiles",
+      "accessibility"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "البحث في إعدادات Mac"
+      ],
+      "de": [
+        "Mac-Einstellungen durchsuchen"
+      ],
+      "en": [
+        "Search Mac Settings"
+      ],
+      "es": [
+        "Buscar ajustes del Mac"
+      ],
+      "fr": [
+        "Rechercher dans les réglages du Mac"
+      ],
+      "ja": [
+        "Mac設定を検索"
+      ],
+      "ko": [
+        "Mac 설정 검색"
+      ],
+      "pt": [
+        "Pesquisar ajustes do Mac"
+      ],
+      "ru": [
+        "Поиск настроек Mac"
+      ],
+      "zh-Hans": [
+        "搜索 Mac 设置"
+      ],
+      "zh-Hant": [
+        "搜尋 Mac 設定"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "search-settings",
+        "title": "@productStrings.action.search"
+      },
+      {
+        "id": "preview-profile",
+        "title": "@productStrings.action.apply-profile"
+      }
+    ],
+    "goalCategories": [
+      "system",
+      "productivity"
+    ],
+    "relatedPluginIDs": [
+      "appearance",
+      "auto-hide-dock",
+      "auto-hide-menu-bar",
+      "stage-manager",
+      "display-true-color",
+      "night-shift"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [
+      "/usr/bin/defaults"
+    ],
+    "permissionIDs": [],
+    "setupComplexity": "guided",
+    "requiresRelaunch": true
+  },
+  "privacy": {
+    "dataObserved": [
+      "system-settings",
+      "input-device-availability"
+    ],
+    "dataPersisted": [
+      "pinned-settings",
+      "settings-profiles",
+      "setting-change-history"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": true
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "conditional-permissions",
+        "title": "@productStrings.setup.title",
+        "description": "@productStrings.setup.description"
+      }
+    ],
+    "optionalSurfaces": [
+      "global-shortcut",
+      "action-grid"
+    ],
+    "suggestedTestAction": {
+      "providerID": "mac-settings",
+      "actionID": "open"
+    }
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "appearance",
+      "auto-hide-dock",
+      "auto-hide-menu-bar",
+      "stage-manager",
+      "display-true-color",
+      "night-shift"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "mac-settings",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "open",
+            "title": "@productStrings.action.open",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "Mac",
+              "settings",
+              "open"
+            ],
+            "systemImage": "slider.horizontal.3",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "open-favorites",
+            "title": "@productStrings.action.open-favorites",
+            "description": "@productStrings.action.open-favorites",
+            "keywords": [
+              "Mac",
+              "settings",
+              "open-favorites"
+            ],
+            "systemImage": "slider.horizontal.3",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "open-category",
+            "title": "@productStrings.action.open-category",
+            "description": "@productStrings.action.open-category",
+            "keywords": [
+              "Mac",
+              "settings",
+              "open-category"
+            ],
+            "systemImage": "slider.horizontal.3",
+            "parameters": [
+              {
+                "id": "category",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "open-setting",
+            "title": "@productStrings.action.open-setting",
+            "description": "@productStrings.action.open-setting",
+            "keywords": [
+              "Mac",
+              "settings",
+              "open-setting"
+            ],
+            "systemImage": "slider.horizontal.3",
+            "parameters": [
+              {
+                "id": "setting-id",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "search",
+            "title": "@productStrings.action.search",
+            "description": "@productStrings.action.search",
+            "keywords": [
+              "Mac",
+              "settings",
+              "search"
+            ],
+            "systemImage": "slider.horizontal.3",
+            "parameters": [
+              {
+                "id": "query",
+                "kind": "string",
+                "isRequired": false,
+                "portability": "portable"
+              }
+            ],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "set-boolean",
+            "title": "@productStrings.action.set-boolean",
+            "description": "@productStrings.action.set-boolean",
+            "keywords": [
+              "Mac",
+              "settings",
+              "set-boolean"
+            ],
+            "systemImage": "switch.2",
+            "parameters": [
+              {
+                "id": "setting-id",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "portable"
+              },
+              {
+                "id": "enabled",
+                "kind": "boolean",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual",
+              "automatic-rule",
+              "app-intent"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "apply-profile",
+            "title": "@productStrings.action.apply-profile",
+            "description": "@productStrings.action.apply-profile",
+            "keywords": [
+              "Mac",
+              "settings",
+              "apply-profile"
+            ],
+            "systemImage": "square.stack.3d.up",
+            "parameters": [
+              {
+                "id": "profile-id",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "undo-most-recent-change",
+            "title": "@productStrings.action.undo-most-recent-change",
+            "description": "@productStrings.action.undo-most-recent-change",
+            "keywords": [
+              "Mac",
+              "settings",
+              "undo-most-recent-change"
+            ],
+            "systemImage": "arrow.uturn.backward",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual",
+              "automatic-rule",
+              "app-intent"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
+}

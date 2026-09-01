@@ -34,7 +34,7 @@ final class DeviceBatteryViewModel: ObservableObject {
     }
 
     private let sampler: any DeviceBatterySampling
-    private let rapooMonitor: any RapooBatteryMonitoring
+    private let vendorHIDMonitor: any VendorHIDBatteryMonitoring
     private let powerSourceObserver: any DeviceBatteryPowerSourceObserving
     private let bluetoothConnectionObserver: any DeviceBatteryBluetoothConnectionObserving
     private let localization: PluginLocalization
@@ -53,8 +53,8 @@ final class DeviceBatteryViewModel: ObservableObject {
     private var internalBatteryItems: [DeviceBatteryItem] = []
     private var bluetoothItems: [DeviceBatteryItem] = []
     private var appleMobileItems: [DeviceBatteryItem] = []
-    private var rapooSnapshot = RapooMouseBatterySnapshot.idle
-    private var rapooSnapshots: [RapooMouseBatterySnapshot] = []
+    private var vendorHIDSnapshot = VendorHIDMouseBatterySnapshot.idle
+    private var vendorHIDSnapshots: [VendorHIDMouseBatterySnapshot] = []
     private var sourceUpdateDates: [DeviceBatterySource: Date] = [:]
     private var activityState: PluginApplicationActivityState = .interactive
     private var needsBluetoothRefreshOnResume = false
@@ -62,7 +62,7 @@ final class DeviceBatteryViewModel: ObservableObject {
     private var includeInternalBattery = true
     private var includeBluetoothDevices = true
     private var includeAppleMobileDevices = true
-    private var includeRapooDevices = true
+    private var includeVendorHIDDevices = true
     private var isComponentPanelVisible = false
     private var isLowBatteryMonitoringEnabled = false
 
@@ -72,7 +72,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         let localization = PluginLocalization(bundle: .main)
         self.init(
             sampler: DeviceBatterySampler(localization: localization),
-            rapooMonitor: RapooHIDBatteryMonitor(localization: localization),
+            vendorHIDMonitor: VendorHIDBatteryMonitor(localization: localization),
             powerSourceObserver: SystemDeviceBatteryPowerSourceObserver(),
             bluetoothConnectionObserver: SystemDeviceBatteryBluetoothConnectionObserver(),
             localization: localization
@@ -81,33 +81,33 @@ final class DeviceBatteryViewModel: ObservableObject {
 
     init(
         sampler: any DeviceBatterySampling,
-        rapooMonitor: any RapooBatteryMonitoring,
+        vendorHIDMonitor: any VendorHIDBatteryMonitoring,
         powerSourceObserver: any DeviceBatteryPowerSourceObserving = NullDeviceBatteryPowerSourceObserver(),
         bluetoothConnectionObserver: any DeviceBatteryBluetoothConnectionObserving = NullDeviceBatteryBluetoothConnectionObserver(),
         localization: PluginLocalization = PluginLocalization(bundle: .main),
         schedule: DeviceBatterySamplingSchedule = .standard
     ) {
         self.sampler = sampler
-        self.rapooMonitor = rapooMonitor
+        self.vendorHIDMonitor = vendorHIDMonitor
         self.powerSourceObserver = powerSourceObserver
         self.bluetoothConnectionObserver = bluetoothConnectionObserver
         self.localization = localization
         self.schedule = schedule
-        rapooSnapshot = rapooMonitor.snapshot
-        rapooSnapshots = rapooMonitor.deviceSnapshots
+        vendorHIDSnapshot = vendorHIDMonitor.snapshot
+        vendorHIDSnapshots = vendorHIDMonitor.deviceSnapshots
     }
 
     func start(
         includeInternalBattery: Bool,
         includeBluetoothDevices: Bool,
         includeAppleMobileDevices: Bool,
-        includeRapooDevices: Bool
+        includeVendorHIDDevices: Bool
     ) {
         updateOptions(
             includeInternalBattery: includeInternalBattery,
             includeBluetoothDevices: includeBluetoothDevices,
             includeAppleMobileDevices: includeAppleMobileDevices,
-            includeRapooDevices: includeRapooDevices
+            includeVendorHIDDevices: includeVendorHIDDevices
         )
 
         guard !isStarted else {
@@ -116,9 +116,9 @@ final class DeviceBatteryViewModel: ObservableObject {
         }
 
         isStarted = true
-        rapooMonitor.onSnapshotChange = { [weak self] snapshot in
-            self?.rapooSnapshot = snapshot
-            self?.rapooSnapshots = self?.rapooMonitor.deviceSnapshots ?? []
+        vendorHIDMonitor.onSnapshotChange = { [weak self] snapshot in
+            self?.vendorHIDSnapshot = snapshot
+            self?.vendorHIDSnapshots = self?.vendorHIDMonitor.deviceSnapshots ?? []
             self?.rebuildSnapshot()
         }
         powerSourceObserver.onChange = { [weak self] in
@@ -136,8 +136,8 @@ final class DeviceBatteryViewModel: ObservableObject {
         bluetoothConnectionObserver.stop()
         powerSourceObserver.onChange = nil
         bluetoothConnectionObserver.onConnectionChange = nil
-        rapooMonitor.stop()
-        rapooMonitor.onSnapshotChange = nil
+        vendorHIDMonitor.stop()
+        vendorHIDMonitor.onSnapshotChange = nil
         isComponentPanelVisible = false
         isStarted = false
         clearCollectedSnapshots()
@@ -147,14 +147,14 @@ final class DeviceBatteryViewModel: ObservableObject {
         includeInternalBattery: Bool,
         includeBluetoothDevices: Bool,
         includeAppleMobileDevices: Bool,
-        includeRapooDevices: Bool
+        includeVendorHIDDevices: Bool
     ) {
         let wasIncludingBluetoothDevices = self.includeBluetoothDevices
         updateOptions(
             includeInternalBattery: includeInternalBattery,
             includeBluetoothDevices: includeBluetoothDevices,
             includeAppleMobileDevices: includeAppleMobileDevices,
-            includeRapooDevices: includeRapooDevices
+            includeVendorHIDDevices: includeVendorHIDDevices
         )
         rebuildSnapshot()
 
@@ -167,17 +167,17 @@ final class DeviceBatteryViewModel: ObservableObject {
         includeInternalBattery: Bool,
         includeBluetoothDevices: Bool,
         includeAppleMobileDevices: Bool,
-        includeRapooDevices: Bool
+        includeVendorHIDDevices: Bool
     ) {
         let previousInternalBattery = self.includeInternalBattery
         let previousBluetoothDevices = self.includeBluetoothDevices
         let previousAppleMobileDevices = self.includeAppleMobileDevices
-        let previousRapooDevices = self.includeRapooDevices
+        let previousVendorHIDDevices = self.includeVendorHIDDevices
         updateOptions(
             includeInternalBattery: includeInternalBattery,
             includeBluetoothDevices: includeBluetoothDevices,
             includeAppleMobileDevices: includeAppleMobileDevices,
-            includeRapooDevices: includeRapooDevices
+            includeVendorHIDDevices: includeVendorHIDDevices
         )
         rebuildSnapshot()
 
@@ -232,8 +232,8 @@ final class DeviceBatteryViewModel: ObservableObject {
             }
         }
 
-        if previousRapooDevices != includeRapooDevices {
-            reconcileRapooMonitoring()
+        if previousVendorHIDDevices != includeVendorHIDDevices {
+            reconcileVendorHIDMonitoring()
         }
     }
 
@@ -283,7 +283,7 @@ final class DeviceBatteryViewModel: ObservableObject {
             cancelSampling()
             powerSourceObserver.stop()
             bluetoothConnectionObserver.stop()
-            rapooMonitor.stop()
+            vendorHIDMonitor.stop()
             return
         }
 
@@ -326,12 +326,12 @@ final class DeviceBatteryViewModel: ObservableObject {
         includeInternalBattery: Bool,
         includeBluetoothDevices: Bool,
         includeAppleMobileDevices: Bool,
-        includeRapooDevices: Bool
+        includeVendorHIDDevices: Bool
     ) {
         self.includeInternalBattery = includeInternalBattery
         self.includeBluetoothDevices = includeBluetoothDevices
         self.includeAppleMobileDevices = includeAppleMobileDevices
-        self.includeRapooDevices = includeRapooDevices
+        self.includeVendorHIDDevices = includeVendorHIDDevices
 
         if !includeInternalBattery {
             internalBatteryItems.removeAll()
@@ -345,9 +345,9 @@ final class DeviceBatteryViewModel: ObservableObject {
             appleMobileItems.removeAll()
             sourceUpdateDates.removeValue(forKey: .appleMobile)
         }
-        if !includeRapooDevices {
-            rapooSnapshot = .idle
-            rapooSnapshots.removeAll()
+        if !includeVendorHIDDevices {
+            vendorHIDSnapshot = .idle
+            vendorHIDSnapshots.removeAll()
         }
     }
 
@@ -596,20 +596,20 @@ final class DeviceBatteryViewModel: ObservableObject {
         }
     }
 
-    private func reconcileRapooMonitoring() {
-        guard includeRapooDevices,
+    private func reconcileVendorHIDMonitoring() {
+        guard includeVendorHIDDevices,
               activityState.allowsBackgroundWork,
               hasSamplingDemand else {
-            rapooMonitor.stop()
-            rapooSnapshot = .idle
-            rapooSnapshots.removeAll()
+            vendorHIDMonitor.stop()
+            vendorHIDSnapshot = .idle
+            vendorHIDSnapshots.removeAll()
             rebuildSnapshot()
             return
         }
 
-        rapooMonitor.start()
-        rapooSnapshot = rapooMonitor.snapshot
-        rapooSnapshots = rapooMonitor.deviceSnapshots
+        vendorHIDMonitor.start()
+        vendorHIDSnapshot = vendorHIDMonitor.snapshot
+        vendorHIDSnapshots = vendorHIDMonitor.deviceSnapshots
         rebuildSnapshot()
     }
 
@@ -644,10 +644,10 @@ final class DeviceBatteryViewModel: ObservableObject {
                 restartAppleMobileSampling(revalidateImmediately: true)
             }
         }
-        if includeRapooDevices {
-            rapooMonitor.refresh()
-            rapooSnapshot = rapooMonitor.snapshot
-            rapooSnapshots = rapooMonitor.deviceSnapshots
+        if includeVendorHIDDevices {
+            vendorHIDMonitor.refresh()
+            vendorHIDSnapshot = vendorHIDMonitor.snapshot
+            vendorHIDSnapshots = vendorHIDMonitor.deviceSnapshots
             rebuildSnapshot()
         }
     }
@@ -696,7 +696,7 @@ final class DeviceBatteryViewModel: ObservableObject {
             cancelSampling()
             powerSourceObserver.stop()
             bluetoothConnectionObserver.stop()
-            rapooMonitor.stop()
+            vendorHIDMonitor.stop()
             rebuildSnapshot()
             return
         }
@@ -704,7 +704,7 @@ final class DeviceBatteryViewModel: ObservableObject {
             cancelSampling()
             powerSourceObserver.stop()
             bluetoothConnectionObserver.stop()
-            rapooMonitor.stop()
+            vendorHIDMonitor.stop()
             clearCollectedSnapshots()
             return
         }
@@ -724,7 +724,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         } else {
             bluetoothConnectionObserver.stop()
         }
-        reconcileRapooMonitoring()
+        reconcileVendorHIDMonitoring()
         restartSampling(
             forceBluetoothProfileRefresh: shouldForceBluetoothProfileRefresh
         )
@@ -752,8 +752,8 @@ final class DeviceBatteryViewModel: ObservableObject {
         internalBatteryItems.removeAll()
         bluetoothItems.removeAll()
         appleMobileItems.removeAll()
-        rapooSnapshot = .idle
-        rapooSnapshots.removeAll()
+        vendorHIDSnapshot = .idle
+        vendorHIDSnapshots.removeAll()
         sourceUpdateDates.removeAll()
         rebuildSnapshot()
     }
@@ -799,13 +799,13 @@ final class DeviceBatteryViewModel: ObservableObject {
                 return includeAppleMobileDevices
             case .bluetooth, .magicAccessory, .airPodsPart, .other:
                 return includeBluetoothDevices
-            case .rapooMouse:
-                return includeRapooDevices
+            case .vendorHIDMouse:
+                return includeVendorHIDDevices
             }
         }
 
-        if includeRapooDevices {
-            items.append(contentsOf: rapooSnapshots.compactMap {
+        if includeVendorHIDDevices {
+            items.append(contentsOf: vendorHIDSnapshots.compactMap {
                 $0.batteryItem(localization: localization)
             })
         }
@@ -817,8 +817,8 @@ final class DeviceBatteryViewModel: ObservableObject {
             includeInternalBattery ? sourceUpdateDates[.internalBattery] : nil,
             includeBluetoothDevices ? sourceUpdateDates[.bluetooth] : nil,
             includeAppleMobileDevices ? sourceUpdateDates[.appleMobile] : nil,
-            includeRapooDevices
-                ? rapooSnapshots.compactMap(\.lastUpdated).max() ?? rapooSnapshot.lastUpdated
+            includeVendorHIDDevices
+                ? vendorHIDSnapshots.compactMap(\.lastUpdated).max() ?? vendorHIDSnapshot.lastUpdated
                 : nil
         ].compactMap { $0 }
         snapshot = DeviceBatterySnapshot(
@@ -827,15 +827,15 @@ final class DeviceBatteryViewModel: ObservableObject {
                 DeviceBatteryItemNormalizer.resolvingAppleMobileDeviceAliases(items)
             ),
             lastUpdated: visibleSourceUpdateDates.max(),
-            rapooState: includeRapooDevices ? rapooSnapshot.accessState : .idle
+            vendorHIDState: includeVendorHIDDevices ? vendorHIDSnapshot.accessState : .idle
         )
     }
 
     private func resolvedAccessState(items: [DeviceBatteryItem]) -> DeviceBatteryAccessState {
-        if rapooSnapshot.accessState == .permissionDenied {
+        if vendorHIDSnapshot.accessState == .permissionDenied {
             return items.isEmpty ? .permissionDenied : .ready
         }
-        if case let .failed(message) = rapooSnapshot.accessState, items.isEmpty {
+        if case let .failed(message) = vendorHIDSnapshot.accessState, items.isEmpty {
             return .failed(message)
         }
         return items.isEmpty ? .noDevices : .ready

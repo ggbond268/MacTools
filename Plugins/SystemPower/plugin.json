@@ -1,0 +1,259 @@
+{
+  "id": "system-power",
+  "displayName": "电源操作",
+  "summary": "让 Mac 睡眠、退出登录、重新启动或关机",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "إجراءات الطاقة",
+      "summary": "ضع Mac في وضع السكون أو سجّل الخروج أو أعد التشغيل أو أوقف التشغيل."
+    },
+    "de": {
+      "displayName": "Energieaktionen",
+      "summary": "Mac in den Ruhezustand versetzen, abmelden, neu starten oder ausschalten."
+    },
+    "en": {
+      "displayName": "Power Actions",
+      "summary": "Sleep, log out, restart, or shut down your Mac."
+    },
+    "es": {
+      "displayName": "Acciones de energía",
+      "summary": "Pon el Mac en reposo, cierra sesión, reinícialo o apágalo."
+    },
+    "fr": {
+      "displayName": "Actions d’alimentation",
+      "summary": "Mettez le Mac en veille, déconnectez-vous, redémarrez-le ou éteignez-le."
+    },
+    "ja": {
+      "displayName": "電源操作",
+      "summary": "Macをスリープ、ログアウト、再起動、またはシステム終了します。"
+    },
+    "ko": {
+      "displayName": "전원 동작",
+      "summary": "Mac을 잠자기 상태로 전환하거나 로그아웃, 재시동 또는 종료합니다."
+    },
+    "pt": {
+      "displayName": "Ações de energia",
+      "summary": "Coloque o Mac em repouso, termine a sessão, reinicie-o ou desligue-o."
+    },
+    "ru": {
+      "displayName": "Действия питания",
+      "summary": "Переведите Mac в режим сна, выйдите из системы, перезагрузите или выключите его."
+    },
+    "zh-Hans": {
+      "displayName": "电源操作",
+      "summary": "让 Mac 睡眠、退出登录、重新启动或关机"
+    },
+    "zh-Hant": {
+      "displayName": "電源操作",
+      "summary": "讓 Mac 睡眠、登出、重新啟動或關機"
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "action.sleep.title": "@localizable.action.sleep.title",
+    "action.sleep.description": "@localizable.action.sleep.description",
+    "action.log-out.title": "@localizable.action.logOut.title",
+    "action.log-out.description": "@localizable.action.logOut.description",
+    "action.restart.title": "@localizable.action.restart.title",
+    "action.restart.description": "@localizable.action.restart.description",
+    "action.shut-down.title": "@localizable.action.shutDown.title",
+    "action.shut-down.description": "@localizable.action.shutDown.description"
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "SystemPower.bundle",
+  "factoryClass": "SystemPowerPlugin.SystemPowerPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "SystemPowerPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "none"
+  },
+  "permissions": ["automation"],
+  "category": "system",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "Apache-2.0"
+  },
+  "discovery": {
+    "keywords": [
+      "power",
+      "sleep",
+      "log out",
+      "restart",
+      "shut down",
+      "system"
+    ],
+    "localizedSynonyms": {
+      "ar": ["إجراءات الطاقة"],
+      "de": ["Energieaktionen"],
+      "en": ["Power Actions"],
+      "es": ["Acciones de energía"],
+      "fr": ["Actions d’alimentation"],
+      "ja": ["電源操作"],
+      "ko": ["전원 동작"],
+      "pt": ["Ações de energia"],
+      "ru": ["Действия питания"],
+      "zh-Hans": ["电源操作"],
+      "zh-Hant": ["電源操作"]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": ["system"],
+    "relatedPluginIDs": [
+      "display-sleep",
+      "keep-awake",
+      "lock-screen",
+      "system-soft-restart"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": ["arm64", "x86_64"],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": ["automation"],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": ["system-state"],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "display-sleep",
+      "keep-awake",
+      "lock-screen",
+      "system-soft-restart"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "system-power",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "sleep",
+            "title": "@productStrings.action.sleep.title",
+            "description": "@productStrings.action.sleep.description",
+            "keywords": ["sleep", "power", "system"],
+            "systemImage": "moon.zzz",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "log-out",
+            "title": "@productStrings.action.log-out.title",
+            "description": "@productStrings.action.log-out.description",
+            "keywords": ["log out", "logout", "power", "system"],
+            "systemImage": "rectangle.portrait.and.arrow.right",
+            "parameters": [],
+            "permissionIDs": ["automation"],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "restart",
+            "title": "@productStrings.action.restart.title",
+            "description": "@productStrings.action.restart.description",
+            "keywords": ["restart", "reboot", "power", "system"],
+            "systemImage": "arrow.clockwise",
+            "parameters": [],
+            "permissionIDs": ["automation"],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "shut-down",
+            "title": "@productStrings.action.shut-down.title",
+            "description": "@productStrings.action.shut-down.description",
+            "keywords": ["shut down", "shutdown", "power off", "system"],
+            "systemImage": "power",
+            "parameters": [],
+            "permissionIDs": ["automation"],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
+}

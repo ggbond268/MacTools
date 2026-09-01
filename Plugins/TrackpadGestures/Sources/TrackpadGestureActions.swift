@@ -9,7 +9,7 @@ protocol TrackpadGestureActionExecuting: AnyObject {
 }
 
 final class TrackpadGestureActionExecutor: TrackpadGestureActionExecuting {
-    nonisolated static let keyboardEventMarker: Int64 = 0x4D_54_4B_45_59_42_4F_41
+    nonisolated static let keyboardEventMarker = MacToolsSyntheticInputEvent.marker
 
     func execute(_ action: TrackpadGestureAction) {
         switch action {
@@ -19,6 +19,8 @@ final class TrackpadGestureActionExecutor: TrackpadGestureActionExecuting {
             break
         case let .keyboardShortcut(binding):
             postShortcut(binding)
+        case let .keyTap(keyTap):
+            KeyboardKeyTapEventPoster.post(keyTap)
         case .middleClick:
             TrackpadMiddleClickEventPoster.postClick()
         }
@@ -35,8 +37,8 @@ final class TrackpadGestureActionExecutor: TrackpadGestureActionExecuting {
         let flags = cgEventFlags(for: binding.modifiers)
         keyDown.flags = flags
         keyUp.flags = flags
-        keyDown.setIntegerValueField(.eventSourceUserData, value: Self.keyboardEventMarker)
-        keyUp.setIntegerValueField(.eventSourceUserData, value: Self.keyboardEventMarker)
+        MacToolsSyntheticInputEvent.mark(keyDown)
+        MacToolsSyntheticInputEvent.mark(keyUp)
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
     }

@@ -40,6 +40,7 @@ enum InputRemappingScrollDirection: String, Codable, CaseIterable, Equatable, Ha
 enum InputRemappingOutputConfigurationState: String, Codable, Equatable, Sendable {
     case needsSelection
     case recordingShortcut
+    case recordingKeyTap
     case configured
 }
 
@@ -144,24 +145,27 @@ struct InputRemappingRule: Identifiable, Codable, Equatable, Sendable {
 
     enum Action: Codable, Equatable, Hashable, Sendable, CaseIterable {
         case shortcut(ShortcutBinding)
+        case keyTap(KeyboardKeyTap?)
         case mouseBack, mouseForward, mouseMiddle, missionControl, spaceLeft, spaceRight
         case mediaPlayPause, volumeDown, volumeUp
 
         static var allCases: [Action] {
             [
                 .shortcut(ShortcutBinding(keyCode: 0, modifiers: [.command])),
+                .keyTap(nil),
                 .mouseBack, .mouseForward, .mouseMiddle, .missionControl,
                 .spaceLeft, .spaceRight, .mediaPlayPause, .volumeDown, .volumeUp,
             ]
         }
 
         enum Kind: CaseIterable, Hashable {
-            case shortcut, mouseBack, mouseForward, mouseMiddle, missionControl, spaceLeft, spaceRight, mediaPlayPause, volumeDown, volumeUp
+            case shortcut, keyTap, mouseBack, mouseForward, mouseMiddle, missionControl, spaceLeft, spaceRight, mediaPlayPause, volumeDown, volumeUp
         }
 
         var kind: Kind {
             switch self {
             case .shortcut: .shortcut
+            case .keyTap: .keyTap
             case .mouseBack: Kind.mouseBack
             case .mouseForward: Kind.mouseForward
             case .mouseMiddle: Kind.mouseMiddle
@@ -181,6 +185,11 @@ struct InputRemappingRule: Identifiable, Codable, Equatable, Sendable {
                     return self
                 }
                 return .shortcut(ShortcutBinding(keyCode: 0, modifiers: [.command]))
+            case .keyTap:
+                if case .keyTap = self {
+                    return self
+                }
+                return .keyTap(nil)
             case .mouseBack: return .mouseBack
             case .mouseForward: return .mouseForward
             case .mouseMiddle: return .mouseMiddle
@@ -196,6 +205,7 @@ struct InputRemappingRule: Identifiable, Codable, Equatable, Sendable {
         func kindTitle(localization: PluginLocalization) -> String {
             switch self {
             case .shortcut: localization.string("action.shortcut", defaultValue: "Shortcut")
+            case .keyTap: localization.string("action.singleKey", defaultValue: "Single Key")
             default: title(localization: localization)
             }
         }
@@ -207,6 +217,11 @@ struct InputRemappingRule: Identifiable, Codable, Equatable, Sendable {
         func title(localization: PluginLocalization) -> String {
             switch self {
             case let .shortcut(binding): localization.format("action.shortcut.format", defaultValue: "快捷键 %@%d", binding.modifiers.symbolString, binding.keyCode)
+            case let .keyTap(keyTap): localization.format(
+                "action.singleKey.format",
+                defaultValue: "单键 %@",
+                KeyboardKeyTapFormatter.displayString(for: keyTap)
+            )
             case .mouseBack: localization.string("action.mouseBack", defaultValue: "鼠标后退")
             case .mouseForward: localization.string("action.mouseForward", defaultValue: "鼠标前进")
             case .mouseMiddle: localization.string("action.mouseMiddle", defaultValue: "中键点击")
@@ -309,15 +324,30 @@ struct InputRemappingRule: Identifiable, Codable, Equatable, Sendable {
         outputConfigurationState: InputRemappingOutputConfigurationState = .configured,
         isUnsafeTriggerConfirmed: Bool = false
     ) {
+        let hasUsableKeyTap: Bool
+        if case let .keyTap(keyTap) = action {
+            hasUsableKeyTap = keyTap?.isSupported == true
+        } else {
+            hasUsableKeyTap = true
+        }
+        let durableOutputConfigurationState: InputRemappingOutputConfigurationState
+        switch outputConfigurationState {
+        case .recordingShortcut, .recordingKeyTap:
+            durableOutputConfigurationState = .needsSelection
+        case .configured where !hasUsableKeyTap:
+            durableOutputConfigurationState = .needsSelection
+        default:
+            durableOutputConfigurationState = outputConfigurationState
+        }
         self.id = id
         self.trigger = trigger.normalized()
         self.isUnsafeTriggerConfirmed = isUnsafeTriggerConfirmed
         self.action = action
         self.isInputConfigured = isInputConfigured
-        self.outputConfigurationState = outputConfigurationState
+        self.outputConfigurationState = durableOutputConfigurationState
         self.isEnabled = isEnabled
             && isInputConfigured
-            && outputConfigurationState == .configured
+            && durableOutputConfigurationState == .configured
             && (!Self.requiresExplicitConfirmation(for: self.trigger) || isUnsafeTriggerConfirmed)
     }
 

@@ -14,7 +14,7 @@ The following plugin source directories publish canonical actions:
 - App and input control: `AppHotkey`, `AppVolume`, `AutoInput`, `MiddleClick`, `WindowSwitcher`.
 - Display and workspace control: `Appearance`, `DisplayBrightness`, `DisplayResolution`, `DisplaySleep`, `DisplayTrueColor`, `DockLock`, `HideNotch`, `NightShift`, `Sidecar`, `StageManager`.
 - Menu bar and Dock control: `AutoHideDock`, `AutoHideMenuBar`.
-- System and device control: `BatteryChargeLimit`, `FanControl`, `KeepAwake`, `LockScreen`, `MicrophoneMute`, `SystemMute`, `SystemSoftRestart`.
+- System and device control: `BatteryChargeLimit`, `FanControl`, `KeepAwake`, `LockScreen`, `MicrophoneMute`, `SystemMute`, `SystemPower`, `SystemSoftRestart`.
 - Productivity and maintenance: `ActivityBar`, `AppleShortcuts`, `ClipboardClear`, `CloudflareR2`, `DiskClean`, `EjectDisk`, `EmptyTrash`, `FixDamagedApp`, `Homebrew`, `IPOverview`, `LaunchControl`, `Launchpad`, `PhysicalCleanMode`, `QuitApps`, `Translator`, `WindowLayouts`, `XcodeClean`.
 
 Parameterized actions publish concrete catalog entries rather than asking each action surface to construct parameters. For example, Sidecar publishes per-device entries, Display Resolution publishes current display modes, App Volume publishes current audio apps, Battery Charge Limit publishes useful limit presets, and Fan Control publishes saved presets. Availability is resolved again at execution time so stale hardware, processes, or configuration fail safely.
@@ -37,7 +37,7 @@ The maintenance providers use deliberately narrow contracts:
 These plugins should not publish a canonical action merely to appear in action pickers:
 
 - `Calendar`, `DeviceBattery`, and `SystemStatus` primarily present information without a stable repeatable mutation. Calendar's selected-date context belongs in its view, while app launching is already covered by App Hotkeys.
-- `MouseEnhancer` and `ZshConfig` are configuration editors; runnable shell tasks belong in Saved Scripts.
+- `MacSettings`, `MouseEnhancer`, and `ZshConfig` are configuration editors. Mac Settings consumes existing canonical providers for settings that already have one, while runnable shell tasks belong in Saved Scripts.
 - `InputRemapping` is an input-lifecycle and configuration surface rather than one stable repeatable operation. If it adopts canonical MacTools actions as mapping outputs, it remains an action consumer rather than publishing a parallel provider surface.
 - `DockClickMinimize` observes native Dock clicks and hides the active app only after macOS processes the click. Its enable switch and event-monitor lifecycle are configuration, not a user-invoked canonical action.
 - `RightClick` extends Finder context menus rather than representing one repeatable operation.

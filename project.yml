@@ -97,6 +97,7 @@ targets:
       - Extensions/**
       - "../Plugins/**"
       - Plugins/**/CalendarPluginResources/**
+      - Resources/ThirdPartyNotices/**
     - path: Sources/MacToolsCLI/CLIArgumentParser.swift
     - path: Sources/MacToolsCLI/CLIOutput.swift
     - path: Sources/MacToolsCLI/CLIStartupDeadline.swift
@@ -182,6 +183,19 @@ targets:
       outputFiles:
       - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/MacToolsCLIBroker"
       - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/app.ggbond.MacTools.cli-broker.plist"
+    - name: Embed license and third-party notices
+      script: |
+        "$SRCROOT/scripts/licenses/embed-app-legal-notices.sh" \
+          --app-bundle "$TARGET_BUILD_DIR/$WRAPPER_NAME"
+      basedOnDependencyAnalysis: false
+      inputFiles:
+      - "$(SRCROOT)/LICENSE"
+      - "$(SRCROOT)/Sources/Resources/ThirdPartyNotices/manifest.json"
+      - "$(SRCROOT)/scripts/licenses/embed-app-legal-notices.sh"
+      - "$(SRCROOT)/scripts/licenses/generate-third-party-notices.py"
+      outputFiles:
+      - "$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/Resources/LICENSE"
+      - "$(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/Contents/Resources/THIRD_PARTY_NOTICES.txt"
   MacToolsCLI:
     type: tool
     platform: macOS

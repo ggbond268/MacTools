@@ -19,6 +19,7 @@ enum SettingsPresentationRequest: Equatable {
     case about
     case appUpdate
     case pluginMarketplace
+    case pluginMarketplaceDetail(MarketplacePluginDetailTarget)
     case pluginConfiguration(String)
     case automationWorkflow(UUID)
     case feature(FeatureSettingsPane)
@@ -507,6 +508,9 @@ final class PluginHost: ObservableObject {
     /// The app shell installs this while the application is running. The host
     /// emits typed requests but never manipulates windows or popovers directly.
     var appPresentationHandler: ((AppPresentationRequest) -> Void)?
+    var componentDetailPresentationHandler: ((String, String) -> Void)?
+
+    private let openPermissionSettings: (URL) -> Void
 
     /// The app shell installs this to present source-appropriate feedback for actions invoked from
     /// headless surfaces such as global shortcuts and trackpad gestures.
@@ -579,7 +583,8 @@ final class PluginHost: ObservableObject {
         displayTopologyRefreshDelay: Duration = .milliseconds(180),
         pluginStateChangeRebuildDelay: Duration = .milliseconds(80),
         loadDynamicPluginsOnInit: Bool = true,
-        actionURLScheme: String = RightClickURLRouter.bundleURLSchemes().sorted().first ?? "mactools"
+        actionURLScheme: String = RightClickURLRouter.bundleURLSchemes().sorted().first ?? "mactools",
+        openPermissionSettings: @escaping (URL) -> Void = { _ = NSWorkspace.shared.open($0) }
     ) {
         let preferencesBackupChangeReporter = providedPreferencesBackupChangeReporter
             ?? PreferencesBackupChangeReporter()
@@ -601,6 +606,7 @@ final class PluginHost: ObservableObject {
         self.automaticPreferencesBackupCoordinator = automaticPreferencesBackupCoordinator
         self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         self.globalShortcutManager = globalShortcutManager
+        self.openPermissionSettings = openPermissionSettings
         self.displayConfigurationObserver = displayConfigurationObserver
         self.accessibilityPermissionObserver = accessibilityPermissionObserver
         self.applicationActivityObserver = applicationActivityObserver
@@ -874,11 +880,11 @@ final class PluginHost: ObservableObject {
         let automationSnapshot = automationController.preferencesBackupSnapshot()
         let portableWorkflowIDs = WorkflowPortabilityAnalysis.portableWorkflowIDs(
             in: automationSnapshot.workflows,
-            referencePortability: { [weak self] reference in
-                self?.leafActionReferenceBackupPortability(
+            referencePortability: { reference in
+                self.leafActionReferenceBackupPortability(
                     reference,
                     selection: dependencySelection
-                ) ?? .unknown
+                )
             }
         )
         let portableWorkflows = automationSnapshot.workflows.filter {
@@ -887,8 +893,10 @@ final class PluginHost: ObservableObject {
         let selectedPortablePreferences = proposedPortablePreferences.filter {
             selection.pluginPreferenceIDs.contains($0.key)
         }
-        let referenceIsPortable: (ActionReference) -> Bool = { [weak self] reference in
-            self?.actionReferenceBackupPortability(
+        // These predicates never escape this synchronous export. Keep a strong
+        // capture to avoid the premature weak-storage destruction in optimized builds.
+        let referenceIsPortable: (ActionReference) -> Bool = { reference in
+            self.actionReferenceBackupPortability(
                 reference,
                 workflows: automationSnapshot.workflows,
                 portableWorkflowIDs: portableWorkflowIDs,
@@ -1478,6 +1486,19 @@ final class PluginHost: ObservableObject {
             return
         }
 
+        let requirement = guardedValue(
+            for: plugin,
+            operation: "read permission requirements",
+            plugin.permissionRequirements
+        )?.first { $0.id == permissionID }
+        if let requirement,
+           case .system(.automation) = permissionPresentationRole(for: requirement),
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+            // Explicit button clicks should navigate; passive guidance requests retain context.
+            openPermissionSettings(url)
+            return
+        }
+
         handlePluginAction {
             guardPluginCall(plugin, operation: "permission action") {
                 plugin.handlePermissionAction(id: permissionID)
@@ -1786,6 +1807,21 @@ final class PluginHost: ObservableObject {
         pluginSettingsItems.contains(where: { $0.id == pluginID })
     }
 
+    func hasMarketplaceDetail(target: MarketplacePluginDetailTarget) -> Bool {
+        guard let item = pluginManagementItems.first(where: { $0.id == target.pluginID }) else {
+            return false
+        }
+
+        guard let highlight = target.actionHighlight else {
+            return true
+        }
+
+        return item.productMetadata?.actions?.providers.contains { provider in
+            provider.id == highlight.providerID
+                && provider.staticActions.contains { $0.id == highlight.actionID }
+        } == true
+    }
+
     func hasPluginSettingsSearchField(pluginID: String) -> Bool {
         guard hasPluginSettings(pluginID: pluginID) else { return false }
         return corePlugin(for: pluginID) is any PluginSettingsSearchFocusing
@@ -1814,7 +1850,7 @@ final class PluginHost: ObservableObject {
             return false
         }
 
-        if item.permissionCards.contains(where: { $0.id == target.entryID }) {
+        if item.missingPermissionCards.contains(where: { $0.id == target.entryID }) {
             return true
         }
 
@@ -2005,6 +2041,32 @@ final class PluginHost: ObservableObject {
             rebuildDerivedState()
         }
         return item
+    }
+
+    func componentDetailContent(
+        pluginID: String,
+        detailID: String,
+        dismiss: @escaping () -> Void
+    ) -> PluginComponentDetailContent? {
+        guard
+            let plugin = corePlugin(for: pluginID),
+            let presenting = plugin as? any PluginComponentDetailPresenting
+        else {
+            return nil
+        }
+
+        guard let content = presenting.makeComponentDetailContent(
+            detailID: detailID,
+            dismiss: dismiss
+        ) else {
+            return nil
+        }
+
+        return guardedValue(
+            for: plugin,
+            operation: "make component detail",
+            content
+        )
     }
 
     func setPanelSurface(_ surface: PluginPanelSurface, visible isVisible: Bool) {
@@ -2840,11 +2902,24 @@ final class PluginHost: ObservableObject {
                     self?.presentPluginSettings(pluginID: pluginID)
                 }
             }
+            if let dashboardPresenting = plugin as? any PluginDashboardPresenting {
+                dashboardPresenting.requestDashboardPresentation = { [weak self] in
+                    self?.appPresentationHandler?(.showDashboard)
+                }
+            }
+            if let componentDetailPresenting = plugin as? any PluginComponentDetailPresenting {
+                componentDetailPresenting.requestComponentDetailPresentation = { [weak self] detailID in
+                    self?.componentDetailPresentationHandler?(pluginID, detailID)
+                }
+            }
             if let actionGridConsumer = plugin as? any ActionGridHostContextConsuming {
                 actionGridConsumer.actionGridHostContext = makeActionGridHostContext()
             }
             if let trackpadActionConsumer = plugin as? any TrackpadActionHostContextConsuming {
                 trackpadActionConsumer.trackpadActionHostContext = makeTrackpadActionHostContext()
+            }
+            if let actionExecutionConsumer = plugin as? any PluginActionExecutionHostContextConsuming {
+                actionExecutionConsumer.actionExecutionHostContext = makePluginActionExecutionHostContext()
             }
             if let activityStateHandling = plugin as? any PluginApplicationActivityStateHandling {
                 guardPluginCall(plugin, operation: "set application activity state") {
@@ -3216,6 +3291,7 @@ final class PluginHost: ObservableObject {
             )
         }
 
+        var missingPermissionCardIDs = Set<String>()
         permissionCards = orderedCorePlugins().flatMap { plugin -> [PluginPermissionCard] in
             let requirements = guardedValue(
                 for: plugin,
@@ -3232,13 +3308,18 @@ final class PluginHost: ObservableObject {
                     return nil
                 }
 
+                let cardID = "\(plugin.metadata.id).permission.\(requirement.id)"
+                if !state.isGranted {
+                    missingPermissionCardIDs.insert(cardID)
+                }
+
                 return PluginPermissionCard(
-                    id: "\(plugin.metadata.id).permission.\(requirement.id)",
+                    id: cardID,
                     pluginID: plugin.metadata.id,
                     permissionID: requirement.id,
                     title: requirement.title,
                     description: requirement.description,
-                    iconSystemImage: permissionIconName(for: requirement.kind),
+                    iconSystemImage: permissionIconName(for: requirement),
                     statusText: state.statusText ?? (state.isGranted
                         ? AppL10n.plugins("plugin.permission.granted", defaultValue: "已授权")
                         : AppL10n.plugins("plugin.permission.notGranted", defaultValue: "未授权")),
@@ -3246,7 +3327,7 @@ final class PluginHost: ObservableObject {
                     statusTone: state.statusTone ?? (state.isGranted ? .positive : .caution),
                     footnote: state.footnote,
                     buttonTitle: permissionActionTitle(
-                        for: requirement.kind,
+                        for: requirement,
                         isGranted: state.isGranted
                     )
                 )
@@ -3372,6 +3453,7 @@ final class PluginHost: ObservableObject {
 
         pluginSettingsItems = buildPluginSettingsItems(
             permissionCards: permissionCards,
+            missingPermissionCardIDs: missingPermissionCardIDs,
             shortcutItems: shortcutItems
         )
         if let dirtyPluginIDs {
@@ -3574,6 +3656,7 @@ final class PluginHost: ObservableObject {
         for plugin in activePlugins {
             (plugin as? any ActionGridHostContextConsuming)?.actionSurfaceCatalogDidChange()
             (plugin as? any TrackpadActionHostContextConsuming)?.trackpadActionCatalogDidChange()
+            (plugin as? any PluginActionExecutionHostContextConsuming)?.actionExecutionCatalogDidChange()
         }
     }
 
@@ -3654,6 +3737,52 @@ final class PluginHost: ObservableObject {
         )
     }
 
+    private func makePluginActionExecutionHostContext() -> PluginActionExecutionHostContext {
+        PluginActionExecutionHostContext(
+            item: { [weak self] reference in
+                self?.actionSurfaceItem(for: reference, livePresentation: true)
+            },
+            execute: { [weak self] reference, source in
+                guard let self else {
+                    return .unavailable(reason: FeatureL10n.string("操作不可用。"))
+                }
+                let outcome = await self.actionExecutor.execute(
+                    ActionInvocation(
+                        reference: reference,
+                        source: source,
+                        mode: .foreground
+                    )
+                )
+                switch outcome {
+                case let .completed(.succeeded(message)):
+                    return .succeeded(message: message)
+                case let .completed(.failed(message)):
+                    return .failed(message: message)
+                case .completed(.cancelled):
+                    return .cancelled
+                case let .rejected(.unavailable(reason)):
+                    return .unavailable(
+                        reason: reason ?? FeatureL10n.string("操作不可用。")
+                    )
+                case let .rejected(.providerFailure(message)):
+                    return .failed(message: message)
+                case .rejected(.confirmationDenied),
+                     .rejected(.confirmationTimedOut):
+                    return .cancelled
+                case .rejected:
+                    return .failed(message: FeatureL10n.string("无法执行操作。"))
+                }
+            },
+            openProviderSettings: { [weak self] providerID in
+                guard let self, PluginPackageManifestLoader.isValidPluginID(providerID) else { return }
+                let reference = ActionReference(key: ActionKey(providerID: providerID, actionID: "set-enabled"))
+                if !self.presentActionOwner(for: reference) {
+                    self.presentPluginMarketplace()
+                }
+            }
+        )
+    }
+
     private static func validateActionGridPresentationEntries(
         _ entries: [ActionGridPresentationEntry],
         depth: Int = 0
@@ -3685,21 +3814,34 @@ final class PluginHost: ObservableObject {
         }
     }
 
-    private func actionSurfaceItem(for reference: ActionReference) -> ActionSurfaceCatalogItem? {
+    private func actionSurfaceItem(
+        for reference: ActionReference,
+        livePresentation: Bool = false
+    ) -> ActionSurfaceCatalogItem? {
         guard case let .success(action) = actionRegistry.registeredAction(for: reference) else {
             return nil
         }
         let ownerTitle = actionSurfaceOwnerTitle(providerID: reference.key.providerID)
+        var entry = action.catalogEntry
+        if livePresentation {
+            guard let plugin = activePlugins.first(where: { $0.metadata.id == reference.key.providerID }),
+                  let provider = plugin as? any PluginActionProviding else { return nil }
+            // Composed settings verify immediately after execution, before the UI rebuild debounce.
+            // Read the provider's current snapshot instead of the registry's presentation cache.
+            entry = guardedValue(
+                for: plugin, operation: "read live action presentation", provider.actionCatalogEntries
+            )?.first { $0.reference == reference }
+        }
         return ActionSurfaceCatalogItem(
             reference: reference,
-            title: action.catalogEntry?.title ?? action.definition.title,
-            subtitle: action.catalogEntry?.subtitle,
+            title: entry?.title ?? action.definition.title,
+            subtitle: entry?.subtitle,
             ownerTitle: ownerTitle,
             systemImage: action.definition.systemImage,
             availability: actionRegistry.availability(for: reference),
             isSafe: action.definition.risk == .safe,
             canOpenOwner: canPresentActionOwner(for: reference),
-            presentationState: action.catalogEntry?.presentationState
+            presentationState: entry?.presentationState
         )
     }
 
@@ -4179,8 +4321,11 @@ final class PluginHost: ObservableObject {
             transactionApplying.performActionShortcutReplacementTransaction = nil
         }
         (plugin as? any PluginSettingsPresenting)?.requestSettingsPresentation = nil
+        (plugin as? any PluginDashboardPresenting)?.requestDashboardPresentation = nil
+        (plugin as? any PluginComponentDetailPresenting)?.requestComponentDetailPresentation = nil
         (plugin as? any ActionGridHostContextConsuming)?.actionGridHostContext = nil
         (plugin as? any TrackpadActionHostContextConsuming)?.trackpadActionHostContext = nil
+        (plugin as? any PluginActionExecutionHostContextConsuming)?.actionExecutionHostContext = nil
         syncGlobalShortcuts()
     }
 
@@ -4229,11 +4374,15 @@ final class PluginHost: ObservableObject {
 
     private func buildPluginSettingsItems(
         permissionCards: [PluginPermissionCard],
+        missingPermissionCardIDs: Set<String>,
         shortcutItems: [ShortcutSettingsItem]
     ) -> [PluginSettingsPageItem] {
         orderedPluginDescriptors().compactMap { descriptor in
             let pluginID = descriptor.metadata.id
             let matchingPermissionCards = permissionCards.filter { $0.pluginID == pluginID }
+            let matchingMissingPermissionCardIDs = missingPermissionCardIDs.intersection(
+                matchingPermissionCards.map(\.id)
+            )
             let matchingShortcutItems = shortcutItems.filter { $0.pluginID == pluginID }
             let rawPage: PluginSettingsPage?
             if descriptor.hasSettings {
@@ -4292,7 +4441,7 @@ final class PluginHost: ObservableObject {
             } else {
                 actionShortcutSettingsConfiguration = nil
             }
-            let hasSettingsSurface = !matchingPermissionCards.isEmpty
+            let hasSettingsSurface = !matchingMissingPermissionCardIDs.isEmpty
                 || !matchingShortcutItems.isEmpty
                 || actionShortcutSettingsConfiguration != nil
                 || page != nil
@@ -4311,6 +4460,7 @@ final class PluginHost: ObservableObject {
                 installedAt: dynamicPluginInstalledAtByID[pluginID],
                 page: page,
                 permissionCards: matchingPermissionCards,
+                missingPermissionCardIDs: matchingMissingPermissionCardIDs,
                 shortcutItems: matchingShortcutItems,
                 actionShortcutSettingsConfiguration: actionShortcutSettingsConfiguration
             )
@@ -5585,69 +5735,93 @@ final class PluginHost: ObservableObject {
 
     private func requestPermissionGuidance(forPluginID pluginID: String, permissionID: String) {
         guard let plugin = activePlugins.first(where: { $0.metadata.id == pluginID }),
-              let requirement = (guardedValue(
+              (guardedValue(
                   for: plugin,
                   operation: "read permission requirements",
                   plugin.permissionRequirements
-              ) ?? []).first(where: { $0.id == permissionID }) else {
+              ) ?? []).contains(where: { $0.id == permissionID }) else {
             return
         }
 
-        switch requirement.kind {
-        case .automation:
-            guard let url = URL(
-                string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
-            ) else {
-                return
-            }
-            NSWorkspace.shared.open(url)
-        default:
-            presentPluginSettings(pluginID: pluginID)
-        }
+        // Keep the user's current context. The unresolved requirement is rendered at the
+        // top of this plugin's settings page when they choose to open it.
+        rebuildDerivedState(dirtyPluginIDs: [pluginID])
     }
 
     private func permissionActionTitle(
-        for kind: PluginPermissionKind,
+        for requirement: PluginPermissionRequirement,
         isGranted: Bool
     ) -> String {
-        switch kind {
-        case .accessibility:
+        switch permissionPresentationRole(for: requirement) {
+        case .fullDiskAccess:
             return isGranted
-                ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
+                ? AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
                 : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
-        case .inputMonitoring:
-            return isGranted
-                ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
-                : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
-        case .calendarFullAccess:
-            return isGranted
-                ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
-                : AppL10n.plugins("plugin.permission.requestAuthorization", defaultValue: "请求授权")
-        case .automation:
+        case .extensionManagement:
             return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
-        case .finderExtension:
-            return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
-        case .screenRecording:
-            return isGranted
-                ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
-                : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
+        case let .system(kind):
+            switch kind {
+            case .accessibility:
+                return isGranted
+                    ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
+                    : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
+            case .inputMonitoring:
+                return isGranted
+                    ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
+                    : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
+            case .calendarFullAccess:
+                return isGranted
+                    ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
+                    : AppL10n.plugins("plugin.permission.requestAuthorization", defaultValue: "请求授权")
+            case .automation, .finderExtension:
+                return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
+            case .screenRecording:
+                return isGranted
+                    ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
+                    : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
+            }
         }
     }
 
-    private func permissionIconName(for kind: PluginPermissionKind) -> String {
-        switch kind {
-        case .accessibility:
-            return "accessibility"
-        case .inputMonitoring:
-            return "keyboard.badge.eye"
-        case .calendarFullAccess:
-            return "calendar"
-        case .automation:
-            return "cursorarrow.click.2"
-        case .finderExtension:
+    private func permissionIconName(for requirement: PluginPermissionRequirement) -> String {
+        switch permissionPresentationRole(for: requirement) {
+        case .fullDiskAccess:
+            return "externaldrive.badge.checkmark"
+        case .extensionManagement:
             return "puzzlepiece.extension"
-        case .screenRecording:
-            return "rectangle.dashed.badge.record"
+        case let .system(kind):
+            switch kind {
+            case .accessibility:
+                return "accessibility"
+            case .inputMonitoring:
+                return "keyboard.badge.eye"
+            case .calendarFullAccess:
+                return "calendar"
+            case .automation:
+                return "cursorarrow.click.2"
+            case .finderExtension:
+                return "puzzlepiece.extension"
+            case .screenRecording:
+                return "rectangle.dashed.badge.record"
+            }
         }
+    }
+
+    /// These capabilities predate first-class PluginKit permission kinds. Stable IDs let
+    /// the host render them consistently without making an incompatible PluginKit v5 change.
+    private func permissionPresentationRole(
+        for requirement: PluginPermissionRequirement
+    ) -> PermissionPresentationRole {
+        switch requirement.id {
+        case "full-disk-access": .fullDiskAccess
+        case "finder-extension": .extensionManagement
+        default: .system(requirement.kind)
+        }
+    }
+
+    private enum PermissionPresentationRole {
+        case system(PluginPermissionKind)
+        case fullDiskAccess
+        case extensionManagement
     }
 }

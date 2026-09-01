@@ -134,6 +134,9 @@ if [[ -z "$SOURCE_DIR" || ! -d "$SOURCE_DIR" ]]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OFFICIAL_PLUGIN_SOURCE_DIR="$(cd "$REPO_ROOT/Plugins" && pwd)"
+THIRD_PARTY_NOTICE_MANIFEST="$REPO_ROOT/Sources/Resources/ThirdPartyNotices/manifest.json"
+THIRD_PARTY_NOTICE_GENERATOR="$REPO_ROOT/scripts/licenses/generate-third-party-notices.py"
 if [[ -z "$XCODEBUILD_COMMAND" ]]; then
     XCODEBUILD_COMMAND="$REPO_ROOT/scripts/xcodebuild-filtered.sh"
 fi
@@ -387,6 +390,13 @@ package_source_dir() {
     mkdir -p "$package_path/$(dirname "$bundle_relative_path")"
     copy_manifest_for_configuration "$manifest" "$package_path/plugin.json"
     ditto "$bundle_path" "$package_path/$bundle_relative_path"
+    if [[ "$root" == "$OFFICIAL_PLUGIN_SOURCE_DIR/"* ]]; then
+        "$PYTHON3" "$THIRD_PARTY_NOTICE_GENERATOR" \
+            --manifest "$THIRD_PARTY_NOTICE_MANIFEST" \
+            --repo-root "$REPO_ROOT" \
+            --product "plugin:$plugin_id" \
+            --output "$package_path/THIRD_PARTY_NOTICES.txt"
+    fi
 
     if [[ -n "$SIGN_IDENTITY" ]]; then
         "$REPO_ROOT/scripts/plugins/sign-plugin-package.sh" \
