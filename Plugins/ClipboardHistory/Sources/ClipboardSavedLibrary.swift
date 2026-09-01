@@ -749,11 +749,16 @@ protocol ClipboardSavedLibraryPersisting: Sendable {
     func loadPayload(id: UUID) throws -> ClipboardHistoryPayload
     func updateLastUsedAt(id: UUID, date: Date) throws
     func delete(id: UUID) throws
+    func delete(ids: Set<UUID>) throws
     func removeAll() throws
     func invalidate()
 }
 
 extension ClipboardSavedLibraryPersisting {
+    func delete(ids: Set<UUID>) throws {
+        for id in ids { try delete(id: id) }
+    }
+
     func invalidate() {}
 }
 
@@ -817,11 +822,15 @@ private final class ClipboardSavedLibraryPersistenceWorker: @unchecked Sendable 
     }
 
     func delete(id: UUID, generation: UInt64) async throws {
+        try await delete(ids: [id], generation: generation)
+    }
+
+    func delete(ids: Set<UUID>, generation: UInt64) async throws {
         try await withCheckedThrowingContinuation { continuation in
             queue.async { [self] in
                 continuation.resume(with: Result {
                     guard self.generation == generation else { throw CancellationError() }
-                    try persistence.delete(id: id)
+                    try persistence.delete(ids: ids)
                 })
             }
         }
@@ -1240,14 +1249,22 @@ final class ClipboardSavedLibraryController: ObservableObject {
     }
 
     func delete(id: UUID) async -> Bool {
-        await withLibraryMutation(cancelledResult: false) { generation in
-            guard self.items.contains(where: { $0.id == id }) else { return false }
+        await delete(ids: [id])
+    }
+
+    func delete(ids: Set<UUID>) async -> Bool {
+        guard !ids.isEmpty else { return false }
+        return await withLibraryMutation(cancelledResult: false) { generation in
+            let availableIDs = Set(self.items.lazy.map(\.id))
+            guard ids.isSubset(of: availableIDs) else { return false }
             do {
-                try await self.worker.delete(id: id, generation: generation)
+                try await self.worker.delete(ids: ids, generation: generation)
                 guard self.isCurrentMutation(generation) else { return false }
-                self.items.removeAll { $0.id == id }
-                self.itemLoadErrorMessages.removeValue(forKey: id)
-                self.keywordTemplatesByID.removeValue(forKey: id)
+                self.items.removeAll { ids.contains($0.id) }
+                for id in ids {
+                    self.itemLoadErrorMessages.removeValue(forKey: id)
+                    self.keywordTemplatesByID.removeValue(forKey: id)
+                }
                 self.errorMessage = nil
                 self.reloadKeywordTemplateCache()
                 self.onChange?()

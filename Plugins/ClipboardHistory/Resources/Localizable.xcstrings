@@ -511,6 +511,51 @@
         "ar": { "stringUnit": { "state": "translated", "value": "تُدمج العناصر حسب ترتيب التحديد." } }
       }
     },
+    "panel.selection.delete.action": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "حذف التحديد (%lld)…" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Auswahl löschen (%lld)…" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Delete Selection (%lld)…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Eliminar selección (%lld)…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer la sélection (%lld)…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "選択項目を削除（%lld件）…" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "선택 항목 삭제(%lld개)…" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Apagar seleção (%lld)…" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Удалить выбранное (%lld)…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除所选项目（%lld）…" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除所選項目（%lld）…" } }
+      }
+    },
+    "panel.selection.delete.message": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "ستُحذف العناصر المحددة نهائيًا، بما في ذلك النسخ المحفوظة أو المقتطفات. لا يمكن التراجع عن هذا الإجراء." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die ausgewählten Elemente werden einschließlich gespeicherter Kopien oder Textbausteine dauerhaft gelöscht. Dies kann nicht widerrufen werden." } },
+        "en": { "stringUnit": { "state": "translated", "value": "The selected items will be permanently deleted, including saved copies or snippets. This can’t be undone." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Los elementos seleccionados se eliminarán permanentemente, incluidas las copias guardadas o los fragmentos. Esta acción no se puede deshacer." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les éléments sélectionnés seront définitivement supprimés, y compris les copies enregistrées ou les extraits. Cette action est irréversible." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "保存済みのコピーやスニペットを含む選択項目が完全に削除されます。この操作は取り消せません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "저장된 복사본 또는 스니펫을 포함한 선택 항목이 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Os itens selecionados serão apagados permanentemente, incluindo cópias guardadas ou trechos. Esta ação não pode ser desfeita." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выбранные элементы, включая сохранённые копии и фрагменты, будут удалены навсегда. Это действие нельзя отменить." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "所选项目将被永久删除，包括已保存的副本或片段。此操作无法撤销。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "所選項目將被永久刪除，包括已儲存的副本或片段。此操作無法還原。" } }
+      }
+    },
+    "panel.selection.delete.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "حذف التحديد نهائيًا (%lld)؟" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Auswahl dauerhaft löschen (%lld)?" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Permanently Delete Selection (%lld)?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Eliminar permanentemente la selección (%lld)?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer définitivement la sélection (%lld) ?" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "選択項目を完全に削除しますか（%lld件）？" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "선택 항목을 영구적으로 삭제할까요(%lld개)?" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Apagar permanentemente a seleção (%lld)?" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Удалить выбранное навсегда (%lld)?" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "永久删除所选项目（%lld）？" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "永久刪除所選項目（%lld）？" } }
+      }
+    },
     "panel.selection.orderedCount": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "%lld selected · Selection order" } },

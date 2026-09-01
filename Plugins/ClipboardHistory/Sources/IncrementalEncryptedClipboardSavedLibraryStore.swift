@@ -226,18 +226,32 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     }
 
     func delete(id: UUID) throws {
+        try delete(ids: [id])
+    }
+
+    func delete(ids: Set<UUID>) throws {
+        guard !ids.isEmpty else { return }
         try databaseAccess.withActiveAccess { try lock.withLock {
             guard !isInvalidated else { return }
             try prepareLocked()
             let database = try openDatabaseLocked()
             defer { sqlite3_close(database) }
-            let statement = try prepareStatement(
-                "DELETE FROM saved_items WHERE id = ?1",
-                database: database
-            )
-            defer { sqlite3_finalize(statement) }
-            try bind(id.uuidString, index: 1, statement: statement, database: database)
-            guard sqlite3_step(statement) == SQLITE_DONE else { throw sqliteError(database) }
+            try execute("BEGIN IMMEDIATE TRANSACTION", database: database)
+            do {
+                for id in ids {
+                    let statement = try prepareStatement(
+                        "DELETE FROM saved_items WHERE id = ?1",
+                        database: database
+                    )
+                    defer { sqlite3_finalize(statement) }
+                    try bind(id.uuidString, index: 1, statement: statement, database: database)
+                    guard sqlite3_step(statement) == SQLITE_DONE else { throw sqliteError(database) }
+                }
+                try execute("COMMIT", database: database)
+            } catch {
+                try? execute("ROLLBACK", database: database)
+                throw error
+            }
         } }
     }
 

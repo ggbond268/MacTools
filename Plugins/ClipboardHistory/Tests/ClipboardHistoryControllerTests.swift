@@ -1570,6 +1570,25 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testPermanentBatchDeleteIsAllOrNothingForCapturedTargets() async {
+        let first = item(text: "First", pinned: false)
+        let second = item(text: "Second", pinned: false)
+        let retained = item(text: "Retained", pinned: false)
+        let fixture = makeFixture(initialItems: [first, second, retained])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        let staleDelete = await fixture.controller.deletePermanently(ids: [first.id, UUID()])
+        XCTAssertFalse(staleDelete)
+        XCTAssertEqual(Set(fixture.controller.items.map(\.id)), [first.id, second.id, retained.id])
+
+        let deleted = await fixture.controller.deletePermanently(ids: [first.id, second.id])
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(fixture.controller.items.map(\.id), [retained.id])
+        XCTAssertEqual(fixture.persistence.savedItems.map(\.id), [retained.id])
+        fixture.controller.stop()
+    }
+
     func testClearSavedRolesLeavesHistoryItemsInPlace() async throws {
         var savedHistoryItem = item(text: "saved", pinned: false)
         savedHistoryItem.setSavedMetadata(ClipboardHistorySavedMetadata(

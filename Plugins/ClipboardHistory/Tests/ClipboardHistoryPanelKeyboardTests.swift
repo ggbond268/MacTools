@@ -56,6 +56,26 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertFalse(model.canPerformAction(in: both))
     }
 
+    func testDeleteConfirmationCapturesTheOrderedMultiSelection() async throws {
+        let first = item(text: "First", pinned: false)
+        let second = item(text: "Second", pinned: false)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [first, second])
+        await model.waitForSearchForTesting()
+        model.selectedItemID = first.id
+        model.setMultiSelectionEnabled(true)
+        model.selectedItemID = second.id
+        model.toggleFocusedSelection()
+
+        model.requestDeleteConfirmation()
+
+        XCTAssertEqual(model.deleteConfirmationRequestID, 1)
+        let context = try XCTUnwrap(model.consumeDeleteConfirmationContext())
+        XCTAssertEqual(context.itemIDs, [first.id, second.id])
+        XCTAssertTrue(context.isMultiSelectionEnabled)
+        XCTAssertNil(model.consumeDeleteConfirmationContext())
+    }
+
     func testMixedSnippetActionContextCanStartAnOrderedQueue() {
         let clipID = UUID()
         let snippetID = UUID()

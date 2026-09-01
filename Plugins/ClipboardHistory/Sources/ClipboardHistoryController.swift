@@ -1493,9 +1493,17 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     /// Permanently removes the unified item regardless of its History or Saved memberships.
     @discardableResult
     func deletePermanently(id: UUID) async -> Bool {
-        await mutateItemsDurably(targetIDs: [id]) { items in
-            guard items.contains(where: { $0.id == id }) else { return nil }
-            return items.filter { $0.id != id }
+        await deletePermanently(ids: [id])
+    }
+
+    /// Permanently removes a captured set of unified items in one durable mutation.
+    @discardableResult
+    func deletePermanently(ids: Set<UUID>) async -> Bool {
+        guard !ids.isEmpty else { return false }
+        return await mutateItemsDurably(targetIDs: ids) { items in
+            let availableIDs = Set(items.lazy.map(\.id))
+            guard ids.isSubset(of: availableIDs) else { return nil }
+            return items.filter { !ids.contains($0.id) }
         }
     }
 

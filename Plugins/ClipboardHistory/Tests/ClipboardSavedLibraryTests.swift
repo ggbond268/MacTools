@@ -839,6 +839,48 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         XCTAssertEqual(try loaded[0].loadPayload().plainText, "Hello {{date}}")
     }
 
+    func testSavedStoreDeletesMultipleItemsInOneBatch() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ClipboardSavedLibraryBatchDeleteTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let store = IncrementalEncryptedClipboardSavedLibraryStore(
+            databaseURL: directory.appendingPathComponent("clipboard.sqlite3"),
+            keyStore: SavedLibraryTestKeyStore()
+        )
+        let first = ClipboardSavedItem(title: "First", savedKind: .snippet, payload: .plainText("First"))
+        let second = ClipboardSavedItem(title: "Second", savedKind: .snippet, payload: .plainText("Second"))
+        let retained = ClipboardSavedItem(title: "Retained", savedKind: .snippet, payload: .plainText("Retained"))
+        for item in [first, second, retained] { try store.save(item, payloadChanged: true) }
+
+        try store.delete(ids: [first.id, second.id])
+
+        XCTAssertEqual(try store.load().map(\.id), [retained.id])
+    }
+
+    @MainActor
+    func testSavedLibraryBatchDeleteRejectsAStaleTargetBeforeWriting() async {
+        let first = ClipboardSavedItem(title: "First", savedKind: .snippet, payload: .plainText("First"))
+        let second = ClipboardSavedItem(title: "Second", savedKind: .snippet, payload: .plainText("Second"))
+        let store = SlowSavedLibraryTestStore(saveDelay: 0, initialItems: [first, second])
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: SavedLibraryTestPasteboard(),
+            persistence: store
+        )
+        await startSavedLibrary(controller)
+
+        let staleDelete = await controller.delete(ids: [first.id, UUID()])
+        XCTAssertFalse(staleDelete)
+        XCTAssertEqual(Set(controller.items.map(\.id)), [first.id, second.id])
+        XCTAssertEqual(Set(store.persistedItems.map(\.id)), [first.id, second.id])
+
+        let deleted = await controller.delete(ids: [first.id, second.id])
+        XCTAssertTrue(deleted)
+        XCTAssertTrue(controller.items.isEmpty)
+        XCTAssertTrue(store.persistedItems.isEmpty)
+        controller.stop()
+    }
+
     func testSavedStoreClearDoesNotDeleteHistory() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ClipboardSavedLibraryClearTests-\(UUID().uuidString)")

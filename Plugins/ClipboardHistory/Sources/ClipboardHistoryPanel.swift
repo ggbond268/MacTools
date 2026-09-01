@@ -560,6 +560,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     @Published private(set) var focusRequestID: UInt = 0
     @Published private(set) var exportMenuRequestID: UInt = 0
     @Published private(set) var actionMenuRequestID: UInt = 0
+    @Published private(set) var deleteConfirmationRequestID: UInt = 0
     @Published private(set) var requestedScrollItemID: UUID?
     @Published private(set) var savedEditRequestID: UInt = 0
     @Published private(set) var availableScopeModes: [ClipboardPanelMode] = [.history]
@@ -587,6 +588,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     private var selectedItemIDSet: Set<UUID> = []
     private var selectionNumberByItemID: [UUID: Int] = [:]
     private var visibleResultLimit = ClipboardHistoryPanelModel.resultPageSize
+    private var deleteConfirmationContext: ClipboardHistoryPanelActionContext?
     private var searchGeneration: UInt64 = 0
     private var searchTask: Task<Void, Never>?
     private var searchProgressTask: Task<Void, Never>?
@@ -1143,6 +1145,20 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     func requestActionMenu() {
         actionMenuRequestID &+= 1
         isActionPalettePresented = true
+    }
+
+    func requestDeleteConfirmation(for context: ClipboardHistoryPanelActionContext? = nil) {
+        guard let context = context ?? actionContext,
+              context.isMultiSelectionEnabled,
+              !context.itemIDs.isEmpty,
+              canPerformAction(in: context) else { return }
+        deleteConfirmationContext = context
+        deleteConfirmationRequestID &+= 1
+    }
+
+    func consumeDeleteConfirmationContext() -> ClipboardHistoryPanelActionContext? {
+        defer { deleteConfirmationContext = nil }
+        return deleteConfirmationContext
     }
 
     func requestSavedItemEdit() {
@@ -2425,8 +2441,11 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 Task { await self.historyController.toggleSaved(id: selectedItemID) }
                 return nil
             case .deleteSelection:
-                guard !self.model.isMultiSelectionEnabled else { return nil }
                 guard !self.historyController.isClearingHistory else { return event }
+                if self.model.isMultiSelectionEnabled {
+                    self.model.requestDeleteConfirmation()
+                    return nil
+                }
                 guard let selectedItemID = self.model.selectedItemID else { return event }
                 Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -2874,10 +2893,18 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 }
 
-private enum ClipboardHistoryClearRequest: String, Identifiable {
+private enum ClipboardHistoryClearRequest: Identifiable {
     case all
+    case selected(ClipboardHistoryPanelActionContext)
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .all:
+            "all"
+        case let .selected(context):
+            "selected-" + context.itemIDs.map(\.uuidString).joined(separator: "-")
+        }
+    }
 }
 
 struct ClipboardHistoryPanelPresentation: Equatable {
@@ -3431,6 +3458,11 @@ private struct ClipboardHistoryPanelView: View {
         .onChange(of: model.isActionPalettePresented) { _, isPresented in
             if !isPresented { onDismissActionPalette() }
         }
+        .onChange(of: model.deleteConfirmationRequestID) { _, _ in
+            guard let context = model.consumeDeleteConfirmationContext(),
+                  model.canPerformAction(in: context) else { return }
+            clearRequest = .selected(context)
+        }
         .alert(item: $clearRequest) { request in
             switch request {
             case .all:
@@ -3447,6 +3479,22 @@ private struct ClipboardHistoryPanelView: View {
                         Task { await controller.clearAllHistory() }
                     },
                     secondaryButton: .cancel(Text(localization.string("common.cancel", defaultValue: "取消")))
+                )
+            case let .selected(context):
+                Alert(
+                    title: Text(localization.format(
+                        "panel.selection.delete.title",
+                        defaultValue: "Permanently Delete Selection (%lld)?",
+                        context.itemIDs.count
+                    )),
+                    message: Text(localization.string(
+                        "panel.selection.delete.message",
+                        defaultValue: "The selected items will be permanently deleted, including saved copies or snippets. This can’t be undone."
+                    )),
+                    primaryButton: .destructive(Text(localization.string("common.delete", defaultValue: "Delete"))) {
+                        Task { await deleteSelectedItems(in: context) }
+                    },
+                    secondaryButton: .cancel(Text(localization.string("common.cancel", defaultValue: "Cancel")))
                 )
             }
         }
@@ -5254,6 +5302,23 @@ private struct ClipboardHistoryPanelView: View {
             ),
             shortcutDefinitionID: ClipboardHistoryPlugin.ShortcutID.panelMultiSelect
         ))
+        if model.isMultiSelectionEnabled, !ids.isEmpty {
+            entries.append(ClipboardHistoryExportMenuEntry(
+                title: localization.format(
+                    "panel.selection.delete.action",
+                    defaultValue: "Delete Selection (%lld)…",
+                    ids.count
+                ),
+                action: .delete,
+                group: .selection,
+                systemImage: "trash",
+                shortcut: panelShortcutText(
+                    ClipboardHistoryPlugin.ShortcutID.panelDelete,
+                    fallback: "⇧⌘⌫"
+                ),
+                shortcutDefinitionID: ClipboardHistoryPlugin.ShortcutID.panelDelete
+            ))
+        }
         entries += historyActionMenuEntries()
         return entries
     }
@@ -5496,7 +5561,10 @@ private struct ClipboardHistoryPanelView: View {
                 isNew: true
             )
         case .delete:
-            if let id = ids.first {
+            if let context = expectedContext ?? model.actionContext,
+               context.isMultiSelectionEnabled {
+                model.requestDeleteConfirmation(for: context)
+            } else if let id = ids.first {
                 deletePanelItem(id)
             }
         case .removeFromHistory:
@@ -5577,6 +5645,28 @@ private struct ClipboardHistoryPanelView: View {
             Task { await savedLibraryController.delete(id: itemID) }
         } else {
             Task { await onDelete(itemID) }
+        }
+    }
+
+    private func deleteSelectedItems(in context: ClipboardHistoryPanelActionContext) async {
+        guard context.isMultiSelectionEnabled,
+              !context.itemIDs.isEmpty,
+              model.canPerformAction(in: context) else {
+            NSSound.beep()
+            return
+        }
+        let historyItemIDs = Set(context.itemIDs).subtracting(context.snippetIDs)
+        if !historyItemIDs.isEmpty {
+            guard await controller.deletePermanently(ids: historyItemIDs) else {
+                NSSound.beep()
+                return
+            }
+        }
+        if !context.snippetIDs.isEmpty {
+            guard await savedLibraryController.delete(ids: context.snippetIDs) else {
+                NSSound.beep()
+                return
+            }
         }
     }
 
