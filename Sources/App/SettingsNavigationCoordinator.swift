@@ -73,19 +73,10 @@ extension SettingsNavigationDestination {
         ).map(SettingsNavigationDestination.plugins)
     }
 
-    static let numberedSidebarDestinations: [SettingsNavigationDestination] = [
-        .general,
-        .permissions,
-        .about,
-        .plugins(.actionsAndShortcuts),
-        .plugins(.automation),
-        .plugins(.dashboardLayout),
-        .plugins(.featurePanelLayout),
-        .plugins(.marketplace)
-    ]
 }
 
 enum SettingsSearchField: Equatable {
+    case actionsAndShortcuts
     case pluginMarketplace
     case pluginSettings(String)
 }
@@ -190,6 +181,87 @@ struct UnifiedSearchQuickSelectionRequest: Equatable {
     let number: Int
 }
 
+enum SettingsSidebarSection: String, Hashable {
+    case app
+    case customize
+    case pluginSettings
+}
+
+enum SettingsSidebarNumberTarget: Hashable {
+    case destination(SettingsNavigationDestination)
+    case collapsedSection(SettingsSidebarSection)
+}
+
+enum SettingsSidebarNumberingPolicy {
+    static let maximumShortcutCount = 9
+
+    static func targets(
+        appDestinations: [SettingsNavigationDestination],
+        customizeDestinations: [SettingsNavigationDestination],
+        pluginDestinations: [SettingsNavigationDestination],
+        appExpanded: Bool,
+        customizeExpanded: Bool,
+        pluginSettingsExpanded: Bool,
+        pluginSearchIsActive: Bool,
+        limit: Int? = maximumShortcutCount
+    ) -> [SettingsSidebarNumberTarget] {
+        if pluginSearchIsActive, pluginSettingsExpanded {
+            let results: [SettingsSidebarNumberTarget] = pluginDestinations.map {
+                .destination($0)
+            }
+            return limit.map { Array(results.prefix($0)) } ?? results
+        }
+        if pluginSearchIsActive {
+            return [.collapsedSection(.pluginSettings)]
+        }
+
+        var targets: [SettingsSidebarNumberTarget] = []
+        targets += appExpanded
+            ? appDestinations.map(SettingsSidebarNumberTarget.destination)
+            : [.collapsedSection(.app)]
+        targets += customizeExpanded
+            ? customizeDestinations.map(SettingsSidebarNumberTarget.destination)
+            : [.collapsedSection(.customize)]
+        targets += pluginSettingsExpanded
+            ? pluginDestinations.map(SettingsSidebarNumberTarget.destination)
+            : [.collapsedSection(.pluginSettings)]
+        return limit.map { Array(targets.prefix($0)) } ?? targets
+    }
+
+    static func movedTarget(
+        from currentTarget: SettingsSidebarNumberTarget?,
+        direction: SettingsSidebarMoveDirection,
+        in targets: [SettingsSidebarNumberTarget]
+    ) -> SettingsSidebarNumberTarget? {
+        guard !targets.isEmpty else { return nil }
+        guard let currentTarget, let currentIndex = targets.firstIndex(of: currentTarget) else {
+            return direction == .next ? targets.first : targets.last
+        }
+        let nextIndex = currentIndex + (direction == .next ? 1 : -1)
+        guard targets.indices.contains(nextIndex) else { return nil }
+        return targets[nextIndex]
+    }
+}
+
+enum SettingsSidebarHeaderAccessibility {
+    static func isActive(
+        containsSelection: Bool,
+        isKeyboardHighlighted: Bool
+    ) -> Bool {
+        containsSelection || isKeyboardHighlighted
+    }
+}
+
+struct SidebarNumberShortcutRequest: Equatable {
+    let id: UInt
+    let number: Int
+}
+
+struct SidebarMoveShortcutRequest: Equatable {
+    let id: UInt
+    let direction: SettingsSidebarMoveDirection
+}
+
 @MainActor
 final class SettingsNavigationCoordinator: ObservableObject {
     private static let maximumHistoryCount = 128
@@ -202,6 +274,8 @@ final class SettingsNavigationCoordinator: ObservableObject {
     @Published private(set) var unifiedSearchFocusRequestID: UInt = 0
     @Published private(set) var pluginSidebarSearchFocusRequestID: UInt = 0
     @Published private(set) var sidebarSelectionRevealRequestID: UInt = 0
+    @Published private(set) var sidebarNumberShortcutRequest: SidebarNumberShortcutRequest?
+    @Published private(set) var sidebarMoveShortcutRequest: SidebarMoveShortcutRequest?
     @Published private(set) var unifiedSearchQuickSelectionRequest: UnifiedSearchQuickSelectionRequest?
     @Published private(set) var searchRevealRequest: SettingsSearchRevealRequest?
 
@@ -224,6 +298,8 @@ final class SettingsNavigationCoordinator: ObservableObject {
     private var nextAboutUpdateActionRequestID: UInt = 0
     private var nextSearchRevealRequestID: UInt = 0
     private var nextUnifiedSearchQuickSelectionRequestID: UInt = 0
+    private var nextSidebarNumberShortcutRequestID: UInt = 0
+    private var nextSidebarMoveShortcutRequestID: UInt = 0
 
     convenience init(
         pluginHost: PluginHost,
@@ -380,24 +456,32 @@ final class SettingsNavigationCoordinator: ObservableObject {
 
     @discardableResult
     func moveSidebarSelection(_ direction: SettingsSidebarMoveDirection) -> Bool {
-        moveSidebarSelection(direction, in: sidebarOrder())
+        nextSidebarMoveShortcutRequestID &+= 1
+        sidebarMoveShortcutRequest = SidebarMoveShortcutRequest(
+            id: nextSidebarMoveShortcutRequestID,
+            direction: direction
+        )
+        return true
     }
 
     @discardableResult
     func performSidebarNumberShortcut(number: Int) -> Bool {
-        if number == 9 {
-            pluginSidebarSearchFocusRequestID &+= 1
-            return true
+        guard (1...SettingsSidebarNumberingPolicy.maximumShortcutCount).contains(number) else {
+            return false
         }
+        nextSidebarNumberShortcutRequestID &+= 1
+        sidebarNumberShortcutRequest = SidebarNumberShortcutRequest(
+            id: nextSidebarNumberShortcutRequestID,
+            number: number
+        )
+        return true
+    }
 
-        guard (1...8).contains(number) else { return false }
-        let availableDestinations = SettingsNavigationDestination.numberedSidebarDestinations
-            .filter(isAvailable)
-        let index = number - 1
-        guard availableDestinations.indices.contains(index) else { return false }
-
-        navigate(to: availableDestinations[index])
-        sidebarSelectionRevealRequestID &+= 1
+    func requestPluginSidebarSearch() -> Bool {
+        if isUnifiedSearchPresented {
+            dismissUnifiedSearch()
+        }
+        pluginSidebarSearchFocusRequestID &+= 1
         return true
     }
 
@@ -552,15 +636,11 @@ final class SettingsNavigationCoordinator: ObservableObject {
             return false
         }
 
-        if let searchField = searchField(for: destination) {
-            if focusedSearchField == searchField {
-                return true
-            }
-            return requestSearchFocus()
+        guard let searchField = searchField(for: destination) else { return false }
+        if focusedSearchField == searchField {
+            return true
         }
-
-        presentUnifiedSearch(origin: .keyboard)
-        return true
+        return requestSearchFocus()
     }
 
     func setSearchField(_ field: SettingsSearchField, focused: Bool) {
@@ -573,7 +653,9 @@ final class SettingsNavigationCoordinator: ObservableObject {
 
     private func searchField(for destination: SettingsNavigationDestination) -> SettingsSearchField? {
         switch destination {
-        case .plugins(.marketplace), .marketplaceDetail:
+        case .plugins(.actionsAndShortcuts):
+            .actionsAndShortcuts
+        case .plugins(.marketplace):
             .pluginMarketplace
         case let .plugins(.configuration(pluginID)) where hasPluginSettingsSearchField(pluginID):
             .pluginSettings(pluginID)

@@ -2,11 +2,29 @@ import AppKit
 import SwiftUI
 import MacToolsPluginKit
 
+@MainActor
+final class TrackpadSettingsSearchFocusController: ObservableObject {
+    @Published private(set) var requestID: UInt = 0
+
+    func requestFocus() {
+        requestID &+= 1
+    }
+}
+
 struct TrackpadActionPickerAccessibility: Equatable {
     let confirmationValue: String?
 
     init(isSafe: Bool, confirmationRequiredText: String) {
         confirmationValue = isSafe ? nil : confirmationRequiredText
+    }
+}
+
+enum TrackpadMappingSearchPresentation {
+    static func showsSearchField(
+        isSearchRequested: Bool,
+        mappingsAreEmpty _: Bool
+    ) -> Bool {
+        isSearchRequested
     }
 }
 
@@ -37,6 +55,7 @@ struct TrackpadGesturesSettingsView: View {
     let onChange: () -> Void
     let onSetTesting: (Bool) -> Void
     let section: SectionKind
+    @ObservedObject var searchFocusController = TrackpadSettingsSearchFocusController()
 
     @State private var editingDraft: TrackpadGestureMappingDraft?
     @State private var isShowingTipTapGuide = false
@@ -46,13 +65,22 @@ struct TrackpadGesturesSettingsView: View {
 
     @ViewBuilder
     var body: some View {
-        switch section {
-        case .mappings:
-            mappingsContent
-        case .typingProtection:
-            typingProtectionSection
-        case .testing:
-            testingContent
+        Group {
+            switch section {
+            case .mappings:
+                mappingsContent
+            case .typingProtection:
+                typingProtectionSection
+            case .testing:
+                testingContent
+            }
+        }
+        .onChange(of: searchFocusController.requestID) {
+            guard section == .mappings else { return }
+            if !isShowingMappingSearch {
+                isShowingMappingSearch = true
+            }
+            isMappingSearchFocused = true
         }
     }
 
@@ -206,12 +234,16 @@ struct TrackpadGesturesSettingsView: View {
             }
             .pluginSettingsListRowPadding()
 
+            if TrackpadMappingSearchPresentation.showsSearchField(
+                isSearchRequested: isShowingMappingSearch,
+                mappingsAreEmpty: store.mappings.isEmpty
+            ) {
+                mappingSearchField
+            }
+
             if store.mappings.isEmpty {
                 emptyState
             } else {
-                if isShowingMappingSearch {
-                    mappingSearchField
-                }
                 if visibleMappings.isEmpty {
                     noMatchingMappingsState
                 } else {

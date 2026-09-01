@@ -103,6 +103,10 @@ struct SettingsView: View {
                         navigationCoordinator.pluginSidebarSearchFocusRequestID,
                     selectionRevealRequestID:
                         navigationCoordinator.sidebarSelectionRevealRequestID,
+                    numberShortcutRequest:
+                        navigationCoordinator.sidebarNumberShortcutRequest,
+                    moveShortcutRequest:
+                        navigationCoordinator.sidebarMoveShortcutRequest,
                     onSearch: {
                         navigationCoordinator.presentUnifiedSearch(origin: .settingsSidebar)
                     }
@@ -2524,13 +2528,14 @@ private struct SettingsSidebar: View {
     @Binding var selection: SettingsNavigationDestination
     let pluginSearchFocusRequestID: UInt
     let selectionRevealRequestID: UInt
+    let numberShortcutRequest: SidebarNumberShortcutRequest?
+    let moveShortcutRequest: SidebarMoveShortcutRequest?
     let onSearch: () -> Void
-    @State private var isAppSectionExpanded = true
-    @State private var isCustomizeSectionExpanded = true
-    @State private var isConfigurationSectionExpanded = true
     @State private var pluginSearchQuery = ""
     @State private var highlightedPluginSearchDestination: SettingsNavigationDestination?
     @State private var showsPluginSearchHighlight = false
+    @State private var highlightedCollapsedSection: SettingsSidebarSection?
+    @AccessibilityFocusState private var accessibilityFocusedCollapsedSection: SettingsSidebarSection?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2552,7 +2557,7 @@ private struct SettingsSidebar: View {
             ScrollViewReader { proxy in
                 List(selection: optionalSelectionBinding) {
                     Section {
-                        if isAppSectionExpanded {
+                        if sidebarPreferences.isAppSectionExpanded {
                             ForEach(appDestinations, id: \.self) { destination in
                                 sidebarRow(for: destination)
                             }
@@ -2560,12 +2565,12 @@ private struct SettingsSidebar: View {
                     } header: {
                         disclosureSectionHeader(
                             title: "MacTools",
-                            isExpanded: $isAppSectionExpanded
+                            section: .app
                         )
                     }
 
                     Section {
-                        if isCustomizeSectionExpanded {
+                        if sidebarPreferences.isCustomizeSectionExpanded {
                             ForEach(primaryPluginDestinations, id: \.self) { destination in
                                 sidebarRow(for: destination)
                             }
@@ -2573,7 +2578,7 @@ private struct SettingsSidebar: View {
                     } header: {
                         disclosureSectionHeader(
                             title: customizeSectionTitle,
-                            isExpanded: $isCustomizeSectionExpanded
+                            section: .customize
                         )
                     }
 
@@ -2582,7 +2587,7 @@ private struct SettingsSidebar: View {
                             Text(emptyConfigurationsText)
                                 .font(PluginSettingsTheme.Typography.secondaryLabel)
                                 .foregroundStyle(.secondary)
-                        } else if isConfigurationSectionExpanded {
+                        } else if sidebarPreferences.isPluginSettingsSectionExpanded {
                             pluginSearchField
 
                             if filteredConfigurationDestinations.isEmpty {
@@ -2621,19 +2626,31 @@ private struct SettingsSidebar: View {
                     }
                 }
                 .onChange(of: selection) { _, destination in
+                    highlightedCollapsedSection = nil
                     reveal(destination, using: proxy)
                 }
                 .onChange(of: selectionRevealRequestID) {
                     reveal(selection, using: proxy)
                 }
                 .onChange(of: pluginSearchFocusRequestID) {
-                    isConfigurationSectionExpanded = true
-                    withAnimation {
-                        proxy.scrollTo(PluginSearchLayout.rowID, anchor: .center)
-                    }
+                    sidebarPreferences.setSection(.pluginSettings, expanded: true)
                     DispatchQueue.main.async {
+                        withAnimation {
+                            proxy.scrollTo(PluginSearchLayout.rowID, anchor: .center)
+                        }
                         synchronizePluginSearchHighlight(resetToFirst: false)
                     }
+                }
+                .onChange(of: numberShortcutRequest) { _, request in
+                    guard let request else { return }
+                    performNumberShortcut(request.number)
+                }
+                .onChange(of: moveShortcutRequest) { _, request in
+                    guard let request else { return }
+                    performMoveShortcut(request.direction)
+                }
+                .onChange(of: highlightedCollapsedSection) { _, section in
+                    accessibilityFocusedCollapsedSection = section
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(AppL10n.settings(
@@ -2746,7 +2763,7 @@ private struct SettingsSidebar: View {
             .frame(maxWidth: .infinity, minHeight: 18)
 
             if pluginSearchQuery.isEmpty {
-                keyboardShortcutBadge("⌘9")
+                keyboardShortcutBadge("⌘⇧F")
                     .accessibilityHidden(true)
             } else {
                 Text("\(filteredConfigurationDestinations.count)")
@@ -2952,7 +2969,7 @@ private struct SettingsSidebar: View {
         HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
             disclosureSectionHeader(
                 title: configurationSectionTitle,
-                isExpanded: $isConfigurationSectionExpanded
+                section: .pluginSettings
             )
 
             Spacer(minLength: 0)
@@ -3042,8 +3059,7 @@ private struct SettingsSidebar: View {
 
     private func shortcutNumber(for destination: SettingsNavigationDestination) -> Int? {
         guard
-            let index = SettingsNavigationDestination.numberedSidebarDestinations
-                .firstIndex(of: destination)
+            let index = effectiveNumberTargets.firstIndex(of: .destination(destination))
         else {
             return nil
         }
@@ -3059,25 +3075,170 @@ private struct SettingsSidebar: View {
 
     private func disclosureSectionHeader(
         title: String,
-        isExpanded: Binding<Bool>
+        section: SettingsSidebarSection
     ) -> some View {
-        Button {
+        let isExpanded = sectionIsExpanded(section)
+        let shortcutNumber = effectiveNumberTargets.firstIndex(of: .collapsedSection(section))
+            .map { $0 + 1 }
+        let isSelected = !isExpanded && selectedSection == section
+        let isKeyboardHighlighted = highlightedCollapsedSection == section
+        let isAccessibilityActive = SettingsSidebarHeaderAccessibility.isActive(
+            containsSelection: isSelected,
+            isKeyboardHighlighted: isKeyboardHighlighted
+        )
+        return Button {
             withAnimation(.easeInOut(duration: 0.15)) {
-                isExpanded.wrappedValue.toggle()
+                sidebarPreferences.setSection(section, expanded: !isExpanded)
             }
+            highlightedCollapsedSection = nil
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: isExpanded.wrappedValue
+                Image(systemName: isExpanded
                     ? "chevron.down"
                     : "chevron.right")
                     .font(.caption2.weight(.semibold))
                 Text(title)
+                Spacer(minLength: 4)
+                if let shortcutNumber {
+                    Text("⌘\(shortcutNumber)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                        .accessibilityHidden(true)
+                }
             }
             .foregroundStyle(.secondary)
             .contentShape(Rectangle())
+            .background {
+                if isSelected || isKeyboardHighlighted {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.14))
+                        .padding(.horizontal, -4)
+                        .padding(.vertical, -2)
+                }
+            }
         }
         .buttonStyle(.plain)
-        .help(disclosureTitle(title: title, isExpanded: isExpanded.wrappedValue))
+        .accessibilityFocused($accessibilityFocusedCollapsedSection, equals: section)
+        .help(disclosureTitle(title: title, isExpanded: isExpanded))
+        .accessibilityLabel(title)
+        .accessibilityHint(sectionAccessibilityHint(
+            title: title,
+            isExpanded: isExpanded,
+            shortcutNumber: shortcutNumber
+        ))
+        .accessibilityAddTraits(isAccessibilityActive ? .isSelected : [])
+    }
+
+    private var effectiveNumberTargets: [SettingsSidebarNumberTarget] {
+        SettingsSidebarNumberingPolicy.targets(
+            appDestinations: appDestinations,
+            customizeDestinations: primaryPluginDestinations,
+            pluginDestinations: normalizedPluginSearchQuery.isEmpty
+                ? configurationDestinations
+                : filteredConfigurationDestinations,
+            appExpanded: sidebarPreferences.isAppSectionExpanded,
+            customizeExpanded: sidebarPreferences.isCustomizeSectionExpanded,
+            pluginSettingsExpanded: sidebarPreferences.isPluginSettingsSectionExpanded,
+            pluginSearchIsActive: !normalizedPluginSearchQuery.isEmpty
+        )
+    }
+
+    private var selectedSection: SettingsSidebarSection {
+        switch selection.sidebarDestination {
+        case .general, .permissions, .about:
+            .app
+        case .plugins(.configuration):
+            .pluginSettings
+        case .plugins, .marketplaceDetail:
+            .customize
+        }
+    }
+
+    private func sectionIsExpanded(_ section: SettingsSidebarSection) -> Bool {
+        switch section {
+        case .app:
+            sidebarPreferences.isAppSectionExpanded
+        case .customize:
+            sidebarPreferences.isCustomizeSectionExpanded
+        case .pluginSettings:
+            sidebarPreferences.isPluginSettingsSectionExpanded
+        }
+    }
+
+    private func performNumberShortcut(_ number: Int) {
+        let index = number - 1
+        guard effectiveNumberTargets.indices.contains(index) else { return }
+        activate(effectiveNumberTargets[index])
+    }
+
+    private func performMoveShortcut(_ direction: SettingsSidebarMoveDirection) {
+        let targets = SettingsSidebarNumberingPolicy.targets(
+            appDestinations: appDestinations,
+            customizeDestinations: primaryPluginDestinations,
+            pluginDestinations: normalizedPluginSearchQuery.isEmpty
+                ? configurationDestinations
+                : filteredConfigurationDestinations,
+            appExpanded: sidebarPreferences.isAppSectionExpanded,
+            customizeExpanded: sidebarPreferences.isCustomizeSectionExpanded,
+            pluginSettingsExpanded: sidebarPreferences.isPluginSettingsSectionExpanded,
+            pluginSearchIsActive: !normalizedPluginSearchQuery.isEmpty,
+            limit: nil
+        )
+        guard !targets.isEmpty else { return }
+        let currentTarget: SettingsSidebarNumberTarget? = if showsPluginSearchHighlight,
+            let highlightedPluginSearchDestination {
+            .destination(highlightedPluginSearchDestination)
+        } else if let highlightedCollapsedSection {
+            .collapsedSection(highlightedCollapsedSection)
+        } else if sectionIsExpanded(selectedSection) {
+            .destination(selection.sidebarDestination)
+        } else {
+            .collapsedSection(selectedSection)
+        }
+        guard let target = SettingsSidebarNumberingPolicy.movedTarget(
+            from: currentTarget,
+            direction: direction,
+            in: targets
+        ) else { return }
+        activate(target, expandSection: false)
+    }
+
+    private func activate(
+        _ target: SettingsSidebarNumberTarget,
+        expandSection: Bool = true
+    ) {
+        switch target {
+        case let .destination(destination):
+            highlightedCollapsedSection = nil
+            if !normalizedPluginSearchQuery.isEmpty {
+                highlightedPluginSearchDestination = destination
+                showsPluginSearchHighlight = true
+            }
+            selection = destination
+        case let .collapsedSection(section):
+            if expandSection {
+                sidebarPreferences.setSection(section, expanded: true)
+                highlightedCollapsedSection = nil
+            } else {
+                highlightedCollapsedSection = section
+            }
+        }
+    }
+
+    private func sectionAccessibilityHint(
+        title: String,
+        isExpanded: Bool,
+        shortcutNumber: Int?
+    ) -> String {
+        let action = disclosureTitle(title: title, isExpanded: isExpanded)
+        guard let shortcutNumber else { return action }
+        let shortcut = AppL10n.settingsFormat(
+            "settings.sidebar.shortcutAccessibilityHint",
+            defaultValue: "Keyboard shortcut: Command-%d",
+            shortcutNumber
+        )
+        return "\(action). \(shortcut)"
     }
 
     private func disclosureTitle(title: String, isExpanded: Bool) -> String {
@@ -3103,11 +3264,11 @@ private struct SettingsSidebar: View {
         withAnimation(.easeInOut(duration: 0.15)) {
             switch destination {
             case .general, .permissions, .about:
-                isAppSectionExpanded = true
+                sidebarPreferences.setSection(.app, expanded: true)
             case .plugins(.configuration):
-                isConfigurationSectionExpanded = true
+                sidebarPreferences.setSection(.pluginSettings, expanded: true)
             case .plugins, .marketplaceDetail:
-                isCustomizeSectionExpanded = true
+                sidebarPreferences.setSection(.customize, expanded: true)
             }
         }
 
@@ -3438,7 +3599,10 @@ private struct PluginSettingsDestinationPane: View {
     private var detail: some View {
         switch selectedPane {
         case .actionsAndShortcuts:
-            ActionShortcutSettingsView(pluginHost: pluginHost)
+            ActionShortcutSettingsView(
+                pluginHost: pluginHost,
+                navigationCoordinator: navigationCoordinator
+            )
         case .automation:
             AutomationSettingsView(
                 pluginHost: pluginHost,

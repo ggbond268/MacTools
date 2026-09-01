@@ -23,6 +23,9 @@ final class SettingsSidebarPreferencesStore: ObservableObject {
     private enum DefaultsKey {
         static let sortMode = "settings.sidebar.pluginSortMode"
         static let customOrder = "settings.sidebar.customPluginOrder"
+        static let appSectionExpanded = "settings.sidebar.appSectionExpanded"
+        static let customizeSectionExpanded = "settings.sidebar.customizeSectionExpanded"
+        static let pluginSettingsSectionExpanded = "settings.sidebar.pluginSettingsSectionExpanded"
     }
 
     static let didImportNotification = Notification.Name(
@@ -31,6 +34,9 @@ final class SettingsSidebarPreferencesStore: ObservableObject {
 
     @Published private(set) var sortMode: SettingsSidebarPluginSortMode
     @Published private(set) var customOrderedPluginIDs: [String]
+    @Published private(set) var isAppSectionExpanded: Bool
+    @Published private(set) var isCustomizeSectionExpanded: Bool
+    @Published private(set) var isPluginSettingsSectionExpanded: Bool
 
     private let userDefaults: UserDefaults
     private let locale: () -> Locale
@@ -48,6 +54,18 @@ final class SettingsSidebarPreferencesStore: ObservableObject {
         self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         sortMode = Self.storedSortMode(in: userDefaults)
         customOrderedPluginIDs = Self.storedCustomOrder(in: userDefaults)
+        isAppSectionExpanded = Self.storedSectionExpansion(
+            forKey: DefaultsKey.appSectionExpanded,
+            in: userDefaults
+        )
+        isCustomizeSectionExpanded = Self.storedSectionExpansion(
+            forKey: DefaultsKey.customizeSectionExpanded,
+            in: userDefaults
+        )
+        isPluginSettingsSectionExpanded = Self.storedSectionExpansion(
+            forKey: DefaultsKey.pluginSettingsSectionExpanded,
+            in: userDefaults
+        )
         isCustomOrderInitialized = userDefaults.object(forKey: DefaultsKey.customOrder) != nil
         importObserver = NotificationCenter.default.addObserver(
             forName: Self.didImportNotification,
@@ -95,6 +113,25 @@ final class SettingsSidebarPreferencesStore: ObservableObject {
             return nil
         }
         return storedCustomOrder(in: userDefaults)
+    }
+
+    func setSection(_ section: SettingsSidebarSection, expanded: Bool) {
+        let key: String
+        switch section {
+        case .app:
+            guard isAppSectionExpanded != expanded else { return }
+            isAppSectionExpanded = expanded
+            key = DefaultsKey.appSectionExpanded
+        case .customize:
+            guard isCustomizeSectionExpanded != expanded else { return }
+            isCustomizeSectionExpanded = expanded
+            key = DefaultsKey.customizeSectionExpanded
+        case .pluginSettings:
+            guard isPluginSettingsSectionExpanded != expanded else { return }
+            isPluginSettingsSectionExpanded = expanded
+            key = DefaultsKey.pluginSettingsSectionExpanded
+        }
+        userDefaults.set(expanded, forKey: key)
     }
 
     static func applyImportedPreferences(
@@ -209,6 +246,26 @@ final class SettingsSidebarPreferencesStore: ObservableObject {
         sortMode = Self.storedSortMode(in: userDefaults)
         customOrderedPluginIDs = Self.storedCustomOrder(in: userDefaults)
         isCustomOrderInitialized = userDefaults.object(forKey: DefaultsKey.customOrder) != nil
+        isAppSectionExpanded = Self.storedSectionExpansion(
+            forKey: DefaultsKey.appSectionExpanded,
+            in: userDefaults
+        )
+        isCustomizeSectionExpanded = Self.storedSectionExpansion(
+            forKey: DefaultsKey.customizeSectionExpanded,
+            in: userDefaults
+        )
+        isPluginSettingsSectionExpanded = Self.storedSectionExpansion(
+            forKey: DefaultsKey.pluginSettingsSectionExpanded,
+            in: userDefaults
+        )
+    }
+
+    private static func storedSectionExpansion(
+        forKey key: String,
+        in userDefaults: UserDefaults
+    ) -> Bool {
+        guard userDefaults.object(forKey: key) != nil else { return true }
+        return userDefaults.bool(forKey: key)
     }
 
     private func normalizedCustomOrder(availableIDs: [String]) -> [String] {

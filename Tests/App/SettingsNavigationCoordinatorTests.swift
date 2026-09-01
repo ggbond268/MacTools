@@ -131,47 +131,187 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.canGoForward)
     }
 
-    func testSidebarSelectionMovementUsesCurrentSidebarOrderProvider() {
+    func testSidebarSelectionMovementPublishesARepeatableUIRequest() {
         let coordinator = SettingsNavigationCoordinator(
             sidebarOrder: {
                 [.general, .plugins(.automation), .about]
             }
         )
 
-        coordinator.moveSidebarSelection(.next)
+        XCTAssertTrue(coordinator.moveSidebarSelection(.next))
+        XCTAssertEqual(
+            coordinator.sidebarMoveShortcutRequest,
+            SidebarMoveShortcutRequest(id: 1, direction: .next)
+        )
+        XCTAssertEqual(coordinator.destination, .general)
 
-        XCTAssertEqual(coordinator.destination, .plugins(.automation))
+        XCTAssertTrue(coordinator.moveSidebarSelection(.previous))
+        XCTAssertEqual(
+            coordinator.sidebarMoveShortcutRequest,
+            SidebarMoveShortcutRequest(id: 2, direction: .previous)
+        )
     }
 
-    func testNumberSelectionNavigatesStableTopDestinations() {
+    func testNumberSelectionPublishesRepeatableDynamicSidebarRequests() {
         let coordinator = SettingsNavigationCoordinator()
 
-        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 0)
         XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 3))
-        XCTAssertEqual(coordinator.destination, .about)
-        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 1)
-        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 4))
-        XCTAssertEqual(coordinator.destination, .plugins(.actionsAndShortcuts))
-        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 2)
-        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 8))
-        XCTAssertEqual(coordinator.destination, .plugins(.marketplace))
-        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 3)
+        XCTAssertEqual(
+            coordinator.sidebarNumberShortcutRequest,
+            SidebarNumberShortcutRequest(id: 1, number: 3)
+        )
         XCTAssertFalse(coordinator.performSidebarNumberShortcut(number: 0))
-        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 3)
-
-        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 8))
-        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 4)
+        XCTAssertFalse(coordinator.performSidebarNumberShortcut(number: 10))
+        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 9))
+        XCTAssertEqual(
+            coordinator.sidebarNumberShortcutRequest,
+            SidebarNumberShortcutRequest(id: 2, number: 9)
+        )
     }
 
-    func testNumberNineRequestsPluginSidebarSearchFocus() {
+    func testPluginSidebarSearchHasDedicatedRepeatableRequest() {
         let coordinator = SettingsNavigationCoordinator()
 
         XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 0)
-        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 9))
+        XCTAssertTrue(coordinator.requestPluginSidebarSearch())
         XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 1)
-        XCTAssertEqual(coordinator.destination, .general)
-        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 9))
+        XCTAssertTrue(coordinator.requestPluginSidebarSearch())
         XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 2)
+    }
+
+    func testPluginSidebarSearchDismissesUnifiedSearchBeforeRequestingFocus() {
+        let coordinator = SettingsNavigationCoordinator()
+        coordinator.presentUnifiedSearch(origin: .keyboard)
+
+        XCTAssertTrue(coordinator.requestPluginSidebarSearch())
+
+        XCTAssertFalse(coordinator.isUnifiedSearchPresented)
+        XCTAssertNil(coordinator.unifiedSearchPresentationOrigin)
+        XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 1)
+    }
+
+    func testDynamicNumberingUsesVisibleRowsCollapsedHeadersAndSearchResults() {
+        let app: [SettingsNavigationDestination] = [.general, .permissions, .about]
+        let customize: [SettingsNavigationDestination] = [
+            .plugins(.actionsAndShortcuts), .plugins(.automation)
+        ]
+        let plugins: [SettingsNavigationDestination] = (1...8).map {
+            .plugins(.configuration("plugin-\($0)"))
+        }
+
+        XCTAssertEqual(
+            SettingsSidebarNumberingPolicy.targets(
+                appDestinations: app,
+                customizeDestinations: customize,
+                pluginDestinations: plugins,
+                appExpanded: false,
+                customizeExpanded: true,
+                pluginSettingsExpanded: false,
+                pluginSearchIsActive: false
+            ),
+            [
+                .collapsedSection(.app),
+                .destination(.plugins(.actionsAndShortcuts)),
+                .destination(.plugins(.automation)),
+                .collapsedSection(.pluginSettings)
+            ]
+        )
+
+        XCTAssertEqual(
+            SettingsSidebarNumberingPolicy.targets(
+                appDestinations: app,
+                customizeDestinations: customize,
+                pluginDestinations: plugins,
+                appExpanded: false,
+                customizeExpanded: false,
+                pluginSettingsExpanded: true,
+                pluginSearchIsActive: true
+            ),
+            plugins.prefix(9).map(SettingsSidebarNumberTarget.destination)
+        )
+
+        XCTAssertEqual(
+            SettingsSidebarNumberingPolicy.targets(
+                appDestinations: app,
+                customizeDestinations: customize,
+                pluginDestinations: plugins,
+                appExpanded: false,
+                customizeExpanded: false,
+                pluginSettingsExpanded: false,
+                pluginSearchIsActive: true
+            ),
+            [.collapsedSection(.pluginSettings)]
+        )
+
+        let collapsedSearchTargets = SettingsSidebarNumberingPolicy.targets(
+            appDestinations: app,
+            customizeDestinations: customize,
+            pluginDestinations: plugins,
+            appExpanded: false,
+            customizeExpanded: false,
+            pluginSettingsExpanded: false,
+            pluginSearchIsActive: true
+        )
+        let expandedSearchTargets = SettingsSidebarNumberingPolicy.targets(
+            appDestinations: app,
+            customizeDestinations: customize,
+            pluginDestinations: plugins,
+            appExpanded: false,
+            customizeExpanded: false,
+            pluginSettingsExpanded: true,
+            pluginSearchIsActive: true
+        )
+        XCTAssertEqual(collapsedSearchTargets.first, .collapsedSection(.pluginSettings))
+        XCTAssertEqual(expandedSearchTargets.first, .destination(plugins[0]))
+    }
+
+    func testCollapsedHeaderAccessibilityIncludesKeyboardHighlight() {
+        XCTAssertTrue(SettingsSidebarHeaderAccessibility.isActive(
+            containsSelection: false,
+            isKeyboardHighlighted: true
+        ))
+        XCTAssertTrue(SettingsSidebarHeaderAccessibility.isActive(
+            containsSelection: true,
+            isKeyboardHighlighted: false
+        ))
+        XCTAssertFalse(SettingsSidebarHeaderAccessibility.isActive(
+            containsSelection: false,
+            isKeyboardHighlighted: false
+        ))
+    }
+
+    func testFilteredSidebarMovementStartsFromTheVisibleHighlight() {
+        let first = SettingsSidebarNumberTarget.destination(
+            .plugins(.configuration("homebrew"))
+        )
+        let second = SettingsSidebarNumberTarget.destination(
+            .plugins(.configuration("launch-control"))
+        )
+        let targets = [first, second]
+
+        XCTAssertEqual(
+            SettingsSidebarNumberingPolicy.movedTarget(
+                from: first,
+                direction: .next,
+                in: targets
+            ),
+            second
+        )
+        XCTAssertEqual(
+            SettingsSidebarNumberingPolicy.movedTarget(
+                from: .destination(.general),
+                direction: .next,
+                in: targets
+            ),
+            first
+        )
+        XCTAssertNil(
+            SettingsSidebarNumberingPolicy.movedTarget(
+                from: first,
+                direction: .previous,
+                in: targets
+            )
+        )
     }
 
     func testRecordsCompletePluginDestinationsAndRestoresExactPaneDuringTraversal() {
@@ -305,13 +445,13 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertNotEqual(coordinator.searchFocusRequest, firstRequest)
     }
 
-    func testSearchRequestFallsBackToUnifiedSearchWithoutContextualSearch() {
+    func testSearchRequestDoesNotFallBackWithoutContextualSearch() {
         let coordinator = SettingsNavigationCoordinator()
 
-        XCTAssertTrue(coordinator.requestSearch())
+        XCTAssertFalse(coordinator.requestSearch())
 
-        XCTAssertTrue(coordinator.isUnifiedSearchPresented)
-        XCTAssertEqual(coordinator.unifiedSearchPresentationOrigin, .keyboard)
+        XCTAssertFalse(coordinator.isUnifiedSearchPresented)
+        XCTAssertNil(coordinator.unifiedSearchPresentationOrigin)
         XCTAssertNil(coordinator.searchFocusRequest)
     }
 
@@ -329,6 +469,16 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.requestSearch())
         XCTAssertEqual(coordinator.searchFocusRequest, firstRequest)
         XCTAssertFalse(coordinator.isUnifiedSearchPresented)
+    }
+
+    func testSearchRequestDoesNotTreatMarketplaceDetailAsLocalSearch() {
+        let target = MarketplacePluginDetailTarget(pluginID: "fan-control")
+        let coordinator = SettingsNavigationCoordinator(
+            initialDestination: .marketplaceDetail(target)
+        )
+
+        XCTAssertFalse(coordinator.requestSearch())
+        XCTAssertNil(coordinator.searchFocusRequest)
     }
 
     func testSearchRequestFocusesPluginContextualSearch() {

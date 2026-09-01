@@ -38,6 +38,7 @@ private struct TrackpadGestureReadinessError: LocalizedError {
 @MainActor
 final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
     AccessibilityPermissionRefreshing, PluginSettingsPresenting,
+    PluginSettingsSearchFocusing,
     PluginFeatureExtractionReadinessProviding, TrackpadActionHostContextConsuming,
     PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting,
     PluginPersistentPreferencesChangeSignaling,
@@ -50,6 +51,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
 
     let metadata: PluginMetadata
     let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    private let settingsSearchFocusController = TrackpadSettingsSearchFocusController()
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -260,7 +262,8 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
                         isGestureOwned: { self.isGestureOwned($0) },
                         onChange: { [weak self] in self?.configurationDidChange() },
                         onSetTesting: { [weak self] enabled in self?.setTesting(enabled) },
-                        section: .mappings
+                        section: .mappings,
+                        searchFocusController: self.settingsSearchFocusController
                     )
                 }
             },
@@ -307,6 +310,10 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
             }
             self?.setTesting(false)
         }
+    }
+
+    func focusSettingsSearch() {
+        settingsSearchFocusController.requestFocus()
     }
 
     func handleAction(_ action: PluginPanelAction) {

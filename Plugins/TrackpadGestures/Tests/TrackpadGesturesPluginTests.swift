@@ -1038,6 +1038,17 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         )
     }
 
+    func testRequestedMappingSearchRemainsVisibleForAnEmptyStore() {
+        XCTAssertTrue(TrackpadMappingSearchPresentation.showsSearchField(
+            isSearchRequested: true,
+            mappingsAreEmpty: true
+        ))
+        XCTAssertFalse(TrackpadMappingSearchPresentation.showsSearchField(
+            isSearchRequested: false,
+            mappingsAreEmpty: true
+        ))
+    }
+
     func testGestureRawValuesRemainCompatibleWithExistingMappingsAndBackups() {
         XCTAssertEqual(TrackpadGesture.allCases.map(\.rawValue), [
             "tipTapLeftOneFixed",

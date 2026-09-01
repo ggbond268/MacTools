@@ -24,6 +24,7 @@ final class LaunchControlPlugin:
     MacToolsPlugin,
     PluginPrimaryPanel,
     PluginSettingsPresenting,
+    PluginSettingsSearchFocusing,
     PluginActionProviding
 {
     private enum ActionID {
@@ -52,6 +53,7 @@ final class LaunchControlPlugin:
 
     private let controller: LaunchControlController
     private let localization: PluginLocalization
+    private let settingsSearchFocusController = LaunchControlSettingsSearchFocusController()
     private var isExpanded = false
 
     init(
@@ -156,8 +158,16 @@ final class LaunchControlPlugin:
     var settingsPage: PluginSettingsPage? {
         let localization = localization
         return .workspace(description: metadata.defaultDescription, scrolling: .selfManaged) { _ in
-            LaunchControlManagerView(controller: self.controller, localization: localization)
+            LaunchControlManagerView(
+                controller: self.controller,
+                localization: localization,
+                searchFocusController: self.settingsSearchFocusController
+            )
         }
+    }
+
+    func focusSettingsSearch() {
+        settingsSearchFocusController.requestFocus()
     }
 
     func refresh() {

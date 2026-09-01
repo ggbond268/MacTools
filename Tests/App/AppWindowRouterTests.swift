@@ -292,6 +292,14 @@ final class AppWindowRouterTests: XCTestCase {
         }
     }
 
+    private func pluginSettingsFilterField(in rootView: NSView) -> NSTextField? {
+        descendantViews(of: rootView)
+            .compactMap { $0 as? NSTextField }
+            .first {
+                $0.accessibilityIdentifier() == "mactools.settings.plugin-filter"
+            }
+    }
+
     private func assertEqual(
         _ actual: NSRect,
         _ expected: NSRect,
@@ -422,6 +430,16 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertEqual(
             MacToolsLocalKeyboardCommand.resolve(
                 for: keyEvent(
+                    keyCode: UInt16(kVK_ANSI_F),
+                    characters: "F",
+                    modifiers: [.command, .shift]
+                )
+            ),
+            .focusPluginSettingsSearch
+        )
+        XCTAssertEqual(
+            MacToolsLocalKeyboardCommand.resolve(
+                for: keyEvent(
                     keyCode: UInt16(kVK_ANSI_K),
                     characters: "K",
                     modifiers: [.command, .capsLock]
@@ -472,14 +490,15 @@ final class AppWindowRouterTests: XCTestCase {
             )
         }
 
-        XCTAssertNil(
+        XCTAssertEqual(
             MacToolsLocalKeyboardCommand.resolve(
                 for: keyEvent(
                     keyCode: UInt16(kVK_ANSI_F),
                     characters: "f",
                     modifiers: [.command, .shift]
                 )
-            )
+            ),
+            .focusPluginSettingsSearch
         )
     }
 
@@ -733,7 +752,7 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertFalse(panel.isVisible)
     }
 
-    func testPhysicalCommandNumbersSelectTopPagesAndFocusPluginSearch() throws {
+    func testPhysicalCommandNumbersAndSidebarMovementPublishUIRequests() throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -752,7 +771,8 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(coordinator.destination, .permissions)
+        XCTAssertEqual(coordinator.sidebarNumberShortcutRequest?.number, 2)
+        XCTAssertEqual(coordinator.destination, .general)
 
         XCTAssertTrue(
             window.performKeyEquivalent(
@@ -763,18 +783,7 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(coordinator.destination, .plugins(.automation))
-
-        XCTAssertTrue(
-            window.performKeyEquivalent(
-                with: keyEvent(
-                    keyCode: UInt16(kVK_ANSI_LeftBracket),
-                    characters: "[",
-                    windowNumber: window.windowNumber
-                )
-            )
-        )
-        XCTAssertEqual(coordinator.destination, .permissions)
+        XCTAssertEqual(coordinator.sidebarNumberShortcutRequest?.number, 5)
 
         XCTAssertTrue(
             window.performKeyEquivalent(
@@ -786,9 +795,8 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(coordinator.destination, .about)
+        XCTAssertEqual(coordinator.sidebarMoveShortcutRequest?.direction, .next)
 
-        let previousPluginSearchFocusRequestID = coordinator.pluginSidebarSearchFocusRequestID
         XCTAssertTrue(
             window.performKeyEquivalent(
                 with: keyEvent(
@@ -799,10 +807,11 @@ final class AppWindowRouterTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            coordinator.pluginSidebarSearchFocusRequestID,
-            previousPluginSearchFocusRequestID + 1
+            coordinator.sidebarNumberShortcutRequest?.number,
+            9
         )
-        XCTAssertEqual(coordinator.destination, .about)
+        XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 0)
+        XCTAssertEqual(coordinator.destination, .general)
 
         window.close()
     }
@@ -852,7 +861,7 @@ final class AppWindowRouterTests: XCTestCase {
         window.close()
     }
 
-    func testCommandFFallsBackToUnifiedSettingsSearch() throws {
+    func testCommandFDoesNotFallBackToUnifiedSettingsSearch() throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -862,7 +871,7 @@ final class AppWindowRouterTests: XCTestCase {
         let window = try XCTUnwrap(router.settingsWindow)
         let coordinator = try XCTUnwrap(router.settingsNavigationCoordinator)
 
-        XCTAssertTrue(
+        XCTAssertFalse(
             window.performKeyEquivalent(
                 with: keyEvent(
                     keyCode: UInt16(kVK_ANSI_F),
@@ -871,8 +880,59 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertTrue(coordinator.isUnifiedSearchPresented)
-        XCTAssertEqual(coordinator.unifiedSearchPresentationOrigin, .keyboard)
+        XCTAssertFalse(coordinator.isUnifiedSearchPresented)
+        XCTAssertNil(coordinator.unifiedSearchPresentationOrigin)
+
+        let previousRequestID = coordinator.pluginSidebarSearchFocusRequestID
+        XCTAssertTrue(
+            window.performKeyEquivalent(
+                with: keyEvent(
+                    keyCode: UInt16(kVK_ANSI_F),
+                    characters: "F",
+                    modifiers: [.command, .shift],
+                    windowNumber: window.windowNumber
+                )
+            )
+        )
+        XCTAssertEqual(
+            coordinator.pluginSidebarSearchFocusRequestID,
+            previousRequestID + 1
+        )
+
+        window.close()
+    }
+
+    func testCommandShiftFExpandsAndFocusesCollapsedPluginSettingsSearch() async throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(false, forKey: "settings.sidebar.pluginSettingsSectionExpanded")
+        let plugins = (1...20).map {
+            AppWindowRouterSettingsPlugin(id: "settings-plugin-\($0)")
+        }
+        let router = makeRouter(defaults: defaults, plugins: plugins)
+
+        router.showSettings()
+        let window = try XCTUnwrap(router.settingsWindow)
+        let hostingView = try XCTUnwrap(window.contentView as? NSHostingView<SettingsView>)
+        await settleWindowLayout(window)
+        XCTAssertNil(pluginSettingsFilterField(in: hostingView))
+
+        XCTAssertTrue(window.performKeyEquivalent(with: keyEvent(
+            keyCode: UInt16(kVK_ANSI_F),
+            characters: "F",
+            modifiers: [.command, .shift],
+            windowNumber: window.windowNumber
+        )))
+
+        for _ in 0..<5 {
+            await settleWindowLayout(window)
+        }
+        let filterField = try XCTUnwrap(pluginSettingsFilterField(in: hostingView))
+        XCTAssertTrue(
+            window.firstResponder === filterField.currentEditor(),
+            "Expected Command-Shift-F to focus the newly rendered plugin filter field."
+        )
 
         window.close()
     }
@@ -994,10 +1054,11 @@ final class AppWindowRouterTests: XCTestCase {
         defaults: UserDefaults,
         appUpdater: AppUpdater? = nil,
         commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration? = nil,
+        plugins: [any MacToolsPlugin] = [],
         configureHost: (PluginHost) -> Void = { _ in }
     ) -> AppWindowRouter {
         let host = PluginHost(
-            plugins: [],
+            plugins: plugins,
             shortcutStore: ShortcutStore(userDefaults: defaults),
             pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
@@ -1033,6 +1094,29 @@ final class AppWindowRouterTests: XCTestCase {
             isARepeat: false,
             keyCode: keyCode
         )!
+    }
+}
+
+@MainActor
+private final class AppWindowRouterSettingsPlugin: MacToolsPlugin {
+    let metadata: PluginMetadata
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+
+    init(id: String) {
+        metadata = PluginMetadata(
+            id: id,
+            title: id,
+            iconName: "gearshape",
+            iconTint: .accentColor,
+            order: 0,
+            defaultDescription: id
+        )
+    }
+
+    var settingsPage: PluginSettingsPage? {
+        .form(description: metadata.defaultDescription, sections: [])
     }
 }
 

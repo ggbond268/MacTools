@@ -3,19 +3,34 @@ import MacToolsPluginKit
 import SwiftUI
 
 @MainActor
+final class SavedScriptsSettingsSearchFocusController: ObservableObject {
+    @Published private(set) var requestID: UInt = 0
+
+    func requestFocus() {
+        requestID &+= 1
+    }
+}
+
+@MainActor
 struct SavedScriptsSettingsView: View {
     let plugin: SavedScriptsPlugin
     @ObservedObject private var store: SavedScriptsStore
     @ObservedObject private var executionStore: SavedScriptsExecutionStore
+    @ObservedObject private var searchFocusController: SavedScriptsSettingsSearchFocusController
 
     @State private var query = ""
     @State private var editorRequest: SavedScriptEditorRequest?
     @State private var deletionRequest: SavedScriptDeletionRequest?
+    @FocusState private var isSearchFocused: Bool
 
-    init(plugin: SavedScriptsPlugin) {
+    init(
+        plugin: SavedScriptsPlugin,
+        searchFocusController: SavedScriptsSettingsSearchFocusController = .init()
+    ) {
         self.plugin = plugin
         _store = ObservedObject(wrappedValue: plugin.store)
         _executionStore = ObservedObject(wrappedValue: plugin.executionStore)
+        _searchFocusController = ObservedObject(wrappedValue: searchFocusController)
     }
 
     var body: some View {
@@ -55,6 +70,9 @@ struct SavedScriptsSettingsView: View {
                 )))
             )
         }
+        .onChange(of: searchFocusController.requestID) {
+            isSearchFocused = true
+        }
     }
 
     private var librarySection: some View {
@@ -77,6 +95,7 @@ struct SavedScriptsSettingsView: View {
                     plugin.localized("settings.search.placeholder", defaultValue: "搜索脚本"),
                     text: $query
                 )
+                .focused($isSearchFocused)
                 .textFieldStyle(.roundedBorder)
                 .frame(minWidth: 160, idealWidth: 220, maxWidth: 280)
 

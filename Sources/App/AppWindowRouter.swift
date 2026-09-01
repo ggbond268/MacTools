@@ -7,6 +7,7 @@ import MacToolsPluginKit
 enum MacToolsLocalKeyboardCommand: Equatable {
     case showSettings
     case focusSearch
+    case focusPluginSettingsSearch
     case showUnifiedSearch
     case selectNumber(Int)
     case goBack
@@ -30,6 +31,11 @@ enum MacToolsLocalKeyboardCommand: Equatable {
             default:
                 return nil
             }
+        }
+
+        if modifiers == [.command, .shift],
+           event.charactersIgnoringModifiers?.lowercased() == "f" {
+            return .focusPluginSettingsSearch
         }
 
         guard modifiers == .command else {
@@ -876,6 +882,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             return true
         case .focusSearch:
             return settingsNavigationCoordinator?.requestSearch() ?? false
+        case .focusPluginSettingsSearch:
+            return settingsNavigationCoordinator?.requestPluginSidebarSearch() ?? false
         case .showUnifiedSearch:
             showUnifiedSearch()
             return true

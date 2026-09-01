@@ -140,6 +140,7 @@ private struct PendingActionShortcutReplacement: Identifiable {
 
 struct ActionShortcutSettingsView: View {
     @ObservedObject var pluginHost: PluginHost
+    @ObservedObject var navigationCoordinator: SettingsNavigationCoordinator
     @State private var query = ""
     @State private var filter: ActionShortcutFilter = .all
     @State private var groups: [ActionShortcutGroup] = []
@@ -186,6 +187,13 @@ struct ActionShortcutSettingsView: View {
         .onChange(of: pluginHost.actionShortcutCatalogItems) { _, _ in refreshGroups() }
         .onChange(of: query) { _, _ in refreshGroups() }
         .onChange(of: filter) { _, _ in refreshGroups() }
+        .onChange(of: navigationCoordinator.searchFocusRequest) { _, request in
+            guard request?.field == .actionsAndShortcuts else { return }
+            isSearchFocused = true
+        }
+        .onChange(of: isSearchFocused) { _, isFocused in
+            navigationCoordinator.setSearchField(.actionsAndShortcuts, focused: isFocused)
+        }
         .alert(item: $pendingReplacement) { replacement in
             Alert(
                 title: Text(FeatureL10n.string("替换快捷键？")),
