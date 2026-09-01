@@ -38,6 +38,62 @@ struct TrackpadGestureRecognitionThresholds: Equatable, Sendable {
     static let `default` = TrackpadGestureRecognitionThresholds()
 }
 
+enum TipTapEpisodeRejectionReason: Equatable, Sendable {
+    case fixedFingersNotSettled
+    case fixedFingersBecameUnstable
+    case tooBrief
+    case tooLong
+    case movedTooFar
+    case wrongRegion
+    case extraContact
+}
+
+struct TipTapGuideGeometry: Equatable, Sendable {
+    let minimumFixedX: Double
+    let maximumFixedX: Double
+    let leftBoundaryX: Double
+    let rightBoundaryX: Double
+    let middleRange: ClosedRange<Double>?
+
+    static func make(
+        fixedContacts: [TrackpadContactSnapshot],
+        thresholds: TrackpadGestureRecognitionThresholds = .default
+    ) -> TipTapGuideGeometry? {
+        let fixedX = fixedContacts.map(\.x)
+        guard let minimumX = fixedX.min(), let maximumX = fixedX.max() else {
+            return nil
+        }
+        let span = maximumX - minimumX
+        let middleRange: ClosedRange<Double>?
+        if fixedContacts.count >= 2, span >= thresholds.tipTapMiddleMinimumSpan {
+            let inset = span * thresholds.tipTapMiddleInsetRatio
+            middleRange = (minimumX + inset) ... (maximumX - inset)
+        } else {
+            middleRange = nil
+        }
+        return TipTapGuideGeometry(
+            minimumFixedX: minimumX,
+            maximumFixedX: maximumX,
+            leftBoundaryX: minimumX - thresholds.tipTapSeparation,
+            rightBoundaryX: maximumX + thresholds.tipTapSeparation,
+            middleRange: middleRange
+        )
+    }
+
+    func classify(x: Double) -> TipTapRegion? {
+        if x <= leftBoundaryX {
+            return .left
+        }
+        if x >= rightBoundaryX {
+            return .right
+        }
+        if middleRange?.contains(x) == true {
+            return .middle
+        }
+        return nil
+    }
+}
+
 struct TipTapRecognizer: Sendable {
     private struct AddedContactEpisode: Sendable {
         let identifier: Int
@@ -45,18 +101,28 @@ struct TipTapRecognizer: Sendable {
         let startedAt: TimeInterval
     }
 
-    private enum AddedContact: Sendable {
-        case candidate(AddedContactEpisode)
-        case ignored(AddedContactEpisode)
-    }
-
     private enum State: Sendable {
         case waitingForZero
         case ready
         case acquiring(initial: [Int: TrackpadContactSnapshot], startedAt: TimeInterval)
         case settling(initial: [Int: TrackpadContactSnapshot], startedAt: TimeInterval)
-        case fixed(initial: [Int: TrackpadContactSnapshot], addedContact: AddedContact?)
+        case fixed(
+            initial: [Int: TrackpadContactSnapshot],
+            startedAt: TimeInterval,
+            addedContact: AddedContactEpisode?
+        )
+        case rejectedEpisode(
+            initial: [Int: TrackpadContactSnapshot],
+            startedAt: TimeInterval,
+            contacts: [Int: TrackpadContactSnapshot],
+            reason: TipTapEpisodeRejectionReason
+        )
         case cancelled
+    }
+
+    private struct TestingRejectionContext: Sendable {
+        let anchors: [TrackpadContactSnapshot]
+        let candidates: [TrackpadContactSnapshot]
     }
 
     let fixedFingerCount: Int
@@ -65,24 +131,37 @@ struct TipTapRecognizer: Sendable {
 
     private var state: State = .waitingForZero
     private var lastRecognitionAt: TimeInterval = -.infinity
+    private(set) var lastRejectionReason: TipTapEpisodeRejectionReason?
+    private(set) var rejectionSequence: UInt64 = 0
+    private var surfacedTestingRejectionSequence: UInt64 = 0
+    private var testingRejectionContext: TestingRejectionContext?
 
     /// Whether the current contact episode contains an added finger that can complete this
     /// recognizer's configured TipTap. The native click correlator reads this synchronously so a
     /// click event emitted at the contact-count peak is not mistaken for a physical finger click.
     var hasQualifiedAddedContact: Bool {
-        guard case let .fixed(_, addedContact) = state,
-              case .candidate? = addedContact
-        else {
+        guard case let .fixed(_, _, addedContact) = state, addedContact != nil else {
             return false
         }
         return true
     }
 
     var isAwaitingAddedContact: Bool {
-        guard case let .fixed(_, addedContact) = state else {
+        switch state {
+        case .settling:
+            return true
+        case let .fixed(_, _, addedContact):
+            return addedContact == nil
+        default:
             return false
         }
-        return addedContact == nil
+    }
+
+    var isRejectingAddedContactEpisode: Bool {
+        if case .rejectedEpisode = state {
+            return true
+        }
+        return false
     }
 
     init(
@@ -102,6 +181,7 @@ struct TipTapRecognizer: Sendable {
         case .waitingForZero, .cancelled:
             if active.isEmpty {
                 state = .ready
+                testingRejectionContext = nil
             }
             return false
 
@@ -155,145 +235,302 @@ struct TipTapRecognizer: Sendable {
                 return false
             }
 
+            let addedContacts = addedContacts(initial: initial, active: active)
             guard frame.timestamp - startedAt >= thresholds.tipTapFixedMinimumDuration else {
-                if active.count != fixedFingerCount {
-                    state = .cancelled
+                if !addedContacts.isEmpty {
+                    rejectEpisode(
+                        initial: initial,
+                        startedAt: startedAt,
+                        addedContacts: addedContacts,
+                        reason: .fixedFingersNotSettled
+                    )
                 }
                 return false
             }
 
-            if active.count == fixedFingerCount {
-                state = .fixed(initial: initial, addedContact: nil)
+            if addedContacts.isEmpty {
+                state = .fixed(initial: initial, startedAt: startedAt, addedContact: nil)
                 return false
             }
-
-            guard active.count == fixedFingerCount + 1,
-                  let added = active.values.first(where: { initial[$0.identifier] == nil })
-            else {
-                state = .cancelled
-                return false
-            }
-            guard classify(x: added.x, relativeTo: initial) == region else {
-                // Another configured TipTap region may own this contact episode. Keep the
-                // established fixed contacts armed so Left, Middle, and Right can alternate, but
-                // never promote this same still-down contact into a target candidate later.
-                state = .fixed(
-                    initial: initial,
-                    addedContact: .ignored(AddedContactEpisode(
-                        identifier: added.identifier,
-                        initialContact: added,
-                        startedAt: frame.timestamp
-                    ))
-                )
-                return false
-            }
-            state = .fixed(
+            beginEpisode(
                 initial: initial,
-                addedContact: .candidate(AddedContactEpisode(
-                    identifier: added.identifier,
-                    initialContact: added,
-                    startedAt: frame.timestamp
-                ))
+                startedAt: startedAt,
+                addedContacts: addedContacts,
+                timestamp: frame.timestamp
             )
             return false
 
-        case let .fixed(initial, addedContact):
+        case let .fixed(initial, startedAt, addedContact):
             guard fixedFingersRemainStable(initial: initial, active: active) else {
+                if let addedContact {
+                    testingRejectionContext = TestingRejectionContext(
+                        anchors: sorted(initial.values),
+                        candidates: [addedContact.initialContact]
+                    )
+                    recordRejection(.fixedFingersBecameUnstable)
+                }
                 state = active.isEmpty ? .ready : .cancelled
                 return false
             }
 
             guard let addedContact else {
-                if active.count == fixedFingerCount {
+                let addedContacts = addedContacts(initial: initial, active: active)
+                if addedContacts.isEmpty {
                     return false
                 }
-                guard active.count == fixedFingerCount + 1,
-                      let added = active.values.first(where: { initial[$0.identifier] == nil })
-                else {
-                    state = .cancelled
-                    return false
-                }
-                guard classify(x: added.x, relativeTo: initial) == region else {
-                    state = .fixed(
-                        initial: initial,
-                        addedContact: .ignored(AddedContactEpisode(
-                            identifier: added.identifier,
-                            initialContact: added,
-                            startedAt: frame.timestamp
-                        ))
-                    )
-                    return false
-                }
-                state = .fixed(
+                beginEpisode(
                     initial: initial,
-                    addedContact: .candidate(AddedContactEpisode(
-                        identifier: added.identifier,
-                        initialContact: added,
-                        startedAt: frame.timestamp
-                    ))
+                    startedAt: startedAt,
+                    addedContacts: addedContacts,
+                    timestamp: frame.timestamp
                 )
                 return false
             }
 
-            guard case let .candidate(tap) = addedContact else {
-                guard case let .ignored(ignored) = addedContact else {
-                    return false
-                }
-                let duration = frame.timestamp - ignored.startedAt
-                guard duration <= thresholds.tapMaximumDuration else {
-                    state = .cancelled
-                    return false
-                }
-                if let current = active[ignored.identifier] {
-                    let movement = current.distance(to: ignored.initialContact)
-                    guard active.count == fixedFingerCount + 1,
-                          movement <= thresholds.tappingFingerMovement
-                    else {
-                        state = .cancelled
-                        return false
-                    }
-                    return false
-                }
-                guard active.count == fixedFingerCount,
-                      duration >= thresholds.tapMinimumDuration
-                else {
-                    state = .cancelled
-                    return false
-                }
-                state = .fixed(initial: initial, addedContact: nil)
-                return false
-            }
-
-            let duration = frame.timestamp - tap.startedAt
+            let duration = frame.timestamp - addedContact.startedAt
+            let currentAddedContacts = addedContacts(initial: initial, active: active)
             guard duration <= thresholds.tapMaximumDuration else {
-                state = .cancelled
+                rejectOrRearm(
+                    initial: initial,
+                    startedAt: startedAt,
+                    addedContacts: currentAddedContacts,
+                    reason: .tooLong
+                )
                 return false
             }
 
-            if let currentTap = active[tap.identifier] {
-                guard active.count == fixedFingerCount + 1,
-                      currentTap.distance(to: tap.initialContact) <= thresholds.tappingFingerMovement
-                else {
-                    state = .cancelled
+            if let currentTap = active[addedContact.identifier] {
+                guard currentAddedContacts.count == 1 else {
+                    rejectEpisode(
+                        initial: initial,
+                        startedAt: startedAt,
+                        addedContacts: currentAddedContacts,
+                        reason: .extraContact
+                    )
+                    return false
+                }
+                guard currentTap.distance(to: addedContact.initialContact)
+                    <= thresholds.tappingFingerMovement else {
+                    rejectEpisode(
+                        initial: initial,
+                        startedAt: startedAt,
+                        addedContacts: currentAddedContacts,
+                        reason: .movedTooFar
+                    )
                     return false
                 }
                 return false
             }
 
-            guard active.count == fixedFingerCount,
-                  duration >= thresholds.tapMinimumDuration
-            else {
-                state = .cancelled
+            guard currentAddedContacts.isEmpty else {
+                rejectEpisode(
+                    initial: initial,
+                    startedAt: startedAt,
+                    addedContacts: currentAddedContacts,
+                    reason: .extraContact
+                )
+                return false
+            }
+            guard duration >= thresholds.tapMinimumDuration else {
+                recordRejection(.tooBrief)
+                state = .fixed(initial: initial, startedAt: startedAt, addedContact: nil)
                 return false
             }
 
             lastRecognitionAt = frame.timestamp
+            lastRejectionReason = nil
             // The release frame still contains the original fixed contacts, so it is already a
             // safe boundary for the next distinct added-finger tap. The contact lifecycle itself
             // prevents duplicate recognition; the generic cooldown remains for brand-new sessions.
-            state = .fixed(initial: initial, addedContact: nil)
+            state = .fixed(initial: initial, startedAt: startedAt, addedContact: nil)
             return true
+
+        case let .rejectedEpisode(initial, startedAt, _, reason):
+            guard fixedFingersRemainStable(initial: initial, active: active) else {
+                state = active.isEmpty ? .ready : .cancelled
+                return false
+            }
+            let remainingAddedContacts = addedContacts(initial: initial, active: active)
+            guard remainingAddedContacts.isEmpty else {
+                state = .rejectedEpisode(
+                    initial: initial,
+                    startedAt: startedAt,
+                    contacts: remainingAddedContacts,
+                    reason: reason
+                )
+                return false
+            }
+            if frame.timestamp - startedAt >= thresholds.tipTapFixedMinimumDuration {
+                state = .fixed(initial: initial, startedAt: startedAt, addedContact: nil)
+            } else {
+                state = .settling(initial: initial, startedAt: startedAt)
+            }
+            return false
         }
+    }
+
+    private mutating func beginEpisode(
+        initial: [Int: TrackpadContactSnapshot],
+        startedAt: TimeInterval,
+        addedContacts: [Int: TrackpadContactSnapshot],
+        timestamp: TimeInterval
+    ) {
+        guard addedContacts.count == 1, let added = addedContacts.values.first else {
+            rejectEpisode(
+                initial: initial,
+                startedAt: startedAt,
+                addedContacts: addedContacts,
+                reason: .extraContact
+            )
+            return
+        }
+        guard classify(x: added.x, relativeTo: initial) == region else {
+            rejectEpisode(
+                initial: initial,
+                startedAt: startedAt,
+                addedContacts: addedContacts,
+                reason: .wrongRegion
+            )
+            return
+        }
+        lastRejectionReason = nil
+        state = .fixed(
+            initial: initial,
+            startedAt: startedAt,
+            addedContact: AddedContactEpisode(
+                identifier: added.identifier,
+                initialContact: added,
+                startedAt: timestamp
+            )
+        )
+    }
+
+    private mutating func rejectOrRearm(
+        initial: [Int: TrackpadContactSnapshot],
+        startedAt: TimeInterval,
+        addedContacts: [Int: TrackpadContactSnapshot],
+        reason: TipTapEpisodeRejectionReason
+    ) {
+        if addedContacts.isEmpty {
+            recordRejection(reason)
+            state = .fixed(initial: initial, startedAt: startedAt, addedContact: nil)
+        } else {
+            rejectEpisode(
+                initial: initial,
+                startedAt: startedAt,
+                addedContacts: addedContacts,
+                reason: reason
+            )
+        }
+    }
+
+    private mutating func rejectEpisode(
+        initial: [Int: TrackpadContactSnapshot],
+        startedAt: TimeInterval,
+        addedContacts: [Int: TrackpadContactSnapshot],
+        reason: TipTapEpisodeRejectionReason
+    ) {
+        recordRejection(reason)
+        state = .rejectedEpisode(
+            initial: initial,
+            startedAt: startedAt,
+            contacts: addedContacts,
+            reason: reason
+        )
+    }
+
+    private mutating func recordRejection(_ reason: TipTapEpisodeRejectionReason) {
+        lastRejectionReason = reason
+        rejectionSequence &+= 1
+    }
+
+    private func addedContacts(
+        initial: [Int: TrackpadContactSnapshot],
+        active: [Int: TrackpadContactSnapshot]
+    ) -> [Int: TrackpadContactSnapshot] {
+        Dictionary(uniqueKeysWithValues: active.filter { initial[$0.key] == nil })
+    }
+
+    mutating func testingSnapshot(
+        for gesture: TrackpadGesture
+    ) -> TrackpadGestureRecognitionSnapshot {
+        let pendingRejectionReason = rejectionSequence > surfacedTestingRejectionSequence
+            ? lastRejectionReason
+            : nil
+        let pendingRejectionContext = pendingRejectionReason == nil
+            ? nil
+            : testingRejectionContext
+        if pendingRejectionReason != nil {
+            surfacedTestingRejectionSequence = rejectionSequence
+            testingRejectionContext = nil
+        }
+        var phase: TrackpadGestureRecognitionPhase
+        var anchors: [TrackpadContactSnapshot]
+        var candidates: [TrackpadContactSnapshot]
+        let startedAt: TimeInterval?
+        let deadline: TimeInterval?
+        switch state {
+        case .waitingForZero, .cancelled:
+            phase = .waitingForReset
+            anchors = []
+            candidates = []
+            startedAt = nil
+            deadline = nil
+        case .ready:
+            phase = .ready
+            anchors = []
+            candidates = []
+            startedAt = nil
+            deadline = nil
+        case let .acquiring(initial, start):
+            phase = .acquiring
+            anchors = sorted(initial.values)
+            candidates = []
+            startedAt = start
+            deadline = start + thresholds.acquisitionMaximumDuration
+        case let .settling(initial, start):
+            phase = .settling
+            anchors = sorted(initial.values)
+            candidates = []
+            startedAt = start
+            deadline = start + thresholds.tipTapFixedMinimumDuration
+        case let .fixed(initial, _, addedContact):
+            phase = addedContact == nil ? .armed : .candidate
+            anchors = sorted(initial.values)
+            candidates = addedContact.map { [$0.initialContact] } ?? []
+            startedAt = addedContact?.startedAt
+            deadline = addedContact.map { $0.startedAt + thresholds.tapMaximumDuration }
+        case let .rejectedEpisode(initial, _, contacts, reason):
+            phase = .rejected(reason)
+            anchors = sorted(initial.values)
+            candidates = sorted(contacts.values)
+            startedAt = nil
+            deadline = nil
+        }
+        if let pendingRejectionReason {
+            phase = .rejected(pendingRejectionReason)
+            if let pendingRejectionContext {
+                anchors = pendingRejectionContext.anchors
+                candidates = pendingRejectionContext.candidates
+            }
+        }
+        return TrackpadGestureRecognitionSnapshot(
+            gesture: gesture,
+            phase: phase,
+            anchorContacts: anchors,
+            candidateContacts: candidates,
+            requiredContactCount: fixedFingerCount + 1,
+            movementTolerance: thresholds.tappingFingerMovement,
+            startedAt: startedAt,
+            deadline: deadline,
+            thresholds: thresholds,
+            rejectionSequence: rejectionSequence
+        )
+    }
+
+    private func sorted<S: Sequence>(_ contacts: S) -> [TrackpadContactSnapshot]
+        where S.Element == TrackpadContactSnapshot {
+        contacts.sorted { $0.identifier < $1.identifier }
     }
 
     private func fixedFingersRemainStable(
@@ -312,24 +549,10 @@ struct TipTapRecognizer: Sendable {
         x: Double,
         relativeTo fixedContacts: [Int: TrackpadContactSnapshot]
     ) -> TipTapRegion? {
-        let fixedX = fixedContacts.values.map(\.x)
-        guard let minimumX = fixedX.min(), let maximumX = fixedX.max() else {
-            return nil
-        }
-        if x <= minimumX - thresholds.tipTapSeparation {
-            return .left
-        }
-        if x >= maximumX + thresholds.tipTapSeparation {
-            return .right
-        }
-        let middleInset = (maximumX - minimumX) * thresholds.tipTapMiddleInsetRatio
-        if fixedContacts.count >= 2,
-           maximumX - minimumX >= thresholds.tipTapMiddleMinimumSpan,
-           x >= minimumX + middleInset,
-           x <= maximumX - middleInset {
-            return .middle
-        }
-        return nil
+        TipTapGuideGeometry.make(
+            fixedContacts: Array(fixedContacts.values),
+            thresholds: thresholds
+        )?.classify(x: x)
     }
 }
 
@@ -442,6 +665,47 @@ struct MultiFingerTapRecognizer: Sendable {
             return false
         }
     }
+
+    func testingSnapshot(for gesture: TrackpadGesture) -> TrackpadGestureRecognitionSnapshot {
+        let phase: TrackpadGestureRecognitionPhase
+        let anchors: [TrackpadContactSnapshot]
+        let startedAt: TimeInterval?
+        let deadline: TimeInterval?
+        switch state {
+        case .waitingForZero, .cancelled:
+            phase = .waitingForReset
+            anchors = []
+            startedAt = nil
+            deadline = nil
+        case .ready:
+            phase = .ready
+            anchors = []
+            startedAt = nil
+            deadline = nil
+        case let .acquiring(initial, start):
+            phase = .acquiring
+            anchors = initial.values.sorted { $0.identifier < $1.identifier }
+            startedAt = start
+            deadline = start + thresholds.acquisitionMaximumDuration
+        case let .tracking(initial, start, _):
+            phase = .tracking
+            anchors = initial.values.sorted { $0.identifier < $1.identifier }
+            startedAt = start
+            deadline = start + thresholds.tapMaximumDuration
+        }
+        return TrackpadGestureRecognitionSnapshot(
+            gesture: gesture,
+            phase: phase,
+            anchorContacts: anchors,
+            candidateContacts: [],
+            requiredContactCount: fingerCount,
+            movementTolerance: thresholds.tappingFingerMovement,
+            startedAt: startedAt,
+            deadline: deadline,
+            thresholds: thresholds,
+            rejectionSequence: 0
+        )
+    }
 }
 
 struct MultiFingerDoubleTapRecognizer: Sendable {
@@ -497,6 +761,25 @@ struct MultiFingerDoubleTapRecognizer: Sendable {
 
         firstTapRecognizedAt = frame.timestamp
         return false
+    }
+
+    func testingSnapshot(for gesture: TrackpadGesture) -> TrackpadGestureRecognitionSnapshot {
+        let tapSnapshot = tapRecognizer.testingSnapshot(for: gesture)
+        guard let firstTapRecognizedAt, !hasActiveEpisode else {
+            return tapSnapshot
+        }
+        return TrackpadGestureRecognitionSnapshot(
+            gesture: gesture,
+            phase: .waitingForSecondTap,
+            anchorContacts: [],
+            candidateContacts: [],
+            requiredContactCount: fingerCount,
+            movementTolerance: thresholds.tappingFingerMovement,
+            startedAt: firstTapRecognizedAt,
+            deadline: firstTapRecognizedAt + thresholds.doubleTapMaximumInterval,
+            thresholds: thresholds,
+            rejectionSequence: 0
+        )
     }
 }
 
@@ -590,6 +873,52 @@ struct LongTouchRecognizer: Sendable {
             return true
         }
     }
+
+    func testingSnapshot(for gesture: TrackpadGesture) -> TrackpadGestureRecognitionSnapshot {
+        let phase: TrackpadGestureRecognitionPhase
+        let anchors: [TrackpadContactSnapshot]
+        let startedAt: TimeInterval?
+        let deadline: TimeInterval?
+        switch state {
+        case .waitingForZero, .cancelled:
+            phase = .waitingForReset
+            anchors = []
+            startedAt = nil
+            deadline = nil
+        case .ready:
+            phase = .ready
+            anchors = []
+            startedAt = nil
+            deadline = nil
+        case let .acquiring(initial, start):
+            phase = .acquiring
+            anchors = initial.values.sorted { $0.identifier < $1.identifier }
+            startedAt = start
+            deadline = start + thresholds.acquisitionMaximumDuration
+        case let .tracking(initial, start):
+            phase = .holding
+            anchors = initial.values.sorted { $0.identifier < $1.identifier }
+            startedAt = start
+            deadline = start + thresholds.longTouchMinimumDuration
+        case .recognized:
+            phase = .recognized
+            anchors = []
+            startedAt = nil
+            deadline = nil
+        }
+        return TrackpadGestureRecognitionSnapshot(
+            gesture: gesture,
+            phase: phase,
+            anchorContacts: anchors,
+            candidateContacts: [],
+            requiredContactCount: fingerCount,
+            movementTolerance: thresholds.fixedFingerMovement,
+            startedAt: startedAt,
+            deadline: deadline,
+            thresholds: thresholds,
+            rejectionSequence: 0
+        )
+    }
 }
 
 private enum TrackpadGestureRecognizer: Sendable {
@@ -623,6 +952,36 @@ private enum TrackpadGestureRecognizer: Sendable {
             return false
         }
     }
+
+    mutating func testingSnapshot(
+        for gesture: TrackpadGesture
+    ) -> TrackpadGestureRecognitionSnapshot {
+        switch self {
+        case .tipTap(var recognizer):
+            let snapshot = recognizer.testingSnapshot(for: gesture)
+            self = .tipTap(recognizer)
+            return snapshot
+        case let .tap(recognizer):
+            return recognizer.testingSnapshot(for: gesture)
+        case let .doubleTap(recognizer):
+            return recognizer.testingSnapshot(for: gesture)
+        case let .longTouch(recognizer):
+            return recognizer.testingSnapshot(for: gesture)
+        case .nativeClick:
+            return TrackpadGestureRecognitionSnapshot(
+                gesture: gesture,
+                phase: .physicalClick,
+                anchorContacts: [],
+                candidateContacts: [],
+                requiredContactCount: gesture.physicalClickFingerCount ?? 0,
+                movementTolerance: 0,
+                startedAt: nil,
+                deadline: nil,
+                thresholds: .default,
+                rejectionSequence: 0
+            )
+        }
+    }
 }
 
 struct TrackpadGestureProcessingResult: Equatable, Sendable {
@@ -635,7 +994,9 @@ struct TrackpadGestureEngine: Sendable {
     private var devicesWithActiveContacts = Set<UInt64>()
     private var devicesWaitingForContactReset = Set<UInt64>()
     private var devicesReadyAfterSuppression = Set<UInt64>()
+    private var devicesReadyAfterLifecycleSuppression = Set<UInt64>()
     private var requiresInitialContactReset = false
+    private var requiresLifecycleContactReset = false
     private let thresholds: TrackpadGestureRecognitionThresholds
 
     init(
@@ -652,10 +1013,9 @@ struct TrackpadGestureEngine: Sendable {
         }
         configuredGestures = gestures
         recognizersByDevice.removeAll()
-        devicesWithActiveContacts.removeAll()
-        devicesWaitingForContactReset.removeAll()
-        devicesReadyAfterSuppression.removeAll()
-        requiresInitialContactReset = false
+        devicesWaitingForContactReset.formUnion(devicesWithActiveContacts)
+        devicesReadyAfterSuppression.subtract(devicesWithActiveContacts)
+        requiresInitialContactReset = !devicesWaitingForContactReset.isEmpty
     }
 
     mutating func beginSuppression(activeDeviceIDs: Set<UInt64>? = nil) {
@@ -671,6 +1031,27 @@ struct TrackpadGestureEngine: Sendable {
         devicesReadyAfterSuppression.subtract(devicesWithActiveContacts)
         recognizersByDevice.removeAll()
         requiresInitialContactReset = !devicesWaitingForContactReset.isEmpty
+    }
+
+    mutating func beginSuppression(deviceID: UInt64) {
+        recognizersByDevice.removeValue(forKey: deviceID)
+        if devicesWithActiveContacts.contains(deviceID) {
+            devicesWaitingForContactReset.insert(deviceID)
+            devicesReadyAfterSuppression.remove(deviceID)
+        } else {
+            devicesWaitingForContactReset.remove(deviceID)
+            devicesReadyAfterSuppression.insert(deviceID)
+        }
+    }
+
+    mutating func beginLifecycleSuppression() {
+        recognizersByDevice.removeAll()
+        devicesWithActiveContacts.removeAll()
+        devicesWaitingForContactReset.removeAll()
+        devicesReadyAfterSuppression.removeAll()
+        devicesReadyAfterLifecycleSuppression.removeAll()
+        requiresInitialContactReset = false
+        requiresLifecycleContactReset = true
     }
 
     mutating func process(
@@ -691,11 +1072,29 @@ struct TrackpadGestureEngine: Sendable {
             if frame.contacts.isEmpty {
                 devicesWaitingForContactReset.remove(frame.deviceID)
                 devicesReadyAfterSuppression.insert(frame.deviceID)
+                if requiresLifecycleContactReset {
+                    devicesReadyAfterLifecycleSuppression.insert(frame.deviceID)
+                }
             } else {
                 devicesWaitingForContactReset.insert(frame.deviceID)
                 devicesReadyAfterSuppression.remove(frame.deviceID)
+                if requiresLifecycleContactReset {
+                    devicesReadyAfterLifecycleSuppression.remove(frame.deviceID)
+                }
             }
             requiresInitialContactReset = !devicesWaitingForContactReset.isEmpty
+            return TrackpadGestureProcessingResult(recognized: [])
+        }
+
+        if requiresLifecycleContactReset,
+           !devicesReadyAfterLifecycleSuppression.contains(frame.deviceID) {
+            if frame.contacts.isEmpty {
+                devicesWaitingForContactReset.remove(frame.deviceID)
+                devicesReadyAfterSuppression.insert(frame.deviceID)
+                devicesReadyAfterLifecycleSuppression.insert(frame.deviceID)
+            } else {
+                devicesWaitingForContactReset.insert(frame.deviceID)
+            }
             return TrackpadGestureProcessingResult(recognized: [])
         }
 
@@ -779,9 +1178,23 @@ struct TrackpadGestureEngine: Sendable {
         devicesWithActiveContacts.remove(deviceID)
         let wasWaiting = devicesWaitingForContactReset.remove(deviceID) != nil
         devicesReadyAfterSuppression.remove(deviceID)
+        devicesReadyAfterLifecycleSuppression.remove(deviceID)
         if wasWaiting && devicesWaitingForContactReset.isEmpty {
             requiresInitialContactReset = false
         }
+    }
+
+    mutating func testingSnapshot(
+        for gesture: TrackpadGesture,
+        deviceID: UInt64
+    ) -> TrackpadGestureRecognitionSnapshot? {
+        if var recognizer = recognizersByDevice[deviceID]?[gesture] {
+            let snapshot = recognizer.testingSnapshot(for: gesture)
+            recognizersByDevice[deviceID]?[gesture] = recognizer
+            return snapshot
+        }
+        var recognizer = makeRecognizer(for: gesture)
+        return recognizer.testingSnapshot(for: gesture)
     }
 
     private func makeRecognizer(for gesture: TrackpadGesture) -> TrackpadGestureRecognizer {

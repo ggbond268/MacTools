@@ -62,11 +62,14 @@ struct TrackpadGesturesSettingsView: View {
     }
 
     @ObservedObject var store: TrackpadGestureStore
+    @ObservedObject var testingModel: TrackpadGestureTestingModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let localization: PluginLocalization
     let actionHostContext: TrackpadActionHostContext?
     let isGestureOwned: (TrackpadGesture) -> Bool
     let onChange: () -> Void
     let onSetTesting: (Bool) -> Void
+    let onSetTestingMode: (TrackpadGestureTestingMode?) -> Void
     let section: SectionKind
 
     @State private var editingDraft: TrackpadGestureMappingDraft?
@@ -109,8 +112,8 @@ struct TrackpadGesturesSettingsView: View {
                 }
             )
         }
-        .onChange(of: store.lastTestGesture) { _, gesture in
-            guard let gesture else { return }
+        .onChange(of: store.testRecognitionSequence) { _, _ in
+            guard let gesture = store.lastTestGesture else { return }
             announceRecognizedTestGesture(gesture)
         }
     }
@@ -234,6 +237,14 @@ struct TrackpadGesturesSettingsView: View {
             if store.isTesting {
                 testingStatusBanner
                     .transition(.move(edge: .top).combined(with: .opacity))
+                TrackpadGestureTestingPanel(
+                    model: testingModel,
+                    store: store,
+                    localization: localization,
+                    actionTitle: mappingActionTitle,
+                    onSetMode: onSetTestingMode
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             if !enabledOwnedOverlappingTapFingerCounts.isEmpty {
@@ -254,9 +265,9 @@ struct TrackpadGesturesSettingsView: View {
                 }
             }
         }
-        .animation(.easeOut(duration: 0.16), value: store.isTesting)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: store.isTesting)
         .animation(
-            .easeOut(duration: 0.16),
+            reduceMotion ? nil : .easeOut(duration: 0.16),
             value: enabledOwnedOverlappingTapFingerCounts
         )
     }
@@ -772,6 +783,40 @@ struct TrackpadGesturesSettingsView: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .accessibilityLabel(gestureTitle)
+
+            Button {
+                onSetTestingMode(.practice(mapping.gesture))
+            } label: {
+                Image(systemName: testingModel.mode == .practice(mapping.gesture)
+                    ? "scope"
+                    : "target")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(localization.format(
+                "settings.testing.practiceGestureFormat",
+                defaultValue: "练习“%@”",
+                gestureTitle
+            ))
+            .accessibilityLabel(Text(localization.format(
+                "settings.testing.practiceGestureFormat",
+                defaultValue: "练习“%@”",
+                gestureTitle
+            )))
+            .accessibilityAddTraits(
+                TrackpadGestureTestingModeAccessibilityState(mode: testingModel.mode)
+                    .isPracticeSelected(mapping.gesture) ? .isSelected : []
+            )
+            .accessibilityValue(Text(localization.string(
+                TrackpadGestureTestingModeAccessibilityState(mode: testingModel.mode)
+                    .isPracticeSelected(mapping.gesture)
+                    ? "settings.testing.mode.accessibility.active"
+                    : "settings.testing.mode.accessibility.inactive",
+                defaultValue: TrackpadGestureTestingModeAccessibilityState(mode: testingModel.mode)
+                    .isPracticeSelected(mapping.gesture)
+                    ? "当前模式"
+                    : "未启用"
+            )))
         }
         .pluginSettingsListRowPadding(interactive: true)
         .contextMenu {
@@ -781,6 +826,20 @@ struct TrackpadGesturesSettingsView: View {
 
     @ViewBuilder
     private func mappingManagementMenuItems(_ mapping: TrackpadGestureMapping) -> some View {
+        Button {
+            onSetTestingMode(.practice(mapping.gesture))
+        } label: {
+            Label(
+                localization.string(
+                    "settings.testing.mode.practice",
+                    defaultValue: "练习一个手势"
+                ),
+                systemImage: "target"
+            )
+        }
+
+        Divider()
+
         Button {
             stopTestingBeforeConfiguration()
             editingDraft = TrackpadGestureMappingDraft(mapping: mapping)
@@ -908,7 +967,12 @@ struct TrackpadGesturesSettingsView: View {
     }
 
     private var testingDescription: String {
-        if let gesture = store.lastTestGesture {
+        let status = TrackpadGestureTestingStatusResolver.resolve(
+            snapshot: testingModel.selectedSnapshot,
+            retainedRecognition: testingModel.selectedRecognizedGesture,
+            retainedRejection: testingModel.selectedRejection
+        )
+        if case let .recognized(gesture) = status {
             return localization.format(
                 "settings.testing.recognizedFormat",
                 defaultValue: "已识别：%@。停止测试前，已配置的操作不会执行。",

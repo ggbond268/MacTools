@@ -172,6 +172,7 @@ final class TrackpadGestureStore: ObservableObject {
     @Published private(set) var mappings: [TrackpadGestureMapping]
     @Published private(set) var isTesting = false
     @Published private(set) var lastTestGesture: TrackpadGesture?
+    @Published private(set) var testRecognitionSequence: UInt64 = 0
     @Published private(set) var ignoresGesturesWhileTyping: Bool
     @Published private(set) var typingGracePeriod: TimeInterval
     @Published private(set) var mappingSort: TrackpadGestureMappingSort
@@ -327,6 +328,11 @@ final class TrackpadGestureStore: ObservableObject {
 
     func recordTestGesture(_ gesture: TrackpadGesture) {
         lastTestGesture = gesture
+        testRecognitionSequence &+= 1
+    }
+
+    func clearTestGesture() {
+        lastTestGesture = nil
     }
 
     @discardableResult

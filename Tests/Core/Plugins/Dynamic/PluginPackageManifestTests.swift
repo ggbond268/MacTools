@@ -273,7 +273,9 @@ final class PluginPackageManifestTests: XCTestCase {
             setup: manifest.setup,
             relationships: manifest.relationships
         )
-        XCTAssertTrue(searchKeywords.contains("Toggle Appearance"))
+        let toggleTitle = try XCTUnwrap(manifest.actions?.providers.first?.staticActions.first?.title)
+        XCTAssertEqual(toggleTitle.values["en"], "Toggle Appearance")
+        XCTAssertTrue(toggleTitle.values.values.contains(where: searchKeywords.contains))
         XCTAssertTrue(searchKeywords.contains("night-shift"))
     }
 

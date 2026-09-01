@@ -4,6 +4,23 @@ import MacToolsPluginKit
 
 @MainActor
 final class SettingsNavigationCoordinatorTests: XCTestCase {
+    func testDirectPluginSettingsNavigationEndsPreviousVisibilityBeforeStartingNext() {
+        XCTAssertEqual(
+            PluginSettingsPageVisibilityTransition.changes(
+                from: "trackpad-gestures",
+                to: "fan-control"
+            ),
+            [
+                .init(pluginID: "trackpad-gestures", isVisible: false),
+                .init(pluginID: "fan-control", isVisible: true),
+            ]
+        )
+        XCTAssertTrue(PluginSettingsPageVisibilityTransition.changes(
+            from: "trackpad-gestures",
+            to: "trackpad-gestures"
+        ).isEmpty)
+    }
+
     func testPluginSidebarOrderPlacesBuiltInPanesBeforeDisplayedConfigurations() {
         XCTAssertEqual(
             FeatureSettingsPane.settingsSidebarOrder(

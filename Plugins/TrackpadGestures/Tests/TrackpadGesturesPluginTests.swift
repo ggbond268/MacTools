@@ -35,6 +35,39 @@ private final class LockedTestCounter: @unchecked Sendable {
     }
 }
 
+private final class LockedTestBoolean: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue: Bool
+
+    init(_ value: Bool) {
+        storedValue = value
+    }
+
+    var value: Bool {
+        get { lock.withLock { storedValue } }
+        set { lock.withLock { storedValue = newValue } }
+    }
+}
+
+private final class LockedNativeEventResultRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValues: [Bool] = []
+
+    var values: [Bool] { lock.withLock { storedValues } }
+
+    func append(_ value: Bool) {
+        lock.withLock { storedValues.append(value) }
+    }
+}
+
+private final class SendableCGEvent: @unchecked Sendable {
+    let value: CGEvent
+
+    init(_ value: CGEvent) {
+        self.value = value
+    }
+}
+
 private final class TrackpadFrameDeliveryBarrier: @unchecked Sendable {
     private let lock = NSLock()
     private let deliveryStarted = DispatchSemaphore(value: 0)
@@ -273,9 +306,18 @@ private final class TrackpadGestureMemoryStorage: PluginStorage {
 }
 
 @MainActor
-private final class MockMultitouchDeviceSession: MultitouchDeviceSessionManaging {
-    var onRecognized: ((TrackpadGesture, UInt64) -> Void)?
+private final class MockMultitouchDeviceSession: MultitouchDeviceSessionManaging,
+    MultitouchDeviceTestingSessionManaging {
+    var onRecognized: ((
+        TrackpadGesture,
+        UInt64,
+        TimeInterval?,
+        TrackpadTipTapEpisodeID?
+    ) -> Void)?
     var onAvailabilityChange: ((Bool) -> Void)?
+    var onTestingSnapshot: ((TrackpadGestureTestSnapshot) -> Void)?
+    var onTestingReset: (() -> Void)?
+    var testingDeviceDescriptors: [MultitouchDeviceDescriptor] = []
     private(set) var isActive = false
     var deviceCount = 1
     private(set) var activations: [Set<TrackpadGesture>] = []
@@ -285,8 +327,12 @@ private final class MockMultitouchDeviceSession: MultitouchDeviceSessionManaging
     private(set) var resolvedMiddleClicks: [(TrackpadGesture, UInt64)] = []
     private(set) var nativeClickResolutionUpdates: [[TrackpadGesture: TrackpadNativeClickResolution]] = []
     private(set) var typingProtectionUpdates: [(Bool, TimeInterval)] = []
+    private(set) var configurationDeliveryInvalidationCount = 0
     var activationSucceeds = true
     var resolvesMiddleClicks = false
+    var acceptsNativeClickResolution = true
+    private(set) var testingModeUpdates: [TrackpadGestureTestingMode?] = []
+    private(set) var currentTestingMode: TrackpadGestureTestingMode?
 
     func activate(gestures: Set<TrackpadGesture>) -> Bool {
         activations.append(gestures)
@@ -296,6 +342,10 @@ private final class MockMultitouchDeviceSession: MultitouchDeviceSessionManaging
 
     func update(gestures: Set<TrackpadGesture>) {
         updates.append(gestures)
+    }
+
+    func invalidatePendingDeliveriesForConfigurationChange() {
+        configurationDeliveryInvalidationCount += 1
     }
 
     func updateMiddleClickGestures(_ gestures: Set<TrackpadGesture>) {
@@ -318,13 +368,20 @@ private final class MockMultitouchDeviceSession: MultitouchDeviceSessionManaging
 
     func resolveNativeClick(
         for gesture: TrackpadGesture,
-        deviceID: UInt64
+        deviceID: UInt64,
+        tipTapEpisodeID: TrackpadTipTapEpisodeID?
     ) -> TrackpadNativeClickResolution? {
         resolvedMiddleClicks.append((gesture, deviceID))
+        guard acceptsNativeClickResolution else { return nil }
         guard resolvesMiddleClicks else {
             return nativeClickResolutionUpdates.last?[gesture] == .consume ? .consume : nil
         }
         return nativeClickResolutionUpdates.last?[gesture]
+    }
+
+    func updateTestingMode(_ mode: TrackpadGestureTestingMode?) {
+        currentTestingMode = mode
+        testingModeUpdates.append(mode)
     }
 
     func updateTypingProtection(isEnabled: Bool, gracePeriod: TimeInterval) {
@@ -334,15 +391,24 @@ private final class MockMultitouchDeviceSession: MultitouchDeviceSessionManaging
     func deactivate() {
         deactivateCount += 1
         isActive = false
+        currentTestingMode = nil
     }
 
-    func recognize(_ gesture: TrackpadGesture) {
-        onRecognized?(gesture, 1)
+    func recognize(_ gesture: TrackpadGesture, deviceID: UInt64 = 1) {
+        onRecognized?(gesture, deviceID, nil, nil)
     }
 
     func reportAvailability(_ available: Bool) {
         isActive = available
         onAvailabilityChange?(available)
+    }
+
+    func reportTestingSnapshot(_ snapshot: TrackpadGestureTestSnapshot) {
+        onTestingSnapshot?(snapshot)
+    }
+
+    func reportTestingReset() {
+        onTestingReset?()
     }
 }
 
@@ -355,6 +421,7 @@ private final class MockTrackpadGestureActionExecutor: TrackpadGestureActionExec
 @MainActor
 private final class MockMultitouchFrameListener: MultitouchFrameListening {
     var deviceCount = 1
+    var connectedDeviceIDs: Set<UInt64> = [1]
     var startSucceeds = true
     private(set) var startCount = 0
     private(set) var stopCount = 0
@@ -381,6 +448,10 @@ private final class MockMultitouchFrameListener: MultitouchFrameListening {
         } else {
             handler?(frame)
         }
+    }
+
+    func currentHandlerForTests() -> (@Sendable (TrackpadContactFrame) -> Void)? {
+        handler
     }
 }
 
@@ -1288,6 +1359,17 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertEqual(fixture.session.deactivateCount, deactivateCount + 1)
     }
 
+    func testRepeatedTestRecognitionPublishesDistinctAnnouncementEvents() {
+        let store = makePlugin().plugin.store
+
+        store.recordTestGesture(.threeFingerTap)
+        let firstSequence = store.testRecognitionSequence
+        store.recordTestGesture(.threeFingerTap)
+
+        XCTAssertEqual(store.lastTestGesture, .threeFingerTap)
+        XCTAssertGreaterThan(store.testRecognitionSequence, firstSequence)
+    }
+
     func testEnabledOverlappingMappingsPublishDeduplicatedSharedGestureClaims() {
         let fixture = makePlugin()
         XCTAssertTrue(fixture.plugin.store.save(TrackpadGestureMapping(
@@ -1368,6 +1450,51 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         )
         XCTAssertEqual(fixture.session.typingProtectionUpdates.last?.0, true)
         XCTAssertEqual(fixture.session.typingProtectionUpdates.last?.1, 0.4)
+    }
+
+    func testActionOnlyMappingChangeInvalidatesPendingDeliveriesButRefreshDoesNot() {
+        let fixture = makePlugin()
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let initialMapping = TrackpadGestureMapping(
+            gesture: gesture,
+            action: .keyboardShortcut(.init(keyCode: 0, modifiers: [.command]))
+        )
+        XCTAssertTrue(fixture.plugin.store.save(initialMapping))
+        fixture.plugin.configurationDidChange()
+        let firstInvalidationCount = fixture.session.configurationDeliveryInvalidationCount
+        XCTAssertEqual(fixture.session.nativeClickResolutionUpdates.last?[gesture], .consume)
+
+        XCTAssertTrue(fixture.plugin.store.save(TrackpadGestureMapping(
+            id: initialMapping.id,
+            gesture: gesture,
+            action: .keyboardShortcut(.init(keyCode: 1, modifiers: [.command]))
+        )))
+        fixture.plugin.configurationDidChange()
+        XCTAssertEqual(
+            fixture.session.configurationDeliveryInvalidationCount,
+            firstInvalidationCount + 1
+        )
+        XCTAssertEqual(fixture.session.nativeClickResolutionUpdates.last?[gesture], .consume)
+
+        fixture.plugin.refresh()
+        XCTAssertEqual(
+            fixture.session.configurationDeliveryInvalidationCount,
+            firstInvalidationCount + 1
+        )
+    }
+
+    func testTipTapActionExecutesOnlyAfterSessionDeliversCommittedRecognition() {
+        let fixture = makePlugin()
+        let shortcut = ShortcutBinding(keyCode: 0, modifiers: [.command])
+        XCTAssertTrue(fixture.plugin.store.save(TrackpadGestureMapping(
+            gesture: .tipTapLeftOneFixed,
+            action: .keyboardShortcut(shortcut)
+        )))
+        fixture.plugin.configurationDidChange()
+        XCTAssertTrue(fixture.executor.actions.isEmpty)
+        fixture.session.recognize(.tipTapLeftOneFixed)
+        XCTAssertEqual(fixture.executor.actions, [.keyboardShortcut(shortcut)])
+        XCTAssertTrue(fixture.session.resolvedMiddleClicks.isEmpty)
     }
 
     func testMacToolsActionUsesSharedHostExecutorAndConsumesTipTapClick() {
@@ -1619,6 +1746,96 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertTrue(fixture.executor.actions.isEmpty)
     }
 
+    func testTestModeShowsTipTapOnlyAfterSessionDeliversCommittedRecognition() {
+        let fixture = makePlugin()
+        fixture.plugin.store.setTesting(true)
+        fixture.plugin.configurationDidChange()
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        fixture.session.reportTestingSnapshot(TrackpadGestureTestSnapshot(
+            deviceID: 1,
+            descriptor: nil,
+            timestamp: 1,
+            contacts: [.init(identifier: 1, x: 0.5, y: 0.5)],
+            recognized: [gesture],
+            recognition: nil
+        ))
+
+        XCTAssertEqual(fixture.plugin.testingModel.selectedSnapshot?.recognized, [])
+        XCTAssertNil(fixture.plugin.store.lastTestGesture)
+
+        fixture.session.recognize(gesture)
+        XCTAssertEqual(fixture.plugin.store.lastTestGesture, gesture)
+        XCTAssertTrue(fixture.executor.actions.isEmpty)
+    }
+
+    func testPracticeModeIgnoresOtherRecognizedGestures() {
+        let fixture = makePlugin()
+        let practicedGesture = TrackpadGesture.threeFingerTap
+        fixture.plugin.store.setTesting(true)
+        fixture.plugin.testingModel.begin(.practice(practicedGesture))
+        fixture.plugin.configurationDidChange()
+        fixture.session.reportTestingSnapshot(TrackpadGestureTestSnapshot(
+            deviceID: 1,
+            descriptor: nil,
+            timestamp: 1,
+            contacts: [.init(identifier: 1, x: 0.5, y: 0.5)],
+            recognized: [.fiveFingerTap],
+            recognition: TrackpadGestureRecognitionSnapshot(
+                gesture: practicedGesture,
+                phase: .tracking,
+                anchorContacts: [],
+                candidateContacts: [],
+                requiredContactCount: 3,
+                movementTolerance: 0.045,
+                startedAt: nil,
+                deadline: nil,
+                thresholds: .default,
+                rejectionSequence: 0
+            )
+        ))
+
+        XCTAssertEqual(fixture.plugin.testingModel.selectedSnapshot?.recognized, [])
+        fixture.session.recognize(.fiveFingerTap)
+        XCTAssertNil(fixture.plugin.store.lastTestGesture)
+
+        fixture.session.recognize(practicedGesture)
+        XCTAssertEqual(fixture.plugin.store.lastTestGesture, practicedGesture)
+        XCTAssertEqual(
+            fixture.plugin.testingModel.selectedRecognizedGesture,
+            practicedGesture
+        )
+    }
+
+    func testPermissionRecoveryRestoresActiveTestingMode() {
+        let accessibilityGranted = MutableBool(true)
+        let fixture = makePlugin(accessibilityTrusted: { accessibilityGranted.value })
+        let mode = TrackpadGestureTestingMode.practice(.threeFingerTap)
+        fixture.plugin.store.setTesting(true)
+        fixture.plugin.testingModel.begin(mode)
+        fixture.plugin.configurationDidChange()
+        XCTAssertEqual(fixture.session.currentTestingMode, mode)
+        fixture.session.reportTestingSnapshot(TrackpadGestureTestSnapshot(
+            deviceID: 1,
+            descriptor: nil,
+            timestamp: 1,
+            contacts: [.init(identifier: 1, x: 0.5, y: 0.5)],
+            recognized: [],
+            recognition: nil
+        ))
+        XCTAssertNotNil(fixture.plugin.testingModel.selectedSnapshot)
+
+        accessibilityGranted.value = false
+        fixture.plugin.refreshAccessibilityPermission()
+        XCTAssertNil(fixture.session.currentTestingMode)
+        XCTAssertFalse(fixture.session.isActive)
+        XCTAssertNil(fixture.plugin.testingModel.selectedSnapshot)
+
+        accessibilityGranted.value = true
+        fixture.plugin.refreshAccessibilityPermission()
+        XCTAssertEqual(fixture.session.currentTestingMode, mode)
+        XCTAssertTrue(fixture.session.isActive)
+    }
+
     func testPermissionRevocationStopsActiveListener() {
         let accessibilityGranted = MutableBool(true)
         let fixture = makePlugin(accessibilityTrusted: { accessibilityGranted.value })
@@ -1728,6 +1945,243 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertEqual(tapStarts, 3)
         XCTAssertEqual(tapStops, 2)
         session.deactivate()
+    }
+
+    func testLifecycleNotificationsSuppressFramesBeforeDelayedRestart() async {
+        for notification in 0 ... 1 {
+            let driver = MockMultitouchFrameListener()
+            let session = MultitouchDeviceSession(
+                driver: driver,
+                testEventTapStart: { true },
+                testEventTapStop: {},
+                wakeRestartDelay: 1,
+                deviceChangeRestartDelay: 1
+            )
+            let unexpectedRecognition = expectation(
+                description: "lifecycle notification suppresses old callback \(notification)"
+            )
+            unexpectedRecognition.isInverted = true
+            session.onRecognized = { _, _, _, _ in
+                unexpectedRecognition.fulfill()
+            }
+            var testingResetCount = 0
+            session.onTestingReset = {
+                testingResetCount += 1
+            }
+
+            XCTAssertTrue(session.activate(gestures: [.threeFingerTap]))
+            session.updateTestingMode(.practice(.threeFingerTap))
+            if notification == 0 {
+                session.simulateWakeNotificationForTests()
+            } else {
+                session.simulateDeviceRemovalNotificationForTests()
+            }
+
+            XCTAssertEqual(driver.startCount, 1)
+            XCTAssertEqual(testingResetCount, 1)
+            driver.send(makeThreeContactFrame(timestamp: 0.01), usingStart: 0)
+            driver.send(.init(deviceID: 1, timestamp: 0.05, contacts: []), usingStart: 0)
+            session.waitForRecognitionForTests()
+            await fulfillment(of: [unexpectedRecognition], timeout: 0.05)
+            XCTAssertEqual(driver.startCount, 1)
+            session.deactivate()
+        }
+    }
+
+    func testDeviceRecoveryRequiresZeroBeforeRecognizingOnRestartedDevice() async {
+        let driver = MockMultitouchFrameListener()
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            deviceChangeRestartDelay: 0
+        )
+        var recognized: [TrackpadGesture] = []
+        let freshRecognition = expectation(description: "fresh tap after lifecycle reset")
+        session.onRecognized = { gesture, _, _, _ in
+            recognized.append(gesture)
+            freshRecognition.fulfill()
+        }
+
+        XCTAssertTrue(session.activate(gestures: [.threeFingerTap]))
+        session.simulateDeviceRemovalNotificationForTests()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(driver.startCount, 2)
+
+        driver.send(makeThreeContactFrame(timestamp: 0.10), usingStart: 1)
+        driver.send(.init(deviceID: 1, timestamp: 0.17, contacts: []), usingStart: 1)
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertTrue(recognized.isEmpty)
+
+        driver.send(makeThreeContactFrame(timestamp: 0.20), usingStart: 1)
+        driver.send(.init(deviceID: 1, timestamp: 0.27, contacts: []), usingStart: 1)
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [freshRecognition], timeout: 1)
+        XCTAssertEqual(recognized, [.threeFingerTap])
+        session.deactivate()
+    }
+
+    func testLifecycleRestartWaitsForGlobalTwoDeviceBoundaryBeforePhysicalClick() async throws {
+        let driver = MockMultitouchFrameListener()
+        driver.connectedDeviceIDs = [1, 2]
+        let clock = LockedTestClock()
+        let gesture = TrackpadGesture.threeFingerClick
+        var recognized: [TrackpadGesture] = []
+        let freshRecognition = expectation(
+            description: "fresh physical click after global contact reset"
+        )
+        freshRecognition.assertForOverFulfill = true
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { recognizedGesture, _, _, _ in
+            recognized.append(recognizedGesture)
+            freshRecognition.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let deviceOneContacts = makeThreeContactFrame(timestamp: 0.01).contacts
+        let deviceTwoContacts = makeThreeContactFrame(timestamp: 0.02).contacts
+        driver.send(.init(
+            deviceID: 1,
+            timestamp: 0.01,
+            contacts: deviceOneContacts
+        ))
+        driver.send(.init(
+            deviceID: 2,
+            timestamp: 0.02,
+            contacts: deviceTwoContacts
+        ))
+
+        session.restartImmediatelyForTests()
+        XCTAssertEqual(driver.startCount, 2)
+
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: []))
+        clock.value = 0.11
+        driver.send(.init(deviceID: 2, timestamp: 0.11, contacts: deviceTwoContacts))
+        clock.value = 0.12
+        driver.send(.init(deviceID: 1, timestamp: 0.12, contacts: deviceOneContacts))
+        clock.value = 0.13
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 901))
+        ))
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 901))
+        ))
+
+        clock.value = 0.20
+        driver.send(.init(deviceID: 2, timestamp: 0.20, contacts: []))
+        clock.value = 0.21
+        driver.send(.init(deviceID: 1, timestamp: 0.21, contacts: deviceOneContacts))
+        clock.value = 0.22
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 902))
+        ))
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 902))
+        ))
+
+        clock.value = 0.30
+        driver.send(.init(deviceID: 1, timestamp: 0.30, contacts: []))
+        clock.value = 0.40
+        driver.send(.init(deviceID: 1, timestamp: 0.40, contacts: deviceOneContacts))
+        clock.value = 0.41
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 903))
+        ))
+        clock.value = 0.42
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 903))
+        ))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [freshRecognition], timeout: 1)
+        XCTAssertEqual(recognized, [gesture])
+    }
+
+    func testLifecycleRestartWaitsForReplacementDeviceZeroBeforePhysicalClick() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let gesture = TrackpadGesture.threeFingerClick
+        var recognized: [TrackpadGesture] = []
+        let freshRecognition = expectation(
+            description: "fresh replacement-device click after contact reset"
+        )
+        freshRecognition.assertForOverFulfill = true
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 2) }
+        )
+        session.onRecognized = { recognizedGesture, _, _, _ in
+            recognized.append(recognizedGesture)
+            freshRecognition.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let contacts = makeThreeContactFrame(timestamp: 0.01).contacts
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: contacts))
+        driver.connectedDeviceIDs = [2]
+        session.restartImmediatelyForTests()
+        XCTAssertEqual(driver.startCount, 2)
+
+        clock.value = 0.10
+        driver.send(.init(deviceID: 2, timestamp: 0.10, contacts: contacts))
+        clock.value = 0.11
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 905))
+        ))
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 905))
+        ))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertTrue(recognized.isEmpty)
+
+        clock.value = 0.20
+        driver.send(.init(deviceID: 2, timestamp: 0.20, contacts: []))
+        clock.value = 0.30
+        driver.send(.init(deviceID: 2, timestamp: 0.30, contacts: contacts))
+        clock.value = 0.31
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 906))
+        ))
+        clock.value = 0.32
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 906))
+        ))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [freshRecognition], timeout: 1)
+        XCTAssertEqual(recognized, [gesture])
     }
 
     func testInterprocessListenerLeaseAllowsOnlyOneOwner() throws {
@@ -2101,6 +2555,208 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertEqual(rejectedDeliveryCount.value, 0)
     }
 
+    func testLifecycleContactResetRequiresGlobalBoundaryAcrossRecontactingDevices() {
+        let gate = TrackpadLifecycleContactResetGate()
+        let contacts = makeThreeContactFrame().contacts
+
+        gate.beginSuppression(activeDeviceIDs: [2])
+        gate.confirmConnectedDeviceIDs([1, 2])
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.01,
+            contacts: []
+        )))
+        gate.completeSuppressedFrameProcessing()
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 2,
+            timestamp: 0.02,
+            contacts: contacts
+        )))
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.03,
+            contacts: contacts
+        )))
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 2,
+            timestamp: 0.04,
+            contacts: []
+        )))
+        gate.completeSuppressedFrameProcessing()
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.05,
+            contacts: []
+        )))
+        XCTAssertTrue(gate.isSuppressing)
+        gate.completeSuppressedFrameProcessing()
+        XCTAssertFalse(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.06,
+            contacts: contacts
+        )))
+    }
+
+    func testLifecycleContactResetRemovesConfirmedDisconnectedDevice() {
+        let gate = TrackpadLifecycleContactResetGate()
+        let contacts = makeThreeContactFrame().contacts
+
+        gate.beginSuppression(activeDeviceIDs: [1, 2])
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.01,
+            contacts: []
+        )))
+        gate.completeSuppressedFrameProcessing()
+        gate.confirmConnectedDeviceIDs([1])
+
+        XCTAssertFalse(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.02,
+            contacts: contacts
+        )))
+    }
+
+    func testLifecycleContactResetKeepsEmptyEpochActiveUntilFirstZero() {
+        let gate = TrackpadLifecycleContactResetGate()
+        let contacts = makeThreeContactFrame().contacts
+
+        gate.beginSuppression(activeDeviceIDs: [])
+        gate.confirmConnectedDeviceIDs([1, 2])
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.01,
+            contacts: contacts
+        )))
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.02,
+            contacts: []
+        )))
+        XCTAssertTrue(gate.isSuppressing)
+        gate.completeSuppressedFrameProcessing()
+        XCTAssertFalse(gate.shouldSuppress(.init(
+            deviceID: 1,
+            timestamp: 0.03,
+            contacts: contacts
+        )))
+    }
+
+    func testLifecycleContactResetKeepsReplacementDeviceBlockedUntilZero() {
+        let gate = TrackpadLifecycleContactResetGate()
+        let contacts = makeThreeContactFrame().contacts
+
+        gate.beginSuppression(activeDeviceIDs: [1])
+        gate.confirmConnectedDeviceIDs([2])
+        XCTAssertTrue(gate.isSuppressing)
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 2,
+            timestamp: 0.01,
+            contacts: contacts
+        )))
+        XCTAssertTrue(gate.shouldSuppress(.init(
+            deviceID: 2,
+            timestamp: 0.02,
+            contacts: []
+        )))
+        XCTAssertTrue(gate.isSuppressing)
+        gate.completeSuppressedFrameProcessing()
+        XCTAssertFalse(gate.shouldSuppress(.init(
+            deviceID: 2,
+            timestamp: 0.03,
+            contacts: contacts
+        )))
+    }
+
+    func testNativePhysicalClickCannotOvertakePublishedContactFrameAdmission() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let admissionBarrier = TrackpadRecognitionFrameBarrier()
+        let nativeResults = LockedNativeEventResultRecorder()
+        let clickGesture = TrackpadGesture.threeFingerClick
+        let tapGesture = TrackpadGesture.threeFingerTap
+        var recognized: [TrackpadGesture] = []
+        let clickRecognized = expectation(description: "physical click is recognized once")
+        clickRecognized.assertForOverFulfill = true
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            recognitionAfterCandidatePublication: {
+                admissionBarrier.pauseIfArmed()
+            },
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { gesture, _, _, _ in
+            recognized.append(gesture)
+            if gesture == clickGesture {
+                clickRecognized.fulfill()
+            }
+        }
+        session.updateNativeClickResolutions([clickGesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [clickGesture, tapGesture]))
+        defer {
+            admissionBarrier.resume()
+            session.deactivate()
+        }
+
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        session.waitForRecognitionForTests()
+        let frameHandler = try XCTUnwrap(driver.currentHandlerForTests())
+        let contacts = makeThreeContactFrame(timestamp: 0.10)
+        let frameFinished = DispatchSemaphore(value: 0)
+        admissionBarrier.arm()
+        DispatchQueue.global().async {
+            frameHandler(contacts)
+            frameFinished.signal()
+        }
+        XCTAssertEqual(admissionBarrier.waitUntilPaused(), .success)
+
+        let down = SendableCGEvent(try XCTUnwrap(makeMouseEvent(
+            type: .leftMouseDown,
+            eventNumber: 904
+        )))
+        let up = SendableCGEvent(try XCTUnwrap(makeMouseEvent(
+            type: .leftMouseUp,
+            eventNumber: 904
+        )))
+        let nativeEventsFinished = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            clock.value = 0.11
+            nativeResults.append(session.handleNativeEventForTests(
+                type: .leftMouseDown,
+                event: down.value
+            ))
+            clock.value = 0.12
+            nativeResults.append(session.handleNativeEventForTests(
+                type: .leftMouseUp,
+                event: up.value
+            ))
+            nativeEventsFinished.signal()
+        }
+        XCTAssertEqual(
+            nativeEventsFinished.wait(timeout: .now() + 0.05),
+            .timedOut
+        )
+
+        admissionBarrier.resume()
+        XCTAssertEqual(frameFinished.wait(timeout: .now() + 1), .success)
+        XCTAssertEqual(nativeEventsFinished.wait(timeout: .now() + 1), .success)
+        clock.value = 0.20
+        driver.send(.init(deviceID: 1, timestamp: 0.20, contacts: []))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [clickRecognized], timeout: 1)
+        await Task.yield()
+
+        XCTAssertEqual(nativeResults.values, [true, true])
+        XCTAssertEqual(recognized, [clickGesture])
+    }
+
     func testSessionRecordsCandidateSynchronouslyBeforeNativeEventsAndRecognition() throws {
         let driver = MockMultitouchFrameListener()
         let clock = LockedTestClock()
@@ -2113,6 +2769,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
             synthesizeMiddleClick: {},
             releaseMiddleButton: {},
             postMiddleClickEvent: { postedTypes.append($0.type) },
+            middleClickAllowsContactInference: { true },
             middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
         )
         session.updateMiddleClickGestures([.threeFingerTap])
@@ -2136,6 +2793,424 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         session.deactivate()
     }
 
+    func testSessionReplaysFailedTipTapBeforeRapidValidRetry() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        var postedTypes: [CGEventType] = []
+        var acceptedGestures: [TrackpadGesture] = []
+        let recognitionCommitted = expectation(description: "TipTap native click committed")
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { postedTypes.append($0.type) },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { recognized, deviceID, _, tipTapEpisodeID in
+            XCTAssertEqual(deviceID, 1)
+            XCTAssertNotNil(tipTapEpisodeID)
+            acceptedGestures.append(recognized)
+            recognitionCommitted.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        let failedTap = TrackpadContactSnapshot(identifier: 2, x: 0.1, y: 0.5)
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+        clock.value = 0.11
+        driver.send(.init(deviceID: 1, timestamp: 0.11, contacts: fixed + [failedTap]))
+        clock.value = 0.111
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
+        ))
+        clock.value = 0.112
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp))
+        ))
+        clock.value = 0.12
+        driver.send(.init(deviceID: 1, timestamp: 0.12, contacts: fixed))
+
+        // Do not yield to the main-queue rejection notification. The next native Down must drain
+        // the failed episode synchronously before it buffers this rapid retry.
+        let validTap = TrackpadContactSnapshot(identifier: 3, x: 0.1, y: 0.5)
+        clock.value = 0.13
+        driver.send(.init(deviceID: 1, timestamp: 0.13, contacts: fixed + [validTap]))
+        clock.value = 0.131
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
+        ))
+        XCTAssertEqual(postedTypes, [.leftMouseDown, .leftMouseUp])
+        clock.value = 0.132
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp))
+        ))
+        clock.value = 0.18
+        driver.send(.init(deviceID: 1, timestamp: 0.18, contacts: fixed))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [recognitionCommitted], timeout: 1)
+
+        XCTAssertEqual(acceptedGestures, [gesture])
+        XCTAssertEqual(postedTypes, [.leftMouseDown, .leftMouseUp])
+    }
+
+    func testSessionUnsafeInventoryNeverDeliversRecognizedTipTap() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { false },
+            middleClickEventOrigin: { _ in .unknown }
+        )
+        let unexpectedRecognition = expectation(description: "unsafe TipTap is not delivered")
+        unexpectedRecognition.isInverted = true
+        session.onRecognized = { _, _, _, _ in unexpectedRecognition.fulfill() }
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+        clock.value = 0.11
+        driver.send(.init(
+            deviceID: 1,
+            timestamp: 0.11,
+            contacts: fixed + [.init(identifier: 2, x: 0.1, y: 0.5)]
+        ))
+        clock.value = 0.16
+        driver.send(.init(deviceID: 1, timestamp: 0.16, contacts: fixed))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [unexpectedRecognition], timeout: 0.05)
+
+        clock.value = 0.17
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 601))
+        ))
+        clock.value = 0.18
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 601))
+        ))
+    }
+
+    func testNoOpConfigurationRefreshPreservesPendingTipTapCommit() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let committed = expectation(description: "pending TipTap survives no-op refresh")
+        var recognized: [TrackpadGesture] = []
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { recognizedGesture, _, _, episodeID in
+            XCTAssertNotNil(episodeID)
+            recognized.append(recognizedGesture)
+            committed.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        let tapping = TrackpadContactSnapshot(identifier: 2, x: 0.1, y: 0.5)
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+        clock.value = 0.11
+        driver.send(.init(deviceID: 1, timestamp: 0.11, contacts: fixed + [tapping]))
+        clock.value = 0.16
+        driver.send(.init(deviceID: 1, timestamp: 0.16, contacts: fixed))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+
+        session.update(gestures: [gesture])
+        session.updateNativeClickResolutions([gesture: .consume])
+        clock.value = 0.161
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 701))
+        ))
+        clock.value = 0.162
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 701))
+        ))
+        await fulfillment(of: [committed], timeout: 1)
+
+        XCTAssertEqual(recognized, [gesture])
+    }
+
+    func testSessionReleasesEveryExpiredTipTapWithoutNativePair() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+
+        for index in 0..<3 {
+            let downAt = 0.11 + Double(index) * 0.50
+            let upAt = downAt + 0.04
+            clock.value = downAt
+            driver.send(.init(
+                deviceID: 1,
+                timestamp: downAt,
+                contacts: fixed + [
+                    .init(identifier: index + 2, x: 0.1, y: 0.5),
+                ]
+            ))
+            clock.value = upAt
+            driver.send(.init(deviceID: 1, timestamp: upAt, contacts: fixed))
+            session.waitForRecognitionForTests()
+            await Task.yield()
+            XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 1)
+
+            clock.value = downAt + 0.40
+            session.expireMiddleClickStateForTests()
+            await Task.yield()
+            XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 0)
+        }
+    }
+
+    func testSessionRestartClearsPendingTipTapWithoutNativePair() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+        clock.value = 0.11
+        driver.send(.init(
+            deviceID: 1,
+            timestamp: 0.11,
+            contacts: fixed + [.init(identifier: 2, x: 0.1, y: 0.5)]
+        ))
+        clock.value = 0.15
+        driver.send(.init(deviceID: 1, timestamp: 0.15, contacts: fixed))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 1)
+
+        session.restartImmediatelyForTests()
+        XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 0)
+    }
+
+    func testSessionConfigurationInvalidationAbandonsPendingTipTapAndAcceptsFreshEpisode() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let freshRecognition = expectation(description: "fresh TipTap commits after configuration")
+        var recognized: [TrackpadGesture] = []
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { recognizedGesture, _, _, _ in
+            recognized.append(recognizedGesture)
+            freshRecognition.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+        clock.value = 0.11
+        driver.send(.init(
+            deviceID: 1,
+            timestamp: 0.11,
+            contacts: fixed + [.init(identifier: 2, x: 0.1, y: 0.5)]
+        ))
+        clock.value = 0.15
+        driver.send(.init(deviceID: 1, timestamp: 0.15, contacts: fixed))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 1)
+
+        session.invalidatePendingDeliveriesForConfigurationChange()
+        XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 0)
+        clock.value = 0.16
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 801))
+        ))
+        clock.value = 0.17
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 801))
+        ))
+        XCTAssertTrue(recognized.isEmpty)
+
+        clock.value = 0.20
+        driver.send(.init(
+            deviceID: 1,
+            timestamp: 0.20,
+            contacts: fixed + [.init(identifier: 4, x: 0.1, y: 0.5)]
+        ))
+        clock.value = 0.25
+        driver.send(.init(deviceID: 1, timestamp: 0.25, contacts: fixed))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 1)
+        clock.value = 0.251
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 802))
+        ))
+        clock.value = 0.252
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 802))
+        ))
+        await fulfillment(of: [freshRecognition], timeout: 1)
+        XCTAssertEqual(recognized, [gesture])
+    }
+
+    func testUnsafeRecognitionOnSecondDevicePreservesFirstDevicePendingTipTap() async throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let allowsContactInference = LockedTestBoolean(true)
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let committed = expectation(description: "first device TipTap remains pending")
+        var recognizedDeviceIDs: [UInt64] = []
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { allowsContactInference.value },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { _, deviceID, _, episodeID in
+            XCTAssertNotNil(episodeID)
+            recognizedDeviceIDs.append(deviceID)
+            committed.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        let tapping = TrackpadContactSnapshot(identifier: 2, x: 0.1, y: 0.5)
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+        clock.value = 0.11
+        driver.send(.init(deviceID: 1, timestamp: 0.11, contacts: fixed + [tapping]))
+        clock.value = 0.16
+        driver.send(.init(deviceID: 1, timestamp: 0.16, contacts: fixed))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+
+        allowsContactInference.value = false
+        clock.value = 0.17
+        driver.send(.init(deviceID: 2, timestamp: 0.17, contacts: []))
+        driver.send(.init(deviceID: 2, timestamp: 0.18, contacts: fixed))
+        clock.value = 0.27
+        driver.send(.init(deviceID: 2, timestamp: 0.27, contacts: fixed))
+        clock.value = 0.28
+        driver.send(.init(deviceID: 2, timestamp: 0.28, contacts: fixed + [tapping]))
+        clock.value = 0.33
+        driver.send(.init(deviceID: 2, timestamp: 0.33, contacts: fixed))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+
+        clock.value = 0.34
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 702))
+        ))
+        clock.value = 0.341
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 702))
+        ))
+        await fulfillment(of: [committed], timeout: 1)
+
+        XCTAssertEqual(recognizedDeviceIDs, [1])
+    }
+
     func testTypingSuppressionRemembersContactFrameQueuedBeforeKeyDown() async throws {
         let clock = LockedTestClock()
         let listener = MockMultitouchFrameListener()
@@ -2144,10 +3219,18 @@ final class TrackpadGesturesPluginTests: XCTestCase {
             driver: listener,
             testEventTapStart: { true },
             recognitionBeforeFrameProcessing: { recognitionBarrier.pauseIfArmed() },
-            middleClickClock: { clock.value }
+            middleClickClock: { clock.value },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
         )
         var recognized: [TrackpadGesture] = []
-        session.onRecognized = { gesture, _ in recognized.append(gesture) }
+        let committed = expectation(description: "TipTap committed after typing suppression")
+        session.onRecognized = {
+            gesture, _, _, _ in
+            recognized.append(gesture)
+            committed.fulfill()
+        }
+        session.updateNativeClickResolutions([.tipTapLeftOneFixed: .consume])
         session.updateTypingProtection(isEnabled: true, gracePeriod: 0.4)
         XCTAssertTrue(session.activate(gestures: [.tipTapLeftOneFixed]))
         defer {
@@ -2204,8 +3287,143 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         listener.send(.init(deviceID: 1, timestamp: 0.95, contacts: fixed))
         session.waitForRecognitionForTests()
         await Task.yield()
+        XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 1)
+        clock.value = 0.951
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 301))
+        ))
+        clock.value = 0.952
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 301))
+        ))
+        await fulfillment(of: [committed], timeout: 1)
 
         XCTAssertEqual(recognized, [.tipTapLeftOneFixed])
+    }
+
+    func testTypingSuppressionBlocksPhysicalClickUntilContactsReset() async throws {
+        let clock = LockedTestClock()
+        let listener = MockMultitouchFrameListener()
+        let gesture = TrackpadGesture.threeFingerClick
+        var recognized: [TrackpadGesture] = []
+        let freshRecognition = expectation(
+            description: "physical click recognized after typing contact reset"
+        )
+        freshRecognition.assertForOverFulfill = true
+        let session = MultitouchDeviceSession(
+            driver: listener,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { recognizedGesture, _, _, _ in
+            recognized.append(recognizedGesture)
+            freshRecognition.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        session.updateTypingProtection(isEnabled: true, gracePeriod: 0.4)
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let occupiedFrame = makeThreeContactFrame(timestamp: 0.10)
+        listener.send(occupiedFrame)
+        let keyDown = try XCTUnwrap(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 0,
+            keyDown: true
+        ))
+        let keyUp = try XCTUnwrap(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 0,
+            keyDown: false
+        ))
+        clock.value = 0.11
+        XCTAssertFalse(session.handleNativeEventForTests(type: .keyDown, event: keyDown))
+        clock.value = 0.12
+        XCTAssertFalse(session.handleNativeEventForTests(type: .keyUp, event: keyUp))
+
+        clock.value = 0.20
+        listener.send(.init(
+            deviceID: 2,
+            timestamp: 0.20,
+            contacts: [.init(identifier: 1, x: 0.5, y: 0.5)]
+        ))
+
+        clock.value = 0.60
+        listener.send(makeThreeContactFrame(timestamp: 0.60))
+        clock.value = 0.61
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 601))
+        ))
+        clock.value = 0.62
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 601))
+        ))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertTrue(recognized.isEmpty)
+
+        clock.value = 0.70
+        listener.send(.init(deviceID: 1, timestamp: 0.70, contacts: []))
+        clock.value = 1.00
+        listener.send(makeThreeContactFrame(timestamp: 1.00))
+        clock.value = 1.01
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 602))
+        ))
+        clock.value = 1.02
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 602))
+        ))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertTrue(recognized.isEmpty)
+
+        clock.value = 1.10
+        listener.send(.init(deviceID: 2, timestamp: 1.10, contacts: []))
+        clock.value = 1.11
+        listener.send(.init(deviceID: 1, timestamp: 1.11, contacts: []))
+        clock.value = 1.40
+        listener.send(makeThreeContactFrame(timestamp: 1.40))
+        clock.value = 1.41
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 603))
+        ))
+        clock.value = 1.42
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 603))
+        ))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [freshRecognition], timeout: 1)
+        XCTAssertEqual(recognized, [gesture])
+    }
+
+    func testStartingTestingModeWithTypingProtectionDisabledRequiresZeroBeforePhysicalClick()
+        async throws {
+        try await assertTestingModeTransitionRequiresContactReset(.start)
+    }
+
+    func testSwitchingTestingModeWithTypingProtectionDisabledRequiresZeroBeforePhysicalClick()
+        async throws {
+        try await assertTestingModeTransitionRequiresContactReset(.switchMode)
+    }
+
+    func testStoppingTestingModeWithTypingProtectionDisabledRequiresZeroBeforePhysicalClick()
+        async throws {
+        try await assertTestingModeTransitionRequiresContactReset(.stop)
     }
 
     func testSessionIgnoresMacToolsGeneratedShortcutKeysForTypingProtection() async throws {
@@ -2214,10 +3432,18 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         let session = MultitouchDeviceSession(
             driver: listener,
             testEventTapStart: { true },
-            middleClickClock: { clock.value }
+            middleClickClock: { clock.value },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
         )
         var recognized: [TrackpadGesture] = []
-        session.onRecognized = { gesture, _ in recognized.append(gesture) }
+        let committed = expectation(description: "TipTap committed after synthetic key")
+        session.onRecognized = {
+            gesture, _, _, _ in
+            recognized.append(gesture)
+            committed.fulfill()
+        }
+        session.updateNativeClickResolutions([.tipTapLeftOneFixed: .consume])
         session.updateTypingProtection(isEnabled: true, gracePeriod: 1.0)
         XCTAssertTrue(session.activate(gestures: [.tipTapLeftOneFixed]))
         defer { session.deactivate() }
@@ -2246,6 +3472,17 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         listener.send(.init(deviceID: 1, timestamp: 0.16, contacts: fixed))
         session.waitForRecognitionForTests()
         await Task.yield()
+        clock.value = 0.161
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 401))
+        ))
+        clock.value = 0.162
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 401))
+        ))
+        await fulfillment(of: [committed], timeout: 1)
 
         XCTAssertEqual(recognized, [.tipTapLeftOneFixed])
     }
@@ -2256,10 +3493,13 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         let session = MultitouchDeviceSession(
             driver: listener,
             testEventTapStart: { true },
-            middleClickClock: { clock.value }
+            middleClickClock: { clock.value },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
         )
         var recognized: [TrackpadGesture] = []
-        session.onRecognized = { gesture, _ in recognized.append(gesture) }
+        session.onRecognized = { gesture, _, _, _ in recognized.append(gesture) }
+        session.updateNativeClickResolutions([.tipTapLeftOneFixed: .consume])
         session.updateTypingProtection(isEnabled: true, gracePeriod: 0.4)
         XCTAssertTrue(session.activate(gestures: [.tipTapLeftOneFixed]))
         defer { session.deactivate() }
@@ -2291,10 +3531,18 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         let session = MultitouchDeviceSession(
             driver: listener,
             testEventTapStart: { true },
-            middleClickClock: { clock.value }
+            middleClickClock: { clock.value },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
         )
         var recognized: [TrackpadGesture] = []
-        session.onRecognized = { gesture, _ in recognized.append(gesture) }
+        let committed = expectation(description: "TipTap committed with typing protection off")
+        session.onRecognized = {
+            gesture, _, _, _ in
+            recognized.append(gesture)
+            committed.fulfill()
+        }
+        session.updateNativeClickResolutions([.tipTapLeftOneFixed: .consume])
         session.updateTypingProtection(isEnabled: false, gracePeriod: 1.0)
         XCTAssertTrue(session.activate(gestures: [.tipTapLeftOneFixed]))
         defer { session.deactivate() }
@@ -2318,6 +3566,17 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         listener.send(.init(deviceID: 1, timestamp: 0.35, contacts: fixed))
         session.waitForRecognitionForTests()
         await Task.yield()
+        clock.value = 0.351
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 501))
+        ))
+        clock.value = 0.352
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 501))
+        ))
+        await fulfillment(of: [committed], timeout: 1)
 
         XCTAssertEqual(recognized, [.tipTapLeftOneFixed])
     }
@@ -2343,22 +3602,24 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         clock.value = 0.01
         XCTAssertFalse(session.handleNativeEventForTests(
             type: .leftMouseDown,
-            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 101))
         ))
 
         // Move beyond the fail-safe window created by the passed-through stale-click probe,
-        // then prove the current generation still accepts fresh frames.
+        // reset every contact, then prove the current generation accepts fresh frames.
+        clock.value = 0.39
+        driver.send(.init(deviceID: 1, timestamp: 0.39, contacts: []), usingStart: 1)
         clock.value = 0.40
-        driver.send(makeThreeContactFrame(), usingStart: 1)
+        driver.send(makeThreeContactFrame(timestamp: 0.40), usingStart: 1)
         clock.value = 0.41
         XCTAssertTrue(session.handleNativeEventForTests(
             type: .leftMouseDown,
-            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 202))
         ))
         session.deactivate()
     }
 
-    func testSessionDeactivationBalancesRewrittenMiddleButtonDown() throws {
+    func testSessionDeactivationDrainsLongHeldRewrittenOriginalUp() throws {
         let driver = MockMultitouchFrameListener()
         let clock = LockedTestClock()
         var releaseCount = 0
@@ -2375,15 +3636,20 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         clock.value = 0.02
         XCTAssertFalse(session.handleNativeEventForTests(
             type: .leftMouseDown,
-            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 101))
         ))
 
         session.deactivate()
 
         XCTAssertEqual(releaseCount, 1)
+        clock.value = TrackpadMiddleClickCoordinator.nativeClickOwnershipWindow + 0.03
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 101))
+        ))
     }
 
-    func testEventTapDisableBalancesRewrittenMiddleButtonDown() throws {
+    func testEventTapDisableBalancesRewrittenDownAndSuppressesItsOriginalUp() throws {
         let driver = MockMultitouchFrameListener()
         let clock = LockedTestClock()
         var releaseCount = 0
@@ -2400,36 +3666,404 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         clock.value = 0.02
         XCTAssertFalse(session.handleNativeEventForTests(
             type: .leftMouseDown,
-            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 201))
         ))
 
         session.simulateEventTapDisableForTests()
 
         XCTAssertEqual(releaseCount, 1)
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 201))
+        ))
         session.deactivate()
+    }
+
+    func testLifecycleSuppressionDrainsLongHeldConsumedAndConvertedPairs() throws {
+        for (index, resolution) in [
+            TrackpadNativeClickResolution.consume,
+            .middleClick,
+        ].enumerated() {
+            for resetCause in 0 ... 3 {
+                let driver = MockMultitouchFrameListener()
+                let clock = LockedTestClock()
+                var releaseCount = 0
+                let session = makeMiddleClickSession(
+                    driver: driver,
+                    now: { clock.value },
+                    releaseMiddleButton: { releaseCount += 1 },
+                    wakeRestartDelay: 1,
+                    deviceChangeRestartDelay: 1
+                )
+                session.updateNativeClickResolutions([.threeFingerTap: resolution])
+                session.updateTypingProtection(isEnabled: true, gracePeriod: 1)
+                XCTAssertTrue(session.activate(gestures: [.threeFingerTap]))
+
+                driver.send(makeThreeContactFrame())
+                clock.value = 0.01
+                XCTAssertEqual(
+                    session.resolveNativeClick(for: .threeFingerTap, deviceID: 1),
+                    resolution
+                )
+                let eventNumber = Int64(300 + index * 10 + resetCause)
+                clock.value = 0.02
+                XCTAssertEqual(
+                    session.handleNativeEventForTests(
+                        type: .leftMouseDown,
+                        event: try XCTUnwrap(makeMouseEvent(
+                            type: .leftMouseDown,
+                            eventNumber: eventNumber
+                        ))
+                    ),
+                    resolution == .consume
+                )
+
+                switch resetCause {
+                case 0:
+                    session.simulateEventTapDisableForTests()
+                case 1:
+                    let keyDown = try XCTUnwrap(CGEvent(
+                        keyboardEventSource: nil,
+                        virtualKey: 0,
+                        keyDown: true
+                    ))
+                    clock.value = 0.03
+                    XCTAssertFalse(session.handleNativeEventForTests(
+                        type: .keyDown,
+                        event: keyDown
+                    ))
+                case 2:
+                    session.simulateWakeNotificationForTests()
+                default:
+                    session.simulateDeviceRemovalNotificationForTests()
+                }
+
+                XCTAssertEqual(
+                    releaseCount,
+                    resolution == .middleClick ? 1 : 0
+                )
+                clock.value = TrackpadMiddleClickCoordinator.nativeClickOwnershipWindow + 0.04
+                XCTAssertTrue(session.handleNativeEventForTests(
+                    type: .leftMouseUp,
+                    event: try XCTUnwrap(makeMouseEvent(
+                        type: .leftMouseUp,
+                        eventNumber: eventNumber
+                    ))
+                ))
+                session.deactivate()
+            }
+        }
+    }
+
+    func testEventTapDisableInvalidatesQueuedFrameRecognition() async {
+        let driver = MockMultitouchFrameListener()
+        let barrier = TrackpadRecognitionFrameBarrier()
+        var recognized: [TrackpadGesture] = []
+        let freshRecognition = expectation(description: "fresh gesture after event-tap recovery")
+        freshRecognition.assertForOverFulfill = true
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            recognitionBeforeFrameProcessing: { barrier.pauseIfArmed() }
+        )
+        session.onRecognized = { gesture, _, _, _ in
+            recognized.append(gesture)
+            freshRecognition.fulfill()
+        }
+        XCTAssertTrue(session.activate(gestures: [.threeFingerTap]))
+        defer { session.deactivate() }
+
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(makeThreeContactFrame(timestamp: 0.01))
+        barrier.arm()
+        driver.send(.init(deviceID: 1, timestamp: 0.05, contacts: []))
+        XCTAssertEqual(barrier.waitUntilPaused(), .success)
+
+        session.simulateEventTapDisableForTests()
+        barrier.resume()
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertTrue(recognized.isEmpty)
+
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: []))
+        driver.send(makeThreeContactFrame(timestamp: 0.11))
+        driver.send(.init(deviceID: 1, timestamp: 0.16, contacts: []))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [freshRecognition], timeout: 1)
+        XCTAssertEqual(recognized, [.threeFingerTap])
+    }
+
+    func testEventTapDisableInvalidatesQueuedPhysicalClickRecognition() async throws {
+        let driver = MockMultitouchFrameListener()
+        let barrier = TrackpadRecognitionFrameBarrier()
+        var recognized: [TrackpadGesture] = []
+        let freshRecognition = expectation(description: "fresh physical click after recovery")
+        freshRecognition.assertForOverFulfill = true
+        let gesture = TrackpadGesture.threeFingerClick
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            recognitionBeforeFrameProcessing: { barrier.pauseIfArmed() },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { value, _, _, _ in
+            recognized.append(value)
+            freshRecognition.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        barrier.arm()
+        driver.send(makeThreeContactFrame(timestamp: 0.01))
+        XCTAssertEqual(barrier.waitUntilPaused(), .success)
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 901))
+        ))
+        session.simulateEventTapDisableForTests()
+        barrier.resume()
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertTrue(recognized.isEmpty)
+
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: []))
+        driver.send(makeThreeContactFrame(timestamp: 0.11))
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 902))
+        ))
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 902))
+        ))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [freshRecognition], timeout: 1)
+        XCTAssertEqual(recognized, [gesture])
+    }
+
+    func testNativeClickInventoryCacheFailsClosedUntilBackgroundRefreshCompletes() {
+        let verdict = LockedTestBoolean(true)
+        let loadCount = LockedTestCounter()
+        let cache = TrackpadNativeClickSourceInventoryCache(loadVerdict: {
+            loadCount.increment()
+            return verdict.value
+        })
+
+        XCTAssertFalse(cache.allowsContactInference())
+        cache.invalidateAndRefresh()
+        XCTAssertFalse(cache.allowsContactInference())
+        cache.waitUntilIdleForTests()
+        XCTAssertTrue(cache.allowsContactInference())
+        XCTAssertEqual(loadCount.value, 1)
+
+        verdict.value = false
+        cache.invalidateAndRefresh()
+        XCTAssertFalse(cache.allowsContactInference())
+        cache.waitUntilIdleForTests()
+        XCTAssertFalse(cache.allowsContactInference())
+        XCTAssertEqual(loadCount.value, 2)
+    }
+
+    func testNativeClickInventoryCacheRequiresContinuousTopologyMonitoring() {
+        let loadCount = LockedTestCounter()
+        let cache = TrackpadNativeClickSourceInventoryCache(
+            requiresMonitoring: true,
+            loadVerdict: {
+                loadCount.increment()
+                return true
+            }
+        )
+
+        cache.invalidateAndRefresh()
+        cache.waitUntilIdleForTests()
+        XCTAssertFalse(cache.allowsContactInference())
+        XCTAssertEqual(loadCount.value, 0)
+
+        cache.setMonitoringAvailable(true)
+        cache.invalidateAndRefresh()
+        cache.waitUntilIdleForTests()
+        XCTAssertTrue(cache.allowsContactInference())
+        XCTAssertEqual(loadCount.value, 1)
+
+        cache.setMonitoringAvailable(false)
+        XCTAssertFalse(cache.allowsContactInference())
+        cache.invalidateAndRefresh()
+        cache.waitUntilIdleForTests()
+        XCTAssertFalse(cache.allowsContactInference())
+        XCTAssertEqual(loadCount.value, 1)
+    }
+
+    func testHIDTopologyInvalidationFailsClosedBeforeDeferredRefresh() throws {
+        let cache = TrackpadNativeClickSourceInventoryCache(
+            requiresMonitoring: true,
+            loadVerdict: { true }
+        )
+        cache.setMonitoringAvailable(true)
+        cache.invalidateAndRefresh()
+        cache.waitUntilIdleForTests()
+        XCTAssertTrue(cache.allowsContactInference())
+
+        cache.invalidate()
+
+        let event = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
+        event.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
+        XCTAssertEqual(
+            TrackpadNativeEventOriginClassifier.origin(
+                for: event,
+                allowsContactInference: { cache.allowsContactInference() }
+            ),
+            .unknown
+        )
+
+        cache.invalidateAndRefresh()
+        cache.waitUntilIdleForTests()
+        XCTAssertTrue(cache.allowsContactInference())
+    }
+
+    func testTestingLifecycleResetClearsRawSnapshotsWithoutStoppingPractice() {
+        let fixture = makePlugin()
+        let mode = TrackpadGestureTestingMode.practice(.threeFingerTap)
+        fixture.plugin.store.setTesting(true)
+        fixture.plugin.testingModel.begin(mode)
+        fixture.session.reportTestingSnapshot(TrackpadGestureTestSnapshot(
+            deviceID: 1,
+            descriptor: nil,
+            timestamp: 1,
+            contacts: [.init(identifier: 1, x: 0.5, y: 0.5)],
+            recognized: [],
+            recognition: nil
+        ))
+        XCTAssertNotNil(fixture.plugin.testingModel.selectedSnapshot)
+
+        fixture.session.reportTestingReset()
+
+        XCTAssertNil(fixture.plugin.testingModel.selectedSnapshot)
+        XCTAssertEqual(fixture.plugin.testingModel.mode, mode)
     }
 
     private func makeMiddleClickSession(
         driver: MockMultitouchFrameListener,
         now: @escaping @Sendable () -> TimeInterval,
-        releaseMiddleButton: @escaping @Sendable @MainActor () -> Void
+        releaseMiddleButton: @escaping @Sendable @MainActor () -> Void,
+        wakeRestartDelay: TimeInterval = 10,
+        deviceChangeRestartDelay: TimeInterval = 2
     ) -> MultitouchDeviceSession {
         MultitouchDeviceSession(
             driver: driver,
             testEventTapStart: { true },
             testEventTapStop: {},
+            wakeRestartDelay: wakeRestartDelay,
+            deviceChangeRestartDelay: deviceChangeRestartDelay,
             middleClickClock: now,
             synthesizeMiddleClick: {},
             releaseMiddleButton: releaseMiddleButton,
             postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
             middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
         )
     }
 
-    private func makeThreeContactFrame() -> TrackpadContactFrame {
+    private enum TestingModeContactResetTransition: String {
+        case start
+        case switchMode
+        case stop
+    }
+
+    private func assertTestingModeTransitionRequiresContactReset(
+        _ transition: TestingModeContactResetTransition
+    ) async throws {
+        let listener = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        let gesture = TrackpadGesture.threeFingerClick
+        var recognized: [TrackpadGesture] = []
+        let freshRecognition = expectation(
+            description: "fresh physical click after \(transition.rawValue) reset"
+        )
+        freshRecognition.assertForOverFulfill = true
+        let session = MultitouchDeviceSession(
+            driver: listener,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { _ in },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.onRecognized = { recognizedGesture, _, _, _ in
+            recognized.append(recognizedGesture)
+            freshRecognition.fulfill()
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        session.updateTypingProtection(isEnabled: false, gracePeriod: 0.4)
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        if transition != .start {
+            session.updateTestingMode(.allGestures)
+            session.updateTypingProtection(isEnabled: false, gracePeriod: 0.4)
+            clock.value = 0.01
+            listener.send(.init(deviceID: 1, timestamp: 0.01, contacts: []))
+        }
+
+        clock.value = 0.10
+        listener.send(makeThreeContactFrame(timestamp: 0.10))
+        switch transition {
+        case .start:
+            session.updateTestingMode(.allGestures)
+        case .switchMode:
+            session.updateTestingMode(.practice(gesture))
+        case .stop:
+            session.updateTestingMode(nil)
+        }
+        session.updateNativeClickResolutions([gesture: .consume])
+        session.updateTypingProtection(isEnabled: false, gracePeriod: 0.4)
+        session.update(gestures: [gesture])
+
+        clock.value = 0.20
+        listener.send(makeThreeContactFrame(timestamp: 0.20))
+        clock.value = 0.21
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 901))
+        ))
+        clock.value = 0.22
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 901))
+        ))
+        session.waitForRecognitionForTests()
+        await Task.yield()
+        XCTAssertTrue(recognized.isEmpty)
+
+        clock.value = 0.60
+        listener.send(.init(deviceID: 1, timestamp: 0.60, contacts: []))
+        clock.value = 0.70
+        listener.send(makeThreeContactFrame(timestamp: 0.70))
+        clock.value = 0.71
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 902))
+        ))
+        clock.value = 0.72
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 902))
+        ))
+        session.waitForRecognitionForTests()
+        await fulfillment(of: [freshRecognition], timeout: 1)
+        XCTAssertEqual(recognized, [gesture])
+    }
+
+    private func makeThreeContactFrame(timestamp: TimeInterval = 0) -> TrackpadContactFrame {
         TrackpadContactFrame(
             deviceID: 1,
-            timestamp: 0,
+            timestamp: timestamp,
             contacts: [
                 .init(identifier: 1, x: 0.2, y: 0.5),
                 .init(identifier: 2, x: 0.5, y: 0.5),
@@ -2438,13 +4072,15 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         )
     }
 
-    private func makeMouseEvent(type: CGEventType) -> CGEvent? {
-        CGEvent(
+    private func makeMouseEvent(type: CGEventType, eventNumber: Int64 = 0) -> CGEvent? {
+        let event = CGEvent(
             mouseEventSource: nil,
             mouseType: type,
             mouseCursorPosition: CGPoint(x: 100, y: 100),
             mouseButton: .left
         )
+        event?.setIntegerValueField(.mouseEventNumber, value: eventNumber)
+        return event
     }
 
     private func makePlugin(

@@ -94,6 +94,7 @@ enum TrackpadMiddleClickEventPoster {
 final class TrackpadGestureRecognitionGeneration: @unchecked Sendable {
     private let lock = NSLock()
     private var value: UInt64 = 0
+    private var deviceValues: [UInt64: UInt64] = [:]
 
     func current() -> UInt64 {
         lock.withLock { value }
@@ -102,6 +103,7 @@ final class TrackpadGestureRecognitionGeneration: @unchecked Sendable {
     func advance() -> UInt64 {
         lock.withLock {
             value &+= 1
+            deviceValues.removeAll()
             return value
         }
     }
@@ -116,11 +118,57 @@ final class TrackpadGestureRecognitionGeneration: @unchecked Sendable {
         }
     }
 
+    func withCurrentFrameValue(
+        deviceID: UInt64,
+        _ body: (UInt64, UInt64) -> Void
+    ) {
+        lock.withLock {
+            body(value, deviceValues[deviceID, default: 0])
+        }
+    }
+
+    func advanceDeviceWithValue(
+        deviceID: UInt64,
+        _ body: (UInt64, UInt64) -> Void
+    ) {
+        lock.withLock {
+            deviceValues[deviceID, default: 0] &+= 1
+            body(value, deviceValues[deviceID, default: 0])
+        }
+    }
+
+    func isCurrent(
+        global candidate: UInt64,
+        deviceID: UInt64,
+        device candidateDevice: UInt64
+    ) -> Bool {
+        lock.withLock {
+            value == candidate
+                && deviceValues[deviceID, default: 0] == candidateDevice
+        }
+    }
+
     func advanceWithValue(_ body: (UInt64) -> Void) {
         lock.withLock {
             value &+= 1
+            deviceValues.removeAll()
             body(value)
         }
+    }
+}
+
+enum TrackpadGestureRecognitionDeliveryToken: Equatable, Sendable {
+    case frame(globalGeneration: UInt64, deviceID: UInt64, deviceGeneration: UInt64)
+    case nativeClick(UInt64)
+
+    var frameGeneration: UInt64? {
+        guard case let .frame(generation, _, _) = self else { return nil }
+        return generation
+    }
+
+    var frameDeviceGeneration: UInt64? {
+        guard case let .frame(_, _, generation) = self else { return nil }
+        return generation
     }
 }
 
@@ -128,9 +176,17 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
     private let queue: DispatchQueue
     private var engine = TrackpadGestureEngine()
     private let generation: TrackpadGestureRecognitionGeneration
+    private let nativeClickDeliveryGeneration = TrackpadGestureRecognitionGeneration()
     private let beforeConfigurationEnqueue: (@Sendable () -> Void)?
     private let beforeFrameProcessing: (@Sendable () -> Void)?
-    private let onRecognized: @Sendable (TrackpadGesture, UInt64, UInt64) -> Void
+    private let testingSnapshotRelay: TrackpadGestureTestSnapshotRelay?
+    private let onRecognized: @Sendable (
+        TrackpadGesture,
+        UInt64,
+        TrackpadGestureRecognitionDeliveryToken,
+        TrackpadTipTapEpisodeID?,
+        TimeInterval?
+    ) -> Void
 
     init(
         generation: TrackpadGestureRecognitionGeneration,
@@ -140,16 +196,25 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
         ),
         beforeConfigurationEnqueue: (@Sendable () -> Void)? = nil,
         beforeFrameProcessing: (@Sendable () -> Void)? = nil,
-        onRecognized: @escaping @Sendable (TrackpadGesture, UInt64, UInt64) -> Void
+        testingSnapshotRelay: TrackpadGestureTestSnapshotRelay? = nil,
+        onRecognized: @escaping @Sendable (
+            TrackpadGesture,
+            UInt64,
+            TrackpadGestureRecognitionDeliveryToken,
+            TrackpadTipTapEpisodeID?,
+            TimeInterval?
+        ) -> Void
     ) {
         self.generation = generation
         self.queue = queue
         self.beforeConfigurationEnqueue = beforeConfigurationEnqueue
         self.beforeFrameProcessing = beforeFrameProcessing
+        self.testingSnapshotRelay = testingSnapshotRelay
         self.onRecognized = onRecognized
     }
 
     func configure(gestures: Set<TrackpadGesture>, reset: Bool = false) {
+        _ = nativeClickDeliveryGeneration.advance()
         generation.advanceWithValue { configurationGeneration in
             beforeConfigurationEnqueue?()
             queue.async { [self] in
@@ -163,21 +228,62 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
         }
     }
 
-    func process(_ frame: TrackpadContactFrame, suppressRecognition: Bool = false) {
-        generation.withCurrentValue { frameGeneration in
+    /// Invalidates work admitted under an old action mapping without rebuilding the recognizers.
+    /// Gesture-shape updates still go through `configure(gestures:)`.
+    func invalidateDeliveriesPreservingRecognizerState() {
+        _ = nativeClickDeliveryGeneration.advance()
+        _ = generation.advance()
+    }
+
+    func process(
+        _ frame: TrackpadContactFrame,
+        suppressRecognition: Bool = false,
+        tipTapRecognitionIDs: [TrackpadGesture: TrackpadTipTapEpisodeID] = [:]
+    ) {
+        generation.withCurrentFrameValue(deviceID: frame.deviceID) {
+            frameGeneration, frameDeviceGeneration in
+            let deliveryToken = TrackpadGestureRecognitionDeliveryToken.frame(
+                globalGeneration: frameGeneration,
+                deviceID: frame.deviceID,
+                deviceGeneration: frameDeviceGeneration
+            )
             queue.async { [self] in
                 beforeFrameProcessing?()
-                guard isCurrent(frameGeneration) else { return }
+                guard isCurrent(deliveryToken) else { return }
                 let result = engine.process(frame, suppressRecognition: suppressRecognition)
-                guard isCurrent(frameGeneration) else { return }
+                guard isCurrent(deliveryToken) else { return }
+                if let testingSnapshotRelay,
+                   let testingToken = testingSnapshotRelay.currentToken() {
+                    testingSnapshotRelay.offer(TrackpadGestureTestSnapshot(
+                        deviceID: frame.deviceID,
+                        descriptor: nil,
+                        timestamp: frame.timestamp,
+                        contacts: frame.contacts,
+                        recognized: result.recognized,
+                        recognition: testingToken.mode.practiceGesture.flatMap {
+                            engine.testingSnapshot(for: $0, deviceID: frame.deviceID)
+                        }
+                    ),
+                    token: testingToken,
+                    recognitionGeneration: frameGeneration,
+                    recognitionDeviceGeneration: frameDeviceGeneration)
+                }
                 result.recognized.forEach {
-                    onRecognized($0, frame.deviceID, frameGeneration)
+                    let episodeID = tipTapRecognitionIDs[$0]
+                    onRecognized(
+                        $0,
+                        frame.deviceID,
+                        deliveryToken,
+                        episodeID,
+                        frame.timestamp
+                    )
                 }
             }
         }
     }
 
     func beginSuppression(activeDeviceIDs: Set<UInt64>) {
+        _ = nativeClickDeliveryGeneration.advance()
         generation.advanceWithValue { suppressionGeneration in
             queue.async { [self] in
                 guard isCurrent(suppressionGeneration) else { return }
@@ -186,16 +292,57 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
         }
     }
 
-    func recognizeNativeClick(_ gesture: TrackpadGesture, deviceID: UInt64) {
-        generation.advanceWithValue { recognitionGeneration in
+    func beginLifecycleSuppression() {
+        _ = nativeClickDeliveryGeneration.advance()
+        generation.advanceWithValue { suppressionGeneration in
             queue.async { [self] in
-                guard isCurrent(recognitionGeneration) else { return }
-                // A physical click can otherwise resemble a tap when the contacts lift. Keep
-                // the rest of this contact episode suppressed, then deliver only the click.
-                engine.beginSuppression(activeDeviceIDs: [deviceID])
-                guard isCurrent(recognitionGeneration) else { return }
-                onRecognized(gesture, deviceID, recognitionGeneration)
+                guard isCurrent(suppressionGeneration) else { return }
+                engine.beginLifecycleSuppression()
             }
+        }
+    }
+
+    func prepareLifecycleRestart(gestures: Set<TrackpadGesture>) {
+        _ = nativeClickDeliveryGeneration.advance()
+        generation.advanceWithValue { suppressionGeneration in
+            queue.async { [self] in
+                guard isCurrent(suppressionGeneration) else { return }
+                engine = TrackpadGestureEngine(gestures: gestures)
+                engine.beginLifecycleSuppression()
+            }
+        }
+    }
+
+    func recognizeNativeClick(_ gesture: TrackpadGesture, deviceID: UInt64) {
+        generation.advanceDeviceWithValue(deviceID: deviceID) { _, _ in
+            nativeClickDeliveryGeneration.withCurrentValue { deliveryGeneration in
+                queue.async { [self] in
+                    guard nativeClickDeliveryGeneration.isCurrent(deliveryGeneration) else {
+                        return
+                    }
+                    // A physical click can otherwise resemble a tap when the contacts lift.
+                    // Suppress only the originating device so another trackpad keeps its own
+                    // recognition epoch and contact state.
+                    engine.beginSuppression(deviceID: deviceID)
+                    guard nativeClickDeliveryGeneration.isCurrent(deliveryGeneration) else {
+                        return
+                    }
+                    onRecognized(gesture, deviceID, .nativeClick(deliveryGeneration), nil, nil)
+                }
+            }
+        }
+    }
+
+    func isCurrent(_ token: TrackpadGestureRecognitionDeliveryToken) -> Bool {
+        switch token {
+        case let .frame(globalGeneration, deviceID, deviceGeneration):
+            generation.isCurrent(
+                global: globalGeneration,
+                deviceID: deviceID,
+                device: deviceGeneration
+            )
+        case let .nativeClick(candidate):
+            nativeClickDeliveryGeneration.isCurrent(candidate)
         }
     }
 
