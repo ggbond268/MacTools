@@ -733,7 +733,7 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertFalse(panel.isVisible)
     }
 
-    func testPhysicalCommandNumbersSelectSettingsPagesInVisualOrder() throws {
+    func testPhysicalCommandNumbersSelectTopPagesAndFocusPluginSearch() throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -763,7 +763,7 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(coordinator.destination, .plugins(.actionsAndShortcuts))
+        XCTAssertEqual(coordinator.destination, .plugins(.automation))
 
         XCTAssertTrue(
             window.performKeyEquivalent(
@@ -786,7 +786,23 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(coordinator.destination, .plugins(.automation))
+        XCTAssertEqual(coordinator.destination, .about)
+
+        let previousPluginSearchFocusRequestID = coordinator.pluginSidebarSearchFocusRequestID
+        XCTAssertTrue(
+            window.performKeyEquivalent(
+                with: keyEvent(
+                    keyCode: UInt16(kVK_ANSI_9),
+                    characters: "(",
+                    windowNumber: window.windowNumber
+                )
+            )
+        )
+        XCTAssertEqual(
+            coordinator.pluginSidebarSearchFocusRequestID,
+            previousPluginSearchFocusRequestID + 1
+        )
+        XCTAssertEqual(coordinator.destination, .about)
 
         window.close()
     }

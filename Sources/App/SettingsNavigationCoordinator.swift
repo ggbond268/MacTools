@@ -39,19 +39,25 @@ extension SettingsNavigationDestination {
     static func settingsSidebarOrder(
         configurationIDs: some Sequence<String>
     ) -> [SettingsNavigationDestination] {
-        let pluginPanes = FeatureSettingsPane.settingsSidebarOrder(
-            configurationIDs: configurationIDs
-        )
-
         return [
             .general,
             .permissions,
-            .plugins(.automation),
             .about
-        ] + pluginPanes
-            .filter { $0 != .automation }
-            .map(SettingsNavigationDestination.plugins)
+        ] + FeatureSettingsPane.settingsSidebarOrder(
+            configurationIDs: configurationIDs
+        ).map(SettingsNavigationDestination.plugins)
     }
+
+    static let numberedSidebarDestinations: [SettingsNavigationDestination] = [
+        .general,
+        .permissions,
+        .about,
+        .plugins(.actionsAndShortcuts),
+        .plugins(.automation),
+        .plugins(.dashboardLayout),
+        .plugins(.featurePanelLayout),
+        .plugins(.marketplace)
+    ]
 }
 
 enum SettingsSearchField: Equatable {
@@ -169,6 +175,8 @@ final class SettingsNavigationCoordinator: ObservableObject {
     @Published private(set) var isUnifiedSearchPresented = false
     @Published private(set) var unifiedSearchPresentationOrigin: UnifiedSearchPresentationOrigin?
     @Published private(set) var unifiedSearchFocusRequestID: UInt = 0
+    @Published private(set) var pluginSidebarSearchFocusRequestID: UInt = 0
+    @Published private(set) var sidebarSelectionRevealRequestID: UInt = 0
     @Published private(set) var unifiedSearchQuickSelectionRequest: UnifiedSearchQuickSelectionRequest?
     @Published private(set) var searchRevealRequest: SettingsSearchRevealRequest?
 
@@ -344,13 +352,20 @@ final class SettingsNavigationCoordinator: ObservableObject {
     }
 
     @discardableResult
-    func selectSidebarDestination(number: Int) -> Bool {
-        guard (1...9).contains(number) else { return false }
-        let availableDestinations = sidebarOrder().filter(isAvailable)
+    func performSidebarNumberShortcut(number: Int) -> Bool {
+        if number == 9 {
+            pluginSidebarSearchFocusRequestID &+= 1
+            return true
+        }
+
+        guard (1...8).contains(number) else { return false }
+        let availableDestinations = SettingsNavigationDestination.numberedSidebarDestinations
+            .filter(isAvailable)
         let index = number - 1
         guard availableDestinations.indices.contains(index) else { return false }
 
         navigate(to: availableDestinations[index])
+        sidebarSelectionRevealRequestID &+= 1
         return true
     }
 

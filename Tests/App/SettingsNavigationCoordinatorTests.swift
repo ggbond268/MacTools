@@ -21,7 +21,7 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         )
     }
 
-    func testSettingsSidebarOrderGroupsAutomationWithAppPages() {
+    func testSettingsSidebarOrderGroupsAppCustomizeAndPluginPages() {
         XCTAssertEqual(
             SettingsNavigationDestination.settingsSidebarOrder(
                 configurationIDs: ["calendar", "fan-control"]
@@ -29,9 +29,9 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
             [
                 .general,
                 .permissions,
-                .plugins(.automation),
                 .about,
                 .plugins(.actionsAndShortcuts),
+                .plugins(.automation),
                 .plugins(.dashboardLayout),
                 .plugins(.featurePanelLayout),
                 .plugins(.marketplace),
@@ -143,25 +143,35 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.destination, .plugins(.automation))
     }
 
-    func testNumberSelectionUsesAvailableVisualSidebarOrder() {
-        let coordinator = SettingsNavigationCoordinator(
-            sidebarOrder: {
-                [
-                    .general,
-                    .plugins(.configuration("removed-plugin")),
-                    .about,
-                    .plugins(.actionsAndShortcuts)
-                ]
-            },
-            isPluginConfigurationAvailable: { _ in false }
-        )
+    func testNumberSelectionNavigatesStableTopDestinations() {
+        let coordinator = SettingsNavigationCoordinator()
 
-        XCTAssertTrue(coordinator.selectSidebarDestination(number: 2))
+        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 0)
+        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 3))
         XCTAssertEqual(coordinator.destination, .about)
-        XCTAssertTrue(coordinator.selectSidebarDestination(number: 3))
+        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 1)
+        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 4))
         XCTAssertEqual(coordinator.destination, .plugins(.actionsAndShortcuts))
-        XCTAssertFalse(coordinator.selectSidebarDestination(number: 0))
-        XCTAssertFalse(coordinator.selectSidebarDestination(number: 4))
+        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 2)
+        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 8))
+        XCTAssertEqual(coordinator.destination, .plugins(.marketplace))
+        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 3)
+        XCTAssertFalse(coordinator.performSidebarNumberShortcut(number: 0))
+        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 3)
+
+        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 8))
+        XCTAssertEqual(coordinator.sidebarSelectionRevealRequestID, 4)
+    }
+
+    func testNumberNineRequestsPluginSidebarSearchFocus() {
+        let coordinator = SettingsNavigationCoordinator()
+
+        XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 0)
+        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 9))
+        XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 1)
+        XCTAssertEqual(coordinator.destination, .general)
+        XCTAssertTrue(coordinator.performSidebarNumberShortcut(number: 9))
+        XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 2)
     }
 
     func testRecordsCompletePluginDestinationsAndRestoresExactPaneDuringTraversal() {

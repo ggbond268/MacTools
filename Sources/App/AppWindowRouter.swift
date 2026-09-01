@@ -885,7 +885,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 return true
             }
 
-            return settingsNavigationCoordinator.selectSidebarDestination(number: number)
+            return settingsNavigationCoordinator.performSidebarNumberShortcut(number: number)
         case .goBack:
             guard
                 let settingsNavigationCoordinator,

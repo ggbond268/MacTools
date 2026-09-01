@@ -79,6 +79,11 @@ struct SettingsView: View {
         let orderedSidebarDestinations = SettingsNavigationDestination.settingsSidebarOrder(
             configurationIDs: orderedConfigurationIDs
         )
+        let configurationSearchKeywordsByID = pluginHost.pluginManagementItems.reduce(
+            into: [String: [String]]()
+        ) { result, item in
+            result[item.id] = item.productSearchKeywords
+        }
         let detailTitle = settingsNavigationTitle(
             for: navigationCoordinator.destination,
             configurationItems: pluginHost.pluginSettingsItems
@@ -88,9 +93,14 @@ struct SettingsView: View {
             SettingsSidebarColumn {
                 SettingsSidebar(
                     configurationItems: configurationItems,
+                    configurationSearchKeywordsByID: configurationSearchKeywordsByID,
                     orderedDestinations: orderedSidebarDestinations,
                     sidebarPreferences: sidebarPreferences,
                     selection: settingsSelection,
+                    pluginSearchFocusRequestID:
+                        navigationCoordinator.pluginSidebarSearchFocusRequestID,
+                    selectionRevealRequestID:
+                        navigationCoordinator.sidebarSelectionRevealRequestID,
                     onSearch: {
                         navigationCoordinator.presentUnifiedSearch(origin: .settingsSidebar)
                     }
@@ -2295,17 +2305,227 @@ private struct SettingsSidebarSearchLauncher: NSViewRepresentable {
     }
 }
 
+struct SettingsSidebarPluginFilterField: NSViewRepresentable {
+    enum Command: Equatable {
+        case moveSelection(Int)
+        case submit
+        case cancel
+    }
+
+    @Binding var text: String
+    let prompt: String
+    let focusRequestID: UInt
+    let onCommand: (Command) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.delegate = context.coordinator
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: NSFont.systemFontSize)
+        field.lineBreakMode = .byTruncatingTail
+        configure(field)
+        context.coordinator.focus(field, for: focusRequestID)
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        configure(field)
+        context.coordinator.focus(field, for: focusRequestID)
+    }
+
+    static func dismantleNSView(_ field: NSTextField, coordinator: Coordinator) {
+        coordinator.cancelPendingFocus()
+    }
+
+    static func command(
+        for selector: Selector,
+        hasMarkedText: Bool
+    ) -> Command? {
+        guard !hasMarkedText else { return nil }
+
+        switch selector {
+        case #selector(NSResponder.moveDown(_:)):
+            return .moveSelection(1)
+        case #selector(NSResponder.moveUp(_:)):
+            return .moveSelection(-1)
+        case #selector(NSResponder.insertNewline(_:)),
+             #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            return .submit
+        case #selector(NSResponder.cancelOperation(_:)):
+            return .cancel
+        default:
+            return nil
+        }
+    }
+
+    private func configure(_ field: NSTextField) {
+        field.placeholderString = prompt
+        field.setAccessibilityLabel(prompt)
+        field.setAccessibilityIdentifier("mactools.settings.plugin-filter")
+        if field.stringValue != text {
+            field.stringValue = text
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        private static let maximumFocusAttemptCount = 25
+        private static let focusRetryDelay = Duration.milliseconds(20)
+
+        var parent: SettingsSidebarPluginFilterField
+        private var completedFocusRequestID: UInt = 0
+        private var pendingFocusRequestID: UInt?
+        private var focusTask: Task<Void, Never>?
+
+        init(parent: SettingsSidebarPluginFilterField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy selector: Selector
+        ) -> Bool {
+            guard let command = SettingsSidebarPluginFilterField.command(
+                for: selector,
+                hasMarkedText: textView.hasMarkedText()
+            ) else {
+                return false
+            }
+
+            parent.onCommand(command)
+            return true
+        }
+
+        func focus(_ field: NSTextField, for requestID: UInt) {
+            guard requestID != 0,
+                  completedFocusRequestID != requestID,
+                  pendingFocusRequestID != requestID else {
+                return
+            }
+
+            focusTask?.cancel()
+            pendingFocusRequestID = requestID
+            focusTask = Task { @MainActor [weak self, weak field] in
+                guard let self, let field else { return }
+
+                for attempt in 0 ..< Self.maximumFocusAttemptCount {
+                    guard !Task.isCancelled,
+                          pendingFocusRequestID == requestID else {
+                        return
+                    }
+
+                    if let window = field.window,
+                       window.isVisible,
+                       window.isKeyWindow,
+                       window.makeFirstResponder(field),
+                       let editor = field.currentEditor() {
+                        if !field.stringValue.isEmpty {
+                            editor.selectAll(nil)
+                        }
+                        completedFocusRequestID = requestID
+                        pendingFocusRequestID = nil
+                        focusTask = nil
+                        return
+                    }
+
+                    guard attempt + 1 < Self.maximumFocusAttemptCount else { break }
+                    if attempt == 0 {
+                        await Task.yield()
+                    } else {
+                        try? await Task.sleep(for: Self.focusRetryDelay)
+                    }
+                }
+
+                if pendingFocusRequestID == requestID {
+                    pendingFocusRequestID = nil
+                    focusTask = nil
+                }
+            }
+        }
+
+        func cancelPendingFocus() {
+            focusTask?.cancel()
+            focusTask = nil
+            pendingFocusRequestID = nil
+        }
+    }
+}
+
+enum SettingsSidebarPluginSearchPolicy {
+    static func matches(
+        query: String,
+        title: String,
+        pluginID: String,
+        description: String,
+        keywords: [String]
+    ) -> Bool {
+        let terms = query
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+        guard !terms.isEmpty else { return true }
+
+        let searchableValues = [title, pluginID, description] + keywords
+        return terms.allSatisfy { term in
+            searchableValues.contains {
+                $0.localizedCaseInsensitiveContains(term)
+            }
+        }
+    }
+
+    static func movedSelection(
+        from current: SettingsNavigationDestination?,
+        offset: Int,
+        in destinations: [SettingsNavigationDestination]
+    ) -> SettingsNavigationDestination? {
+        guard !destinations.isEmpty, offset != 0 else { return current }
+        guard let current,
+              let currentIndex = destinations.firstIndex(of: current) else {
+            return offset > 0 ? destinations.first : destinations.last
+        }
+
+        let count = destinations.count
+        let nextIndex = (currentIndex + offset % count + count) % count
+        return destinations[nextIndex]
+    }
+}
+
 private struct SettingsSidebar: View {
     private enum Layout {
         static let sectionHeaderTrailingInset: CGFloat = 8
         static let searchSectionSpacing = PluginSettingsTheme.Spacing.sectionHeaderContent
     }
 
+    private enum PluginSearchLayout {
+        static let rowID = "settings-sidebar-plugin-search"
+    }
+
     let configurationItems: [PluginSettingsPageItem]
+    let configurationSearchKeywordsByID: [String: [String]]
     let orderedDestinations: [SettingsNavigationDestination]
     @ObservedObject var sidebarPreferences: SettingsSidebarPreferencesStore
     @Binding var selection: SettingsNavigationDestination
+    let pluginSearchFocusRequestID: UInt
+    let selectionRevealRequestID: UInt
     let onSearch: () -> Void
+    @State private var isAppSectionExpanded = true
+    @State private var isCustomizeSectionExpanded = true
+    @State private var isConfigurationSectionExpanded = true
+    @State private var pluginSearchQuery = ""
+    @State private var highlightedPluginSearchDestination: SettingsNavigationDestination?
+    @State private var showsPluginSearchHighlight = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2314,6 +2534,12 @@ private struct SettingsSidebar: View {
                 onActivate: onSearch
             )
             .frame(height: 30)
+            .overlay(alignment: .trailing) {
+                keyboardShortcutBadge("⌘K")
+                    .padding(.trailing, 14)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             .padding(.horizontal, 8)
             .padding(.top, 8)
             .padding(.bottom, Layout.searchSectionSpacing)
@@ -2321,22 +2547,29 @@ private struct SettingsSidebar: View {
             ScrollViewReader { proxy in
                 List(selection: optionalSelectionBinding) {
                     Section {
-                        ForEach(appDestinations, id: \.self) { destination in
-                            sidebarRow(for: destination)
+                        if isAppSectionExpanded {
+                            ForEach(appDestinations, id: \.self) { destination in
+                                sidebarRow(for: destination)
+                            }
                         }
                     } header: {
-                        Text("MacTools")
+                        disclosureSectionHeader(
+                            title: "MacTools",
+                            isExpanded: $isAppSectionExpanded
+                        )
                     }
 
                     Section {
-                        ForEach(primaryPluginDestinations, id: \.self) { destination in
-                            sidebarRow(for: destination)
+                        if isCustomizeSectionExpanded {
+                            ForEach(primaryPluginDestinations, id: \.self) { destination in
+                                sidebarRow(for: destination)
+                            }
                         }
                     } header: {
-                        Text(AppL10n.settings(
-                            "plugins.sidebar.pluginsSection",
-                            defaultValue: "插件"
-                        ))
+                        disclosureSectionHeader(
+                            title: customizeSectionTitle,
+                            isExpanded: $isCustomizeSectionExpanded
+                        )
                     }
 
                     Section {
@@ -2344,20 +2577,57 @@ private struct SettingsSidebar: View {
                             Text(emptyConfigurationsText)
                                 .font(PluginSettingsTheme.Typography.secondaryLabel)
                                 .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(configurationDestinations, id: \.self) { destination in
-                                sidebarRow(for: destination)
+                        } else if isConfigurationSectionExpanded {
+                            pluginSearchField
+
+                            if filteredConfigurationDestinations.isEmpty {
+                                Text(AppL10n.settings(
+                                    "settings.sidebar.pluginSearch.noResults",
+                                    defaultValue: "未找到匹配的插件设置。请尝试其他名称或 ID。"
+                                ))
+                                    .font(PluginSettingsTheme.Typography.secondaryLabel)
+                                    .foregroundStyle(.secondary)
+                            } else if normalizedPluginSearchQuery.isEmpty {
+                                ForEach(filteredConfigurationDestinations, id: \.self) { destination in
+                                    sidebarRow(for: destination)
+                                }
+                                .onMove(perform: moveConfigurations)
+                            } else {
+                                ForEach(filteredConfigurationDestinations, id: \.self) { destination in
+                                    sidebarRow(for: destination)
+                                }
                             }
-                            .onMove(perform: moveConfigurations)
                         }
                     } header: {
                         configurationSectionHeader
                     }
                 }
                 .listStyle(.sidebar)
-                .onChange(of: selection) { _, destination in
+                .onChange(of: pluginSearchQuery) {
+                    synchronizePluginSearchHighlight(resetToFirst: true)
+                }
+                .onChange(of: filteredConfigurationDestinations) {
+                    synchronizePluginSearchHighlight(resetToFirst: false)
+                }
+                .onChange(of: highlightedPluginSearchDestination) { _, destination in
+                    guard showsPluginSearchHighlight, let destination else { return }
                     withAnimation {
-                        proxy.scrollTo(destination)
+                        proxy.scrollTo(destination, anchor: .center)
+                    }
+                }
+                .onChange(of: selection) { _, destination in
+                    reveal(destination, using: proxy)
+                }
+                .onChange(of: selectionRevealRequestID) {
+                    reveal(selection, using: proxy)
+                }
+                .onChange(of: pluginSearchFocusRequestID) {
+                    isConfigurationSectionExpanded = true
+                    withAnimation {
+                        proxy.scrollTo(PluginSearchLayout.rowID, anchor: .center)
+                    }
+                    DispatchQueue.main.async {
+                        synchronizePluginSearchHighlight(resetToFirst: false)
                     }
                 }
                 .accessibilityElement(children: .contain)
@@ -2377,6 +2647,13 @@ private struct SettingsSidebar: View {
         )
     }
 
+    private var customizeSectionTitle: String {
+        AppL10n.settings(
+            "settings.sidebar.customizeSection",
+            defaultValue: "自定义"
+        )
+    }
+
     private var configurationOrderItems: [SettingsSidebarPluginOrderItem] {
         configurationItems.map {
             SettingsSidebarPluginOrderItem(
@@ -2390,7 +2667,7 @@ private struct SettingsSidebar: View {
     private var appDestinations: [SettingsNavigationDestination] {
         orderedDestinations.filter {
             switch $0 {
-            case .general, .permissions, .plugins(.automation), .about:
+            case .general, .permissions, .about:
                 true
             case .plugins:
                 false
@@ -2401,9 +2678,6 @@ private struct SettingsSidebar: View {
     private var primaryPluginDestinations: [SettingsNavigationDestination] {
         orderedDestinations.filter {
             guard case let .plugins(pane) = $0 else {
-                return false
-            }
-            guard pane != .automation else {
                 return false
             }
             if case .configuration = pane {
@@ -2423,6 +2697,151 @@ private struct SettingsSidebar: View {
             }
             return false
         }
+    }
+
+    private var normalizedPluginSearchQuery: String {
+        pluginSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var filteredConfigurationDestinations: [SettingsNavigationDestination] {
+        guard !normalizedPluginSearchQuery.isEmpty else {
+            return configurationDestinations
+        }
+        return configurationDestinations.filter { destination in
+            guard case let .plugins(.configuration(pluginID)) = destination else {
+                return false
+            }
+            guard let item = configurationItems.first(where: { $0.id == pluginID }) else {
+                return false
+            }
+            return SettingsSidebarPluginSearchPolicy.matches(
+                query: normalizedPluginSearchQuery,
+                title: item.title,
+                pluginID: pluginID,
+                description: item.description,
+                keywords: configurationSearchKeywordsByID[pluginID] ?? []
+            )
+        }
+    }
+
+    private var pluginSearchField: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            SettingsSidebarPluginFilterField(
+                text: $pluginSearchQuery,
+                prompt: AppL10n.settings(
+                    "settings.sidebar.pluginSearch.prompt",
+                    defaultValue: "筛选插件设置"
+                ),
+                focusRequestID: pluginSearchFocusRequestID,
+                onCommand: handlePluginSearchFieldCommand
+            )
+            .frame(maxWidth: .infinity, minHeight: 18)
+
+            if pluginSearchQuery.isEmpty {
+                keyboardShortcutBadge("⌘9")
+                    .accessibilityHidden(true)
+            } else {
+                Text("\(filteredConfigurationDestinations.count)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+                    .help(pluginSearchResultCountText)
+                    .accessibilityLabel(pluginSearchResultCountText)
+
+                Button {
+                    pluginSearchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(AppL10n.settings(
+                    "settings.sidebar.pluginSearch.clear",
+                    defaultValue: "清除插件搜索"
+                ))
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .id(PluginSearchLayout.rowID)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var pluginSearchResultCountText: String {
+        AppL10n.settingsFormat(
+            "settings.sidebar.pluginSearch.resultCountFormat",
+            defaultValue: "%d 个结果",
+            filteredConfigurationDestinations.count
+        )
+    }
+
+    private func keyboardShortcutBadge(_ shortcut: String) -> some View {
+        Text(shortcut)
+            .font(PluginSettingsTheme.Typography.statusBadge)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.12))
+            )
+    }
+
+    private func handlePluginSearchFieldCommand(
+        _ command: SettingsSidebarPluginFilterField.Command
+    ) {
+        switch command {
+        case let .moveSelection(offset):
+            highlightedPluginSearchDestination = SettingsSidebarPluginSearchPolicy
+                .movedSelection(
+                    from: showsPluginSearchHighlight
+                        ? highlightedPluginSearchDestination
+                        : nil,
+                    offset: offset,
+                    in: filteredConfigurationDestinations
+                )
+            showsPluginSearchHighlight = highlightedPluginSearchDestination != nil
+        case .submit:
+            openHighlightedPluginSearchResult()
+        case .cancel:
+            if pluginSearchQuery.isEmpty {
+                showsPluginSearchHighlight = false
+                highlightedPluginSearchDestination = nil
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            } else {
+                pluginSearchQuery = ""
+            }
+        }
+    }
+
+    private func openHighlightedPluginSearchResult() {
+        guard let destination = highlightedPluginSearchDestination
+            ?? filteredConfigurationDestinations.first else {
+            return
+        }
+        selection = destination
+        highlightedPluginSearchDestination = destination
+        showsPluginSearchHighlight = true
+    }
+
+    private func synchronizePluginSearchHighlight(resetToFirst: Bool) {
+        guard !normalizedPluginSearchQuery.isEmpty else {
+            highlightedPluginSearchDestination = nil
+            showsPluginSearchHighlight = false
+            return
+        }
+
+        let currentHighlightIsAvailable = highlightedPluginSearchDestination.map {
+            filteredConfigurationDestinations.contains($0)
+        } ?? false
+        if resetToFirst || !currentHighlightIsAvailable {
+            highlightedPluginSearchDestination = filteredConfigurationDestinations.first
+        }
+        showsPluginSearchHighlight = highlightedPluginSearchDestination != nil
     }
 
     @ViewBuilder
@@ -2512,7 +2931,9 @@ private struct SettingsSidebar: View {
                     title: title,
                     systemImage: item.iconName,
                     iconTint: item.iconTint,
-                    shortcutNumber: shortcutNumber
+                    shortcutNumber: shortcutNumber,
+                    isSearchHighlighted: showsPluginSearchHighlight
+                        && highlightedPluginSearchDestination == destination
                 )
                 .tag(destination)
                 .id(destination)
@@ -2522,11 +2943,10 @@ private struct SettingsSidebar: View {
 
     private var configurationSectionHeader: some View {
         HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-            Text(AppL10n.settings(
-                "plugins.sidebar.configurationSection",
-                defaultValue: "插件设置"
-            ))
-                .foregroundStyle(.secondary)
+            disclosureSectionHeader(
+                title: configurationSectionTitle,
+                isExpanded: $isConfigurationSectionExpanded
+            )
 
             Spacer(minLength: 0)
 
@@ -2615,12 +3035,79 @@ private struct SettingsSidebar: View {
 
     private func shortcutNumber(for destination: SettingsNavigationDestination) -> Int? {
         guard
-            let index = orderedDestinations.firstIndex(of: destination),
-            index < 9
+            let index = SettingsNavigationDestination.numberedSidebarDestinations
+                .firstIndex(of: destination)
         else {
             return nil
         }
         return index + 1
+    }
+
+    private var configurationSectionTitle: String {
+        AppL10n.settings(
+            "plugins.sidebar.configurationSection",
+            defaultValue: "插件设置"
+        )
+    }
+
+    private func disclosureSectionHeader(
+        title: String,
+        isExpanded: Binding<Bool>
+    ) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isExpanded.wrappedValue.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isExpanded.wrappedValue
+                    ? "chevron.down"
+                    : "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                Text(title)
+            }
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(disclosureTitle(title: title, isExpanded: isExpanded.wrappedValue))
+    }
+
+    private func disclosureTitle(title: String, isExpanded: Bool) -> String {
+        if isExpanded {
+            return AppL10n.settingsFormat(
+                "settings.sidebar.section.collapseFormat",
+                defaultValue: "收起%@",
+                title
+            )
+        }
+        return AppL10n.settingsFormat(
+            "settings.sidebar.section.expandFormat",
+            defaultValue: "展开%@",
+            title
+        )
+    }
+
+    private func reveal(
+        _ destination: SettingsNavigationDestination,
+        using proxy: ScrollViewProxy
+    ) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            switch destination {
+            case .general, .permissions, .about:
+                isAppSectionExpanded = true
+            case .plugins(.configuration):
+                isConfigurationSectionExpanded = true
+            case .plugins:
+                isCustomizeSectionExpanded = true
+            }
+        }
+
+        DispatchQueue.main.async {
+            withAnimation {
+                proxy.scrollTo(destination)
+            }
+        }
     }
 
     private func moveConfigurations(fromOffsets: IndexSet, toOffset: Int) {
@@ -2633,9 +3120,22 @@ private struct SettingsSidebar: View {
 
     private var optionalSelectionBinding: Binding<SettingsNavigationDestination?> {
         Binding(
-            get: { selection },
+            get: {
+                showsPluginSearchHighlight ? nil : selection
+            },
             set: { newSelection in
-                guard let newSelection, newSelection != selection else {
+                guard let newSelection else { return }
+
+                if filteredConfigurationDestinations.contains(newSelection),
+                   !normalizedPluginSearchQuery.isEmpty {
+                    highlightedPluginSearchDestination = newSelection
+                    showsPluginSearchHighlight = true
+                } else {
+                    highlightedPluginSearchDestination = nil
+                    showsPluginSearchHighlight = false
+                }
+
+                guard newSelection != selection else {
                     return
                 }
 
@@ -2772,6 +3272,7 @@ private struct SettingsSidebarRow: View {
     let systemImage: String
     let iconTint: Color
     let shortcutNumber: Int?
+    var isSearchHighlighted = false
 
     var body: some View {
         HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
@@ -2797,11 +3298,20 @@ private struct SettingsSidebarRow: View {
             }
         }
         .font(.body)
+        .background {
+            if isSearchHighlighted {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.16))
+                    .padding(.horizontal, -5)
+                    .padding(.vertical, -2)
+            }
+        }
         .focusable(false)
         .help(title)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityHint(shortcutAccessibilityHint)
+        .accessibilityAddTraits(isSearchHighlighted ? .isSelected : [])
     }
 
     private var shortcutAccessibilityHint: String {

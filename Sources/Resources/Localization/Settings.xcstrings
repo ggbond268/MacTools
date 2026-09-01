@@ -665,6 +665,118 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "功能面板" } }
       }
     },
+    "settings.sidebar.customizeSection": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تخصيص" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Anpassen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Customize" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Personalizar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Personnaliser" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "カスタマイズ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "사용자화" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Personalizar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Настройка" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂" } }
+      }
+    },
+    "settings.sidebar.pluginSearch.prompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تصفية إعدادات المكونات الإضافية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Plugin-Einstellungen filtern" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Filter Plugin Settings" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Filtrar ajustes de complementos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Filtrer les réglages des plugins" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "プラグイン設定を絞り込む" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "플러그인 설정 필터링" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Filtrar ajustes de plug-ins" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Фильтр настроек плагинов" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "筛选插件设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "篩選外掛設定" } }
+      }
+    },
+    "settings.sidebar.pluginSearch.noResults": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لا توجد إعدادات مطابقة. جرّب اسمًا أو معرّفًا مختلفًا." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Keine passenden Plugin-Einstellungen. Versuche einen anderen Namen oder eine andere ID." } },
+        "en": { "stringUnit": { "state": "translated", "value": "No matching plugin settings. Try a different name or ID." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No hay ajustes de complementos coincidentes. Prueba otro nombre o ID." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aucun réglage de plugin correspondant. Essayez un autre nom ou identifiant." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "一致するプラグイン設定がありません。別の名前または ID をお試しください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "일치하는 플러그인 설정이 없습니다. 다른 이름이나 ID를 사용해 보세요." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Nenhum ajuste de plug-in correspondente. Tente outro nome ou ID." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Нет подходящих настроек плагинов. Попробуйте другое имя или ID." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未找到匹配的插件设置。请尝试其他名称或 ID。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "找不到相符的外掛設定。請嘗試其他名稱或 ID。" } }
+      }
+    },
+    "settings.sidebar.pluginSearch.resultCountFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "%d نتيجة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%d Ergebnisse" } },
+        "en": { "stringUnit": { "state": "translated", "value": "%d results" } },
+        "es": { "stringUnit": { "state": "translated", "value": "%d resultados" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%d résultats" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%d件" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%d개 결과" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "%d resultados" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Результатов: %d" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "%d 个结果" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "%d 個結果" } }
+      }
+    },
+    "settings.sidebar.pluginSearch.clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مسح بحث المكونات الإضافية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Plugin-Suche löschen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clear Plugin Search" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Borrar búsqueda de complementos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Effacer la recherche de plugins" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "プラグイン検索を消去" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "플러그인 검색 지우기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Limpar busca de plug-ins" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Очистить поиск плагинов" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "清除插件搜索" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除外掛搜尋" } }
+      }
+    },
+    "settings.sidebar.section.collapseFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "طي %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ reduzieren" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Collapse %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Contraer %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réduire %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@を折りたたむ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@ 접기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Recolher %@" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Свернуть %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "收起%@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "收合%@" } }
+      }
+    },
+    "settings.sidebar.section.expandFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "توسيع %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ erweitern" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Expand %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Expandir %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Développer %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@を展開" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@ 펼치기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Expandir %@" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Развернуть %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "展开%@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "展開%@" } }
+      }
+    },
     "settings.sidebar.accessibilityLabel": {
       "extractionState": "manual",
       "localizations": {
