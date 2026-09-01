@@ -99,14 +99,14 @@ struct DeviceBatterySettingsView: View {
                 action: store.setShowBluetoothDevices
             )
             sourceToggle(
-                title: localization.string("settings.source.rapoo.title", defaultValue: "厂商 HID 鼠标"),
+                title: localization.string("settings.source.vendorHID.title", defaultValue: "厂商 HID 鼠标"),
                 description: localization.string(
-                    "settings.source.rapoo.description",
+                    "settings.source.vendorHID.description",
                     defaultValue: "读取已适配鼠标的电量、充电状态、设备型号和名称。"
                 ),
-                isOn: store.showRapooDevices,
+                isOn: store.showVendorHIDDevices,
                 isLast: true,
-                action: store.setShowRapooDevices
+                action: store.setShowVendorHIDDevices
             )
         }
     }

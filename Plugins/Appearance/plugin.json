@@ -49,6 +49,32 @@
     }
   },
   "productStrings": {
+    "action-appearance-set-mode-title": {
+      "ar": "تعيين مظهر النظام",
+      "de": "Systemdarstellung festlegen",
+      "en": "Set System Appearance",
+      "es": "Establecer apariencia del sistema",
+      "fr": "Définir l’apparence du système",
+      "ja": "システムの外観を設定",
+      "ko": "시스템 화면 모드 설정",
+      "pt": "Definir aparência do sistema",
+      "ru": "Настроить оформление системы",
+      "zh-Hans": "设置系统外观",
+      "zh-Hant": "設定系統外觀"
+    },
+    "action-appearance-set-mode-description": {
+      "ar": "اختر مظهر النظام التلقائي أو الفاتح أو الداكن.",
+      "de": "Automatische, helle oder dunkle Systemdarstellung wählen.",
+      "en": "Choose automatic, light, or dark system appearance.",
+      "es": "Elige la apariencia automática, clara u oscura del sistema.",
+      "fr": "Choisissez une apparence automatique, claire ou sombre pour le système.",
+      "ja": "システムの外観を自動、ライト、ダークから選択します。",
+      "ko": "시스템 화면 모드를 자동, 라이트 또는 다크로 선택합니다.",
+      "pt": "Escolha a aparência automática, clara ou escura do sistema.",
+      "ru": "Выберите автоматическое, светлое или тёмное оформление системы.",
+      "zh-Hans": "选择自动、浅色或深色系统外观。",
+      "zh-Hant": "選擇自動、淺色或深色系統外觀。"
+    },
     "long-description": {
       "ar": "بدّل مظهر macOS بين الوضعين الفاتح والداكن من أي سطح إجراءات في MacTools.",
       "de": "Wechsle die macOS-Darstellung über jede MacTools-Aktionsoberfläche zwischen Hell und Dunkel.",
@@ -184,7 +210,7 @@
     "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
     "supportURL": "https://github.com/ggbond268/MacTools/issues",
     "publisher": "MacTools",
-    "license": "Apache-2.0"
+    "license": "GPL-3.0-only"
   },
   "discovery": {
     "keywords": [
@@ -352,6 +378,19 @@
               "app-intent",
               "manual"
             ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "set-mode",
+            "title": "@productStrings.action-appearance-set-mode-title",
+            "description": "@productStrings.action-appearance-set-mode-description",
+            "keywords": ["appearance", "auto", "light", "dark"],
+            "systemImage": "circle.lefthalf.filled",
+            "parameters": [{ "id": "mode", "kind": "string", "isRequired": true, "portability": "portable" }],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": ["unified-search", "global-shortcut", "run-link", "workflow", "automatic-rule", "action-grid", "trackpad-gesture", "app-intent", "manual"],
             "automaticEligible": true,
             "externalInvocation": "allowed"
           }

@@ -6,9 +6,8 @@ import os
 
 /// Full Disk Access probe (design §9).
 ///
-/// Implemented locally in the plugin, not via host permission cards: PluginKit v3's
-/// `PluginPermissionKind` has no fullDiskAccess case, and adding one would change the
-/// shared ABI while the loader requires exact `pluginKitVersion` equality.
+/// The capability probe remains plugin-owned so the scan engine, contextual warnings, and
+/// host-rendered permission card share one cached result for the lifetime of the process.
 protocol DiskCleanFullDiskAccessProbing: Sendable {
     var hasFullDiskAccess: Bool { get }
 }

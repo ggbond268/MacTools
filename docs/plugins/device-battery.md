@@ -15,11 +15,11 @@
 - Battery percentage and charging state are resolved independently. Sources that expose only a percentage, including IOBluetooth and the standard GATT Battery Service, report an unknown charging state instead of assuming that the device is not charging. Only explicit state fields or flags can replace a known charging state.
 - Apple mobile devices use their stable MobileDevice identifier as the physical identity. The device-reported Bluetooth address is retained as a strong alias, allowing USB, Wi-Fi, and BLE observations of the same physical device to consolidate without comparing display names. Unmatched BatteryCenter mobile records are excluded because BatteryCenter identifiers cannot be proven equivalent to MobileDevice identifiers.
 - When a current MobileDevice percentage lacks charging fields, a current diagnostics-registry state can complete that observation without replacing its percentage. A recent explicit state may bridge a transient read failure for up to three minutes without advancing its original observation time; a confirmed disconnection clears the device immediately.
-- Rapoo VT-series mice use the vendor HID interface matched by `VendorID = 0x24AE`, `PrimaryUsagePage = 0xFF00`, and `PrimaryUsage = 0x0001`. Each connected HID device keeps its own stable snapshot instead of replacing the previously detected mouse.
+- Vendor HID mice (Rapoo, MCHOSE) use vendor-defined HID interfaces: Rapoo receivers match `VendorID = 0x24AE`, `PrimaryUsagePage = 0xFF00`, `PrimaryUsage = 0x0001`; MCHOSE mice match `VendorID = 0x3837`, `PrimaryUsagePage = 0xFF0B`, `PrimaryUsage = 0x00C4`. Each connected HID device keeps its own stable snapshot instead of replacing the previously detected mouse.
 
 The AirPods component keys exposed by `system_profiler` and local logs, the installed CoreTypes product metadata, and Apple headphone manufacturer advertisements are undocumented macOS implementation details rather than stable public APIs. Unknown advertisement packet shapes and battery nibble values are ignored.
 
-雷柏鼠标电量来自本机 HID input report，不访问雷柏网页，也不请求网络。第一版只监听设备主动上报，不主动发送刷新命令。
+厂商鼠标（雷柏、迈从）电量来自本机 HID，不访问厂商网页，也不请求网络。雷柏设备只监听主动上报的 input report；迈从设备不会主动上报电量，插件通过厂商接口发送 readBasics 查询并解析响应。
 
 Bluetooth log fallback queries a bounded recent window of the local unified log with predicates, an output filter, and a timeout, then correlates usable readings with known battery targets. AirPods and Beats advertisement scans run for a short, bounded interval only when connected Apple headphone candidates require them. Standard GATT battery devices are retrieved through the Battery Service first; unresolved GATT targets use a Battery-Service-scoped scan, while an all-advertisement scan is reserved for Apple headphone manufacturer data that has no public service-UUID contract. The plugin stops each scan promptly, does not keep an all-device BLE scan running, and keeps all readings local.
 
@@ -37,17 +37,25 @@ These measures reduce avoidable polling, process launches, and Bluetooth discove
 
 Apple 移动设备首次使用时，需要通过数据线连接 Mac 并在设备上选择“信任”。在 Finder 中启用通过 Wi-Fi 显示设备后，同一局域网内可无线读取。该路径使用 Apple 未公开但随 macOS 提供的系统框架；组件面板可见时按 90 秒最短间隔刷新，面板隐藏后放宽到 5 分钟。框架、符号或返回字段变化时会无崩溃降级，不影响其他电量来源。设备 UDID 不进入 UI 或普通日志，仅使用本地稳定摘要做去重。
 
-Apple Pencil 不采用 AirBattery 的长时间设备 syslog 扫描方案。该方案本身属于 Beta，首次发现慢且可能增加 iPad 耗电，不符合 MacTools 的轻量、非干扰目标。
+Apple Pencil discovery does not use a long-running device syslog scan. That approach has slow initial discovery and may increase iPad energy use, which conflicts with MacTools' lightweight, non-disruptive design.
 
-## 雷蛇设备说明
+## Razer devices
 
-AirBattery 没有雷蛇专用 VID/PID 表、HyperSpeed 接收器命令或厂商 HID 电量协议。它对雷蛇设备的兼容来自通用 `bluetoothd` 电源日志和标准 BLE Battery Service (`0x180F` / `0x2A19`)。DeviceBattery 已具备对应的通用路径，因此蓝牙直连、且由设备或 macOS 上报电量的雷蛇鼠标、键盘或耳机可以显示；使用 2.4G HyperSpeed 接收器且不向系统暴露电量的型号仍需按具体设备协议单独适配。
+DeviceBattery supports Razer hardware only through generic `bluetoothd` power observations and the standard BLE Battery Service (`0x180F` / `0x2A19`). Bluetooth devices that report a battery level through the device or macOS can appear. Models connected through a 2.4 GHz HyperSpeed receiver that exposes no system battery data require a separately verified device protocol.
 
 ## 雷柏 HID 维护依据
 
 雷柏 Hub 网页使用 WebHID 直连本机设备，已知过滤条件为 `vendorId = 0x24AE`、`usagePage = 0xFF00`。VT7 在 macOS `ioreg` 中对应厂商接口 `ProductID = 5139`、`PrimaryUsagePage = 65280`、`PrimaryUsage = 1`；雷柏网页设备表将 `5139` 映射到 Web 产品 ID `17939`，型号为 `VT7`，协议字段为 `protocol = "1"`、`featureReportId = 8`。
 
 当前实现固化了已确认的 VT 系列接收器 Product ID 与 Web 产品 ID 映射，并只处理 input report id `7`。协议 1 的电量解析优先使用 `status = data[6]`、`battery = data[7]`，同时保留 `status = data[7]`、`battery = data[8]` 作为候选偏移。`status` 取值 `1` 表示正常，`2` 表示充电中，`battery` 只接受 `0...100`。
+
+## 迈从 HID 维护依据
+
+迈从 Hub 网页同样使用 WebHID 直连本机设备，社区已知的 hub 原生协议族为 `vendorId = 0x3837`。实测 A7 V3 Ultra+ 有线连接时，厂商接口为 `ProductID = 0x1018`、`PrimaryUsagePage = 0xFF0B`、`PrimaryUsage = 0x00C4`，最大输入/输出 report 均为 64 字节。
+
+新版“0x4d 协议”所有帧都使用 report ID `0x4D`，帧头为 `0x4d 01 01 <长度> <命令小端两字节> 00 00`，命令后跟 XOR 校验（bytes 2...7 异或）。电量查询命令为 `4d 01 01 00 00 09 00 00 08`（readBasics，cmd `0x0900`）。实测 A7 V3 Ultra+ 会原样回显命令字 `0x0900`，社区抓包（其他型号）描述过 `0x0010`，两种响应命令均接受。响应 payload 从第 8 字节开始，为 `vid:u16le, pid:u16le, fw:u32le, 保留 ×2, mode:u8, charge:u8, level:u8`，即 `level = payload[12]`、`charge = payload[11]`（`charge != 0` 表示充电中，`level` 只接受 `0...100`）。该偏移已在真实 A7 V3 Ultra+ 上与官方驱动显示的电量比对验证。
+
+当前型号表只收录已验证 VID/PID 且厂商接口位于 `0xFF0B/0x00C4` 的型号：A7 V3 Ultra+（`0x1018`，实测）与社区记录的 G3 V2、G3 V2 Pro、A7e、A7e Pro。实测中 MagDock 充电底座接入时，A7 会通过 USB 暴露 `0xFF0B/0x00C4` 厂商接口并把 readBasics 查询经无线电转发给无线连接的鼠标（响应中的 pid 为鼠标本体 `0x4026`，而非 USB 接口 PID），因此无线模式同样可读电量。MagDock 自身的 `0xFF00` 接口（`0x1012`）不回复 0x4d 电量帧，不在匹配范围内。
 
 ## Layout
 
@@ -64,4 +72,4 @@ Both layouts consume the full normalized device snapshot without applying a fixe
 
 ## 权限
 
-系统电池、Apple 移动设备和蓝牙系统信息通常不需要额外授权。Apple 移动设备需要先信任此 Mac。雷柏 HID 读取可能被 macOS 归入输入监控权限；如果 `IOHIDManagerOpen` 返回 `0xE00002E2`，插件会提示打开输入监控设置。
+系统电池、Apple 移动设备和蓝牙系统信息通常不需要额外授权。Apple 移动设备需要先信任此 Mac。厂商 HID 读取（雷柏、迈从）可能被 macOS 归入输入监控权限；如果 `IOHIDManagerOpen` 返回 `0xE00002E2`，插件会提示打开输入监控设置。

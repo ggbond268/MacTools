@@ -37,6 +37,7 @@
 - 插件实现 `MacToolsPlugin`；菜单栏主面板实现 `PluginPrimaryPanel`，组件面板实现 `PluginComponentPanel`。
 - `plugin.json.id` 必须稳定、可读，并与运行时 `PluginMetadata.id` 完全一致；每个插件包只返回一个插件实例。
 - 插件展示状态通过 `PluginPanelState`、`PluginPanelDetail`、`PluginPanelControl` 等模型表达，不绕过现有面板框架。
+- 插件需要组合现有提供者的规范动作时，可采用 `PluginActionExecutionHostContextConsuming`；不要直接调用提供者实现或重复系统写入。该桥接只负责查询和执行，让宿主继续统一处理可用性、安全、确认和诊断。参考实现见 `docs/plugins/mac-settings.md`。
 - 插件设置优先使用 `settingsSections`、`permissionRequirements`、`shortcutDefinitions` 等描述式模型；只有复杂管理器或专用交互才使用 `PluginConfiguration` 自定义视图。
 - 普通插件资源文件如果依赖变更较少，推荐直接打包到可执行二进制中；需要额外 bundle 资源时，在插件自己的 `project.yml` 中声明最小差异。
 - 自定义插件设置视图必须复用 `MacToolsPluginKit.PluginSettingsTheme` 和 `.pluginSettingsCardBackground(...)`，不要复制插件私有 settings style，也不要让插件依赖 `Sources/App/SettingsStyle.swift`。

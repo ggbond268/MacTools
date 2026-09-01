@@ -38,6 +38,8 @@ private func settingsNavigationTitle(
         AppL10n.settings("plugins.sidebar.featurePanel", defaultValue: "功能面板")
     case .plugins(.marketplace):
         AppL10n.settings("plugins.sidebar.marketplace", defaultValue: "市场")
+    case .marketplaceDetail:
+        AppL10n.settings("plugins.sidebar.marketplace", defaultValue: "市场")
     case let .plugins(.configuration(pluginID)):
         configurationItems.first { $0.id == pluginID }?.title
             ?? AppL10n.settings("tab.plugins", defaultValue: "插件")
@@ -155,6 +157,9 @@ struct SettingsView: View {
         .onChange(of: pluginHost.pluginSettingsItems.map(\.id)) {
             navigationCoordinator.reconcileCurrentDestinationAvailability()
         }
+        .onChange(of: pluginHost.pluginManagementItems) {
+            navigationCoordinator.reconcileCurrentDestinationAvailability()
+        }
         .blur(
             radius: navigationCoordinator.isUnifiedSearchPresented
                 && !accessibilityReduceTransparency
@@ -186,7 +191,7 @@ struct SettingsView: View {
 
     private var settingsSelection: Binding<SettingsNavigationDestination> {
         Binding {
-            navigationCoordinator.destination
+            navigationCoordinator.destination.sidebarDestination
         } set: { destination in
             navigationCoordinator.navigate(to: destination)
         }
@@ -2110,7 +2115,7 @@ private struct SettingsSidebar: View {
             switch $0 {
             case .general, .plugins(.automation), .about:
                 true
-            case .plugins:
+            case .plugins, .marketplaceDetail:
                 false
             }
         }
@@ -2226,6 +2231,8 @@ private struct SettingsSidebar: View {
                 .tag(destination)
                 .id(destination)
             }
+        case .marketplaceDetail:
+            EmptyView()
         }
     }
 
@@ -2598,6 +2605,12 @@ private struct SettingsDetailPane: View {
                 uninstallConfirmationSession: uninstallConfirmationSession,
                 showDashboard: showDashboard,
                 showFeaturePanel: showFeaturePanel
+            )
+        case let .marketplaceDetail(target):
+            MarketplacePluginDetailView(
+                pluginHost: pluginHost,
+                navigationCoordinator: navigationCoordinator,
+                target: target
             )
         }
     }
@@ -3081,6 +3094,13 @@ private struct PluginSettingsDetailPane: View {
             }
             activeSearchTarget = nil
         }
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
+            // Permission changes are completed in System Settings while MacTools is inactive.
+            // Refresh every provider once on return so form and workspace cards use current state.
+            pluginHost.refreshAll()
+        }
     }
 
     @ViewBuilder
@@ -3159,9 +3179,9 @@ private struct PluginFormPage: View {
 
     var body: some View {
         SettingsGroupedFormPageScaffold(introduction: item.introductionConfiguration) { widths in
-            if !item.permissionCards.isEmpty {
+            if !item.missingPermissionCards.isEmpty {
                 Section {
-                    ForEach(item.permissionCards) { card in
+                    ForEach(item.missingPermissionCards) { card in
                         PermissionSettingsRow(
                             card: card,
                             statusColor: statusColor(for: card.statusTone),
@@ -3177,6 +3197,7 @@ private struct PluginFormPage: View {
                             entryID: card.id
                         )
                         .settingsGroupedFormRowWidth(widths.sectionLayout)
+                        .listRowBackground(Color.orange.opacity(0.08))
                     }
                 } header: {
                     SettingsGroupedFormSectionHeader(
@@ -3184,9 +3205,10 @@ private struct PluginFormPage: View {
                             "plugins.configuration.section.permissions",
                             defaultValue: "权限"
                         ),
-                        systemImage: "lock.shield",
+                        systemImage: "exclamationmark.shield",
                         layoutWidth: widths.readableContent
                     )
+                    .foregroundStyle(.orange)
                 }
             }
 
@@ -3393,6 +3415,7 @@ private struct PluginWorkspacePage: View {
                         spacing: SettingsPageLayout.introductionContentSpacing
                     ) {
                         introduction
+                        workspacePermissions
                         workspaceContent
                     }
                 }
@@ -3402,6 +3425,7 @@ private struct PluginWorkspacePage: View {
                     spacing: SettingsPageLayout.introductionContentSpacing
                 ) {
                     introduction
+                    workspacePermissions
                     workspaceContent
                         .frame(maxHeight: .infinity, alignment: .topLeading)
                 }
@@ -3413,6 +3437,57 @@ private struct PluginWorkspacePage: View {
         SettingsPageIntroduction(
             configuration: item.introductionConfiguration
         )
+    }
+
+    @ViewBuilder
+    private var workspacePermissions: some View {
+        if !item.missingPermissionCards.isEmpty {
+            VStack(
+                alignment: .leading,
+                spacing: PluginSettingsTheme.Spacing.sectionHeaderContent
+            ) {
+                Label(
+                    AppL10n.settings(
+                        "plugins.configuration.section.permissions",
+                        defaultValue: "权限"
+                    ),
+                    systemImage: "exclamationmark.shield"
+                )
+                .font(PluginSettingsTheme.Typography.sectionTitle)
+                .foregroundStyle(.orange)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(item.missingPermissionCards.enumerated()), id: \.element.id) { index, card in
+                        PermissionSettingsRow(
+                            card: card,
+                            statusColor: statusColor(for: card.statusTone),
+                            onAction: {
+                                pluginHost.performPermissionAction(
+                                    pluginID: card.pluginID,
+                                    permissionID: card.permissionID
+                                )
+                            }
+                        )
+                        .pluginSettingsSearchAnchor(
+                            pluginID: card.pluginID,
+                            entryID: card.id
+                        )
+                        .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+
+                        if index < item.missingPermissionCards.count - 1 {
+                            Divider()
+                                .padding(.leading, PluginSettingsTheme.Spacing.rowHorizontal)
+                        }
+                    }
+                }
+                .pluginSettingsCardBackground(.standard)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.orange.opacity(0.65))
+                        .frame(width: 3)
+                }
+            }
+        }
     }
 
     private var workspaceContent: some View {

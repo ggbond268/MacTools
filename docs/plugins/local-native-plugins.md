@@ -6,6 +6,8 @@ This phase intentionally supports only trusted local plugins built by the same d
 
 For catalog-based installation, GitHub release distribution, and Debug `file://` development catalogs, see [plugin-catalog.md](plugin-catalog.md).
 
+For a complete workspace-plugin example with a typed catalog, verified adapters, portable preferences, profiles, and composition of canonical actions from other providers, see [Mac Settings](mac-settings.md).
+
 ## Package Layout
 
 Use a directory package with the `.mactoolsplugin` extension:
@@ -13,6 +15,8 @@ Use a directory package with the `.mactoolsplugin` extension:
 ```text
 Example.mactoolsplugin/
   plugin.json
+  LICENSE                    # Required when the package is distributed independently
+  THIRD_PARTY_NOTICES.txt    # Present only when third-party notices apply
   Example.bundle/
     Contents/
       Info.plist
@@ -72,7 +76,7 @@ Plugins/Example/
   Resources/            # Optional plugin resources
 ```
 
-Only `plugin.json` and the built `.bundle` are copied into a `.mactoolsplugin` package. Bundle resources must therefore be copied into the built `.bundle` by the generated Xcode target. In this repository, `Plugins/<PluginName>/Resources` is automatically added to the generated bundle target, so plugin-owned `.xcstrings`, images, JSON files, and other runtime resources should live there. `Tests/` is included only by the host unit-test target during development and is never packaged into the app or plugin distribution.
+The runtime payload contains the projected `plugin.json` and the built `.bundle`. Bundle resources must therefore be copied into the built `.bundle` by the generated Xcode target. In this repository, `Plugins/<PluginName>/Resources` is automatically added to the generated bundle target, so plugin-owned `.xcstrings`, images, JSON files, and other runtime resources should live there. Official release packaging also copies the repository `LICENSE` into every independently distributed ZIP and generates a product-specific `THIRD_PARTY_NOTICES.txt` when required. These legal files are generated from central sources and are not maintained inside each plugin source directory. `Tests/` is included only by the host unit-test target during development and is never packaged into the app or plugin distribution.
 
 In this repository, plugin Xcode targets are generated before XcodeGen runs. The generator scans `Plugins/*/plugin.json` and applies a shared target template for `Sources/`, `Bundle/`, `Tests/`, plugin schemes, and the host test target. Most plugins do not need any root project changes. Add `Plugins/<PluginName>/project.yml` only for plugin-local build differences such as `OTHER_LDFLAGS`, `SWIFT_INCLUDE_PATHS`, extra bundle resources, helper/tool targets, or additional target dependencies. A helper/tool target can declare `bundleResourcePath` to have the generated bundle target copy its built executable into `Contents/Resources/<bundleResourcePath>/`.
 

@@ -18,6 +18,8 @@ The three schemes route to the matching installation. Stable, development, and N
 | Actions & Shortcuts | `mactools://app/settings/features/actions-and-shortcuts` |
 | Automation | `mactools://app/settings/features/automation` |
 | Plugin Marketplace | `mactools://app/settings/plugins/marketplace` |
+| Marketplace plugin details | `mactools://app/settings/plugins/marketplace/<plugin-id>` |
+| Marketplace static-action details | `mactools://app/settings/plugins/marketplace/<plugin-id>?provider=<provider-id>&action=<action-id>` |
 | Installed plugin settings | `mactools://app/settings/plugins/<plugin-id>` |
 | Dashboard | `mactools://app/panels/dashboard` |
 | Feature Panel | `mactools://app/panels/feature` |
@@ -29,12 +31,15 @@ For example:
 
 ```bash
 open 'mactools://app/settings/plugins/fan-control'
+open 'mactools://app/settings/plugins/marketplace/fan-control?provider=fan-control&action=set-speed'
 open 'mactools://app/panels/dashboard'
 open 'mactools://app/search'
 open 'mactools://app/actions/display-sleep/execute'
 ```
 
 Use the stable ID from the plugin's `plugin.json` for `<plugin-id>`. The ID `marketplace` is reserved for the host-owned Marketplace route and cannot be used by a plugin. A plugin settings link is accepted only when that plugin is installed, loaded, and provides settings. Dashboard and Feature Panel links always use show/focus behavior, so opening the same link again does not toggle the panel closed.
+
+Marketplace detail links are navigation-only. They can refer to an available or installed catalog entry, but never install a package or execute an action. `provider` and `action` are accepted only as a pair, must identify a catalog-published static action for that plugin, and reject unknown, duplicate, partial, or malformed values.
 
 ## Run Links
 
@@ -48,7 +53,7 @@ Mixed navigation and action links share one ordered cold-launch queue. The queue
 
 ## Compatibility
 
-Published routes are a backward-compatible product interface and are independent of the MacTools app version. New routes and optional navigation parameters may be added, but an existing route will keep its meaning. Unique unknown navigation query parameters are ignored; duplicate parameter names and all action-route query parameters are rejected, as are malformed or unavailable destinations.
+Published routes are a backward-compatible product interface and are independent of the MacTools app version. New routes and optional navigation parameters may be added, but an existing route will keep its meaning. Unique unknown navigation query parameters are ignored except for Marketplace-detail links, which accept only the paired `provider` and `action` highlight parameters. Duplicate parameter names and all action-route query parameters are rejected, as are malformed or unavailable destinations.
 
 The URL namespace has no global version. If a future feature needs an incompatible structured payload, that feature will use a dedicated `formatVersion` or `protocolVersion` parameter.
 

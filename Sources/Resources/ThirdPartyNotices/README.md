@@ -1,21 +1,9 @@
 # Third-Party Notices
 
-This directory records third-party assets, dependencies, and implementation references used by MacTools. The links below are provided for source tracking and acknowledgements; they do not imply that every listed project is packaged as a third-party component.
+[`manifest.json`](manifest.json) is the canonical inventory of third-party dependencies, adapted implementations, and assets that are included in MacTools release artifacts. Each entry pins an upstream revision, records its reviewed GPLv3 compatibility, identifies its relationship to MacTools, lists the affected products and source paths, and points to the retained upstream license text.
 
-- [Kyome22/menubar_runcat](https://github.com/Kyome22/menubar_runcat)
-- [tabler/tabler-icons](https://github.com/tabler/tabler-icons)
-- [sparkle-project/Sparkle](https://github.com/sparkle-project/Sparkle)
-- [LunarBar-app/LunarBar](https://github.com/LunarBar-app/LunarBar)
-- [MonitorControl/MonitorControl](https://github.com/MonitorControl/MonitorControl)
-- [artginzburg/MiddleClick](https://github.com/artginzburg/MiddleClick)
-- [orchetect/MenuBarExtraAccess](https://github.com/orchetect/MenuBarExtraAccess)
-- [auramagi/everypinch](https://github.com/auramagi/everypinch)
-- [asmagill/hs.\_asm.undocumented.touchdevice](https://github.com/asmagill/hs._asm.undocumented.touchdevice)
-- [SoloTeamDev/solofan](https://github.com/SoloTeamDev/solofan)
-- [designsbymuzeer/Bye-Mac-App](https://github.com/designsbymuzeer/Bye-Mac-App)
-- [gbammc/Thor](https://github.com/gbammc/Thor)
-- [lihaoyun6/AirBattery](https://github.com/lihaoyun6/AirBattery)
-- [darrylmorley/whatbattery](https://github.com/darrylmorley/whatbattery)
-- [libimobiledevice/libimobiledevice](https://github.com/libimobiledevice/libimobiledevice)
-- [SuveenE/activity-bar](https://github.com/SuveenE/activity-bar)
-- [Lakr233/FixTim](https://github.com/Lakr233/FixTim) — MIT License; Copyright (c) 2024 Lakr Aream
+Application and plugin builds generate product-specific `THIRD_PARTY_NOTICES.txt` files from this inventory. A release artifact receives only the entries that apply to that artifact. Do not edit generated notice files by hand.
+
+Research-only projects are not distribution components and do not belong in this manifest. A project should be added only when its code, adapted expression, dependency, or asset is present in a release artifact. Preserve existing source-level copyright and license notices in addition to this central inventory.
+
+The menu-bar icon source mapping remains in [`docs/icon-gallery/sources/manifest.json`](../../../docs/icon-gallery/sources/manifest.json); its revisions and license identifiers must match this legal inventory.

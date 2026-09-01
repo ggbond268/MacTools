@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "components": [
+    {
+      "id": "sparkle",
+      "name": "Sparkle",
+      "repository": "https://github.com/sparkle-project/Sparkle",
+      "revision": "066e75a8b3e99962685d6a90cdd5293ebffd9261",
+      "license": "MIT AND BSD-2-Clause AND Zlib",
+      "gpl3Compatibility": "compatible",
+      "relationship": "dependency",
+      "products": [
+        "app"
+      ],
+      "paths": [
+        "project.yml",
+        "Sources/Core/Updates"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/Sparkle-LICENSE.txt"
+    },
+    {
+      "id": "menubar-runcat",
+      "name": "menubar_runcat",
+      "repository": "https://github.com/Kyome22/menubar_runcat",
+      "revision": "82747b139cc32e13a7b713f8521f44c70317f7d4",
+      "license": "Apache-2.0",
+      "gpl3Compatibility": "compatible",
+      "relationship": "asset",
+      "products": [
+        "app"
+      ],
+      "paths": [
+        "docs/icon-gallery/catalog.json"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/menubar_runcat-LICENSE.txt"
+    },
+    {
+      "id": "tabler-icons",
+      "name": "Tabler Icons",
+      "repository": "https://github.com/tabler/tabler-icons",
+      "revision": "fe319f05d943a17efb29c5089e21364d3975843c",
+      "license": "MIT",
+      "gpl3Compatibility": "compatible",
+      "relationship": "asset",
+      "products": [
+        "app"
+      ],
+      "paths": [
+        "docs/icon-gallery/catalog.json"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/tabler-icons-LICENSE.txt"
+    },
+    {
+      "id": "menubar-extra-access",
+      "name": "MenuBarExtraAccess",
+      "repository": "https://github.com/orchetect/MenuBarExtraAccess",
+      "revision": "466addf58dab7189c237142825f8417985f2c1b9",
+      "license": "MIT",
+      "gpl3Compatibility": "compatible",
+      "relationship": "adapted",
+      "products": [
+        "app"
+      ],
+      "paths": [
+        "Sources/App/MenuBarContent.swift"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/MenuBarExtraAccess-LICENSE.txt"
+    },
+    {
+      "id": "activity-bar",
+      "name": "activity-bar",
+      "repository": "https://github.com/SuveenE/activity-bar",
+      "revision": "10380e54aa4d710e06bbebfbfdb7a28db49ebfd1",
+      "license": "MIT",
+      "gpl3Compatibility": "compatible",
+      "relationship": "adapted",
+      "products": [
+        "plugin:activity-bar"
+      ],
+      "paths": [
+        "Plugins/ActivityBar"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/activity-bar-LICENSE.txt"
+    },
+    {
+      "id": "middleclick",
+      "name": "MiddleClick",
+      "repository": "https://github.com/artginzburg/MiddleClick",
+      "revision": "21234476a51d58b87c4b8d6fdd7b49ce49147c8d",
+      "license": "GPL-3.0-only",
+      "gpl3Compatibility": "compatible",
+      "relationship": "adapted",
+      "products": [
+        "plugin:middle-click",
+        "plugin:mouse-enhancer"
+      ],
+      "paths": [
+        "Plugins/MiddleClick",
+        "Plugins/MouseEnhancer/Sources/MouseEnhancerMiddleClickSession.swift"
+      ],
+      "licenseFile": "LICENSE",
+      "includeLicenseText": false
+    },
+    {
+      "id": "everypinch",
+      "name": "everypinch",
+      "repository": "https://github.com/auramagi/everypinch",
+      "revision": "44b74e6f34a525d5fa2661f5eddea1fb69fff51f",
+      "license": "MIT",
+      "gpl3Compatibility": "compatible",
+      "relationship": "adapted",
+      "products": [
+        "plugin:middle-click",
+        "plugin:mouse-enhancer",
+        "plugin:trackpad-gestures"
+      ],
+      "paths": [
+        "Sources/Core/MultitouchSupport/MultitouchSupport.h"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/everypinch-LICENSE.txt"
+    },
+    {
+      "id": "touchdevice",
+      "name": "hs._asm.undocumented.touchdevice",
+      "repository": "https://github.com/asmagill/hs._asm.undocumented.touchdevice",
+      "revision": "856f98dd700e5c0263fbf74ed9ac9b6d13fac84c",
+      "license": "MIT",
+      "gpl3Compatibility": "compatible",
+      "relationship": "adapted",
+      "products": [
+        "plugin:middle-click",
+        "plugin:mouse-enhancer",
+        "plugin:trackpad-gestures"
+      ],
+      "paths": [
+        "Sources/Core/MultitouchSupport/MultitouchSupport.h"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/touchdevice-LICENSE.txt"
+    },
+    {
+      "id": "fixtim",
+      "name": "FixTim",
+      "repository": "https://github.com/Lakr233/FixTim",
+      "revision": "26e4f5c94d188a8b814624cbc3c532f252dd0afd",
+      "license": "MIT",
+      "gpl3Compatibility": "compatible",
+      "relationship": "adapted",
+      "products": [
+        "plugin:system-soft-restart"
+      ],
+      "paths": [
+        "Plugins/SystemSoftRestart/RestartHelper/Sources/LaunchdRestart.c"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/FixTim-LICENSE.txt"
+    }
+  ]
+}

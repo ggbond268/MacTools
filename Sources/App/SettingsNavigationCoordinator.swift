@@ -8,6 +8,7 @@ enum SettingsNavigationDestination: Hashable {
     case general
     case about
     case plugins(FeatureSettingsPane)
+    case marketplaceDetail(MarketplacePluginDetailTarget)
 
     var settingsDestination: SettingsDestination {
         switch self {
@@ -15,7 +16,7 @@ enum SettingsNavigationDestination: Hashable {
             .general
         case .about:
             .about
-        case .plugins:
+        case .plugins, .marketplaceDetail:
             .pluginConfiguration
         }
     }
@@ -28,6 +29,30 @@ enum SettingsNavigationDestination: Hashable {
         return pane
     }
 
+}
+
+/// A catalog-backed Marketplace destination. A provider/action pair is only
+/// a presentation hint; it never represents an executable action request.
+struct MarketplacePluginDetailTarget: Hashable {
+    let pluginID: String
+    let providerID: String?
+    let actionID: String?
+
+    init(pluginID: String, providerID: String? = nil, actionID: String? = nil) {
+        self.pluginID = pluginID
+        self.providerID = providerID
+        self.actionID = actionID
+    }
+
+    var actionHighlight: MarketplacePluginActionHighlight? {
+        guard let providerID, let actionID else { return nil }
+        return MarketplacePluginActionHighlight(providerID: providerID, actionID: actionID)
+    }
+}
+
+struct MarketplacePluginActionHighlight: Hashable {
+    let providerID: String
+    let actionID: String
 }
 
 extension SettingsNavigationDestination {
@@ -177,6 +202,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
     private let focusPluginSettingsSearch: (String) -> Bool
     private let isPluginSettingsSearchTargetAvailable: (PluginSettingsSearchTarget) -> Bool
     private let isPluginManagementAvailable: (String) -> Bool
+    private let isMarketplaceDetailAvailable: (MarketplacePluginDetailTarget) -> Bool
     private let isPluginSurfaceAvailable: (SurfaceSettingsSearchTarget) -> Bool
     private let isAutomationWorkflowAvailable: (UUID) -> Bool
     private let selectPluginSettingsPane: (FeatureSettingsPane) -> Bool
@@ -218,6 +244,9 @@ final class SettingsNavigationCoordinator: ObservableObject {
                     in: pluginHost.pluginManagementItems
                 )
             },
+            isMarketplaceDetailAvailable: { target in
+                pluginHost.hasMarketplaceDetail(target: target)
+            },
             isPluginSurfaceAvailable: { target in
                 let items = switch target.surface {
                 case .dashboard:
@@ -243,6 +272,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
         focusPluginSettingsSearch: @escaping (String) -> Bool = { _ in false },
         isPluginSettingsSearchTargetAvailable: @escaping (PluginSettingsSearchTarget) -> Bool = { _ in true },
         isPluginManagementAvailable: @escaping (String) -> Bool = { _ in true },
+        isMarketplaceDetailAvailable: @escaping (MarketplacePluginDetailTarget) -> Bool = { _ in true },
         isPluginSurfaceAvailable: @escaping (SurfaceSettingsSearchTarget) -> Bool = { _ in true },
         isAutomationWorkflowAvailable: @escaping (UUID) -> Bool = { _ in true },
         selectPluginSettingsPane: @escaping (FeatureSettingsPane) -> Bool = { _ in true }
@@ -257,6 +287,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
         self.focusPluginSettingsSearch = focusPluginSettingsSearch
         self.isPluginSettingsSearchTargetAvailable = isPluginSettingsSearchTargetAvailable
         self.isPluginManagementAvailable = isPluginManagementAvailable
+        self.isMarketplaceDetailAvailable = isMarketplaceDetailAvailable
         self.isPluginSurfaceAvailable = isPluginSurfaceAvailable
         self.isAutomationWorkflowAvailable = isAutomationWorkflowAvailable
         self.selectPluginSettingsPane = selectPluginSettingsPane
@@ -307,8 +338,9 @@ final class SettingsNavigationCoordinator: ObservableObject {
         _ direction: SettingsSidebarMoveDirection,
         in orderedDestinations: [SettingsNavigationDestination]
     ) -> Bool {
+        let sidebarDestination = destination.sidebarDestination
         guard
-            let currentIndex = orderedDestinations.firstIndex(of: destination)
+            let currentIndex = orderedDestinations.firstIndex(of: sidebarDestination)
         else {
             return false
         }
@@ -520,7 +552,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
 
     private func searchField(for destination: SettingsNavigationDestination) -> SettingsSearchField? {
         switch destination {
-        case .plugins(.marketplace):
+        case .plugins(.marketplace), .marketplaceDetail:
             .pluginMarketplace
         case let .plugins(.configuration(pluginID)) where hasPluginSettingsSearchField(pluginID):
             .pluginSettings(pluginID)
@@ -555,11 +587,14 @@ final class SettingsNavigationCoordinator: ObservableObject {
     }
 
     private func isAvailable(_ destination: SettingsNavigationDestination) -> Bool {
-        guard case let .plugins(.configuration(pluginID)) = destination else {
-            return true
+        switch destination {
+        case let .plugins(.configuration(pluginID)):
+            isPluginConfigurationAvailable(pluginID)
+        case let .marketplaceDetail(target):
+            isMarketplaceDetailAvailable(target)
+        default:
+            true
         }
-
-        return isPluginConfigurationAvailable(pluginID)
     }
 
     private func isAvailable(_ target: SettingsSearchRevealTarget) -> Bool {
@@ -603,10 +638,21 @@ final class SettingsNavigationCoordinator: ObservableObject {
     }
 
     private func activate(_ destination: SettingsNavigationDestination) {
-        if let pane = destination.featureSettingsPane {
+        if case .marketplaceDetail = destination {
+            _ = selectPluginSettingsPane(.marketplace)
+        } else if let pane = destination.featureSettingsPane {
             _ = selectPluginSettingsPane(pane)
         }
 
         self.destination = destination
+    }
+}
+
+extension SettingsNavigationDestination {
+    var sidebarDestination: SettingsNavigationDestination {
+        if case .marketplaceDetail = self {
+            return .plugins(.marketplace)
+        }
+        return self
     }
 }

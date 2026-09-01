@@ -92,6 +92,62 @@ final class AppURLRouterTests: XCTestCase {
         )
     }
 
+    func testMarketplaceDetailRouteIsNavigationOnlyAndCarriesAnOptionalActionHighlight() throws {
+        let url = try XCTUnwrap(URL(string: "mactools://app/settings/plugins/marketplace/fan-control?provider=fan-control&action=set-speed"))
+
+        XCTAssertEqual(
+            AppDeepLinkParser.parseRoute(url, acceptedSchemes: ["mactools"]),
+            .success(.navigation(.settings(.marketplaceDetail(
+                .init(pluginID: "fan-control", providerID: "fan-control", actionID: "set-speed")
+            ))))
+        )
+        XCTAssertEqual(
+            AppDeepLinkParser.parse(url, acceptedSchemes: ["mactools"]),
+            .success(.settings(.marketplaceDetail(
+                .init(pluginID: "fan-control", providerID: "fan-control", actionID: "set-speed")
+            )))
+        )
+    }
+
+    func testMarketplaceDetailRouteRejectsPartialUnknownDuplicateAndMalformedParameters() throws {
+        let cases: [(String, AppURLRoutingError)] = [
+            ("mactools://app/settings/plugins/marketplace/fan-control?provider=fan-control", .unexpectedActionParameters),
+            ("mactools://app/settings/plugins/marketplace/fan-control?action=set-speed", .unexpectedActionParameters),
+            ("mactools://app/settings/plugins/marketplace/fan-control?source=website", .unexpectedActionParameters),
+            ("mactools://app/settings/plugins/marketplace/fan-control?provider=fan-control&provider=other&action=set-speed", .duplicatedParameter("provider")),
+            ("mactools://app/settings/plugins/marketplace/bad%20plugin", .malformedPluginID),
+            ("mactools://app/settings/plugins/marketplace/fan-control?provider=fan-control&action=bad%20action", .malformedActionID)
+        ]
+
+        for (urlString, expected) in cases {
+            XCTAssertEqual(
+                AppDeepLinkParser.parseRoute(try XCTUnwrap(URL(string: urlString)), acceptedSchemes: ["mactools"]),
+                .failure(expected),
+                "Unexpected result for \(urlString)"
+            )
+        }
+    }
+
+    func testMarketplaceDetailRouteRejectsUnavailablePluginAndStaticActionAtDelivery() throws {
+        var requests: [AppPresentationRequest] = []
+        let router = AppURLRouter(acceptedURLSchemes: ["mactools"], rightClickHandler: { _ in })
+        let unknownPlugin = try XCTUnwrap(URL(string: "mactools://app/settings/plugins/marketplace/missing"))
+        let unknownAction = try XCTUnwrap(URL(string: "mactools://app/settings/plugins/marketplace/fan-control?provider=fan-control&action=missing"))
+
+        router.activate(
+            presentationHandler: { requests.append($0) },
+            isPluginConfigurationAvailable: { _ in true },
+            isMarketplaceDetailAvailable: { target in target.pluginID == "fan-control" && target.actionHighlight == nil }
+        )
+
+        XCTAssertEqual(router.handle(unknownPlugin), .rejected(.unavailablePlugin("missing")))
+        XCTAssertEqual(
+            router.handle(unknownAction),
+            .rejected(.unavailableMarketplaceAction(pluginID: "fan-control", providerID: "fan-control", actionID: "missing"))
+        )
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func testActionParserRejectsParametersMalformedIDsAndEncodedSeparators() throws {
         let cases: [(String, AppURLRoutingError)] = [
             (

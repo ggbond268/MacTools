@@ -634,15 +634,10 @@ final class AutomationControllerTests: XCTestCase {
         controller.addStep(workflowID: workflow.id, reference: provider.reference)
         let runID = try XCTUnwrap(controller.startWorkflow(id: workflow.id))
 
-        for _ in 0 ..< 100 where controller.activeRunIDs(for: workflow.id).isEmpty {
-            await Task.yield()
-        }
-        XCTAssertEqual(controller.activeRunIDs(for: workflow.id), [runID])
+        await waitUntil { controller.activeRunIDs(for: workflow.id) == [runID] }
 
         controller.cancel(runID: runID)
-        for _ in 0 ..< 100 where controller.activeRunIDs.contains(runID) {
-            await Task.yield()
-        }
+        await waitUntil { !controller.activeRunIDs.contains(runID) }
 
         XCTAssertFalse(controller.activeRunIDs.contains(runID))
         XCTAssertEqual(controller.recentRuns(workflowID: workflow.id).first?.status, .cancelled)

@@ -55,6 +55,9 @@ NEW_API_MINIMUM_HOSTS = {
     "ActionGridHostContextConsuming": "1.2.0",
     "TrackpadActionHostContext": "1.2.0",
     "TrackpadActionHostContextConsuming": "1.2.0",
+    "PluginActionHostExecutionResult": "1.2.1",
+    "PluginActionExecutionHostContext": "1.2.1",
+    "PluginActionExecutionHostContextConsuming": "1.2.1",
     "ActionSurfaceAssignmentSummary": "1.2.0",
     "ActionSurfaceAssignmentSummarizing": "1.2.0",
     # Portable preferences and input ownership added with the shared surfaces.
@@ -251,6 +254,15 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             set(),
             "Public ActionModels types used by plugins must declare their minimum host",
         )
+
+    def test_action_execution_bridge_inventory_requires_the_first_compatible_host(self) -> None:
+        bridge = REPO_ROOT / "Sources/MacToolsPluginKit/PluginActionExecutionHostContext.swift"
+        symbols = public_top_level_type_names(bridge.read_text(encoding="utf-8"))
+        self.assertTrue(symbols)
+        for symbol in symbols:
+            with self.subTest(symbol=symbol):
+                self.assertEqual(NEW_API_MINIMUM_HOSTS.get(symbol), "1.2.1")
+                self.assertTrue(minimum_host_violations("legacy", "1.2.0", symbol))
 
     def test_dashboard_presentation_apis_reject_host_1_2_0(self) -> None:
         symbols = {

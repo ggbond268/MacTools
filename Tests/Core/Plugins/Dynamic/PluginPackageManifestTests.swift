@@ -260,7 +260,7 @@ final class PluginPackageManifestTests: XCTestCase {
         XCTAssertEqual(manifest.actions?.providers.first?.kind, "static")
         XCTAssertEqual(
             manifest.actions?.providers.first?.staticActions.map(\.id),
-            ["toggle", "set-enabled"]
+            ["toggle", "set-enabled", "set-mode"]
         )
         XCTAssertEqual(manifest.requirements?.architectures, ["arm64", "x86_64"])
         XCTAssertEqual(manifest.privacy?.networkUse, "none")
