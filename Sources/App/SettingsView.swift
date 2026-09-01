@@ -359,17 +359,14 @@ private struct PermissionCenterSettingsView: View {
                         PermissionCenterRow(
                             item: item,
                             onAction: {
-                                if item.status == .granted {
-                                    coordinator.refresh()
-                                } else {
-                                    coordinator.performAction(
-                                        for: item,
-                                        sourceFrame: permissionGuidanceSourceFrame(
-                                            eventType: NSApp.currentEvent?.type,
-                                            mouseLocation: NSEvent.mouseLocation
-                                        )
+                                performPermissionCenterAction(
+                                    coordinator: coordinator,
+                                    item: item,
+                                    sourceFrame: permissionGuidanceSourceFrame(
+                                        eventType: NSApp.currentEvent?.type,
+                                        mouseLocation: NSEvent.mouseLocation
                                     )
-                                }
+                                )
                             }
                         )
                         .settingsGroupedFormRowWidth(widths.sectionLayout)
@@ -384,6 +381,15 @@ private struct PermissionCenterSettingsView: View {
             }
         }
     }
+}
+
+@MainActor
+func performPermissionCenterAction(
+    coordinator: PermissionCoordinator,
+    item: PermissionCenterItem,
+    sourceFrame: CGRect?
+) {
+    coordinator.performAction(for: item, sourceFrame: sourceFrame)
 }
 
 func permissionGuidanceSourceFrame(
@@ -2590,14 +2596,14 @@ private struct SettingsSidebar: View {
                     }
 
                     Section {
-                        if configurationDestinations.isEmpty {
-                            Text(emptyConfigurationsText)
-                                .font(PluginSettingsTheme.Typography.secondaryLabel)
-                                .foregroundStyle(.secondary)
-                        } else if sidebarPreferences.isPluginSettingsSectionExpanded {
+                        if sidebarPreferences.isPluginSettingsSectionExpanded {
                             pluginSearchField
 
-                            if filteredConfigurationDestinations.isEmpty {
+                            if configurationDestinations.isEmpty {
+                                Text(emptyConfigurationsText)
+                                    .font(PluginSettingsTheme.Typography.secondaryLabel)
+                                    .foregroundStyle(.secondary)
+                            } else if filteredConfigurationDestinations.isEmpty {
                                 Text(AppL10n.settings(
                                     "settings.sidebar.pluginSearch.noResults",
                                     defaultValue: "未找到匹配的插件设置。请尝试其他名称或 ID。"

@@ -25,7 +25,8 @@ private struct HomebrewPluginProvider: PluginProvider {
 
 @MainActor
 public final class HomebrewPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSettingsPresenting,
-    PluginSettingsSearchFocusing, PluginActionProviding {
+    PluginSettingsSearchFocusing, PluginSettingsSearchFocusMetadataProviding,
+    PluginActionProviding {
     private enum ActionID {
         static let update = "update"
         static let upgradeAll = "upgrade-all"
@@ -211,6 +212,10 @@ public final class HomebrewPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSet
 
     public func focusSettingsSearch() {
         settingsSearchFocusController.requestFocus()
+    }
+
+    public var isSettingsSearchAvailable: Bool {
+        controller.isBrewAvailable
     }
 
     public func handleAction(_ action: PluginPanelAction) {

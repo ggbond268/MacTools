@@ -483,19 +483,25 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
 
     func testSearchRequestFocusesPluginContextualSearch() {
         var focusedPluginIDs: [String] = []
+        let target = PluginSettingsSearchTarget(
+            pluginID: "apple-shortcuts",
+            entryID: "shortcuts"
+        )
         let coordinator = SettingsNavigationCoordinator(
             initialDestination: .plugins(.configuration("apple-shortcuts")),
             hasPluginSettingsSearchField: { $0 == "apple-shortcuts" },
             focusPluginSettingsSearch: {
                 focusedPluginIDs.append($0)
                 return true
-            }
+            },
+            pluginSettingsSearchFocusTarget: { _ in target }
         )
 
         XCTAssertTrue(coordinator.requestSearch())
         XCTAssertEqual(focusedPluginIDs, ["apple-shortcuts"])
         XCTAssertFalse(coordinator.isUnifiedSearchPresented)
         XCTAssertNil(coordinator.searchFocusRequest)
+        XCTAssertEqual(coordinator.searchRevealRequest?.target, .plugin(target))
     }
 
     func testAboutUpdateActionNavigatesAndCanOnlyBeConsumedOnce() throws {

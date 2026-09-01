@@ -1049,6 +1049,30 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         ))
     }
 
+    func testMappingSearchFocusRequestRemainsPendingUntilMappingsConsumeIt() {
+        let controller = TrackpadSettingsSearchFocusController()
+
+        XCTAssertFalse(controller.consumePendingFocusRequest())
+        controller.requestFocus()
+        XCTAssertTrue(controller.consumePendingFocusRequest())
+        XCTAssertFalse(controller.consumePendingFocusRequest())
+
+        controller.requestFocus()
+        XCTAssertTrue(controller.consumePendingFocusRequest())
+    }
+
+    func testContextualSearchTargetsTheMappingsSection() {
+        let fixture = makePlugin()
+
+        XCTAssertEqual(
+            fixture.plugin.settingsSearchFocusTarget,
+            PluginSettingsSearchTarget(
+                pluginID: "trackpad-gestures",
+                entryID: "mappings"
+            )
+        )
+    }
+
     func testGestureRawValuesRemainCompatibleWithExistingMappingsAndBackups() {
         XCTAssertEqual(TrackpadGesture.allCases.map(\.rawValue), [
             "tipTapLeftOneFixed",

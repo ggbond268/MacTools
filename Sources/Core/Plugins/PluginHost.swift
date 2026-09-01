@@ -1875,12 +1875,27 @@ final class PluginHost: ObservableObject {
 
     func hasPluginSettingsSearchField(pluginID: String) -> Bool {
         guard hasPluginSettings(pluginID: pluginID) else { return false }
-        return corePlugin(for: pluginID) is any PluginSettingsSearchFocusing
+        guard let plugin = corePlugin(for: pluginID),
+              plugin is any PluginSettingsSearchFocusing else {
+            return false
+        }
+        return (plugin as? any PluginSettingsSearchFocusMetadataProviding)?
+            .isSettingsSearchAvailable ?? true
+    }
+
+    func pluginSettingsSearchFocusTarget(pluginID: String) -> PluginSettingsSearchTarget? {
+        guard hasPluginSettingsSearchField(pluginID: pluginID),
+              let metadata = corePlugin(for: pluginID)
+                as? any PluginSettingsSearchFocusMetadataProviding else {
+            return nil
+        }
+        return metadata.settingsSearchFocusTarget
     }
 
     @discardableResult
     func focusPluginSettingsSearch(pluginID: String) -> Bool {
-        guard let plugin = corePlugin(for: pluginID),
+        guard hasPluginSettingsSearchField(pluginID: pluginID),
+              let plugin = corePlugin(for: pluginID),
               let searchFocusing = plugin as? any PluginSettingsSearchFocusing else {
             return false
         }

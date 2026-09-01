@@ -288,6 +288,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
     private let isPluginConfigurationAvailable: (String) -> Bool
     private let hasPluginSettingsSearchField: (String) -> Bool
     private let focusPluginSettingsSearch: (String) -> Bool
+    private let pluginSettingsSearchFocusTarget: (String) -> PluginSettingsSearchTarget?
     private let isPluginSettingsSearchTargetAvailable: (PluginSettingsSearchTarget) -> Bool
     private let isPluginManagementAvailable: (String) -> Bool
     private let isMarketplaceDetailAvailable: (MarketplacePluginDetailTarget) -> Bool
@@ -325,6 +326,9 @@ final class SettingsNavigationCoordinator: ObservableObject {
             isPluginConfigurationAvailable: { pluginHost.hasPluginSettings(pluginID: $0) },
             hasPluginSettingsSearchField: { pluginHost.hasPluginSettingsSearchField(pluginID: $0) },
             focusPluginSettingsSearch: { pluginHost.focusPluginSettingsSearch(pluginID: $0) },
+            pluginSettingsSearchFocusTarget: {
+                pluginHost.pluginSettingsSearchFocusTarget(pluginID: $0)
+            },
             isPluginSettingsSearchTargetAvailable: {
                 pluginHost.hasPluginSettingsSearchTarget($0)
             },
@@ -360,6 +364,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
         isPluginConfigurationAvailable: @escaping (String) -> Bool = { _ in true },
         hasPluginSettingsSearchField: @escaping (String) -> Bool = { _ in false },
         focusPluginSettingsSearch: @escaping (String) -> Bool = { _ in false },
+        pluginSettingsSearchFocusTarget: @escaping (String) -> PluginSettingsSearchTarget? = { _ in nil },
         isPluginSettingsSearchTargetAvailable: @escaping (PluginSettingsSearchTarget) -> Bool = { _ in true },
         isPluginManagementAvailable: @escaping (String) -> Bool = { _ in true },
         isMarketplaceDetailAvailable: @escaping (MarketplacePluginDetailTarget) -> Bool = { _ in true },
@@ -375,6 +380,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
         self.isPluginConfigurationAvailable = isPluginConfigurationAvailable
         self.hasPluginSettingsSearchField = hasPluginSettingsSearchField
         self.focusPluginSettingsSearch = focusPluginSettingsSearch
+        self.pluginSettingsSearchFocusTarget = pluginSettingsSearchFocusTarget
         self.isPluginSettingsSearchTargetAvailable = isPluginSettingsSearchTargetAvailable
         self.isPluginManagementAvailable = isPluginManagementAvailable
         self.isMarketplaceDetailAvailable = isMarketplaceDetailAvailable
@@ -619,7 +625,17 @@ final class SettingsNavigationCoordinator: ObservableObject {
         }
 
         if case let .pluginSettings(pluginID) = field {
-            return focusPluginSettingsSearch(pluginID)
+            guard focusPluginSettingsSearch(pluginID) else {
+                return false
+            }
+            if let target = pluginSettingsSearchFocusTarget(pluginID) {
+                nextSearchRevealRequestID &+= 1
+                searchRevealRequest = SettingsSearchRevealRequest(
+                    id: nextSearchRevealRequestID,
+                    target: .plugin(target)
+                )
+            }
+            return true
         }
 
         nextSearchFocusRequestID &+= 1

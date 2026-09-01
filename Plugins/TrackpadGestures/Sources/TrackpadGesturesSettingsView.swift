@@ -5,9 +5,16 @@ import MacToolsPluginKit
 @MainActor
 final class TrackpadSettingsSearchFocusController: ObservableObject {
     @Published private(set) var requestID: UInt = 0
+    private var consumedRequestID: UInt = 0
 
     func requestFocus() {
         requestID &+= 1
+    }
+
+    func consumePendingFocusRequest() -> Bool {
+        guard consumedRequestID != requestID else { return false }
+        consumedRequestID = requestID
+        return true
     }
 }
 
@@ -75,11 +82,21 @@ struct TrackpadGesturesSettingsView: View {
                 testingContent
             }
         }
+        .onAppear {
+            focusMappingSearchIfRequested()
+        }
         .onChange(of: searchFocusController.requestID) {
-            guard section == .mappings else { return }
-            if !isShowingMappingSearch {
-                isShowingMappingSearch = true
-            }
+            focusMappingSearchIfRequested()
+        }
+    }
+
+    private func focusMappingSearchIfRequested() {
+        guard section == .mappings,
+              searchFocusController.consumePendingFocusRequest() else {
+            return
+        }
+        isShowingMappingSearch = true
+        DispatchQueue.main.async {
             isMappingSearchFocused = true
         }
     }

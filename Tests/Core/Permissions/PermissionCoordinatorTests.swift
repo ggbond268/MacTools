@@ -322,7 +322,11 @@ final class PermissionCoordinatorTests: XCTestCase {
                 statusTone: .neutral
             ),
         ])
-        coordinator.performAction(for: try XCTUnwrap(coordinator.items.first))
+        performPermissionCenterAction(
+            coordinator: coordinator,
+            item: try XCTUnwrap(coordinator.items.first),
+            sourceFrame: nil
+        )
         notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
         await Task.yield()
 
@@ -346,7 +350,11 @@ final class PermissionCoordinatorTests: XCTestCase {
                 kind: .systemAudioRecording
             ),
         ])
-        coordinator.performAction(for: try XCTUnwrap(coordinator.items.first))
+        performPermissionCenterAction(
+            coordinator: coordinator,
+            item: try XCTUnwrap(coordinator.items.first),
+            sourceFrame: nil
+        )
 
         notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
         await Task.yield()

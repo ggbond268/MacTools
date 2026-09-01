@@ -38,6 +38,20 @@ public protocol PluginSettingsSearchFocusing: AnyObject {
     func focusSettingsSearch()
 }
 
+/// Optional metadata for a plugin settings page with contextual search.
+/// The host uses this to avoid routing Command-F to an unavailable field and to
+/// reveal lazily rendered search content before requesting focus.
+@MainActor
+public protocol PluginSettingsSearchFocusMetadataProviding: AnyObject {
+    var isSettingsSearchAvailable: Bool { get }
+    var settingsSearchFocusTarget: PluginSettingsSearchTarget? { get }
+}
+
+public extension PluginSettingsSearchFocusMetadataProviding {
+    var isSettingsSearchAvailable: Bool { true }
+    var settingsSearchFocusTarget: PluginSettingsSearchTarget? { nil }
+}
+
 public enum PluginShortcutEventPhase: Sendable {
     case pressed
     case released
