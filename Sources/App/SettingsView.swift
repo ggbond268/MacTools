@@ -2524,9 +2524,153 @@ enum SettingsSidebarPluginSearchRevealScheduler {
     }
 }
 
+private enum SettingsSidebarAccessoryLayout {
+    static let width: CGFloat = 40
+    static let sectionHeaderTrailingInset: CGFloat = 8
+}
+
+enum SettingsSidebarCommandHintPolicy {
+    static let revealDelay: TimeInterval = 0.15
+
+    static func commandIsHeld(in modifierFlags: NSEvent.ModifierFlags) -> Bool {
+        modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .contains(.command)
+    }
+}
+
+@MainActor
+private final class SettingsSidebarCommandHintMonitor: ObservableObject {
+    @Published private(set) var showsHints = false
+
+    private var localEventMonitor: Any?
+    private var applicationDeactivationObserver: NSObjectProtocol?
+    private var pendingReveal: DispatchWorkItem?
+
+    func start() {
+        guard localEventMonitor == nil else { return }
+
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) {
+            [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.handleModifierFlags(event.modifierFlags)
+            }
+            return event
+        }
+        applicationDeactivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.hideHints()
+            }
+        }
+    }
+
+    func stop() {
+        pendingReveal?.cancel()
+        pendingReveal = nil
+        if let localEventMonitor {
+            NSEvent.removeMonitor(localEventMonitor)
+            self.localEventMonitor = nil
+        }
+        if let applicationDeactivationObserver {
+            NotificationCenter.default.removeObserver(applicationDeactivationObserver)
+            self.applicationDeactivationObserver = nil
+        }
+        showsHints = false
+    }
+
+    private func handleModifierFlags(_ modifierFlags: NSEvent.ModifierFlags) {
+        guard SettingsSidebarCommandHintPolicy.commandIsHeld(in: modifierFlags) else {
+            hideHints()
+            return
+        }
+        guard !showsHints, pendingReveal == nil else { return }
+
+        let reveal = DispatchWorkItem { [weak self] in
+            self?.pendingReveal = nil
+            self?.showsHints = true
+        }
+        pendingReveal = reveal
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + SettingsSidebarCommandHintPolicy.revealDelay,
+            execute: reveal
+        )
+    }
+
+    private func hideHints() {
+        pendingReveal?.cancel()
+        pendingReveal = nil
+        showsHints = false
+    }
+}
+
+private struct SettingsSidebarShowsNumberShortcutHintsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var settingsSidebarShowsNumberShortcutHints: Bool {
+        get { self[SettingsSidebarShowsNumberShortcutHintsKey.self] }
+        set { self[SettingsSidebarShowsNumberShortcutHintsKey.self] = newValue }
+    }
+}
+
+private struct SettingsSidebarShortcutLabel: View {
+    enum Style {
+        case plain
+        case badge
+    }
+
+    let shortcut: String
+    var style: Style = .plain
+    @Environment(\.settingsSidebarShowsNumberShortcutHints) private var showsNumberHints
+
+    var body: some View {
+        Group {
+            switch style {
+            case .plain:
+                shortcutText
+            case .badge:
+                shortcutText
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.12))
+                    )
+            }
+        }
+        .frame(
+            width: SettingsSidebarAccessoryLayout.width,
+            alignment: .trailing
+        )
+        .opacity(isVisible ? 1 : 0)
+        .animation(.easeOut(duration: 0.12), value: isVisible)
+        .accessibilityHidden(true)
+    }
+
+    private var isVisible: Bool {
+        switch style {
+        case .plain:
+            showsNumberHints
+        case .badge:
+            true
+        }
+    }
+
+    private var shortcutText: some View {
+        Text(shortcut)
+            .font(PluginSettingsTheme.Typography.statusBadge)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+    }
+}
+
 private struct SettingsSidebar: View {
     private enum Layout {
-        static let sectionHeaderTrailingInset: CGFloat = 8
         static let searchSectionSpacing = PluginSettingsTheme.Spacing.sectionHeaderContent
     }
 
@@ -2548,6 +2692,7 @@ private struct SettingsSidebar: View {
     @State private var highlightedPluginSearchDestination: SettingsNavigationDestination?
     @State private var showsPluginSearchHighlight = false
     @State private var highlightedCollapsedSection: SettingsSidebarSection?
+    @StateObject private var commandHintMonitor = SettingsSidebarCommandHintMonitor()
     @AccessibilityFocusState private var accessibilityFocusedCollapsedSection: SettingsSidebarSection?
 
     var body: some View {
@@ -2558,10 +2703,9 @@ private struct SettingsSidebar: View {
             )
             .frame(height: 30)
             .overlay(alignment: .trailing) {
-                keyboardShortcutBadge("⌘K")
+                SettingsSidebarShortcutLabel(shortcut: "⌘K", style: .badge)
                     .padding(.trailing, 14)
                     .allowsHitTesting(false)
-                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 8)
             .padding(.top, 8)
@@ -2673,6 +2817,16 @@ private struct SettingsSidebar: View {
                 .accessibilityHint(configurationDestinations.isEmpty ? emptyConfigurationsText : "")
             }
         }
+        .environment(
+            \.settingsSidebarShowsNumberShortcutHints,
+            commandHintMonitor.showsHints
+        )
+        .onAppear {
+            commandHintMonitor.start()
+        }
+        .onDisappear {
+            commandHintMonitor.stop()
+        }
     }
 
     private var emptyConfigurationsText: String {
@@ -2768,7 +2922,7 @@ private struct SettingsSidebar: View {
                 text: $pluginSearchQuery,
                 prompt: AppL10n.settings(
                     "settings.sidebar.pluginSearch.prompt",
-                    defaultValue: "筛选插件设置"
+                    defaultValue: "筛选插件"
                 ),
                 focusRequestID: pluginSearchFocusRequestID,
                 onCommand: handlePluginSearchFieldCommand
@@ -2776,27 +2930,32 @@ private struct SettingsSidebar: View {
             .frame(maxWidth: .infinity, minHeight: 18)
 
             if pluginSearchQuery.isEmpty {
-                keyboardShortcutBadge("⌘⇧F")
-                    .accessibilityHidden(true)
+                SettingsSidebarShortcutLabel(shortcut: "⌘⇧F", style: .badge)
             } else {
-                Text("\(filteredConfigurationDestinations.count)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .monospacedDigit()
-                    .help(pluginSearchResultCountText)
-                    .accessibilityLabel(pluginSearchResultCountText)
-
-                Button {
-                    pluginSearchQuery = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
+                HStack(spacing: 4) {
+                    Text("\(filteredConfigurationDestinations.count)")
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                        .help(pluginSearchResultCountText)
+                        .accessibilityLabel(pluginSearchResultCountText)
+
+                    Button {
+                        pluginSearchQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppL10n.settings(
+                        "settings.sidebar.pluginSearch.clear",
+                        defaultValue: "清除插件搜索"
+                    ))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(AppL10n.settings(
-                    "settings.sidebar.pluginSearch.clear",
-                    defaultValue: "清除插件搜索"
-                ))
+                .frame(
+                    width: SettingsSidebarAccessoryLayout.width,
+                    alignment: .trailing
+                )
             }
         }
         .padding(.horizontal, 7)
@@ -2812,18 +2971,6 @@ private struct SettingsSidebar: View {
             defaultValue: "%d 个结果",
             filteredConfigurationDestinations.count
         )
-    }
-
-    private func keyboardShortcutBadge(_ shortcut: String) -> some View {
-        Text(shortcut)
-            .font(PluginSettingsTheme.Typography.statusBadge)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.12))
-            )
     }
 
     private func handlePluginSearchFieldCommand(
@@ -3035,17 +3182,23 @@ private struct SettingsSidebar: View {
                 }
                 .disabled(true)
             } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.caption2.weight(.medium))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 11, height: 11, alignment: .center)
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.caption2.weight(.medium))
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 11, height: 11, alignment: .center)
+                }
+                .frame(width: SettingsSidebarAccessoryLayout.width)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .fixedSize()
             .scaleEffect(0.80, anchor: .trailing)
-            .padding(.trailing, Layout.sectionHeaderTrailingInset)
+            .padding(
+                .trailing,
+                SettingsSidebarAccessoryLayout.sectionHeaderTrailingInset
+            )
             .accessibilityLabel(sidebarPreferences.sortMode.localizedTitle)
             .help(AppL10n.settings(
                 "settings.sidebar.pluginSortHelp",
@@ -3113,11 +3266,7 @@ private struct SettingsSidebar: View {
                 Text(title)
                 Spacer(minLength: 4)
                 if let shortcutNumber {
-                    Text("⌘\(shortcutNumber)")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
-                        .accessibilityHidden(true)
+                    SettingsSidebarShortcutLabel(shortcut: "⌘\(shortcutNumber)")
                 }
             }
             .foregroundStyle(.secondary)
@@ -3132,6 +3281,10 @@ private struct SettingsSidebar: View {
             }
         }
         .buttonStyle(.plain)
+        .padding(
+            .trailing,
+            SettingsSidebarAccessoryLayout.sectionHeaderTrailingInset
+        )
         .accessibilityFocused($accessibilityFocusedCollapsedSection, equals: section)
         .help(disclosureTitle(title: title, isExpanded: isExpanded))
         .accessibilityLabel(title)
@@ -3472,11 +3625,7 @@ private struct SettingsSidebarRow: View {
             Spacer(minLength: 0)
 
             if let shortcutNumber {
-                Text("⌘\(shortcutNumber)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .monospacedDigit()
-                    .accessibilityHidden(true)
+                SettingsSidebarShortcutLabel(shortcut: "⌘\(shortcutNumber)")
             }
         }
         .font(.body)

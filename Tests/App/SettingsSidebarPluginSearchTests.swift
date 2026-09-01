@@ -3,6 +3,14 @@ import XCTest
 @testable import MacTools
 
 final class SettingsSidebarPluginSearchTests: XCTestCase {
+    func testCommandHintPolicyRequiresTheCommandModifier() {
+        XCTAssertTrue(SettingsSidebarCommandHintPolicy.commandIsHeld(in: .command))
+        XCTAssertTrue(SettingsSidebarCommandHintPolicy.commandIsHeld(in: [.command, .shift]))
+        XCTAssertFalse(SettingsSidebarCommandHintPolicy.commandIsHeld(in: .shift))
+        XCTAssertFalse(SettingsSidebarCommandHintPolicy.commandIsHeld(in: []))
+        XCTAssertEqual(SettingsSidebarCommandHintPolicy.revealDelay, 0.15)
+    }
+
     func testMatchesPluginIdentityDescriptionAndExistingKeywords() {
         let values = (
             title: "Display Brightness",

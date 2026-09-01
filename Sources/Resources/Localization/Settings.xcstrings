@@ -684,17 +684,17 @@
     "settings.sidebar.pluginSearch.prompt": {
       "extractionState": "manual",
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تصفية إعدادات المكونات الإضافية" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Plugin-Einstellungen filtern" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Filter Plugin Settings" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Filtrar ajustes de complementos" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Filtrer les réglages des plugins" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "プラグイン設定を絞り込む" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "플러그인 설정 필터링" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Filtrar ajustes de plug-ins" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Фильтр настроек плагинов" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "筛选插件设置" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "篩選外掛設定" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "تصفية المكونات الإضافية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Plugins filtern" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Filter Plugins" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Filtrar complementos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Filtrer les plugins" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "プラグインを絞り込む" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "플러그인 필터링" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Filtrar plug-ins" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Фильтр плагинов" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "筛选插件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "篩選外掛" } }
       }
     },
     "settings.sidebar.pluginSearch.noResults": {
