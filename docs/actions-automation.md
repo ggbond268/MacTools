@@ -10,6 +10,7 @@ MacTools exposes one host-owned action platform to every invocation surface. Plu
 - Automation owns workflow definitions, rules, conditions, and bounded privacy-conscious history. Steps store versioned `ActionReference` values and execute serially through `ActionExecutor`.
 - `AppURLRouter` owns one strict, ordered, bounded route queue. Run Links resolve to `ActionReference` values before execution.
 - Action Grid owns only its versioned tree of folders, each containing up to nine positioned references. Catalog discovery, owner navigation, migration, availability, execution, shortcut assignment, and Run Link generation remain host-owned.
+- `PluginActionExecutionHostContext` is the narrow composition bridge for a plugin that needs to invoke another provider's canonical action. Its live lookup and execution closures still enter `ActionRegistry` and `ActionExecutor`; it does not expose provider instances or create a parallel dispatch path. The host refreshes consumers after catalog revisions and clears the context when isolating a plugin.
 
 Unavailable references are retained by shortcut assignments, workflows, presets, and Action Grid. A provider returning with a compatible migration can restore them without recreating user configuration.
 

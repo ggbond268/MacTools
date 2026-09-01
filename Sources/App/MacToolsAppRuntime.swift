@@ -227,6 +227,9 @@ final class MacToolsAppRuntime {
             isPluginConfigurationAvailable: { [weak self] pluginID in
                 self?.pluginHost.hasPluginSettings(pluginID: pluginID) == true
             },
+            isMarketplaceDetailAvailable: { [weak self] target in
+                self?.pluginHost.hasMarketplaceDetail(target: target) == true
+            },
             actionIdentityResolver: { [weak self] request in
                 self?.pluginHost.actionRunLinkService.resolve(request)
             },

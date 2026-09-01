@@ -18,7 +18,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: true
+            includeVendorHIDDevices: true
         )
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -29,10 +29,11 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         viewModel.stop()
     }
 
-    func testRapooMonitorPublishesEveryConnectedMouse() async {
-        let first = RapooMouseBatterySnapshot(
+    func testVendorHIDMonitorPublishesEveryConnectedMouse() async {
+        let first = VendorHIDMouseBatterySnapshot(
             accessState: .connected,
-            device: RapooMouseDeviceInfo(
+            device: VendorHIDMouseDeviceInfo(
+                vendor: .rapoo,
                 productID: 0x0201,
                 modelName: "Rapoo MT760",
                 displayName: "Desk Mouse",
@@ -40,16 +41,17 @@ final class DeviceBatteryViewModelTests: XCTestCase {
                 locationID: 1,
                 registryEntryID: nil
             ),
-            reading: RapooBatteryReading(
+            reading: VendorHIDBatteryReading(
                 level: 80,
                 chargeState: .normal,
                 statusCode: 1
             ),
             lastUpdated: Date(timeIntervalSince1970: 100)
         )
-        let second = RapooMouseBatterySnapshot(
+        let second = VendorHIDMouseBatterySnapshot(
             accessState: .connected,
-            device: RapooMouseDeviceInfo(
+            device: VendorHIDMouseDeviceInfo(
+                vendor: .rapoo,
                 productID: 0x0202,
                 modelName: "Rapoo MT750",
                 displayName: "Travel Mouse",
@@ -57,17 +59,17 @@ final class DeviceBatteryViewModelTests: XCTestCase {
                 locationID: 2,
                 registryEntryID: nil
             ),
-            reading: RapooBatteryReading(
+            reading: VendorHIDBatteryReading(
                 level: 60,
                 chargeState: .charging,
                 statusCode: 3
             ),
             lastUpdated: Date(timeIntervalSince1970: 200)
         )
-        let rapooMonitor = MultipleRapooBatteryMonitor(snapshots: [first, second])
+        let vendorHIDMonitor = MultipleVendorHIDBatteryMonitor(snapshots: [first, second])
         let viewModel = DeviceBatteryViewModel(
             sampler: RecordingDeviceBatterySampler(),
-            rapooMonitor: rapooMonitor,
+            vendorHIDMonitor: vendorHIDMonitor,
             schedule: DeviceBatterySamplingSchedule(
                 internalBatteryFallback: 30,
                 bluetoothBackground: 30,
@@ -83,7 +85,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: false,
             includeBluetoothDevices: false,
             includeAppleMobileDevices: false,
-            includeRapooDevices: true
+            includeVendorHIDDevices: true
         )
         viewModel.setComponentPanelVisible(true)
 
@@ -100,7 +102,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
 
         viewModel.setComponentPanelVisible(true)
@@ -121,7 +123,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
 
         await waitForCounts(.oneEach, sampler: sampler)
@@ -137,7 +139,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         await waitForCounts(.oneEach, sampler: sampler)
 
@@ -167,7 +169,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         let sampler = SuspendedBluetoothSampler()
         let viewModel = DeviceBatteryViewModel(
             sampler: sampler,
-            rapooMonitor: RecordingRapooBatteryMonitor(),
+            vendorHIDMonitor: RecordingVendorHIDBatteryMonitor(),
             schedule: DeviceBatterySamplingSchedule(
                 internalBatteryFallback: 30,
                 bluetoothBackground: 30,
@@ -183,7 +185,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: false,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: false,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
 
         for _ in 0..<100 {
@@ -216,7 +218,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         viewModel.setComponentPanelVisible(true)
         await waitForCounts(.oneEach, sampler: sampler)
@@ -237,7 +239,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         viewModel.setComponentPanelVisible(true)
         await waitForCounts(.oneEach, sampler: sampler)
@@ -246,7 +248,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: false,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         try? await Task.sleep(for: .milliseconds(30))
         let countsAfterDisabling = await sampler.counts()
@@ -256,7 +258,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         await waitForCounts(
             DeviceBatterySamplingCounts(
@@ -288,7 +290,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: false,
             includeAppleMobileDevices: false,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         await waitForCounts(
             DeviceBatterySamplingCounts(internalBattery: 1, bluetooth: 0, appleMobile: 0),
@@ -301,7 +303,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: false,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: false,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         try? await Task.sleep(for: .milliseconds(20))
         let countsDuringWakeDelay = await sampler.counts()
@@ -326,7 +328,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         let sampler = SuspendedAppleMobileSampler()
         let viewModel = DeviceBatteryViewModel(
             sampler: sampler,
-            rapooMonitor: RecordingRapooBatteryMonitor(),
+            vendorHIDMonitor: RecordingVendorHIDBatteryMonitor(),
             schedule: DeviceBatterySamplingSchedule(
                 internalBatteryFallback: 30,
                 bluetoothBackground: 30,
@@ -341,7 +343,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: false,
             includeBluetoothDevices: false,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         viewModel.setComponentPanelVisible(true)
         for _ in 0..<100 {
@@ -358,7 +360,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: false,
             includeBluetoothDevices: false,
             includeAppleMobileDevices: false,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
 
         XCTAssertEqual(viewModel.snapshot.accessState, .noDevices)
@@ -380,7 +382,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         await waitForCounts(.oneEach, sampler: sampler)
 
@@ -411,7 +413,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         await waitForCounts(.oneEach, sampler: sampler)
 
@@ -438,7 +440,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: false,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: false,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
 
         viewModel.setComponentPanelVisible(true)
@@ -479,7 +481,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         await waitForCounts(.oneEach, sampler: sampler)
 
@@ -510,7 +512,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: true,
             includeBluetoothDevices: false,
             includeAppleMobileDevices: false,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         viewModel.setComponentPanelVisible(true)
         await waitForCounts(
@@ -566,7 +568,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         )
         let viewModel = DeviceBatteryViewModel(
             sampler: sampler,
-            rapooMonitor: RecordingRapooBatteryMonitor(),
+            vendorHIDMonitor: RecordingVendorHIDBatteryMonitor(),
             schedule: DeviceBatterySamplingSchedule(
                 internalBatteryFallback: 30,
                 bluetoothBackground: 30,
@@ -581,7 +583,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             includeInternalBattery: false,
             includeBluetoothDevices: true,
             includeAppleMobileDevices: true,
-            includeRapooDevices: false
+            includeVendorHIDDevices: false
         )
         viewModel.setComponentPanelVisible(true)
 
@@ -611,7 +613,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
     ) -> DeviceBatteryViewModel {
         DeviceBatteryViewModel(
             sampler: sampler,
-            rapooMonitor: RecordingRapooBatteryMonitor(),
+            vendorHIDMonitor: RecordingVendorHIDBatteryMonitor(),
             powerSourceObserver: powerObserver ?? RecordingPowerSourceObserver(),
             bluetoothConnectionObserver: bluetoothObserver ?? RecordingBluetoothConnectionObserver(),
             schedule: schedule ?? DeviceBatterySamplingSchedule(
@@ -837,21 +839,21 @@ private final class RecordingBluetoothConnectionObserver:
 }
 
 @MainActor
-private final class RecordingRapooBatteryMonitor: RapooBatteryMonitoring {
-    var snapshot = RapooMouseBatterySnapshot.idle
-    var onSnapshotChange: ((RapooMouseBatterySnapshot) -> Void)?
+private final class RecordingVendorHIDBatteryMonitor: VendorHIDBatteryMonitoring {
+    var snapshot = VendorHIDMouseBatterySnapshot.idle
+    var onSnapshotChange: ((VendorHIDMouseBatterySnapshot) -> Void)?
     func start() {}
     func stop() {}
     func refresh() {}
 }
 
 @MainActor
-private final class MultipleRapooBatteryMonitor: RapooBatteryMonitoring {
-    var snapshot: RapooMouseBatterySnapshot
-    var deviceSnapshots: [RapooMouseBatterySnapshot]
-    var onSnapshotChange: ((RapooMouseBatterySnapshot) -> Void)?
+private final class MultipleVendorHIDBatteryMonitor: VendorHIDBatteryMonitoring {
+    var snapshot: VendorHIDMouseBatterySnapshot
+    var deviceSnapshots: [VendorHIDMouseBatterySnapshot]
+    var onSnapshotChange: ((VendorHIDMouseBatterySnapshot) -> Void)?
 
-    init(snapshots: [RapooMouseBatterySnapshot]) {
+    init(snapshots: [VendorHIDMouseBatterySnapshot]) {
         deviceSnapshots = snapshots
         snapshot = snapshots.first ?? .idle
     }

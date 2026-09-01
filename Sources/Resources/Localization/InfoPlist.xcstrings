@@ -7,67 +7,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools يحتاج إلى التحكم في التقويم عند النقر على تاريخ حتى يتمكن من فتح ذلك اليوم في تطبيق تقويم النظام."
+            "value": "يستخدم MacTools أحداث Apple لفتح التواريخ في التقويم، وقراءة أيقونات الاختصارات وألوانها وحالة تشغيلها، وإظهار تأكيد تسجيل الخروج وإعادة التشغيل وإيقاف التشغيل في macOS."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools muss den Kalender steuern, wenn Sie auf ein Datum klicken, damit er an diesem Tag in der Systemkalender-App geöffnet werden kann."
+            "value": "MacTools verwendet Apple Events, um Daten im Kalender zu öffnen, Symbole, Farben und Ausführungsstatus von Kurzbefehlen zu lesen und macOS-Bestätigungen zum Abmelden, Neustarten und Ausschalten anzuzeigen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools needs to control Calendar when you click a date so it can open that day in the system Calendar app."
+            "value": "MacTools uses Apple Events to open dates in Calendar, read Shortcuts icons, colors, and run status, and show macOS log out, restart, and shut down confirmations."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools necesita controlar el Calendario cuando haces clic en una fecha para poder abrir ese día en la aplicación Calendario del sistema."
+            "value": "MacTools usa Apple Events para abrir fechas en Calendario, leer iconos, colores y el estado de ejecución de Atajos, y mostrar confirmaciones de cierre de sesión, reinicio y apagado de macOS."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools doit contrôler le calendrier lorsque vous cliquez sur une date afin qu'il puisse s'ouvrir ce jour-là dans l'application Calendrier du système."
+            "value": "MacTools utilise Apple Events pour ouvrir des dates dans Calendrier, lire les icônes, les couleurs et l’état d’exécution des raccourcis, et afficher les confirmations macOS de déconnexion, de redémarrage et d’extinction."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools は、日付をクリックしたときにシステムのカレンダー アプリでその日を開くことができるようにカレンダーを制御する必要があります。"
+            "value": "MacTools は Apple Events を使用してカレンダーで日付を開き、ショートカットのアイコン、カラー、実行状態を読み取り、macOS のログアウト、再起動、システム終了の確認を表示します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools은 날짜를 클릭할 때 캘린더를 제어해야 시스템 캘린더 앱에서 해당 날짜를 열 수 있습니다."
+            "value": "MacTools는 Apple Events를 사용하여 캘린더에서 날짜를 열고 단축어의 아이콘, 색상 및 실행 상태를 읽으며 macOS 로그아웃, 재시동 및 종료 확인을 표시합니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools precisa controlar o Agenda quando você clica em uma data para que ele possa abrir esse dia no aplicativo Agenda do sistema."
+            "value": "O MacTools usa Apple Events para abrir datas no Calendário, ler ícones, cores e o estado de execução dos Atalhos e mostrar confirmações de fim de sessão, reinício e encerramento do macOS."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "MacTools необходимо управлять Календарем, когда вы нажимаете дату, чтобы он мог открыть этот день в системном приложении «Календарь»."
+            "value": "MacTools использует Apple Events, чтобы открывать даты в Календаре, читать значки, цвета и состояние выполнения Команд, а также показывать подтверждения macOS при выходе из системы, перезагрузке и выключении."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "点击日历日期时需要控制系统日历应用并定位到对应日期。"
+            "value": "MacTools 使用 Apple Events 在系统日历中打开日期、读取 Apple“快捷指令”的图标、颜色和运行状态，并显示 macOS 退出登录、重新启动和关机确认。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "點擊日曆日期時需要控制系統日曆應用並定位到對應日期。"
+            "value": "MacTools 使用 Apple Events 在系統行事曆中開啟日期、讀取 Apple「捷徑」的圖示、顏色和執行狀態，並顯示 macOS 登出、重新啟動和關機確認。"
           }
         }
       }

@@ -134,6 +134,128 @@ final class PluginHostComponentSupportTests: XCTestCase {
         XCTAssertEqual(host.pluginSettingsItems.first?.shortcutItems.map(\.pluginID), ["component"])
     }
 
+    func testPermissionPresentationUsesStableCapabilityIDsForLegacyPluginKitKinds() {
+        let plugin = MockComponentPanelPlugin(
+            id: "component",
+            permissionRequirements: [
+                PluginPermissionRequirement(
+                    id: "full-disk-access",
+                    kind: .automation,
+                    title: "完全磁盘访问权限",
+                    description: "需要完全磁盘访问权限。"
+                ),
+                PluginPermissionRequirement(
+                    id: "finder-extension",
+                    kind: .automation,
+                    title: "Finder 扩展",
+                    description: "需要启用 Finder 扩展。"
+                )
+            ]
+        )
+
+        let cards = makeHost(plugins: [plugin]).permissionCards
+
+        XCTAssertEqual(cards.map(\.permissionID), ["full-disk-access", "finder-extension"])
+        XCTAssertEqual(cards.map(\.iconSystemImage), [
+            "externaldrive.badge.checkmark",
+            "puzzlepiece.extension"
+        ])
+    }
+
+    func testPluginSettingsExposeOnlyMissingPermissionsForTopGuidance() throws {
+        let plugin = MockComponentPanelPlugin(
+            id: "component",
+            permissionRequirements: [
+                PluginPermissionRequirement(
+                    id: "accessibility",
+                    kind: .accessibility,
+                    title: "辅助功能",
+                    description: "需要辅助功能权限。"
+                )
+            ],
+            isPermissionGranted: false
+        )
+
+        let item = try XCTUnwrap(makeHost(plugins: [plugin]).pluginSettingsItems.first)
+
+        XCTAssertEqual(item.permissionCards.map(\.permissionID), ["accessibility"])
+        XCTAssertEqual(item.missingPermissionCards.map(\.permissionID), ["accessibility"])
+    }
+
+    func testNativeFinderExtensionPermissionUsesExtensionPresentation() {
+        let plugin = MockComponentPanelPlugin(
+            id: "component",
+            permissionRequirements: [
+                PluginPermissionRequirement(
+                    id: "native-extension",
+                    kind: .finderExtension,
+                    title: "Finder Extension",
+                    description: "Enable the Finder extension."
+                )
+            ]
+        )
+        let cards = makeHost(plugins: [plugin]).permissionCards
+        XCTAssertEqual(cards.first?.iconSystemImage, "puzzlepiece.extension")
+    }
+
+    func testPermissionGuidanceRequestDoesNotChangeSettingsPage() {
+        let plugin = MockComponentPanelPlugin(
+            id: "component",
+            permissionRequirements: [
+                PluginPermissionRequirement(
+                    id: "accessibility",
+                    kind: .accessibility,
+                    title: "辅助功能",
+                    description: "需要辅助功能权限。"
+                )
+            ],
+            isPermissionGranted: false
+        )
+        let host = makeHost(plugins: [plugin])
+        var presentationRequests: [AppPresentationRequest] = []
+        host.appPresentationHandler = { presentationRequests.append($0) }
+
+        plugin.requestPermissionGuidance?("accessibility")
+
+        XCTAssertTrue(presentationRequests.isEmpty)
+        XCTAssertEqual(
+            host.pluginSettingsItems.first?.missingPermissionCards.map(\.permissionID),
+            ["accessibility"]
+        )
+    }
+
+    func testExplicitAutomationPermissionButtonOpensSystemSettingsWithoutPassiveNavigation() {
+        let plugin = MockComponentPanelPlugin(
+            id: "automation",
+            permissionRequirements: [.init(
+                id: "automation", kind: .automation, title: "Automation", description: "Allow System Events"
+            )],
+            isPermissionGranted: false
+        )
+        var openedURLs: [URL] = []
+        let host = makeHost(plugins: [plugin], openPermissionSettings: { openedURLs.append($0) })
+        plugin.requestPermissionGuidance?("automation")
+        XCTAssertTrue(openedURLs.isEmpty)
+        host.performPermissionAction(pluginID: "automation", permissionID: "automation")
+        XCTAssertEqual(openedURLs.map(\.absoluteString), [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+        ])
+    }
+
+    func testLegacyFullDiskAccessIsNotRoutedToAutomationSettings() {
+        let plugin = MockComponentPanelPlugin(
+            id: "disk",
+            permissionRequirements: [.init(
+                id: "full-disk-access", kind: .automation, title: "Full Disk Access", description: "Protected files"
+            )]
+        )
+        var openedURLs: [URL] = []
+        let host = makeHost(plugins: [plugin], openPermissionSettings: { openedURLs.append($0) })
+        host.performPermissionAction(pluginID: "disk", permissionID: "full-disk-access")
+        XCTAssertTrue(openedURLs.isEmpty)
+        XCTAssertEqual(plugin.handledPermissionIDs, ["full-disk-access"])
+    }
+
     func testShortcutsInSameSharedBindingGroupCanUseSameBinding() {
         let binding = ShortcutBinding(keyCode: 18, modifiers: [.command, .option])
         let componentPanelPlugin = MockComponentPanelPlugin(
@@ -313,7 +435,7 @@ final class PluginHostComponentSupportTests: XCTestCase {
                         embeddedShortcutGroupIDs: ["queue"]
                     ) { _ in EmptyView() },
                 ]),
-                permissionCards: [], shortcutItems: [],
+                permissionCards: [], missingPermissionCardIDs: [], shortcutItems: [],
                 actionShortcutSettingsConfiguration: nil,
                 shortcutSettingsGroups: [queueGroup, generalGroup],
                 shortcutDefinitionFirstSettingsGroupIDs: [],
@@ -879,7 +1001,8 @@ final class PluginHostComponentSupportTests: XCTestCase {
         dynamicPluginManager: DynamicPluginManager? = nil,
         displayConfigurationObserver: (any DisplayConfigurationObserving)? = nil,
         displayTopologyRefreshDelay: Duration = .milliseconds(180),
-        pluginStateChangeRebuildDelay: Duration = .milliseconds(80)
+        pluginStateChangeRebuildDelay: Duration = .milliseconds(80),
+        openPermissionSettings: @escaping (URL) -> Void = { _ in }
     ) -> PluginHost {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -893,7 +1016,8 @@ final class PluginHostComponentSupportTests: XCTestCase {
             globalShortcutManager: GlobalShortcutManager(),
             displayConfigurationObserver: displayConfigurationObserver,
             displayTopologyRefreshDelay: displayTopologyRefreshDelay,
-            pluginStateChangeRebuildDelay: pluginStateChangeRebuildDelay
+            pluginStateChangeRebuildDelay: pluginStateChangeRebuildDelay,
+            openPermissionSettings: openPermissionSettings
         )
     }
 
@@ -979,6 +1103,8 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
     private(set) var receivedPanelVisibilityValues: [Bool] = []
     private(set) var surfaceEvents: [SurfaceEvent] = []
     private(set) var shortcutBindingChanges: [ShortcutBindingChange] = []
+    private let isPermissionGranted: Bool
+    private(set) var handledPermissionIDs: [String] = []
 
     init(
         id: String,
@@ -988,7 +1114,8 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
         permissionRequirements: [PluginPermissionRequirement] = [],
         settingsPage: PluginSettingsPage? = nil,
         shortcutDefinitions: [PluginShortcutDefinition] = [],
-        shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] = []
+        shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] = [],
+        isPermissionGranted: Bool = true
     ) {
         self.metadata = PluginMetadata(
             id: id,
@@ -1004,6 +1131,7 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
         self.shortcutDefinitions = shortcutDefinitions
         self.settingsPage = settingsPage
         self.shortcutSettingsGroups = shortcutSettingsGroups
+        self.isPermissionGranted = isPermissionGranted
     }
 
     var componentPanelState: PluginComponentState {
@@ -1053,10 +1181,10 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
-        PluginPermissionState(isGranted: true, footnote: nil)
+        PluginPermissionState(isGranted: isPermissionGranted, footnote: nil)
     }
 
-    func handlePermissionAction(id: String) {}
+    func handlePermissionAction(id: String) { handledPermissionIDs.append(id) }
     func handleSettingsAction(_ action: PluginSettingsAction) {}
     func handleShortcutAction(id: String) {}
     func shortcutBindingDidChange(id: String, binding: ShortcutBinding?) {

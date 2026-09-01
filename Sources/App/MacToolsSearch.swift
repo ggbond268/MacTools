@@ -920,7 +920,7 @@ enum MacToolsSearchIndexBuilder {
             }
         }
 
-        let permissions = item.permissionCards.map { card in
+        let permissions = item.missingPermissionCards.map { card in
             settingResult(
                 id: "permission.\(card.id)",
                 item: item,

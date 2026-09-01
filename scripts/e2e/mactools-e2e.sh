@@ -146,7 +146,9 @@ for raw in sorted(path for path in paths if path):
     path = os.path.join(root, relative)
     digest.update(raw)
     digest.update(b"\0")
-    if os.path.islink(path):
+    if not os.path.exists(path) and not os.path.islink(path):
+        digest.update(b"R\0")
+    elif os.path.islink(path):
         digest.update(b"L\0")
         digest.update(os.readlink(path).encode("utf-8", "surrogateescape"))
     else:
@@ -1791,6 +1793,8 @@ verify_code_session() {
         -only-testing:MacToolsTests/SidecarPluginTests \
         -only-testing:MacToolsTests/StageManagerPluginTests \
         -only-testing:MacToolsTests/SystemMutePluginTests \
+        -only-testing:MacToolsTests/SystemPowerControllerTests \
+        -only-testing:MacToolsTests/SystemPowerPluginTests \
         -only-testing:MacToolsTests/SystemSoftRestartPluginTests \
         -only-testing:MacToolsTests/TranslatorPluginTests \
         -only-testing:MacToolsTests/WindowLayoutsPluginTests \

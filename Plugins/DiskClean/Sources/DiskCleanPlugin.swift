@@ -166,7 +166,24 @@ final class DiskCleanPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSettingsP
         )
     }
 
-    var permissionRequirements: [PluginPermissionRequirement] { [] }
+    var permissionRequirements: [PluginPermissionRequirement] {
+        [
+            PluginPermissionRequirement(
+                id: "full-disk-access",
+                // PluginKit v5 has no Full Disk Access case. The host recognizes this
+                // stable ID and provides the shared Full Disk Access presentation.
+                kind: .automation,
+                title: localization.string(
+                    "permission.fullDiskAccess.title",
+                    defaultValue: "完全磁盘访问"
+                ),
+                description: localization.string(
+                    "permission.fullDiskAccess.description",
+                    defaultValue: "用于扫描受 macOS 保护的缓存与应用数据；未授权时会安全跳过这些位置。"
+                )
+            ),
+        ]
+    }
     var shortcutDefinitions: [PluginShortcutDefinition] { [] }
     var actionDefinitions: [ActionDefinition] {
         let scanTitle = localization.string("panel.action.scan", defaultValue: "扫描")
@@ -306,10 +323,23 @@ final class DiskCleanPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSettingsP
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
-        PluginPermissionState(isGranted: true, footnote: nil)
+        guard permissionID == "full-disk-access" else {
+            return PluginPermissionState(isGranted: true, footnote: nil)
+        }
+        let isGranted = DiskCleanFullDiskAccessProbe.shared.hasFullDiskAccess
+        return PluginPermissionState(
+            isGranted: isGranted,
+            footnote: isGranted ? nil : localization.string(
+                "permission.fullDiskAccess.footnote",
+                defaultValue: "授权后请退出并重新打开 MacTools，受保护位置才会加入扫描。"
+            )
+        )
     }
 
-    func handlePermissionAction(id: String) {}
+    func handlePermissionAction(id: String) {
+        guard id == "full-disk-access" else { return }
+        DiskCleanFullDiskAccessGuide.openSettings()
+    }
     func handleSettingsAction(_ action: PluginSettingsAction) {}
     func handleShortcutAction(id: String) {}
 

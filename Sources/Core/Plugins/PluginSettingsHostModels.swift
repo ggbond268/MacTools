@@ -11,6 +11,7 @@ struct PluginSettingsPageItem: Identifiable {
     let installedAt: Date?
     let page: PluginSettingsPage?
     let permissionCards: [PluginPermissionCard]
+    let missingPermissionCardIDs: Set<String>
     let shortcutItems: [ShortcutSettingsItem]
     let actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration?
     let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
@@ -31,6 +32,10 @@ struct PluginSettingsPageItem: Identifiable {
 
     var hasPluginContent: Bool {
         page != nil
+    }
+
+    var missingPermissionCards: [PluginPermissionCard] {
+        permissionCards.filter { missingPermissionCardIDs.contains($0.id) }
     }
 
     var workspaceScrolling: PluginSettingsWorkspaceScrolling {

@@ -92,7 +92,7 @@
     "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
     "supportURL": "https://github.com/ggbond268/MacTools/issues",
     "publisher": "MacTools",
-    "license": "Apache-2.0"
+    "license": "GPL-3.0-only"
   },
   "discovery": {
     "keywords": [

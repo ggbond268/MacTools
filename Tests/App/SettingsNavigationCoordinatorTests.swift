@@ -198,6 +198,38 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.historyIndex, 4)
     }
 
+    func testMarketplaceDetailParticipatesInHistoryAndKeepsMarketplaceSidebarSelection() {
+        let target = MarketplacePluginDetailTarget(pluginID: "fan-control")
+        let coordinator = SettingsNavigationCoordinator(
+            isMarketplaceDetailAvailable: { $0 == target }
+        )
+
+        coordinator.navigate(to: .plugins(.marketplace))
+        coordinator.navigate(to: .marketplaceDetail(target))
+        coordinator.navigate(to: .about)
+
+        coordinator.goBack()
+        XCTAssertEqual(coordinator.destination, .marketplaceDetail(target))
+        XCTAssertEqual(coordinator.destination.sidebarDestination, .plugins(.marketplace))
+        coordinator.goBack()
+        XCTAssertEqual(coordinator.destination, .plugins(.marketplace))
+        coordinator.goForward()
+        XCTAssertEqual(coordinator.destination, .marketplaceDetail(target))
+    }
+
+    func testMarketplaceDetailFallsBackToMarketplaceWhenCatalogItemDisappears() {
+        var isAvailable = true
+        let coordinator = SettingsNavigationCoordinator(
+            isMarketplaceDetailAvailable: { _ in isAvailable }
+        )
+        coordinator.navigate(to: .marketplaceDetail(.init(pluginID: "fan-control")))
+
+        isAvailable = false
+        coordinator.reconcileCurrentDestinationAvailability()
+
+        XCTAssertEqual(coordinator.destination, .plugins(.marketplace))
+    }
+
     func testSuppressesConsecutiveDuplicateDestinations() {
         let coordinator = SettingsNavigationCoordinator()
 
