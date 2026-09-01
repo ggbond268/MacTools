@@ -102,6 +102,35 @@ final class CLIHostDiscoveryTests: XCTestCase {
         XCTAssertEqual(executions, 1)
     }
 
+    func testDescribeMasksV3ExecutionCapabilityFromV2Clients() async throws {
+        let registry = ActionRegistry()
+        let definition = actionDefinition()
+        install(definition, in: registry) { _ in
+            .success(ActionExecutionHandle { .succeeded() })
+        }
+        let discovery = CLIActionDiscovery(registry: registry)
+        discovery.markReady()
+        let bridge = CLIHostBridge(discovery: discovery, callerIsBroker: { true })
+        let request = CLIActionTargetRequest(id: definition.key.id)
+        let payload = try CLIProtocolCodec.encodeRequest(request)
+
+        let v2 = try await response(bridge, operation: .actionsDescribe, version: 2, payload: payload)
+        let v2Description = try CLIDiscoveryValidation.decode(
+            CLIActionDescription.self,
+            from: try XCTUnwrap(v2.payload)
+        )
+        try CLIDiscoveryValidation.validate(v2Description, id: request.id)
+        XCTAssertFalse(v2Description.executionSupported)
+
+        let v3 = try await response(bridge, operation: .actionsDescribe, version: 3, payload: payload)
+        let v3Description = try CLIDiscoveryValidation.decode(
+            CLIActionDescription.self,
+            from: try XCTUnwrap(v3.payload)
+        )
+        try CLIDiscoveryValidation.validate(v3Description, id: request.id)
+        XCTAssertTrue(v3Description.executionSupported)
+    }
+
     func testRunCancellationReachesExecutionHandle() async throws {
         let registry = ActionRegistry()
         var didCancel = false

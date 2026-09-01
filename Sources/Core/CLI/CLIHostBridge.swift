@@ -186,8 +186,20 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
                     payload = try CLIProtocolCodec.encodeResponse(discovery.list(
                         CLIDiscoveryValidation.decode(CLIActionListRequest.self, from: data)))
                 case .actionsDescribe:
-                    payload = try CLIProtocolCodec.encodeResponse(discovery.describe(
-                        CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data)))
+                    let description = try discovery.describe(
+                        CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data))
+                    if request.protocolVersion >= 3 {
+                        payload = try CLIProtocolCodec.encodeResponse(description)
+                    } else {
+                        payload = try CLIProtocolCodec.encodeResponse(CLIActionDescription(
+                            id: description.id,
+                            title: description.title,
+                            description: description.description,
+                            parameterSchemaVersion: description.parameterSchemaVersion,
+                            parameters: description.parameters,
+                            executionSupported: false
+                        ))
+                    }
                 case .actionsAvailability:
                     payload = try CLIProtocolCodec.encodeResponse(discovery.availability(
                         CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data)))
