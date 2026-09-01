@@ -38,6 +38,8 @@ enum HostPermissionKind: String, CaseIterable, Hashable, Sendable {
             return .systemAudioRecording
         case "full-disk-access":
             return .fullDiskAccess
+        case "finder-extension":
+            return .finderExtension
         default:
             break
         }

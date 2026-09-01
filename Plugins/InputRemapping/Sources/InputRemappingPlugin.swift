@@ -124,6 +124,7 @@ final class InputRemappingButtonCaptureCoordinator: ObservableObject {
         }
         return true
     }
+
 }
 
 @MainActor
@@ -572,6 +573,24 @@ private enum InputRemappingEditorLayout {
     static let inputControlWidth: CGFloat = 220
 }
 
+struct InputRemappingOutputRecordingSnapshot: Equatable {
+    let action: InputRemappingRule.Action
+    let outputConfigurationState: InputRemappingOutputConfigurationState
+    let isEnabled: Bool
+
+    init(rule: InputRemappingRule) {
+        action = rule.action
+        outputConfigurationState = rule.outputConfigurationState
+        isEnabled = rule.isEnabled
+    }
+
+    func restore(_ rule: inout InputRemappingRule) {
+        rule.action = action
+        rule.outputConfigurationState = outputConfigurationState
+        rule.isEnabled = isEnabled
+    }
+}
+
 private struct InputRemappingRuleEditor: View {
     let rule: InputRemappingRule
     @ObservedObject var store: InputRemappingStore
@@ -582,6 +601,7 @@ private struct InputRemappingRuleEditor: View {
 
     @State private var draft: InputRemappingRule
     @State private var requiresSafetyConfirmation = false
+    @State private var outputRecordingSnapshot: InputRemappingOutputRecordingSnapshot?
 
     init(
         rule: InputRemappingRule,
@@ -598,6 +618,7 @@ private struct InputRemappingRuleEditor: View {
         self.requestTrackpadGestureOwnership = requestTrackpadGestureOwnership
         self.isTrackpadGestureOwned = isTrackpadGestureOwned
         _draft = State(initialValue: rule)
+        _outputRecordingSnapshot = State(initialValue: nil)
     }
 
     var body: some View {
@@ -707,6 +728,10 @@ private struct InputRemappingRuleEditor: View {
                 (draft.isOutputConfigured && draft.action.kind == .shortcut) {
                 shortcutRecordingControl
             }
+            if draft.outputConfigurationState == .recordingKeyTap ||
+                (draft.isOutputConfigured && draft.action.kind == .keyTap) {
+                keyTapSelectionControl
+            }
         }
         .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
     }
@@ -782,7 +807,9 @@ private struct InputRemappingRuleEditor: View {
         } label: {
             mappingMenuLabel(
                 actionTitle,
-                systemImage: draft.outputConfigurationState == .needsSelection || draft.action.kind == .shortcut ? nil : actionSymbolName
+                systemImage: draft.outputConfigurationState == .needsSelection
+                    || draft.action.kind == .shortcut
+                    || draft.action.kind == .keyTap ? nil : actionSymbolName
             )
         }
         .menuStyle(.button)
@@ -816,6 +843,7 @@ private struct InputRemappingRuleEditor: View {
         }
         return switch draft.action {
         case let .shortcut(shortcut): shortcutTitle(shortcut)
+        case let .keyTap(keyTap): KeyboardKeyTapFormatter.displayString(for: keyTap)
         default: draft.action.title(localization: localization)
         }
     }
@@ -823,6 +851,7 @@ private struct InputRemappingRuleEditor: View {
     private var actionSymbolName: String {
         switch draft.action {
         case .shortcut: "command"
+        case .keyTap: "keyboard.badge.ellipsis"
         case .mouseBack: "arrow.left"
         case .mouseForward: "arrow.right"
         case .mouseMiddle: "computermouse"
@@ -848,8 +877,18 @@ private struct InputRemappingRuleEditor: View {
         Binding(
             get: { draft.action.kind },
             set: { kind in
+                buttonCapture.cancel()
+                outputRecordingSnapshot?.restore(&draft)
+                outputRecordingSnapshot = nil
+                if kind == .shortcut || kind == .keyTap {
+                    outputRecordingSnapshot = InputRemappingOutputRecordingSnapshot(rule: draft)
+                }
                 draft.action = draft.action.replacingKind(kind)
-                draft.outputConfigurationState = kind == .shortcut ? .recordingShortcut : .configured
+                draft.outputConfigurationState = switch kind {
+                case .shortcut: .recordingShortcut
+                case .keyTap: .recordingKeyTap
+                default: .configured
+                }
                 enableIfComplete()
                 save()
             }
@@ -945,22 +984,31 @@ private struct InputRemappingRuleEditor: View {
                 .foregroundStyle(.tint)
             Text(localization.string("settings.shortcut.preparing.detail", defaultValue: "Release the Record Shortcut button; listening starts next."))
                 .foregroundStyle(.secondary)
-            Button(localization.string("settings.cancel", defaultValue: "Cancel")) { buttonCapture.cancel() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            Button(localization.string("settings.cancel", defaultValue: "Cancel")) {
+                cancelOutputRecording()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         } else if buttonCapture.recordingShortcutRuleID == rule.id {
             Label(localization.string("settings.shortcut.recording", defaultValue: "Press the shortcut"), systemImage: "record.circle")
                 .foregroundStyle(.tint)
-            Button(localization.string("settings.cancel", defaultValue: "Cancel")) { buttonCapture.cancel() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            Button(localization.string("settings.cancel", defaultValue: "Cancel")) {
+                cancelOutputRecording()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         } else {
             Button {
-                _ = buttonCapture.startShortcut(ruleID: rule.id) { binding in
+                beginOutputRecordingIfNeeded()
+                guard buttonCapture.startShortcut(ruleID: rule.id, onCapture: { binding in
+                    outputRecordingSnapshot = nil
                     draft.action = .shortcut(binding)
                     draft.outputConfigurationState = .configured
                     enableIfComplete()
                     save()
+                }) else {
+                    cancelOutputRecording()
+                    return
                 }
             } label: {
                 Text(localization.string("settings.shortcut.record", defaultValue: "Record shortcut"))
@@ -971,12 +1019,57 @@ private struct InputRemappingRuleEditor: View {
         }
     }
 
+    private var keyTapSelectionControl: some View {
+        PluginKeyTapPicker(
+            title: localization.string("action.singleKey", defaultValue: "Single Key"),
+            selection: Binding(
+                get: {
+                    guard case let .keyTap(keyTap) = draft.action,
+                          draft.outputConfigurationState == .configured
+                    else { return nil }
+                    return keyTap
+                },
+                set: { keyTap in
+                    guard let keyTap else {
+                        draft.outputConfigurationState = .recordingKeyTap
+                        draft.isEnabled = false
+                        save()
+                        return
+                    }
+                    outputRecordingSnapshot = nil
+                    draft.action = .keyTap(keyTap)
+                    draft.outputConfigurationState = .configured
+                    enableIfComplete()
+                    save()
+                }
+            ),
+            minWidth: InputRemappingEditorLayout.inputControlWidth
+        )
+    }
+
     private func enableIfComplete() {
         guard draft.isInputConfigured, draft.isOutputConfigured else {
             draft.isEnabled = false
             return
         }
         draft.isEnabled = !InputRemappingRule.requiresExplicitConfirmation(for: draft.trigger)
+    }
+
+    private func beginOutputRecordingIfNeeded() {
+        guard outputRecordingSnapshot == nil else { return }
+        outputRecordingSnapshot = InputRemappingOutputRecordingSnapshot(rule: draft)
+    }
+
+    private func cancelOutputRecording() {
+        buttonCapture.cancel()
+        if let outputRecordingSnapshot {
+            outputRecordingSnapshot.restore(&draft)
+            self.outputRecordingSnapshot = nil
+        } else {
+            draft.outputConfigurationState = .needsSelection
+            draft.isEnabled = false
+        }
+        save()
     }
 
     private func captureStatus(title: String, detail: String, isPreparing: Bool) -> some View {

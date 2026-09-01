@@ -19,6 +19,45 @@ public enum PluginKitLocalization {
         string("shortcutRecorder.defaultPlaceholder", defaultValue: "未设置")
     }
 
+    public static var keyboardKeyLeft: String {
+        string("keyboardKey.side.left", defaultValue: "左侧")
+    }
+
+    public static var keyboardKeyRight: String {
+        string("keyboardKey.side.right", defaultValue: "右侧")
+    }
+
+    public static var keyboardKeyTapPickerHelp: String {
+        string("keyboardKeyTap.pickerHelp", defaultValue: "从列表中选择要发送的按键。")
+    }
+
+    public static var keyboardKeyTapUnset: String {
+        string("keyboardKeyTap.unset", defaultValue: "未设置")
+    }
+
+    public static var keyboardKeyTapUnsupportedHelp: String {
+        string(
+            "keyboardKeyTap.unsupportedHelp",
+            defaultValue: "不支持大写锁定和媒体键。"
+        )
+    }
+
+    public static var keyboardKeyGroupModifiers: String {
+        string("keyboardKeyTap.group.modifiers", defaultValue: "修饰键")
+    }
+
+    public static var keyboardKeyGroupNavigation: String {
+        string("keyboardKeyTap.group.navigation", defaultValue: "导航与编辑")
+    }
+
+    public static var keyboardKeyGroupKeypad: String {
+        string("keyboardKeyTap.group.keypad", defaultValue: "数字键盘")
+    }
+
+    public static var keyboardKeyGroupOther: String {
+        string("keyboardKeyTap.group.other", defaultValue: "其他按键")
+    }
+
     static var shortcutRecorderPreviewPlaceholder: String {
         string("shortcutRecorder.previewPlaceholder", defaultValue: "按下录制快捷键")
     }

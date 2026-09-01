@@ -613,6 +613,7 @@ final class AppleShortcutsControllerTests: XCTestCase {
         AppleShortcutsController(
             runner: runner,
             visualMetadataLoader: visualMetadataLoader,
+            iconCache: AppleShortcutsIconCache(cache: ControlledIconCache()),
             localization: PluginLocalization(bundle: .main),
             now: now
         )

@@ -40,6 +40,13 @@ final class PermissionCoordinatorTests: XCTestCase {
             ),
             .screenRecording
         )
+        XCTAssertEqual(
+            HostPermissionKind.resolve(
+                permissionID: "finder-extension",
+                pluginKind: .automation
+            ),
+            .finderExtension
+        )
     }
 
     func testAggregationDeduplicatesKindsListsAffectedPluginsAndOrdersAttentionFirst() throws {

@@ -42,21 +42,23 @@ struct CLIApplication {
                 return CLIExitCode.transportFailure.rawValue
             }
         case let .doctor(json):
-            return await interruptibleDoctor(json: json)
+            return await interruptibleRequest(operation: .doctor, payload: nil, json: json)
+        case let .discovery(operation, payload, json):
+            return await interruptibleRequest(operation: operation, payload: payload, json: json)
         }
     }
 
-    private func interruptibleDoctor(json: Bool) async -> Int32 {
+    private func interruptibleRequest(operation: CLIOperation, payload: Data?, json: Bool) async -> Int32 {
         let taskState = CLICommandTaskState()
         let signalCoordinator = CLISignalCoordinator { taskState.cancel() }
         defer { signalCoordinator.finish() }
-        let task = Task { try await doctor(json: json) }
+        let task = Task { try await request(operation: operation, payload: payload, json: json) }
         taskState.install(task)
         do {
             return try await task.value
         } catch is CancellationError {
             writeFailure(output.localFailure(
-                command: "doctor",
+                command: operation.rawValue,
                 outcome: .cancelled,
                 category: "cancelled",
                 message: "The request was cancelled.",
@@ -65,7 +67,7 @@ struct CLIApplication {
             return CLIExitCode.cancellation.rawValue
         } catch CLIBrokerClientError.protocolIncompatible {
             writeFailure(output.localFailure(
-                command: "doctor",
+                command: operation.rawValue,
                 outcome: .protocolIncompatible,
                 category: "protocolIncompatible",
                 message: "The CLI protocol is incompatible with the installed MacTools components.",
@@ -74,7 +76,7 @@ struct CLIApplication {
             return CLIExitCode.protocolIncompatible.rawValue
         } catch CLIBrokerClientError.invalidPeerResponse {
             writeFailure(output.localFailure(
-                command: "doctor",
+                command: operation.rawValue,
                 outcome: .protocolIncompatible,
                 category: "invalidPeerResponse",
                 message: "The authenticated broker or host returned an invalid response.",
@@ -83,7 +85,7 @@ struct CLIApplication {
             return CLIExitCode.protocolIncompatible.rawValue
         } catch let CLIBrokerClientError.unavailable(message) {
             writeFailure(output.localFailure(
-                command: "doctor",
+                command: operation.rawValue,
                 outcome: .hostUnavailable,
                 category: "hostUnavailable",
                 message: message,
@@ -92,7 +94,7 @@ struct CLIApplication {
             return CLIExitCode.transportFailure.rawValue
         } catch {
             writeFailure(output.localFailure(
-                command: "doctor",
+                command: operation.rawValue,
                 outcome: .hostUnavailable,
                 category: "hostUnavailable",
                 message: "MacTools command-line integration is unavailable.",
@@ -102,14 +104,19 @@ struct CLIApplication {
         }
     }
 
-    private func doctor(json: Bool) async throws -> Int32 {
+    private func request(operation: CLIOperation, payload: Data?, json: Bool) async throws -> Int32 {
         let deadline = CLIStartupDeadline(timeout: .seconds(10))
         let handshake = try await client.prepareHost(deadline: deadline)
-        let response = try await client.sendDoctor(deadline: deadline)
+        let response = try await client.send(operation: operation, payload: payload, deadline: deadline)
         let rendered: String
         if response.outcome == .completed {
             do {
-                rendered = try output.renderDoctor(response, handshake: handshake, json: json)
+                if operation == .doctor {
+                    rendered = try output.renderDoctor(response, handshake: handshake, json: json)
+                } else {
+                    guard let payload else { throw CLIBrokerClientError.invalidPeerResponse }
+                    rendered = try output.renderDiscovery(response, requestPayload: payload, json: json)
+                }
             } catch {
                 throw CLIBrokerClientError.invalidPeerResponse
             }
@@ -130,6 +137,7 @@ struct CLIApplication {
         case .completed: .success
         case .cancelled: .cancellation
         case .invalidInput: .invalidInput
+        case .unknownTarget: .unknownTarget
         case .hostUnavailable: .transportFailure
         case .protocolIncompatible: .protocolIncompatible
         }
@@ -151,6 +159,11 @@ struct CLIApplication {
           help
           version [--json]
           doctor [--json]
+          actions list [--page-size 1...100] [--cursor <cursor>] [--json]
+          actions describe <id-from-list> [--json]
+          actions availability <id-from-list> [--json]
+
+        Discovery is read-only. Action execution and parameter input are not supported.
         """
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import XCTest
 import MacToolsPluginKit
 import MultitouchSupport
@@ -515,6 +516,37 @@ final class TrackpadGestureStoreTests: XCTestCase {
 
         reloaded.delete(id: mapping.id)
         XCTAssertTrue(TrackpadGestureStore(storage: storage, legacyMiddleClick: nil).mappings.isEmpty)
+    }
+
+    func testSingleKeyMappingPersistsRightCommandIdentity() throws {
+        let storage = TrackpadGestureMemoryStorage()
+        let store = TrackpadGestureStore(storage: storage, legacyMiddleClick: nil)
+        let keyTap = KeyboardKeyTap(keyCode: UInt16(kVK_RightCommand))
+        let mapping = TrackpadGestureMapping(
+            gesture: .threeFingerTap,
+            action: .keyTap(keyTap)
+        )
+
+        XCTAssertTrue(store.save(mapping))
+        XCTAssertEqual(
+            TrackpadGestureStore(storage: storage, legacyMiddleClick: nil).mappings,
+            [mapping]
+        )
+    }
+
+    func testUnsupportedSingleKeyMappingIsRejectedAndFilteredFromPersistence() throws {
+        let storage = TrackpadGestureMemoryStorage()
+        let invalid = TrackpadGestureMapping(
+            gesture: .threeFingerTap,
+            action: .keyTap(KeyboardKeyTap(keyCode: .max))
+        )
+        let store = TrackpadGestureStore(storage: storage, legacyMiddleClick: nil)
+
+        XCTAssertFalse(store.save(invalid))
+        storage.set(try JSONEncoder().encode([invalid]), forKey: "mappings")
+        XCTAssertTrue(
+            TrackpadGestureStore(storage: storage, legacyMiddleClick: nil).mappings.isEmpty
+        )
     }
 
     func testMappingMutationsPublishOnlyAfterDurablePersistence() throws {
@@ -1314,6 +1346,20 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertEqual(fixture.executor.actions, [.keyboardShortcut(shortcut)])
     }
 
+    func testConfiguredGestureExecutesSingleRightCommandTap() {
+        let fixture = makePlugin()
+        let keyTap = KeyboardKeyTap(keyCode: UInt16(kVK_RightCommand))
+        XCTAssertTrue(fixture.plugin.store.save(TrackpadGestureMapping(
+            gesture: .fourFingerTap,
+            action: .keyTap(keyTap)
+        )))
+
+        fixture.plugin.configurationDidChange()
+        fixture.session.recognize(.fourFingerTap)
+
+        XCTAssertEqual(fixture.executor.actions, [.keyTap(keyTap)])
+    }
+
     func testOrdinaryMultiFingerShortcutDoesNotConsumeNativeClick() {
         let fixture = makePlugin()
         XCTAssertTrue(fixture.plugin.store.save(TrackpadGestureMapping(
@@ -2111,12 +2157,15 @@ final class TrackpadGesturesPluginTests: XCTestCase {
             virtualKey: 0,
             keyDown: true
         ))
-        generatedKey.setIntegerValueField(
-            .eventSourceUserData,
-            value: TrackpadGestureActionExecutor.keyboardEventMarker
-        )
-        clock.value = 0.10
-        XCTAssertFalse(session.handleNativeEventForTests(type: .keyDown, event: generatedKey))
+        for marker in [
+            MacToolsSyntheticInputEvent.marker,
+            MacToolsSyntheticInputEvent.legacyTrackpadGesturesMarker,
+            MacToolsSyntheticInputEvent.supersededSharedMarker,
+        ] {
+            generatedKey.setIntegerValueField(.eventSourceUserData, value: marker)
+            clock.value = 0.10
+            XCTAssertFalse(session.handleNativeEventForTests(type: .keyDown, event: generatedKey))
+        }
 
         let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
         let tapping = TrackpadContactSnapshot(identifier: 2, x: 0.1, y: 0.5)

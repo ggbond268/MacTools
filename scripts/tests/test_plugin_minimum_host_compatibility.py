@@ -55,6 +55,9 @@ NEW_API_MINIMUM_HOSTS = {
     "ActionGridHostContextConsuming": "1.2.0",
     "TrackpadActionHostContext": "1.2.0",
     "TrackpadActionHostContextConsuming": "1.2.0",
+    "PluginActionHostExecutionResult": "1.2.1",
+    "PluginActionExecutionHostContext": "1.2.1",
+    "PluginActionExecutionHostContextConsuming": "1.2.1",
     "ActionSurfaceAssignmentSummary": "1.2.0",
     "ActionSurfaceAssignmentSummarizing": "1.2.0",
     # Portable preferences and input ownership added with the shared surfaces.
@@ -69,8 +72,28 @@ NEW_API_MINIMUM_HOSTS = {
     # Shared lifecycle and presentation helpers introduced in host 1.2.
     "PluginCallbackContext": "1.2.0",
     "PluginPresentationSafety": "1.2.0",
+    "PluginDashboardPresenting": "1.2.1",
+    "PluginComponentDetailContent": "1.2.1",
+    "PluginComponentDetailPresenting": "1.2.1",
     "PluginProcessGroupLease": "1.2.0",
     "PluginSystemImage": "1.2.0",
+    # Side-aware atomic keyboard output introduced in host 1.2.1.
+    "KeyboardKeyTap": "1.2.1",
+    "KeyboardKeyTapFormatter": "1.2.1",
+    "MacToolsSyntheticInputEvent": "1.2.1",
+    "KeyboardKeyTapEventTransition": "1.2.1",
+    "KeyboardKeyTapEventPoster": "1.2.1",
+    "PluginKeyTapPicker": "1.2.1",
+    # New accessors on the pre-existing PluginKitLocalization type.
+    "keyboardKeyLeft": "1.2.1",
+    "keyboardKeyRight": "1.2.1",
+    "keyboardKeyTapPickerHelp": "1.2.1",
+    "keyboardKeyTapUnset": "1.2.1",
+    "keyboardKeyTapUnsupportedHelp": "1.2.1",
+    "keyboardKeyGroupModifiers": "1.2.1",
+    "keyboardKeyGroupNavigation": "1.2.1",
+    "keyboardKeyGroupKeypad": "1.2.1",
+    "keyboardKeyGroupOther": "1.2.1",
     # Shared component-panel theme surfaces introduced in host 1.2.
     "PluginComponentTheme": "1.2.0",
     "PluginComponentCardBackground": "1.2.0",
@@ -231,6 +254,30 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             set(),
             "Public ActionModels types used by plugins must declare their minimum host",
         )
+
+    def test_action_execution_bridge_inventory_requires_the_first_compatible_host(self) -> None:
+        bridge = REPO_ROOT / "Sources/MacToolsPluginKit/PluginActionExecutionHostContext.swift"
+        symbols = public_top_level_type_names(bridge.read_text(encoding="utf-8"))
+        self.assertTrue(symbols)
+        for symbol in symbols:
+            with self.subTest(symbol=symbol):
+                self.assertEqual(NEW_API_MINIMUM_HOSTS.get(symbol), "1.2.1")
+                self.assertTrue(minimum_host_violations("legacy", "1.2.0", symbol))
+
+    def test_dashboard_presentation_apis_reject_host_1_2_0(self) -> None:
+        symbols = {
+            "PluginDashboardPresenting",
+            "PluginComponentDetailContent",
+            "PluginComponentDetailPresenting",
+        }
+        interfaces = (REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swift").read_text(
+            encoding="utf-8"
+        )
+        self.assertTrue(symbols <= public_top_level_type_names(interfaces))
+        for symbol in symbols:
+            self.assertEqual(NEW_API_MINIMUM_HOSTS[symbol], "1.2.1")
+            self.assertEqual(len(minimum_host_violations("probe", "1.2.0", symbol)), 1)
+            self.assertEqual(minimum_host_violations("probe", "1.2.1", symbol), [])
 
     def test_component_theme_inventory_covers_every_public_type_used_by_plugins(self) -> None:
         component_theme_symbols = public_top_level_type_names(

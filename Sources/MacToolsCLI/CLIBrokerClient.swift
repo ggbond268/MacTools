@@ -78,15 +78,28 @@ final class CLIBrokerClient: @unchecked Sendable {
         requestID: UUID = UUID(),
         deadline: CLIStartupDeadline
     ) async throws -> CLIResponseEnvelope {
+        try await send(operation: .doctor, payload: nil, requestID: requestID, deadline: deadline)
+    }
+
+    func send(
+        operation: CLIOperation,
+        payload: Data?,
+        requestID: UUID = UUID(),
+        deadline: CLIStartupDeadline
+    ) async throws -> CLIResponseEnvelope {
         guard let version = negotiatedProtocolVersion else {
             throw CLIBrokerClientError.unavailable("The host handshake has not completed.")
+        }
+        guard version >= operation.minimumProtocolVersion else {
+            invalidateConnection()
+            throw CLIBrokerClientError.protocolIncompatible
         }
         let request = CLIRequestEnvelope(
             protocolVersion: version,
             requestID: requestID,
-            operation: .doctor,
+            operation: operation,
             sentAt: .now,
-            payload: nil
+            payload: payload
         )
         let data = try CLIProtocolCodec.encodeRequest(request)
         let responseData: Data

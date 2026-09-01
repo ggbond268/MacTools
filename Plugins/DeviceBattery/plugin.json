@@ -1,51 +1,51 @@
 {
   "id": "device-battery",
   "displayName": "设备电量",
-  "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏鼠标电量",
+  "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏/迈从鼠标电量",
   "localizedMetadata": {
     "ar": {
       "displayName": "بطارية الأجهزة",
-      "summary": "عرض مستويات البطارية لجهاز Mac وأجهزة Apple المحمولة وملحقات Bluetooth وأجهزة الماوس Rapoo."
+      "summary": "عرض مستويات البطارية لجهاز Mac وأجهزة Apple المحمولة وملحقات Bluetooth وأجهزة الماوس Rapoo وMCHOSE."
     },
     "de": {
       "displayName": "Gerätebatterie",
-      "summary": "Zeigen Sie den Akkustand Ihres Mac, mobiler Apple-Geräte, von Bluetooth-Zubehör und Rapoo-Mäusen an."
+      "summary": "Zeigen Sie den Akkustand Ihres Mac, mobiler Apple-Geräte, von Bluetooth-Zubehör sowie Rapoo- und MCHOSE-Mäusen an."
     },
     "en": {
       "displayName": "Device Battery",
-      "summary": "View battery levels for your Mac, Apple mobile devices, Bluetooth accessories, and Rapoo mice."
+      "summary": "View battery levels for your Mac, Apple mobile devices, Bluetooth accessories, and Rapoo or MCHOSE mice."
     },
     "es": {
       "displayName": "Batería de dispositivos",
-      "summary": "Consulta la batería del Mac, dispositivos móviles Apple, accesorios Bluetooth y ratones Rapoo."
+      "summary": "Consulta la batería del Mac, dispositivos móviles Apple, accesorios Bluetooth y ratones Rapoo y MCHOSE."
     },
     "fr": {
       "displayName": "Batterie des appareils",
-      "summary": "Affichez la batterie du Mac, des appareils mobiles Apple, des accessoires Bluetooth et des souris Rapoo."
+      "summary": "Affichez la batterie du Mac, des appareils mobiles Apple, des accessoires Bluetooth et des souris Rapoo et MCHOSE."
     },
     "ja": {
       "displayName": "デバイスのバッテリー",
-      "summary": "Mac、Apple モバイルデバイス、Bluetooth アクセサリ、Rapoo マウスのバッテリー残量を表示します。"
+      "summary": "Mac、Apple モバイルデバイス、Bluetooth アクセサリ、Rapoo / MCHOSE マウスのバッテリー残量を表示します。"
     },
     "ko": {
       "displayName": "기기 배터리",
-      "summary": "Mac, Apple 모바일 기기, Bluetooth 액세서리 및 Rapoo 마우스의 배터리를 확인합니다."
+      "summary": "Mac, Apple 모바일 기기, Bluetooth 액세서리 및 Rapoo/MCHOSE 마우스의 배터리를 확인합니다."
     },
     "pt": {
       "displayName": "Bateria dos dispositivos",
-      "summary": "Veja a bateria do Mac, dispositivos móveis Apple, acessórios Bluetooth e mouses Rapoo."
+      "summary": "Veja a bateria do Mac, dispositivos móveis Apple, acessórios Bluetooth e mouses Rapoo e MCHOSE."
     },
     "ru": {
       "displayName": "Батарея устройств",
-      "summary": "Просматривайте заряд Mac, мобильных устройств Apple, Bluetooth-аксессуаров и мышей Rapoo."
+      "summary": "Просматривайте заряд Mac, мобильных устройств Apple, Bluetooth-аксессуаров и мышей Rapoo и MCHOSE."
     },
     "zh-Hans": {
       "displayName": "设备电量",
-      "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏鼠标电量"
+      "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏/迈从鼠标电量"
     },
     "zh-Hant": {
       "displayName": "裝置電量",
-      "summary": "查看 Mac、Apple 行動裝置、藍牙外設和雷柏滑鼠電量"
+      "summary": "查看 Mac、Apple 行動裝置、藍牙外設和雷柏/邁從滑鼠電量"
     }
   },
   "productStrings": {
@@ -82,13 +82,15 @@
     "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
     "supportURL": "https://github.com/ggbond268/MacTools/issues",
     "publisher": "MacTools",
-    "license": "Apache-2.0"
+    "license": "GPL-3.0-only"
   },
   "discovery": {
     "keywords": [
       "device",
       "battery",
-      "monitoring"
+      "monitoring",
+      "rapoo",
+      "mchose"
     ],
     "localizedSynonyms": {
       "ar": [

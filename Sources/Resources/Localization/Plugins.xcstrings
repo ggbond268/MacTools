@@ -2734,67 +2734,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تثبيت"
+            "value": "الانتقال إلى التثبيت"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installieren"
+            "value": "Plugins installieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Install"
+            "value": "Install Plugins"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Instalar"
+            "value": "Instalar complementos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installer"
+            "value": "Installer des plugins"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "インストール"
+            "value": "インストールへ"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "설치"
+            "value": "설치하러 가기"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Instalar"
+            "value": "Instalar plug-ins"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Установить"
+            "value": "Установить плагины"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "安装"
+            "value": "去安装"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "安裝"
+            "value": "前往安裝"
           }
         }
       }

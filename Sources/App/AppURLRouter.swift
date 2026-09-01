@@ -11,6 +11,7 @@ enum AppDeepLink: Equatable {
         case actionsAndShortcuts
         case automation
         case pluginMarketplace
+        case marketplaceDetail(MarketplacePluginDetailTarget)
         case pluginConfiguration(String)
     }
 
@@ -39,6 +40,8 @@ enum AppDeepLink: Equatable {
             return .settings(.feature(.automation))
         case .settings(.pluginMarketplace):
             return .settings(.pluginMarketplace)
+        case let .settings(.marketplaceDetail(target)):
+            return .settings(.pluginMarketplaceDetail(target))
         case let .settings(.pluginConfiguration(pluginID)):
             return .settings(.pluginConfiguration(pluginID))
         case .panel(.dashboard):
@@ -69,6 +72,7 @@ enum AppURLRoutingError: Error, Equatable {
     case invalidPresetID
     case unexpectedActionParameters
     case unavailablePlugin(String)
+    case unavailableMarketplaceAction(pluginID: String, providerID: String, actionID: String)
     case pendingQueueFull
     case actionAlreadyRunning
     case recursiveActionInvocation
@@ -99,6 +103,8 @@ enum AppURLRoutingError: Error, Equatable {
             return "unexpected-action-parameters"
         case .unavailablePlugin:
             return "unavailable-plugin"
+        case .unavailableMarketplaceAction:
+            return "unavailable-marketplace-action"
         case .pendingQueueFull:
             return "pending-queue-full"
         case .actionAlreadyRunning:
@@ -212,6 +218,36 @@ enum AppDeepLinkParser {
             return .success(.navigation(.settings(.automation)))
         case ["settings", "plugins", "marketplace"]:
             return .success(.navigation(.settings(.pluginMarketplace)))
+        case let path where path.count == 4
+            && path[0] == "settings"
+            && path[1] == "plugins"
+            && path[2] == "marketplace":
+            let pluginID = path[3]
+            guard PluginPackageManifestLoader.isValidPluginID(pluginID) else {
+                return .failure(.malformedPluginID)
+            }
+            let items = components.queryItems ?? []
+            guard items.allSatisfy({ $0.name == "provider" || $0.name == "action" }) else {
+                return .failure(.unexpectedActionParameters)
+            }
+            let providerID = items.first(where: { $0.name == "provider" })?.value
+            let actionID = items.first(where: { $0.name == "action" })?.value
+            switch (providerID, actionID) {
+            case (nil, nil):
+                return .success(.navigation(.settings(.marketplaceDetail(
+                    .init(pluginID: pluginID)
+                ))))
+            case let (.some(providerID), .some(actionID)):
+                guard PluginPackageManifestLoader.isValidPluginID(providerID),
+                      isValidActionIdentifier(actionID) else {
+                    return .failure(.malformedActionID)
+                }
+                return .success(.navigation(.settings(.marketplaceDetail(
+                    .init(pluginID: pluginID, providerID: providerID, actionID: actionID)
+                ))))
+            default:
+                return .failure(.unexpectedActionParameters)
+            }
         case let components where components.count == 3
             && components[0] == "settings"
             && components[1] == "plugins":
@@ -348,6 +384,7 @@ final class AppURLRouter {
     private var pendingActionIdentities: Set<ActionExecutionIdentity> = []
     private var presentationHandler: ((AppPresentationRequest) -> Void)?
     private var isPluginConfigurationAvailable: ((String) -> Bool)?
+    private var isMarketplaceDetailAvailable: ((MarketplacePluginDetailTarget) -> Bool)?
     private var actionHandler: (
         (
             ActionRunLinkRequest,
@@ -472,6 +509,7 @@ final class AppURLRouter {
     func activate(
         presentationHandler: @escaping (AppPresentationRequest) -> Void,
         isPluginConfigurationAvailable: @escaping (String) -> Bool,
+        isMarketplaceDetailAvailable: @escaping (MarketplacePluginDetailTarget) -> Bool = { _ in true },
         actionIdentityResolver: @escaping (
             ActionRunLinkRequest
         ) -> Result<ActionReference, ActionRunLinkResolutionError>? = { _ in nil },
@@ -486,6 +524,7 @@ final class AppURLRouter {
 
         self.presentationHandler = presentationHandler
         self.isPluginConfigurationAvailable = isPluginConfigurationAvailable
+        self.isMarketplaceDetailAvailable = isMarketplaceDetailAvailable
         self.actionIdentityResolver = actionIdentityResolver
         self.actionHandler = actionHandler
 
@@ -704,6 +743,21 @@ final class AppURLRouter {
         if case let .settings(.pluginConfiguration(pluginID)) = deepLink,
            isPluginConfigurationAvailable?(pluginID) != true {
             return reject(.unavailablePlugin(pluginID), deepLink: deepLink)
+        }
+
+        if case let .settings(.marketplaceDetail(target)) = deepLink,
+           isMarketplaceDetailAvailable?(target) != true {
+            if let highlight = target.actionHighlight {
+                return reject(
+                    .unavailableMarketplaceAction(
+                        pluginID: target.pluginID,
+                        providerID: highlight.providerID,
+                        actionID: highlight.actionID
+                    ),
+                    deepLink: deepLink
+                )
+            }
+            return reject(.unavailablePlugin(target.pluginID), deepLink: deepLink)
         }
 
         guard let presentationHandler else {

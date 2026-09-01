@@ -170,18 +170,18 @@ final class DiskCleanPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSettingsP
         [
             PluginPermissionRequirement(
                 id: "full-disk-access",
-                // PluginPermissionKind is ABI-stable and predates Full Disk
-                // Access. The host resolves this permission by its stable ID.
-                kind: .screenRecording,
+                // PluginKit v5 has no Full Disk Access case. The host recognizes this
+                // stable ID and provides the shared Full Disk Access presentation.
+                kind: .automation,
                 title: localization.string(
                     "permission.fullDiskAccess.title",
                     defaultValue: "完全磁盘访问"
                 ),
                 description: localization.string(
                     "permission.fullDiskAccess.description",
-                    defaultValue: "用于检查受保护的系统缓存位置；未授权时仍可清理其他项目。"
+                    defaultValue: "用于扫描受 macOS 保护的缓存与应用数据；未授权时会安全跳过这些位置。"
                 )
-            )
+            ),
         ]
     }
     var shortcutDefinitions: [PluginShortcutDefinition] { [] }
@@ -331,7 +331,7 @@ final class DiskCleanPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSettingsP
             isGranted: isGranted,
             footnote: isGranted ? nil : localization.string(
                 "detail.fda.footnote",
-                defaultValue: "授权后请退出并重新打开 MacTools。"
+                defaultValue: "授权后请退出并重新打开 MacTools，受保护位置才会加入扫描。"
             )
         )
     }

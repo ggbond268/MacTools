@@ -1278,7 +1278,7 @@ private final class SearchableTestPlugin:
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
-        PluginPermissionState(isGranted: true, footnote: nil)
+        PluginPermissionState(isGranted: false, footnote: nil)
     }
 
     func handleAction(_ action: PluginPanelAction) {}

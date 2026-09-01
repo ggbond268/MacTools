@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import CoreGraphics
 import Foundation
 import MacToolsPluginKit
@@ -80,6 +81,7 @@ private final class InputRemappingTapSpy: InputRemappingEventTapping {
         shortcutCaptureHandler = nil
         handler?(shortcut)
     }
+
 }
 
 @MainActor
@@ -145,6 +147,88 @@ final class InputRemappingModelsTests: XCTestCase {
 
         XCTAssertEqual(recorded.kind, .shortcut)
         XCTAssertEqual(recorded.replacingKind(.shortcut), recorded)
+    }
+
+    func testSingleKeyActionKindStaysSelectedAndPersistsRightCommand() throws {
+        let recorded = InputRemappingRule.Action.keyTap(
+            KeyboardKeyTap(keyCode: UInt16(kVK_RightCommand))
+        )
+
+        XCTAssertEqual(recorded.kind, .keyTap)
+        XCTAssertEqual(recorded.replacingKind(.keyTap), recorded)
+
+        let rule = InputRemappingRule(action: recorded)
+        let data = try JSONEncoder().encode(rule)
+        XCTAssertEqual(try JSONDecoder().decode(InputRemappingRule.self, from: data), rule)
+    }
+
+    func testOutputRecordingCancelRestoresConfiguredSingleKey() {
+        let original = InputRemappingRule(
+            isEnabled: true,
+            action: .keyTap(KeyboardKeyTap(keyCode: UInt16(kVK_RightCommand)))
+        )
+        let snapshot = InputRemappingOutputRecordingSnapshot(rule: original)
+        var draft = original
+        draft.action = .keyTap(nil)
+        draft.outputConfigurationState = .recordingKeyTap
+        draft.isEnabled = false
+
+        snapshot.restore(&draft)
+
+        XCTAssertEqual(draft.action, original.action)
+        XCTAssertEqual(draft.outputConfigurationState, .configured)
+        XCTAssertTrue(draft.isEnabled)
+    }
+
+    func testOutputRecordingCancelRestoresActionBeforeTemporaryShortcutSelection() {
+        let original = InputRemappingRule(
+            isEnabled: true,
+            action: .mouseForward
+        )
+        let snapshot = InputRemappingOutputRecordingSnapshot(rule: original)
+        var draft = original
+        draft.action = .shortcut(ShortcutBinding(keyCode: 0, modifiers: [.command]))
+        draft.outputConfigurationState = .recordingShortcut
+        draft.isEnabled = false
+
+        snapshot.restore(&draft)
+
+        XCTAssertEqual(draft.action, .mouseForward)
+        XCTAssertEqual(draft.outputConfigurationState, .configured)
+        XCTAssertTrue(draft.isEnabled)
+    }
+
+    func testIncompleteSingleKeyReloadsAsUnsetInsteadOfA() throws {
+        var rule = InputRemappingRule(buttonNumber: 4, action: .mouseBack)
+        rule.action = .keyTap(nil)
+        rule.outputConfigurationState = .recordingKeyTap
+        rule.isEnabled = false
+
+        let decoded = try JSONDecoder().decode(
+            InputRemappingRule.self,
+            from: JSONEncoder().encode(rule)
+        )
+
+        XCTAssertEqual(decoded.action, .keyTap(nil))
+        XCTAssertEqual(decoded.outputConfigurationState, .needsSelection)
+        XCTAssertFalse(decoded.isEnabled)
+        XCTAssertNotEqual(KeyboardKeyTapFormatter.displayString(for: nil), "A")
+    }
+
+    func testUnsupportedPersistedSingleKeyIsDisabledWithoutDroppingRule() throws {
+        var rule = InputRemappingRule(buttonNumber: 4, action: .mouseBack)
+        rule.action = .keyTap(KeyboardKeyTap(keyCode: .max))
+        rule.outputConfigurationState = .configured
+        rule.isEnabled = true
+
+        let decoded = try JSONDecoder().decode(
+            InputRemappingRule.self,
+            from: JSONEncoder().encode(rule)
+        )
+
+        XCTAssertEqual(decoded.action, .keyTap(KeyboardKeyTap(keyCode: .max)))
+        XCTAssertEqual(decoded.outputConfigurationState, .needsSelection)
+        XCTAssertFalse(decoded.isEnabled)
     }
     func testMatcherRequiresEligibleButtonAndExactModifiers() {
         let rule = InputRemappingRule(
@@ -553,10 +637,15 @@ final class InputRemappingModelsTests: XCTestCase {
     }
 
     func testSyntheticEventMarkerIsRecognizedBeforeCapture() {
-        let event = CGEvent(keyboardEventSource: nil, virtualKey: 21, keyDown: true)!
-        event.setIntegerValueField(.eventSourceUserData, value: InputRemappingEventTap.syntheticMarker)
-
-        XCTAssertTrue(InputRemappingEventTap.isMarkedSynthetic(event))
+        for marker in [
+            MacToolsSyntheticInputEvent.marker,
+            MacToolsSyntheticInputEvent.legacyTrackpadGesturesMarker,
+            MacToolsSyntheticInputEvent.supersededSharedMarker,
+        ] {
+            let event = CGEvent(keyboardEventSource: nil, virtualKey: 21, keyDown: true)!
+            event.setIntegerValueField(.eventSourceUserData, value: marker)
+            XCTAssertTrue(InputRemappingEventTap.isMarkedSynthetic(event))
+        }
     }
 
     func testSystemDefinedMediaEventEncodesDownAndUpStateOnce() {

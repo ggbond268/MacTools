@@ -5,12 +5,13 @@ import MacToolsPluginKit
 
 @MainActor
 final class DiskCleanPluginTests: XCTestCase {
-    func testDeclaresOptionalFullDiskAccessForHostPermissionCenter() throws {
+    func testDeclaresSharedFullDiskAccessRequirement() throws {
         let plugin = DiskCleanPlugin(controller: FakeDiskCleanPluginController())
 
         let requirement = try XCTUnwrap(plugin.permissionRequirements.first)
         XCTAssertEqual(requirement.id, "full-disk-access")
         XCTAssertEqual(plugin.permissionRequirements.count, 1)
+        XCTAssertTrue(requirement.description.contains("跳过"))
     }
 
     func testFullDiskAccessPermissionCopyCoversEverySupportedLocale() throws {

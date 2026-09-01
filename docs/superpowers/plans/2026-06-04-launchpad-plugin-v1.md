@@ -432,7 +432,7 @@ final class LaunchpadOverlayController: NSObject, NSWindowDelegate {
 
 ## 10. 参考实现
 
-- **LaunchNext**（`github.com/RoversX/LaunchNext`，GPL-3.0）—— 最成熟的 Tahoe 替代，本规划的窗口/枚举/图标缓存/启动模式都对照它的真源码。**注意它是 GPL**：可读思路、对照 API，但**别整段抄代码**（MacTools 许可证不同）。它的已知 bug（供避坑）：四指手势把内建触控板误判为 Touch Bar(#239)、跨页拖入文件夹(#236)、开 FPS 叠层反而更卡——这些都在 v2 的手势/拖拽/性能区，v1 不碰。
+- **LaunchNext** (`github.com/RoversX/LaunchNext`, GPL-3.0) was reviewed as a mature Tahoe Launchpad alternative. GPL compatibility does not remove the need to preserve provenance and notices when code is deliberately adapted. This plan uses its documented behavior and known issues as research context rather than incorporating untracked source portions.
 - **MacTools 内部对照**：全屏窗销毁纪律 = `Plugins/PhysicalCleanMode/Sources/PhysicalCleanModeSession.swift`；全局热键链路 = `Sources/Core/Shortcuts/GlobalShortcutManager.swift` + `PluginHost.handleShortcutTrigger`；菜单栏/设置 = `LaunchControlPlugin` / `BatteryChargeLimitPlugin` / `ActivityBarPlugin`。
 
 ---
