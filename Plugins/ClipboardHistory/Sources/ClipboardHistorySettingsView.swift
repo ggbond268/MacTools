@@ -261,10 +261,18 @@ struct ClipboardHistorySettingsView: View {
                     Button {
                         showsPrivacyDetails.toggle()
                     } label: {
-                        Text(localization.string(
-                            "settings.privacyOverview.details",
-                            defaultValue: "Details"
-                        ))
+                        Label(
+                            showsPrivacyDetails
+                                ? localization.string(
+                                    "settings.privacyOverview.hideDetails",
+                                    defaultValue: "Hide Details"
+                                )
+                                : localization.string(
+                                    "settings.privacyOverview.details",
+                                    defaultValue: "Details"
+                                ),
+                            systemImage: showsPrivacyDetails ? "chevron.up" : "chevron.down"
+                        )
                     }
                     .buttonStyle(.link)
                 }

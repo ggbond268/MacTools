@@ -636,6 +636,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     var onPrivateCopyLeaseChange: ((ClipboardPrivateCopyLease?) -> Void)?
     var onCaptureRejection: ((ClipboardCaptureIgnoreReason, Int) -> Void)?
     var onExternalPasteboardChange: (() -> Void)?
+    var onWillClearHistory: (() -> Void)?
     var onWillResetPersistentHistory: (() -> Void)?
     var onItemCaptured: ((UUID) -> Void)?
 
@@ -1295,7 +1296,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 expiresAt: Date().addingTimeInterval(max(0, timeout))
             ))
         }
-        notifyChanged()
+        notifyChanged(reschedulesRetention: false)
         onCaptureSuppressionEvent?(.armed(mode: mode, timeout: timeout))
         scheduleCaptureSuppressionExpiration(after: timeout)
         return true
@@ -1335,7 +1336,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             captureSuppressionHardDeadline = ProcessInfo.processInfo.systemUptime + remaining
             scheduleCaptureSuppressionExpiration(after: remaining)
         }
-        notifyChanged()
+        notifyChanged(reschedulesRetention: false)
         return true
     }
 
@@ -1357,7 +1358,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             onPrivateCopyLeaseChange?(nil)
         }
         discardSourceApplicationAttribution()
-        notifyChanged()
+        notifyChanged(reschedulesRetention: false)
         if notifyCancellation,
            !hadObservedSuppressedChange,
            let mode {
@@ -1515,7 +1516,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         }
         publishItems(updated, changedIDs: selectedIDs)
         persistCurrentItems(changedIDs: selectedIDs)
-        notifyChanged()
+        notifyChanged(reschedulesRetention: false)
     }
 
     /// Replaces the current system clipboard with visible text derived from its safe rich-text
@@ -1572,7 +1573,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         updated[index].lastUsedAt = Date()
         publishItems(updated, changedIDs: [updated[index].id])
         persistCurrentItems(changedIDs: [items[index].id])
-        notifyChanged()
+        notifyChanged(reschedulesRetention: false)
     }
 
     func recordSuccessfulUse(id: UUID) {
@@ -1671,7 +1672,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     @discardableResult
     func clearAllHistory() async -> Bool {
-        await mutateItemsDurably(blocksCollection: true) { items in
+        onWillClearHistory?()
+        return await mutateItemsDurably(blocksCollection: true) { items in
             items.compactMap { item -> ClipboardHistoryItem? in
                 guard item.isSaved else { return nil }
                 var savedOnlyItem = item
@@ -1874,7 +1876,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 self.onPrivateCopyLeaseChange?(nil)
             }
             self.discardSourceApplicationAttribution()
-            self.notifyChanged()
+            self.notifyChanged(reschedulesRetention: false)
             if !hadObservedSuppressedChange, let mode {
                 self.onCaptureSuppressionEvent?(.expired(mode: mode))
             }
@@ -2135,8 +2137,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         notifyChanged()
     }
 
-    private func notifyChanged() {
-        scheduleRetentionExpiration()
+    private func notifyChanged(reschedulesRetention: Bool = true) {
+        if reschedulesRetention { scheduleRetentionExpiration() }
         onChange?()
         objectWillChange.send()
     }
@@ -2250,7 +2252,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         updated[index].hasCompletedImageTextIndexing = true
         publishItems(updated, changedIDs: [itemID])
         scheduleImageIndexPersistence()
-        notifyChanged()
+        notifyChanged(reschedulesRetention: false)
     }
 
     private func scheduleNextBackgroundImageTextIndexBatchIfNeeded() {

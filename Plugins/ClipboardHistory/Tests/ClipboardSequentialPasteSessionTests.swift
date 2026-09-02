@@ -166,6 +166,51 @@ final class ClipboardSequentialPasteSessionTests: XCTestCase {
         XCTAssertNil(coordinator.session)
     }
 
+    func testCancellingQueueCreationRemovesAQueueWhoseSaveAlreadyCommitted() async throws {
+        let store = SuspendingSequentialPasteStore()
+        await store.suspendNextSave()
+        let coordinator = ClipboardSequentialPasteCoordinator(store: store)
+        let creation = Task { @MainActor in
+            try await coordinator.startExplicitQueue(snapshots: [snapshot(UUID())])
+        }
+
+        await store.waitUntilSaveSuspends()
+        coordinator.cancelPendingExplicitQueueCreation()
+        creation.cancel()
+        await store.resumeSuspendedSave()
+
+        do {
+            try await creation.value
+            XCTFail("Expected cancelled queue creation")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertNil(coordinator.session)
+        let persistedSession = try await store.loadExplicitSession()
+        XCTAssertNil(persistedSession)
+    }
+
+    func testCancelWinsAgainstAnInFlightQueueControlMutation() async throws {
+        let store = SuspendingSequentialPasteStore()
+        let coordinator = ClipboardSequentialPasteCoordinator(store: store)
+        try await coordinator.startExplicitQueue(snapshots: [snapshot(UUID()), snapshot(UUID())])
+        await store.suspendNextSave()
+
+        let skipping = Task { @MainActor in await coordinator.skip() }
+        await store.waitUntilSaveSuspends()
+        let cancelling = Task { @MainActor in await coordinator.cancel() }
+        await Task.yield()
+        let didCancel = await cancelling.value
+        await store.resumeSuspendedSave()
+
+        let didSkip = await skipping.value
+        XCTAssertFalse(didSkip)
+        XCTAssertTrue(didCancel)
+        XCTAssertNil(coordinator.session)
+        let persistedSession = try await store.loadExplicitSession()
+        XCTAssertNil(persistedSession)
+    }
+
     func testStorageResetDiscardsQueueAndPreventsReloadingItsOldSnapshot() async throws {
         let persistedID = UUID()
         let recentID = UUID()
@@ -351,5 +396,47 @@ private actor ControllableSequentialPasteStore: ClipboardSequentialPasteSessionP
     func saveExplicitSession(_ session: ClipboardSequentialPasteSession?) async throws {
         if failsSave { throw ClipboardHistoryStoreError.unavailableStorage }
         self.session = session
+    }
+}
+
+private actor SuspendingSequentialPasteStore: ClipboardSequentialPasteSessionPersisting {
+    private var session: ClipboardSequentialPasteSession?
+    private var shouldSuspendNextSave = false
+    private var saveIsSuspended = false
+    private var saveStartedContinuations: [CheckedContinuation<Void, Never>] = []
+    private var saveResumeContinuation: CheckedContinuation<Void, Never>?
+
+    func suspendNextSave() {
+        shouldSuspendNextSave = true
+    }
+
+    func waitUntilSaveSuspends() async {
+        if saveIsSuspended { return }
+        await withCheckedContinuation { continuation in
+            saveStartedContinuations.append(continuation)
+        }
+    }
+
+    func resumeSuspendedSave() {
+        saveResumeContinuation?.resume()
+        saveResumeContinuation = nil
+    }
+
+    func loadExplicitSession() async throws -> ClipboardSequentialPasteSession? {
+        session
+    }
+
+    func saveExplicitSession(_ session: ClipboardSequentialPasteSession?) async throws {
+        self.session = session
+        guard shouldSuspendNextSave else { return }
+        shouldSuspendNextSave = false
+        saveIsSuspended = true
+        let continuations = saveStartedContinuations
+        saveStartedContinuations.removeAll()
+        continuations.forEach { $0.resume() }
+        await withCheckedContinuation { continuation in
+            saveResumeContinuation = continuation
+        }
+        saveIsSuspended = false
     }
 }

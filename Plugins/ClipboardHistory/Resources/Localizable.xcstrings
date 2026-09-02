@@ -1786,6 +1786,21 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "詳細資訊" } }
       }
     },
+    "settings.privacyOverview.hideDetails": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إخفاء التفاصيل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Details ausblenden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Hide Details" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Ocultar detalles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Masquer les détails" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "詳細を隠す" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "세부사항 가리기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Ocultar detalhes" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скрыть подробности" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "隐藏详情" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "隱藏詳細資訊" } }
+      }
+    },
     "settings.privacyOverview.section": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "الخصوصية والتخزين" } },
@@ -13681,17 +13696,17 @@
     },
     "panel.shortcuts.copyCombined.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تخصيص هذا الاختصار لنافذة سجل الحافظة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Diesen Kurzbefehl für das Zwischenablagefenster anpassen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Customize this shortcut for the Clipboard History window." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Personaliza este atajo para la ventana del historial." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Personnaliser ce raccourci pour la fenêtre de l’historique." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴ウインドウ用のショートカットを変更します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록 윈도우의 단축키를 사용자화합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Personalize este atalho para a janela do histórico." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Настроить это сочетание для окна истории буфера." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义此剪贴板历史窗口快捷键。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂此剪貼簿歷史視窗快速鍵。" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "انسخ العناصر المحددة معًا بترتيب تحديدها." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ausgewählte Einträge gemeinsam in Auswahlreihenfolge kopieren." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Copy selected entries together in their selected order." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Copia juntas las entradas seleccionadas en el orden elegido." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Copier ensemble les éléments dans l’ordre de sélection." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "選択した項目を選択順にまとめてコピーします。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "선택한 항목을 선택 순서대로 함께 복사합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Copie em conjunto os itens pela ordem selecionada." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Копировать выбранные элементы вместе в порядке выбора." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按选择顺序合并复制所选项目。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "依選取順序合併拷貝所選項目。" } }
       }
     },
     "panel.shortcuts.delete": {
@@ -13711,17 +13726,17 @@
     },
     "panel.shortcuts.delete.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تخصيص هذا الاختصار لنافذة سجل الحافظة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Diesen Kurzbefehl für das Zwischenablagefenster anpassen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Customize this shortcut for the Clipboard History window." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Personaliza este atajo para la ventana del historial." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Personnaliser ce raccourci pour la fenêtre de l’historique." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴ウインドウ用のショートカットを変更します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록 윈도우의 단축키를 사용자화합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Personalize este atalho para a janela do histórico." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Настроить это сочетание для окна истории буфера." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义此剪贴板历史窗口快捷键。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂此剪貼簿歷史視窗快速鍵。" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "احذف عنصر الحافظة المحدد دون التعارض مع تحرير النص." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Das fokussierte Zwischenablageelement ohne Konflikt mit der Textbearbeitung löschen." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Delete the focused clipboard item without conflicting with text editing." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elimina el elemento enfocado sin interferir con la edición de texto." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer l’élément actif sans conflit avec l’édition de texte." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "テキスト編集と競合せずに選択中の項目を削除します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "텍스트 편집과 충돌하지 않고 현재 항목을 삭제합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Elimine o item em foco sem interferir com a edição de texto." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Удалить выбранный элемент без конфликта с редактированием текста." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除当前剪贴板项目，且不与文本编辑冲突。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除目前剪貼簿項目，且不與文字編輯衝突。" } }
       }
     },
     "panel.shortcuts.export": {
@@ -13741,17 +13756,17 @@
     },
     "panel.shortcuts.export.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تخصيص هذا الاختصار لنافذة سجل الحافظة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Diesen Kurzbefehl für das Zwischenablagefenster anpassen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Customize this shortcut for the Clipboard History window." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Personaliza este atajo para la ventana del historial." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Personnaliser ce raccourci pour la fenêtre de l’historique." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴ウインドウ用のショートカットを変更します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록 윈도우의 단축키를 사용자화합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Personalize este atalho para a janela do histórico." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Настроить это сочетание для окна истории буфера." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义此剪贴板历史窗口快捷键。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂此剪貼簿歷史視窗快速鍵。" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "افتح تنسيقات التصدير لعنصر الحافظة المحدد." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Exportformate für das fokussierte Zwischenablageelement öffnen." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Open export formats for the focused clipboard item." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Abre los formatos de exportación del elemento enfocado." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir les formats d’exportation pour l’élément actif." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "選択中の項目で利用できる書き出し形式を開きます。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "현재 클립보드 항목의 내보내기 형식을 엽니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Abra os formatos de exportação do item em foco." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Открыть форматы экспорта для выбранного элемента." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开当前剪贴板项目的导出格式。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "開啟目前剪貼簿項目的輸出格式。" } }
       }
     },
     "panel.shortcuts.group": {
@@ -13801,17 +13816,17 @@
     },
     "panel.shortcuts.multiSelect.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تخصيص هذا الاختصار لنافذة سجل الحافظة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Diesen Kurzbefehl für das Zwischenablagefenster anpassen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Customize this shortcut for the Clipboard History window." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Personaliza este atajo para la ventana del historial." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Personnaliser ce raccourci pour la fenêtre de l’historique." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴ウインドウ用のショートカットを変更します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록 윈도우의 단축키를 사용자화합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Personalize este atalho para a janela do histórico." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Настроить это сочетание для окна истории буфера." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义此剪贴板历史窗口快捷键。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂此剪貼簿歷史視窗快速鍵。" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "ادخل وضع التحديد المتعدد أو اخرج منه." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Mehrfachauswahl starten oder beenden." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Enter or leave multiple-selection mode." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Entra o sal del modo de selección múltiple." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Activer ou quitter le mode de sélection multiple." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "複数選択モードを開始または終了します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "다중 선택 모드를 시작하거나 종료합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Entre ou saia do modo de seleção múltipla." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Войти в режим множественного выбора или выйти из него." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "进入或退出多选模式。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "進入或離開多選模式。" } }
       }
     },
     "panel.shortcuts.pasteCombined": {
@@ -13831,17 +13846,17 @@
     },
     "panel.shortcuts.pasteCombined.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تخصيص هذا الاختصار لنافذة سجل الحافظة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Diesen Kurzbefehl für das Zwischenablagefenster anpassen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Customize this shortcut for the Clipboard History window." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Personaliza este atajo para la ventana del historial." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Personnaliser ce raccourci pour la fenêtre de l’historique." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴ウインドウ用のショートカットを変更します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록 윈도우의 단축키를 사용자화합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Personalize este atalho para a janela do histórico." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Настроить это сочетание для окна истории буфера." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义此剪贴板历史窗口快捷键。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂此剪貼簿歷史視窗快速鍵。" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "الصق العناصر المحددة معًا بترتيب تحديدها." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ausgewählte Einträge gemeinsam in Auswahlreihenfolge einsetzen." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Paste selected entries together in their selected order." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Pega juntas las entradas seleccionadas en el orden elegido." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Coller ensemble les éléments dans l’ordre de sélection." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "選択した項目を選択順にまとめてペーストします。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "선택한 항목을 선택 순서대로 함께 붙여넣습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Cole em conjunto os itens pela ordem selecionada." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Вставить выбранные элементы вместе в порядке выбора." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按选择顺序合并粘贴所选项目。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "依選取順序合併貼上所選項目。" } }
       }
     },
     "panel.shortcuts.save": {
@@ -13891,17 +13906,17 @@
     },
     "panel.shortcuts.share.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تخصيص هذا الاختصار لنافذة سجل الحافظة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Diesen Kurzbefehl für das Zwischenablagefenster anpassen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Customize this shortcut for the Clipboard History window." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Personaliza este atajo para la ventana del historial." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Personnaliser ce raccourci pour la fenêtre de l’historique." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴ウインドウ用のショートカットを変更します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록 윈도우의 단축키를 사용자화합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Personalize este atalho para a janela do histórico." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Настроить это сочетание для окна истории буфера." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义此剪贴板历史窗口快捷键。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂此剪貼簿歷史視窗快速鍵。" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "افتح ورقة المشاركة في macOS للعنصر أو التحديد الحالي." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Das macOS-Teilen-Menü für das aktuelle Element oder die Auswahl öffnen." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Open the macOS share sheet for the current item or selection." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Abre la hoja para compartir de macOS para el elemento o la selección actual." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir la feuille de partage macOS pour l’élément ou la sélection actuelle." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "現在の項目または選択内容をmacOSの共有シートで開きます。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "현재 항목 또는 선택 항목의 macOS 공유 시트를 엽니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Abra a folha de partilha do macOS para o item ou seleção atual." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Открыть меню «Поделиться» macOS для текущего элемента или выбора." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "为当前项目或所选内容打开 macOS 共享表单。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "為目前項目或所選內容開啟 macOS 分享表單。" } }
       }
     },
     "saved.create": {

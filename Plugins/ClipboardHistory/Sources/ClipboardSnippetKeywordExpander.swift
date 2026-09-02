@@ -132,9 +132,12 @@ struct ClipboardSnippetKeywordInputState: Sendable {
             return nil
         }
 
-        // Focus can move programmatically between ordinary and secure fields in one app.
-        // Classify before every buffered character. The listen-only event tap means this
-        // check cannot hold up delivery of the original keyboard event.
+        // Avoid Accessibility IPC until an idle matcher sees the beginning of a configured
+        // keyword. Once buffering starts, every character is still classified so a programmatic
+        // focus change into a secure field fails closed before more text is retained.
+        guard !matcher.buffer.isEmpty || matcher.canBeginKeyword(with: text) else {
+            return nil
+        }
         guard classifyEditor(processIdentifier) == .nonSecure else {
             matcher.reset()
             return nil
@@ -159,6 +162,10 @@ struct ClipboardSnippetKeywordMatcher: Sendable {
 
     mutating func reset() {
         buffer.removeAll(keepingCapacity: true)
+    }
+
+    func canBeginKeyword(with text: String) -> Bool {
+        !text.isEmpty && hasPotentialKeywordSuffix(in: text)
     }
 
     mutating func consume(

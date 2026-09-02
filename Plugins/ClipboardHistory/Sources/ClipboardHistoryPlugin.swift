@@ -556,6 +556,9 @@ final class ClipboardHistoryPlugin:
             guard let self else { return }
             self.resetImplicitQueueForManualClipboardWrite()
         }
+        controller.onWillClearHistory = { [weak self] in
+            self?.prepareForHistoryClear()
+        }
         controller.onWillResetPersistentHistory = { [weak self] in
             self?.cancelPendingSequentialPastes()
             self?.cancelSequentialQueueCreation()
@@ -1300,6 +1303,7 @@ final class ClipboardHistoryPlugin:
         case ActionID.cancelSequentialQueue:
             return ActionExecutionHandle { [weak self] in
                 guard let self else { return .cancelled }
+                cancelSequentialQueueCreation()
                 cancelPendingSequentialPastes()
                 sequentialHUDPreviewTask?.cancel()
                 sequentialHUDPreviewTask = nil
@@ -1346,6 +1350,8 @@ final class ClipboardHistoryPlugin:
         ActionExecutionHandle { [weak self] in
             guard let self else { return .cancelled }
             guard !isSequentialQueueMutationLocked else { return .cancelled }
+            guard let session = sequentialPasteCoordinator.session,
+                  !session.isComplete else { return .succeeded() }
             guard await operation(sequentialPasteCoordinator) else {
                 showSequentialPersistenceFailure()
                 return .failed(message: localization.string(
@@ -1710,6 +1716,7 @@ final class ClipboardHistoryPlugin:
               !itemIDs.isDisjoint(with: session.itemIDs) else {
             return true
         }
+        cancelSequentialQueueCreation()
         cancelPendingSequentialPastes()
         sequentialHUDPreviewTask?.cancel()
         sequentialHUDPreviewTask = nil
@@ -1732,8 +1739,18 @@ final class ClipboardHistoryPlugin:
 
     private func cancelSequentialQueueCreation() {
         sequentialQueueCreationGeneration &+= 1
+        sequentialPasteCoordinator.cancelPendingExplicitQueueCreation()
         sequentialQueueCreationTask?.cancel()
         sequentialQueueCreationTask = nil
+    }
+
+    private func prepareForHistoryClear() {
+        guard sequentialPasteCoordinator.session?.source != .explicitQueue else { return }
+        cancelSequentialQueueCreation()
+        cancelPendingSequentialPastes()
+        sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
+        synchronizeSequentialPasteProtection()
+        sequentialPasteHUD.dismiss()
     }
 
     private func performSequentialPaste(
@@ -1950,8 +1967,9 @@ final class ClipboardHistoryPlugin:
 
     @discardableResult
     private func startSequentialQueue(itemIDs: [UUID]) async -> Bool {
-        let availableItemIDs = Set(controller.items.map(\.id))
-            .union(savedLibraryController.items.map(\.id))
+        let historyItemsByID = Dictionary(uniqueKeysWithValues: controller.items.map { ($0.id, $0) })
+        let savedItemsByID = Dictionary(uniqueKeysWithValues: savedLibraryController.items.map { ($0.id, $0) })
+        let availableItemIDs = Set(historyItemsByID.keys).union(savedItemsByID.keys)
         guard !itemIDs.isEmpty, itemIDs.allSatisfy(availableItemIDs.contains) else {
             privacyHUDPresenter.showFailure(localization.string(
                 "hud.sequentialPaste.unavailable",
@@ -1968,11 +1986,11 @@ final class ClipboardHistoryPlugin:
                 let payload: ClipboardHistoryPayload
                 let expandsSnippetVariables: Bool
                 let discardPayload: () -> Void
-                if let item = controller.items.first(where: { $0.id == itemID }) {
+                if let item = historyItemsByID[itemID] {
                     payload = try await item.loadPayloadAsync()
                     expandsSnippetVariables = false
                     discardPayload = { item.discardCachedPayloadIfReloadable() }
-                } else if let item = savedLibraryController.items.first(where: { $0.id == itemID }) {
+                } else if let item = savedItemsByID[itemID] {
                     payload = try await item.loadPayloadAsync()
                     expandsSnippetVariables = item.isSnippet
                     discardPayload = { item.discardCachedPayloadIfReloadable() }

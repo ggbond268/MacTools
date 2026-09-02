@@ -374,6 +374,23 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         plugin.controller.stop()
     }
 
+    func testInactiveQueueNavigationActionsAreSuccessfulNoOps() async throws {
+        let plugin = makePlugin()
+        defer { plugin.deactivate(reason: .hostShutdown) }
+
+        for actionID in [
+            ClipboardHistoryPlugin.ActionID.previousSequentialQueueItem,
+            ClipboardHistoryPlugin.ActionID.skipSequentialQueueItem,
+            ClipboardHistoryPlugin.ActionID.restartSequentialQueue,
+        ] {
+            let action = reference(plugin, actionID: actionID)
+            let result = try await plugin.beginAction(
+                ActionInvocation(reference: action, source: .test, mode: .background)
+            ).result()
+            XCTAssertEqual(result, .succeeded())
+        }
+    }
+
     func testSettingsFormPublishesGroupedActionAndPluginShortcutSections() throws {
         let plugin = makePlugin()
         let page = try XCTUnwrap(plugin.settingsPage)
@@ -1519,6 +1536,38 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(sender.pastedTexts, ["Newer", "Fresh", "Newer"])
         sender.completeNextPaste()
         plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testClearingHistoryEndsAnActiveImplicitQueue() async {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = BlockingClipboardPasteCommandSender { pasteboard.text }
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            pasteCommandSender: sender,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        defer {
+            sender.completeNextPaste()
+            plugin.deactivate(reason: .hostShutdown)
+        }
+        plugin.controller.start()
+        await waitUntilLoaded(plugin.controller)
+        pasteboard.simulateCopy("Queued")
+        plugin.controller.processPasteboardChange()
+        let didCapture = await waitUntil { plugin.controller.items.count == 1 }
+        XCTAssertTrue(didCapture)
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let didStartPaste = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(didStartPaste)
+        XCTAssertEqual(plugin.sequentialPasteSessionForTesting?.source, .recentHistory)
+
+        let didClear = await plugin.controller.clearAllHistory()
+        XCTAssertTrue(didClear)
+        XCTAssertNil(plugin.sequentialPasteSessionForTesting)
+        XCTAssertFalse(plugin.hasPendingSequentialPasteForTesting)
     }
 
     func testExternalCopyDuringPayloadLoadCancelsImplicitPasteBeforePolling() async {
