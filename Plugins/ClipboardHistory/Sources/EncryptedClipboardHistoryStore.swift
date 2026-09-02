@@ -15,6 +15,17 @@ protocol ClipboardHistoryPersisting: Sendable {
     func removeAll() throws
 }
 
+/// Production SQLite storage uses this capability to remove History/Saved clips and snippets in
+/// one transaction. It intentionally lives beside history persistence so the existing serialized
+/// history worker remains the single writer for a mixed destructive operation.
+protocol ClipboardUnifiedDeletionPersisting: ClipboardHistoryPersisting {
+    func saveChanges(
+        _ items: [ClipboardHistoryItem],
+        applying mutation: ClipboardHistoryMutation,
+        deletingSavedItemIDs: Set<UUID>
+    ) throws
+}
+
 extension ClipboardHistoryPersisting {
     /// Legacy stores/test doubles can persist the worker's merged collection. Production SQLite
     /// writes only the affected rows; neither path accepts an obsolete controller snapshot.

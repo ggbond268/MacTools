@@ -4,6 +4,11 @@ import MacToolsPluginKit
 import QuickLookThumbnailing
 import SwiftUI
 
+@MainActor
+private var selectedRowTextColor: Color {
+    Color(nsColor: .selectedControlTextColor)
+}
+
 enum ClipboardHistoryContentFilter: String, CaseIterable, Identifiable, Sendable {
     case all
     case text
@@ -512,6 +517,7 @@ struct ClipboardHistoryPreviousApplicationState<Application> {
 final class ClipboardHistoryPanelModel: ObservableObject {
     nonisolated static let resultPageSize = 50
     nonisolated static let searchDebounceNanoseconds: UInt64 = 120_000_000
+    nonisolated static let maximumMultiSelectionItemCount = ClipboardSequentialPasteSession.maximumItemCount
 
     @Published var query = "" {
         didSet {
@@ -549,6 +555,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     @Published var selectedItemID: UUID?
     @Published var isMultiSelectionEnabled = false
     @Published private(set) var selectedItemIDs: [UUID] = []
+    @Published private(set) var selectionLimitReachedRevision: UInt = 0
     @Published var isActionPalettePresented = false
     @Published private(set) var visibleItems: [ClipboardHistoryItem] = []
     @Published private(set) var visibleSavedPresentationItemIDs: Set<UUID> = []
@@ -969,11 +976,18 @@ final class ClipboardHistoryPanelModel: ObservableObject {
 
     func refreshFiltersForReactivation(
         items: [ClipboardHistoryItem],
-        savedItems: [ClipboardSavedItem] = []
+        savedItems: [ClipboardSavedItem] = [],
+        historyRevision: UInt64? = nil,
+        savedRevision: UInt64? = nil
     ) {
+        if let historyRevision, let savedRevision,
+           historyRevision == currentHistoryRevision,
+           savedRevision == currentSavedRevision {
+            return
+        }
         let previousFamily = selectedFilterFamily
-        updateItems(items)
-        updateSavedItems(savedItems)
+        updateItems(items, revision: historyRevision)
+        updateSavedItems(savedItems, revision: savedRevision)
         filterRefreshTask?.cancel()
         filterRefreshGeneration &+= 1
         let generation = filterRefreshGeneration
@@ -1242,10 +1256,17 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         return requestedScrollItemID
     }
 
-    private func appendSelectedItem(_ itemID: UUID) {
-        guard selectedItemIDSet.insert(itemID).inserted else { return }
+    @discardableResult
+    private func appendSelectedItem(_ itemID: UUID) -> Bool {
+        guard !selectedItemIDSet.contains(itemID) else { return false }
+        guard selectedItemIDs.count < Self.maximumMultiSelectionItemCount else {
+            selectionLimitReachedRevision &+= 1
+            return false
+        }
+        selectedItemIDSet.insert(itemID)
         selectedItemIDs.append(itemID)
         selectionNumberByItemID[itemID] = selectedItemIDs.count
+        return true
     }
 
     private func removeSelectedItem(at index: Int) {
@@ -1817,6 +1838,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private let shareCoordinator: ClipboardHistoryShareCoordinator
     private let combinedExportCoordinator: ClipboardCombinedExportCoordinator
     private let onStartSequentialQueue: ([UUID]) async -> Bool
+    private let onPrepareForPermanentDeletion: ([UUID]) async -> Bool
     private let shortcutBindingProvider: (String) -> ShortcutBinding?
     private let shortcutSettingsContextProvider: () -> PluginSettingsContext?
     private let model = ClipboardHistoryPanelModel()
@@ -1839,6 +1861,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         onIgnoreNextCopy: @escaping () -> Void,
         onManualClipboardWrite: @escaping () -> Void = {},
         onStartSequentialQueue: @escaping ([UUID]) async -> Bool = { _ in false },
+        onPrepareForPermanentDeletion: @escaping ([UUID]) async -> Bool = { _ in true },
         hudPresenter: any ClipboardPrivacyHUDPresenting,
         pasteCommandSender: any ClipboardPasteCommandSending = SystemClipboardPasteCommandSender(),
         shortcutBindingProvider: @escaping (String) -> ShortcutBinding? = {
@@ -1853,6 +1876,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         self.onIgnoreNextCopy = onIgnoreNextCopy
         self.onManualClipboardWrite = onManualClipboardWrite
         self.onStartSequentialQueue = onStartSequentialQueue
+        self.onPrepareForPermanentDeletion = onPrepareForPermanentDeletion
         self.pasteCommandSender = pasteCommandSender
         self.shortcutBindingProvider = shortcutBindingProvider
         self.shortcutSettingsContextProvider = shortcutSettingsContextProvider
@@ -2035,7 +2059,9 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private func refreshFiltersAfterExternalInteraction() {
         model.refreshFiltersForReactivation(
             items: historyController.items,
-            savedItems: savedLibraryController.items
+            savedItems: savedLibraryController.items,
+            historyRevision: historyController.presentationRevision,
+            savedRevision: savedLibraryController.presentationRevision
         )
         needsFilterRefreshOnActivation = false
     }
@@ -2117,7 +2143,14 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 },
                 onDelete: { [weak self] itemID in
                     guard let self else { return }
-                    await self.deleteItem(id: itemID)
+                    await self.deletePresentationItem(id: itemID)
+                },
+                onDeleteSelection: { [weak self] historyIDs, snippetIDs in
+                    guard let self else { return false }
+                    return await self.deleteSelection(
+                        historyIDs: historyIDs,
+                        snippetIDs: snippetIDs
+                    )
                 },
                 onExport: { [weak self] itemID, format in
                     guard let self else { return }
@@ -2449,11 +2482,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 guard let selectedItemID = self.model.selectedItemID else { return event }
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    if self.model.isSavedPresentation(selectedItemID) {
-                        _ = await self.savedLibraryController.delete(id: selectedItemID)
-                    } else {
-                        await self.deleteItem(id: selectedItemID)
-                    }
+                    await self.deletePresentationItem(id: selectedItemID)
                 }
                 return nil
             case .showExportMenu:
@@ -2716,6 +2745,33 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             return
         }
         selectFirstVisibleItemIfNeeded()
+    }
+
+    private func deletePresentationItem(id: UUID) async {
+        guard await onPrepareForPermanentDeletion([id]) else {
+            NSSound.beep()
+            return
+        }
+        if savedLibraryController.items.contains(where: { $0.id == id && $0.isSnippet }) {
+            guard await savedLibraryController.delete(id: id) else { NSSound.beep(); return }
+            selectFirstVisibleItemIfNeeded()
+        } else {
+            await deleteItem(id: id)
+        }
+    }
+
+    private func deleteSelection(historyIDs: Set<UUID>, snippetIDs: Set<UUID>) async -> Bool {
+        let allIDs = Array(historyIDs.union(snippetIDs))
+        guard await onPrepareForPermanentDeletion(allIDs) else { return false }
+        if historyIDs.isEmpty { return await savedLibraryController.delete(ids: snippetIDs) }
+        if snippetIDs.isEmpty { return await historyController.deletePermanently(ids: historyIDs) }
+        guard historyController.supportsAtomicSnippetDeletion else { return false }
+        return await savedLibraryController.removeAfterAtomicDeletion(ids: snippetIDs) {
+            await self.historyController.deletePermanently(
+                ids: historyIDs,
+                deletingSnippetIDs: snippetIDs
+            )
+        }
     }
 
     private func pasteItem(id: UUID, asPlainText: Bool) {
@@ -3243,6 +3299,7 @@ private struct ClipboardHistoryPanelView: View {
     let onPasteAndClose: (UUID, Bool) -> Void
     let onIgnoreNextCopy: () -> Void
     let onDelete: (UUID) async -> Void
+    let onDeleteSelection: (Set<UUID>, Set<UUID>) async -> Bool
     let onExport: (UUID, ClipboardExportFormat) -> Void
     let onShowReferencedFiles: (UUID) -> Void
     let onCopyReferencedFiles: (UUID) -> Void
@@ -3284,6 +3341,7 @@ private struct ClipboardHistoryPanelView: View {
         onPasteAndClose: @escaping (UUID, Bool) -> Void,
         onIgnoreNextCopy: @escaping () -> Void,
         onDelete: @escaping (UUID) async -> Void,
+        onDeleteSelection: @escaping (Set<UUID>, Set<UUID>) async -> Bool = { _, _ in false },
         onExport: @escaping (UUID, ClipboardExportFormat) -> Void,
         onShowReferencedFiles: @escaping (UUID) -> Void,
         onCopyReferencedFiles: @escaping (UUID) -> Void,
@@ -3313,6 +3371,7 @@ private struct ClipboardHistoryPanelView: View {
         self.onPasteAndClose = onPasteAndClose
         self.onIgnoreNextCopy = onIgnoreNextCopy
         self.onDelete = onDelete
+        self.onDeleteSelection = onDeleteSelection
         self.onExport = onExport
         self.onShowReferencedFiles = onShowReferencedFiles
         self.onCopyReferencedFiles = onCopyReferencedFiles
@@ -3435,6 +3494,22 @@ private struct ClipboardHistoryPanelView: View {
         }
         .onChange(of: savedLibraryController.items) { _, items in
             model.updateSavedItems(items, revision: savedLibraryController.presentationRevision)
+        }
+        .onChange(of: model.selectionLimitReachedRevision) { _, _ in
+            let message = localization.format(
+                "panel.selection.limitReached",
+                defaultValue: "You can select up to %lld items.",
+                ClipboardHistoryPanelModel.maximumMultiSelectionItemCount
+            )
+            NSSound.beep()
+            NSAccessibility.post(
+                element: NSApplication.shared,
+                notification: .announcementRequested,
+                userInfo: [
+                    .announcement: message,
+                    .priority: NSAccessibilityPriorityLevel.high.rawValue,
+                ]
+            )
         }
         .onChange(of: visibleItems.map(\.id)) { _, _ in repairSelection() }
         .onChange(of: model.savedEditRequestID) { _, _ in
@@ -3707,6 +3782,21 @@ private struct ClipboardHistoryPanelView: View {
     private var panelToolbar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
+                ViewThatFits(in: .horizontal) {
+                    Label(
+                        localization.string("metadata.title", defaultValue: "Clipboard"),
+                        systemImage: "clipboard"
+                    )
+                    .fixedSize()
+                    Image(systemName: "clipboard")
+                        .accessibilityLabel(
+                            localization.string("metadata.title", defaultValue: "Clipboard")
+                        )
+                }
+                .font(PluginSettingsTheme.Typography.rowTitle)
+                .foregroundStyle(.secondary)
+                .help(localization.string("metadata.title", defaultValue: "Clipboard"))
+
                 PluginPaletteSearchToolbar(
                     text: searchText,
                     placeholder: searchPlaceholder,
@@ -3797,7 +3887,7 @@ private struct ClipboardHistoryPanelView: View {
         case .all:
             localization.string(
                 "panel.search.all.placeholder",
-                defaultValue: "Search history and saved items"
+                defaultValue: "Search history, saved items, and snippets"
             )
         case .history:
             localization.string(
@@ -4208,19 +4298,19 @@ private struct ClipboardHistoryPanelView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(displayTitle(item).replacingOccurrences(of: "\n", with: " "))
                         .font(PluginSettingsTheme.Typography.rowTitle)
-                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                        .foregroundStyle(isSelected ? selectedRowTextColor : Color.primary)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if item.isSaved {
                         Image(systemName: "bookmark.fill")
                             .font(PluginSettingsTheme.Typography.statusBadge)
-                            .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
+                            .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.85) : Color.secondary)
                             .help(localization.string("saved.kind.clip", defaultValue: "Saved Item"))
                     }
                     if let badgeNumber = model.rowNumber(for: item.id, quickPasteNumber: quickPasteNumber) {
                         Text(model.isMultiSelectionEnabled ? "\(badgeNumber)" : "⌘\(badgeNumber)")
                             .font(PluginSettingsTheme.Typography.statusBadge)
-                            .foregroundStyle(isSelected ? Color.white.opacity(0.78) : Color.secondary)
+                            .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.78) : Color.secondary)
                             .frame(minWidth: 24, alignment: .trailing)
                             .fixedSize(horizontal: true, vertical: false)
                     }
@@ -4233,7 +4323,7 @@ private struct ClipboardHistoryPanelView: View {
                         .fixedSize()
                 }
                 .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(isSelected ? Color.white.opacity(0.78) : Color.secondary)
+                .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.78) : Color.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -4329,7 +4419,7 @@ private struct ClipboardHistoryPanelView: View {
             } label: {
                 Image(systemName: isMarked ? "checkmark.square.fill" : "square")
                     .font(.body)
-                    .foregroundStyle(isSelected ? Color.white : Color.accentColor)
+                    .foregroundStyle(isSelected ? selectedRowTextColor : Color.accentColor)
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
@@ -4347,7 +4437,7 @@ private struct ClipboardHistoryPanelView: View {
         } else {
             Image(systemName: itemSystemImage(item))
                 .font(.body)
-                .foregroundStyle(isSelected ? Color.white : Color.accentColor)
+                .foregroundStyle(isSelected ? selectedRowTextColor : Color.accentColor)
                 .frame(width: PluginPaletteMetrics.rowIconWidth, height: 20)
                 .help(detailKindTitle(item))
                 .accessibilityLabel(detailKindTitle(item))
@@ -4373,8 +4463,18 @@ private struct ClipboardHistoryPanelView: View {
     }
 
     private var selectionContext: String {
-        localization.format("panel.selection.orderedCount", defaultValue: "%lld selected · Selection order",
-            model.actionItemIDs.count)
+        if model.actionItemIDs.count == ClipboardHistoryPanelModel.maximumMultiSelectionItemCount {
+            return localization.format(
+                "panel.selection.orderedCountMaximum",
+                defaultValue: "%lld selected · Maximum · Selection order",
+                model.actionItemIDs.count
+            )
+        }
+        return localization.format(
+            "panel.selection.orderedCount",
+            defaultValue: "%lld selected · Selection order",
+            model.actionItemIDs.count
+        )
     }
 
     private func rowAccessibilityLabel(_ item: ClipboardHistoryItem) -> String {
@@ -5641,11 +5741,7 @@ private struct ClipboardHistoryPanelView: View {
     }
 
     private func deletePanelItem(_ itemID: UUID) {
-        if model.isSavedPresentation(itemID) {
-            Task { await savedLibraryController.delete(id: itemID) }
-        } else {
-            Task { await onDelete(itemID) }
-        }
+        Task { await onDelete(itemID) }
     }
 
     private func deleteSelectedItems(in context: ClipboardHistoryPanelActionContext) async {
@@ -5656,17 +5752,9 @@ private struct ClipboardHistoryPanelView: View {
             return
         }
         let historyItemIDs = Set(context.itemIDs).subtracting(context.snippetIDs)
-        if !historyItemIDs.isEmpty {
-            guard await controller.deletePermanently(ids: historyItemIDs) else {
-                NSSound.beep()
-                return
-            }
-        }
-        if !context.snippetIDs.isEmpty {
-            guard await savedLibraryController.delete(ids: context.snippetIDs) else {
-                NSSound.beep()
-                return
-            }
+        guard await onDeleteSelection(historyItemIDs, context.snippetIDs) else {
+            NSSound.beep()
+            return
         }
     }
 
@@ -6598,10 +6686,10 @@ private struct ClipboardHistoryActionPalette: View {
                 if let shortcut = actionShortcutText(entry) {
                     Text(shortcut)
                         .font(PluginSettingsTheme.Typography.statusBadge)
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.8) : Color.secondary)
+                        .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.8) : Color.secondary)
                 }
             }
-            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .foregroundStyle(isSelected ? selectedRowTextColor : Color.primary)
             .pluginPaletteSelectableRow(isSelected: isSelected)
         }
         .onContinuousHover { phase in

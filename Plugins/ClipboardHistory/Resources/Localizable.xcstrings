@@ -316,21 +316,6 @@
         "ar": { "stringUnit": { "state": "translated", "value": "(نص فارغ)" } }
       }
     },
-    "saved.variable.uuidHelp": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Example UUID. A new value is generated each time the snippet is used." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "UUID 示例。每次使用片段时都会生成新值。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "UUID 範例。每次使用片段時都會產生新值。" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "UUID の例です。スニペットを使うたびに新しい値が生成されます。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "UUID 예시입니다. 스니펫을 사용할 때마다 새 값이 생성됩니다." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Beispiel-UUID. Bei jeder Verwendung wird ein neuer Wert erzeugt." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Exemple d’UUID. Une nouvelle valeur est générée à chaque utilisation." } },
-        "es": { "stringUnit": { "state": "translated", "value": "UUID de ejemplo. Se genera un valor nuevo con cada uso." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "UUID de exemplo. Um novo valor é gerado em cada utilização." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Пример UUID. При каждом использовании создаётся новое значение." } },
-        "ar": { "stringUnit": { "state": "translated", "value": "مثال UUID. تُولَّد قيمة جديدة في كل استخدام للمقتطف." } }
-      }
-    },
     "saved.variable.formatHelp": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "yyyy = year, MM = month, dd = day; HH = hour, mm = minute. Quote literal text with single quotes." } },
@@ -571,6 +556,36 @@
         "ar": { "stringUnit": { "state": "translated", "value": "تم تحديد %lld · ترتيب التحديد" } }
       }
     },
+    "panel.selection.orderedCountMaximum": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%lld selected · Maximum · Selection order" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已选 %lld 项 · 已达上限 · 按选择顺序" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已選 %lld 項 · 已達上限 · 依選取順序" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%lld 件選択 · 上限 · 選択順" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%lld개 선택 · 최대 · 선택 순서" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%lld ausgewählt · Maximum · Auswahlreihenfolge" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%lld sélectionnés · Maximum · Ordre de sélection" } },
+        "es": { "stringUnit": { "state": "translated", "value": "%lld seleccionados · Máximo · Orden de selección" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "%lld selecionados · Máximo · Ordem de seleção" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выбрано: %lld · Максимум · Порядок выбора" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "تم تحديد %lld · الحد الأقصى · ترتيب التحديد" } }
+      }
+    },
+    "panel.selection.limitReached": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "You can select up to %lld items." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "最多可选择 %lld 项。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "最多可選取 %lld 項。" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "選択できる項目は最大 %lld 件です。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "최대 %lld개 항목을 선택할 수 있습니다." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Du kannst bis zu %lld Elemente auswählen." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Vous pouvez sélectionner jusqu’à %lld éléments." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Puedes seleccionar hasta %lld elementos." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Pode selecionar até %lld itens." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Можно выбрать не более %lld элементов." } },
+        "ar": { "stringUnit": { "state": "translated", "value": "يمكنك تحديد ما يصل إلى %lld عنصرًا." } }
+      }
+    },
     "panel.selection.position": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Position %lld of %lld in selection" } },
@@ -678,17 +693,17 @@
     },
     "panel.shortcuts.editSnippet.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "عدّل المقتطف المحدد عندما تكون نافذة سجل الحافظة نشطة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Bearbeite das ausgewählte Snippet, wenn der Zwischenablageverlauf fokussiert ist." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Edit the selected snippet while Clipboard History is focused." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Edita el fragmento seleccionado cuando el historial del portapapeles tenga el foco." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Modifiez l’extrait sélectionné lorsque l’historique du presse-papiers est actif." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "クリップボード履歴がアクティブなときに、選択したスニペットを編集します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록에 초점이 있을 때 선택한 스니펫을 편집합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Edite o trecho selecionado quando o Histórico da Área de Transferência estiver em foco." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Редактировать выбранный фрагмент, когда окно истории буфера обмена активно." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板历史窗口处于前台时，编辑选中的片段。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼簿歷史視窗位於前景時，編輯所選片段。" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "عدّل المقتطف المحدد عندما تكون نافذة الحافظة نشطة." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Bearbeite das ausgewählte Snippet, wenn das Zwischenablagefenster fokussiert ist." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Edit the selected snippet while the Clipboard window is focused." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Edita el fragmento seleccionado cuando la ventana del portapapeles tenga el foco." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Modifiez l’extrait sélectionné lorsque la fenêtre du presse-papiers est active." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードウインドウがアクティブなときに、選択したスニペットを編集します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 윈도우에 초점이 있을 때 선택한 스니펫을 편집합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Edite o trecho selecionado quando a janela da Área de Transferência estiver em foco." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Редактировать выбранный фрагмент, когда окно буфера обмена активно." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板窗口处于前台时，编辑选中的片段。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼簿視窗位於前景時，編輯所選片段。" } }
       }
     },
     "panel.filter.family.type": {
@@ -3178,17 +3193,17 @@
     },
     "panel.search.all.placeholder": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "البحث في السجل والعناصر المحفوظة" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Verlauf und gespeicherte Objekte durchsuchen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Search history and saved items" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Buscar en el historial y los elementos guardados" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Rechercher dans l’historique et les éléments enregistrés" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴と保存済み項目を検索" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기록 및 저장된 항목 검색" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Pesquisar no histórico e nos itens salvos" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Поиск в истории и сохранённых элементах" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "搜索历史和已存项目" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "搜尋記錄和已儲存項目" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "البحث في السجل والعناصر المحفوظة والمقتطفات" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Verlauf, gespeicherte Objekte und Snippets durchsuchen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Search history, saved items, and snippets" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Buscar en el historial, los elementos guardados y los fragmentos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Rechercher dans l’historique, les éléments enregistrés et les extraits" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "履歴、保存済み項目、スニペットを検索" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기록, 저장된 항목 및 스니펫 검색" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Pesquisar no histórico, nos itens salvos e nos trechos" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Поиск в истории, сохранённых элементах и фрагментах" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "搜索历史、已存项目和片段" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "搜尋記錄、已儲存項目和片段" } }
       }
     },
     "panel.search.placeholder": {
@@ -4517,76 +4532,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "永不"
-          }
-        }
-      }
-    },
-    "settings.retention.itemCount.noLimit": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10,000 عنصر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10.000 Einträge"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10,000 items"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10.000 elementos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10 000 éléments"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10,000件"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10,000개"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10.000 itens"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10 000 элементов"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10,000 条"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "10,000 筆"
           }
         }
       }
@@ -13826,17 +13771,17 @@
     },
     "panel.shortcuts.group.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تعمل هذه الاختصارات فقط عند التركيز على سجل الحافظة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Diese Kurzbefehle funktionieren nur bei fokussiertem Zwischenablageverlauf." } },
-        "en": { "stringUnit": { "state": "translated", "value": "These shortcuts work only while Clipboard History is focused." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Estos atajos solo funcionan cuando el historial está enfocado." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Ces raccourcis fonctionnent uniquement lorsque l’historique est actif." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴にフォーカス中のみ機能します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 기록에 포커스된 동안에만 작동합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Estes atalhos só funcionam quando o histórico está em foco." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Эти сочетания работают только при активной истории буфера." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "这些快捷键仅在剪贴板历史聚焦时生效。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "這些快速鍵僅在剪貼簿歷史聚焦時生效。" } }
+        "ar": { "stringUnit": { "state": "translated", "value": "تعمل هذه الاختصارات فقط عند التركيز على نافذة الحافظة." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Diese Kurzbefehle funktionieren nur bei fokussiertem Zwischenablagefenster." } },
+        "en": { "stringUnit": { "state": "translated", "value": "These shortcuts work only while the Clipboard window is focused." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Estos atajos solo funcionan cuando la ventana del portapapeles está enfocada." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ces raccourcis fonctionnent uniquement lorsque la fenêtre du presse-papiers est active." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードウインドウにフォーカス中のみ機能します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 윈도우에 포커스된 동안에만 작동합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Estes atalhos só funcionam quando a janela da Área de Transferência está em foco." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Эти сочетания работают только при активном окне буфера обмена." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "这些快捷键仅在剪贴板窗口聚焦时生效。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "這些快速鍵僅在剪貼簿視窗聚焦時生效。" } }
       }
     },
     "panel.shortcuts.multiSelect": {

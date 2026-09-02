@@ -44,7 +44,6 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         2_500,
         5_000,
         ClipboardHistorySettings.maximumSupportedItemCount,
-        ClipboardHistorySettings.noItemCountLimit,
     ]
     static let allowedItemByteCounts = [
         1 * 1_024 * 1_024,

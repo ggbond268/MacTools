@@ -2,7 +2,11 @@ import CryptoKit
 import Foundation
 import SQLite3
 
-final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersisting, @unchecked Sendable {
+final class IncrementalEncryptedClipboardHistoryStore:
+    ClipboardHistoryPersisting,
+    ClipboardUnifiedDeletionPersisting,
+    @unchecked Sendable
+{
     private struct StoredMetadata: Codable {
         let id: UUID
         let text: String
@@ -150,7 +154,24 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         applying mutation: ClipboardHistoryMutation
     ) throws {
         try databaseAccess.withActiveAccess {
-            try lock.withLock { try saveChangesLocked(applying: mutation) }
+            try lock.withLock {
+                try saveChangesLocked(applying: mutation, deletingSavedItemIDs: [])
+            }
+        }
+    }
+
+    func saveChanges(
+        _: [ClipboardHistoryItem],
+        applying mutation: ClipboardHistoryMutation,
+        deletingSavedItemIDs: Set<UUID>
+    ) throws {
+        try databaseAccess.withActiveAccess {
+            try lock.withLock {
+                try saveChangesLocked(
+                    applying: mutation,
+                    deletingSavedItemIDs: deletingSavedItemIDs
+                )
+            }
         }
     }
 
@@ -252,8 +273,12 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         }
     }
 
-    private func saveChangesLocked(applying mutation: ClipboardHistoryMutation) throws {
-        guard !isInvalidated, !mutation.changes.isEmpty else { return }
+    private func saveChangesLocked(
+        applying mutation: ClipboardHistoryMutation,
+        deletingSavedItemIDs: Set<UUID>
+    ) throws {
+        guard !isInvalidated,
+              !mutation.changes.isEmpty || !deletingSavedItemIDs.isEmpty else { return }
         try prepareLocked()
         let key = try encryptionKeyLocked()
         let database = try openDatabaseLocked()
@@ -290,6 +315,9 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
         do {
             for removedID in removedIDs {
                 try deleteItem(id: removedID, database: database)
+            }
+            for savedItemID in deletingSavedItemIDs {
+                try deleteSavedItem(id: savedItemID, database: database)
             }
             for item in affectedItems {
                 let previous = cachedItems[item.id]
@@ -739,6 +767,16 @@ final class IncrementalEncryptedClipboardHistoryStore: ClipboardHistoryPersistin
 
     private func deleteItem(id: UUID, database: OpaquePointer) throws {
         let statement = try prepareStatement("DELETE FROM items WHERE id = ?1", database: database)
+        defer { sqlite3_finalize(statement) }
+        try bind(id.uuidString, index: 1, statement: statement, database: database)
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw sqliteError(database) }
+    }
+
+    private func deleteSavedItem(id: UUID, database: OpaquePointer) throws {
+        let statement = try prepareStatement(
+            "DELETE FROM saved_items WHERE id = ?1",
+            database: database
+        )
         defer { sqlite3_finalize(statement) }
         try bind(id.uuidString, index: 1, statement: statement, database: database)
         guard sqlite3_step(statement) == SQLITE_DONE else { throw sqliteError(database) }

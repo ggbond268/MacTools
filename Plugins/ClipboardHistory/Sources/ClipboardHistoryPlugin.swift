@@ -339,6 +339,10 @@ final class ClipboardHistoryPlugin:
             guard let self else { return false }
             return await self.requestSequentialQueueCreation(itemIDs: itemIDs)
         },
+        onPrepareForPermanentDeletion: { [weak self] itemIDs in
+            guard let self else { return false }
+            return await self.prepareForPermanentDeletion(itemIDs: Set(itemIDs))
+        },
         hudPresenter: privacyHUDPresenter,
         pasteCommandSender: pasteCommandSender,
         shortcutBindingProvider: { [weak self] shortcutID in
@@ -460,6 +464,7 @@ final class ClipboardHistoryPlugin:
             sourceContext: sourceContext ?? WorkspaceClipboardSourceContextProvider(),
             persistence: resolvedPersistence,
             imageTextRecognizer: imageTextRecognizer ?? VisionClipboardImageTextRecognizer(),
+            copyEventMonitor: SystemClipboardCopyEventMonitor(),
             errorMessageProvider: { error in
                 Self.localizedErrorMessage(error, localization: localization)
             }
@@ -876,7 +881,7 @@ final class ClipboardHistoryPlugin:
             panelShortcut(
                 id: ShortcutID.panelEditSnippet,
                 title: localization.string("saved.edit", defaultValue: "Edit Snippet"),
-                description: localization.string("panel.shortcuts.editSnippet.description", defaultValue: "Edit the selected snippet while Clipboard History is focused."),
+                description: localization.string("panel.shortcuts.editSnippet.description", defaultValue: "Edit the selected snippet while the Clipboard window is focused."),
                 keyCode: 14,
                 modifiers: [.command, .option],
                 systemImage: "pencil"
@@ -982,7 +987,7 @@ final class ClipboardHistoryPlugin:
             ),
             settingsGroupDescription: localization.string(
                 "panel.shortcuts.group.description",
-                defaultValue: "These shortcuts work only while Clipboard History is focused."
+                defaultValue: "These shortcuts work only while the Clipboard window is focused."
             ),
             settingsControlTitle: title,
             settingsControlSystemImage: systemImage
@@ -1058,7 +1063,7 @@ final class ClipboardHistoryPlugin:
             PluginShortcutSettingsGroupConfiguration(
                 id: ShortcutID.panelGroup,
                 title: localization.string("panel.shortcuts.group", defaultValue: "Clipboard Window Shortcuts"),
-                description: localization.string("panel.shortcuts.group.description", defaultValue: "These shortcuts work only while Clipboard History is focused."),
+                description: localization.string("panel.shortcuts.group.description", defaultValue: "These shortcuts work only while the Clipboard window is focused."),
                 systemImage: "rectangle.and.hand.point.up.left",
                 shortcutDefinitionIDs: [
                     ShortcutID.panelCycleScope,
@@ -1697,6 +1702,34 @@ final class ClipboardHistoryPlugin:
         sequentialPasteWorkerTask = nil
     }
 
+    private func prepareForPermanentDeletion(itemIDs: Set<UUID>) async -> Bool {
+        guard !itemIDs.isEmpty,
+              let session = sequentialPasteCoordinator.session,
+              session.source == .explicitQueue,
+              !session.isComplete,
+              !itemIDs.isDisjoint(with: session.itemIDs) else {
+            return true
+        }
+        cancelPendingSequentialPastes()
+        sequentialHUDPreviewTask?.cancel()
+        sequentialHUDPreviewTask = nil
+        guard await sequentialPasteCoordinator.cancel() else {
+            showSequentialPersistenceFailure()
+            return false
+        }
+        synchronizeSequentialPasteProtection()
+        sequentialPasteHUD.dismiss()
+        return true
+    }
+
+    var sequentialPasteSessionForTesting: ClipboardSequentialPasteSession? {
+        sequentialPasteCoordinator.session
+    }
+
+    func prepareForPermanentDeletionForTesting(itemIDs: Set<UUID>) async -> Bool {
+        await prepareForPermanentDeletion(itemIDs: itemIDs)
+    }
+
     private func cancelSequentialQueueCreation() {
         sequentialQueueCreationGeneration &+= 1
         sequentialQueueCreationTask?.cancel()
@@ -1809,9 +1842,6 @@ final class ClipboardHistoryPlugin:
             }
             return true
         }
-        guard isCurrentSequentialPasteWorker(generation: workerGeneration) else {
-            return false
-        }
         guard didSendPaste else {
             synchronizeSequentialPasteProtection()
             privacyHUDPresenter.showFailure(localization.string(
@@ -1825,10 +1855,17 @@ final class ClipboardHistoryPlugin:
         }
         // Commit the exact item that was actually sent before yielding for pacing. Session-bound
         // operations prevent a late completion from advancing a replaced or cancelled queue.
-        guard await sequentialPasteCoordinator.recordSuccessfulPaste(operation: operation) else {
+        // A successful paste command is irreversible. Commit it from a fresh task so cancelling
+        // the shortcut worker (deactivation, a new external copy, or queue dismissal) cannot make
+        // the next launch repeat content that the destination already received.
+        let commitTask = Task { @MainActor [sequentialPasteCoordinator] in
+            await sequentialPasteCoordinator.recordSuccessfulPaste(operation: operation)
+        }
+        guard await commitTask.value else {
             showSequentialPersistenceFailure()
             return false
         }
+        guard isCurrentSequentialPasteWorker(generation: workerGeneration) else { return true }
         if let cursorAccess, let cursorContext {
             await cursorContext.apply(access: cursorAccess)
         }

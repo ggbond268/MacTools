@@ -93,7 +93,7 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
 
     func testTotalPayloadBudgetBoundsMaximumConfiguredHistory() {
         var settings = ClipboardHistorySettings.defaults
-        settings.maximumItemCount = ClipboardHistorySettings.noItemCountLimit
+        settings.maximumItemCount = ClipboardHistorySettings.maximumSupportedItemCount
         settings.maximumItemByteCount = 1_024 * 1_024
         let payload = ClipboardHistoryPayload(pasteboardItems: [
             ClipboardStoredPasteboardItem(representations: [

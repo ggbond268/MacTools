@@ -440,7 +440,7 @@ public struct PluginPaletteSelectableRowModifier: ViewModifier {
 
     private var rowBackground: Color {
         if isSelected {
-            return .accentColor
+            return Color(nsColor: .selectedContentBackgroundColor)
         }
         return isHovered ? Color.primary.opacity(0.09) : .clear
     }

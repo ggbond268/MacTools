@@ -15,6 +15,8 @@ MAKEFILE = REPO_ROOT / "Makefile"
 ACTION_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/ActionModels.swift"
 COMPONENT_THEME_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginComponentTheme.swift"
 PLUGIN_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginModels.swift"
+PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swift"
+PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
     # Canonical action registry, execution, discovery, and surface bridges.
@@ -115,6 +117,11 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginPrivateDataKeychainIdentity": "1.3.0",
     "PluginSettingsActionShortcutItem": "1.3.0",
     "PluginInlineShortcutSettingsContextConsuming": "1.3.0",
+    "PluginShortcutBindingValidating": "1.3.0",
+    "actionShortcutItem": "1.3.0",
+    "actionShortcutItems": "1.3.0",
+    "recordActionShortcut": "1.3.0",
+    "clearActionShortcut": "1.3.0",
     "PluginSettingsShortcutRecorderControl": "1.3.0",
     "PluginShortcutRecordingAnchor": "1.3.0",
     "PluginWindowLayoutTargetProviding": "1.3.0",
@@ -318,6 +325,21 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             "Public component-theme types used by plugins must declare their minimum host",
         )
 
+    def test_clipboard_shortcut_extension_apis_require_host_1_3(self) -> None:
+        interfaces = PLUGIN_INTERFACES.read_text(encoding="utf-8")
+        settings_models = PLUGIN_SETTINGS_MODELS.read_text(encoding="utf-8")
+        symbols_by_source = {
+            "PluginShortcutBindingValidating": interfaces,
+            "actionShortcutItem": settings_models,
+            "actionShortcutItems": settings_models,
+            "recordActionShortcut": settings_models,
+            "clearActionShortcut": settings_models,
+        }
+        for symbol, source in symbols_by_source.items():
+            with self.subTest(symbol=symbol):
+                self.assertTrue(source_uses_symbol(source, symbol))
+                self.assertEqual(NEW_API_MINIMUM_HOSTS.get(symbol), "1.3.0")
+                self.assertTrue(minimum_host_violations("legacy", "1.2.1", symbol))
     def test_symbol_matching_rejects_legacy_consumer_without_substring_false_positive(self) -> None:
         self.assertTrue(source_uses_symbol("let risk: ActionRisk = .safe", "ActionRisk"))
         self.assertFalse(source_uses_symbol("struct MyActionRiskWrapper {}", "ActionRisk"))

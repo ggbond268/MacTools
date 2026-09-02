@@ -463,7 +463,6 @@ struct ClipboardSnippetExpansionContext: Sendable {
     var locale: Locale
     var timeZone: TimeZone
     var clipboardText: String?
-    var uuid: @Sendable () -> UUID
     var maximumUTF8ByteCount: Int = defaultMaximumUTF8ByteCount
 
     static func current(clipboardText: String?) -> Self {
@@ -471,8 +470,7 @@ struct ClipboardSnippetExpansionContext: Sendable {
             date: Date(),
             locale: .current,
             timeZone: .current,
-            clipboardText: clipboardText,
-            uuid: { UUID() }
+            clipboardText: clipboardText
         )
     }
 }
@@ -569,9 +567,6 @@ enum ClipboardSnippetTemplateEngine {
                 if options["case"] == "upper" { value = value.uppercased(with: context.locale) }
                 if options["case"] == "lower" { value = value.lowercased(with: context.locale) }
                 replacement = value
-            case "uuid":
-                try requireOptions(options, allowed: [])
-                replacement = context.uuid().uuidString
             case "cursor":
                 try requireOptions(options, allowed: [])
                 guard !hasCursor else {
@@ -1275,6 +1270,30 @@ final class ClipboardSavedLibraryController: ObservableObject {
                 self.onChange?()
                 return false
             }
+        }
+    }
+
+    /// Holds the snippet mutation gate while another shared-database worker performs an atomic
+    /// mixed deletion, then mirrors the committed result into the snippet presentation state.
+    func removeAfterAtomicDeletion(
+        ids: Set<UUID>,
+        performDeletion: @MainActor () async -> Bool
+    ) async -> Bool {
+        guard !ids.isEmpty else { return false }
+        return await withLibraryMutation(cancelledResult: false) { generation in
+            let availableIDs = Set(self.items.lazy.map(\.id))
+            guard ids.isSubset(of: availableIDs) else { return false }
+            for id in ids { self.pendingUsageDates.removeValue(forKey: id) }
+            guard await performDeletion(), self.isCurrentMutation(generation) else { return false }
+            self.items.removeAll { ids.contains($0.id) }
+            for id in ids {
+                self.itemLoadErrorMessages.removeValue(forKey: id)
+                self.keywordTemplatesByID.removeValue(forKey: id)
+            }
+            self.errorMessage = nil
+            self.reloadKeywordTemplateCache()
+            self.onChange?()
+            return true
         }
     }
 

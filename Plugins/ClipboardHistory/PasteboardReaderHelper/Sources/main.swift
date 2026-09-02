@@ -135,7 +135,7 @@ private final class ResidentMemoryWatchdog: @unchecked Sendable {
                 _exit(4)
             }
         }
-        timer.schedule(deadline: .now(), repeating: .milliseconds(2))
+        timer.schedule(deadline: .now(), repeating: .milliseconds(20))
         recordWatchdogState("active", at: stateFilePath)
         timer.resume()
     }

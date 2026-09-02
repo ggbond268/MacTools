@@ -916,6 +916,22 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testCopyEventAssistCapturesBeforeSlowPollingFallback() async {
+        let monitor = FakeClipboardCopyEventMonitor()
+        let fixture = makeFixture(copyEventMonitor: monitor)
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        monitor.fire()
+        fixture.pasteboard.simulateCopy("event-assisted")
+
+        let captured = await waitUntil { fixture.controller.items.first?.text == "event-assisted" }
+        XCTAssertTrue(captured)
+        XCTAssertEqual(monitor.startCount, 1)
+        fixture.controller.stop()
+        XCTAssertEqual(monitor.stopCount, 1)
+    }
+
     func testPlainTextRewriteReportsPendingImageRecognition() async {
         let fixture = makeFixture(imageTextRecognizer: SlowClipboardImageTextRecognizer())
         fixture.controller.start()
@@ -1992,7 +2008,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         initialItems: [ClipboardHistoryItem] = [],
         captureSuppressionSettlingInterval: TimeInterval = 0.75,
         imageIndexBatchPauseNanoseconds: UInt64 = 0,
-        imageTextRecognizer: any ClipboardImageTextRecognizing = VisionClipboardImageTextRecognizer()
+        imageTextRecognizer: any ClipboardImageTextRecognizing = VisionClipboardImageTextRecognizer(),
+        copyEventMonitor: (any ClipboardCopyEventMonitoring)? = nil
     ) -> (
         controller: ClipboardHistoryController,
         settings: ClipboardHistorySettingsStore,
@@ -2022,7 +2039,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             monitoringInterval: 60,
             captureSuppressionSettlingInterval: captureSuppressionSettlingInterval,
             imageIndexBatchPauseNanoseconds: imageIndexBatchPauseNanoseconds,
-            imageTextRecognizer: imageTextRecognizer
+            imageTextRecognizer: imageTextRecognizer,
+            copyEventMonitor: copyEventMonitor
         )
         settings.onChange = { [weak controller] in
             controller?.settingsDidChange()
@@ -2164,6 +2182,25 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             payloadLoader: payloadLoader
         )
     }
+}
+
+@MainActor
+private final class FakeClipboardCopyEventMonitor: ClipboardCopyEventMonitoring {
+    private var action: (@MainActor () -> Void)?
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    func start(onCopyOrCut: @escaping @MainActor () -> Void) {
+        startCount += 1
+        action = onCopyOrCut
+    }
+
+    func stop() {
+        stopCount += 1
+        action = nil
+    }
+
+    func fire() { action?() }
 }
 
 private struct FakeClipboardImageTextRecognizer: ClipboardImageTextRecognizing {

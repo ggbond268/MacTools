@@ -23,7 +23,7 @@ enum ClipboardSnippetPreviewClipboard {
 }
 
 enum ClipboardSnippetVariable: String, CaseIterable, Identifiable, Sendable {
-    case date, time, datetime, clipboard, cursor, uuid
+    case date, time, datetime, clipboard, cursor
     var id: String { rawValue }
     var isDate: Bool { self == .date || self == .time || self == .datetime }
 
@@ -95,7 +95,6 @@ struct ClipboardSnippetVariablePicker: View {
     @State private var usesCustomFormat = false
     @State private var preview: Result<ClipboardSnippetExpansion, Error>?
     @State private var previewedTemplate: String?
-    @State private var previewUUID = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -120,12 +119,6 @@ struct ClipboardSnippetVariablePicker: View {
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
             }
-            if options.variable == .uuid {
-                Text(localization.string("saved.variable.uuidHelp", defaultValue: "Example UUID. A new value is generated each time the snippet is used."))
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-            }
-
             previewBlock(localization.string("saved.variable.template", defaultValue: "Variable Template")) {
                 Text(options.template).font(.body.monospaced()).textSelection(.enabled)
                     .accessibilityLabel(options.template)
@@ -263,7 +256,6 @@ struct ClipboardSnippetVariablePicker: View {
     }
 
     private func refreshPreview() async {
-        let uuid = previewUUID
         let currentOptions = options
         let template = currentOptions.previewTemplate(text: text, selection: selection)
         let needsClipboard = await Task.detached { ClipboardSnippetTemplateEngine.requiresClipboardText(template) }.value
@@ -277,7 +269,6 @@ struct ClipboardSnippetVariablePicker: View {
         guard !Task.isCancelled else { return }
         var context = ClipboardSnippetExpansionContext.current(clipboardText: clipboardText)
         context.maximumUTF8ByteCount = maximumExpandedTextByteCount
-        context.uuid = { uuid }
         do {
             let expansion = try await ClipboardSnippetTemplateEngine.expandAsync(template, context: context)
             guard !Task.isCancelled else { return }

@@ -552,7 +552,7 @@ struct ClipboardHistorySettingsView: View {
                     headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
                 ) {
                     VStack(spacing: 0) {
-                        Text(localization.string("panel.shortcuts.group.description", defaultValue: "These shortcuts work only while Clipboard History is focused."))
+                        Text(localization.string("panel.shortcuts.group.description", defaultValue: "These shortcuts work only while the Clipboard window is focused."))
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -873,18 +873,11 @@ struct ClipboardHistorySettingsView: View {
                     selection: $settings.maximumItemCount
                 ) {
                     ForEach(ClipboardHistorySettingsStore.allowedItemCounts, id: \.self) { count in
-                        Text(
-                            count == ClipboardHistorySettings.noItemCountLimit
-                                ? localization.string(
-                                    "settings.retention.itemCount.noLimit",
-                                    defaultValue: "Unlimited"
-                                )
-                                : localization.format(
-                                    "settings.retention.itemCount",
-                                    defaultValue: "%d 条",
-                                    count
-                                )
-                        )
+                        Text(localization.format(
+                            "settings.retention.itemCount",
+                            defaultValue: "%d 条",
+                            count
+                        ))
                         .tag(count)
                     }
                 }
@@ -946,13 +939,11 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var retentionSummary: String {
-        let itemLimit = settings.maximumItemCount == ClipboardHistorySettings.noItemCountLimit
-            ? localization.string("settings.retention.itemCount.noLimit", defaultValue: "Unlimited items")
-            : localization.format(
-                "settings.retention.itemCount",
-                defaultValue: "%d items",
-                settings.maximumItemCount
-            )
+        let itemLimit = localization.format(
+            "settings.retention.itemCount",
+            defaultValue: "%d items",
+            settings.maximumItemCount
+        )
         return [
             itemLimit,
             byteCountTitle(settings.maximumTotalPayloadByteCount),
@@ -1186,29 +1177,14 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private func localDataUsageSummary(_ usage: ClipboardHistoryUsage) -> String {
-        let itemUsage: String
-        if settings.maximumItemCount == ClipboardHistorySettings.noItemCountLimit {
-            itemUsage = localization.format(
-                "settings.retention.itemCount",
-                defaultValue: "%d items",
-                usage.itemCount
-            ) + " · " + localization.string(
-                "settings.retention.itemCount.noLimit",
-                defaultValue: "Unlimited items"
-            )
-        } else {
-            itemUsage = localization.format(
-                "settings.data.savedCount",
-                defaultValue: "%d / %d items · %@ / %@",
-                usage.itemCount,
-                settings.maximumItemCount,
-                byteCountTitle(usage.payloadByteCount),
-                byteCountTitle(settings.maximumTotalPayloadByteCount)
-            )
-            return itemUsage
-        }
-        return itemUsage + " · " + byteCountTitle(usage.payloadByteCount)
-            + " / " + byteCountTitle(settings.maximumTotalPayloadByteCount)
+        localization.format(
+            "settings.data.savedCount",
+            defaultValue: "%d / %d items · %@ / %@",
+            usage.itemCount,
+            settings.maximumItemCount,
+            byteCountTitle(usage.payloadByteCount),
+            byteCountTitle(settings.maximumTotalPayloadByteCount)
+        )
     }
 
     private func advancedSectionBinding(

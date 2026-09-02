@@ -216,25 +216,29 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         print("Clipboard 50k cold presentation scheduling: \(scheduling)")
     }
 
-    func testLargeReactivationFilterRefreshReturnsWithoutBlockingTheUI() async {
+    func testUnchangedLargeReactivationUsesRevisionFastPath() async {
         let items = makeItems(50_000)
         let model = ClipboardHistoryPanelModel()
-        model.prepareForPresentation(items: items)
+        model.prepareForPresentation(items: items, historyRevision: 7, savedRevision: 11)
         await model.waitForSearchForTesting()
 
         let start = ContinuousClock.now
-        model.refreshFiltersForReactivation(items: items)
+        model.refreshFiltersForReactivation(
+            items: items,
+            historyRevision: 7,
+            savedRevision: 11
+        )
         let scheduling = ContinuousClock.now - start
 
         XCTAssertLessThan(
             scheduling,
-            .milliseconds(100),
-            "Returning to Clipboard must schedule collection-wide filter analysis off the main actor"
+            .milliseconds(50),
+            "Unchanged reactivation must return after constant-time revision checks"
         )
         await model.waitForFilterRefreshForTesting()
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.scopedItemCount, items.count)
-        print("Clipboard 50k reactivation filter scheduling: \(scheduling)")
+        print("Clipboard 50k unchanged reactivation: \(scheduling)")
     }
 
     func testCancelledPresentationPreparationStopsDetachedCollectionScan() async throws {

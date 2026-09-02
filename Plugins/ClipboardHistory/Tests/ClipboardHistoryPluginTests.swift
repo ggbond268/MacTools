@@ -792,7 +792,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(clearedActionID, ClipboardHistoryPlugin.ActionID.openHistory)
     }
 
-    func testUnlimitedItemCountRemainsExplicitlyUnlimited() {
+    func testRemovedUnlimitedItemCountFallsBackToDefaultLimit() {
         let suiteName = "ClipboardHistoryItemLimitMigrationTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -803,17 +803,15 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             pluginID: ClipboardHistoryPlugin.pluginID,
             userDefaults: defaults
         )
-        storage.set(ClipboardHistorySettings.noItemCountLimit, forKey: "maximum-item-count")
+        storage.set(-1, forKey: "maximum-item-count")
 
         let settings = ClipboardHistorySettingsStore(storage: storage)
 
         XCTAssertEqual(
             settings.maximumItemCount,
-            ClipboardHistorySettings.noItemCountLimit
+            ClipboardHistorySettings.defaultMaximumItemCount
         )
-        XCTAssertTrue(ClipboardHistorySettingsStore.allowedItemCounts.contains(
-            ClipboardHistorySettings.noItemCountLimit
-        ))
+        XCTAssertFalse(ClipboardHistorySettingsStore.allowedItemCounts.contains(-1))
     }
 
     func testStorageLimitPersistsFiveGigabytePreset() {
@@ -1373,7 +1371,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         plugin.deactivate(reason: .hostShutdown)
     }
 
-    func testSuccessfulPasteFinishingDuringDeactivationDoesNotAdvanceOrPersistImplicitQueue() async {
+    func testSuccessfulPasteFinishingDuringDeactivationDoesNotAdvanceImplicitQueue() async {
         let pasteboard = PluginTestClipboardPasteboard()
         let sender = BlockingClipboardPasteCommandSender { pasteboard.text }
         let plugin = makePlugin(
@@ -1409,6 +1407,75 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         XCTAssertEqual(sender.pastedTexts, ["Newer", "Newer"])
         sender.completeNextPaste()
         plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testSuccessfulExplicitPasteFinishingDuringDeactivationStillAdvancesQueue() async throws {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = BlockingClipboardPasteCommandSender { pasteboard.text }
+        let newerID = UUID()
+        let olderID = UUID()
+        let initialSession = try ClipboardSequentialPasteSession(explicitSnapshots: [
+            ClipboardSequentialPasteSnapshot(
+                sourceItemID: newerID,
+                payload: .plainText("Newer"),
+                expandsSnippetVariables: false
+            ),
+            ClipboardSequentialPasteSnapshot(
+                sourceItemID: olderID,
+                payload: .plainText("Older"),
+                expandsSnippetVariables: false
+            ),
+        ])
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            pasteCommandSender: sender,
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero,
+            initialExplicitSession: initialSession
+        )
+        plugin.controller.start()
+        plugin.savedLibraryController.start()
+        await waitUntilLoaded(plugin.controller)
+        let savedLibraryLoaded = await waitUntil { plugin.savedLibraryController.isLoaded }
+        XCTAssertTrue(savedLibraryLoaded)
+
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let firstPasteStarted = await waitUntil { sender.sendCount == 1 }
+        XCTAssertTrue(firstPasteStarted)
+        XCTAssertEqual(sender.pastedTexts, ["Newer"])
+        plugin.deactivate(reason: .hostShutdown)
+        sender.completeNextPaste()
+        for _ in 0..<50 { await Task.yield() }
+
+        plugin.controller.start()
+        plugin.savedLibraryController.start()
+        await waitUntilLoaded(plugin.controller)
+        let savedLibraryReloaded = await waitUntil { plugin.savedLibraryController.isLoaded }
+        XCTAssertTrue(savedLibraryReloaded)
+        plugin.handleShortcutAction(id: "paste-sequentially")
+        let secondPasteStarted = await waitUntil { sender.sendCount == 2 }
+        XCTAssertTrue(secondPasteStarted)
+        XCTAssertEqual(sender.pastedTexts, ["Newer", "Older"])
+        sender.completeNextPaste()
+        plugin.deactivate(reason: .hostShutdown)
+    }
+
+    func testDeletingAnExplicitQueueItemCancelsTheImmutableQueueFirst() async throws {
+        let queuedID = UUID()
+        let initialSession = try ClipboardSequentialPasteSession(explicitSnapshots: [
+            ClipboardSequentialPasteSnapshot(
+                sourceItemID: queuedID,
+                payload: .plainText("Queued"),
+                expandsSnippetVariables: false
+            ),
+        ])
+        let plugin = makePlugin(initialExplicitSession: initialSession)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+
+        let prepared = await plugin.prepareForPermanentDeletionForTesting(itemIDs: [queuedID])
+
+        XCTAssertTrue(prepared)
+        XCTAssertNil(plugin.sequentialPasteSessionForTesting)
     }
 
     func testExternalCopyCancelsBufferedPastesWithoutClearingNewWorkerReservations() async {

@@ -38,17 +38,6 @@ final class ClipboardSnippetVariableTests: XCTestCase {
         catch { XCTAssertTrue(error is CancellationError) }
     }
 
-    @MainActor
-    func testAsyncExpansionEvaluatesVariablesOffTheMainThread() async throws {
-        var context = context()
-        context.uuid = {
-            XCTAssertFalse(Thread.isMainThread)
-            return UUID()
-        }
-        let expanded = try await ClipboardSnippetTemplateEngine.expandAsync("{{uuid}}", context: context)
-        XCTAssertNotNil(UUID(uuidString: expanded.text))
-    }
-
     func testCursorPreviewIncludesClipboardVariablesFromTheDraft() throws {
         let options = ClipboardSnippetVariableOptions(variable: .cursor)
         let draft = "Hi {{clipboard}}, "
@@ -67,8 +56,7 @@ final class ClipboardSnippetVariableTests: XCTestCase {
             date: ISO8601DateFormatter().date(from: date)!,
             locale: Locale(identifier: "en_US_POSIX"),
             timeZone: TimeZone(identifier: "UTC")!,
-            clipboardText: text,
-            uuid: { UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")! }
+            clipboardText: text
         )
     }
 
@@ -114,7 +102,7 @@ final class ClipboardSnippetVariableTests: XCTestCase {
             #"{{date unexpected="value"}}"#, #"{{date offset="tomorrow"}}"#,
             #"{{date timezone="not/a/zone"}}"#, #"{{time offset="999999999999999999999d"}}"#,
             #"{{date format="yyyy" format="MM"}}"#, #"{{clipboard trim="yes"}}"#,
-            #"{{clipboard case="title"}}"#, #"{{uuid case="lower"}}"#, #"{{cursor offset="+1d"}}"#,
+            #"{{clipboard case="title"}}"#, #"{{cursor offset="+1d"}}"#,
             #"{{clipboard fallback="\q"}}"#
         ] {
             XCTAssertThrowsError(try expand(template), template) {
@@ -162,7 +150,7 @@ final class ClipboardSnippetVariableTests: XCTestCase {
         XCTAssertEqual(options.template, #"{{date format="yyyy-MM-dd" offset="+1d"}}"#)
         options.variable = .clipboard
         XCTAssertEqual(options.template, #"{{clipboard trim="true"}}"#)
-        options.variable = .uuid
-        XCTAssertEqual(options.template, "{{uuid}}")
+        options.variable = .cursor
+        XCTAssertEqual(options.template, "{{cursor}}")
     }
 }

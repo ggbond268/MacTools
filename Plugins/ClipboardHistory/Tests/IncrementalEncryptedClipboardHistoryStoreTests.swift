@@ -183,6 +183,41 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertTrue(try fixture.store.load().isEmpty)
     }
 
+    func testMixedHistoryAndSnippetDeletionCommitsInOneSharedTransaction() throws {
+        let fixture = try makeFixture()
+        let coordinator = ClipboardDatabaseAccessCoordinator()
+        let historyStore = IncrementalEncryptedClipboardHistoryStore(
+            databaseURL: fixture.databaseURL,
+            keyStore: fixture.keyStore,
+            databaseAccess: coordinator
+        )
+        let savedStore = IncrementalEncryptedClipboardSavedLibraryStore(
+            databaseURL: fixture.databaseURL,
+            keyStore: fixture.keyStore,
+            databaseAccess: coordinator
+        )
+        let historyItem = sampleItem(index: 1)
+        let snippet = ClipboardSavedItem(
+            title: "Reusable",
+            keyword: ";reuse",
+            savedKind: .snippet,
+            payload: .plainText("Reusable text"),
+            templateText: "Reusable text"
+        )
+        try historyStore.save([historyItem])
+        try savedStore.save(snippet, payloadChanged: true)
+        let mutation = ClipboardHistoryMutation.between([historyItem], [])
+
+        try historyStore.saveChanges(
+            [],
+            applying: mutation,
+            deletingSavedItemIDs: [snippet.id]
+        )
+
+        XCTAssertTrue(try historyStore.load().isEmpty)
+        XCTAssertTrue(try savedStore.load().isEmpty)
+    }
+
     func testTargetedRecaptureKeepsSameDigestPayloadEvictable() throws {
         let fixture = try makeFixture()
         let original = sampleItem(index: 1)

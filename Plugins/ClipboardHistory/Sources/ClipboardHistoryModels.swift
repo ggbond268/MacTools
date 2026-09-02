@@ -1042,7 +1042,6 @@ enum ClipboardHistoryExpiration: Int, CaseIterable, Identifiable, Sendable {
 
 struct ClipboardHistorySettings: Equatable, Sendable {
     static let maximumSupportedItemCount = 10_000
-    static let noItemCountLimit = -1
     static let defaultMaximumItemCount = 500
     static let defaultMaximumItemByteCount = 5 * 1_024 * 1_024
     static let defaultMaximumTotalPayloadByteCount = 64 * 1_024 * 1_024
@@ -1276,9 +1275,7 @@ enum ClipboardRetentionPolicy {
         let recent = unexpired.filter {
             !protectedItemIDs.contains($0.id)
         }
-        let maximumItemCount: Int? = settings.maximumItemCount == ClipboardHistorySettings.noItemCountLimit
-            ? nil
-            : max(0, settings.maximumItemCount)
+        let maximumItemCount = max(0, settings.maximumItemCount)
 
         // Active sequential queues protect their immutable snapshot until completion or
         // cancellation. Every other History item remains subject to ordinary retention.
@@ -1286,11 +1283,10 @@ enum ClipboardRetentionPolicy {
         let protectedItemCount = retained.count
         let protectedPayloadBytes = retained.reduce(0) { $0 + $1.payloadByteCount }
         var retainedPayloadBytes = protectedPayloadBytes
-        let availableRecentCount = maximumItemCount.map { max(0, $0 - retained.count) }
+        let availableRecentCount = max(0, maximumItemCount - retained.count)
         var retainedRecentCount = 0
         for item in recent {
-            if let availableRecentCount,
-               retainedRecentCount >= availableRecentCount {
+            if retainedRecentCount >= availableRecentCount {
                 break
             }
             let byteCount = item.payloadByteCount
@@ -1318,7 +1314,7 @@ enum ClipboardRetentionPolicy {
             items: unifiedItems,
             evictedItemCount: evictedItemCount,
             isCaptureBlockedByProtectedItems:
-                maximumItemCount.map { protectedItemCount >= $0 } == true
+                protectedItemCount >= maximumItemCount
                 || protectedPayloadBytes >= settings.maximumTotalPayloadByteCount
         )
     }

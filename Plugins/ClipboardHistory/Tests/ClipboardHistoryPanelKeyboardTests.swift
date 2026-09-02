@@ -855,6 +855,27 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(model.selectionNumber(for: model.selectedItemIDs[25]), 26)
     }
 
+    func testMultipleSelectionStopsAtQueueLimitAndReportsRejectedAppend() async {
+        let items = (0..<(ClipboardHistoryPanelModel.maximumMultiSelectionItemCount + 1)).map {
+            item(text: "item-\($0)", pinned: false)
+        }
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: items)
+        await model.waitForSearchForTesting()
+        model.setMultiSelectionEnabled(true)
+
+        for item in items where !model.selectedItemIDs.contains(item.id) {
+            model.toggleMultiSelection(for: item.id)
+        }
+
+        XCTAssertEqual(
+            model.selectedItemIDs.count,
+            ClipboardHistoryPanelModel.maximumMultiSelectionItemCount
+        )
+        XCTAssertEqual(model.selectionLimitReachedRevision, 1)
+        XCTAssertEqual(Set(items.map(\.id)).subtracting(model.selectedItemIDs).count, 1)
+    }
+
     func testOpeningDefaultsToScopeWhenAvailableAndFallsBackToType() {
         let model = ClipboardHistoryPanelModel()
         let history = item(text: "history", pinned: false)

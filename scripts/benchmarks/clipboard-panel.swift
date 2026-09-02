@@ -52,7 +52,7 @@ for count in [500, 5_000, 50_000] {
     await model.waitForSearchForTesting()
     let substring = ms(ContinuousClock.now - start)
     var settings = ClipboardHistorySettings.defaults
-    settings.maximumItemCount = ClipboardHistorySettings.noItemCountLimit
+settings.maximumItemCount = ClipboardHistorySettings.maximumSupportedItemCount
     settings.maximumTotalPayloadByteCount = Int.max
     settings.expiration = .never
     start = .now

@@ -737,18 +737,17 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             date: date,
             locale: Locale(identifier: "en_US_POSIX"),
             timeZone: TimeZone(secondsFromGMT: 0)!,
-            clipboardText: "copied",
-            uuid: { UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")! }
+            clipboardText: "copied"
         )
 
         let expansion = try ClipboardSnippetTemplateEngine.expand(
-            #"{{date format="yyyy-MM-dd"}} {{time format="HH:mm"}} {{clipboard}} {{uuid}} before{{cursor}}after \{{date}}"#,
+            #"{{date format="yyyy-MM-dd"}} {{time format="HH:mm"}} {{clipboard}} before{{cursor}}after \{{date}}"#,
             context: context
         )
 
         XCTAssertEqual(
             expansion.text,
-            "2024-01-02 03:04 copied AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE beforeafter {{date}}"
+            "2024-01-02 03:04 copied beforeafter {{date}}"
         )
         XCTAssertEqual(expansion.cursorOffsetFromEnd, "after {{date}}".count)
 
@@ -765,8 +764,7 @@ final class ClipboardSavedLibraryTests: XCTestCase {
             date: Date(timeIntervalSince1970: 0),
             locale: Locale(identifier: "en_US_POSIX"),
             timeZone: TimeZone(secondsFromGMT: 0)!,
-            clipboardText: nil,
-            uuid: { UUID() }
+            clipboardText: nil
         )
 
         XCTAssertThrowsError(try ClipboardSnippetTemplateEngine.expand("{{network}}", context: context)) {
