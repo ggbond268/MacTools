@@ -27,6 +27,8 @@ private final class InputRemappingTapSpy: InputRemappingEventTapping {
     private(set) var stopCallCount = 0
     private(set) var cancelCaptureCallCount = 0
     var startResult = true
+    var beginInputResult = true
+    var beginShortcutResult = true
     var captureHandler: (@Sendable (InputRemappingCapturedInput) -> Void)?
     var shortcutCaptureHandler: (@Sendable (ShortcutBinding) -> Void)?
     private(set) var executedActions: [InputRemappingRule.Action] = []
@@ -51,12 +53,20 @@ private final class InputRemappingTapSpy: InputRemappingEventTapping {
 
     func beginInputCapture(_ handler: @escaping @Sendable (InputRemappingCapturedInput) -> Void) -> Bool {
         captureHandler = handler
-        return startResult
+        guard beginInputResult else {
+            cancelButtonCapture()
+            return false
+        }
+        return true
     }
 
     func beginShortcutCapture(_ handler: @escaping @Sendable (ShortcutBinding) -> Void) -> Bool {
         shortcutCaptureHandler = handler
-        return startResult
+        guard beginShortcutResult else {
+            cancelButtonCapture()
+            return false
+        }
+        return true
     }
 
     func cancelButtonCapture() {
@@ -865,6 +875,124 @@ final class InputRemappingModelsTests: XCTestCase {
         page.visibilityHandler?(false)
         XCTAssertNil(buttonCapture.recordingRuleID)
         XCTAssertEqual(tap.cancelCaptureCallCount, 1)
+    }
+
+    @MainActor
+    func testInputCaptureStartFailurePublishesRuleLocalErrorAndRetryClearsIt() {
+        let tap = InputRemappingTapSpy()
+        tap.startResult = false
+        let coordinator = InputRemappingButtonCaptureCoordinator(
+            tap: tap,
+            scheduleArming: { $0() }
+        )
+        let ruleID = UUID()
+        var failureCalled = false
+
+        XCTAssertFalse(coordinator.start(ruleID: ruleID, onCapture: { _ in }, onFailure: { failureCalled = true }))
+        XCTAssertTrue(failureCalled)
+        XCTAssertEqual(
+            coordinator.recordingError,
+            InputRemappingRecordingError(
+                ruleID: ruleID,
+                target: .input,
+                failure: .eventTapUnavailable
+            )
+        )
+        XCTAssertNil(coordinator.preparingRuleID)
+        XCTAssertNil(coordinator.recordingRuleID)
+
+        coordinator.cancel()
+        XCTAssertNil(coordinator.recordingError)
+    }
+
+    @MainActor
+    func testInputCaptureArmingFailureRestoresInputState() {
+        let tap = InputRemappingTapSpy()
+        tap.beginInputResult = false
+        let coordinator = InputRemappingButtonCaptureCoordinator(
+            tap: tap,
+            scheduleArming: { $0() }
+        )
+        let originalRule = InputRemappingRule(isEnabled: true, action: .mouseForward)
+        let snapshot = InputRemappingInputRecordingSnapshot(rule: originalRule)
+        var draft = originalRule
+        draft.replaceTrigger(.keyboard(keyCode: 0, modifiers: []))
+        draft.isInputConfigured = true
+        draft.isEnabled = false
+
+        XCTAssertTrue(coordinator.start(
+            ruleID: draft.id,
+            onCapture: { _ in },
+            onFailure: { snapshot.restore(&draft) }
+        ))
+        XCTAssertEqual(draft, originalRule)
+        XCTAssertEqual(tap.cancelCaptureCallCount, 1)
+    }
+
+    @MainActor
+    func testShortcutCaptureArmingFailureRestoresMappingAndCancelsTapOnce() {
+        let tap = InputRemappingTapSpy()
+        tap.beginShortcutResult = false
+        let coordinator = InputRemappingButtonCaptureCoordinator(
+            tap: tap,
+            scheduleArming: { $0() }
+        )
+        let originalRule = InputRemappingRule(isEnabled: true, action: .mouseForward)
+        let snapshot = InputRemappingOutputRecordingSnapshot(rule: originalRule)
+        var draft = originalRule
+        draft.action = .shortcut(ShortcutBinding(keyCode: 0, modifiers: [.command]))
+        draft.outputConfigurationState = .recordingShortcut
+        draft.isEnabled = false
+        let ruleID = draft.id
+        var failureCalled = false
+
+        XCTAssertTrue(coordinator.startShortcut(
+            ruleID: ruleID,
+            onCapture: { _ in },
+            onFailure: {
+                failureCalled = true
+                snapshot.restore(&draft)
+            }
+        ))
+        XCTAssertTrue(failureCalled)
+        XCTAssertEqual(draft, originalRule)
+        XCTAssertEqual(
+            coordinator.recordingError,
+            InputRemappingRecordingError(
+                ruleID: ruleID,
+                target: .shortcut,
+                failure: .eventTapUnavailable
+            )
+        )
+        XCTAssertNil(coordinator.preparingShortcutRuleID)
+        XCTAssertNil(coordinator.recordingShortcutRuleID)
+        XCTAssertEqual(tap.cancelCaptureCallCount, 1)
+    }
+
+    @MainActor
+    func testRecordingPermissionGuidanceIdentifiesAccessibilityBeforeInputMonitoring() {
+        let storage = InputRemappingMemoryStorage()
+        let permissionState = InputRemappingPermissionState()
+        let plugin = InputRemappingPlugin(
+            context: PluginRuntimeContext(pluginID: "input-remapping", storage: storage),
+            tap: InputRemappingTapSpy(),
+            accessibilityTrusted: { permissionState.accessibilityGranted },
+            inputMonitoringStatus: { permissionState.inputMonitoringStatus }
+        )
+
+        XCTAssertEqual(plugin.recordingPermissionGuidance()?.issue, .accessibility)
+
+        permissionState.accessibilityGranted = true
+        plugin.refreshAccessibilityPermission()
+        XCTAssertEqual(plugin.recordingPermissionGuidance()?.issue, .inputMonitoring)
+
+        permissionState.inputMonitoringStatus = .unknown
+        plugin.refreshAccessibilityPermission()
+        XCTAssertNil(plugin.recordingPermissionGuidance())
+
+        permissionState.inputMonitoringStatus = .granted
+        plugin.refreshAccessibilityPermission()
+        XCTAssertNil(plugin.recordingPermissionGuidance())
     }
 
     @MainActor
