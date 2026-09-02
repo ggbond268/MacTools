@@ -5,6 +5,59 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
+    func testSequentialPasteHUDReservesPreviewGeometryBeforeDecodeCompletes() {
+        XCTAssertEqual(ClipboardSequentialPasteHUDPreviewLayout.dimension(hasData: true), 48)
+        XCTAssertEqual(ClipboardSequentialPasteHUDPreviewLayout.dimension(hasData: false), 0)
+    }
+
+    func testSaveFeedbackAcknowledgesImmediatelyAndCoalescesRepeatedRequests() {
+        let clip = item(text: "Clip", pinned: false)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [clip])
+
+        XCTAssertFalse(model.effectiveSavedState(for: clip))
+        XCTAssertTrue(model.beginSavedMutation(for: clip.id))
+        XCTAssertTrue(model.effectiveSavedState(for: clip))
+        XCTAssertEqual(model.pendingSavedItemIDs, [clip.id])
+        XCTAssertFalse(model.beginSavedMutation(for: clip.id))
+
+        model.finishSavedMutation(for: clip.id)
+        XCTAssertFalse(model.effectiveSavedState(for: clip))
+        XCTAssertTrue(model.pendingSavedItemIDs.isEmpty)
+    }
+
+    func testStructuralRemovalDisappearsBeforeBackgroundSearchCompletes() async {
+        let clip = item(text: "Sensitive", pinned: false)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [clip])
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.visibleItems.map(\.id), [clip.id])
+
+        model.updateItems([])
+
+        XCTAssertTrue(model.visibleItems.isEmpty)
+    }
+
+    func testActionPaletteModelResetsAndCachesGroupedSearchResultsForEveryPresentation() {
+        let model = ClipboardHistoryActionPaletteModel()
+        let entries: [ClipboardHistoryExportMenuEntry] = [
+            .init(title: "Paste", action: .paste, shortcut: "Return"),
+            .init(title: "Share", action: .share, shortcut: "⇧⌘E"),
+        ]
+
+        model.present(entries: entries, contextTitle: "First")
+        model.query = "share"
+        XCTAssertEqual(model.filteredEntries.map(\.action), [.share])
+
+        model.present(entries: entries, contextTitle: "Second")
+
+        XCTAssertEqual(model.query, "")
+        XCTAssertEqual(model.contextTitle, "Second")
+        XCTAssertEqual(model.filteredEntries.map(\.action), [.paste, .share])
+        XCTAssertEqual(model.selectedAction, .paste)
+        XCTAssertEqual(model.sections.flatMap(\.entries).count, 2)
+    }
+
     func testVisibleRowHitAreaFocusesExceptForMultiSelectCheckbox() {
         XCTAssertTrue(ClipboardHistoryRowHitTesting.targetsFocus(
             atX: 0,

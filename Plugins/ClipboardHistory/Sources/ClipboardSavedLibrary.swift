@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Combine
 import Foundation
 import MacToolsPluginKit
 
@@ -916,6 +917,12 @@ enum ClipboardSavedLibrarySearch {
 
 @MainActor
 final class ClipboardSavedLibraryController: ObservableObject {
+    struct ItemsUpdate {
+        let items: [ClipboardSavedItem]
+        let revision: UInt64
+    }
+
+    let itemUpdates = PassthroughSubject<ItemsUpdate, Never>()
     private(set) var presentationRevision: UInt64 = 0
     private var itemIndicesByID: [UUID: Int] = [:]
     @Published private(set) var items: [ClipboardSavedItem] = [] {
@@ -924,6 +931,7 @@ final class ClipboardSavedLibraryController: ObservableObject {
             itemIndicesByID = Dictionary(
                 uniqueKeysWithValues: items.indices.map { (items[$0].id, $0) }
             )
+            itemUpdates.send(ItemsUpdate(items: items, revision: presentationRevision))
         }
     }
     @Published private(set) var errorMessage: String?

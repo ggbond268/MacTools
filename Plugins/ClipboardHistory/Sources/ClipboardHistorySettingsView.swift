@@ -14,11 +14,102 @@ enum ClipboardHistorySettingsContentSection: Hashable {
 }
 
 @MainActor
+private final class ClipboardHistorySettingsPresentationModel: ObservableObject {
+    struct Snapshot: Equatable {
+        var usage: ClipboardHistoryUsage
+        var historyItemCount: Int
+        var savedItemCount: Int
+        var snippetCount: Int
+        var historyErrorMessage: String?
+        var storageError: ClipboardHistoryStoreError?
+        var savedErrorMessage: String?
+        var savedFatalErrorMessage: String?
+        var isHistoryLoaded: Bool
+        var isClearingHistory: Bool
+        var isCollectionOperational: Bool
+        var canResetUnreadableHistory: Bool
+    }
+
+    @Published private(set) var snapshot: Snapshot
+
+    init(
+        controller: ClipboardHistoryController,
+        savedLibraryController: ClipboardSavedLibraryController
+    ) {
+        snapshot = Self.makeSnapshot(
+            controller: controller,
+            savedLibraryController: savedLibraryController
+        )
+    }
+
+    func refreshHistoryItems(_ items: [ClipboardHistoryItem]) {
+        let historyItems = items.filter(\.isInHistory)
+        var next = snapshot
+        next.usage = ClipboardHistoryUsage(items: historyItems)
+        next.historyItemCount = historyItems.count
+        next.savedItemCount = items.lazy.filter(\.isSaved).count
+        publish(next)
+    }
+
+    func refreshHistoryStatus(_ controller: ClipboardHistoryController) {
+        var next = snapshot
+        next.historyErrorMessage = controller.errorMessage
+        next.storageError = controller.storageError
+        next.isHistoryLoaded = controller.isLoaded
+        next.isClearingHistory = controller.isClearingHistory
+        next.isCollectionOperational = controller.isCollectionOperational
+        next.canResetUnreadableHistory = controller.canResetUnreadablePersistentHistory
+        publish(next)
+    }
+
+    func refreshSavedLibrary(_ controller: ClipboardSavedLibraryController) {
+        var next = snapshot
+        next.snippetCount = controller.items.count
+        next.savedErrorMessage = controller.errorMessage
+        next.savedFatalErrorMessage = controller.fatalErrorMessage
+        publish(next)
+    }
+
+    func refreshSavedLibraryItems(_ items: [ClipboardSavedItem]) {
+        var next = snapshot
+        next.snippetCount = items.count
+        publish(next)
+    }
+
+    private func publish(_ next: Snapshot) {
+        guard next != snapshot else { return }
+        snapshot = next
+    }
+
+    private static func makeSnapshot(
+        controller: ClipboardHistoryController,
+        savedLibraryController: ClipboardSavedLibraryController
+    ) -> Snapshot {
+        let historyItems = controller.items.filter(\.isInHistory)
+        return Snapshot(
+            usage: ClipboardHistoryUsage(items: historyItems),
+            historyItemCount: historyItems.count,
+            savedItemCount: controller.items.lazy.filter(\.isSaved).count,
+            snippetCount: savedLibraryController.items.count,
+            historyErrorMessage: controller.errorMessage,
+            storageError: controller.storageError,
+            savedErrorMessage: savedLibraryController.errorMessage,
+            savedFatalErrorMessage: savedLibraryController.fatalErrorMessage,
+            isHistoryLoaded: controller.isLoaded,
+            isClearingHistory: controller.isClearingHistory,
+            isCollectionOperational: controller.isCollectionOperational,
+            canResetUnreadableHistory: controller.canResetUnreadablePersistentHistory
+        )
+    }
+}
+
+@MainActor
 struct ClipboardHistorySettingsView: View {
     @Environment(\.pluginSettingsSearchTarget) private var searchTarget
-    @ObservedObject var controller: ClipboardHistoryController
-    @ObservedObject var savedLibraryController: ClipboardSavedLibraryController
+    let controller: ClipboardHistoryController
+    let savedLibraryController: ClipboardSavedLibraryController
     @ObservedObject private var settings: ClipboardHistorySettingsStore
+    @StateObject private var presentation: ClipboardHistorySettingsPresentationModel
     private let localization: PluginLocalization
     private let settingsContext: PluginSettingsContext?
     private let contentSections: Set<ClipboardHistorySettingsContentSection>
@@ -55,6 +146,10 @@ struct ClipboardHistorySettingsView: View {
         self.contentSections = contentSections
         self.onManageSnippets = onManageSnippets
         _settings = ObservedObject(wrappedValue: controller.settings)
+        _presentation = StateObject(wrappedValue: ClipboardHistorySettingsPresentationModel(
+            controller: controller,
+            savedLibraryController: savedLibraryController
+        ))
     }
 
     var body: some View {
@@ -83,6 +178,18 @@ struct ClipboardHistorySettingsView: View {
         }
         .onChange(of: searchTarget, initial: true) { _, target in
             revealShortcutGroup(target)
+        }
+        .onReceive(controller.objectWillChange) { _ in
+            refreshHistoryStatusAfterPublication()
+        }
+        .onReceive(controller.itemUpdates) { update in
+            presentation.refreshHistoryItems(update.items)
+        }
+        .onReceive(savedLibraryController.objectWillChange) { _ in
+            refreshSavedLibraryAfterPublication()
+        }
+        .onReceive(savedLibraryController.itemUpdates) { update in
+            presentation.refreshSavedLibraryItems(update.items)
         }
         .onAppear {
             guard contentSections.contains(.essentials),
@@ -181,6 +288,20 @@ struct ClipboardHistorySettingsView: View {
                     secondaryButton: .cancel(Text(localization.string("common.cancel", defaultValue: "取消")))
                 )
             }
+        }
+    }
+
+    private func refreshHistoryStatusAfterPublication() {
+        Task { @MainActor in
+            await Task.yield()
+            presentation.refreshHistoryStatus(controller)
+        }
+    }
+
+    private func refreshSavedLibraryAfterPublication() {
+        Task { @MainActor in
+            await Task.yield()
+            presentation.refreshSavedLibrary(savedLibraryController)
         }
     }
 
@@ -319,8 +440,8 @@ struct ClipboardHistorySettingsView: View {
                 systemImage: "text.quote"
             )
             VStack(spacing: 0) {
-                if let errorMessage = savedLibraryController.fatalErrorMessage
-                    ?? savedLibraryController.errorMessage {
+                if let errorMessage = presentation.snapshot.savedFatalErrorMessage
+                    ?? presentation.snapshot.savedErrorMessage {
                     VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(PluginSettingsTheme.Typography.rowDescription)
@@ -341,7 +462,7 @@ struct ClipboardHistorySettingsView: View {
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
 
-                            if savedLibraryController.fatalErrorMessage != nil {
+                            if presentation.snapshot.savedFatalErrorMessage != nil {
                                 Button(localization.string(
                                     "settings.snippets.clear",
                                     defaultValue: "Delete Snippets"
@@ -364,7 +485,7 @@ struct ClipboardHistorySettingsView: View {
                         Text(localization.format(
                             "settings.snippets.count",
                             defaultValue: "%d snippets",
-                            savedLibraryController.items.count
+                            presentation.snapshot.snippetCount
                         ))
                             .font(PluginSettingsTheme.Typography.rowTitle)
                         Text(localization.string(
@@ -526,20 +647,20 @@ struct ClipboardHistorySettingsView: View {
                         Text(collectionDescription)
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(
-                                controller.errorMessage == nil ? Color.secondary : Color.red
+                                presentation.snapshot.historyErrorMessage == nil ? Color.secondary : Color.red
                             )
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     Toggle(localization.string("settings.collection.toggle", defaultValue: "收集剪贴板历史"), isOn: Binding(
-                        get: { !settings.isPaused && controller.isCollectionOperational },
+                        get: { !settings.isPaused && presentation.snapshot.isCollectionOperational },
                         set: { isEnabled in
-                            guard controller.isCollectionOperational else { return }
+                            guard presentation.snapshot.isCollectionOperational else { return }
                             settings.setPaused(!isEnabled)
                         }
                     ))
                     .labelsHidden()
                     .toggleStyle(.switch)
-                    .disabled(!controller.isCollectionOperational)
+                    .disabled(!presentation.snapshot.isCollectionOperational)
                 }
                 .pluginSettingsListRowPadding(interactive: true)
             }
@@ -653,16 +774,16 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var collectionDescription: String {
-        if let errorMessage = controller.errorMessage {
+        if let errorMessage = presentation.snapshot.historyErrorMessage {
             return errorMessage
         }
-        if !controller.isLoaded {
+        if !presentation.snapshot.isHistoryLoaded {
             return localization.string(
                 "settings.collection.loadingDescription",
                 defaultValue: "正在准备本机加密存储…"
             )
         }
-        if controller.isClearingHistory {
+        if presentation.snapshot.isClearingHistory {
             return localization.string(
                 "settings.collection.clearingDescription",
                 defaultValue: "正在安全清除加密历史…"
@@ -814,20 +935,20 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var encryptedStorageStatusTitle: String {
-        if controller.errorMessage != nil {
+        if presentation.snapshot.historyErrorMessage != nil {
             return localization.string("settings.storage.status.attention", defaultValue: "需要处理")
         }
-        if controller.isLoaded {
+        if presentation.snapshot.isHistoryLoaded {
             return localization.string("settings.storage.status.ready", defaultValue: "已就绪")
         }
         return localization.string("settings.storage.status.preparing", defaultValue: "准备中")
     }
 
     private var encryptedStorageStatusColor: Color {
-        if controller.errorMessage != nil {
+        if presentation.snapshot.historyErrorMessage != nil {
             return .orange
         }
-        return controller.isLoaded ? .green : .secondary
+        return presentation.snapshot.isHistoryLoaded ? .green : .secondary
     }
 
     private var privacyDescription: String {
@@ -838,7 +959,7 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var storageRecoveryDescription: String? {
-        switch controller.storageError {
+        switch presentation.snapshot.storageError {
         case .keychain:
             localization.string(
                 "settings.storage.recovery.keychain",
@@ -1062,7 +1183,7 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var dataSection: some View {
-        let historyUsage = controller.usage
+        let historyUsage = presentation.snapshot.usage
         return VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
             sectionHeader(
                 localization.string("settings.data.section", defaultValue: "本机数据"),
@@ -1095,23 +1216,27 @@ struct ClipboardHistorySettingsView: View {
                             title: localization.string("settings.data.clearHistory", defaultValue: "Clear History"),
                             description: localization.string("clear.all.message", defaultValue: "Clears History. Saved clips and snippets are kept. This cannot be undone."),
                             request: .all,
-                            disabled: controller.errorMessage != nil || controller.historyItems.isEmpty || controller.isClearingHistory
+                            disabled: presentation.snapshot.historyErrorMessage != nil
+                                || presentation.snapshot.historyItemCount == 0
+                                || presentation.snapshot.isClearingHistory
                         )
                         PluginSettingsListDivider()
                         clearDataRow(
                             title: localization.string("settings.saved.clear", defaultValue: "Clear Saved Clips"),
                             description: localization.string("settings.saved.clear.message", defaultValue: "Removes Saved status from clips in History and permanently deletes Saved-only clips. History and snippets are kept. This cannot be undone."),
                             request: .savedClips,
-                            disabled: controller.errorMessage != nil || controller.savedItems.isEmpty || controller.isClearingHistory
+                            disabled: presentation.snapshot.historyErrorMessage != nil
+                                || presentation.snapshot.savedItemCount == 0
+                                || presentation.snapshot.isClearingHistory
                         )
                         PluginSettingsListDivider()
                         clearDataRow(
                             title: localization.string("settings.snippets.clear", defaultValue: "Delete Snippets"),
                             description: localization.string("settings.snippets.clear.message", defaultValue: "Permanently deletes all snippets and their keywords. History and Saved clips are kept. This cannot be undone."),
                             request: .snippets,
-                            disabled: (savedLibraryController.items.isEmpty
-                                && savedLibraryController.fatalErrorMessage == nil)
-                                || savedLibraryController.errorMessage != nil
+                            disabled: (presentation.snapshot.snippetCount == 0
+                                && presentation.snapshot.savedFatalErrorMessage == nil)
+                                || presentation.snapshot.savedErrorMessage != nil
                         )
                     }
                 } label: {
@@ -1120,7 +1245,7 @@ struct ClipboardHistorySettingsView: View {
                 }
                 .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
 
-                if let errorMessage = controller.errorMessage {
+                if let errorMessage = presentation.snapshot.historyErrorMessage {
                     PluginSettingsListDivider()
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(PluginSettingsTheme.Typography.rowDescription)
@@ -1144,7 +1269,7 @@ struct ClipboardHistorySettingsView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
 
-                        if controller.canResetUnreadablePersistentHistory {
+                        if presentation.snapshot.canResetUnreadableHistory {
                             Button(localization.string(
                                 "settings.storage.resetUnreadable",
                                 defaultValue: "Delete Unreadable Clipboard Data…"
@@ -1200,7 +1325,7 @@ struct ClipboardHistorySettingsView: View {
     ) -> Binding<Bool> {
         Binding(
             get: {
-                section == .data && controller.errorMessage != nil
+                section == .data && presentation.snapshot.historyErrorMessage != nil
                     || expandedAdvancedSections.contains(section)
             },
             set: { isExpanded in

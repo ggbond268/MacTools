@@ -216,6 +216,41 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         print("Clipboard 50k cold presentation scheduling: \(scheduling)")
     }
 
+    func testWarmPresentationKeepsUsefulResultsVisibleWhileAnalysisRuns() async throws {
+        let gate = ClipboardPreparationSuspensionGate(initiallyArmed: false)
+        let items = makeItems(2_000)
+        let model = ClipboardHistoryPanelModel(
+            presentationPreparationCheckpointForTesting: { gate.pauseOnce() }
+        )
+        model.prepareForPresentation(
+            items: items,
+            historyRevision: 1,
+            savedRevision: 1
+        )
+        await model.waitForSearchForTesting()
+        let visibleIDs = model.visibleItems.map(\.id)
+
+        gate.arm()
+        model.prepareForPresentationAsynchronously(
+            items: items,
+            historyRevision: 2,
+            savedRevision: 1
+        )
+        try await waitUntilPaused(gate)
+
+        XCTAssertTrue(model.isPreparingPresentation)
+        XCTAssertEqual(
+            model.visibleItems.map(\.id),
+            visibleIDs,
+            "A warm refresh should retain useful results instead of flashing an empty list"
+        )
+
+        gate.resume()
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+        XCTAssertFalse(model.isPreparingPresentation)
+    }
+
     func testUnchangedLargeReactivationUsesRevisionFastPath() async {
         let items = makeItems(50_000)
         let model = ClipboardHistoryPanelModel()

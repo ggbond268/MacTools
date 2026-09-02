@@ -2140,7 +2140,6 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private func notifyChanged(reschedulesRetention: Bool = true) {
         if reschedulesRetention { scheduleRetentionExpiration() }
         onChange?()
-        objectWillChange.send()
     }
 
     private func publishItems(_ updated: [ClipboardHistoryItem], changedIDs: Set<UUID>) {

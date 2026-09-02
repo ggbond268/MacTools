@@ -135,34 +135,87 @@ final class ClipboardEmbeddedPreviewCache {
 struct ClipboardEmbeddedPreviewView<Content: View, Unavailable: View>: View {
     let item: ClipboardHistoryItem
     let cache: ClipboardEmbeddedPreviewCache
+    var resetID: UInt = 0
+    var isActive = true
     @ViewBuilder let content: (NSImage) -> Content
     @ViewBuilder let unavailable: () -> Unavailable
     @State private var image: NSImage?
     @State private var displayedKey: ClipboardEmbeddedPreviewKey?
+    @State private var requestedKey: ClipboardEmbeddedPreviewKey?
     @State private var isLoading = false
+    @State private var showsLoadingIndicator = false
 
     var body: some View {
         Group {
-            if displayedKey == ClipboardEmbeddedPreviewKey(item), let image {
+            if let image {
                 content(image)
-            } else if isLoading {
+                    .opacity(displayedKey == requestedKey ? 1 : 0.58)
+                    .overlay {
+                        if showsLoadingIndicator {
+                            ProgressView().controlSize(.small)
+                                .padding(8)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+            } else if showsLoadingIndicator {
                 ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 160)
             } else {
                 unavailable()
             }
         }
-        .task(id: ClipboardEmbeddedPreviewKey(item)) { await load() }
+        .task(id: ClipboardEmbeddedPreviewRequestID(
+            key: ClipboardEmbeddedPreviewKey(item),
+            resetID: resetID
+        )) {
+            guard isActive else {
+                requestedKey = nil
+                displayedKey = nil
+                image = nil
+                isLoading = false
+                showsLoadingIndicator = false
+                return
+            }
+            await load()
+        }
+        .onChange(of: isActive) { _, active in
+            guard !active else { return }
+            requestedKey = nil
+            displayedKey = nil
+            image = nil
+            isLoading = false
+            showsLoadingIndicator = false
+        }
     }
 
     private func load() async {
+        guard isActive else { return }
         let key = ClipboardEmbeddedPreviewKey(item)
-        displayedKey = key
-        image = cache.cachedImage(for: item)
-        guard image == nil else { isLoading = false; return }
+        requestedKey = key
+        if let cached = cache.cachedImage(for: item) {
+            displayedKey = key
+            image = cached
+            isLoading = false
+            showsLoadingIndicator = false
+            return
+        }
         isLoading = true
+        showsLoadingIndicator = false
+        let progressTask = Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
+            guard !Task.isCancelled, requestedKey == key, isLoading else { return }
+            showsLoadingIndicator = true
+        }
         let loaded = await cache.image(for: item)
-        guard !Task.isCancelled, displayedKey == key else { return }
+        progressTask.cancel()
+        guard !Task.isCancelled, requestedKey == key else { return }
         image = loaded
+        displayedKey = loaded == nil ? nil : key
         isLoading = false
+        showsLoadingIndicator = false
     }
+}
+
+private struct ClipboardEmbeddedPreviewRequestID: Hashable {
+    let key: ClipboardEmbeddedPreviewKey
+    let resetID: UInt
 }

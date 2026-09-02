@@ -227,17 +227,9 @@ private struct ClipboardSequentialPasteHUDView: View {
                 .foregroundStyle(.green)
             } else if !content.hidesPreview {
                 HStack(alignment: .top, spacing: 10) {
-                    if let previewImage {
-                        Image(nsImage: previewImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 48, height: 48)
-                            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 7))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 7)
-                                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
-                            }
-                    }
+                    ClipboardSequentialPasteHUDPreview(
+                        data: content.justPastedPreviewImageData ?? content.nextPreviewImageData
+                    )
                     VStack(alignment: .leading, spacing: 3) {
                         if let justPastedTitle = content.justPastedTitle {
                             Text(localization.string("hud.queue.pasted", defaultValue: "Pasted"))
@@ -331,11 +323,6 @@ private struct ClipboardSequentialPasteHUDView: View {
         }
     }
 
-    private var previewImage: NSImage? {
-        let data = content.justPastedPreviewImageData ?? content.nextPreviewImageData
-        return data.flatMap(NSImage.init(data:))
-    }
-
     private var progressTitle: String {
         guard content.totalCount > 0 else {
             return localization.string("hud.queue.complete", defaultValue: "Complete")
@@ -358,6 +345,52 @@ private struct ClipboardSequentialPasteHUDView: View {
             .controlSize(.small)
             .help(help)
             .accessibilityLabel(help)
+    }
+}
+
+private struct ClipboardSequentialPasteHUDPreview: View {
+    let data: Data?
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else if data != nil {
+                Image(systemName: "photo")
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(
+            width: ClipboardSequentialPasteHUDPreviewLayout.dimension(hasData: data != nil),
+            height: ClipboardSequentialPasteHUDPreviewLayout.dimension(hasData: data != nil)
+        )
+        .background(Color.primary.opacity(data == nil ? 0 : 0.05), in: RoundedRectangle(cornerRadius: 7))
+        .overlay {
+            if data != nil {
+                RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+            }
+        }
+        .task(id: data) {
+            image = nil
+            guard let data else {
+                return
+            }
+            let result = await ClipboardBoundedImagePreviewWork.image(from: data)
+            guard !Task.isCancelled else { return }
+            image = result
+        }
+    }
+}
+
+enum ClipboardSequentialPasteHUDPreviewLayout {
+    static let previewDimension: CGFloat = 48
+
+    static func dimension(hasData: Bool) -> CGFloat {
+        hasData ? previewDimension : 0
     }
 }
 

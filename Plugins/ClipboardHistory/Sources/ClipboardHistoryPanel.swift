@@ -515,6 +515,24 @@ struct ClipboardHistoryPreviousApplicationState<Application> {
 
 @MainActor
 final class ClipboardHistoryPanelModel: ObservableObject {
+    struct RuntimeStatus: Equatable {
+        var historyErrorMessage: String?
+        var isHistoryLoaded: Bool
+        var isClearingHistory: Bool
+        var savedErrorMessage: String?
+        var savedFatalErrorMessage: String?
+        var isSavedLibraryLoaded: Bool
+
+        static let loading = RuntimeStatus(
+            historyErrorMessage: nil,
+            isHistoryLoaded: false,
+            isClearingHistory: false,
+            savedErrorMessage: nil,
+            savedFatalErrorMessage: nil,
+            isSavedLibraryLoaded: false
+        )
+    }
+
     nonisolated static let resultPageSize = 50
     nonisolated static let searchDebounceNanoseconds: UInt64 = 120_000_000
     nonisolated static let maximumMultiSelectionItemCount = ClipboardSequentialPasteSession.maximumItemCount
@@ -575,6 +593,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     @Published private(set) var availableSemanticFilters: [ClipboardHistorySemanticFilter] = []
     @Published private(set) var availableFilterFamilies: [ClipboardHistoryFilterFamily] = []
     @Published private(set) var selectedFilterFamily: ClipboardHistoryFilterFamily = .scope
+    @Published private(set) var pendingSavedItemIDs: Set<UUID> = []
+    @Published private(set) var previewResetRevision: UInt = 0
+    @Published private(set) var isPreviewPresentationActive = false
+    @Published private(set) var runtimeStatus = RuntimeStatus.loading
 
     var filterOptionCount: Int {
         guard availableFilterFamilies.contains(selectedFilterFamily) else { return 0 }
@@ -588,6 +610,8 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     private var allItems: [ClipboardHistoryItem] = []
     private var allSavedItems: [ClipboardSavedItem] = []
     private var itemIndexByID: [UUID: Int] = [:]
+    private var savedItemByID: [UUID: ClipboardSavedItem] = [:]
+    private var optimisticSavedStateByID: [UUID: Bool] = [:]
     private var historyItemCount = 0
     private var availableClipItemIDs: Set<UUID> = []
     private var availableSnippetIDs: Set<UUID> = []
@@ -714,6 +738,14 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 rebuildSelectionIndex()
             }
         }
+        let removedIDs = Set(changes.lazy.filter { $0.after == nil }.map(\.id))
+        let changedByID = Dictionary(uniqueKeysWithValues: changes.compactMap { change in
+            change.after.map { (change.id, $0) }
+        })
+        let immediatelyReconciled = visibleItems.compactMap { item in
+            removedIDs.contains(item.id) ? nil : (changedByID[item.id] ?? item)
+        }
+        if immediatelyReconciled != visibleItems { visibleItems = immediatelyReconciled }
         guard mode != .snippets else { return }
         let preparedQuery = ClipboardHistorySearch.PreparedQuery(query)
         let changesResults = structural || changes.contains {
@@ -722,9 +754,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         if isSearching || changesResults {
             scheduleSearch(debounced: false)
         } else {
-            let changedByID = Dictionary(uniqueKeysWithValues: changes.compactMap { change in
-                change.after.map { (change.id, $0) }
-            })
             let updated = visibleItems.map { changedByID[$0.id] ?? $0 }
             if updated != visibleItems { visibleItems = updated }
         }
@@ -773,6 +802,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let previousByID = Dictionary(uniqueKeysWithValues: allSavedItems.map { ($0.id, $0) })
         let changedItems = items.filter { previousByID[$0.id] != $0 }
         allSavedItems = items
+        savedItemByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         availableSnippetIDs = Set(items.lazy.filter(\.isSnippet).map(\.id))
         appendAvailableFilterOptions(for: changedItems.lazy.filter(\.isSnippet).map {
             $0.historyPresentationItem()
@@ -780,6 +810,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let availableIDs = Set(allItems.map(\.id)).union(items.map(\.id))
         selectedItemIDs = selectedItemIDs.filter { availableIDs.contains($0) }
         rebuildSelectionIndex()
+        if !visibleSavedPresentationItemIDs.isSubset(of: availableSnippetIDs) {
+            visibleSavedPresentationItemIDs.formIntersection(availableSnippetIDs)
+            visibleItems.removeAll { !availableIDs.contains($0.id) }
+        }
         if mode == .all || mode == .snippets {
             scheduleSearch(debounced: false)
         }
@@ -840,6 +874,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         semanticFilter = .any
         allItems = items
         allSavedItems = savedItems
+        savedItemByID = Dictionary(uniqueKeysWithValues: savedItems.map { ($0.id, $0) })
         currentHistoryRevision = historyRevision ?? (currentHistoryRevision &+ 1)
         currentSavedRevision = savedRevision ?? (currentSavedRevision &+ 1)
         itemIndexByID = preparation.itemIndexByID
@@ -1054,7 +1089,57 @@ final class ClipboardHistoryPanelModel: ObservableObject {
 
     func savedItem(forPresentationID itemID: UUID) -> ClipboardSavedItem? {
         guard visibleSavedPresentationItemIDs.contains(itemID) else { return nil }
-        return allSavedItems.first { $0.id == itemID }
+        return savedItemByID[itemID]
+    }
+
+    func item(forPresentationID itemID: UUID) -> ClipboardHistoryItem? {
+        if let index = itemIndexByID[itemID], allItems.indices.contains(index) {
+            return allItems[index]
+        }
+        return savedItemByID[itemID]?.historyPresentationItem()
+    }
+
+    func effectiveSavedState(for item: ClipboardHistoryItem) -> Bool {
+        optimisticSavedStateByID[item.id] ?? item.isSaved
+    }
+
+    func beginSavedMutation(for itemID: UUID) -> Bool {
+        guard !pendingSavedItemIDs.contains(itemID),
+              let item = item(forPresentationID: itemID),
+              !isSavedPresentation(itemID) else { return false }
+        pendingSavedItemIDs.insert(itemID)
+        optimisticSavedStateByID[itemID] = !item.isSaved
+        return true
+    }
+
+    func finishSavedMutation(for itemID: UUID) {
+        pendingSavedItemIDs.remove(itemID)
+        optimisticSavedStateByID.removeValue(forKey: itemID)
+    }
+
+    func activatePreviewPresentation() {
+        isPreviewPresentationActive = true
+        previewResetRevision &+= 1
+    }
+
+    func resetPreviewPresentation() {
+        isPreviewPresentationActive = false
+        previewResetRevision &+= 1
+    }
+
+    func updateRuntimeStatus(
+        historyController: ClipboardHistoryController,
+        savedLibraryController: ClipboardSavedLibraryController
+    ) {
+        let status = RuntimeStatus(
+            historyErrorMessage: historyController.errorMessage,
+            isHistoryLoaded: historyController.isLoaded,
+            isClearingHistory: historyController.isClearingHistory,
+            savedErrorMessage: savedLibraryController.errorMessage,
+            savedFatalErrorMessage: savedLibraryController.fatalErrorMessage,
+            isSavedLibraryLoaded: savedLibraryController.isLoaded
+        )
+        if runtimeStatus != status { runtimeStatus = status }
     }
 
     func isSavedPresentation(_ itemID: UUID) -> Bool {
@@ -1436,16 +1521,19 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         semanticFilter = .any
         allItems = items
         allSavedItems = savedItems
+        savedItemByID = Dictionary(uniqueKeysWithValues: savedItems.map { ($0.id, $0) })
         itemIndexByID = preparation.itemIndexByID
         historyItemCount = preparation.historyItemCount
         availableClipItemIDs = preparation.availableClipItemIDs
         availableSnippetIDs = preparation.availableSnippetIDs
         savedClipIDs = preparation.savedClipIDs
         visibleResultLimit = Self.resultPageSize
-        visibleItems = []
-        visibleSavedPresentationItemIDs = []
-        hasMoreResults = false
-        selectedItemID = preparation.newestHistoryItemID
+        if items.isEmpty && savedItems.isEmpty {
+            visibleItems = []
+            visibleSavedPresentationItemIDs = []
+            hasMoreResults = false
+        }
+        selectedItemID = visibleItems.first?.id ?? preparation.newestHistoryItemID
         requestedScrollItemID = selectedItemID
         isMultiSelectionEnabled = false
         selectedItemIDs = []
@@ -1969,6 +2057,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         let shouldCenterPanel = Self.shouldCenterPanel(hasExistingPanel: panel != nil)
         let panel = panel ?? makePanel()
         self.panel = panel
+        model.activatePreviewPresentation()
         previousApplicationState.beginPresentation(
             frontmostApplication: NSWorkspace.shared.frontmostApplication,
             isExternal: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
@@ -1996,6 +2085,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
 
     func close(restorePreviousApplication: Bool = true) {
         model.cancelPresentationPreparation()
+        model.resetPreviewPresentation()
         previewCache.removeAll()
         exportCoordinator.cancel()
         shareCoordinator.cancel()
@@ -2014,6 +2104,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        model.resetPreviewPresentation()
         previewCache.removeAll()
         exportCoordinator.cancel()
         shareCoordinator.cancel()
@@ -2064,6 +2155,15 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             savedRevision: savedLibraryController.presentationRevision
         )
         needsFilterRefreshOnActivation = false
+    }
+
+    private func toggleSavedOptimistically(_ itemID: UUID) {
+        guard model.beginSavedMutation(for: itemID) else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            _ = await historyController.toggleSaved(id: itemID)
+            model.finishSavedMutation(for: itemID)
+        }
     }
 
     private func presentActionPalette(
@@ -2471,7 +2571,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 guard !self.historyController.isClearingHistory else { return event }
                 guard let selectedItemID = self.model.selectedItemID else { return event }
                 guard !self.model.isSavedPresentation(selectedItemID) else { return nil }
-                Task { await self.historyController.toggleSaved(id: selectedItemID) }
+                self.toggleSavedOptimistically(selectedItemID)
                 return nil
             case .deleteSelection:
                 guard !self.historyController.isClearingHistory else { return event }
@@ -3290,8 +3390,8 @@ private struct ClipboardHistoryPanelView: View {
         static let listMaximumWidth: CGFloat = 310
     }
 
-    @ObservedObject var controller: ClipboardHistoryController
-    @ObservedObject var savedLibraryController: ClipboardSavedLibraryController
+    let controller: ClipboardHistoryController
+    let savedLibraryController: ClipboardSavedLibraryController
     @ObservedObject var model: ClipboardHistoryPanelModel
     let previewCache: ClipboardEmbeddedPreviewCache
     let previewPasteboard: any ClipboardPasteboardAccess
@@ -3396,8 +3496,7 @@ private struct ClipboardHistoryPanelView: View {
 
     private var selectedItem: ClipboardHistoryItem? {
         guard let selectedItemID = model.selectedItemID else { return nil }
-        return visibleItems.first { $0.id == selectedItemID }
-            ?? controller.items.first { $0.id == selectedItemID }
+        return model.item(forPresentationID: selectedItemID)
     }
 
     private var selectedSavedItem: ClipboardSavedItem? {
@@ -3415,16 +3514,18 @@ private struct ClipboardHistoryPanelView: View {
         .resolve(
             itemCount: logicalItemCount,
             visibleItemCount: visibleItems.count,
-            hasStorageError: controller.errorMessage != nil,
-            isLoaded: controller.isLoaded,
+            hasStorageError: model.runtimeStatus.historyErrorMessage != nil,
+            isLoaded: model.runtimeStatus.isHistoryLoaded,
             isSnippetScope: model.mode == .snippets,
-            snippetsAreLoaded: savedLibraryController.isLoaded,
-            snippetsHaveStorageError: savedLibraryController.fatalErrorMessage != nil
+            snippetsAreLoaded: model.runtimeStatus.isSavedLibraryLoaded,
+            snippetsHaveStorageError: model.runtimeStatus.savedFatalErrorMessage != nil
         )
     }
 
     private var scopedStorageError: String? {
-        model.mode == .snippets ? savedLibraryController.fatalErrorMessage : controller.errorMessage
+        model.mode == .snippets
+            ? model.runtimeStatus.savedFatalErrorMessage
+            : model.runtimeStatus.historyErrorMessage
     }
 
     private func retryScopedStorage() {
@@ -3440,10 +3541,10 @@ private struct ClipboardHistoryPanelView: View {
                 storageErrorBanner(errorMessage)
             }
             if model.mode == .all || model.mode == .snippets {
-                if let message = savedLibraryController.fatalErrorMessage, model.mode == .all {
+                if let message = model.runtimeStatus.savedFatalErrorMessage, model.mode == .all {
                     snippetErrorBanner(message, retry: true)
-                } else if let message = savedLibraryController.errorMessage,
-                          savedLibraryController.fatalErrorMessage == nil {
+                } else if let message = model.runtimeStatus.savedErrorMessage,
+                          model.runtimeStatus.savedFatalErrorMessage == nil {
                     snippetErrorBanner(message, retry: false)
                 }
             }
@@ -3481,6 +3582,10 @@ private struct ClipboardHistoryPanelView: View {
             .allowsHitTesting(false)
         }
         .onAppear {
+            model.updateRuntimeStatus(
+                historyController: controller,
+                savedLibraryController: savedLibraryController
+            )
             model.updateItems(controller.items, revision: controller.presentationRevision)
             model.updateSavedItems(
                 savedLibraryController.items,
@@ -3492,8 +3597,26 @@ private struct ClipboardHistoryPanelView: View {
             model.updateItems(update.items, revision: update.revision, changedIDs: update.changedIDs)
             previewCache.retain(where: model.containsPreview)
         }
-        .onChange(of: savedLibraryController.items) { _, items in
-            model.updateSavedItems(items, revision: savedLibraryController.presentationRevision)
+        .onReceive(savedLibraryController.itemUpdates) { update in
+            model.updateSavedItems(update.items, revision: update.revision)
+        }
+        .onReceive(controller.objectWillChange) { _ in
+            Task { @MainActor in
+                await Task.yield()
+                model.updateRuntimeStatus(
+                    historyController: controller,
+                    savedLibraryController: savedLibraryController
+                )
+            }
+        }
+        .onReceive(savedLibraryController.objectWillChange) { _ in
+            Task { @MainActor in
+                await Task.yield()
+                model.updateRuntimeStatus(
+                    historyController: controller,
+                    savedLibraryController: savedLibraryController
+                )
+            }
         }
         .onChange(of: model.selectionLimitReachedRevision) { _, _ in
             let message = localization.format(
@@ -3577,7 +3700,7 @@ private struct ClipboardHistoryPanelView: View {
             ClipboardSnippetEditorSheet(
                 initialDraft: draft,
                 settings: settings,
-                errorMessage: savedLibraryController.errorMessage,
+                errorMessage: model.runtimeStatus.savedErrorMessage,
                 localization: localization,
                 previewPasteboard: previewPasteboard,
                 onSave: { updatedDraft in
@@ -3627,16 +3750,14 @@ private struct ClipboardHistoryPanelView: View {
     @ViewBuilder
     private var panelResults: some View {
         if model.isPreparingPresentation {
-            Color.clear
-                .overlay {
-                    if model.showsSearchProgress {
-                        ProgressView(localization.string(
-                            "panel.search.searching",
-                            defaultValue: "正在搜索…"
-                        ))
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if visibleItems.isEmpty {
+                Color.clear
+                    .overlay { delayedSearchProgress }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                historyResults
+                    .overlay { delayedSearchProgress }
+            }
         } else if presentation.showsLoading {
             ProgressView(
                 localization.string(
@@ -3712,17 +3833,33 @@ private struct ClipboardHistoryPanelView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else if presentation.showsHistory {
-            GeometryReader { geometry in
-                HStack(spacing: 12) {
-                    historyList
-                        .frame(width: listWidth(availableWidth: geometry.size.width))
-                    Divider()
-                    detail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .disabled(controller.isClearingHistory)
+            historyResults
         }
+    }
+
+    @ViewBuilder
+    private var delayedSearchProgress: some View {
+        if model.showsSearchProgress {
+            ProgressView(localization.string(
+                "panel.search.searching",
+                defaultValue: "正在搜索…"
+            ))
+            .padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    private var historyResults: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 12) {
+                historyList
+                    .frame(width: listWidth(availableWidth: geometry.size.width))
+                Divider()
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .disabled(model.runtimeStatus.isClearingHistory || model.isPreparingPresentation)
     }
 
     private func storageErrorBanner(_ message: String) -> some View {
@@ -4188,7 +4325,7 @@ private struct ClipboardHistoryPanelView: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .accessibilityIdentifier("mactools.clipboard.new-snippet")
-        .disabled(!savedLibraryController.isLoaded || savedLibraryController.fatalErrorMessage != nil)
+        .disabled(!model.runtimeStatus.isSavedLibraryLoaded || model.runtimeStatus.savedFatalErrorMessage != nil)
     }
 
     private var historyList: some View {
@@ -4285,6 +4422,8 @@ private struct ClipboardHistoryPanelView: View {
         let isSelected = item.id == model.selectedItemID
         let selectionNumber = model.selectionNumber(for: item.id)
         let isMarked = selectionNumber != nil
+        let isSaved = model.effectiveSavedState(for: item)
+        let isSavePending = model.pendingSavedItemIDs.contains(item.id)
         return HStack(alignment: .top, spacing: PluginPaletteMetrics.rowContentSpacing) {
             rowLeadingControl(
                 item: item,
@@ -4301,11 +4440,12 @@ private struct ClipboardHistoryPanelView: View {
                         .foregroundStyle(isSelected ? selectedRowTextColor : Color.primary)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if item.isSaved {
-                        Image(systemName: "bookmark.fill")
+                    if isSaved || isSavePending {
+                        Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
                             .font(PluginSettingsTheme.Typography.statusBadge)
                             .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.85) : Color.secondary)
                             .help(localization.string("saved.kind.clip", defaultValue: "Saved Item"))
+                            .opacity(isSavePending ? 0.65 : 1)
                     }
                     if let badgeNumber = model.rowNumber(for: item.id, quickPasteNumber: quickPasteNumber) {
                         Text(model.isMultiSelectionEnabled ? "\(badgeNumber)" : "⌘\(badgeNumber)")
@@ -4368,11 +4508,12 @@ private struct ClipboardHistoryPanelView: View {
             exportActions(for: item)
             Divider()
             if !model.isSavedPresentation(item.id) {
-                Button(item.isSaved
+                Button(isSaved
                     ? localization.string("saved.remove", defaultValue: "Unsave Clip")
                     : localization.string("saved.save", defaultValue: "Save Clip")) {
                     toggleSaved(item.id)
                 }
+                .disabled(isSavePending)
                 Divider()
             }
             Button(localization.string("common.delete", defaultValue: "删除"), role: .destructive) {
@@ -4492,7 +4633,7 @@ private struct ClipboardHistoryPanelView: View {
         selectionNumber: Int?
     ) -> String {
         var values: [String] = []
-        if item.isSaved {
+        if model.effectiveSavedState(for: item) {
             values.append(localization.string("saved.kind.clip", defaultValue: "Saved Item"))
         }
         if let selectionNumber {
@@ -4592,7 +4733,9 @@ private struct ClipboardHistoryPanelView: View {
     }
 
     private func detailActions(_ item: ClipboardHistoryItem) -> some View {
-        HStack(spacing: 6) {
+        let isSaved = model.effectiveSavedState(for: item)
+        let isSavePending = model.pendingSavedItemIDs.contains(item.id)
+        return HStack(spacing: 6) {
             if model.isMultiSelectionEnabled {
                 Button {
                     performActionMenuAction(.share)
@@ -4629,18 +4772,20 @@ private struct ClipboardHistoryPanelView: View {
                 Button {
                     toggleSaved(item.id)
                 } label: {
-                    Image(systemName: item.isSaved
+                    Image(systemName: isSaved
                         ? "bookmark.fill"
                         : "bookmark")
+                        .opacity(isSavePending ? 0.65 : 1)
                 }
                 .buttonStyle(ClipboardHistoryDetailActionStyle())
-                .help(item.isSaved
+                .disabled(isSavePending)
+                .help(isSaved
                     ? localization.string("saved.remove", defaultValue: "Unsave Clip")
                     : localization.string("saved.save", defaultValue: "Save Clip"))
-                .accessibilityLabel(Text(item.isSaved
+                .accessibilityLabel(Text(isSaved
                     ? localization.string("saved.remove", defaultValue: "Unsave Clip")
                     : localization.string("saved.save", defaultValue: "Save Clip")))
-                .accessibilityValue(Text(item.isSaved
+                .accessibilityValue(Text(isSaved
                     ? localization.string("saved.kind.clip", defaultValue: "Saved Item")
                     : localization.string("saved.state.notSaved", defaultValue: "Not Saved")))
             }
@@ -4678,7 +4823,7 @@ private struct ClipboardHistoryPanelView: View {
             )
         }
         .fixedSize()
-        .disabled(controller.isClearingHistory)
+        .disabled(model.runtimeStatus.isClearingHistory)
     }
 
     @ViewBuilder
@@ -4834,7 +4979,7 @@ private struct ClipboardHistoryPanelView: View {
                 footerActionHint(
                     key: ClipboardHistoryFixedShortcut.display(ClipboardHistoryFixedShortcut.paste),
                     action: localization.string("panel.footer.paste", defaultValue: "Paste"),
-                    isEnabled: selectedItem != nil && !controller.isClearingHistory
+                    isEnabled: selectedItem != nil && !model.runtimeStatus.isClearingHistory
                 ) {
                     guard let selectedItem else { return }
                     pastePanelItem(selectedItem.id, asPlainText: false)
@@ -4845,7 +4990,7 @@ private struct ClipboardHistoryPanelView: View {
                         action: localization.string("panel.pastePlain", defaultValue: "Plain Text"),
                         isEnabled: selectedItem.map {
                             ClipboardPlainTextConversion.isAvailable(for: $0)
-                        } == true && !controller.isClearingHistory
+                        } == true && !model.runtimeStatus.isClearingHistory
                     ) {
                         guard let selectedItem else { return }
                         pastePanelItem(selectedItem.id, asPlainText: true)
@@ -5109,7 +5254,7 @@ private struct ClipboardHistoryPanelView: View {
             footerActionHint(
                 key: ClipboardHistoryFixedShortcut.display(ClipboardHistoryFixedShortcut.paste),
                 action: localization.string("panel.footer.paste", defaultValue: "粘贴"),
-                isEnabled: selectedItem != nil && !controller.isClearingHistory
+                isEnabled: selectedItem != nil && !model.runtimeStatus.isClearingHistory
                 ) {
                     guard let selectedItem else { return }
                     pastePanelItem(selectedItem.id, asPlainText: false)
@@ -5131,7 +5276,7 @@ private struct ClipboardHistoryPanelView: View {
                     action: localization.string("panel.pastePlain", defaultValue: "粘贴为纯文本"),
                     isEnabled: selectedItem.map {
                         ClipboardPlainTextConversion.isAvailable(for: $0)
-                    } == true && !controller.isClearingHistory
+                    } == true && !model.runtimeStatus.isClearingHistory
                 ) {
                     guard let selectedItem else { return }
                     pastePanelItem(selectedItem.id, asPlainText: true)
@@ -5149,7 +5294,7 @@ private struct ClipboardHistoryPanelView: View {
                         fallback: "⌘P"
                     ),
                     action: localization.string("saved.save", defaultValue: "Save"),
-                    isEnabled: selectedItem != nil && !controller.isClearingHistory,
+                    isEnabled: selectedItem != nil && !model.runtimeStatus.isClearingHistory,
                     shortcutDefinitionID: ClipboardHistoryPlugin.ShortcutID.panelSave
                 ) {
                     guard let selectedItem else { return }
@@ -5161,7 +5306,7 @@ private struct ClipboardHistoryPanelView: View {
                         fallback: "⇧⌘⌫"
                     ),
                     action: localization.string("common.delete", defaultValue: "删除"),
-                    isEnabled: selectedItem != nil && !controller.isClearingHistory,
+                    isEnabled: selectedItem != nil && !model.runtimeStatus.isClearingHistory,
                     shortcutDefinitionID: ClipboardHistoryPlugin.ShortcutID.panelDelete
                 ) {
                     guard let selectedItem else { return }
@@ -5580,8 +5725,8 @@ private struct ClipboardHistoryPanelView: View {
                 systemImage: "eye.slash"
             ),
         ]
-        if (!controller.items.isEmpty || controller.errorMessage != nil),
-           !controller.isClearingHistory {
+        if (model.scopedItemCount > 0 || model.runtimeStatus.historyErrorMessage != nil),
+           !model.runtimeStatus.isClearingHistory {
             entries.append(ClipboardHistoryExportMenuEntry(
                 title: localization.string("clear.all.menu", defaultValue: "Clear All History"),
                 action: .clearAll,
@@ -5759,8 +5904,11 @@ private struct ClipboardHistoryPanelView: View {
     }
 
     private func toggleSaved(_ itemID: UUID) {
-        guard !model.isSavedPresentation(itemID) else { return }
-        Task { await controller.toggleSaved(id: itemID) }
+        guard model.beginSavedMutation(for: itemID) else { return }
+        Task { @MainActor in
+            _ = await controller.toggleSaved(id: itemID)
+            model.finishSavedMutation(for: itemID)
+        }
     }
 
     private func beginEditingSelectedSavedItem() {
@@ -5845,7 +5993,7 @@ private struct ClipboardHistoryPanelView: View {
                 )
             }
             .fixedSize()
-            .disabled(controller.isClearingHistory || entries.isEmpty)
+            .disabled(model.runtimeStatus.isClearingHistory || entries.isEmpty)
             .accessibilityLabel(localization.string("export.shortcut", defaultValue: "导出"))
             .accessibilityHint(panelShortcutText(
                 ClipboardHistoryPlugin.ShortcutID.panelExport,
@@ -5994,7 +6142,12 @@ private struct ClipboardHistoryPanelView: View {
     private func detailPreviewSurface(_ item: ClipboardHistoryItem) -> some View {
         switch item.kind {
         case .image, .pdf:
-            ClipboardEmbeddedPreviewView(item: item, cache: previewCache) { image in
+            ClipboardEmbeddedPreviewView(
+                item: item,
+                cache: previewCache,
+                resetID: model.previewResetRevision,
+                isActive: model.isPreviewPresentationActive
+            ) { image in
                 imagePreviewCanvas(image, showsTransparencyGrid: item.kind == .image)
             } unavailable: {
                 unavailablePreview(item)
@@ -6069,7 +6222,12 @@ private struct ClipboardHistoryPanelView: View {
     private func nonLiteralColorDetailPreview(_ item: ClipboardHistoryItem) -> some View {
         switch item.kind {
         case .image, .pdf:
-            ClipboardEmbeddedPreviewView(item: item, cache: previewCache) { image in
+            ClipboardEmbeddedPreviewView(
+                item: item,
+                cache: previewCache,
+                resetID: model.previewResetRevision,
+                isActive: model.isPreviewPresentationActive
+            ) { image in
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)
@@ -6403,6 +6561,62 @@ enum ClipboardHistoryActionPalettePlacement {
 }
 
 @MainActor
+final class ClipboardHistoryActionPaletteModel: ObservableObject {
+    struct Section: Identifiable {
+        let id: ClipboardHistoryExportMenuEntry.Group
+        let entries: [ClipboardHistoryExportMenuEntry]
+    }
+
+    @Published private(set) var entries: [ClipboardHistoryExportMenuEntry] = []
+    @Published private(set) var contextTitle = ""
+    @Published var query = "" {
+        didSet {
+            guard query != oldValue else { return }
+            rebuildSections()
+            selectedAction = filteredEntries.first?.action
+        }
+    }
+    @Published var selectedAction: ClipboardHistoryExportMenuEntry.Action?
+    @Published private(set) var sections: [Section] = []
+    @Published private(set) var focusRequestID: UInt = 0
+    @Published private(set) var keyboardScrollRevision: UInt = 0
+
+    private(set) var filteredEntries: [ClipboardHistoryExportMenuEntry] = []
+
+    func present(entries: [ClipboardHistoryExportMenuEntry], contextTitle: String) {
+        self.entries = entries
+        self.contextTitle = contextTitle
+        if query.isEmpty {
+            rebuildSections()
+            selectedAction = filteredEntries.first?.action
+        } else {
+            query = ""
+        }
+        focusRequestID &+= 1
+    }
+
+    func dismiss() {
+        entries = []
+        contextTitle = ""
+        query = ""
+        filteredEntries = []
+        sections = []
+        selectedAction = nil
+    }
+
+    func requestKeyboardScroll() {
+        keyboardScrollRevision &+= 1
+    }
+
+    private func rebuildSections() {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        filteredEntries = ClipboardHistoryExportMenuEntry.visibleEntries(entries, query: normalizedQuery)
+        let grouped = Dictionary(grouping: filteredEntries, by: \.group)
+        sections = grouped.keys.sorted().map { Section(id: $0, entries: grouped[$0] ?? []) }
+    }
+}
+
+@MainActor
 private final class ClipboardHistoryActionPaletteController: NSObject, NSWindowDelegate {
     private final class PalettePanel: NSPanel {
         override var canBecomeKey: Bool { true }
@@ -6410,16 +6624,20 @@ private final class ClipboardHistoryActionPaletteController: NSObject, NSWindowD
     }
 
     private let localization: PluginLocalization
+    private let model: ClipboardHistoryActionPaletteModel
     private var panel: PalettePanel?
+    private var hostingView: NSHostingView<ClipboardHistoryActionPalette>?
     private weak var parentWindow: NSWindow?
     private var onDismiss: (() -> Void)?
     private var shortcutEntries: [ClipboardHistoryExportMenuEntry] = []
     private var shortcutBindingsProvider: (() -> [String: ShortcutBinding])?
+    private var shortcutSettingsContextProvider: (() -> PluginSettingsContext?)?
     private var onSelect: ((ClipboardHistoryExportMenuEntry.Action) -> Void)?
     private var isRecordingShortcut = false
 
     init(localization: PluginLocalization) {
         self.localization = localization
+        self.model = ClipboardHistoryActionPaletteModel()
     }
 
     var isVisible: Bool { panel?.isVisible == true }
@@ -6465,15 +6683,8 @@ private final class ClipboardHistoryActionPaletteController: NSObject, NSWindowD
         self.shortcutBindingsProvider = shortcutBindingsProvider
         self.onSelect = onSelect
         isRecordingShortcut = false
-        panel.contentView = NSHostingView(rootView: ClipboardHistoryActionPalette(
-            entries: entries,
-            contextTitle: contextTitle,
-            localization: localization,
-            shortcutSettingsContextProvider: shortcutSettingsContextProvider,
-            onShortcutRecordingChanged: { [weak self] in self?.isRecordingShortcut = $0 },
-            onSelect: onSelect,
-            onDismiss: { [weak self] in self?.dismiss() }
-        ))
+        self.shortcutSettingsContextProvider = shortcutSettingsContextProvider
+        model.present(entries: entries, contextTitle: contextTitle)
         if panel.parent !== parentWindow {
             panel.parent?.removeChildWindow(panel)
             parentWindow.addChildWindow(panel, ordered: .above)
@@ -6502,8 +6713,10 @@ private final class ClipboardHistoryActionPaletteController: NSObject, NSWindowD
         parentWindow = nil
         shortcutEntries = []
         shortcutBindingsProvider = nil
+        shortcutSettingsContextProvider = nil
         onSelect = nil
         isRecordingShortcut = false
+        model.dismiss()
         let callback = onDismiss
         onDismiss = nil
         if notify {
@@ -6528,6 +6741,16 @@ private final class ClipboardHistoryActionPaletteController: NSObject, NSWindowD
         panel.level = .floating
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.delegate = self
+        let hostingView = NSHostingView(rootView: ClipboardHistoryActionPalette(
+            model: model,
+            localization: localization,
+            shortcutSettingsContextProvider: { [weak self] in self?.shortcutSettingsContextProvider?() },
+            onShortcutRecordingChanged: { [weak self] in self?.isRecordingShortcut = $0 },
+            onSelect: { [weak self] action in self?.onSelect?(action) },
+            onDismiss: { [weak self] in self?.dismiss() }
+        ))
+        self.hostingView = hostingView
+        panel.contentView = hostingView
         return panel
     }
 
@@ -6537,8 +6760,7 @@ private final class ClipboardHistoryActionPaletteController: NSObject, NSWindowD
 }
 
 private struct ClipboardHistoryActionPalette: View {
-    let entries: [ClipboardHistoryExportMenuEntry]
-    let contextTitle: String
+    @ObservedObject var model: ClipboardHistoryActionPaletteModel
     let localization: PluginLocalization
     let shortcutSettingsContextProvider: () -> PluginSettingsContext?
     let onShortcutRecordingChanged: (Bool) -> Void
@@ -6546,26 +6768,17 @@ private struct ClipboardHistoryActionPalette: View {
     let onDismiss: () -> Void
 
     @Environment(\.accessibilityReduceTransparency) private var accessibilityReduceTransparency
-    @State private var query = ""
-    @State private var selectedAction: ClipboardHistoryExportMenuEntry.Action?
-    @State private var focusRequestID: UInt = 0
     @State private var shortcutDisplayRevision: UInt = 0
-    @State private var keyboardScrollRevision: UInt = 0
     @State private var keyboardNavigationMouseLocation: NSPoint?
 
     private var filteredEntries: [ClipboardHistoryExportMenuEntry] {
-        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return ClipboardHistoryExportMenuEntry.visibleEntries(entries, query: normalizedQuery)
-    }
-
-    private var groups: [ClipboardHistoryExportMenuEntry.Group] {
-        Array(Set(filteredEntries.map(\.group))).sorted()
+        model.filteredEntries
     }
 
     var body: some View {
         VStack(spacing: 0) {
             PluginPaletteSearchToolbar(
-                text: $query,
+                text: $model.query,
                 placeholder: localization.string(
                     "panel.actions.search",
                     defaultValue: "Search actions…"
@@ -6576,7 +6789,7 @@ private struct ClipboardHistoryActionPalette: View {
                 ),
                 accessibilityIdentifier: "mactools.clipboard-history.actions.search",
                 clearAccessibilityLabel: localization.string("common.clear", defaultValue: "Clear"),
-                focusRequestID: focusRequestID,
+                focusRequestID: model.focusRequestID,
                 onCommand: handleSearchCommand
             ) {
                 Button(action: onDismiss) {
@@ -6588,8 +6801,8 @@ private struct ClipboardHistoryActionPalette: View {
             }
             .padding(PluginPaletteMetrics.contentPadding)
 
-            if !contextTitle.isEmpty {
-                Text(contextTitle)
+            if !model.contextTitle.isEmpty {
+                Text(model.contextTitle)
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -6603,21 +6816,21 @@ private struct ClipboardHistoryActionPalette: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 5) {
-                        ForEach(groups, id: \.self) { group in
-                            Text(groupTitle(group))
+                        ForEach(model.sections) { section in
+                            Text(groupTitle(section.id))
                                 .font(PluginSettingsTheme.Typography.secondaryLabel)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 10)
                                 .padding(.top, 8)
 
-                            ForEach(filteredEntries.filter { $0.group == group }) { entry in
+                            ForEach(section.entries) { entry in
                                 actionRow(entry)
                                     .id(entry.action)
                             }
                         }
 
                         if filteredEntries.isEmpty {
-                            ContentUnavailableView.search(text: query)
+                            ContentUnavailableView.search(text: model.query)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 28)
                         }
@@ -6625,11 +6838,9 @@ private struct ClipboardHistoryActionPalette: View {
                     .padding(8)
                 }
                 .frame(maxHeight: 390)
-                .onChange(of: keyboardScrollRevision) { _, _ in
-                    guard let action = selectedAction else { return }
-                    withAnimation(.easeOut(duration: 0.12)) {
-                        proxy.scrollTo(action, anchor: .center)
-                    }
+                .onChange(of: model.keyboardScrollRevision) { _, _ in
+                    guard let action = model.selectedAction else { return }
+                    proxy.scrollTo(action, anchor: .center)
                 }
             }
 
@@ -6651,22 +6862,13 @@ private struct ClipboardHistoryActionPalette: View {
         .background {
             ClipboardHistoryWindowSurface(role: .actions, reducesTransparency: accessibilityReduceTransparency)
         }
-        .onAppear {
-            selectedAction = filteredEntries.first?.action
-            focusRequestID &+= 1
-        }
-        .onChange(of: query) { _, _ in
+        .onChange(of: model.query) { _, _ in
             keyboardNavigationMouseLocation = nil
-            selectedAction = filteredEntries.first?.action
-        }
-        .onChange(of: filteredEntries.map(\.action)) { _, actions in
-            if let selectedAction, actions.contains(selectedAction) { return }
-            self.selectedAction = actions.first
         }
     }
 
     private func actionRow(_ entry: ClipboardHistoryExportMenuEntry) -> some View {
-        let isSelected = selectedAction == entry.action
+        let isSelected = model.selectedAction == entry.action
         return ClipboardHistoryInlineShortcutAction(
             shortcutDefinitionID: entry.shortcutDefinitionID,
             shortcutSettingsContextProvider: shortcutSettingsContextProvider,
@@ -6704,7 +6906,8 @@ private struct ClipboardHistoryActionPalette: View {
                 return
             }
             keyboardNavigationMouseLocation = nil
-            selectedAction = entry.action
+            guard model.selectedAction != entry.action else { return }
+            model.selectedAction = entry.action
         }
         .accessibilityLabel(entry.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -6721,17 +6924,17 @@ private struct ClipboardHistoryActionPalette: View {
         case let .moveSelection(offset):
             guard !filteredEntries.isEmpty else { return }
             keyboardNavigationMouseLocation = NSEvent.mouseLocation
-            let currentIndex = selectedAction.flatMap { action in
+            let currentIndex = model.selectedAction.flatMap { action in
                 filteredEntries.firstIndex { $0.action == action }
             } ?? 0
             let nextIndex = ClipboardHistoryPanelModel.wrappedIndex(
                 currentIndex + offset,
                 count: filteredEntries.count
             )
-            selectedAction = filteredEntries[nextIndex].action
-            keyboardScrollRevision &+= 1
+            model.selectedAction = filteredEntries[nextIndex].action
+            model.requestKeyboardScroll()
         case .submit, .alternateSubmit:
-            guard let selectedAction else { return }
+            guard let selectedAction = model.selectedAction else { return }
             onSelect(selectedAction)
         case .cancel:
             onDismiss()

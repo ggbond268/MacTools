@@ -1,9 +1,48 @@
 import AppKit
+import Combine
 import Foundation
 import XCTest
 @testable import ClipboardHistoryPlugin
 
 final class ClipboardSavedLibraryTests: XCTestCase {
+    @MainActor
+    func testSavedItemUpdatePublishesAfterRevisionAdvances() async throws {
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: SavedLibraryTestPasteboard(),
+            persistence: SlowSavedLibraryTestStore(saveDelay: 0)
+        )
+        await startSavedLibrary(controller)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(
+            items: [],
+            savedItems: controller.items,
+            historyRevision: 0,
+            savedRevision: controller.presentationRevision
+        )
+        model.showSnippetScope()
+        await model.waitForSearchForTesting()
+        var receivedRevision: UInt64?
+        let subscription = controller.itemUpdates.sink { update in
+            receivedRevision = update.revision
+            model.updateSavedItems(update.items, revision: update.revision)
+        }
+
+        let saved = await controller.saveSnippet(ClipboardSnippetDraft(
+            id: nil,
+            title: "First snippet",
+            content: "body",
+            tags: [],
+            keyword: nil
+        ))
+        await model.waitForSearchForTesting()
+
+        XCTAssertNotNil(saved)
+        XCTAssertEqual(receivedRevision, controller.presentationRevision)
+        XCTAssertEqual(model.visibleSavedPresentationItemIDs, [try XCTUnwrap(saved?.id)])
+        withExtendedLifetime(subscription) {}
+        controller.stop()
+    }
+
     func testCachedHistoryPresentationTracksMetadataWithoutChangingOlderCopies() {
         let original = ClipboardSavedItem(title: "Original", savedKind: .snippet,
             payload: .plainText("first body"), templateText: "first body")
