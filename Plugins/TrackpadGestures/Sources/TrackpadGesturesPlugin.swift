@@ -173,12 +173,12 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         }
 
         self.session.onRecognized = {
-            [weak self] gesture, deviceID, timestamp, tipTapEpisodeID in
+            [weak self] gesture, deviceID, timestamp, evidence in
             self?.handleRecognizedGesture(
                 gesture,
                 deviceID: deviceID,
                 timestamp: timestamp,
-                tipTapEpisodeID: tipTapEpisodeID
+                evidence: evidence
             )
         }
         self.session.onAvailabilityChange = { [weak self] isAvailable in
@@ -438,7 +438,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         _ gesture: TrackpadGesture,
         deviceID: UInt64,
         timestamp: TimeInterval?,
-        tipTapEpisodeID: TrackpadTipTapEpisodeID?
+        evidence: TrackpadGestureRecognitionEvidence?
     ) {
         guard session.isActive else {
             return
@@ -461,11 +461,31 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
                gesture != practiceGesture {
                 return
             }
+            if gesture.tipTapConfiguration == nil,
+               gesture.physicalClickFingerCount == nil,
+               gesture.producesNativeClick,
+               session.resolveNativeClick(
+                   for: gesture,
+                   deviceID: deviceID,
+                   evidence: evidence
+               ) == nil {
+                return
+            }
             testingModel.recordRecognized(gesture, deviceID: deviceID, at: timestamp)
             store.recordTestGesture(gesture)
             return
         }
         if externalGestureClaims.contains(gesture) {
+            if gesture.tipTapConfiguration == nil,
+               gesture.physicalClickFingerCount == nil,
+               gesture.producesNativeClick,
+               session.resolveNativeClick(
+                   for: gesture,
+                   deviceID: deviceID,
+                   evidence: evidence
+               ) == nil {
+                return
+            }
             externalGestureHandler?(gesture, deviceID)
             return
         }
@@ -483,11 +503,11 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
             if mapping.action == .middleClick {
                 return
             }
-        } else if mapping.action == .middleClick {
+        } else if gesture.producesNativeClick {
             guard let clickResolution = session.resolveNativeClick(
                 for: gesture,
                 deviceID: deviceID,
-                tipTapEpisodeID: tipTapEpisodeID
+                evidence: evidence
             ) else {
                 return
             }
@@ -583,8 +603,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         if store.isTesting {
             clickResolutions = Dictionary(uniqueKeysWithValues: TrackpadGesture.allCases.compactMap {
                 gesture in
-                guard gesture.physicalClickFingerCount != nil
-                    || gesture.tipTapConfiguration != nil else {
+                guard gesture.producesNativeClick else {
                     return nil
                 }
                 return (gesture, .consume)
@@ -596,12 +615,10 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
                 switch mapping.action {
                 case .middleClick:
                     return (mapping.gesture, .middleClick)
-                case .action where mapping.gesture.tipTapConfiguration != nil
-                    || mapping.gesture.physicalClickFingerCount != nil:
+                case .action where mapping.gesture.producesNativeClick:
                     return (mapping.gesture, .consume)
                 case .keyboardShortcut, .keyTap:
-                    guard mapping.gesture.tipTapConfiguration != nil
-                        || mapping.gesture.physicalClickFingerCount != nil else {
+                    guard mapping.gesture.producesNativeClick else {
                         return nil
                     }
                     return (mapping.gesture, .consume)
@@ -612,8 +629,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
             )
             let externalResolutions: [TrackpadGesture: TrackpadNativeClickResolution] = Dictionary(
                 uniqueKeysWithValues: externalGestureClaims.compactMap { gesture -> (TrackpadGesture, TrackpadNativeClickResolution)? in
-                    guard gesture.tipTapConfiguration != nil
-                        || gesture.physicalClickFingerCount != nil else {
+                    guard gesture.producesNativeClick else {
                         return nil
                     }
                     return (gesture, .consume)

@@ -184,7 +184,7 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
         TrackpadGesture,
         UInt64,
         TrackpadGestureRecognitionDeliveryToken,
-        TrackpadTipTapEpisodeID?,
+        TrackpadGestureRecognitionEvidence?,
         TimeInterval?
     ) -> Void
 
@@ -201,7 +201,7 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
             TrackpadGesture,
             UInt64,
             TrackpadGestureRecognitionDeliveryToken,
-            TrackpadTipTapEpisodeID?,
+            TrackpadGestureRecognitionEvidence?,
             TimeInterval?
         ) -> Void
     ) {
@@ -238,6 +238,7 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
     func process(
         _ frame: TrackpadContactFrame,
         suppressRecognition: Bool = false,
+        contactEpisodeID: TrackpadContactEpisodeID? = nil,
         tipTapRecognitionIDs: [TrackpadGesture: TrackpadTipTapEpisodeID] = [:]
     ) {
         generation.withCurrentFrameValue(deviceID: frame.deviceID) {
@@ -269,12 +270,14 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
                     recognitionDeviceGeneration: frameDeviceGeneration)
                 }
                 result.recognized.forEach {
-                    let episodeID = tipTapRecognitionIDs[$0]
+                    let evidence = tipTapRecognitionIDs[$0]
+                        .map(TrackpadGestureRecognitionEvidence.tipTapEpisode)
+                        ?? contactEpisodeID.map(TrackpadGestureRecognitionEvidence.contactEpisode)
                     onRecognized(
                         $0,
                         frame.deviceID,
                         deliveryToken,
-                        episodeID,
+                        evidence,
                         frame.timestamp
                     )
                 }

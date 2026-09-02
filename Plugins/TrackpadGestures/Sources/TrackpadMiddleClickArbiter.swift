@@ -13,6 +13,26 @@ struct TrackpadTipTapEpisodeID: Equatable, Hashable, Sendable {
     let sequence: UInt64
 }
 
+struct TrackpadContactEpisodeID: Equatable, Hashable, Sendable {
+    let deviceID: UInt64
+    let sequence: UInt64
+}
+
+enum TrackpadGestureRecognitionEvidence: Equatable, Sendable {
+    case contactEpisode(TrackpadContactEpisodeID)
+    case tipTapEpisode(TrackpadTipTapEpisodeID)
+
+    var contactEpisodeID: TrackpadContactEpisodeID? {
+        guard case let .contactEpisode(episodeID) = self else { return nil }
+        return episodeID
+    }
+
+    var tipTapEpisodeID: TrackpadTipTapEpisodeID? {
+        guard case let .tipTapEpisode(episodeID) = self else { return nil }
+        return episodeID
+    }
+}
+
 struct TrackpadTipTapEpisodeStart: Equatable, Sendable {
     let id: TrackpadTipTapEpisodeID
     let observedAt: TimeInterval
@@ -20,6 +40,7 @@ struct TrackpadTipTapEpisodeStart: Equatable, Sendable {
 
 struct TrackpadMiddleClickFrameObservation: Equatable, Sendable {
     let shouldNotifyCoordinator: Bool
+    let contactEpisodeID: TrackpadContactEpisodeID?
     let tipTapRecognitionIDs: [TrackpadGesture: TrackpadTipTapEpisodeID]
 }
 
@@ -154,10 +175,14 @@ final class TrackpadMiddleClickCandidateTimeline: @unchecked Sendable {
                 }
             }
             let tipTapUpdate = observeTipTapCandidates(frame: frame, at: time)
+            let contactEpisodeID = episodesByDevice[frame.deviceID].map {
+                TrackpadContactEpisodeID(deviceID: frame.deviceID, sequence: $0.id)
+            }
             return TrackpadMiddleClickFrameObservation(
                 shouldNotifyCoordinator: tipTapUpdate.didStart
                     || tipTapUpdate.didReject
                     || tipTapUpdate.didEndRejected,
+                contactEpisodeID: contactEpisodeID,
                 tipTapRecognitionIDs: tipTapUpdate.recognitionIDs
             )
         }
@@ -181,10 +206,8 @@ final class TrackpadMiddleClickCandidateTimeline: @unchecked Sendable {
         inferredTrackpadCandidate(at: time).map { .trackpad(deviceID: $0.deviceID) }
     }
 
-    /// Infers ownership only from an already-qualified TipTap episode. This is intentionally
-    /// narrower than general contact inference: an unrelated pointer service may make the
-    /// system-wide inventory ambiguous, while the exact TipTap contact sequence still provides
-    /// a short-lived correlation window for its native tap-to-click event.
+    /// Infers ownership only from an already-qualified TipTap episode so TipTap can retain its
+    /// stricter added-contact sequencing and rejected-episode quarantine.
     func inferredTipTapOrigin(at time: TimeInterval) -> TrackpadMiddleClickArbiter.NativeEventOrigin? {
         lock.withLock {
             pruneEventDeadlines(at: time)
@@ -222,6 +245,17 @@ final class TrackpadMiddleClickCandidateTimeline: @unchecked Sendable {
                 observedAt: episode.observedAt,
                 isAmbiguous: false
             )
+        }
+    }
+
+    func contactEpisodeID(deviceID: UInt64, at time: TimeInterval) -> TrackpadContactEpisodeID? {
+        lock.withLock {
+            pruneEventDeadlines(at: time)
+            pruneEpisodes(at: time)
+            guard let episode = episodesByDevice[deviceID], !episode.isAmbiguous else {
+                return nil
+            }
+            return TrackpadContactEpisodeID(deviceID: deviceID, sequence: episode.id)
         }
     }
 
@@ -833,8 +867,10 @@ struct TrackpadMiddleClickArbiter: Sendable {
 
     private struct PendingRecognition: Equatable, Sendable {
         let deviceID: UInt64
+        let contactEpisodeID: TrackpadContactEpisodeID?
         let tipTapEpisodeID: TrackpadTipTapEpisodeID?
         let resolution: TrackpadNativeClickResolution
+        let requiredNativeClickPairCount: Int
         let deadline: TimeInterval
     }
 
@@ -842,10 +878,13 @@ struct TrackpadMiddleClickArbiter: Sendable {
     private let postRecognitionWindow: TimeInterval
     private let convertedReleaseWindow: TimeInterval
     private var candidateDeadlinesByDevice: [UInt64: TimeInterval] = [:]
+    private var candidateEpisodeIDsByDevice: [UInt64: TrackpadContactEpisodeID] = [:]
     private var ambiguousDeadlinesByDevice: [UInt64: TimeInterval] = [:]
     private var bufferedEvents: [NativeEvent] = []
     private var bufferedDeviceID: UInt64?
+    private var bufferedContactEpisodeID: TrackpadContactEpisodeID?
     private var bufferedTipTapEpisodeID: TrackpadTipTapEpisodeID?
+    private var bufferedPairCapacity = 1
     private var bufferedDeadline: TimeInterval?
     private var pendingRecognitions: [PendingRecognition] = []
     private var convertedButton: Button?
@@ -897,12 +936,16 @@ struct TrackpadMiddleClickArbiter: Sendable {
     @discardableResult
     mutating func observeCandidate(
         deviceID: UInt64,
+        contactEpisodeID: TrackpadContactEpisodeID? = nil,
         at time: TimeInterval,
         isAmbiguous: Bool = false
     ) -> [DeferredAction] {
         let actions = expire(at: time)
         let deadline = time + candidateWindow
         candidateDeadlinesByDevice[deviceID] = deadline
+        if let contactEpisodeID {
+            candidateEpisodeIDsByDevice[deviceID] = contactEpisodeID
+        }
         if isAmbiguous
             || ambiguousDeadlinesByDevice[deviceID] != nil
             || uncorrelatableNativeEventDeadline.map({ $0 > time }) == true
@@ -914,14 +957,18 @@ struct TrackpadMiddleClickArbiter: Sendable {
 
     mutating func recognize(
         deviceID: UInt64,
+        contactEpisodeID: TrackpadContactEpisodeID? = nil,
         tipTapEpisodeID: TrackpadTipTapEpisodeID? = nil,
         resolution: TrackpadNativeClickResolution = .middleClick,
+        requiredNativeClickPairCount: Int = 1,
         at time: TimeInterval
     ) -> [DeferredAction] {
         attemptRecognition(
             deviceID: deviceID,
+            contactEpisodeID: contactEpisodeID,
             tipTapEpisodeID: tipTapEpisodeID,
             resolution: resolution,
+            requiredNativeClickPairCount: requiredNativeClickPairCount,
             at: time
         )
             .deferredActions
@@ -929,15 +976,21 @@ struct TrackpadMiddleClickArbiter: Sendable {
 
     mutating func attemptRecognition(
         deviceID: UInt64,
+        contactEpisodeID: TrackpadContactEpisodeID? = nil,
         tipTapEpisodeID: TrackpadTipTapEpisodeID? = nil,
         resolution: TrackpadNativeClickResolution = .middleClick,
+        requiredNativeClickPairCount: Int = 1,
         at time: TimeInterval,
         hasNewerTipTapEpisode: Bool = false
     ) -> RecognitionAttempt {
         var actions = expire(at: time)
-        let activeCandidateIDs = Set(candidateDeadlinesByDevice.keys)
-        guard activeCandidateIDs == [deviceID],
-              ambiguousDeadlinesByDevice[deviceID] == nil
+        let hasExactEvidence = contactEpisodeID != nil || tipTapEpisodeID != nil
+        let candidateMatches = candidateDeadlinesByDevice[deviceID] != nil
+            && (contactEpisodeID == nil
+                || candidateEpisodeIDsByDevice[deviceID] == contactEpisodeID)
+        guard candidateMatches,
+              ambiguousDeadlinesByDevice[deviceID] == nil,
+              hasExactEvidence || Set(candidateDeadlinesByDevice.keys) == [deviceID]
         else {
             if !bufferedEvents.isEmpty {
                 actions.append(.replayBuffered)
@@ -966,6 +1019,9 @@ struct TrackpadMiddleClickArbiter: Sendable {
 
         if !bufferedEvents.isEmpty {
             guard bufferedDeviceID == deviceID,
+                  requiredNativeClickPairCount > 1
+                    || contactEpisodeID == nil
+                    || bufferedContactEpisodeID == contactEpisodeID,
                   let downButton = validBufferedDownButton()
             else {
                 actions.append(.replayBuffered)
@@ -990,12 +1046,39 @@ struct TrackpadMiddleClickArbiter: Sendable {
                 ))
                 return RecognitionAttempt(deferredActions: actions, disposition: .rejected)
             }
-            actions.append(resolution == .middleClick ? .convertBuffered : .discardBuffered)
-            if bufferedEvents.count == 1 {
+            let bufferedClickCount = bufferedEvents.filter(\.isDown).count
+            if bufferedClickCount < requiredNativeClickPairCount {
+                let deadline = max(
+                    time + postRecognitionWindow,
+                    candidateDeadlinesByDevice[deviceID] ?? time
+                )
+                bufferedDeadline = max(bufferedDeadline ?? deadline, deadline)
+                replacePendingRecognition(PendingRecognition(
+                    deviceID: deviceID,
+                    contactEpisodeID: contactEpisodeID,
+                    tipTapEpisodeID: tipTapEpisodeID,
+                    resolution: resolution,
+                    requiredNativeClickPairCount: requiredNativeClickPairCount,
+                    deadline: deadline
+                ))
+                return RecognitionAttempt(deferredActions: actions, disposition: .pending)
+            }
+            if requiredNativeClickPairCount > 1 {
+                actions.append(.discardBuffered)
                 if resolution == .middleClick {
-                    beginConvertedClick(button: downButton, deviceID: deviceID, at: time)
-                } else {
+                    actions.append(.synthesizeMiddleClick)
+                }
+                if bufferedEvents.count.isMultiple(of: 2) == false {
                     beginConsumedClick(button: downButton, deviceID: deviceID, at: time)
+                }
+            } else {
+                actions.append(resolution == .middleClick ? .convertBuffered : .discardBuffered)
+                if bufferedEvents.count == 1 {
+                    if resolution == .middleClick {
+                        beginConvertedClick(button: downButton, deviceID: deviceID, at: time)
+                    } else {
+                        beginConsumedClick(button: downButton, deviceID: deviceID, at: time)
+                    }
                 }
             }
             clearBufferedState()
@@ -1021,8 +1104,10 @@ struct TrackpadMiddleClickArbiter: Sendable {
         }
         pendingRecognitions.append(PendingRecognition(
             deviceID: deviceID,
+            contactEpisodeID: contactEpisodeID,
             tipTapEpisodeID: tipTapEpisodeID,
             resolution: resolution,
+            requiredNativeClickPairCount: requiredNativeClickPairCount,
             deadline: deadline
         ))
         pendingRecognitions.sort {
@@ -1094,7 +1179,9 @@ struct TrackpadMiddleClickArbiter: Sendable {
         _ event: NativeEvent,
         origin: NativeEventOrigin,
         at time: TimeInterval,
+        contactEpisodeID: TrackpadContactEpisodeID? = nil,
         tipTapEpisodeID: TrackpadTipTapEpisodeID? = nil,
+        pairCapacity: Int = 1,
         bufferingWindow: TimeInterval? = nil
     ) -> NativeEventOutcome {
         var actions = expire(at: time)
@@ -1132,7 +1219,9 @@ struct TrackpadMiddleClickArbiter: Sendable {
         }
 
         if let recognition = pendingRecognitions.first(where: {
-            $0.deviceID == originDeviceID && $0.tipTapEpisodeID == tipTapEpisodeID
+            $0.deviceID == originDeviceID
+                && $0.contactEpisodeID == contactEpisodeID
+                && $0.tipTapEpisodeID == tipTapEpisodeID
         }) {
             // The native source and retained episode already identify this device exactly. A
             // simultaneous candidate on another trackpad must not invalidate that ownership;
@@ -1145,6 +1234,11 @@ struct TrackpadMiddleClickArbiter: Sendable {
             switch event {
             case let .down(button):
                 let committedTipTapEpisodeID = recognition.tipTapEpisodeID
+                if recognition.requiredNativeClickPairCount > 1,
+                   !bufferedEvents.isEmpty {
+                    actions.append(.discardBuffered)
+                    clearBufferedState()
+                }
                 if recognition.resolution == .middleClick {
                     beginConvertedClick(button: button, deviceID: recognition.deviceID, at: time)
                 } else {
@@ -1178,6 +1272,25 @@ struct TrackpadMiddleClickArbiter: Sendable {
                     deferredActions: actions
                 )
             }
+            if event == .up(downButton), bufferedEvents.last?.isDown == true {
+                bufferedEvents.append(event)
+                return NativeEventOutcome(
+                    decision: .suppressAndBuffer,
+                    deferredActions: actions
+                )
+            }
+            if event == .down(downButton),
+               bufferedEvents.count.isMultiple(of: 2),
+               bufferedEvents.filter(\.isDown).count < bufferedPairCapacity,
+               bufferedDeviceID == originDeviceID {
+                bufferedEvents.append(event)
+                bufferedContactEpisodeID = contactEpisodeID
+                bufferedDeadline = time + (bufferingWindow ?? candidateWindow)
+                return NativeEventOutcome(
+                    decision: .suppressAndBuffer,
+                    deferredActions: actions
+                )
+            }
             actions.append(.replayBuffered)
             markBufferedDeviceAmbiguous()
             clearBufferedState()
@@ -1198,7 +1311,9 @@ struct TrackpadMiddleClickArbiter: Sendable {
 
         bufferedEvents = [event]
         bufferedDeviceID = candidateDeviceID
+        bufferedContactEpisodeID = contactEpisodeID
         bufferedTipTapEpisodeID = tipTapEpisodeID
+        bufferedPairCapacity = max(1, pairCapacity)
         bufferedDeadline = time + (bufferingWindow ?? candidateWindow)
         return NativeEventOutcome(
             decision: .suppressAndBuffer,
@@ -1208,6 +1323,9 @@ struct TrackpadMiddleClickArbiter: Sendable {
 
     mutating func expire(at time: TimeInterval) -> [DeferredAction] {
         candidateDeadlinesByDevice = candidateDeadlinesByDevice.filter { $0.value > time }
+        candidateEpisodeIDsByDevice = candidateEpisodeIDsByDevice.filter {
+            candidateDeadlinesByDevice[$0.key] != nil
+        }
         ambiguousDeadlinesByDevice = ambiguousDeadlinesByDevice.filter { $0.value > time }
         uncorrelatedTrackpadDeadlinesByDevice = uncorrelatedTrackpadDeadlinesByDevice.filter {
             $0.value > time
@@ -1217,13 +1335,30 @@ struct TrackpadMiddleClickArbiter: Sendable {
         }
         var actions: [DeferredAction] = []
 
+        let expiredRecognitions = pendingRecognitions.filter { $0.deadline <= time }
+        var resolvedBufferedRecognition: PendingRecognition?
         if let bufferedDeadline, bufferedDeadline <= time, !bufferedEvents.isEmpty {
-            actions.append(.replayBuffered)
-            markBufferedDeviceAmbiguous()
+            resolvedBufferedRecognition = expiredRecognitions.first {
+                $0.deviceID == bufferedDeviceID
+                    && $0.tipTapEpisodeID == bufferedTipTapEpisodeID
+                    && ($0.requiredNativeClickPairCount > 1
+                        || $0.contactEpisodeID == bufferedContactEpisodeID)
+            }
+            if let recognition = resolvedBufferedRecognition {
+                actions.append(.discardBuffered)
+                if recognition.resolution == .middleClick {
+                    actions.append(.synthesizeMiddleClick)
+                }
+            } else {
+                actions.append(.replayBuffered)
+                markBufferedDeviceAmbiguous()
+            }
             clearBufferedState()
         }
-        let expiredRecognitions = pendingRecognitions.filter { $0.deadline <= time }
         for recognition in expiredRecognitions {
+            if recognition == resolvedBufferedRecognition {
+                continue
+            }
             if recognition.tipTapEpisodeID == nil, recognition.resolution == .middleClick {
                 actions.append(.synthesizeMiddleClick)
             } else if let episodeID = recognition.tipTapEpisodeID {
@@ -1250,6 +1385,7 @@ struct TrackpadMiddleClickArbiter: Sendable {
             recognition.tipTapEpisodeID.map(DeferredAction.abandonTipTapRecognition)
         })
         candidateDeadlinesByDevice.removeAll()
+        candidateEpisodeIDsByDevice.removeAll()
         ambiguousDeadlinesByDevice.removeAll()
         uncorrelatableNativeEventDeadline = nil
         uncorrelatedTrackpadDeadlinesByDevice.removeAll()
@@ -1269,6 +1405,7 @@ struct TrackpadMiddleClickArbiter: Sendable {
             recognition.tipTapEpisodeID.map(DeferredAction.abandonTipTapRecognition)
         })
         candidateDeadlinesByDevice.removeAll()
+        candidateEpisodeIDsByDevice.removeAll()
         ambiguousDeadlinesByDevice.removeAll()
         uncorrelatableNativeEventDeadline = nil
         uncorrelatedTrackpadDeadlinesByDevice.removeAll()
@@ -1279,12 +1416,14 @@ struct TrackpadMiddleClickArbiter: Sendable {
 
     private func validBufferedDownButton() -> Button? {
         guard case let .down(button)? = bufferedEvents.first,
-              bufferedEvents.count <= 2
-        else {
+              bufferedEvents.count <= bufferedPairCapacity * 2 else {
             return nil
         }
-        if bufferedEvents.count == 2, bufferedEvents[1] != .up(button) {
-            return nil
+        for (index, event) in bufferedEvents.enumerated() {
+            let expected: NativeEvent = index.isMultiple(of: 2)
+                ? .down(button)
+                : .up(button)
+            guard event == expected else { return nil }
         }
         return button
     }
@@ -1292,12 +1431,23 @@ struct TrackpadMiddleClickArbiter: Sendable {
     private mutating func clearBufferedState() {
         bufferedEvents.removeAll()
         bufferedDeviceID = nil
+        bufferedContactEpisodeID = nil
         bufferedTipTapEpisodeID = nil
+        bufferedPairCapacity = 1
         bufferedDeadline = nil
     }
 
     private mutating func clearRecognitionState() {
         pendingRecognitions.removeAll()
+    }
+
+    private mutating func replacePendingRecognition(_ recognition: PendingRecognition) {
+        if let tipTapEpisodeID = recognition.tipTapEpisodeID {
+            pendingRecognitions.removeAll { $0.tipTapEpisodeID == tipTapEpisodeID }
+        } else {
+            pendingRecognitions.removeAll { $0.tipTapEpisodeID == nil }
+        }
+        pendingRecognitions.append(recognition)
     }
 
     private mutating func abandonRecognitionState() -> [DeferredAction] {
@@ -1407,6 +1557,10 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
     private var arbiter = TrackpadMiddleClickArbiter()
     private var clickResolutions: [TrackpadGesture: TrackpadNativeClickResolution] = [:]
     private var physicalClicksByFingerCount: [Int: TrackpadGesture] = [:]
+    private var singleTapFingerCounts: Set<Int> = []
+    private var doubleTapFingerCounts: Set<Int> = []
+    private var nativeClickContactCounts: Set<Int> = []
+    private var tipTapFixedFingerCounts: Set<Int> = []
     private var bufferedEvents: [CGEvent] = []
     private var expirationWorkItem: DispatchWorkItem?
     private var pendingPhysicalClick: PendingPhysicalClick?
@@ -1424,6 +1578,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
 
     private struct NativeClickOwnership {
         let origin: TrackpadMiddleClickArbiter.NativeEventOrigin
+        let contactEpisodeID: TrackpadContactEpisodeID?
         let tipTapEpisodeID: TrackpadTipTapEpisodeID?
         let beganAt: TimeInterval
         let terminalDisposition: NativeClickTerminalDisposition?
@@ -1444,13 +1599,13 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
     // A native click can precede its added-contact frame. One short frame-ordering window is used
     // only while the same fixed contacts are already armed for a configured TipTap.
     private let tipTapOrderingWindow: TimeInterval
+    private let doubleTapBufferingWindow: TimeInterval
     private let clock: @Sendable () -> TimeInterval
     private let synthesizeMiddleClick: () -> Void
     private let releaseMiddleButton: () -> Void
     private let postEvent: (CGEvent) -> Void
     private let candidateTimeline: TrackpadMiddleClickCandidateTimeline
     private let eventOrigin: (CGEvent) -> TrackpadMiddleClickArbiter.NativeEventOrigin
-    private let allowsContactInference: @Sendable () -> Bool
     private let recognizePhysicalClick: @Sendable (TrackpadGesture, UInt64) -> Void
     private let commitTipTapRecognition: @Sendable (TrackpadTipTapEpisodeID) -> Void
     private let abandonTipTapRecognition: @Sendable (TrackpadTipTapEpisodeID) -> Void
@@ -1479,17 +1634,17 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             $0.post(tap: .cghidEventTap)
         },
         tipTapOrderingWindow: TimeInterval = 0.02,
+        doubleTapBufferingWindow: TimeInterval = 0.40,
         candidateTimeline: TrackpadMiddleClickCandidateTimeline = .init(),
         recognizePhysicalClick: @escaping @Sendable (TrackpadGesture, UInt64) -> Void = { _, _ in },
         commitTipTapRecognition: @escaping @Sendable (TrackpadTipTapEpisodeID) -> Void = { _ in },
         abandonTipTapRecognition: @escaping @Sendable (TrackpadTipTapEpisodeID) -> Void = { _ in },
-        // Direct coordinator construction is a unit-test seam. The production session always
-        // injects the exhaustive live HID inventory check.
-        allowsContactInference: @escaping @Sendable () -> Bool = { true },
+        // Retained as a compatibility seam for focused tests. Production folds this broad HID
+        // signal into eventOrigin; exact episode correlation remains available when it is false.
+        allowsContactInference _: @escaping @Sendable () -> Bool = { true },
         eventOrigin: @escaping (CGEvent) -> TrackpadMiddleClickArbiter.NativeEventOrigin = { _ in
-            // Unknown is deliberately fail-open. Production explicitly authorizes contact
-            // inference only after checking that every live mouse-capable HID service belongs to
-            // a Multitouch trackpad.
+            // Unknown can use one exact, unambiguous contact episode. Without that evidence the
+            // event remains fail-open.
             .unknown
         }
     ) {
@@ -1498,11 +1653,11 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         self.releaseMiddleButton = releaseMiddleButton
         self.postEvent = postEvent
         self.tipTapOrderingWindow = tipTapOrderingWindow
+        self.doubleTapBufferingWindow = doubleTapBufferingWindow
         self.candidateTimeline = candidateTimeline
         self.recognizePhysicalClick = recognizePhysicalClick
         self.commitTipTapRecognition = commitTipTapRecognition
         self.abandonTipTapRecognition = abandonTipTapRecognition
-        self.allowsContactInference = allowsContactInference
         self.eventOrigin = eventOrigin
     }
 
@@ -1515,6 +1670,14 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         physicalClicksByFingerCount = Dictionary(uniqueKeysWithValues: resolutions.keys.compactMap {
             gesture in
             gesture.physicalClickFingerCount.map { ($0, gesture) }
+        })
+        singleTapFingerCounts = Set(resolutions.keys.compactMap(\.fingerTapCount))
+        doubleTapFingerCounts = Set(resolutions.keys.compactMap(\.doubleFingerTapCount))
+        nativeClickContactCounts = Set(resolutions.keys.compactMap { gesture in
+            gesture.producesNativeClick ? gesture.middleClickContactCount : nil
+        })
+        tipTapFixedFingerCounts = Set(resolutions.keys.compactMap {
+            $0.tipTapConfiguration?.fixedFingerCount
         })
         if gestureShapeChanged {
             candidateTimeline.update(gestures: gestures)
@@ -1547,6 +1710,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
     func recognize(
         gesture: TrackpadGesture? = nil,
         deviceID: UInt64,
+        evidence: TrackpadGestureRecognitionEvidence? = nil,
         tipTapEpisodeID: TrackpadTipTapEpisodeID? = nil,
         resolution: TrackpadNativeClickResolution = .middleClick
     ) -> Bool {
@@ -1555,26 +1719,21 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         if pendingPhysicalClick?.deviceID == deviceID {
             pendingPhysicalClick = nil
         }
-        let resolvedTipTapEpisodeID = tipTapEpisodeID
+        let resolvedTipTapEpisodeID = evidence?.tipTapEpisodeID
+            ?? tipTapEpisodeID
             ?? gesture.flatMap { observedTipTapRecognitionIDs[$0]?[deviceID] }
+        let resolvedContactEpisodeID = evidence?.contactEpisodeID
+            ?? candidateTimeline.contactEpisodeID(deviceID: deviceID, at: now)
         if let gesture, gesture.tipTapConfiguration != nil, resolvedTipTapEpisodeID == nil {
-            return false
-        }
-        // An ordinary tap or long touch can request a synthesized middle click without a
-        // correlated native event. When another pointer makes native-click ownership
-        // ambiguous, fail open before creating that pending synthesis just as TipTap does.
-        if resolvedTipTapEpisodeID == nil,
-           resolution == .middleClick,
-           !allowsContactInference() {
-            synchronizeCandidates(at: now)
-            scheduleExpiration()
             return false
         }
         synchronizeCandidates(at: now)
         let attempt = arbiter.attemptRecognition(
             deviceID: deviceID,
+            contactEpisodeID: resolvedContactEpisodeID,
             tipTapEpisodeID: resolvedTipTapEpisodeID,
             resolution: resolution,
+            requiredNativeClickPairCount: gesture.map(requiredNativeClickPairCount) ?? 1,
             at: now,
             hasNewerTipTapEpisode: resolvedTipTapEpisodeID.map {
                 candidateTimeline.hasNewerTipTapEpisode(than: $0)
@@ -1609,6 +1768,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         )
         let origin: TrackpadMiddleClickArbiter.NativeEventOrigin
         var ownedTipTapEpisodeID: TrackpadTipTapEpisodeID?
+        var ownedContactEpisodeID: TrackpadContactEpisodeID?
         var suppressOriginalUpAfterReset = false
         var suppressExpiredTerminalUp = false
         if nativeEvent.isDown,
@@ -1646,6 +1806,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         } else if !nativeEvent.isDown,
                   let ownership = nativeOriginsByClick.removeValue(forKey: clickKey) {
             origin = ownership.origin
+            ownedContactEpisodeID = ownership.contactEpisodeID
             ownedTipTapEpisodeID = ownership.tipTapEpisodeID
             suppressOriginalUpAfterReset = ownership.suppressOriginalUpAfterReset
             suppressExpiredTerminalUp = ownership.terminalDisposition != nil
@@ -1656,9 +1817,14 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             origin = .unknown
         } else {
             let reportedOrigin = eventOrigin(event)
+            var inferredContactEpisodeID: TrackpadContactEpisodeID?
             if reportedOrigin == .contactInferenceAllowed,
-               let inferredOrigin = candidateTimeline.inferredTrackpadOrigin(at: now) {
-                origin = inferredOrigin
+               let candidate = inferredNativeClickCandidate(at: now) {
+                origin = .trackpad(deviceID: candidate.deviceID)
+                inferredContactEpisodeID = TrackpadContactEpisodeID(
+                    deviceID: candidate.deviceID,
+                    sequence: candidate.episodeID
+                )
             } else if reportedOrigin == .unknown,
                       let inferredOrigin = candidateTimeline.inferredTipTapOrigin(at: now) {
                 // A qualified TipTap episode is precise enough to correlate its native
@@ -1666,11 +1832,25 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 // inventory ambiguous. Process-owned events remain `.external` and never enter
                 // this fallback.
                 origin = inferredOrigin
+                inferredContactEpisodeID = inferredOrigin.trackpadDeviceID.flatMap {
+                    candidateTimeline.contactEpisodeID(deviceID: $0, at: now)
+                }
+            } else if reportedOrigin == .unknown,
+                      let candidate = inferredNativeClickCandidate(at: now) {
+                // Installed pointer inventory is not ownership evidence. A single, unambiguous
+                // live contact episode is narrow enough to correlate this native Down; process-
+                // owned events have already been classified as external above.
+                origin = .trackpad(deviceID: candidate.deviceID)
+                inferredContactEpisodeID = TrackpadContactEpisodeID(
+                    deviceID: candidate.deviceID,
+                    sequence: candidate.episodeID
+                )
             } else {
                 origin = reportedOrigin
             }
             nativeOriginsByClick[clickKey] = NativeClickOwnership(
                 origin: origin,
+                contactEpisodeID: inferredContactEpisodeID,
                 tipTapEpisodeID: nil,
                 beganAt: now,
                 terminalDisposition: nil,
@@ -1704,6 +1884,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             if nativeEvent.isDown, let ownership = nativeOriginsByClick[clickKey] {
                 nativeOriginsByClick[clickKey] = NativeClickOwnership(
                     origin: ownership.origin,
+                    contactEpisodeID: ownership.contactEpisodeID,
                     tipTapEpisodeID: rejectedEpisodeID,
                     beganAt: ownership.beganAt,
                     terminalDisposition: ownership.terminalDisposition,
@@ -1727,9 +1908,13 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             )
         }
         let activeTipTapEpisodeID = ownedTipTapEpisodeID ?? currentTipTapEpisodeID
+        let activeContactEpisodeID = ownedContactEpisodeID ?? origin.trackpadDeviceID.flatMap {
+            candidateTimeline.contactEpisodeID(deviceID: $0, at: now)
+        }
         if nativeEvent.isDown, var ownership = nativeOriginsByClick[clickKey] {
             ownership = NativeClickOwnership(
                 origin: ownership.origin,
+                contactEpisodeID: activeContactEpisodeID,
                 tipTapEpisodeID: activeTipTapEpisodeID,
                 beganAt: ownership.beganAt,
                 terminalDisposition: ownership.terminalDisposition,
@@ -1743,6 +1928,15 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         let physicalCandidate = nativeEvent.isDown
             ? candidateTimeline.activePhysicalClickCandidate(at: now)
             : nil
+        let ordinaryCandidate = origin.trackpadDeviceID.flatMap { deviceID in
+            candidateTimeline.contactEpisodeID(deviceID: deviceID, at: now).flatMap { episodeID in
+                inferredNativeClickCandidate(at: now).flatMap { candidate in
+                    candidate.deviceID == deviceID && candidate.episodeID == episodeID.sequence
+                        ? candidate
+                        : nil
+                }
+            }
+        }
         var recognizedPhysicalClick: (gesture: TrackpadGesture, deviceID: UInt64)?
         let isAwaitingTipTapAddedContact = physicalCandidate.map {
             candidateTimeline.shouldDeferPhysicalClick($0)
@@ -1766,6 +1960,10 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             } else {
                 let attempt = arbiter.attemptRecognition(
                     deviceID: deviceID,
+                    contactEpisodeID: TrackpadContactEpisodeID(
+                        deviceID: deviceID,
+                        sequence: candidate.episodeID
+                    ),
                     resolution: resolution,
                     at: now
                 )
@@ -1775,16 +1973,27 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 }
             }
         }
+        let nativePairCapacity = ordinaryCandidate.map {
+            bufferedPairCapacity(contactCount: $0.contactCount)
+        } ?? 1
+        let nativeBufferingWindow: TimeInterval?
+        if activeTipTapEpisodeID == nil,
+           isAwaitingTipTapAddedContact,
+           !hasDeferredPhysicalClick {
+            nativeBufferingWindow = tipTapOrderingWindow
+        } else if nativePairCapacity > 1 {
+            nativeBufferingWindow = doubleTapBufferingWindow
+        } else {
+            nativeBufferingWindow = nil
+        }
         let outcome = arbiter.handleNativeEvent(
             nativeEvent,
             origin: origin,
             at: now,
+            contactEpisodeID: activeContactEpisodeID,
             tipTapEpisodeID: activeTipTapEpisodeID,
-            bufferingWindow: activeTipTapEpisodeID == nil
-                && isAwaitingTipTapAddedContact
-                && !hasDeferredPhysicalClick
-                ? tipTapOrderingWindow
-                : nil
+            pairCapacity: nativePairCapacity,
+            bufferingWindow: nativeBufferingWindow
         )
         if nativeEvent.isDown {
             switch outcome.decision {
@@ -1894,6 +2103,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 guard ownership.terminalDisposition != nil else { return nil }
                 return NativeClickOwnership(
                     origin: ownership.origin,
+                    contactEpisodeID: ownership.contactEpisodeID,
                     tipTapEpisodeID: ownership.tipTapEpisodeID,
                     beganAt: ownership.beganAt,
                     terminalDisposition: ownership.terminalDisposition,
@@ -1966,11 +2176,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 }
                 bufferedEvents.removeAll()
             case .synthesizeMiddleClick:
-                // Inventory can become unsafe after recognition admission but before this
-                // deferred fallback expires. Recheck at the execution boundary and fail open.
-                if allowsContactInference() {
-                    synthesizeMiddleClick()
-                }
+                synthesizeMiddleClick()
             case .releaseConvertedMiddleButton:
                 releaseMiddleButton()
             case let .abandonTipTapRecognition(episodeID):
@@ -2006,18 +2212,18 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
     private func markBufferedNativeDownTerminalDisposition(
         _ disposition: NativeClickTerminalDisposition
     ) {
-        guard let event = bufferedEvents.first,
-              let nativeEvent = nativeEvent(for: event.type),
-              nativeEvent.isDown else {
-            return
-        }
-        markTerminalDisposition(
-            disposition,
-            for: NativeClickKey(
-                button: nativeEvent.button,
-                eventNumber: event.getIntegerValueField(.mouseEventNumber)
+        for event in bufferedEvents {
+            guard let nativeEvent = nativeEvent(for: event.type), nativeEvent.isDown else {
+                continue
+            }
+            markTerminalDisposition(
+                disposition,
+                for: NativeClickKey(
+                    button: nativeEvent.button,
+                    eventNumber: event.getIntegerValueField(.mouseEventNumber)
+                )
             )
-        )
+        }
     }
 
     private func markTerminalDisposition(
@@ -2027,6 +2233,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         guard let ownership = nativeOriginsByClick[clickKey] else { return }
         nativeOriginsByClick[clickKey] = NativeClickOwnership(
             origin: ownership.origin,
+            contactEpisodeID: ownership.contactEpisodeID,
             tipTapEpisodeID: ownership.tipTapEpisodeID,
             beganAt: ownership.beganAt,
             terminalDisposition: disposition,
@@ -2038,11 +2245,38 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         for candidate in candidateTimeline.takeCandidates() {
             process(arbiter.observeCandidate(
                 deviceID: candidate.deviceID,
+                contactEpisodeID: TrackpadContactEpisodeID(
+                    deviceID: candidate.deviceID,
+                    sequence: candidate.episodeID
+                ),
                 at: candidate.observedAt,
                 isAmbiguous: candidate.isAmbiguous
             ))
         }
         process(arbiter.expire(at: time))
+    }
+
+    private func requiredNativeClickPairCount(for gesture: TrackpadGesture) -> Int {
+        guard let count = gesture.doubleFingerTapCount else { return 1 }
+        return singleTapFingerCounts.contains(count) ? 1 : 2
+    }
+
+    private func bufferedPairCapacity(contactCount: Int) -> Int {
+        doubleTapFingerCounts.contains(contactCount)
+            && !singleTapFingerCounts.contains(contactCount)
+            ? 2
+            : 1
+    }
+
+    private func inferredNativeClickCandidate(
+        at time: TimeInterval
+    ) -> TrackpadMiddleClickCandidateTimeline.Candidate? {
+        guard let candidate = candidateTimeline.inferredTrackpadCandidate(at: time),
+              nativeClickContactCounts.contains(candidate.contactCount)
+                || tipTapFixedFingerCounts.contains(candidate.contactCount) else {
+            return nil
+        }
+        return candidate
     }
 
     private func candidateTimelineDidUpdate(at time: TimeInterval) {
@@ -2150,6 +2384,10 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         self.pendingPhysicalClick = nil
         let attempt = arbiter.attemptRecognition(
             deviceID: pendingPhysicalClick.deviceID,
+            contactEpisodeID: TrackpadContactEpisodeID(
+                deviceID: pendingPhysicalClick.deviceID,
+                sequence: pendingPhysicalClick.episodeID
+            ),
             resolution: pendingPhysicalClick.resolution,
             at: time
         )
@@ -2185,9 +2423,13 @@ private extension TrackpadMiddleClickArbiter.NativeEventOrigin {
 
 private extension TrackpadGesture {
     var middleClickContactCount: Int? {
-        if let count = physicalClickFingerCount ?? fingerTapCount ?? longTouchFingerCount {
+        if let count = physicalClickFingerCount
+            ?? fingerTapCount
+            ?? doubleFingerTapCount
+            ?? longTouchFingerCount {
             return count
         }
         return tipTapConfiguration.map { $0.fixedFingerCount + 1 }
     }
+
 }

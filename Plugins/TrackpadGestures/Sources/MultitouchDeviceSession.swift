@@ -392,7 +392,7 @@ final class TrackpadRecognitionDeliveryRelay: @unchecked Sendable {
         TrackpadGesture,
         UInt64,
         TrackpadGestureRecognitionDeliveryToken,
-        TrackpadTipTapEpisodeID?,
+        TrackpadGestureRecognitionEvidence?,
         TimeInterval?
     ) -> Void
 
@@ -407,11 +407,11 @@ final class TrackpadRecognitionDeliveryRelay: @unchecked Sendable {
         _ gesture: TrackpadGesture,
         deviceID: UInt64,
         token: TrackpadGestureRecognitionDeliveryToken,
-        tipTapEpisodeID: TrackpadTipTapEpisodeID?,
+        evidence: TrackpadGestureRecognitionEvidence?,
         timestamp: TimeInterval?
     ) {
         let currentHandler: Handler? = lock.withLock { self.handler }
-        currentHandler?(gesture, deviceID, token, tipTapEpisodeID, timestamp)
+        currentHandler?(gesture, deviceID, token, evidence, timestamp)
     }
 }
 
@@ -1264,7 +1264,7 @@ protocol MultitouchDeviceSessionManaging: AnyObject {
         TrackpadGesture,
         UInt64,
         TimeInterval?,
-        TrackpadTipTapEpisodeID?
+        TrackpadGestureRecognitionEvidence?
     ) -> Void)? { get set }
     var onAvailabilityChange: ((Bool) -> Void)? { get set }
     var isActive: Bool { get }
@@ -1278,7 +1278,7 @@ protocol MultitouchDeviceSessionManaging: AnyObject {
     func resolveNativeClick(
         for gesture: TrackpadGesture,
         deviceID: UInt64,
-        tipTapEpisodeID: TrackpadTipTapEpisodeID?
+        evidence: TrackpadGestureRecognitionEvidence?
     ) -> TrackpadNativeClickResolution?
     func updateTypingProtection(isEnabled: Bool, gracePeriod: TimeInterval)
     func updateMiddleClickGestures(_ gestures: Set<TrackpadGesture>)
@@ -1294,7 +1294,7 @@ extension MultitouchDeviceSessionManaging {
     func resolveNativeClick(
         for gesture: TrackpadGesture,
         deviceID: UInt64,
-        tipTapEpisodeID: TrackpadTipTapEpisodeID? = nil
+        evidence: TrackpadGestureRecognitionEvidence? = nil
     ) -> TrackpadNativeClickResolution? { nil }
     func updateTypingProtection(isEnabled: Bool, gracePeriod: TimeInterval) {}
     func updateMiddleClickGestures(_ gestures: Set<TrackpadGesture>) {}
@@ -1318,7 +1318,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
         TrackpadGesture,
         UInt64,
         TimeInterval?,
-        TrackpadTipTapEpisodeID?
+        TrackpadGestureRecognitionEvidence?
     ) -> Void)?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onTestingSnapshot: ((TrackpadGestureTestSnapshot) -> Void)?
@@ -1439,12 +1439,12 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
             generation: recognitionGeneration,
             beforeFrameProcessing: recognitionBeforeFrameProcessing,
             testingSnapshotRelay: testingSnapshotRelay
-        ) { gesture, deviceID, token, tipTapEpisodeID, timestamp in
+        ) { gesture, deviceID, token, evidence, timestamp in
             recognitionDeliveryRelay.deliver(
                 gesture,
                 deviceID: deviceID,
                 token: token,
-                tipTapEpisodeID: tipTapEpisodeID,
+                evidence: evidence,
                 timestamp: timestamp
             )
         }
@@ -1488,7 +1488,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
         self.wakeRestartDelay = wakeRestartDelay
         self.deviceChangeRestartDelay = deviceChangeRestartDelay
         recognitionDeliveryRelay.activate {
-            [weak self] gesture, deviceID, token, tipTapEpisodeID, timestamp in
+            [weak self] gesture, deviceID, token, evidence, timestamp in
             DispatchQueue.main.async { [weak self] in
                 guard let self,
                       self.isActive,
@@ -1496,7 +1496,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
                     return
                 }
                 if gesture.tipTapConfiguration != nil {
-                    guard let tipTapEpisodeID else { return }
+                    guard let tipTapEpisodeID = evidence?.tipTapEpisodeID else { return }
                     guard token.frameGeneration != nil else { return }
                     guard let resolution = self.nativeClickResolutions[gesture] else { return }
                     self.pendingTipTapRecognitions[tipTapEpisodeID] = PendingTipTapRecognition(
@@ -1509,7 +1509,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
                     guard self.middleClickCoordinator.recognize(
                         gesture: gesture,
                         deviceID: deviceID,
-                        tipTapEpisodeID: tipTapEpisodeID,
+                        evidence: .tipTapEpisode(tipTapEpisodeID),
                         resolution: resolution
                     ) else {
                         self.pendingTipTapRecognitions.removeValue(forKey: tipTapEpisodeID)
@@ -1517,7 +1517,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
                     }
                     return
                 }
-                self.onRecognized?(gesture, deviceID, timestamp, tipTapEpisodeID)
+                self.onRecognized?(gesture, deviceID, timestamp, evidence)
             }
         }
         tipTapCommitDeliveryRelay.activate { [weak self] episodeID in
@@ -1536,7 +1536,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
                     pending.gesture,
                     pending.deviceID,
                     pending.timestamp,
-                    pending.episodeID
+                    .tipTapEpisode(pending.episodeID)
                 )
             }
         }
@@ -1656,7 +1656,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
     func resolveNativeClick(
         for gesture: TrackpadGesture,
         deviceID: UInt64,
-        tipTapEpisodeID: TrackpadTipTapEpisodeID? = nil
+        evidence: TrackpadGestureRecognitionEvidence? = nil
     ) -> TrackpadNativeClickResolution? {
         // TipTap is finalized internally and delivered through onRecognized only after exact
         // native correlation. This synchronous compatibility path is for non-TipTap gestures.
@@ -1665,7 +1665,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
         return middleClickCoordinator.recognize(
             gesture: gesture,
             deviceID: deviceID,
-            tipTapEpisodeID: tipTapEpisodeID,
+            evidence: evidence,
             resolution: resolution
         )
             ? resolution
@@ -1953,6 +1953,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
                         recognitionWorker.process(
                             frame,
                             suppressRecognition: false,
+                            contactEpisodeID: observation.contactEpisodeID,
                             tipTapRecognitionIDs: observation.tipTapRecognitionIDs
                         )
                     }

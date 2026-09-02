@@ -2,6 +2,13 @@ import Foundation
 import MacToolsPluginKit
 
 extension TrackpadGesture {
+    var producesNativeClick: Bool {
+        physicalClickFingerCount != nil
+            || fingerTapCount != nil
+            || doubleFingerTapCount != nil
+            || tipTapConfiguration != nil
+    }
+
     var settingsOrder: Int {
         Self.configurableCases.firstIndex(of: self) ?? Self.configurableCases.count
     }

@@ -203,6 +203,107 @@ final class TrackpadMiddleClickArbiterTests: XCTestCase {
         XCTAssertTrue(arbiter.expire(at: 1).isEmpty)
     }
 
+    func testStaleContactEpisodeCannotClaimNewerCandidate() {
+        var arbiter = makeArbiter()
+        let first = TrackpadContactEpisodeID(deviceID: 1, sequence: 1)
+        let second = TrackpadContactEpisodeID(deviceID: 1, sequence: 2)
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: first, at: 0)
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: second, at: 0.10)
+
+        let attempt = arbiter.attemptRecognition(
+            deviceID: 1,
+            contactEpisodeID: first,
+            at: 0.11
+        )
+
+        XCTAssertEqual(attempt.disposition, .rejected)
+        XCTAssertTrue(attempt.deferredActions.isEmpty)
+        XCTAssertTrue(arbiter.expire(at: 1).isEmpty)
+    }
+
+    func testDoubleTapBuffersTwoNativePairsAndEmitsOneMiddleClick() {
+        var arbiter = makeArbiter()
+        let first = TrackpadContactEpisodeID(deviceID: 1, sequence: 1)
+        let second = TrackpadContactEpisodeID(deviceID: 1, sequence: 2)
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: first, at: 0)
+        XCTAssertEqual(
+            arbiter.handleNativeEvent(
+                .down(.left),
+                origin: .trackpad(deviceID: 1),
+                at: 0.01,
+                contactEpisodeID: first,
+                pairCapacity: 2
+            ).decision,
+            .suppressAndBuffer
+        )
+        XCTAssertEqual(
+            arbiter.handleNativeEvent(
+                .up(.left),
+                origin: .trackpad(deviceID: 1),
+                at: 0.02,
+                contactEpisodeID: first,
+                pairCapacity: 2
+            ).decision,
+            .suppressAndBuffer
+        )
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: second, at: 0.10)
+        XCTAssertEqual(
+            arbiter.handleNativeEvent(
+                .down(.left),
+                origin: .trackpad(deviceID: 1),
+                at: 0.11,
+                contactEpisodeID: second,
+                pairCapacity: 2
+            ).decision,
+            .suppressAndBuffer
+        )
+        XCTAssertEqual(
+            arbiter.handleNativeEvent(
+                .up(.left),
+                origin: .trackpad(deviceID: 1),
+                at: 0.12,
+                contactEpisodeID: second,
+                pairCapacity: 2
+            ).decision,
+            .suppressAndBuffer
+        )
+
+        let attempt = arbiter.attemptRecognition(
+            deviceID: 1,
+            contactEpisodeID: second,
+            resolution: .middleClick,
+            requiredNativeClickPairCount: 2,
+            at: 0.13
+        )
+
+        XCTAssertEqual(attempt.disposition, .committed)
+        XCTAssertEqual(attempt.deferredActions, [.discardBuffered, .synthesizeMiddleClick])
+        XCTAssertTrue(arbiter.expire(at: 1).isEmpty)
+    }
+
+    func testUnrecognizedDoubleTapReplaysFirstNativePair() {
+        var arbiter = makeArbiter()
+        let episode = TrackpadContactEpisodeID(deviceID: 1, sequence: 1)
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: episode, at: 0)
+        _ = arbiter.handleNativeEvent(
+            .down(.left),
+            origin: .trackpad(deviceID: 1),
+            at: 0.01,
+            contactEpisodeID: episode,
+            pairCapacity: 2
+        )
+        _ = arbiter.handleNativeEvent(
+            .up(.left),
+            origin: .trackpad(deviceID: 1),
+            at: 0.02,
+            contactEpisodeID: episode,
+            pairCapacity: 2
+        )
+
+        XCTAssertEqual(arbiter.expire(at: 0.34), [.replayBuffered])
+        XCTAssertTrue(arbiter.expire(at: 1).isEmpty)
+    }
+
     func testLateUnknownNativeClickCancelsPendingSynthesis() {
         var arbiter = makeArbiter()
         arbiter.observeCandidate(deviceID: 1, at: 0)
@@ -1302,7 +1403,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.reset()
     }
 
-    func testCoordinatorDefaultUnknownOriginPassesThroughSingleCandidate() throws {
+    func testCoordinatorDefaultUnknownOriginUsesUniqueExactCandidate() throws {
         let clock = LockedMiddleClickTestClock()
         let coordinator = TrackpadMiddleClickCoordinator(clock: { clock.value })
         coordinator.updateClickResolutions([.tipTapLeftOneFixed: .consume])
@@ -1316,7 +1417,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         ))
 
         let down = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
-        XCTAssertNotNil(coordinator.handleNativeEvent(
+        XCTAssertNil(coordinator.handleNativeEvent(
             type: .leftMouseDown,
             event: down
         ))
@@ -1614,6 +1715,96 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.reset()
     }
 
+    func testUnsafeInventoryStillCorrelatesUniquePhysicalClickEpisode() throws {
+        let clock = LockedMiddleClickTestClock()
+        let recognized = LockedPhysicalClickRecorder()
+        let coordinator = TrackpadMiddleClickCoordinator(
+            clock: { clock.value },
+            recognizePhysicalClick: { gesture, deviceID in
+                recognized.append(gesture, deviceID: deviceID)
+            },
+            allowsContactInference: { false },
+            eventOrigin: { _ in .unknown }
+        )
+        coordinator.updateClickResolutions([.twoFingerClick: .middleClick])
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
+        clock.value = 0.01
+        coordinator.observe(frame: .init(
+            deviceID: 1,
+            timestamp: 0.01,
+            contacts: [
+                .init(identifier: 1, x: 0.4, y: 0.5),
+                .init(identifier: 2, x: 0.6, y: 0.5),
+            ]
+        ))
+
+        clock.value = 0.02
+        let down = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 111))
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: down))
+        XCTAssertEqual(down.type, .otherMouseDown)
+        XCTAssertEqual(recognized.values.count, 1)
+
+        clock.value = 0.03
+        let up = try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 111))
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseUp, event: up))
+        XCTAssertEqual(up.type, .otherMouseUp)
+        coordinator.reset()
+    }
+
+    func testDoubleTapCoordinatorConsumesTwoPairsAndSynthesizesOnce() throws {
+        let clock = LockedMiddleClickTestClock()
+        var synthesizedCount = 0
+        let coordinator = TrackpadMiddleClickCoordinator(
+            clock: { clock.value },
+            synthesizeMiddleClick: { synthesizedCount += 1 },
+            allowsContactInference: { false },
+            eventOrigin: { _ in .unknown }
+        )
+        coordinator.updateClickResolutions([.threeFingerDoubleTap: .middleClick])
+        let contacts = [
+            TrackpadContactSnapshot(identifier: 1, x: 0.3, y: 0.5),
+            TrackpadContactSnapshot(identifier: 2, x: 0.5, y: 0.5),
+            TrackpadContactSnapshot(identifier: 3, x: 0.7, y: 0.5),
+        ]
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
+        clock.value = 0.01
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.01, contacts: contacts))
+        clock.value = 0.02
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 121))
+        ))
+        clock.value = 0.03
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 121))
+        ))
+        clock.value = 0.04
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.04, contacts: []))
+
+        clock.value = 0.20
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.20, contacts: contacts))
+        clock.value = 0.21
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 122))
+        ))
+        clock.value = 0.22
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 122))
+        ))
+        clock.value = 0.23
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.23, contacts: []))
+
+        XCTAssertTrue(coordinator.recognize(
+            gesture: .threeFingerDoubleTap,
+            deviceID: 1
+        ))
+        XCTAssertEqual(synthesizedCount, 1)
+        coordinator.reset()
+    }
+
     func testUnsafeInventoryDoesNotClaimProcessOwnedClickForTipTap() throws {
         let clock = LockedMiddleClickTestClock()
         let commits = LockedTipTapCommitRecorder()
@@ -1655,7 +1846,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.reset()
     }
 
-    func testUnsafeInventoryRejectsOrdinaryTapBeforeMiddleClickSynthesis() {
+    func testUnsafeInventoryDoesNotRejectExactOrdinaryTapEpisode() {
         let clock = LockedMiddleClickTestClock()
         var synthesizedCount = 0
         let coordinator = TrackpadMiddleClickCoordinator(
@@ -1673,7 +1864,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         ))
         clock.value = 0.03
 
-        XCTAssertFalse(coordinator.recognize(
+        XCTAssertTrue(coordinator.recognize(
             gesture: .threeFingerTap,
             deviceID: 1
         ))
@@ -1684,11 +1875,11 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
             timestamp: 0.34,
             contacts: []
         ))
-        XCTAssertEqual(synthesizedCount, 0)
+        XCTAssertEqual(synthesizedCount, 1)
         coordinator.reset()
     }
 
-    func testUnsafeInventoryRejectsOrdinaryLongTouchBeforeMiddleClickSynthesis() {
+    func testUnsafeInventoryDoesNotRejectExactOrdinaryLongTouchEpisode() {
         let clock = LockedMiddleClickTestClock()
         var synthesizedCount = 0
         let coordinator = TrackpadMiddleClickCoordinator(
@@ -1704,18 +1895,48 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.observe(frame: makeThreeContactFrame())
         clock.value = 0.56
 
-        XCTAssertFalse(coordinator.recognize(
+        XCTAssertTrue(coordinator.recognize(
             gesture: .threeFingerLongTouch,
             deviceID: 1
         ))
 
         clock.value = 0.90
         coordinator.observe(frame: makeThreeContactFrame())
+        XCTAssertEqual(synthesizedCount, 1)
+        coordinator.reset()
+    }
+
+    func testLongTouchEvidenceDoesNotClaimUnknownNativeClick() throws {
+        let clock = LockedMiddleClickTestClock()
+        var synthesizedCount = 0
+        let coordinator = TrackpadMiddleClickCoordinator(
+            clock: { clock.value },
+            synthesizeMiddleClick: { synthesizedCount += 1 },
+            allowsContactInference: { false },
+            eventOrigin: { _ in .unknown }
+        )
+        coordinator.updateMiddleClickGestures([.threeFingerLongTouch])
+        coordinator.observe(frame: makeThreeContactFrame())
+
+        clock.value = 0.10
+        let down = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 131))
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: down))
+        XCTAssertEqual(down.type, .leftMouseDown)
+        clock.value = 0.11
+        let up = try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 131))
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseUp, event: up))
+        XCTAssertEqual(up.type, .leftMouseUp)
+
+        clock.value = 0.56
+        XCTAssertFalse(coordinator.recognize(
+            gesture: .threeFingerLongTouch,
+            deviceID: 1
+        ))
         XCTAssertEqual(synthesizedCount, 0)
         coordinator.reset()
     }
 
-    func testOrdinaryTapMiddleClickFailsOpenWhenInventoryInvalidatesBeforeSynthesis() {
+    func testOrdinaryTapMiddleClickCompletesWhenInventoryChangesAfterAdmission() {
         let clock = LockedMiddleClickTestClock()
         var synthesizedCount = 0
         let coordinator = TrackpadMiddleClickCoordinator(
@@ -1739,14 +1960,14 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
 
         clock.value = 0.34
         coordinator.candidateTimelineDidUpdate()
-        XCTAssertEqual(synthesizedCount, 0)
+        XCTAssertEqual(synthesizedCount, 1)
         clock.value = 1
         coordinator.candidateTimelineDidUpdate()
-        XCTAssertEqual(synthesizedCount, 0)
+        XCTAssertEqual(synthesizedCount, 1)
         coordinator.reset()
     }
 
-    func testOrdinaryLongTouchMiddleClickFailsOpenWhenInventoryInvalidatesBeforeSynthesis() {
+    func testOrdinaryLongTouchMiddleClickCompletesWhenInventoryChangesAfterAdmission() {
         let clock = LockedMiddleClickTestClock()
         var synthesizedCount = 0
         let coordinator = TrackpadMiddleClickCoordinator(
@@ -1768,10 +1989,10 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
 
         clock.value = 0.90
         coordinator.candidateTimelineDidUpdate()
-        XCTAssertEqual(synthesizedCount, 0)
+        XCTAssertEqual(synthesizedCount, 1)
         clock.value = 1.20
         coordinator.candidateTimelineDidUpdate()
-        XCTAssertEqual(synthesizedCount, 0)
+        XCTAssertEqual(synthesizedCount, 1)
         coordinator.reset()
     }
 
@@ -2287,7 +2508,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         XCTAssertEqual(synthesizedCount, 0)
     }
 
-    func testCoordinatorInfersExplicitlyAllowedClickDuringSingleLongTouchEpisode() throws {
+    func testCoordinatorDoesNotClaimNativeClickDuringSingleLongTouchEpisode() throws {
         let clock = LockedMiddleClickTestClock()
         var synthesizedCount = 0
         let coordinator = TrackpadMiddleClickCoordinator(
@@ -2301,7 +2522,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.observe(frame: makeThreeContactFrame())
         clock.value = 0.01
         let down = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
-        XCTAssertNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: down))
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: down))
         clock.value = 0.30
         coordinator.observe(frame: makeThreeContactFrame())
         clock.value = 0.55
@@ -2329,7 +2550,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.observe(frame: makeThreeContactFrame())
         clock.value = 0.01
         let down = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown))
-        XCTAssertNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: down))
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: down))
         clock.value = 0.02
         coordinator.observe(frame: TrackpadContactFrame(deviceID: 1, timestamp: 0.02, contacts: []))
         clock.value = 0.60

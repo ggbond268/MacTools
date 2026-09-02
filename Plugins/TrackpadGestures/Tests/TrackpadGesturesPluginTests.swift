@@ -312,7 +312,7 @@ private final class MockMultitouchDeviceSession: MultitouchDeviceSessionManaging
         TrackpadGesture,
         UInt64,
         TimeInterval?,
-        TrackpadTipTapEpisodeID?
+        TrackpadGestureRecognitionEvidence?
     ) -> Void)?
     var onAvailabilityChange: ((Bool) -> Void)?
     var onTestingSnapshot: ((TrackpadGestureTestSnapshot) -> Void)?
@@ -369,7 +369,7 @@ private final class MockMultitouchDeviceSession: MultitouchDeviceSessionManaging
     func resolveNativeClick(
         for gesture: TrackpadGesture,
         deviceID: UInt64,
-        tipTapEpisodeID: TrackpadTipTapEpisodeID?
+        evidence: TrackpadGestureRecognitionEvidence?
     ) -> TrackpadNativeClickResolution? {
         resolvedMiddleClicks.append((gesture, deviceID))
         guard acceptsNativeClickResolution else { return nil }
@@ -1553,7 +1553,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertEqual(fixture.executor.actions, [.keyTap(keyTap)])
     }
 
-    func testOrdinaryMultiFingerShortcutDoesNotConsumeNativeClick() {
+    func testOrdinaryMultiFingerShortcutConsumesCorrelatedNativeClick() {
         let fixture = makePlugin()
         XCTAssertTrue(fixture.plugin.store.save(TrackpadGestureMapping(
             gesture: .fourFingerTap,
@@ -1562,7 +1562,10 @@ final class TrackpadGesturesPluginTests: XCTestCase {
 
         fixture.plugin.configurationDidChange()
 
-        XCTAssertNil(fixture.session.nativeClickResolutionUpdates.last?[.fourFingerTap])
+        XCTAssertEqual(
+            fixture.session.nativeClickResolutionUpdates.last?[.fourFingerTap],
+            .consume
+        )
     }
 
     func testPhysicalClickShortcutConsumesNativeClickAndExecutesWithoutResolvingTwice() {
