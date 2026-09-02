@@ -1,7 +1,7 @@
 ---
 release: app
 type: fixed
-area: Window Layouts
+area: Settings
 ---
 
-Keep layout shortcuts targeting Clipboard while its Actions window has focus, instead of moving the previous app.
+Settings search now reveals embedded shortcut groups correctly, shortcut recorders remain aligned when descriptions wrap, and Window Layouts keeps targeting Clipboard while its owned Actions window has focus.

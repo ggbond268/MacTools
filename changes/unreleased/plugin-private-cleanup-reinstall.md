@@ -4,4 +4,4 @@ type: security
 area: Plugins
 ---
 
-Prevent reinstalling a plugin while its previous private-data removal remains incomplete, so delayed cleanup cannot remove newly created data.
+Plugins that request private-data removal now receive a dedicated warning and host-owned cleanup. Reinstallation remains blocked until cleanup succeeds, preventing delayed cleanup from deleting replacement data.

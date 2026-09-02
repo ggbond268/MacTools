@@ -6,7 +6,8 @@ import SwiftUI
 
 @MainActor
 private var selectedRowTextColor: Color {
-    Color(nsColor: .selectedControlTextColor)
+    // This is the list/table foreground paired with selectedContentBackgroundColor.
+    Color(nsColor: .alternateSelectedControlTextColor)
 }
 
 enum ClipboardHistoryContentFilter: String, CaseIterable, Identifiable, Sendable {

@@ -4,4 +4,4 @@ type: added
 area: Productivity
 ---
 
-Added encrypted Clipboard History, Saved clips, and reusable snippets with OCR, export, sharing, combined selection, paste queues, privacy controls, and contextual keyboard-accessible filters.
+Added a privacy-first Clipboard workspace with encrypted History, Saved clips, snippets, OCR, rich or plain-text paste, export, sharing, ordered multi-selection, paste queues, app exclusions, and Private Copy.

@@ -1,7 +1,7 @@
 # Clipboard Plugin Design
 
 Date: 2026-08-19
-Updated: 2026-08-25
+Updated: 2026-09-02
 
 ## Summary
 
@@ -42,7 +42,7 @@ text or paste-time variables. This keeps literal captured text such as `{{name}}
 
 Saved clips have a name, tags, and usage time. Snippets additionally have an optional expansion keyword. Saving replaces the former pin model; there is no History pin capacity or automatic Saved eviction.
 
-Snippet templates expand `{{date}}`, `{{time}}`, `{{datetime}}`, `{{clipboard}}`, `{{cursor}}`, and `{{uuid}}` at paste time. Date variables accept an optional quoted format. Templates do not run shell commands, AppleScript, or network requests. Optional keyword expansion requires Accessibility, ignores secure text fields, and revalidates the focused editor and insertion point before replacement. Unambiguous keywords expand immediately; a keyword that prefixes a longer configured keyword waits for a delimiter. Unsupported editors fail safely. Ephemeral diagnostics describe the last expansion attempt without retaining typed text or editor contents. Accessibility is also used for direct paste and private copy, independently of keyword expansion.
+Snippet templates expand `{{date}}`, `{{time}}`, `{{datetime}}`, `{{clipboard}}`, and `{{cursor}}` at paste time. Date variables accept an optional quoted format. Templates do not run shell commands, AppleScript, or network requests. Optional keyword expansion requires Accessibility, ignores secure text fields, and revalidates the focused editor and insertion point before replacement. Unambiguous keywords expand immediately; a keyword that prefixes a longer configured keyword waits for a delimiter. Expansion verifies direct Accessibility replacement and uses a guarded, clipboard-preserving paste fallback for incompatible editors. Unsupported editors fail safely. Ephemeral diagnostics describe the last expansion attempt without retaining typed text or editor contents. Accessibility is also used for direct paste and private copy, independently of keyword expansion.
 
 ### Sequential Paste
 
@@ -61,6 +61,8 @@ bindings are not intercepted. Footer hints and tooltips reflect the active group
 Command-1 through Command-9 remains quick paste.
 
 The floating keyboard-first panel shares the Command Palette visual language. All, History, Saved, and Snippets are explicit scopes with one shared search field. Type and semantic filters, quick paste, mixed clip/snippet multi-selection, export, native sharing, plain-text conversion, Delete, and Save actions remain available when applicable. Per-item Delete removes the selected record everywhere; Unsave only removes its Saved status. Snippets have their own creation, editing, keyword status, tags, and template preview, without a separate Favorites hierarchy.
+
+Captured clips remain ordered by capture time in History and All; usage bookkeeping does not reorder that chronology. Snippets use their authored or edited chronology. Multi-selection preserves the order in which items were marked, independently of display order.
 
 Clipboard-window commands resolve through one binding map. Configurable commands cannot silently
 claim fixed navigation, quick-paste, or filter keys, and configurable conflicts offer Swap,
@@ -81,12 +83,12 @@ Grouped files remain references rather than copied file contents. Unsupported ap
 
 ## Defaults
 
-- History count: 500, with explicit presets through 10,000 and an Unlimited option. The configured age and storage limits still apply.
+- History count: 500, with explicit presets through the supported maximum of 10,000. The configured age and storage limits still apply.
 - History expiration: 30 days, configurable through Never.
 - Embedded payload: 5 MiB per item, configurable through 50 MiB.
 - Aggregate History payload: 64 MiB, configurable through 5 GiB and available disk space.
 - Saved Library: no automatic retention or silent count cap.
-- Snippets: 5 MiB of UTF-8 text per item; keyword-enabled snippet bodies: 16 MiB total in the expansion cache. Both limits reject saves explicitly and never truncate content.
+- Expanded snippet output: 5 MiB by default, configurable to 1, 5, 20, or 50 MiB. Oversized output is rejected without truncation or clipboard changes.
 - Default exclusions: Apple Passwords, Keychain Access, 1Password, and Bitwarden.
 
 ## Architecture
@@ -100,6 +102,10 @@ Grouped files remain references rather than copied file contents. Unsupported ap
 - `ClipboardHistoryPanelController` owns the floating History/Saved panel and restores the previous application for paste.
 - The panel caches its bounded initial page against monotonic History and Snippet revisions, allowing constant-time unchanged reopens while rebuilding asynchronously whenever either source changes.
 - `ClipboardSequentialPasteCoordinator` owns immutable explicit mixed-item snapshots and implicit History snapshots, and protects queued History rows from retention until completion or cancellation.
+
+## Verification
+
+Focused tests cover encrypted History/Saved independence, metadata and rich-text round trips, retention and clearing boundaries, template expansion, keyword matching, duplicate validation, panel keyboard behavior, queue lifecycle, and localization completeness. Cross-module PluginKit changes also require repository script tests, a Debug plugin build, and the CI-equivalent validation before review.
 
 ## Deferred Work
 
