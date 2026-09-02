@@ -181,6 +181,25 @@ final class TrackpadMiddleClickCandidateTimeline: @unchecked Sendable {
         inferredTrackpadCandidate(at: time).map { .trackpad(deviceID: $0.deviceID) }
     }
 
+    /// Infers ownership only from an already-qualified TipTap episode. This is intentionally
+    /// narrower than general contact inference: an unrelated pointer service may make the
+    /// system-wide inventory ambiguous, while the exact TipTap contact sequence still provides
+    /// a short-lived correlation window for its native tap-to-click event.
+    func inferredTipTapOrigin(at time: TimeInterval) -> TrackpadMiddleClickArbiter.NativeEventOrigin? {
+        lock.withLock {
+            pruneEventDeadlines(at: time)
+            pruneEpisodes(at: time)
+            let deviceIDs = episodesByDevice.keys.filter { deviceID in
+                episodesByDevice[deviceID]?.isAmbiguous == false
+                    && hasCorrelatableTipTapEpisode(deviceID: deviceID)
+            }
+            guard deviceIDs.count == 1, let deviceID = deviceIDs.first else {
+                return nil
+            }
+            return .trackpad(deviceID: deviceID)
+        }
+    }
+
     func inferredTrackpadCandidate(at time: TimeInterval) -> Candidate? {
         lock.withLock {
             pruneEventDeadlines(at: time)
@@ -1551,16 +1570,6 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             scheduleExpiration()
             return false
         }
-        if let resolvedTipTapEpisodeID, !allowsContactInference() {
-            process(arbiter.rejectBufferedCandidate(
-                tipTapEpisodeID: resolvedTipTapEpisodeID,
-                at: now
-            ))
-            candidateTimeline.completeTipTapRecognition(resolvedTipTapEpisodeID)
-            removeObservedTipTapRecognitionID(resolvedTipTapEpisodeID)
-            scheduleExpiration()
-            return false
-        }
         synchronizeCandidates(at: now)
         let attempt = arbiter.attemptRecognition(
             deviceID: deviceID,
@@ -1649,6 +1658,13 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             let reportedOrigin = eventOrigin(event)
             if reportedOrigin == .contactInferenceAllowed,
                let inferredOrigin = candidateTimeline.inferredTrackpadOrigin(at: now) {
+                origin = inferredOrigin
+            } else if reportedOrigin == .unknown,
+                      let inferredOrigin = candidateTimeline.inferredTipTapOrigin(at: now) {
+                // A qualified TipTap episode is precise enough to correlate its native
+                // tap-to-click event even when another installed pointer makes the broad HID
+                // inventory ambiguous. Process-owned events remain `.external` and never enter
+                // this fallback.
                 origin = inferredOrigin
             } else {
                 origin = reportedOrigin

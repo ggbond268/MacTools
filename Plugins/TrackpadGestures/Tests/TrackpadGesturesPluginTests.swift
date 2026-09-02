@@ -2874,7 +2874,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertEqual(postedTypes, [.leftMouseDown, .leftMouseUp])
     }
 
-    func testSessionUnsafeInventoryNeverDeliversRecognizedTipTap() async throws {
+    func testSessionUnsafeInventoryCorrelatesQualifiedTipTapNativePair() async throws {
         let driver = MockMultitouchFrameListener()
         let clock = LockedTestClock()
         let gesture = TrackpadGesture.tipTapLeftOneFixed
@@ -2889,9 +2889,13 @@ final class TrackpadGesturesPluginTests: XCTestCase {
             middleClickAllowsContactInference: { false },
             middleClickEventOrigin: { _ in .unknown }
         )
-        let unexpectedRecognition = expectation(description: "unsafe TipTap is not delivered")
-        unexpectedRecognition.isInverted = true
-        session.onRecognized = { _, _, _, _ in unexpectedRecognition.fulfill() }
+        let committed = expectation(description: "qualified TipTap is delivered")
+        session.onRecognized = { recognizedGesture, deviceID, _, episodeID in
+            XCTAssertEqual(recognizedGesture, gesture)
+            XCTAssertEqual(deviceID, 1)
+            XCTAssertNotNil(episodeID)
+            committed.fulfill()
+        }
         session.updateNativeClickResolutions([gesture: .consume])
         XCTAssertTrue(session.activate(gestures: [gesture]))
         defer { session.deactivate() }
@@ -2910,18 +2914,20 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         clock.value = 0.16
         driver.send(.init(deviceID: 1, timestamp: 0.16, contacts: fixed))
         session.waitForRecognitionForTests()
-        await fulfillment(of: [unexpectedRecognition], timeout: 0.05)
+        await Task.yield()
+        XCTAssertEqual(session.pendingTipTapRecognitionCountForTests, 1)
 
         clock.value = 0.17
-        XCTAssertFalse(session.handleNativeEventForTests(
+        XCTAssertTrue(session.handleNativeEventForTests(
             type: .leftMouseDown,
             event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 601))
         ))
         clock.value = 0.18
-        XCTAssertFalse(session.handleNativeEventForTests(
+        XCTAssertTrue(session.handleNativeEventForTests(
             type: .leftMouseUp,
             event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 601))
         ))
+        await fulfillment(of: [committed], timeout: 1)
     }
 
     func testNoOpConfigurationRefreshPreservesPendingTipTapCommit() async throws {

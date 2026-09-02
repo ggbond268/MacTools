@@ -1568,18 +1568,16 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.reset()
     }
 
-    func testUnsafeInventoryRejectsTipTapBeforeNativeAndNeverSynthesizes() throws {
+    func testUnsafeInventoryStillCorrelatesExactTipTapNativePair() throws {
         let clock = LockedMiddleClickTestClock()
         let commits = LockedTipTapCommitRecorder()
-        var synthesizedCount = 0
         let coordinator = TrackpadMiddleClickCoordinator(
             clock: { clock.value },
-            synthesizeMiddleClick: { synthesizedCount += 1 },
             commitTipTapRecognition: { commits.append($0) },
             allowsContactInference: { false },
             eventOrigin: { _ in .unknown }
         )
-        coordinator.updateClickResolutions([.tipTapLeftOneFixed: .middleClick])
+        coordinator.updateClickResolutions([.tipTapLeftOneFixed: .consume])
         let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
         coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
         coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.01, contacts: fixed))
@@ -1594,22 +1592,66 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         clock.value = 0.15
         coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.15, contacts: fixed))
 
-        XCTAssertFalse(coordinator.recognize(
+        XCTAssertTrue(coordinator.recognize(
             gesture: .tipTapLeftOneFixed,
             deviceID: 1,
-            resolution: .middleClick
+            resolution: .consume
         ))
         XCTAssertTrue(commits.values.isEmpty)
 
-        clock.value = 1
-        coordinator.candidateTimelineDidUpdate()
-        XCTAssertEqual(synthesizedCount, 0)
-        let lateDown = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 101))
-        let lateUp = try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 101))
-        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: lateDown))
-        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseUp, event: lateUp))
+        clock.value = 0.151
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 101))
+        ))
+        XCTAssertEqual(commits.values.count, 1)
+        clock.value = 0.152
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 101))
+        ))
+        XCTAssertEqual(commits.values.count, 1)
+        coordinator.reset()
+    }
+
+    func testUnsafeInventoryDoesNotClaimProcessOwnedClickForTipTap() throws {
+        let clock = LockedMiddleClickTestClock()
+        let commits = LockedTipTapCommitRecorder()
+        let coordinator = TrackpadMiddleClickCoordinator(
+            clock: { clock.value },
+            commitTipTapRecognition: { commits.append($0) },
+            allowsContactInference: { false },
+            eventOrigin: { _ in .external }
+        )
+        coordinator.updateClickResolutions([.tipTapLeftOneFixed: .consume])
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+        clock.value = 0.11
+        coordinator.observe(frame: .init(
+            deviceID: 1,
+            timestamp: 0.11,
+            contacts: fixed + [.init(identifier: 2, x: 0.1, y: 0.5)]
+        ))
+        clock.value = 0.15
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.15, contacts: fixed))
+
+        XCTAssertTrue(coordinator.recognize(
+            gesture: .tipTapLeftOneFixed,
+            deviceID: 1,
+            resolution: .consume
+        ))
+        clock.value = 0.151
+        let processOwnedDown = try XCTUnwrap(
+            makeMouseEvent(type: .leftMouseDown, eventNumber: 102)
+        )
+        XCTAssertNotNil(coordinator.handleNativeEvent(
+            type: .leftMouseDown,
+            event: processOwnedDown
+        ))
         XCTAssertTrue(commits.values.isEmpty)
-        XCTAssertEqual(synthesizedCount, 0)
         coordinator.reset()
     }
 

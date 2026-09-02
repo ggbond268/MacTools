@@ -913,6 +913,26 @@ final class TrackpadGestureTestingModelTests: XCTestCase {
         )
     }
 
+    func testRetainedSuccessSurvivesIdleFramesUntilNextAttemptBegins() {
+        let model = TrackpadGestureTestingModel()
+        model.begin(.practice(.twoFingerClick))
+        let recognizedContacts = [
+            TrackpadContactSnapshot(identifier: 1, x: 0.4, y: 0.5),
+            TrackpadContactSnapshot(identifier: 2, x: 0.6, y: 0.5),
+        ]
+        model.apply(snapshot(deviceID: 1, timestamp: 1, contacts: recognizedContacts))
+        model.recordRecognized(.twoFingerClick, deviceID: 1, at: 1)
+
+        model.apply(snapshot(deviceID: 1, timestamp: 1.1, contacts: []))
+        model.apply(snapshot(deviceID: 1, timestamp: 2, contacts: []))
+        XCTAssertEqual(model.selectedRecognizedGesture, .twoFingerClick)
+
+        model.apply(snapshot(deviceID: 1, timestamp: 3, contacts: [
+            .init(identifier: 3, x: 0.5, y: 0.5),
+        ]))
+        XCTAssertNil(model.selectedRecognizedGesture)
+    }
+
     func testRepeatedSuccessThenLiveRejectionUsesTheCurrentAttemptState() {
         let model = TrackpadGestureTestingModel()
         model.begin(.practice(.tipTapLeftOneFixed))
@@ -1356,7 +1376,7 @@ final class TrackpadGestureTestingModelTests: XCTestCase {
         }
     }
 
-    func testCommittedPhysicalClickSuccessSurvivesUntilContactsChange() {
+    func testCommittedPhysicalClickSuccessSurvivesReleaseUntilNextAttempt() {
         let model = TrackpadGestureTestingModel()
         model.begin(.practice(.threeFingerClick))
         let contacts = [
@@ -1402,6 +1422,20 @@ final class TrackpadGestureTestingModelTests: XCTestCase {
         )
 
         model.apply(snapshot(timestamp: 3, contacts: []))
+        XCTAssertEqual(model.selectedRecognizedGesture, .threeFingerClick)
+        XCTAssertEqual(
+            TrackpadGestureTestingStatusResolver.resolve(
+                snapshot: model.selectedSnapshot,
+                retainedRecognition: model.selectedRecognizedGesture
+            ),
+            .recognized(.threeFingerClick)
+        )
+
+        model.apply(snapshot(timestamp: 4, contacts: [
+            .init(identifier: 4, x: 0.3, y: 0.5),
+            .init(identifier: 5, x: 0.5, y: 0.5),
+            .init(identifier: 6, x: 0.7, y: 0.5),
+        ]))
         XCTAssertNil(model.selectedRecognizedGesture)
         XCTAssertEqual(
             TrackpadGestureTestingStatusResolver.resolve(

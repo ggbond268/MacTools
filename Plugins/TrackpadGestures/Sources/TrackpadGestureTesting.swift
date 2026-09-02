@@ -671,6 +671,10 @@ final class TrackpadGestureTestingModel: ObservableObject {
         if snapshot.recognition?.phase.supersedesRetainedRecognition == true {
             return true
         }
+        // Lifting the last contact is the idle/reset portion of the gesture that just
+        // succeeded, not a new attempt. Keep the success visible until a later contact starts
+        // or the recognizer explicitly reports a new live phase.
+        guard !snapshot.contacts.isEmpty else { return false }
         let currentIdentifiers = Set(snapshot.contacts.map(\.identifier))
         return currentIdentifiers != recognizedContactIdentifiersByDevice[snapshot.deviceID]
     }
