@@ -884,7 +884,7 @@ final class MacToolsSearchTests: XCTestCase {
         )
     }
 
-    func testPaletteSearchFieldUsesSingleLineScrollableConfiguration() {
+    func testPaletteSearchFieldUsesSingleLineScrollableConfigurationAndFontDerivedHeight() {
         let field = PluginPaletteSearchField.SearchTextField(
             frame: NSRect(x: 0, y: 0, width: 320, height: 22)
         )
@@ -896,9 +896,16 @@ final class MacToolsSearchTests: XCTestCase {
         XCTAssertFalse(field.cell?.wraps ?? true)
         XCTAssertTrue(field.cell?.isScrollable ?? false)
         XCTAssertEqual(field.stringValue, input)
+        guard let font = field.font else {
+            return XCTFail("Expected the search field to have a font")
+        }
         XCTAssertEqual(
             field.intrinsicContentSize.height,
-            PluginPaletteMetrics.searchTextFieldHeight
+            ceil(font.ascender - font.descender + font.leading)
+        )
+        XCTAssertLessThan(
+            field.intrinsicContentSize.height,
+            PluginPaletteMetrics.toolbarControlSize.height
         )
     }
 

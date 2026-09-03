@@ -8,7 +8,6 @@ public enum PluginPaletteMetrics {
     public static let searchCornerRadius: CGFloat = 9
     public static let searchHorizontalPadding: CGFloat = 12
     public static let searchVerticalPadding: CGFloat = 9
-    public static let searchTextFieldHeight: CGFloat = 24
     public static let searchContentSpacing: CGFloat = 8
     public static let searchToolbarSpacing: CGFloat = 8
     public static let toolbarControlSize = CGSize(width: 40, height: 40)
@@ -211,7 +210,9 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
 
         public override var intrinsicContentSize: NSSize {
             var size = super.intrinsicContentSize
-            size.height = PluginPaletteMetrics.searchTextFieldHeight
+            if let font {
+                size.height = ceil(font.ascender - font.descender + font.leading)
+            }
             return size
         }
 
@@ -403,12 +404,7 @@ public struct PluginPaletteSearchBar: View {
                 alternateSubmitModifier: alternateSubmitModifier,
                 onCommand: onCommand
             )
-            .frame(
-                maxWidth: .infinity,
-                minHeight: PluginPaletteMetrics.searchTextFieldHeight,
-                idealHeight: PluginPaletteMetrics.searchTextFieldHeight,
-                maxHeight: PluginPaletteMetrics.searchTextFieldHeight
-            )
+            .frame(maxWidth: .infinity)
 
             if !text.isEmpty {
                 Button {
@@ -424,7 +420,7 @@ public struct PluginPaletteSearchBar: View {
 
         }
         .padding(.horizontal, PluginPaletteMetrics.searchHorizontalPadding)
-        .padding(.vertical, PluginPaletteMetrics.searchVerticalPadding)
+        .frame(height: PluginPaletteMetrics.toolbarControlSize.height)
         .background(
             RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius, style: .continuous)
                 .fill(PluginSettingsTheme.Palette.fieldBackground)

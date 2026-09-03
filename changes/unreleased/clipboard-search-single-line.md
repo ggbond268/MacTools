@@ -4,4 +4,4 @@ type: fixed
 area: Productivity
 ---
 
-Kept multiline text pasted into palette searches readable on one line while matching the original clipboard content.
+Kept multiline text pasted into palette searches readable, vertically aligned on one line, and matching the original clipboard content.
