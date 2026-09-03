@@ -3920,21 +3920,6 @@ private struct ClipboardHistoryPanelView: View {
     private var panelToolbar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                ViewThatFits(in: .horizontal) {
-                    Label(
-                        localization.string("metadata.title", defaultValue: "Clipboard"),
-                        systemImage: "clipboard"
-                    )
-                    .fixedSize()
-                    Image(systemName: "clipboard")
-                        .accessibilityLabel(
-                            localization.string("metadata.title", defaultValue: "Clipboard")
-                        )
-                }
-                .font(PluginSettingsTheme.Typography.rowTitle)
-                .foregroundStyle(.secondary)
-                .help(localization.string("metadata.title", defaultValue: "Clipboard"))
-
                 PluginPaletteSearchToolbar(
                     text: searchText,
                     placeholder: searchPlaceholder,
