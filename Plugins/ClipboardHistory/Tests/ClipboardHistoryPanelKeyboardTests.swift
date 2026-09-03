@@ -5,6 +5,24 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
+    func testSearchQuerySummaryIsCompactAndDoesNotMutateTheQuery() {
+        let query = "first line\r\n\r\nsecond\tline"
+
+        XCTAssertEqual(
+            ClipboardHistorySearchQueryPresentation.summary(query),
+            "first line second line"
+        )
+        XCTAssertEqual(query, "first line\r\n\r\nsecond\tline")
+    }
+
+    func testSearchQuerySummaryTruncatesLongQueries() {
+        let query = String(repeating: "x", count: 140)
+        let summary = ClipboardHistorySearchQueryPresentation.summary(query)
+
+        XCTAssertEqual(summary.count, ClipboardHistorySearchQueryPresentation.maximumSummaryCharacterCount + 1)
+        XCTAssertTrue(summary.hasSuffix("…"))
+    }
+
     func testSequentialPasteHUDReservesPreviewGeometryBeforeDecodeCompletes() {
         XCTAssertEqual(ClipboardSequentialPasteHUDPreviewLayout.dimension(hasData: true), 48)
         XCTAssertEqual(ClipboardSequentialPasteHUDPreviewLayout.dimension(hasData: false), 0)

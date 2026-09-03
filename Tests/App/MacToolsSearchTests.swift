@@ -856,6 +856,48 @@ final class MacToolsSearchTests: XCTestCase {
         )
     }
 
+    func testPaletteSearchFieldNormalizesMultilineInputWithoutChangingOrdinaryTyping() {
+        XCTAssertEqual(
+            PluginPaletteSearchField.normalizedSingleLineText("first\r\nsecond\tthird\u{2028}fourth"),
+            "first second third fourth"
+        )
+        XCTAssertEqual(
+            PluginPaletteSearchField.normalizedSingleLineText("ordinary  spacing"),
+            "ordinary  spacing"
+        )
+    }
+
+    func testPaletteSearchFieldPreservesSelectionAcrossMultilineNormalization() {
+        XCTAssertEqual(
+            PluginPaletteSearchField.normalizedSelection(
+                NSRange(location: 14, length: 0),
+                in: "before one\ntwo after"
+            ),
+            NSRange(location: 14, length: 0)
+        )
+        XCTAssertEqual(
+            PluginPaletteSearchField.normalizedSelection(
+                NSRange(location: 8, length: 0),
+                in: "before \nafter"
+            ),
+            NSRange(location: 7, length: 0)
+        )
+    }
+
+    func testPaletteSearchFieldUsesSingleLineScrollableConfiguration() {
+        let field = PluginPaletteSearchField.SearchTextField(
+            frame: NSRect(x: 0, y: 0, width: 320, height: 22)
+        )
+        let input = "first\nsecond"
+        field.stringValue = input
+
+        XCTAssertTrue(field.usesSingleLineMode)
+        XCTAssertEqual(field.maximumNumberOfLines, 1)
+        XCTAssertFalse(field.cell?.wraps ?? true)
+        XCTAssertTrue(field.cell?.isScrollable ?? false)
+        XCTAssertEqual(field.stringValue, input)
+    }
+
     func testUnifiedSearchFocusRetriesUntilFocusCanBeClaimed() {
         let parent = PluginPaletteSearchField(
             text: .constant(""),

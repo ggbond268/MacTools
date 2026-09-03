@@ -3114,6 +3114,17 @@ struct ClipboardHistoryPanelPresentation: Equatable {
     }
 }
 
+enum ClipboardHistorySearchQueryPresentation {
+    static let maximumSummaryCharacterCount = 120
+
+    static func summary(_ query: String) -> String {
+        let compact = query.split(whereSeparator: \Character.isWhitespace).joined(separator: " ")
+        guard compact.count > maximumSummaryCharacterCount else { return compact }
+        return String(compact.prefix(maximumSummaryCharacterCount))
+            .trimmingCharacters(in: .whitespaces) + "…"
+    }
+}
+
 @MainActor
 private struct ClipboardRichTextPreviewView: View {
     let item: ClipboardHistoryItem
@@ -3830,7 +3841,9 @@ private struct ClipboardHistoryPanelView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView.search(text: model.query)
+                ContentUnavailableView.search(
+                    text: ClipboardHistorySearchQueryPresentation.summary(model.query)
+                )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else if presentation.showsHistory {
@@ -6816,7 +6829,9 @@ private struct ClipboardHistoryActionPalette: View {
                         }
 
                         if filteredEntries.isEmpty {
-                            ContentUnavailableView.search(text: model.query)
+                            ContentUnavailableView.search(
+                                text: ClipboardHistorySearchQueryPresentation.summary(model.query)
+                            )
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 28)
                         }

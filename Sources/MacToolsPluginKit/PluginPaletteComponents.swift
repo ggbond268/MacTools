@@ -59,7 +59,7 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
     }
 
     public func makeNSView(context: Context) -> NSTextField {
-        let field = SearchTextField()
+        let field = SearchTextField(frame: .zero)
         field.onAlternateSubmit = { [weak coordinator = context.coordinator] in
             coordinator?.parent.onCommand(.alternateSubmit)
         }
@@ -157,10 +157,64 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
             .subtracting([.capsLock, .numericPad, .function])
     }
 
+    static func normalizedSingleLineText(_ text: String) -> String {
+        guard text.unicodeScalars.contains(where: {
+            CharacterSet.newlines.contains($0) || $0 == "\t"
+        }) else {
+            return text
+        }
+        return text.split(whereSeparator: \Character.isWhitespace).joined(separator: " ")
+    }
+
+    static func normalizedSelection(
+        _ selection: NSRange,
+        in originalText: String
+    ) -> NSRange {
+        let string = originalText as NSString
+        let location = min(max(0, selection.location), string.length)
+        let length = min(max(0, selection.length), string.length - location)
+        let upperBound = location + length
+        let normalizedLocation = normalizedOffset(location, in: string)
+        let normalizedUpperBound = normalizedOffset(upperBound, in: string)
+        return NSRange(
+            location: normalizedLocation,
+            length: max(0, normalizedUpperBound - normalizedLocation)
+        )
+    }
+
+    private static func normalizedOffset(_ offset: Int, in text: NSString) -> Int {
+        let prefix = text.substring(to: offset)
+        let normalizedPrefix = normalizedSingleLineText(prefix)
+        guard prefix.last?.isWhitespace == true,
+              text.substring(from: offset).contains(where: { !$0.isWhitespace }),
+              !normalizedPrefix.isEmpty else {
+            return normalizedPrefix.utf16.count
+        }
+        return normalizedPrefix.utf16.count + 1
+    }
+
     @MainActor
     public final class SearchTextField: NSTextField {
         fileprivate var alternateSubmitModifier: NSEvent.ModifierFlags?
         fileprivate var onAlternateSubmit: (() -> Void)?
+
+        public override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            configureSingleLineEditing()
+        }
+
+        public required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            configureSingleLineEditing()
+        }
+
+        private func configureSingleLineEditing() {
+            usesSingleLineMode = true
+            maximumNumberOfLines = 1
+            cell?.usesSingleLineMode = true
+            cell?.wraps = false
+            cell?.isScrollable = true
+        }
 
         public override func performKeyEquivalent(with event: NSEvent) -> Bool {
             if PluginPaletteSearchField.isAlternateSubmitKeyEquivalent(
@@ -184,6 +238,7 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
         private var completedFocusRequestID: UInt?
         private var pendingFocusRequestID: UInt?
         private var focusTask: Task<Void, Never>?
+        private var isNormalizingText = false
         private let focusClaim: @MainActor (NSTextField) -> Bool
 
         init(
@@ -196,7 +251,29 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
 
         public func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
-            parent.text = field.stringValue
+            guard !isNormalizingText else { return }
+            let originalText = field.stringValue
+            guard let editor = field.currentEditor() as? NSTextView,
+                  !editor.hasMarkedText() else {
+                parent.text = originalText
+                return
+            }
+            let normalizedText = PluginPaletteSearchField.normalizedSingleLineText(originalText)
+            guard normalizedText != originalText else {
+                parent.text = originalText
+                return
+            }
+
+            let normalizedSelection = PluginPaletteSearchField.normalizedSelection(
+                editor.selectedRange(),
+                in: originalText
+            )
+            isNormalizingText = true
+            field.stringValue = normalizedText
+            editor.string = normalizedText
+            editor.setSelectedRange(normalizedSelection)
+            parent.text = normalizedText
+            isNormalizingText = false
         }
 
         public func control(
@@ -319,7 +396,8 @@ public struct PluginPaletteSearchBar: View {
                 alternateSubmitModifier: alternateSubmitModifier,
                 onCommand: onCommand
             )
-            .frame(maxWidth: .infinity, minHeight: 22)
+            .frame(maxWidth: .infinity, minHeight: 22, maxHeight: 22)
+            .clipped()
 
             if !text.isEmpty {
                 Button {
