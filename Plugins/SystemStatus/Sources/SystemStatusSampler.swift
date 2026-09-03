@@ -3,6 +3,7 @@ import Foundation
 import IOKit
 import IOKit.ps
 import MacToolsPluginKit
+import OSLog
 import SystemConfiguration
 
 protocol SystemStatusSampling: Sendable {
@@ -38,6 +39,10 @@ actor SystemStatusSampler: SystemStatusSampling {
 
     private static let systemPowerHealthCacheInterval: TimeInterval = 60 * 60
     private static let networkMetadataCacheInterval: TimeInterval = 10
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools",
+        category: "SystemStatusSampler"
+    )
 
     init(localization: PluginLocalization = PluginLocalization(bundle: .main)) {
         self.localization = localization
@@ -62,16 +67,17 @@ actor SystemStatusSampler: SystemStatusSampling {
     }
 
     func collectSlow() async -> SystemStatusSlowSample {
-        SystemStatusSlowSample(
+        let battery = await collectBattery()
+        return SystemStatusSlowSample(
             disk: Self.collectDiskCapacity(),
-            battery: collectBattery(),
+            battery: battery,
             gpu: collectGPU(),
             hardware: collectHardware()
         )
     }
 
     func collectTopProcesses(limit: Int = 3) async -> [SystemStatusTopProcess] {
-        Self.collectTopProcesses(limit: limit)
+        await Self.collectTopProcesses(limit: limit)
     }
 
     func collectPublicIPAddress() async -> String? {
@@ -816,7 +822,7 @@ actor SystemStatusSampler: SystemStatusSampling {
         return SystemStatusDiskIOCounter(readBytes: readBytes, writeBytes: writeBytes)
     }
 
-    private func collectBattery() -> SystemStatusBatterySnapshot {
+    private func collectBattery() async -> SystemStatusBatterySnapshot {
         guard
             let powerSourcesInfo = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
             let powerSources = IOPSCopyPowerSourcesList(powerSourcesInfo)?.takeRetainedValue() as? [CFTypeRef],
@@ -878,6 +884,12 @@ actor SystemStatusSampler: SystemStatusSampling {
         )
         let timeKey = isCharging ? kIOPSTimeToFullChargeKey : kIOPSTimeToEmptyKey
         let registryInfo = Self.collectBatteryRegistryInfo()
+        let healthPercent: Int?
+        if let registryHealthPercent = registryInfo.healthPercent {
+            healthPercent = registryHealthPercent
+        } else {
+            healthPercent = await systemPowerHealthPercent(referenceDate: Date())
+        }
 
         return SystemStatusBatterySnapshot(
             isAvailable: true,
@@ -887,12 +899,12 @@ actor SystemStatusSampler: SystemStatusSampling {
             adapterWatts: Self.adapterWatts(),
             batteryPowerWatts: registryInfo.batteryPowerWatts,
             temperatureCelsius: registryInfo.temperatureCelsius,
-            healthPercent: registryInfo.healthPercent ?? systemPowerHealthPercent(referenceDate: Date()),
+            healthPercent: healthPercent,
             cycleCount: registryInfo.cycleCount
         )
     }
 
-    private func systemPowerHealthPercent(referenceDate: Date) -> Int? {
+    private func systemPowerHealthPercent(referenceDate: Date) async -> Int? {
         if didCacheSystemPowerHealth,
            let lastSystemPowerHealthDate,
            referenceDate.timeIntervalSince(lastSystemPowerHealthDate) < Self.systemPowerHealthCacheInterval {
@@ -900,7 +912,7 @@ actor SystemStatusSampler: SystemStatusSampling {
         }
 
         let healthPercent: Int?
-        if let output = Self.runCommand(
+        if let output = await Self.runCommand(
             path: "/usr/sbin/system_profiler",
             arguments: ["SPPowerDataType", "-json"],
             timeout: 3
@@ -1571,54 +1583,37 @@ actor SystemStatusSampler: SystemStatusSampling {
         return vpnPrefixes.contains { lowercasedName.hasPrefix($0) }
     }
 
-    private static func collectTopProcesses(limit: Int) -> [SystemStatusTopProcess] {
-        guard let output = runCommand(path: "/bin/ps", arguments: ["-ww", "-Aceo", "pid=,pcpu=,pmem=,rss=,command=", "-r"]) else {
+    private static func collectTopProcesses(limit: Int) async -> [SystemStatusTopProcess] {
+        guard let output = await runCommand(path: "/bin/ps", arguments: ["-ww", "-Aceo", "pid=,pcpu=,pmem=,rss=,command=", "-r"]) else {
             return []
         }
 
         return SystemStatusProcessParser.parsePSOutputCandidates(output, limitPerSort: limit)
     }
 
-    private static func runCommand(path: String, arguments: [String], timeout: TimeInterval = 1) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
-        do {
-            try process.run()
-        } catch {
-            outputPipe.fileHandleForReading.closeFile()
-            errorPipe.fileHandleForReading.closeFile()
+    private static func runCommand(path: String, arguments: [String], timeout: TimeInterval = 1) async -> String? {
+        guard let result = await SystemStatusCommandRunner.run(
+            path: path,
+            arguments: arguments,
+            timeout: timeout
+        ) else {
+            logger.error("Failed to launch command at \(path, privacy: .public)")
             return nil
         }
 
-        let deadline = Date().addingTimeInterval(timeout)
-        while process.isRunning, Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.02)
-        }
-
-        guard !process.isRunning else {
-            process.terminate()
-            outputPipe.fileHandleForReading.closeFile()
-            errorPipe.fileHandleForReading.closeFile()
+        guard result.completion == .completed, result.terminationStatus == EXIT_SUCCESS else {
+            logger.error(
+                "Command failed at \(path, privacy: .public), status: \(result.terminationStatus), timed out: \(result.completion == .timedOut)"
+            )
             return nil
         }
 
-        process.waitUntilExit()
-        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        outputPipe.fileHandleForReading.closeFile()
-        errorPipe.fileHandleForReading.closeFile()
-
-        guard let output = String(data: outputData, encoding: .utf8), !output.isEmpty else {
+        guard !result.standardOutput.isEmpty else {
+            logger.error("Command returned no output at \(path, privacy: .public)")
             return nil
         }
 
-        return output
+        return result.standardOutput
     }
 
     private static func regexCaptures(_ pattern: String, in value: String) -> [String] {

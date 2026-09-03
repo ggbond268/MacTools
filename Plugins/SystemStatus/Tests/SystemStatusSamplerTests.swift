@@ -3,6 +3,35 @@ import XCTest
 @testable import SystemStatusPlugin
 
 final class SystemStatusSamplerTests: XCTestCase {
+    func testCommandRunnerDrainsOutputLargerThanPipeBuffer() async throws {
+        let lineCount = 100_000
+        let commandResult = await SystemStatusCommandRunner.run(
+            path: "/usr/bin/jot",
+            arguments: ["-b", "x", String(lineCount)],
+            timeout: 2
+        )
+        let result = try XCTUnwrap(commandResult)
+
+        XCTAssertEqual(result.completion, .completed)
+        XCTAssertEqual(result.terminationStatus, 0)
+        XCTAssertEqual(result.standardOutput, String(repeating: "x\n", count: lineCount))
+        XCTAssertEqual(result.standardError, "")
+    }
+
+    func testCommandRunnerTerminatesTimedOutProcess() async throws {
+        let clock = ContinuousClock()
+        let start = clock.now
+        let commandResult = await SystemStatusCommandRunner.run(
+            path: "/bin/sleep",
+            arguments: ["5"],
+            timeout: 0.05
+        )
+        let result = try XCTUnwrap(commandResult)
+
+        XCTAssertEqual(result.completion, .timedOut)
+        XCTAssertLessThan(start.duration(to: clock.now), .seconds(1))
+    }
+
     func testDetailStatisticsUseEveryVisibleReadingRegardlessOfDrawingBudget() {
         let history = (0..<600).map { index -> SystemStatusHistoryPoint in
             let cpu: Double = index == 1 ? 1 : 0
