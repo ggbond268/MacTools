@@ -2803,6 +2803,69 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         session.deactivate()
     }
 
+    func testSessionFailsOpenFixedOnlyTipTapWhenNativeDragBegins() throws {
+        let driver = MockMultitouchFrameListener()
+        let clock = LockedTestClock()
+        var postedTypes: [CGEventType] = []
+        let gesture = TrackpadGesture.tipTapLeftOneFixed
+        let session = MultitouchDeviceSession(
+            driver: driver,
+            testEventTapStart: { true },
+            testEventTapStop: {},
+            middleClickClock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postMiddleClickEvent: { postedTypes.append($0.type) },
+            middleClickAllowsContactInference: { true },
+            middleClickEventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        session.updateNativeClickResolutions([gesture: .consume])
+        XCTAssertTrue(session.activate(gestures: [gesture]))
+        defer { session.deactivate() }
+
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        driver.send(.init(deviceID: 1, timestamp: 0, contacts: []))
+        driver.send(.init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        driver.send(.init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+
+        let eventNumber: Int64 = 907
+        clock.value = 0.11
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(
+                type: .leftMouseDown,
+                eventNumber: eventNumber
+            ))
+        ))
+        clock.value = 0.111
+        XCTAssertTrue(session.handleNativeEventForTests(
+            type: .leftMouseDragged,
+            event: try XCTUnwrap(makeMouseEvent(
+                type: .leftMouseDragged,
+                eventNumber: eventNumber
+            ))
+        ))
+        XCTAssertEqual(postedTypes, [.leftMouseDown, .leftMouseDragged])
+
+        clock.value = 0.112
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseDragged,
+            event: try XCTUnwrap(makeMouseEvent(
+                type: .leftMouseDragged,
+                eventNumber: eventNumber
+            ))
+        ))
+        clock.value = 0.113
+        XCTAssertFalse(session.handleNativeEventForTests(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(
+                type: .leftMouseUp,
+                eventNumber: eventNumber
+            ))
+        ))
+    }
+
     func testSessionReplaysFailedTipTapBeforeRapidValidRetry() async throws {
         let driver = MockMultitouchFrameListener()
         let clock = LockedTestClock()

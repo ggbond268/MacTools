@@ -810,6 +810,7 @@ struct TrackpadMiddleClickArbiter: Sendable {
 
     enum NativeEvent: Equatable, Sendable {
         case down(Button)
+        case drag(Button)
         case up(Button)
     }
 
@@ -823,6 +824,7 @@ struct TrackpadMiddleClickArbiter: Sendable {
     enum CurrentEventDecision: Equatable, Sendable {
         case passThrough
         case suppressAndBuffer
+        case replayBufferedThenCurrent
         case suppress
         case rewriteAsMiddle
     }
@@ -1187,6 +1189,13 @@ struct TrackpadMiddleClickArbiter: Sendable {
         var actions = expire(at: time)
 
         if let convertedButton, let convertedDeviceID {
+            if event == .drag(convertedButton),
+               origin == .trackpad(deviceID: convertedDeviceID) {
+                return NativeEventOutcome(
+                    decision: .rewriteAsMiddle,
+                    deferredActions: actions
+                )
+            }
             if event == .up(convertedButton), origin == .trackpad(deviceID: convertedDeviceID) {
                 clearConvertedState()
                 return NativeEventOutcome(
@@ -1198,11 +1207,54 @@ struct TrackpadMiddleClickArbiter: Sendable {
         }
 
         if let consumedButton, let consumedDeviceID {
+            if event == .drag(consumedButton),
+               origin == .trackpad(deviceID: consumedDeviceID) {
+                return NativeEventOutcome(decision: .suppress, deferredActions: actions)
+            }
             if event == .up(consumedButton), origin == .trackpad(deviceID: consumedDeviceID) {
                 clearConsumedState()
                 return NativeEventOutcome(decision: .suppress, deferredActions: actions)
             }
             return NativeEventOutcome(decision: .passThrough, deferredActions: actions)
+        }
+
+        if event.isDrag {
+            guard case let .trackpad(originDeviceID) = origin else {
+                if !bufferedEvents.isEmpty {
+                    actions.append(.replayBuffered)
+                    markBufferedDeviceAmbiguous()
+                    clearBufferedState()
+                }
+                actions.append(contentsOf: abandonRecognitionState())
+                return NativeEventOutcome(decision: .passThrough, deferredActions: actions)
+            }
+
+            guard !bufferedEvents.isEmpty else {
+                if candidateDeadlinesByDevice[originDeviceID] != nil {
+                    ambiguousDeadlinesByDevice[originDeviceID] =
+                        candidateDeadlinesByDevice[originDeviceID]
+                }
+                actions.append(contentsOf: abandonRecognitionState(deviceID: originDeviceID))
+                return NativeEventOutcome(decision: .passThrough, deferredActions: actions)
+            }
+
+            guard validBufferedDownButton() == event.button,
+                  bufferedDeviceID == originDeviceID else {
+                actions.append(.replayBuffered)
+                markBufferedDeviceAmbiguous()
+                clearBufferedState()
+                actions.append(contentsOf: abandonRecognitionState())
+                return NativeEventOutcome(decision: .passThrough, deferredActions: actions)
+            }
+
+            actions.append(.replayBuffered)
+            markBufferedDeviceAmbiguous()
+            clearBufferedState()
+            actions.append(contentsOf: abandonRecognitionState(deviceID: originDeviceID))
+            return NativeEventOutcome(
+                decision: .replayBufferedThenCurrent,
+                deferredActions: actions
+            )
         }
 
         guard case let .trackpad(originDeviceID) = origin else {
@@ -1254,6 +1306,9 @@ struct TrackpadMiddleClickArbiter: Sendable {
                 // Seeing an Up without its Down means correlation is ambiguous. Preserve the
                 // native event and do not add a synthetic middle click.
                 actions.append(contentsOf: abandonRecognition(recognition))
+                return NativeEventOutcome(decision: .passThrough, deferredActions: actions)
+            case .drag:
+                // Drag events are resolved before pending recognition handling above.
                 return NativeEventOutcome(decision: .passThrough, deferredActions: actions)
             }
         }
@@ -1458,6 +1513,14 @@ struct TrackpadMiddleClickArbiter: Sendable {
         return actions
     }
 
+    private mutating func abandonRecognitionState(deviceID: UInt64) -> [DeferredAction] {
+        let abandoned = pendingRecognitions.filter { $0.deviceID == deviceID }
+        pendingRecognitions.removeAll { $0.deviceID == deviceID }
+        return abandoned.compactMap { recognition in
+            recognition.tipTapEpisodeID.map(DeferredAction.abandonTipTapRecognition)
+        }
+    }
+
     private mutating func removeRecognition(tipTapEpisodeID: TrackpadTipTapEpisodeID) {
         pendingRecognitions.removeAll { $0.tipTapEpisodeID == tipTapEpisodeID }
     }
@@ -1582,6 +1645,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         let tipTapEpisodeID: TrackpadTipTapEpisodeID?
         let beganAt: TimeInterval
         let terminalDisposition: NativeClickTerminalDisposition?
+        let passesNativeDragThrough: Bool
         let suppressOriginalUpAfterReset: Bool
     }
 
@@ -1756,12 +1820,24 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         guard let nativeEvent = nativeEvent(for: type) else {
             return Unmanaged.passUnretained(event)
         }
+        if nativeEvent.isDrag {
+            let clickKey = NativeClickKey(
+                button: nativeEvent.button,
+                eventNumber: event.getIntegerValueField(.mouseEventNumber)
+            )
+            if nativeOriginsByClick[clickKey]?.passesNativeDragThrough == true {
+                return Unmanaged.passUnretained(event)
+            }
+        }
 
         let now = clock()
         pruneNativeClickOwnership(at: now)
         // A retrying native Down can overtake the main-queue notification posted by the frame
         // callback. Drain first so a failed episode's buffered click cannot taint this event.
         drainTipTapStateChanges(at: now)
+        if nativeEvent.isDrag {
+            return handleNativeDragEvent(nativeEvent, event: event, at: now)
+        }
         let clickKey = NativeClickKey(
             button: nativeEvent.button,
             eventNumber: event.getIntegerValueField(.mouseEventNumber)
@@ -1854,6 +1930,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 tipTapEpisodeID: nil,
                 beganAt: now,
                 terminalDisposition: nil,
+                passesNativeDragThrough: false,
                 suppressOriginalUpAfterReset: false
             )
         }
@@ -1888,6 +1965,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                     tipTapEpisodeID: rejectedEpisodeID,
                     beganAt: ownership.beganAt,
                     terminalDisposition: ownership.terminalDisposition,
+                    passesNativeDragThrough: ownership.passesNativeDragThrough,
                     suppressOriginalUpAfterReset: ownership.suppressOriginalUpAfterReset
                 )
             } else if let rejectedEpisodeID {
@@ -1918,6 +1996,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 tipTapEpisodeID: activeTipTapEpisodeID,
                 beganAt: ownership.beganAt,
                 terminalDisposition: ownership.terminalDisposition,
+                passesNativeDragThrough: ownership.passesNativeDragThrough,
                 suppressOriginalUpAfterReset: ownership.suppressOriginalUpAfterReset
             )
             nativeOriginsByClick[clickKey] = ownership
@@ -2001,7 +2080,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 markTerminalDisposition(.converted, for: clickKey)
             case .suppress:
                 markTerminalDisposition(.consumed, for: clickKey)
-            case .passThrough, .suppressAndBuffer:
+            case .passThrough, .suppressAndBuffer, .replayBufferedThenCurrent:
                 break
             }
         }
@@ -2028,7 +2107,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                     recognizedPhysicalClick.deviceID
                 )
             }
-            rewriteAsMiddle(event, isDown: nativeEvent.isDown)
+            rewriteAsMiddle(event, nativeEvent: nativeEvent)
             if !nativeEvent.isDown,
                isRetainedRejectedTipTapOwnership,
                let activeTipTapEpisodeID {
@@ -2068,6 +2147,57 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 candidateTimeline.completeRejectedNativeClick(activeTipTapEpisodeID)
             }
             return nil
+        case .replayBufferedThenCurrent:
+            // Drag events are handled before click-pair ownership processing so this state is
+            // unreachable here. Keep the fallback fail-open if a future event path reaches it.
+            return Unmanaged.passUnretained(event)
+        }
+    }
+
+    private func handleNativeDragEvent(
+        _ nativeEvent: TrackpadMiddleClickArbiter.NativeEvent,
+        event: CGEvent,
+        at time: TimeInterval
+    ) -> Unmanaged<CGEvent>? {
+        let clickKey = NativeClickKey(
+            button: nativeEvent.button,
+            eventNumber: event.getIntegerValueField(.mouseEventNumber)
+        )
+        let origin = nativeOriginsByClick[clickKey]?.origin ?? eventOrigin(event)
+        if pendingPhysicalClick?.deviceID == origin.trackpadDeviceID {
+            pendingPhysicalClick = nil
+        }
+        let outcome = arbiter.handleNativeEvent(nativeEvent, origin: origin, at: time)
+        defer { scheduleExpiration() }
+
+        switch outcome.decision {
+        case .passThrough:
+            markNativeDragPassThrough(for: clickKey)
+            process(outcome.deferredActions)
+            return Unmanaged.passUnretained(event)
+        case .suppress:
+            process(outcome.deferredActions)
+            return nil
+        case .rewriteAsMiddle:
+            process(outcome.deferredActions)
+            rewriteAsMiddle(event, nativeEvent: nativeEvent)
+            return Unmanaged.passUnretained(event)
+        case .replayBufferedThenCurrent:
+            markNativeDragPassThrough(for: clickKey)
+            if let eventCopy = event.copy() {
+                bufferedEvents.append(eventCopy)
+                process(outcome.deferredActions)
+            } else {
+                // Preserve ordering even in the unlikely event-copy failure path by posting the
+                // live event immediately after the buffered Down, then suppressing its original.
+                process(outcome.deferredActions)
+                post(event)
+            }
+            return nil
+        case .suppressAndBuffer:
+            // A drag is never allowed to extend a gesture-recognition buffer.
+            process(outcome.deferredActions)
+            return Unmanaged.passUnretained(event)
         }
     }
 
@@ -2088,6 +2218,11 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
               ownership.suppressOriginalUpAfterReset else {
             return Unmanaged.passUnretained(event)
         }
+        guard nativeEvent.isUp else {
+            // Reset already balanced any converted middle-button Down. Continue suppressing the
+            // original drag stream until its exact Up arrives so clients never see an orphan drag.
+            return nil
+        }
         nativeOriginsByClick.removeValue(forKey: clickKey)
         scheduleExpiration()
         return nil
@@ -2107,6 +2242,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                     tipTapEpisodeID: ownership.tipTapEpisodeID,
                     beganAt: ownership.beganAt,
                     terminalDisposition: ownership.terminalDisposition,
+                    passesNativeDragThrough: ownership.passesNativeDragThrough,
                     suppressOriginalUpAfterReset: true
                 )
             }
@@ -2171,7 +2307,9 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             case .convertBuffered:
                 markBufferedNativeDownTerminalDisposition(.converted)
                 bufferedEvents.forEach { event in
-                    rewriteAsMiddle(event, isDown: nativeEvent(for: event.type)?.isDown == true)
+                    if let nativeEvent = nativeEvent(for: event.type) {
+                        rewriteAsMiddle(event, nativeEvent: nativeEvent)
+                    }
                     post(event)
                 }
                 bufferedEvents.removeAll()
@@ -2237,6 +2375,24 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             tipTapEpisodeID: ownership.tipTapEpisodeID,
             beganAt: ownership.beganAt,
             terminalDisposition: disposition,
+            passesNativeDragThrough: ownership.passesNativeDragThrough,
+            suppressOriginalUpAfterReset: ownership.suppressOriginalUpAfterReset
+        )
+    }
+
+    private func markNativeDragPassThrough(for clickKey: NativeClickKey) {
+        guard let ownership = nativeOriginsByClick[clickKey],
+              ownership.terminalDisposition == nil,
+              !ownership.passesNativeDragThrough else {
+            return
+        }
+        nativeOriginsByClick[clickKey] = NativeClickOwnership(
+            origin: ownership.origin,
+            contactEpisodeID: ownership.contactEpisodeID,
+            tipTapEpisodeID: ownership.tipTapEpisodeID,
+            beganAt: ownership.beganAt,
+            terminalDisposition: nil,
+            passesNativeDragThrough: true,
             suppressOriginalUpAfterReset: ownership.suppressOriginalUpAfterReset
         )
     }
@@ -2321,8 +2477,15 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         postEvent(event)
     }
 
-    private func rewriteAsMiddle(_ event: CGEvent, isDown: Bool) {
-        event.type = isDown ? .otherMouseDown : .otherMouseUp
+    private func rewriteAsMiddle(
+        _ event: CGEvent,
+        nativeEvent: TrackpadMiddleClickArbiter.NativeEvent
+    ) {
+        event.type = switch nativeEvent {
+        case .down: .otherMouseDown
+        case .drag: .otherMouseDragged
+        case .up: .otherMouseUp
+        }
         event.setIntegerValueField(
             .mouseEventButtonNumber,
             value: Int64(CGMouseButton.center.rawValue)
@@ -2332,8 +2495,10 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
     private func nativeEvent(for type: CGEventType) -> TrackpadMiddleClickArbiter.NativeEvent? {
         switch type {
         case .leftMouseDown: .down(.left)
+        case .leftMouseDragged: .drag(.left)
         case .leftMouseUp: .up(.left)
         case .rightMouseDown: .down(.right)
+        case .rightMouseDragged: .drag(.right)
         case .rightMouseUp: .up(.right)
         default: nil
         }
@@ -2406,9 +2571,19 @@ private extension TrackpadMiddleClickArbiter.NativeEvent {
         return false
     }
 
+    var isDrag: Bool {
+        if case .drag = self { return true }
+        return false
+    }
+
+    var isUp: Bool {
+        if case .up = self { return true }
+        return false
+    }
+
     var button: TrackpadMiddleClickArbiter.Button {
         switch self {
-        case let .down(button), let .up(button):
+        case let .down(button), let .drag(button), let .up(button):
             return button
         }
     }

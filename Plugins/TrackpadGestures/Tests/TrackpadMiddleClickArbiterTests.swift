@@ -40,6 +40,101 @@ private final class LockedTipTapCommitRecorder: @unchecked Sendable {
 }
 
 final class TrackpadMiddleClickArbiterTests: XCTestCase {
+    func testBufferedCandidateDragReplaysNativeInputAndStopsGestureOwnership() {
+        var arbiter = makeArbiter()
+        arbiter.observeCandidate(deviceID: 1, at: 0)
+        XCTAssertEqual(
+            arbiter.handleNativeEvent(
+                .down(.left), origin: .trackpad(deviceID: 1), at: 0.01
+            ).decision,
+            .suppressAndBuffer
+        )
+
+        let drag = arbiter.handleNativeEvent(
+            .drag(.left), origin: .trackpad(deviceID: 1), at: 0.011
+        )
+
+        XCTAssertEqual(drag.decision, .replayBufferedThenCurrent)
+        XCTAssertEqual(drag.deferredActions, [.replayBuffered])
+        XCTAssertEqual(
+            arbiter.handleNativeEvent(
+                .up(.left), origin: .trackpad(deviceID: 1), at: 0.02
+            ).decision,
+            .passThrough
+        )
+        XCTAssertEqual(
+            arbiter.attemptRecognition(
+                deviceID: 1,
+                resolution: .consume,
+                at: 0.03
+            ).disposition,
+            .rejected
+        )
+    }
+
+    func testCommittedNativeDispositionIncludesDragEvents() {
+        for resolution in [TrackpadNativeClickResolution.consume, .middleClick] {
+            var arbiter = makeArbiter()
+            arbiter.observeCandidate(deviceID: 1, at: 0)
+            XCTAssertTrue(arbiter.recognize(
+                deviceID: 1,
+                resolution: resolution,
+                at: 0.01
+            ).isEmpty)
+
+            let down = arbiter.handleNativeEvent(
+                .down(.right), origin: .trackpad(deviceID: 1), at: 0.02
+            )
+            let drag = arbiter.handleNativeEvent(
+                .drag(.right), origin: .trackpad(deviceID: 1), at: 0.03
+            )
+            let up = arbiter.handleNativeEvent(
+                .up(.right), origin: .trackpad(deviceID: 1), at: 0.04
+            )
+            let expected: TrackpadMiddleClickArbiter.CurrentEventDecision =
+                resolution == .consume ? .suppress : .rewriteAsMiddle
+
+            XCTAssertEqual(down.decision, expected)
+            XCTAssertEqual(drag.decision, expected)
+            XCTAssertEqual(up.decision, expected)
+        }
+    }
+
+    func testDragCancelsOnlyItsTrackpadPendingRecognition() {
+        var arbiter = makeArbiter()
+        let firstEpisode = TrackpadContactEpisodeID(deviceID: 1, sequence: 11)
+        let secondEpisode = TrackpadContactEpisodeID(deviceID: 2, sequence: 22)
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: firstEpisode, at: 0)
+        arbiter.observeCandidate(deviceID: 2, contactEpisodeID: secondEpisode, at: 0)
+        XCTAssertEqual(
+            arbiter.attemptRecognition(
+                deviceID: 2,
+                contactEpisodeID: secondEpisode,
+                resolution: .consume,
+                at: 0.01
+            ).disposition,
+            .pending
+        )
+
+        XCTAssertEqual(
+            arbiter.handleNativeEvent(
+                .drag(.left),
+                origin: .trackpad(deviceID: 1),
+                at: 0.02
+            ).decision,
+            .passThrough
+        )
+        XCTAssertEqual(
+            arbiter.handleNativeEvent(
+                .down(.left),
+                origin: .trackpad(deviceID: 2),
+                at: 0.03,
+                contactEpisodeID: secondEpisode
+            ).decision,
+            .suppress
+        )
+    }
+
     func testShortcutRecognitionDiscardsCompleteBufferedNativeClick() {
         var arbiter = makeArbiter()
         arbiter.observeCandidate(deviceID: 1, at: 0)
@@ -3048,6 +3143,138 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.reset()
     }
 
+    func testFixedOnlyTipTapBufferReplaysDownAndFirstDragInOrder() throws {
+        let clock = LockedMiddleClickTestClock()
+        var postedTypes: [CGEventType] = []
+        let coordinator = TrackpadMiddleClickCoordinator(
+            clock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postEvent: { postedTypes.append($0.type) },
+            tipTapOrderingWindow: 0.02,
+            eventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        coordinator.updateClickResolutions([.tipTapLeftOneFixed: .consume])
+        let fixed = [TrackpadContactSnapshot(identifier: 1, x: 0.5, y: 0.5)]
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.01, contacts: fixed))
+        clock.value = 0.10
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.10, contacts: fixed))
+
+        clock.value = 0.11
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 101))
+        ))
+        clock.value = 0.111
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseDragged,
+            event: try XCTUnwrap(makeMouseEvent(type: .leftMouseDragged, eventNumber: 101))
+        ))
+
+        XCTAssertEqual(postedTypes, [.leftMouseDown, .leftMouseDragged])
+
+        let subsequentDrag = try XCTUnwrap(
+            makeMouseEvent(type: .leftMouseDragged, eventNumber: 101)
+        )
+        let up = try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 101))
+        clock.value = 0.112
+        XCTAssertNotNil(coordinator.handleNativeEvent(
+            type: .leftMouseDragged,
+            event: subsequentDrag
+        ))
+        clock.value = 0.113
+        XCTAssertNotNil(coordinator.handleNativeEvent(
+            type: .leftMouseUp,
+            event: up
+        ))
+        XCTAssertEqual(postedTypes, [.leftMouseDown, .leftMouseDragged])
+        coordinator.reset()
+    }
+
+    func testMiddleClickConversionRewritesDragWithMatchingButton() throws {
+        let clock = LockedMiddleClickTestClock()
+        let coordinator = TrackpadMiddleClickCoordinator(
+            clock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postEvent: { _ in },
+            eventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        coordinator.updateClickResolutions([.threeFingerTap: .middleClick])
+        coordinator.observe(frame: makeThreeContactFrame())
+        clock.value = 0.01
+        XCTAssertTrue(coordinator.recognize(
+            gesture: .threeFingerTap,
+            deviceID: 1,
+            resolution: .middleClick
+        ))
+
+        let down = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 102))
+        let drag = try XCTUnwrap(makeMouseEvent(type: .leftMouseDragged, eventNumber: 102))
+        let up = try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 102))
+        clock.value = 0.02
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: down))
+        clock.value = 0.03
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseDragged, event: drag))
+        clock.value = 0.04
+        XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseUp, event: up))
+
+        XCTAssertEqual(down.type, .otherMouseDown)
+        XCTAssertEqual(drag.type, .otherMouseDragged)
+        XCTAssertEqual(up.type, .otherMouseUp)
+        coordinator.reset()
+    }
+
+    func testLifecycleResetSuppressesOrphanDragUntilExactOriginalUp() throws {
+        let clock = LockedMiddleClickTestClock()
+        let coordinator = TrackpadMiddleClickCoordinator(
+            clock: { clock.value },
+            synthesizeMiddleClick: {},
+            releaseMiddleButton: {},
+            postEvent: { _ in },
+            eventOrigin: { _ in .trackpad(deviceID: 1) }
+        )
+        coordinator.updateClickResolutions([.threeFingerTap: .consume])
+        coordinator.observe(frame: makeThreeContactFrame())
+        clock.value = 0.01
+        XCTAssertTrue(coordinator.recognize(
+            gesture: .threeFingerTap,
+            deviceID: 1,
+            resolution: .consume
+        ))
+        let eventNumber: Int64 = 103
+        clock.value = 0.02
+        XCTAssertNil(coordinator.handleNativeEvent(
+            type: .leftMouseDown,
+            event: try XCTUnwrap(makeMouseEvent(
+                type: .leftMouseDown,
+                eventNumber: eventNumber
+            ))
+        ))
+        coordinator.reset(preservingTerminalNativePairs: true)
+
+        clock.value = 0.03
+        XCTAssertNil(coordinator.handleLifecycleSuppressedNativeEvent(
+            type: .leftMouseDragged,
+            event: try XCTUnwrap(makeMouseEvent(
+                type: .leftMouseDragged,
+                eventNumber: eventNumber
+            ))
+        ))
+        XCTAssertEqual(coordinator.nativeClickOwnershipCountForTests(button: .left), 1)
+        clock.value = 0.04
+        XCTAssertNil(coordinator.handleLifecycleSuppressedNativeEvent(
+            type: .leftMouseUp,
+            event: try XCTUnwrap(makeMouseEvent(
+                type: .leftMouseUp,
+                eventNumber: eventNumber
+            ))
+        ))
+        XCTAssertEqual(coordinator.nativeClickOwnershipCountForTests(button: .left), 0)
+        coordinator.reset()
+    }
+
     func testPhysicalClickCanFollowRejectedTipTapWithoutLiftingFixedFingers() throws {
         let clock = LockedMiddleClickTestClock()
         let recognized = LockedPhysicalClickRecorder()
@@ -3632,7 +3859,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
 
     private func makeMouseEvent(type: CGEventType, eventNumber: Int64 = 0) -> CGEvent? {
         let button: CGMouseButton = switch type {
-        case .rightMouseDown, .rightMouseUp: .right
+        case .rightMouseDown, .rightMouseDragged, .rightMouseUp: .right
         default: .left
         }
         let event = CGEvent(
