@@ -896,6 +896,10 @@ final class MacToolsSearchTests: XCTestCase {
         XCTAssertFalse(field.cell?.wraps ?? true)
         XCTAssertTrue(field.cell?.isScrollable ?? false)
         XCTAssertEqual(field.stringValue, input)
+        XCTAssertEqual(
+            field.intrinsicContentSize.height,
+            PluginPaletteMetrics.searchTextFieldHeight
+        )
     }
 
     func testUnifiedSearchFocusRetriesUntilFocusCanBeClaimed() {

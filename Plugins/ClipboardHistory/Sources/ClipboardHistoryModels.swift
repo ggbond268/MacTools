@@ -1343,6 +1343,7 @@ enum ClipboardHistorySearch {
     static let maximumNormalizedCharacterCount = 4_096
     static let maximumTokenCount = 128
     static let maximumTokenCharacterCount = 128
+    static let maximumPrimaryTextTokenCount = 48
     static let maximumWordFragmentStateCount = 512
 
     struct Result: Equatable, Sendable {
@@ -1448,7 +1449,7 @@ enum ClipboardHistorySearch {
         imageSearchText: String?
     ) -> ClipboardHistorySearchIndex {
         let fields: [(value: String?, characterLimit: Int, tokenLimit: Int)] = [
-            (text, 2_048, 48),
+            (text, 2_048, maximumPrimaryTextTokenCount),
             (sourceApplication?.name, 256, 16),
             (sourceApplication?.bundleIdentifier, 256, 16),
             (fileURLs.map(\.path).joined(separator: " "), 508, 16),
@@ -1631,9 +1632,10 @@ enum ClipboardHistorySearch {
     }
 
     private static func normalized(_ value: String) -> String {
-        value
+        let folded = value
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
             .lowercased()
+        return folded.split(whereSeparator: \Character.isWhitespace).joined(separator: " ")
     }
 
     private static func tokens(

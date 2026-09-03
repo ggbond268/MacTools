@@ -8,6 +8,7 @@ public enum PluginPaletteMetrics {
     public static let searchCornerRadius: CGFloat = 9
     public static let searchHorizontalPadding: CGFloat = 12
     public static let searchVerticalPadding: CGFloat = 9
+    public static let searchTextFieldHeight: CGFloat = 24
     public static let searchContentSpacing: CGFloat = 8
     public static let searchToolbarSpacing: CGFloat = 8
     public static let toolbarControlSize = CGSize(width: 40, height: 40)
@@ -208,6 +209,12 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
             configureSingleLineEditing()
         }
 
+        public override var intrinsicContentSize: NSSize {
+            var size = super.intrinsicContentSize
+            size.height = PluginPaletteMetrics.searchTextFieldHeight
+            return size
+        }
+
         private func configureSingleLineEditing() {
             usesSingleLineMode = true
             maximumNumberOfLines = 1
@@ -396,8 +403,12 @@ public struct PluginPaletteSearchBar: View {
                 alternateSubmitModifier: alternateSubmitModifier,
                 onCommand: onCommand
             )
-            .frame(maxWidth: .infinity, minHeight: 22, maxHeight: 22)
-            .clipped()
+            .frame(
+                maxWidth: .infinity,
+                minHeight: PluginPaletteMetrics.searchTextFieldHeight,
+                idealHeight: PluginPaletteMetrics.searchTextFieldHeight,
+                maxHeight: PluginPaletteMetrics.searchTextFieldHeight
+            )
 
             if !text.isEmpty {
                 Button {

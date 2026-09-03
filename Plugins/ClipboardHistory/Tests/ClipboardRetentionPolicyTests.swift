@@ -422,6 +422,27 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
         )
     }
 
+    func testSearchMatchesFullMultilineClipAfterSearchFieldWhitespaceNormalization() {
+        let text = (0..<64).map { "word\($0)" }.joined(separator: "\n")
+        let normalizedQuery = text.split(whereSeparator: \Character.isWhitespace).joined(separator: " ")
+        let matching = item(text: text, date: Date(), pinned: false)
+
+        XCTAssertGreaterThan(
+            normalizedQuery.split(separator: " ").count,
+            ClipboardHistorySearch.maximumPrimaryTextTokenCount
+        )
+        XCTAssertEqual(ClipboardHistorySearch.filter([matching], query: normalizedQuery), [matching])
+    }
+
+    func testSearchTreatsLineBreakTabAndSpaceSeparatorsAsEquivalent() {
+        let matching = item(text: "first\r\nsecond\tthird\u{2028}fourth", date: Date(), pinned: false)
+
+        XCTAssertEqual(
+            ClipboardHistorySearch.filter([matching], query: "first second third fourth"),
+            [matching]
+        )
+    }
+
     func testSearchMatchesCompactPrefixesAcrossConsecutiveWords() {
         let matching = item(text: "foo bar baz", date: Date(), pinned: false)
         let wrongMiddleWord = item(text: "food qux baz", date: Date(), pinned: false)
