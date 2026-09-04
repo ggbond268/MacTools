@@ -4,4 +4,4 @@ type: changed
 area: Settings
 ---
 
-Settings sections now remember their collapsed state. Dynamic Command-number shortcuts follow visible rows, Command-Shift-F searches plugin settings, and Command-F stays on the current page. The sidebar now distinguishes the open page, a keyboard search candidate, and a collapsed section containing the open page.
+Settings sections remember collapse; Command-number follows visible rows, Command-Shift-F searches plugins, and Command-F searches the page. Open pages, search candidates, and containing groups use distinct indicators.
