@@ -2,6 +2,10 @@ settings:
   base:
     OTHER_LDFLAGS: -framework IOKit
 
+core:
+  sources:
+    - path: SMCHelper/Sources/BatteryForceDischargePolicy.swift
+
 targets:
   mactools-battery-smc-helper:
     type: tool
