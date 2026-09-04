@@ -173,6 +173,45 @@ final class SystemStatusPluginTests: XCTestCase {
         )
     }
 
+    func testSystemStatusActionUsesMenuBarOverviewWhenAvailableAndDashboardOtherwise() {
+        XCTAssertEqual(
+            SystemStatusShortcutPresentationPolicy.destination(hasMenuBarButton: true),
+            .menuBarOverview
+        )
+        XCTAssertEqual(
+            SystemStatusShortcutPresentationPolicy.destination(hasMenuBarButton: false),
+            .dashboard
+        )
+    }
+
+    func testSystemStatusActionAndShortcutSettingsDescribeOneOptionalGlobalAction() async throws {
+        let plugin = SystemStatusPlugin(storage: SystemStatusMemoryPluginStorage())
+        XCTAssertEqual(plugin.actionDefinitions.count, 1)
+        let definition = try XCTUnwrap(plugin.actionDefinitions.first)
+
+        XCTAssertEqual(definition.key.providerID, "system-status")
+        XCTAssertEqual(definition.key.actionID, "show-system-status")
+        XCTAssertEqual(definition.externalInvocationPolicy, .unavailable)
+        XCTAssertEqual(definition.capabilities, [.foregroundInteractive])
+        XCTAssertTrue(plugin.shortcutDefinitions.isEmpty)
+
+        let configuration = plugin.actionShortcutSettingsConfiguration
+        XCTAssertEqual(configuration.actionIDs, ["show-system-status"])
+        XCTAssertEqual(configuration.placementAfterSectionID, "menu-bar-metrics")
+        XCTAssertNil(configuration.description)
+
+        var dashboardPresentationCount = 0
+        plugin.requestDashboardPresentation = { dashboardPresentationCount += 1 }
+        let result = try await plugin.beginAction(ActionInvocation(
+            reference: ActionReference(key: definition.key),
+            source: .test,
+            mode: .foreground
+        )).result()
+
+        XCTAssertEqual(result, .succeeded())
+        XCTAssertEqual(dashboardPresentationCount, 1)
+    }
+
     func testConfigurationDefaultsShowPanelMetricsAndHideMenuBarMetrics() {
         let controller = SystemStatusSettingsController(
             store: SystemStatusPluginStorageConfigurationStore(storage: SystemStatusMemoryPluginStorage())
@@ -830,6 +869,8 @@ final class SystemStatusPluginTests: XCTestCase {
                 .map(\.rawValue)
         )
         let exactKeys: Set<String> = [
+            "action.showSystemStatus.description",
+            "action.showSystemStatus.title",
             "disk.availableUnitFormat",
             "chart.range30Minutes",
             "chart.range2Hours",
@@ -867,6 +908,7 @@ final class SystemStatusPluginTests: XCTestCase {
             "settings.menuBarValue.first",
             "settings.menuBarValue.secondOptional",
             "settings.metric.reorderAccessibility",
+            "settings.shortcuts.title",
             "topProcesses.openActivityMonitor",
             "topProcesses.sortHelpFormat",
         ]

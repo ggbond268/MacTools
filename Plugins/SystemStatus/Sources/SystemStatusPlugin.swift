@@ -24,6 +24,8 @@ private struct SystemStatusPluginProvider: PluginProvider {
 @MainActor
 final class SystemStatusPlugin:
     MacToolsPlugin,
+    PluginActionProviding,
+    PluginActionShortcutSettingsProviding,
     PluginComponentPanel,
     PluginPanelSurfaceLifecycleHandling,
     PluginSettingsPresenting,
@@ -33,6 +35,10 @@ final class SystemStatusPlugin:
     PluginPortablePreferencesRestorationReporting,
     PluginPersistentPreferencesChangeSignaling
 {
+    private enum ActionID {
+        static let showSystemStatus = "show-system-status"
+    }
+
     let metadata: PluginMetadata
 
     var descriptor: PluginComponentDescriptor {
@@ -128,6 +134,35 @@ final class SystemStatusPlugin:
 
     var permissionRequirements: [PluginPermissionRequirement] { [] }
     var shortcutDefinitions: [PluginShortcutDefinition] { [] }
+
+    var actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration {
+        PluginActionShortcutSettingsConfiguration(
+            title: localization.string(
+                "settings.shortcuts.title",
+                defaultValue: "快捷键"
+            ),
+            systemImage: "command",
+            actionIDs: [ActionID.showSystemStatus],
+            placementAfterSectionID: "menu-bar-metrics"
+        )
+    }
+
+    var actionDefinitions: [ActionDefinition] {
+        [
+            ActionDefinition(
+                key: ActionKey(
+                    providerID: metadata.id,
+                    actionID: ActionID.showSystemStatus
+                ),
+                title: actionTitle,
+                description: actionDescription,
+                keywords: [metadata.title, actionTitle],
+                systemImage: metadata.iconName,
+                externalInvocationPolicy: .unavailable,
+                capabilities: [.foregroundInteractive]
+            ),
+        ]
+    }
 
     var settingsPage: PluginSettingsPage? {
         .form(description: metadata.defaultDescription, sections: [
@@ -260,6 +295,31 @@ final class SystemStatusPlugin:
     func handlePermissionAction(id: String) {}
     func handleSettingsAction(_ action: PluginSettingsAction) {}
     func handleShortcutAction(id: String) {}
+
+    func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
+        guard invocation.reference.key.providerID == metadata.id,
+              invocation.reference.key.actionID == ActionID.showSystemStatus else {
+            return ActionExecutionHandle {
+                .failed(message: PluginKitLocalization.actionUnavailable)
+            }
+        }
+        menuBarMetricsController.presentSystemStatus()
+        return ActionExecutionHandle { .succeeded() }
+    }
+
+    private var actionTitle: String {
+        localization.string(
+            "action.showSystemStatus.title",
+            defaultValue: "显示系统状态"
+        )
+    }
+
+    private var actionDescription: String {
+        localization.string(
+            "action.showSystemStatus.description",
+            defaultValue: "显示或隐藏菜单栏概览。如果菜单栏指标已隐藏，则改为打开仪表盘。"
+        )
+    }
 }
 
 @MainActor

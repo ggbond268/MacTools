@@ -4152,12 +4152,28 @@ private struct SurfaceLayoutSearchAnchors: View {
     }
 }
 
+struct PluginSettingsPageVisibilityTransition {
+    struct Change: Equatable {
+        let pluginID: String
+        let isVisible: Bool
+    }
+
+    static func changes(from currentPluginID: String?, to pluginID: String?) -> [Change] {
+        guard currentPluginID != pluginID else { return [] }
+        return [
+            currentPluginID.map { Change(pluginID: $0, isVisible: false) },
+            pluginID.map { Change(pluginID: $0, isVisible: true) },
+        ].compactMap { $0 }
+    }
+}
+
 private struct PluginSettingsDetailPane: View {
     @ObservedObject var pluginHost: PluginHost
     @ObservedObject var navigationCoordinator: SettingsNavigationCoordinator
     let item: PluginSettingsPageItem?
     @State private var activeSearchTarget: PluginSettingsSearchTarget?
     @State private var clearSearchTargetTask: Task<Void, Never>?
+    @State private var visiblePluginID: String?
 
     var body: some View {
         Group {
@@ -4193,7 +4209,14 @@ private struct PluginSettingsDetailPane: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            transitionVisiblePlugin(to: item?.pluginID)
+        }
+        .onChange(of: item?.pluginID) { _, pluginID in
+            transitionVisiblePlugin(to: pluginID)
+        }
         .onDisappear {
+            transitionVisiblePlugin(to: nil)
             clearSearchTargetTask?.cancel()
             clearSearchTargetTask = nil
             if let activeSearchTarget {
@@ -4202,6 +4225,13 @@ private struct PluginSettingsDetailPane: View {
                 )
             }
             activeSearchTarget = nil
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
+            // Permission changes are completed in System Settings while MacTools is inactive.
+            // Refresh every provider once on return so form and workspace cards use current state.
+            pluginHost.refreshAll()
         }
     }
 
@@ -4215,18 +4245,16 @@ private struct PluginSettingsDetailPane: View {
                 PluginWorkspacePage(pluginHost: pluginHost, item: item)
             }
         }
-        .onAppear {
-            pluginHost.setPluginSettingsPage(item.pluginID, visible: true)
-        }
-        .onDisappear {
-            pluginHost.setPluginSettingsPage(item.pluginID, visible: false)
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
-        ) { _ in
-            // Permission changes are completed in System Settings while MacTools is inactive.
-            // Refresh every provider once on return so form and workspace cards use current state.
-            pluginHost.refreshAll()
+    }
+
+    private func transitionVisiblePlugin(to pluginID: String?) {
+        let changes = PluginSettingsPageVisibilityTransition.changes(
+            from: visiblePluginID,
+            to: pluginID
+        )
+        visiblePluginID = pluginID
+        for change in changes {
+            pluginHost.setPluginSettingsPage(change.pluginID, visible: change.isVisible)
         }
     }
 

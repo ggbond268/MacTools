@@ -212,24 +212,22 @@ final class AppleShortcutsControllerTests: XCTestCase {
         )
 
         controller.setSettingsVisible(true)
-        for _ in 0 ..< 100 {
-            if controller.snapshot.discovery.shortcuts.first?.visualMetadata == metadata { break }
-            await Task.yield()
+        try await waitUntil("initial settings refresh") {
+            controller.snapshot.discovery.shortcuts.first?.visualMetadata == metadata
         }
         controller.setSettingsVisible(false)
         await runner.setShortcuts([first, second])
         currentDate.addTimeInterval(10)
         controller.refresh(force: true)
-        for _ in 0 ..< 100 {
-            if await runner.observedListCallCount() == 2 { break }
-            await Task.yield()
+        try await waitUntil("light library refresh") {
+            controller.snapshot.discovery.shortcuts.map(\.id) == [first.id, second.id]
+                && !controller.snapshot.isRefreshing
         }
 
         controller.setSettingsVisible(true)
-        for _ in 0 ..< 100 {
-            if controller.snapshot.discovery.shortcuts.count == 2,
-               controller.snapshot.discovery.shortcuts.last?.visualMetadata == metadata { break }
-            await Task.yield()
+        try await waitUntil("settings refresh after library change") {
+            await visualMetadataLoader.observedCallCount() == 2
+                && controller.snapshot.discovery.shortcuts.last?.visualMetadata == metadata
         }
 
         let visualMetadataCallCount = await visualMetadataLoader.observedCallCount()
@@ -617,5 +615,22 @@ final class AppleShortcutsControllerTests: XCTestCase {
             localization: PluginLocalization(bundle: .main),
             now: now
         )
+    }
+
+    private func waitUntil(
+        _ description: String,
+        timeout: Duration = .seconds(1),
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        condition: @escaping @MainActor () async -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while !(await condition()) {
+            guard ContinuousClock.now < deadline else {
+                XCTFail("Timed out waiting for \(description)", file: file, line: line)
+                return
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
     }
 }

@@ -616,6 +616,7 @@ private struct WindowSwitcherAppTile: View {
                             .frame(height: WindowSwitcherOverlayMetrics.shortcutHeight)
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                     .onHover { isShortcutHovered = $0 }
                     .help("修改 \(entry.appName)快捷键")
                 } else {

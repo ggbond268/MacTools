@@ -51,6 +51,32 @@
   "productStrings": {
     "display-name": "@displayName",
     "summary": "@summary",
+    "action.show-system-status.title": {
+      "ar": "عرض حالة النظام",
+      "de": "Systemstatus anzeigen",
+      "en": "Show System Status",
+      "es": "Mostrar estado del sistema",
+      "fr": "Afficher l’état du système",
+      "ja": "システムステータスを表示",
+      "ko": "시스템 상태 보기",
+      "pt": "Mostrar status do sistema",
+      "ru": "Показать состояние системы",
+      "zh-Hans": "显示系统状态",
+      "zh-Hant": "顯示系統狀態"
+    },
+    "action.show-system-status.description": {
+      "ar": "عرض أو إخفاء نظرة عامة من شريط القوائم. إذا كانت مقاييس شريط القوائم مخفية، تُفتح لوحة المعلومات بدلاً من ذلك.",
+      "de": "Zeigt oder verbirgt die Übersicht in der Menüleiste. Sind Menüleistenmetriken ausgeblendet, wird stattdessen das Dashboard geöffnet.",
+      "en": "Shows or hides the menu bar overview. If menu bar metrics are hidden, opens the dashboard instead.",
+      "es": "Muestra u oculta el resumen de la barra de menús. Si las métricas están ocultas, abre el panel.",
+      "fr": "Affiche ou masque l’aperçu de la barre des menus. Si les métriques sont masquées, ouvre le tableau de bord.",
+      "ja": "メニューバーの概要を表示または非表示にします。指標が非表示の場合は、代わりにダッシュボードを開きます。",
+      "ko": "메뉴 막대 개요를 표시하거나 가립니다. 메뉴 막대 측정항목이 가려져 있으면 대시보드를 엽니다.",
+      "pt": "Mostra ou oculta a visão geral da barra de menus. Se as métricas estiverem ocultas, abre o painel.",
+      "ru": "Показывает или скрывает обзор в строке меню. Если показатели скрыты, открывает панель.",
+      "zh-Hans": "显示或隐藏菜单栏概览。如果菜单栏指标已隐藏，则改为打开仪表盘。",
+      "zh-Hant": "顯示或隱藏選單列概覽。如果選單列指標已隱藏，則改為打開儀表板。"
+    },
     "retention-description": {
       "ar": "تظل الإعدادات محفوظة حتى إزالة بيانات الإضافة. يقتصر سجل الأداء على 24 ساعة و8640 عينة.",
       "de": "Einstellungen bleiben bis zum Entfernen der Plug-in-Daten erhalten. Der Leistungsverlauf ist auf 24 Stunden und 8.640 Messwerte begrenzt.",
@@ -189,5 +215,39 @@
     "includedPackIDs": [],
     "suggestedRecipeIDs": [],
     "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "system-status",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "show-system-status",
+            "title": "@productStrings.action.show-system-status.title",
+            "description": "@productStrings.action.show-system-status.description",
+            "keywords": [
+              "系统状态",
+              "system status",
+              "monitoring",
+              "menu bar",
+              "dashboard"
+            ],
+            "systemImage": "gauge.with.dots.needle.67percent",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
   }
 }
