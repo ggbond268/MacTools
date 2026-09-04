@@ -2854,7 +2854,7 @@
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 입력"
+            "value": "입력 캡처"
           }
         },
         "pt": {
@@ -3478,13 +3478,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "録音ショートカット"
+            "value": "入力キャプチャ"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 바로가기"
+            "value": "입력 캡처 바로가기"
           }
         },
         "pt": {
@@ -4668,13 +4668,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "録音を準備しています…"
+            "value": "入力キャプチャを準備中…"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 준비 중…"
+            "value": "입력 캡처 준비 중…"
           }
         },
         "pt": {
@@ -4738,13 +4738,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "録音入力ボタンを放します。次にリスニングが始まります。"
+            "value": "入力キャプチャボタンを離すと、待機が始まります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 입력 버튼을 놓습니다. 듣기는 다음부터 시작됩니다."
+            "value": "입력 캡처 버튼에서 손을 떼면 감지가 시작됩니다."
           }
         },
         "pt": {
@@ -4948,13 +4948,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "録音ショートカット ボタンを放します。次にリスニングが始まります。"
+            "value": "ショートカットキャプチャボタンを離すと、待機が始まります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 바로가기 버튼을 놓습니다. 듣기는 다음부터 시작됩니다."
+            "value": "바로가기 캡처 버튼에서 손을 떼면 감지가 시작됩니다."
           }
         },
         "pt": {
@@ -5955,6 +5955,66 @@
             "value": "五指雙擊"
           }
         }
+      }
+    },
+    "settings.recording.error": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Recording could not start." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法开始录制。" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذر بدء التسجيل." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die Aufnahme konnte nicht gestartet werden." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo iniciar la grabación." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible de démarrer l’enregistrement." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "入力キャプチャを開始できませんでした。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "입력 캡처를 시작할 수 없습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não foi possível iniciar a gravação." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось начать запись." } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法開始記錄。" } }
+      }
+    },
+    "settings.recording.unavailable": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Input capture is unavailable right now. Try again." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "输入捕获暂时不可用，请重试。" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذر التقاط الإدخال الآن. حاول مرة أخرى." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die Eingabeerfassung ist derzeit nicht verfügbar. Erneut versuchen." } },
+        "es": { "stringUnit": { "state": "translated", "value": "La captura de entrada no está disponible ahora. Inténtalo de nuevo." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "La capture des entrées est momentanément indisponible. Réessayez." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "入力キャプチャを現在利用できません。再試行してください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "입력 캡처를 지금 사용할 수 없습니다. 다시 시도하세요." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "A captura de entrada não está disponível agora. Tente novamente." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Захват ввода сейчас недоступен. Повторите попытку." } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "輸入擷取目前無法使用，請重試。" } }
+      }
+    },
+    "settings.recording.openFormat": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Open %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开%@" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "فتح %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ öffnen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Abrir %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@を開く" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@ 열기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Abrir %@" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Открыть: %@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開%@" } }
+      }
+    },
+    "settings.recording.retry": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Try again" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "重试" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "حاول مرة أخرى" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Erneut versuchen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Intentar de nuevo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réessayer" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再試行" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "다시 시도" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Tentar novamente" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Повторить" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "重試" } }
       }
     }
   },
