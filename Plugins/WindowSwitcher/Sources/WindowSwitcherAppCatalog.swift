@@ -1289,7 +1289,7 @@ final class WindowSwitcherAppCatalog {
             window,
             isMinimized: isMinimized,
             deadline: deadline,
-            setAttributeValue: setAXAttributeValue,
+            writeAttribute: setAXAttributeValue,
             performRaise: { element, deadline in
                 guard !Task.isCancelled,
                       setAXMessagingTimeout(on: element, deadline: deadline)
@@ -1306,11 +1306,11 @@ final class WindowSwitcherAppCatalog {
         _ window: AXUIElement,
         isMinimized: Bool,
         deadline: Date,
-        setAttributeValue: (AXUIElement, CFString, CFTypeRef, Date) -> Bool,
+        writeAttribute: (AXUIElement, CFString, CFTypeRef, Date) -> Bool,
         performRaise: (AXUIElement, Date) -> Bool
     ) {
         if isMinimized {
-            guard setAXAttributeValue(
+            guard writeAttribute(
                 window,
                 kAXMinimizedAttribute as CFString,
                 kCFBooleanFalse,
@@ -1320,7 +1320,7 @@ final class WindowSwitcherAppCatalog {
             }
         }
 
-        _ = setAttributeValue(
+        _ = writeAttribute(
             window,
             kAXMainAttribute as CFString,
             kCFBooleanTrue,
@@ -1330,7 +1330,7 @@ final class WindowSwitcherAppCatalog {
             return
         }
 
-        _ = setAttributeValue(
+        _ = writeAttribute(
             window,
             kAXFocusedAttribute as CFString,
             kCFBooleanTrue,

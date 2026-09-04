@@ -2297,7 +2297,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             window,
             isMinimized: false,
             deadline: Date().addingTimeInterval(1),
-            setAttributeValue: { _, attribute, _, _ in
+            writeAttribute: { _, attribute, _, _ in
                 writtenAttributes.append(attribute as String)
                 return attribute as String != kAXFocusedAttribute as String
             },
