@@ -244,11 +244,18 @@ enum SettingsSidebarNumberingPolicy {
 }
 
 enum SettingsSidebarHeaderAccessibility {
-    static func isActive(
-        containsSelection: Bool,
-        isKeyboardHighlighted: Bool
+    static func isSelected(containsSelection: Bool) -> Bool {
+        containsSelection
+    }
+}
+
+enum SettingsSidebarHighlightPolicy {
+    static func showsSearchCandidate(
+        candidate: SettingsNavigationDestination?,
+        selection: SettingsNavigationDestination,
+        destination: SettingsNavigationDestination
     ) -> Bool {
-        containsSelection || isKeyboardHighlighted
+        candidate == destination && selection != destination
     }
 }
 

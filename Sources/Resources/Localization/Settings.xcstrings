@@ -745,6 +745,22 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除外掛搜尋" } }
       }
     },
+    "settings.sidebar.searchCandidate.openHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "اضغط على Return للفتح" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zum Öffnen Return drücken" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Press Return to open" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Pulsa Retorno para abrir" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Appuyez sur Retour pour ouvrir" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Returnキーを押して開く" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Return 키를 눌러 열기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Pressione Return para abrir" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Нажмите Return, чтобы открыть" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按下 Return 打开" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "按下 Return 開啟" } }
+      }
+    },
     "settings.sidebar.section.collapseFormat": {
       "extractionState": "manual",
       "localizations": {

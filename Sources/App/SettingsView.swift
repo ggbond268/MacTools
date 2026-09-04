@@ -3114,8 +3114,14 @@ private struct SettingsSidebar: View {
                     systemImage: item.iconName,
                     iconTint: item.iconTint,
                     shortcutNumber: shortcutNumber,
-                    isSearchHighlighted: showsPluginSearchHighlight
-                        && highlightedPluginSearchDestination == destination
+                    isKeyboardCandidate: SettingsSidebarHighlightPolicy
+                        .showsSearchCandidate(
+                            candidate: showsPluginSearchHighlight
+                                ? highlightedPluginSearchDestination
+                                : nil,
+                            selection: selection,
+                            destination: destination
+                        )
                 )
                 .tag(destination)
                 .id(destination)
@@ -3246,11 +3252,10 @@ private struct SettingsSidebar: View {
         let isExpanded = sectionIsExpanded(section)
         let shortcutNumber = effectiveNumberTargets.firstIndex(of: .collapsedSection(section))
             .map { $0 + 1 }
-        let isSelected = !isExpanded && selectedSection == section
+        let containsSelection = !isExpanded && selectedSection == section
         let isKeyboardHighlighted = highlightedCollapsedSection == section
-        let isAccessibilityActive = SettingsSidebarHeaderAccessibility.isActive(
-            containsSelection: isSelected,
-            isKeyboardHighlighted: isKeyboardHighlighted
+        let isAccessibilitySelected = SettingsSidebarHeaderAccessibility.isSelected(
+            containsSelection: containsSelection
         )
         return Button {
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -3259,22 +3264,32 @@ private struct SettingsSidebar: View {
             highlightedCollapsedSection = nil
         } label: {
             HStack(spacing: 4) {
+                Capsule(style: .continuous)
+                    .fill(Color(nsColor: .controlAccentColor))
+                    .frame(width: 3, height: 14)
+                    .opacity(containsSelection ? 1 : 0)
+                    .accessibilityHidden(true)
+
                 Image(systemName: isExpanded
                     ? "chevron.down"
                     : "chevron.right")
                     .font(.caption2.weight(.semibold))
                 Text(title)
+                    .fontWeight(containsSelection ? .semibold : .regular)
                 Spacer(minLength: 4)
                 if let shortcutNumber {
                     SettingsSidebarShortcutLabel(shortcut: "⌘\(shortcutNumber)")
                 }
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(
+                containsSelection || isKeyboardHighlighted
+                    ? Color.primary
+                    : Color.secondary
+            )
             .contentShape(Rectangle())
             .background {
-                if isSelected || isKeyboardHighlighted {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.14))
+                if isKeyboardHighlighted {
+                    SettingsSidebarKeyboardCandidateBackground()
                         .padding(.horizontal, -4)
                         .padding(.vertical, -2)
                 }
@@ -3293,7 +3308,7 @@ private struct SettingsSidebar: View {
             isExpanded: isExpanded,
             shortcutNumber: shortcutNumber
         ))
-        .accessibilityAddTraits(isAccessibilityActive ? .isSelected : [])
+        .accessibilityAddTraits(isAccessibilitySelected ? .isSelected : [])
     }
 
     private var effectiveNumberTargets: [SettingsSidebarNumberTarget] {
@@ -3455,9 +3470,7 @@ private struct SettingsSidebar: View {
 
     private var optionalSelectionBinding: Binding<SettingsNavigationDestination?> {
         Binding(
-            get: {
-                showsPluginSearchHighlight ? nil : selection
-            },
+            get: { selection },
             set: { newSelection in
                 guard let newSelection else { return }
 
@@ -3607,7 +3620,7 @@ private struct SettingsSidebarRow: View {
     let systemImage: String
     let iconTint: Color
     let shortcutNumber: Int?
-    var isSearchHighlighted = false
+    var isKeyboardCandidate = false
 
     var body: some View {
         HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
@@ -3630,9 +3643,8 @@ private struct SettingsSidebarRow: View {
         }
         .font(.body)
         .background {
-            if isSearchHighlighted {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.16))
+            if isKeyboardCandidate {
+                SettingsSidebarKeyboardCandidateBackground()
                     .padding(.horizontal, -5)
                     .padding(.vertical, -2)
             }
@@ -3641,19 +3653,39 @@ private struct SettingsSidebarRow: View {
         .help(title)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
-        .accessibilityHint(shortcutAccessibilityHint)
-        .accessibilityAddTraits(isSearchHighlighted ? .isSelected : [])
+        .accessibilityHint(accessibilityHint)
     }
 
-    private var shortcutAccessibilityHint: String {
-        guard let shortcutNumber else {
-            return ""
+    private var accessibilityHint: String {
+        var hints: [String] = []
+        if isKeyboardCandidate {
+            hints.append(AppL10n.settings(
+                "settings.sidebar.searchCandidate.openHint",
+                defaultValue: "Press Return to open"
+            ))
         }
-        return AppL10n.settingsFormat(
-            "settings.sidebar.shortcutAccessibilityHint",
-            defaultValue: "Keyboard shortcut: Command-%d",
-            shortcutNumber
-        )
+        if let shortcutNumber {
+            hints.append(AppL10n.settingsFormat(
+                "settings.sidebar.shortcutAccessibilityHint",
+                defaultValue: "Keyboard shortcut: Command-%d",
+                shortcutNumber
+            ))
+        }
+        return hints.joined(separator: ". ")
+    }
+}
+
+private struct SettingsSidebarKeyboardCandidateBackground: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .fill(Color(nsColor: .unemphasizedSelectedContentBackgroundColor))
+            .overlay {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(
+                        Color(nsColor: .keyboardFocusIndicatorColor),
+                        lineWidth: PluginSettingsTheme.Stroke.standard
+                    )
+            }
     }
 }
 

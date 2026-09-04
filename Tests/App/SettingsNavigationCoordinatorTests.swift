@@ -282,18 +282,43 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertEqual(expandedSearchTargets.first, .destination(plugins[0]))
     }
 
-    func testCollapsedHeaderAccessibilityIncludesKeyboardHighlight() {
-        XCTAssertTrue(SettingsSidebarHeaderAccessibility.isActive(
-            containsSelection: false,
-            isKeyboardHighlighted: true
+    func testCollapsedHeaderAccessibilityMarksOnlyContainedSelectionAsSelected() {
+        XCTAssertTrue(SettingsSidebarHeaderAccessibility.isSelected(
+            containsSelection: true
         ))
-        XCTAssertTrue(SettingsSidebarHeaderAccessibility.isActive(
-            containsSelection: true,
-            isKeyboardHighlighted: false
+        XCTAssertFalse(SettingsSidebarHeaderAccessibility.isSelected(
+            containsSelection: false
         ))
-        XCTAssertFalse(SettingsSidebarHeaderAccessibility.isActive(
-            containsSelection: false,
-            isKeyboardHighlighted: false
+    }
+
+    func testSidebarSearchCandidateDoesNotReplaceTheSelectedDestination() {
+        let general = SettingsNavigationDestination.general
+        let appVolume = SettingsNavigationDestination.plugins(
+            .configuration("app-volume")
+        )
+        let darkMode = SettingsNavigationDestination.plugins(
+            .configuration("dark-mode")
+        )
+
+        XCTAssertTrue(SettingsSidebarHighlightPolicy.showsSearchCandidate(
+            candidate: appVolume,
+            selection: general,
+            destination: appVolume
+        ))
+        XCTAssertFalse(SettingsSidebarHighlightPolicy.showsSearchCandidate(
+            candidate: appVolume,
+            selection: appVolume,
+            destination: appVolume
+        ))
+        XCTAssertFalse(SettingsSidebarHighlightPolicy.showsSearchCandidate(
+            candidate: appVolume,
+            selection: general,
+            destination: darkMode
+        ))
+        XCTAssertFalse(SettingsSidebarHighlightPolicy.showsSearchCandidate(
+            candidate: nil,
+            selection: general,
+            destination: appVolume
         ))
     }
 
