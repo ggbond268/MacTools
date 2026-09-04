@@ -31,12 +31,46 @@ enum InputRemappingInputMonitoringStatus: Equatable {
     case unknown
 }
 
+enum InputRemappingRecordingTarget: Equatable {
+    case input
+    case shortcut
+}
+
+enum InputRemappingRecordingFailure: Equatable {
+    case eventTapUnavailable
+}
+
+struct InputRemappingRecordingError: Equatable {
+    let ruleID: UUID
+    let target: InputRemappingRecordingTarget
+    let failure: InputRemappingRecordingFailure
+}
+
+enum InputRemappingRecordingPermissionIssue: Equatable {
+    case accessibility
+    case inputMonitoring
+
+    var permissionID: String {
+        switch self {
+        case .accessibility: "accessibility"
+        case .inputMonitoring: "input-monitoring"
+        }
+    }
+}
+
+struct InputRemappingRecordingPermissionGuidance: Equatable {
+    let issue: InputRemappingRecordingPermissionIssue
+    let title: String
+    let detail: String
+}
+
 @MainActor
 final class InputRemappingButtonCaptureCoordinator: ObservableObject {
     @Published private(set) var recordingRuleID: UUID?
     @Published private(set) var recordingShortcutRuleID: UUID?
     @Published private(set) var preparingRuleID: UUID?
     @Published private(set) var preparingShortcutRuleID: UUID?
+    @Published private(set) var recordingError: InputRemappingRecordingError?
 
     private let tap: any InputRemappingEventTapping
     private let scheduleArming: (@escaping @MainActor () -> Void) -> Void
@@ -55,10 +89,18 @@ final class InputRemappingButtonCaptureCoordinator: ObservableObject {
 
     func start(
         ruleID: UUID,
-        onCapture: @escaping @MainActor (InputRemappingCapturedInput) -> Void
+        onCapture: @escaping @MainActor (InputRemappingCapturedInput) -> Void,
+        onFailure: @escaping @MainActor () -> Void = {}
     ) -> Bool {
         cancel()
+        recordingError = nil
         guard tap.start() else {
+            recordingError = InputRemappingRecordingError(
+                ruleID: ruleID,
+                target: .input,
+                failure: .eventTapUnavailable
+            )
+            onFailure()
             return false
         }
         preparingRuleID = ruleID
@@ -70,10 +112,17 @@ final class InputRemappingButtonCaptureCoordinator: ObservableObject {
                 Task { @MainActor [weak self] in
                     guard let self, self.recordingRuleID == ruleID else { return }
                     self.recordingRuleID = nil
+                    self.recordingError = nil
                     onCapture(input)
                 }
             }) else {
                 self.recordingRuleID = nil
+                self.recordingError = InputRemappingRecordingError(
+                    ruleID: ruleID,
+                    target: .input,
+                    failure: .eventTapUnavailable
+                )
+                onFailure()
                 return
             }
         }
@@ -81,14 +130,16 @@ final class InputRemappingButtonCaptureCoordinator: ObservableObject {
     }
 
     func cancel() {
-        guard recordingRuleID != nil || recordingShortcutRuleID != nil
+        let hasActiveCapture = recordingRuleID != nil || recordingShortcutRuleID != nil
             || preparingRuleID != nil || preparingShortcutRuleID != nil
-        else { return }
         recordingRuleID = nil
         recordingShortcutRuleID = nil
         preparingRuleID = nil
         preparingShortcutRuleID = nil
-        tap.cancelButtonCapture()
+        recordingError = nil
+        if hasActiveCapture {
+            tap.cancelButtonCapture()
+        }
     }
 
     func cancelFromEmergencyStop() {
@@ -96,14 +147,23 @@ final class InputRemappingButtonCaptureCoordinator: ObservableObject {
         recordingShortcutRuleID = nil
         preparingRuleID = nil
         preparingShortcutRuleID = nil
+        recordingError = nil
     }
 
     func startShortcut(
         ruleID: UUID,
-        onCapture: @escaping @MainActor (ShortcutBinding) -> Void
+        onCapture: @escaping @MainActor (ShortcutBinding) -> Void,
+        onFailure: @escaping @MainActor () -> Void = {}
     ) -> Bool {
         cancel()
+        recordingError = nil
         guard tap.start() else {
+            recordingError = InputRemappingRecordingError(
+                ruleID: ruleID,
+                target: .shortcut,
+                failure: .eventTapUnavailable
+            )
+            onFailure()
             return false
         }
         preparingShortcutRuleID = ruleID
@@ -115,10 +175,17 @@ final class InputRemappingButtonCaptureCoordinator: ObservableObject {
                 Task { @MainActor [weak self] in
                     guard let self, self.recordingShortcutRuleID == ruleID else { return }
                     self.recordingShortcutRuleID = nil
+                    self.recordingError = nil
                     onCapture(shortcut)
                 }
             }) else {
                 self.recordingShortcutRuleID = nil
+                self.recordingError = InputRemappingRecordingError(
+                    ruleID: ruleID,
+                    target: .shortcut,
+                    failure: .eventTapUnavailable
+                )
+                onFailure()
                 return
             }
         }
@@ -162,7 +229,7 @@ final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
     private let notificationCenter: NotificationCenter
 
     private var isAccessibilityGranted: Bool
-    private var isInputMonitoringGranted: Bool
+    private var inputMonitoringState: InputRemappingInputMonitoringStatus
     private var errorMessage: String?
     private var applicationActivationObserver: NSObjectProtocol?
     private var ownedTrackpadGestures: Set<TrackpadGesture> = []
@@ -201,7 +268,7 @@ final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
         self.openURL = openURL
         self.notificationCenter = notificationCenter
         self.isAccessibilityGranted = accessibilityTrusted()
-        self.isInputMonitoringGranted = inputMonitoringStatus() == .granted
+        self.inputMonitoringState = inputMonitoringStatus()
         self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
             controlStyle: .button,
             menuActionBehavior: .keepPresented,
@@ -345,6 +412,8 @@ final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
                     store: self.store,
                     localization: self.localization,
                     buttonCapture: self.buttonCapture,
+                    recordingPermissionGuidance: { self.recordingPermissionGuidance() },
+                    requestRecordingPermission: { self.requestRecordingPermission($0) },
                     requestTrackpadGestureOwnership: self.requestTrackpadGestureOwnership,
                     isTrackpadGestureOwned: { self.ownedTrackpadGestures.contains($0) }
                 )
@@ -409,9 +478,47 @@ final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
         onStateChange?()
     }
 
+    func recordingPermissionGuidance() -> InputRemappingRecordingPermissionGuidance? {
+        if !isAccessibilityGranted {
+            return InputRemappingRecordingPermissionGuidance(
+                issue: .accessibility,
+                title: localization.string(
+                    "permission.accessibility.title",
+                    defaultValue: "Accessibility"
+                ),
+                detail: localization.string(
+                    "permission.accessibility.footnote",
+                    defaultValue: "System Settings → Privacy & Security → Accessibility: allow MacTools."
+                )
+            )
+        }
+        if inputMonitoringState == .denied {
+            return InputRemappingRecordingPermissionGuidance(
+                issue: .inputMonitoring,
+                title: localization.string(
+                    "permission.inputMonitoring.title",
+                    defaultValue: "Input Monitoring"
+                ),
+                detail: localization.string(
+                    "permission.inputMonitoring.footnote",
+                    defaultValue: "System Settings → Privacy & Security → Input Monitoring: allow MacTools."
+                )
+            )
+        }
+        return nil
+    }
+
+    func requestRecordingPermission(_ issue: InputRemappingRecordingPermissionIssue) {
+        handlePermissionAction(id: issue.permissionID)
+    }
+
     private func refreshPermissionState() {
         isAccessibilityGranted = accessibilityTrusted()
-        isInputMonitoringGranted = inputMonitoringStatus() == .granted
+        inputMonitoringState = inputMonitoringStatus()
+    }
+
+    private var isInputMonitoringGranted: Bool {
+        inputMonitoringState == .granted
     }
 
     private func applyConfiguration() {
@@ -494,6 +601,8 @@ private struct InputRemappingSettingsView: View {
     @ObservedObject var store: InputRemappingStore
     let localization: PluginLocalization
     @ObservedObject var buttonCapture: InputRemappingButtonCaptureCoordinator
+    let recordingPermissionGuidance: () -> InputRemappingRecordingPermissionGuidance?
+    let requestRecordingPermission: (InputRemappingRecordingPermissionIssue) -> Void
     let requestTrackpadGestureOwnership: ((TrackpadGesture) -> Void)?
     let isTrackpadGestureOwned: (TrackpadGesture) -> Bool
 
@@ -541,6 +650,8 @@ private struct InputRemappingSettingsView: View {
                         store: store,
                         localization: localization,
                         buttonCapture: buttonCapture,
+                        recordingPermissionGuidance: recordingPermissionGuidance,
+                        requestRecordingPermission: requestRecordingPermission,
                         requestTrackpadGestureOwnership: requestTrackpadGestureOwnership,
                         isTrackpadGestureOwned: isTrackpadGestureOwned
                     )
@@ -591,23 +702,60 @@ struct InputRemappingOutputRecordingSnapshot: Equatable {
     }
 }
 
+struct InputRemappingInputRecordingSnapshot: Equatable {
+    let trigger: InputRemappingTrigger
+    let isInputConfigured: Bool
+    let isUnsafeTriggerConfirmed: Bool
+    let isEnabled: Bool
+
+    init(rule: InputRemappingRule) {
+        trigger = rule.trigger
+        isInputConfigured = rule.isInputConfigured
+        isUnsafeTriggerConfirmed = rule.isUnsafeTriggerConfirmed
+        isEnabled = rule.isEnabled
+    }
+
+    func restore(_ rule: inout InputRemappingRule) {
+        rule.trigger = trigger
+        rule.isInputConfigured = isInputConfigured
+        rule.isUnsafeTriggerConfirmed = isUnsafeTriggerConfirmed
+        rule.isEnabled = isEnabled
+    }
+}
+
+@MainActor
+func shouldShowShortcutRecordingControl(
+    for rule: InputRemappingRule,
+    buttonCapture: InputRemappingButtonCaptureCoordinator
+) -> Bool {
+    rule.outputConfigurationState == .recordingShortcut ||
+        (rule.isOutputConfigured && rule.action.kind == .shortcut) ||
+        buttonCapture.preparingShortcutRuleID == rule.id ||
+        buttonCapture.recordingShortcutRuleID == rule.id
+}
+
 private struct InputRemappingRuleEditor: View {
     let rule: InputRemappingRule
     @ObservedObject var store: InputRemappingStore
     let localization: PluginLocalization
     @ObservedObject var buttonCapture: InputRemappingButtonCaptureCoordinator
+    let recordingPermissionGuidance: () -> InputRemappingRecordingPermissionGuidance?
+    let requestRecordingPermission: (InputRemappingRecordingPermissionIssue) -> Void
     let requestTrackpadGestureOwnership: ((TrackpadGesture) -> Void)?
     let isTrackpadGestureOwned: (TrackpadGesture) -> Bool
 
     @State private var draft: InputRemappingRule
     @State private var requiresSafetyConfirmation = false
     @State private var outputRecordingSnapshot: InputRemappingOutputRecordingSnapshot?
+    @State private var inputRecordingSnapshot: InputRemappingInputRecordingSnapshot?
 
     init(
         rule: InputRemappingRule,
         store: InputRemappingStore,
         localization: PluginLocalization,
         buttonCapture: InputRemappingButtonCaptureCoordinator,
+        recordingPermissionGuidance: @escaping () -> InputRemappingRecordingPermissionGuidance? = { nil },
+        requestRecordingPermission: @escaping (InputRemappingRecordingPermissionIssue) -> Void = { _ in },
         requestTrackpadGestureOwnership: ((TrackpadGesture) -> Void)? = nil,
         isTrackpadGestureOwned: @escaping (TrackpadGesture) -> Bool = { _ in true }
     ) {
@@ -615,10 +763,13 @@ private struct InputRemappingRuleEditor: View {
         self.store = store
         self.localization = localization
         self.buttonCapture = buttonCapture
+        self.recordingPermissionGuidance = recordingPermissionGuidance
+        self.requestRecordingPermission = requestRecordingPermission
         self.requestTrackpadGestureOwnership = requestTrackpadGestureOwnership
         self.isTrackpadGestureOwned = isTrackpadGestureOwned
         _draft = State(initialValue: rule)
         _outputRecordingSnapshot = State(initialValue: nil)
+        _inputRecordingSnapshot = State(initialValue: nil)
     }
 
     var body: some View {
@@ -637,7 +788,7 @@ private struct InputRemappingRuleEditor: View {
                 isEnabled: enabledBinding,
                 enabledTitle: localization.string("settings.enabled", defaultValue: "Enabled"),
                 deleteTitle: localization.string("settings.deleteMapping", defaultValue: "Delete mapping"),
-                onDelete: { store.delete(rule) }
+                onDelete: deleteRule
             )
         }
         .font(PluginSettingsTheme.Typography.rowDescription)
@@ -713,6 +864,10 @@ private struct InputRemappingRuleEditor: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
+
+            if let recordingError = recordingError(for: .input) {
+                recordingFailureView(recordingError, retry: startInputCapture)
+            }
         }
         .frame(minWidth: 170, maxWidth: .infinity, alignment: .leading)
     }
@@ -724,13 +879,16 @@ private struct InputRemappingRuleEditor: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             actionMenu
 
-            if draft.outputConfigurationState == .recordingShortcut ||
-                (draft.isOutputConfigured && draft.action.kind == .shortcut) {
+            if shouldShowShortcutRecordingControl(for: draft, buttonCapture: buttonCapture) {
                 shortcutRecordingControl
             }
             if draft.outputConfigurationState == .recordingKeyTap ||
                 (draft.isOutputConfigured && draft.action.kind == .keyTap) {
                 keyTapSelectionControl
+            }
+
+            if let recordingError = recordingError(for: .shortcut) {
+                recordingFailureView(recordingError, retry: startShortcutCapture)
             }
         }
         .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
@@ -877,9 +1035,7 @@ private struct InputRemappingRuleEditor: View {
         Binding(
             get: { draft.action.kind },
             set: { kind in
-                buttonCapture.cancel()
-                outputRecordingSnapshot?.restore(&draft)
-                outputRecordingSnapshot = nil
+                cancelRecording()
                 if kind == .shortcut || kind == .keyTap {
                     outputRecordingSnapshot = InputRemappingOutputRecordingSnapshot(rule: draft)
                 }
@@ -908,6 +1064,7 @@ private struct InputRemappingRuleEditor: View {
         Binding(
             get: { inputKind },
             set: { kind in
+                cancelRecording()
                 switch kind {
                 case .keyboard:
                     draft.replaceTrigger(.keyboard(keyCode: 0, modifiers: []))
@@ -969,12 +1126,26 @@ private struct InputRemappingRuleEditor: View {
     }
 
     private func startInputCapture() {
-        _ = buttonCapture.start(ruleID: rule.id) { input in
+        cancelRecording()
+        inputRecordingSnapshot = InputRemappingInputRecordingSnapshot(rule: draft)
+        _ = buttonCapture.start(ruleID: rule.id, onCapture: { input in
+            inputRecordingSnapshot = nil
             draft.replaceTrigger(input.trigger(interaction: draft.mouseInteraction))
             draft.isInputConfigured = true
             enableIfComplete()
             save()
-        }
+        }, onFailure: restoreInputRecordingAfterFailure)
+    }
+
+    private func startShortcutCapture() {
+        beginOutputRecordingIfNeeded()
+        _ = buttonCapture.startShortcut(ruleID: rule.id, onCapture: { binding in
+            outputRecordingSnapshot = nil
+            draft.action = .shortcut(binding)
+            draft.outputConfigurationState = .configured
+            enableIfComplete()
+            save()
+        }, onFailure: restoreOutputRecordingAfterFailure)
     }
 
     @ViewBuilder
@@ -999,17 +1170,7 @@ private struct InputRemappingRuleEditor: View {
             .controlSize(.small)
         } else {
             Button {
-                beginOutputRecordingIfNeeded()
-                guard buttonCapture.startShortcut(ruleID: rule.id, onCapture: { binding in
-                    outputRecordingSnapshot = nil
-                    draft.action = .shortcut(binding)
-                    draft.outputConfigurationState = .configured
-                    enableIfComplete()
-                    save()
-                }) else {
-                    cancelOutputRecording()
-                    return
-                }
+                startShortcutCapture()
             } label: {
                 Text(localization.string("settings.shortcut.record", defaultValue: "Record shortcut"))
                     .frame(maxWidth: .infinity)
@@ -1030,6 +1191,7 @@ private struct InputRemappingRuleEditor: View {
                     return keyTap
                 },
                 set: { keyTap in
+                    buttonCapture.cancel()
                     guard let keyTap else {
                         draft.outputConfigurationState = .recordingKeyTap
                         draft.isEnabled = false
@@ -1055,17 +1217,105 @@ private struct InputRemappingRuleEditor: View {
         draft.isEnabled = !InputRemappingRule.requiresExplicitConfirmation(for: draft.trigger)
     }
 
+    private func recordingError(for target: InputRemappingRecordingTarget) -> InputRemappingRecordingError? {
+        guard let recordingError = buttonCapture.recordingError,
+              recordingError.ruleID == rule.id,
+              recordingError.target == target
+        else {
+            return nil
+        }
+        return recordingError
+    }
+
+    private func recordingFailureView(
+        _ error: InputRemappingRecordingError,
+        retry: @escaping () -> Void
+    ) -> some View {
+        let errorTitle = switch error.failure {
+        case .eventTapUnavailable:
+            localization.string(
+                "settings.recording.error",
+                defaultValue: "Recording could not start."
+            )
+        }
+        return VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+            Label(
+                errorTitle,
+                systemImage: "exclamationmark.triangle"
+            )
+            .foregroundStyle(.red)
+
+            if let guidance = recordingPermissionGuidance() {
+                Text(guidance.detail)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    Button(
+                        localization.format(
+                            "settings.recording.openFormat",
+                            defaultValue: "Open %@",
+                            guidance.title
+                        )
+                    ) {
+                        requestRecordingPermission(guidance.issue)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    retryButton(retry: retry)
+                }
+            } else {
+                Text(
+                    localization.string(
+                        "settings.recording.unavailable",
+                        defaultValue: "Input capture is unavailable right now. Try again."
+                    )
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                retryButton(retry: retry)
+            }
+        }
+        .font(PluginSettingsTheme.Typography.rowDescription)
+    }
+
+    private func retryButton(retry: @escaping () -> Void) -> some View {
+        Button(localization.string("settings.recording.retry", defaultValue: "Try again"), action: retry)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+    }
+
     private func beginOutputRecordingIfNeeded() {
         guard outputRecordingSnapshot == nil else { return }
         outputRecordingSnapshot = InputRemappingOutputRecordingSnapshot(rule: draft)
     }
 
-    private func cancelOutputRecording() {
+    private func restoreOutputRecordingAfterFailure() {
+        guard let outputRecordingSnapshot else { return }
+        outputRecordingSnapshot.restore(&draft)
+        self.outputRecordingSnapshot = nil
+        save()
+    }
+
+    private func restoreInputRecordingAfterFailure() {
+        guard let inputRecordingSnapshot else { return }
+        inputRecordingSnapshot.restore(&draft)
+        self.inputRecordingSnapshot = nil
+        save()
+    }
+
+    private func cancelRecording() {
         buttonCapture.cancel()
-        if let outputRecordingSnapshot {
-            outputRecordingSnapshot.restore(&draft)
-            self.outputRecordingSnapshot = nil
-        } else {
+        outputRecordingSnapshot?.restore(&draft)
+        outputRecordingSnapshot = nil
+        inputRecordingSnapshot?.restore(&draft)
+        inputRecordingSnapshot = nil
+    }
+
+    private func cancelOutputRecording() {
+        let hadOutputRecordingSnapshot = outputRecordingSnapshot != nil
+        cancelRecording()
+        if !hadOutputRecordingSnapshot {
             draft.outputConfigurationState = .needsSelection
             draft.isEnabled = false
         }
@@ -1078,7 +1328,7 @@ private struct InputRemappingRuleEditor: View {
             detail: detail,
             isPreparing: isPreparing,
             cancelTitle: localization.string("settings.cancel", defaultValue: "Cancel"),
-            onCancel: { buttonCapture.cancel() }
+            onCancel: cancelRecording
         )
     }
 
@@ -1086,6 +1336,7 @@ private struct InputRemappingRuleEditor: View {
         Binding(
             get: { draft.mouseInteraction },
             set: { interaction in
+                cancelRecording()
                 draft.mouseInteraction = interaction
                 save()
             }
@@ -1097,6 +1348,7 @@ private struct InputRemappingRuleEditor: View {
             get: { if case let .trackpadGesture(gesture) = draft.trigger { gesture } else { nil } },
             set: { gesture in
                 guard let gesture else { return }
+                cancelRecording()
                 draft.replaceTrigger(.trackpadGesture(gesture))
                 save()
             }
@@ -1138,6 +1390,11 @@ private struct InputRemappingRuleEditor: View {
         case .left: localization.string("settings.scroll.left", defaultValue: "left")
         case .right: localization.string("settings.scroll.right", defaultValue: "right")
         }
+    }
+
+    private func deleteRule() {
+        cancelRecording()
+        store.delete(rule)
     }
 
     private func save() {

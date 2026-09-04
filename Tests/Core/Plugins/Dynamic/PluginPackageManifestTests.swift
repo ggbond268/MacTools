@@ -302,10 +302,11 @@ final class PluginPackageManifestTests: XCTestCase {
             setup: manifest.setup,
             relationships: manifest.relationships
         )
-        let localizedActionTitle = try XCTUnwrap(
-            manifest.actions?.providers.first?.staticActions.first?.title.localizedValue()
-        )
+        let toggleTitle = try XCTUnwrap(manifest.actions?.providers.first?.staticActions.first?.title)
+        XCTAssertEqual(toggleTitle.values["en"], "Toggle Appearance")
+        let localizedActionTitle = try XCTUnwrap(toggleTitle.localizedValue())
         XCTAssertTrue(searchKeywords.contains(localizedActionTitle))
+        XCTAssertTrue(toggleTitle.values.values.contains(where: searchKeywords.contains))
         XCTAssertTrue(searchKeywords.contains("night-shift"))
     }
 

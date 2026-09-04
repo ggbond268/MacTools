@@ -1161,6 +1161,19 @@ final class SystemStatusMenuBarMetricsController: NSObject {
         removeStatusItem()
     }
 
+    func presentSystemStatus() {
+        let button = statusItem?.button
+        switch SystemStatusShortcutPresentationPolicy.destination(
+            hasMenuBarButton: button != nil
+        ) {
+        case .menuBarOverview:
+            guard let button else { return }
+            localPopoverController.toggle(relativeTo: button)
+        case .dashboard:
+            requestDashboardPresentation?()
+        }
+    }
+
     private func observeState() {
         settingsController.$configuration
             .removeDuplicates()
@@ -1318,6 +1331,17 @@ final class SystemStatusMenuBarMetricsController: NSObject {
     @objc
     private func openActivityMonitor() {
         SystemStatusProcessActions.openActivityMonitor()
+    }
+}
+
+enum SystemStatusShortcutPresentationPolicy {
+    enum Destination: Equatable {
+        case menuBarOverview
+        case dashboard
+    }
+
+    static func destination(hasMenuBarButton: Bool) -> Destination {
+        hasMenuBarButton ? .menuBarOverview : .dashboard
     }
 }
 

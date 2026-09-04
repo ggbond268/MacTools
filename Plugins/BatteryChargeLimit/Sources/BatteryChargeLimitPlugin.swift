@@ -450,7 +450,7 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel, Plugin
                     control: .status(
                         text: localization.string(
                             "settings.compatibility.forceDischarge.supported",
-                            defaultValue: "支持（CH0I）"
+                            defaultValue: "支持（SMC）"
                         ),
                         systemImage: "checkmark.circle.fill",
                         tone: .positive,

@@ -23,19 +23,53 @@ private struct TrackpadConfirmationAccessibilityModifier: ViewModifier {
     }
 }
 
+struct TrackpadGestureTestingHeaderAccessory: View {
+    @ObservedObject var store: TrackpadGestureStore
+    let localization: PluginLocalization
+    let onSetTesting: (Bool) -> Void
+
+    @ViewBuilder
+    var body: some View {
+        let title = store.isTesting
+            ? localization.string("settings.testing.stop", defaultValue: "停止测试")
+            : localization.string("settings.testing.inactive", defaultValue: "测试手势")
+        let button = Button {
+            onSetTesting(!store.isTesting)
+        } label: {
+            Label(
+                title,
+                systemImage: store.isTesting ? "stop.circle.fill" : "waveform.path"
+            )
+            .font(PluginSettingsTheme.Typography.controlLabel)
+        }
+        .controlSize(.small)
+        .fixedSize()
+        .help(title)
+        .accessibilityLabel(Text(title))
+
+        if store.isTesting {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
+        }
+    }
+}
+
 struct TrackpadGesturesSettingsView: View {
     enum SectionKind {
         case mappings
         case typingProtection
-        case testing
     }
 
     @ObservedObject var store: TrackpadGestureStore
+    @ObservedObject var testingModel: TrackpadGestureTestingModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let localization: PluginLocalization
     let actionHostContext: TrackpadActionHostContext?
     let isGestureOwned: (TrackpadGesture) -> Bool
     let onChange: () -> Void
     let onSetTesting: (Bool) -> Void
+    let onSetTestingMode: (TrackpadGestureTestingMode?) -> Void
     let section: SectionKind
 
     @State private var editingDraft: TrackpadGestureMappingDraft?
@@ -51,8 +85,6 @@ struct TrackpadGesturesSettingsView: View {
             mappingsContent
         case .typingProtection:
             typingProtectionSection
-        case .testing:
-            testingContent
         }
     }
 
@@ -80,12 +112,8 @@ struct TrackpadGesturesSettingsView: View {
                 }
             )
         }
-    }
-
-    private var testingContent: some View {
-        testingSection
-        .onChange(of: store.lastTestGesture) { _, gesture in
-            guard let gesture else { return }
+        .onChange(of: store.testRecognitionSequence) { _, _ in
+            guard let gesture = store.lastTestGesture else { return }
             announceRecognizedTestGesture(gesture)
         }
     }
@@ -195,16 +223,34 @@ struct TrackpadGesturesSettingsView: View {
                 Spacer(minLength: PluginSettingsTheme.Spacing.controlCluster)
 
                 HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-                    mappingViewMenu
-                    tipTapGuideButton
-                    addMappingButton
+                    ViewThatFits(in: .horizontal) {
+                        mappingToolbar(compact: false)
+                        mappingToolbar(compact: true)
+                    }
                 }
-                .fixedSize()
                 .popover(isPresented: $isShowingTipTapGuide, arrowEdge: .top) {
                     tipTapGuide
                 }
             }
             .pluginSettingsListRowPadding()
+
+            if store.isTesting {
+                testingStatusBanner
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                TrackpadGestureTestingPanel(
+                    model: testingModel,
+                    store: store,
+                    localization: localization,
+                    actionTitle: mappingActionTitle,
+                    onSetMode: onSetTestingMode
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if !enabledOwnedOverlappingTapFingerCounts.isEmpty {
+                overlappingTapBehaviorNotice
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
             if store.mappings.isEmpty {
                 emptyState
@@ -219,9 +265,27 @@ struct TrackpadGesturesSettingsView: View {
                 }
             }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: store.isTesting)
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: 0.16),
+            value: enabledOwnedOverlappingTapFingerCounts
+        )
     }
 
-    private var mappingViewMenu: some View {
+    private var enabledOwnedOverlappingTapFingerCounts: [Int] {
+        store.enabledOverlappingTapFingerCounts(where: isGestureOwned)
+    }
+
+    private func mappingToolbar(compact: Bool) -> some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            mappingViewMenu(compact: compact)
+            tipTapGuideButton
+            addMappingButton(compact: compact)
+        }
+        .fixedSize()
+    }
+
+    private func mappingViewMenu(compact: Bool) -> some View {
         let title = localization.string(
             "settings.mappings.viewOptions",
             defaultValue: "查看选项"
@@ -320,15 +384,24 @@ struct TrackpadGesturesSettingsView: View {
                 }
             }
         } label: {
-            Label {
-                Text(title)
-            } icon: {
+            if compact {
                 Image(systemName: hasCustomizedMappingView
                     ? "line.3.horizontal.decrease.circle.fill"
                     : "line.3.horizontal.decrease.circle")
                     .foregroundStyle(hasCustomizedMappingView ? Color.accentColor : Color.primary)
+            } else {
+                Label {
+                    Text(title)
+                } icon: {
+                    Image(systemName: hasCustomizedMappingView
+                        ? "line.3.horizontal.decrease.circle.fill"
+                        : "line.3.horizontal.decrease.circle")
+                        .foregroundStyle(
+                            hasCustomizedMappingView ? Color.accentColor : Color.primary
+                        )
+                }
+                .font(PluginSettingsTheme.Typography.controlLabel)
             }
-            .font(PluginSettingsTheme.Typography.controlLabel)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -354,11 +427,8 @@ struct TrackpadGesturesSettingsView: View {
         return Button {
             isShowingTipTapGuide.toggle()
         } label: {
-            Image(systemName: "questionmark.circle")
-                .frame(
-                    width: PluginSettingsTheme.Size.controlHeight,
-                    height: PluginSettingsTheme.Size.controlHeight
-                )
+            Label(title, systemImage: "questionmark.circle")
+                .labelStyle(.iconOnly)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -366,17 +436,86 @@ struct TrackpadGesturesSettingsView: View {
         .accessibilityLabel(Text(title))
     }
 
-    private var addMappingButton: some View {
+    private func addMappingButton(compact: Bool) -> some View {
         let title = localization.string("settings.mappings.add", defaultValue: "添加手势")
         return Button(action: addMapping) {
-            Label(title, systemImage: "plus")
-                .font(PluginSettingsTheme.Typography.controlLabel)
+            if compact {
+                Label(title, systemImage: "plus")
+                    .labelStyle(.iconOnly)
+            } else {
+                Label(title, systemImage: "plus")
+                    .font(PluginSettingsTheme.Typography.controlLabel)
+            }
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
         .help(title)
         .accessibilityLabel(Text(title))
         .disabled(store.mappings.count == TrackpadGesture.configurableCases.count)
+    }
+
+    private var testingStatusBanner: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            Image(systemName: "waveform.path")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 34, height: 34)
+                .background(Color.accentColor.opacity(0.12))
+                .clipShape(RoundedRectangle(
+                    cornerRadius: PluginSettingsTheme.Radius.control,
+                    style: .continuous
+                ))
+                .accessibilityHidden(true)
+
+            VStack(
+                alignment: .leading,
+                spacing: PluginSettingsTheme.Spacing.rowTitleDescription
+            ) {
+                Text(localization.string(
+                    "settings.testing.active",
+                    defaultValue: "正在识别手势"
+                ))
+                .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                Text(testingDescription)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+            Button {
+                onSetTesting(false)
+            } label: {
+                Text(localization.string(
+                    "settings.testing.stop",
+                    defaultValue: "停止测试"
+                ))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .pluginSettingsListRowPadding(interactive: true)
+        .background(PluginSettingsTheme.Palette.recordingBackground)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var overlappingTapBehaviorNotice: some View {
+        Label {
+            Text(localization.string(
+                "settings.mappings.overlappingTapBehavior",
+                defaultValue: "同时启用相同手指数量的轻点和双击时，双击会先执行轻点操作，再执行双击操作。"
+            ))
+            .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "info.circle.fill")
+                .foregroundStyle(Color.accentColor)
+        }
+        .font(PluginSettingsTheme.Typography.rowDescription)
+        .foregroundStyle(.secondary)
+        .pluginSettingsListRowPadding()
+        .background(Color.accentColor.opacity(0.06))
     }
 
     private func toggleMappingSearch() {
@@ -434,9 +573,13 @@ struct TrackpadGesturesSettingsView: View {
             Divider()
 
             Label(
-                localization.string(
+                localization.format(
                     "settings.mappings.tipTapGuide.test",
-                    defaultValue: "可使用下方的“测试”练习，不会执行已配置的操作。"
+                    defaultValue: "可使用“%@”练习，不会执行已配置的操作。",
+                    localization.string(
+                        "settings.testing.inactive",
+                        defaultValue: "测试手势"
+                    )
                 ),
                 systemImage: "waveform.path"
             )
@@ -557,6 +700,7 @@ struct TrackpadGesturesSettingsView: View {
 
         return HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
             Button {
+                stopTestingBeforeConfiguration()
                 editingDraft = TrackpadGestureMappingDraft(mapping: mapping)
             } label: {
                 HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
@@ -630,6 +774,7 @@ struct TrackpadGesturesSettingsView: View {
             Toggle(gestureTitle, isOn: Binding(
                 get: { mapping.isEnabled },
                 set: { enabled in
+                    stopTestingBeforeConfiguration()
                     guard store.setEnabled(enabled, id: mapping.id) else { return }
                     onChange()
                 }
@@ -638,6 +783,40 @@ struct TrackpadGesturesSettingsView: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .accessibilityLabel(gestureTitle)
+
+            Button {
+                onSetTestingMode(.practice(mapping.gesture))
+            } label: {
+                Image(systemName: testingModel.mode == .practice(mapping.gesture)
+                    ? "scope"
+                    : "target")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(localization.format(
+                "settings.testing.practiceGestureFormat",
+                defaultValue: "练习“%@”",
+                gestureTitle
+            ))
+            .accessibilityLabel(Text(localization.format(
+                "settings.testing.practiceGestureFormat",
+                defaultValue: "练习“%@”",
+                gestureTitle
+            )))
+            .accessibilityAddTraits(
+                TrackpadGestureTestingModeAccessibilityState(mode: testingModel.mode)
+                    .isPracticeSelected(mapping.gesture) ? .isSelected : []
+            )
+            .accessibilityValue(Text(localization.string(
+                TrackpadGestureTestingModeAccessibilityState(mode: testingModel.mode)
+                    .isPracticeSelected(mapping.gesture)
+                    ? "settings.testing.mode.accessibility.active"
+                    : "settings.testing.mode.accessibility.inactive",
+                defaultValue: TrackpadGestureTestingModeAccessibilityState(mode: testingModel.mode)
+                    .isPracticeSelected(mapping.gesture)
+                    ? "当前模式"
+                    : "未启用"
+            )))
         }
         .pluginSettingsListRowPadding(interactive: true)
         .contextMenu {
@@ -648,6 +827,21 @@ struct TrackpadGesturesSettingsView: View {
     @ViewBuilder
     private func mappingManagementMenuItems(_ mapping: TrackpadGestureMapping) -> some View {
         Button {
+            onSetTestingMode(.practice(mapping.gesture))
+        } label: {
+            Label(
+                localization.string(
+                    "settings.testing.mode.practice",
+                    defaultValue: "练习一个手势"
+                ),
+                systemImage: "target"
+            )
+        }
+
+        Divider()
+
+        Button {
+            stopTestingBeforeConfiguration()
             editingDraft = TrackpadGestureMappingDraft(mapping: mapping)
         } label: {
             Label(
@@ -657,6 +851,7 @@ struct TrackpadGesturesSettingsView: View {
         }
 
         Button {
+            stopTestingBeforeConfiguration()
             guard store.setEnabled(!mapping.isEnabled, id: mapping.id) else { return }
             onChange()
         } label: {
@@ -671,6 +866,7 @@ struct TrackpadGesturesSettingsView: View {
         Divider()
 
         Button(role: .destructive) {
+            stopTestingBeforeConfiguration()
             guard store.delete(id: mapping.id) else { return }
             onChange()
         } label: {
@@ -770,43 +966,30 @@ struct TrackpadGesturesSettingsView: View {
         isMappingSearchFocused = isShowingMappingSearch
     }
 
-    private var testingSection: some View {
-        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                    Text(store.isTesting
-                        ? localization.string("settings.testing.active", defaultValue: "正在识别手势")
-                        : localization.string("settings.testing.inactive", defaultValue: "测试手势"))
-                        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-                    Text(testingDescription)
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-                Button {
-                    onSetTesting(!store.isTesting)
-                } label: {
-                    Text(store.isTesting
-                        ? localization.string("settings.testing.stop", defaultValue: "停止测试")
-                        : localization.string("settings.testing.start", defaultValue: "开始测试"))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-        }
-        .pluginSettingsListRowPadding(interactive: true)
-    }
-
     private var testingDescription: String {
-        if let gesture = store.lastTestGesture {
+        let status = TrackpadGestureTestingStatusResolver.resolve(
+            snapshot: testingModel.selectedSnapshot,
+            retainedRecognition: testingModel.selectedRecognizedGesture,
+            retainedContactPattern: testingModel.selectedContactPatternGesture,
+            retainedRejection: testingModel.selectedRejection
+        )
+        if case let .recognized(gesture) = status {
             return localization.format(
                 "settings.testing.recognizedFormat",
-                defaultValue: "已识别：%@。测试期间不会执行操作。",
+                defaultValue: "已识别：%@。停止测试前，已配置的操作不会执行。",
+                gesture.title(localization: localization)
+            )
+        }
+        if case let .contactPatternDetected(gesture) = status {
+            return localization.format(
+                "settings.testing.contactPatternFormat",
+                defaultValue: "已检测到 %@ 的接触动作。实际映射仍需关联 macOS 轻点点击。",
                 gesture.title(localization: localization)
             )
         }
         return localization.string(
             "settings.testing.description",
-            defaultValue: "识别手势但不执行操作。"
+            defaultValue: "测试模式已开启。停止测试前，已配置的操作不会执行。"
         )
     }
 
@@ -821,7 +1004,7 @@ struct TrackpadGesturesSettingsView: View {
     private func announceRecognizedTestGesture(_ gesture: TrackpadGesture) {
         let announcement = localization.format(
             "settings.testing.recognizedFormat",
-            defaultValue: "已识别：%@。测试期间不会执行操作。",
+            defaultValue: "已识别：%@。停止测试前，已配置的操作不会执行。",
             gesture.title(localization: localization)
         )
         NSAccessibility.post(
@@ -838,7 +1021,13 @@ struct TrackpadGesturesSettingsView: View {
         guard let gesture = store.availableGestures().first else {
             return
         }
+        stopTestingBeforeConfiguration()
         editingDraft = TrackpadGestureMappingDraft(gesture: gesture)
+    }
+
+    private func stopTestingBeforeConfiguration() {
+        guard store.isTesting else { return }
+        onSetTesting(false)
     }
 
     private func mappingActionTitle(_ action: TrackpadGestureAction) -> String {
