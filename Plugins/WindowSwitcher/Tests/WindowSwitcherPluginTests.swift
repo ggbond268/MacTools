@@ -2288,6 +2288,77 @@ final class WindowSwitcherPluginTests: XCTestCase {
         )
     }
 
+    func testFocusStillRaisesWindowWhenFocusedAttributeIsReadOnly() {
+        let window = AXUIElementCreateSystemWide()
+        var writtenAttributes: [String] = []
+        var didRaise = false
+
+        WindowSwitcherAppCatalog.focusWindow(
+            window,
+            isMinimized: false,
+            deadline: Date().addingTimeInterval(1),
+            setAttributeValue: { _, attribute, _, _ in
+                writtenAttributes.append(attribute as String)
+                return attribute as String != kAXFocusedAttribute as String
+            },
+            performRaise: { _, _ in
+                didRaise = true
+                return true
+            }
+        )
+
+        XCTAssertEqual(
+            writtenAttributes,
+            [kAXMainAttribute as String, kAXFocusedAttribute as String]
+        )
+        XCTAssertTrue(didRaise)
+    }
+
+    func testRestartedApplicationReleasesExpiredWindowShortcutForReassignment() {
+        let storage = WindowSwitcherMemoryStorage()
+        let oldState = WindowSwitcherShortcutBindingState(
+            manual: ["window:321:cg:401": "q"]
+        )
+        storage.set(try? JSONEncoder().encode(oldState), forKey: "shortcut-bindings")
+        let store = WindowSwitcherStore(storage: storage, processIsRunning: { _ in false })
+        let restartedEntry = makeWindowEntry(
+            processIdentifier: 654,
+            windowNumber: 501,
+            title: "Restarted window"
+        )
+        let entries = store.assignShortcuts(to: [restartedEntry])
+
+        guard case let .updated(reassigned) = store.setManualShortcut(
+            "q",
+            for: restartedEntry.id,
+            in: entries
+        ) else {
+            return XCTFail("Expected the expired shortcut to be reassigned after restart.")
+        }
+
+        XCTAssertEqual(reassigned[0].shortcutToken, "q")
+        XCTAssertNil(store.shortcutBindings.manual["window:321:cg:401"])
+        XCTAssertEqual(store.shortcutBindings.manual["window:654:cg:501"], "q")
+    }
+
+    func testTemporarilyMissingWindowKeepsShortcutWhileProcessIsRunning() {
+        let storage = WindowSwitcherMemoryStorage()
+        let oldState = WindowSwitcherShortcutBindingState(
+            manual: ["window:321:cg:401": "q"]
+        )
+        storage.set(try? JSONEncoder().encode(oldState), forKey: "shortcut-bindings")
+        let store = WindowSwitcherStore(storage: storage, processIsRunning: { $0 == 321 })
+        let visibleEntry = makeWindowEntry(
+            processIdentifier: 654,
+            windowNumber: 501,
+            title: "Visible window"
+        )
+        let entries = store.assignShortcuts(to: [visibleEntry])
+
+        XCTAssertTrue(store.hasShortcutConflict("q", for: visibleEntry.id, in: entries))
+        XCTAssertEqual(store.shortcutBindings.manual["window:321:cg:401"], "q")
+    }
+
     private func makeEntry(
         index: Int,
         appName: String,
@@ -2304,6 +2375,26 @@ final class WindowSwitcherPluginTests: XCTestCase {
             isMinimized: false,
             windowNumber: nil,
             windowBounds: nil,
+            shortcutToken: nil
+        )
+    }
+
+    private func makeWindowEntry(
+        processIdentifier: pid_t,
+        windowNumber: CGWindowID,
+        title: String
+    ) -> WindowSwitcherAppEntry {
+        WindowSwitcherAppEntry(
+            id: "window-\(processIdentifier)-\(windowNumber)",
+            processIdentifier: processIdentifier,
+            bundleIdentifier: "com.example.WindowApp",
+            appName: "Window App",
+            windowTitle: title,
+            icon: nil,
+            windowElement: nil,
+            isMinimized: false,
+            windowNumber: windowNumber,
+            windowBounds: CGRect(x: 80, y: 100, width: 900, height: 700),
             shortcutToken: nil
         )
     }

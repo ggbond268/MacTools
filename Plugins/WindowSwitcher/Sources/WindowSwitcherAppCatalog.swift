@@ -1285,40 +1285,62 @@ final class WindowSwitcherAppCatalog {
         isMinimized: Bool,
         deadline: Date
     ) {
+        focusWindow(
+            window,
+            isMinimized: isMinimized,
+            deadline: deadline,
+            setAttributeValue: setAXAttributeValue,
+            performRaise: { element, deadline in
+                guard !Task.isCancelled,
+                      setAXMessagingTimeout(on: element, deadline: deadline)
+                else {
+                    return false
+                }
+
+                return AXUIElementPerformAction(element, kAXRaiseAction as CFString) == .success
+            }
+        )
+    }
+
+    static func focusWindow(
+        _ window: AXUIElement,
+        isMinimized: Bool,
+        deadline: Date,
+        setAttributeValue: (AXUIElement, CFString, CFTypeRef, Date) -> Bool,
+        performRaise: (AXUIElement, Date) -> Bool
+    ) {
         if isMinimized {
             guard setAXAttributeValue(
                 window,
                 kAXMinimizedAttribute as CFString,
-                value: kCFBooleanFalse,
-                deadline: deadline
+                kCFBooleanFalse,
+                deadline
             ) else {
                 return
             }
         }
 
-        guard setAXAttributeValue(
+        _ = setAttributeValue(
             window,
             kAXMainAttribute as CFString,
-            value: kCFBooleanTrue,
-            deadline: deadline
-        ),
-        setAXAttributeValue(
-            window,
-            kAXFocusedAttribute as CFString,
-            value: kCFBooleanTrue,
-            deadline: deadline
-        ) else {
+            kCFBooleanTrue,
+            deadline
+        )
+        guard !Task.isCancelled, Date() < deadline else {
             return
         }
 
-        guard !Task.isCancelled,
-              setAXMessagingTimeout(on: window, deadline: deadline)
-        else {
+        _ = setAttributeValue(
+            window,
+            kAXFocusedAttribute as CFString,
+            kCFBooleanTrue,
+            deadline
+        )
+        guard !Task.isCancelled, Date() < deadline else {
             return
         }
-        guard AXUIElementPerformAction(window, kAXRaiseAction as CFString) == .success else {
-            return
-        }
+
+        _ = performRaise(window, deadline)
     }
 
     private static func setAXAttributeValue(

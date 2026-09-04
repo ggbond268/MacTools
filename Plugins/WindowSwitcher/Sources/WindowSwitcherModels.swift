@@ -97,11 +97,18 @@ final class WindowSwitcherStore: ObservableObject {
     @Published private(set) var shortcutBindings: WindowSwitcherShortcutBindingState
 
     private let storage: PluginStorage
+    private let processIsRunning: (pid_t) -> Bool
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(storage: PluginStorage) {
+    init(
+        storage: PluginStorage,
+        processIsRunning: @escaping (pid_t) -> Bool = {
+            NSRunningApplication(processIdentifier: $0)?.isTerminated == false
+        }
+    ) {
         self.storage = storage
+        self.processIsRunning = processIsRunning
         if let data = storage.data(forKey: Keys.configuration),
            let loaded = try? decoder.decode(WindowSwitcherConfiguration.self, from: data) {
             self.configuration = loaded
@@ -154,6 +161,7 @@ final class WindowSwitcherStore: ObservableObject {
     }
 
     func assignShortcuts(to entries: [WindowSwitcherAppEntry]) -> [WindowSwitcherAppEntry] {
+        removeExpiredWindowBindings(for: entries)
         let result = WindowSwitcherShortcutAssignment.assignShortcuts(
             to: entries,
             bindingState: shortcutBindings
@@ -172,6 +180,7 @@ final class WindowSwitcherStore: ObservableObject {
         for entryID: String,
         in entries: [WindowSwitcherAppEntry]
     ) -> WindowSwitcherShortcutCustomizationResult {
+        removeExpiredWindowBindings(for: entries)
         let identities = WindowSwitcherShortcutAssignment.identities(for: entries)
         guard let targetIndex = entries.firstIndex(where: { $0.id == entryID }),
               identities.indices.contains(targetIndex)
@@ -221,6 +230,7 @@ final class WindowSwitcherStore: ObservableObject {
         for entryID: String,
         in entries: [WindowSwitcherAppEntry]
     ) -> Bool {
+        removeExpiredWindowBindings(for: entries)
         guard let token = WindowSwitcherShortcutAssignment.normalizedManualToken(rawToken) else {
             return true
         }
@@ -272,6 +282,40 @@ final class WindowSwitcherStore: ObservableObject {
         }
 
         storage.set(data, forKey: Keys.shortcutBindings)
+    }
+
+    private func removeExpiredWindowBindings(for entries: [WindowSwitcherAppEntry]) {
+        let activeProcessIdentifiers = Set(entries.compactMap { entry in
+            entry.isWindowEntry ? entry.processIdentifier : nil
+        })
+        let previousState = shortcutBindings
+
+        shortcutBindings.manual = shortcutBindings.manual.filter { identity, _ in
+            !isExpiredWindowIdentity(identity, activeProcessIdentifiers: activeProcessIdentifiers)
+        }
+        shortcutBindings.automatic = shortcutBindings.automatic.filter { identity, _ in
+            !isExpiredWindowIdentity(identity, activeProcessIdentifiers: activeProcessIdentifiers)
+        }
+
+        if shortcutBindings != previousState {
+            persistShortcutBindings()
+        }
+    }
+
+    private func isExpiredWindowIdentity(
+        _ identity: String,
+        activeProcessIdentifiers: Set<pid_t>
+    ) -> Bool {
+        let components = identity.split(separator: ":", omittingEmptySubsequences: false)
+        guard components.count >= 4,
+              components[0] == "window",
+              let processIdentifier = pid_t(components[1]),
+              !activeProcessIdentifiers.contains(processIdentifier)
+        else {
+            return false
+        }
+
+        return !processIsRunning(processIdentifier)
     }
 }
 
