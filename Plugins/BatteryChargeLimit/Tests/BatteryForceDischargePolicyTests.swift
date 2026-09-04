@@ -11,13 +11,13 @@ final class BatteryForceDischargePolicyTests: XCTestCase {
             BatteryForceDischargePolicy.candidates,
             [
                 .init(key: BatteryForceDischargePolicy.tahoeAdapterKey, enabledValue: 0x08),
-                .init(key: BatteryForceDischargePolicy.secondaryAdapterKey, enabledValue: 0x01),
+                .init(key: BatteryForceDischargePolicy.secondaryAdapterKey, enabledValue: 0x20),
                 .init(key: BatteryForceDischargePolicy.legacyAdapterKey, enabledValue: 0x01),
             ]
         )
         XCTAssertEqual(
             BatteryForceDischargePolicy.availableCandidates(hasKey: { $0 == "CH0J" }),
-            [.init(key: "CH0J", enabledValue: 0x01)]
+            [.init(key: "CH0J", enabledValue: 0x20)]
         )
     }
 
@@ -32,6 +32,18 @@ final class BatteryForceDischargePolicyTests: XCTestCase {
         )
         XCTAssertNil(BatteryForceDischargePolicy.activeState(for: 0x02, enabledValue: 0x08))
         XCTAssertNil(BatteryForceDischargePolicy.activeState(for: nil, enabledValue: 0x08))
+    }
+
+    func testCH0JUsesItsOwnActiveBit() {
+        let candidate = BatteryForceDischargePolicy.Candidate(key: "CH0J", enabledValue: 0x20)
+
+        XCTAssertEqual(
+            BatteryForceDischargePolicy.activeState(for: 0x20, enabledValue: candidate.enabledValue),
+            true
+        )
+        XCTAssertNil(
+            BatteryForceDischargePolicy.activeState(for: 0x01, enabledValue: candidate.enabledValue)
+        )
     }
 
     func testEnableStopsAfterFirstSuccessfulCandidate() throws {

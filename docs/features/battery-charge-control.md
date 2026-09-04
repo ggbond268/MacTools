@@ -1,6 +1,6 @@
 # Feature — Battery charge-control write reliability
 
-Last verified: 2026-08-31
+Last verified: 2026-09-04
 
 Status: in-review
 Source of truth: yes
@@ -22,7 +22,7 @@ Source of truth: yes
 
 ## Acceptance criteria
 
-- [x] Force discharge uses `CHIE=0x08` when `CHIE` is available, otherwise `CH0J=0x01`, otherwise `CH0I=0x01`.
+- [x] Force discharge uses `CHIE=0x08` when `CHIE` is available, otherwise `CH0J=0x20`, otherwise `CH0I=0x01`.
 - [x] Force discharge is reported as supported when any one of `CHIE`, `CH0J`, or `CH0I` is available.
 - [x] A present but non-writable fallback key does not turn a successful selected-key write into a reported failure.
 - [x] Stopping force discharge attempts to clear all known available adapter-isolation keys, ignores failures for readable inactive compatibility keys, and reports failure when an active or indeterminate key cannot be cleared.
@@ -37,7 +37,7 @@ Source of truth: yes
 - [x] Focused Battery Charge Limit and policy checks passed before the final shared-policy wiring; the package still builds after the final wiring.
 - [x] Post-wiring XCTest execution of `BatteryChargeLimitPluginTests`, `BatteryForceDischargePolicyTests`, and `BatteryChargeLimitWriterTests` passes.
 - [x] Separate standards/spec/security review completed; final review has no remaining P0–P3 findings.
-- [ ] Manual SMC acceptance is recorded on compatible hardware, or the exact missing evidence is reported before publication.
+- [ ] Manual `CH0J` hardware acceptance confirms force discharge switches to battery power and disabling restores external power; SMC readback alone is insufficient.
 - [ ] One focused pull request closes issue #341.
 
 ## Business rules
@@ -56,6 +56,7 @@ Source of truth: yes
 | 2026-08-31 | Preserve cleanup failures for active or unreadable keys while ignoring failures for readable inactive compatibility keys | Clearing an inactive fallback must not mask a still-active force-discharge key | Prevents the UI from reporting a successful stop while force discharge remains enabled |
 | 2026-08-31 | Keep the fix inside the existing privileged helper and capability model | The issue is a write-path compatibility defect; no new PluginKit or IPC contract is needed | Limits the PR to Battery Charge Limit sources, tests, and required documentation |
 | 2026-08-31 | Do not update `docs/features/INDEX.md` in this shared workspace | The index already contains unrelated staged WindowSwitcher WIP and must not receive a mixed hunk | The standalone feature record remains the source of truth for this PR; index registration can be done separately if needed |
+| 2026-09-04 | Use `CH0J=0x20`, distinct from `CH0I=0x01` | Maintainer review cites established macOS implementations with this bit mapping | Corrects the adapter-isolation request on `CH0J` firmware |
 
 ## Plan
 
@@ -65,6 +66,7 @@ Source of truth: yes
 - [x] P004 — Add focused regressions and update required documentation/localization.
 - [x] P005 — Run verification, independent standards/spec/security review, and resolve findings.
 - [x] P006 — Commit only issue #341 changes and publish one focused PR.
+- [x] P007 — Correct the `CH0J` enable value from maintainer review and update focused regression coverage.
 
 ## TODO
 
@@ -72,6 +74,7 @@ Source of truth: yes
 - [x] F002 — Extend capability probing and user-facing capability presentation — files: `Plugins/BatteryChargeLimit/Sources/BatteryChargeLimitModels.swift`, `Plugins/BatteryChargeLimit/Sources/BatteryChargeLimitWriter.swift`, `Plugins/BatteryChargeLimit/Sources/BatteryChargeLimitPlugin.swift`, `Plugins/BatteryChargeLimit/Resources/Localizable.xcstrings` — status: done
 - [x] F003 — Add regression coverage — files: `Plugins/BatteryChargeLimit/Tests/BatteryChargeLimitPluginTests.swift`, `Plugins/BatteryChargeLimit/Tests/BatteryForceDischargePolicyTests.swift` — status: done
 - [x] F004 — Update documentation and release note — files: `Plugins/BatteryChargeLimit/SMCHelper/README.md`, `README.md`, `changes/unreleased/battery-charge-control.md` — status: done
+- [x] F005 — Correct `CH0J` policy value and regression expectations — files: `Plugins/BatteryChargeLimit/SMCHelper/Sources/BatteryForceDischargePolicy.swift`, `Plugins/BatteryChargeLimit/Tests/BatteryForceDischargePolicyTests.swift` — status: done
 
 ## Journal impl Codex
 
@@ -90,6 +93,7 @@ Source of truth: yes
 - 2026-08-31 — User authorized publication while unrelated WindowSwitcher WIP remains in the shared checkout. The issue branch will include only Battery Charge Limit hunks; the PR will explicitly retain the post-wiring XCTest and compatible-hardware SMC limitations.
 - 2026-08-31 — The post-wiring focused XCTest rerun passed all Battery Charge Limit, force-discharge policy, and writer tests. The latest `make ci` still exits 65 only on unrelated `FanControlPluginTests.testMonitoringOnlyPublishesMeaningfulSnapshotChanges`, `PluginPackageManifestTests.testRichProjectedManifestDecodesProductMetadata`, three `SystemStatusPluginTests` formatter/width tests, and three `DiskCleanPluginTests` action/subtitle tests; the runner duplicated one Fan Control failure.
 - 2026-08-31 — Commit `e8118b7abec3ae7378bda31a10e84ba499808a15` contains only the 13 planned Battery Charge Limit and documentation files; target comparison against `upstream/main` is clean. Draft PR #370 was opened to close issue #341, with compatible-hardware SMC acceptance explicitly left for review.
+- 2026-09-04 — Maintainer review of PR #370 corrected the `CH0J` enable value from `0x01` to `0x20`; `CHIE=0x08` and `CH0I=0x01` remain unchanged. Focused policy regressions now assert the corrected mapping. Physical `CH0J` on/off validation remains pending because this workspace has no compatible hardware.
 
 ## Current files
 

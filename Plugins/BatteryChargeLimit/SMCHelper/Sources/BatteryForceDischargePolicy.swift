@@ -17,7 +17,7 @@ enum BatteryForceDischargePolicy {
 
     static let candidates = [
         Candidate(key: tahoeAdapterKey, enabledValue: 0x08),
-        Candidate(key: secondaryAdapterKey, enabledValue: 0x01),
+        Candidate(key: secondaryAdapterKey, enabledValue: 0x20),
         Candidate(key: legacyAdapterKey, enabledValue: 0x01),
     ]
 
