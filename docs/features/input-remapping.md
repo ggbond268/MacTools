@@ -1,6 +1,6 @@
 # Feature — Input Remapping
 
-Last verified: 2026-09-02
+Last verified: 2026-09-04
 
 Status: in-progress
 Source of truth: yes
@@ -18,7 +18,7 @@ Source of truth: yes
 - A new rule starts as a disabled draft with direct input recording and a neutral output selector. Selecting Shortcut reveals its recorder; each captured value is then shown in its normal editor.
 - To select a trigger, the user starts recording and presses a key, a mouse button, or scrolls; the recorded sequence is consumed without executing a rule.
 - Recording first shows a brief preparation state so the click that opened the recorder cannot become the trigger; it then shows an explicit listening state.
-- If recorder startup fails, the affected mapping card shows a local diagnostic, the confirmed missing permission action when available, and a retry action while restoring the previous mapping state.
+- If shortcut recorder startup fails, the affected mapping card shows a local diagnostic, the confirmed missing permission action when available, and a retry action while restoring the previous mapping state. A retry keeps the shortcut recorder's preparation/listening controls visible even when the restored action is not a shortcut.
 - A matching click, key, or scroll executes the action. Mouse double-click and long-press keep the original click available to avoid unsafe event replay.
 - When the action is a shortcut, the user can record the output combination directly; the recorded key-down and key-up are consumed.
 - When the action is a single key, the user chooses it from a categorized list without generating a physical key press that another global listener could intercept.
@@ -127,7 +127,7 @@ Source of truth: yes
 - [x] Control-Option-Command-Escape remains available during recording and disables every unsafe mapping.
 - [x] An external TipTap claim consumes its corresponding native click before dispatching its action.
 - [x] The primary-panel title lists keyboard, trackpad, and mouse as supported input sources.
-- [x] Recorder startup failures remain local to the affected mapping card, restore the previous mapping state, and offer permission guidance or retry.
+- [x] Recorder startup failures remain local to the affected mapping card, restore the previous mapping state, and offer permission guidance or retry; shortcut retries keep preparation/listening controls and Cancel visible after a non-shortcut restoration.
 
 ## Implementation journal
 
@@ -191,6 +191,7 @@ Source of truth: yes
 - 2026-08-14 — Updated the Custom Shortcuts plugin icon to `arrow.left.arrow.right`.
 - 2026-08-14 — Review fix: persisted precise-trackpad ownership in Core and restore it after restart.
 - 2026-09-02 — P023/F023 complete. The coordinator publishes rule/target-scoped failures for immediate and delayed tap startup, restores the previous shortcut action and enabled state through the editor callback, and mapping cards show localized diagnostics, confirmed permission actions, or retry. Delayed failures rely on the event tap's internal cancellation path exactly once.
+- 2026-09-04 — PR #364 retry regression fixed: shortcut preparation/listening state now controls recorder visibility independently of the restored output action. Targeted `InputRemappingModelsTests/testShortcutRetryAfterFailureShowsRecordingControlsForRestoredNonShortcutAction` and plugin build passed.
 
 ## Files
 

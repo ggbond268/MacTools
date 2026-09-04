@@ -723,6 +723,17 @@ struct InputRemappingInputRecordingSnapshot: Equatable {
     }
 }
 
+@MainActor
+func shouldShowShortcutRecordingControl(
+    for rule: InputRemappingRule,
+    buttonCapture: InputRemappingButtonCaptureCoordinator
+) -> Bool {
+    rule.outputConfigurationState == .recordingShortcut ||
+        (rule.isOutputConfigured && rule.action.kind == .shortcut) ||
+        buttonCapture.preparingShortcutRuleID == rule.id ||
+        buttonCapture.recordingShortcutRuleID == rule.id
+}
+
 private struct InputRemappingRuleEditor: View {
     let rule: InputRemappingRule
     @ObservedObject var store: InputRemappingStore
@@ -868,8 +879,7 @@ private struct InputRemappingRuleEditor: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             actionMenu
 
-            if draft.outputConfigurationState == .recordingShortcut ||
-                (draft.isOutputConfigured && draft.action.kind == .shortcut) {
+            if shouldShowShortcutRecordingControl(for: draft, buttonCapture: buttonCapture) {
                 shortcutRecordingControl
             }
             if draft.outputConfigurationState == .recordingKeyTap ||

@@ -970,6 +970,45 @@ final class InputRemappingModelsTests: XCTestCase {
     }
 
     @MainActor
+    func testShortcutRetryAfterFailureShowsRecordingControlsForRestoredNonShortcutAction() {
+        let tap = InputRemappingTapSpy()
+        tap.beginShortcutResult = false
+        var pendingArming: (@MainActor () -> Void)?
+        let coordinator = InputRemappingButtonCaptureCoordinator(
+            tap: tap,
+            scheduleArming: { pendingArming = $0 }
+        )
+        let originalRule = InputRemappingRule(isEnabled: true, action: .mouseForward)
+        var draft = originalRule
+        let snapshot = InputRemappingOutputRecordingSnapshot(rule: originalRule)
+
+        draft.action = .shortcut(ShortcutBinding(keyCode: 0, modifiers: [.command]))
+        draft.outputConfigurationState = .recordingShortcut
+        XCTAssertTrue(coordinator.startShortcut(
+            ruleID: draft.id,
+            onCapture: { _ in },
+            onFailure: { snapshot.restore(&draft) }
+        ))
+        XCTAssertEqual(coordinator.preparingShortcutRuleID, draft.id)
+        XCTAssertTrue(shouldShowShortcutRecordingControl(for: draft, buttonCapture: coordinator))
+        pendingArming?()
+        XCTAssertEqual(draft, originalRule)
+        XCTAssertFalse(shouldShowShortcutRecordingControl(for: draft, buttonCapture: coordinator))
+
+        tap.beginShortcutResult = true
+        XCTAssertTrue(coordinator.startShortcut(ruleID: draft.id) { _ in })
+        XCTAssertEqual(coordinator.preparingShortcutRuleID, draft.id)
+        XCTAssertTrue(shouldShowShortcutRecordingControl(for: draft, buttonCapture: coordinator))
+        pendingArming?()
+
+        XCTAssertEqual(coordinator.recordingShortcutRuleID, draft.id)
+        XCTAssertTrue(
+            shouldShowShortcutRecordingControl(for: draft, buttonCapture: coordinator),
+            "The recording state must keep the visible Cancel control available after retry."
+        )
+    }
+
+    @MainActor
     func testRecordingPermissionGuidanceIdentifiesAccessibilityBeforeInputMonitoring() {
         let storage = InputRemappingMemoryStorage()
         let permissionState = InputRemappingPermissionState()
