@@ -65,4 +65,33 @@ final class TrackpadTypingSuppressionGateTests: XCTestCase {
         XCTAssertEqual(TrackpadTypingSuppressionGate.clamped(0.6), 0.6)
         XCTAssertEqual(TrackpadTypingSuppressionGate.clamped(2), 1.0)
     }
+
+    func testContactResetRequiresEveryOccupiedDeviceToReachZero() {
+        let gate = TrackpadContactResetGate()
+        let occupiedDeviceOne = TrackpadContactFrame(
+            deviceID: 1,
+            timestamp: 0,
+            contacts: [.init(identifier: 1, x: 0.5, y: 0.5)]
+        )
+        let occupiedDeviceTwo = TrackpadContactFrame(
+            deviceID: 2,
+            timestamp: 0,
+            contacts: [.init(identifier: 2, x: 0.5, y: 0.5)]
+        )
+
+        gate.beginSuppression(activeDeviceIDs: [1])
+        XCTAssertTrue(gate.shouldSuppress(occupiedDeviceOne, while: false))
+        XCTAssertTrue(gate.shouldSuppress(occupiedDeviceTwo, while: true))
+        XCTAssertTrue(gate.shouldSuppress(occupiedDeviceTwo, while: false))
+        XCTAssertTrue(gate.shouldSuppress(
+            .init(deviceID: 1, timestamp: 0.1, contacts: []),
+            while: false
+        ))
+        XCTAssertTrue(gate.shouldSuppress(
+            .init(deviceID: 2, timestamp: 0.2, contacts: []),
+            while: false
+        ))
+        XCTAssertFalse(gate.shouldSuppress(occupiedDeviceTwo, while: false))
+        XCTAssertFalse(gate.shouldSuppress(occupiedDeviceOne, while: false))
+    }
 }

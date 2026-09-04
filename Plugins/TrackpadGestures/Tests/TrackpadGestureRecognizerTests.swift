@@ -94,7 +94,7 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         XCTAssertTrue(recognizer.process(frame(time: 0.20, contacts: [(1, 0.5, 0.5)])))
     }
 
-    func testTipTapIgnoredContactCannotMoveFromSiblingRegionIntoTargetRegion() {
+    func testTipTapRejectedContactCannotMoveIntoTargetRegionButNextEpisodeCanRecognize() {
         var recognizer = TipTapRecognizer(fixedFingerCount: 1, region: .left)
         let fixedContact = [(1, 0.5, 0.5)]
         _ = recognizer.process(frame(time: 0, contacts: []))
@@ -109,7 +109,7 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         ])))
         XCTAssertFalse(recognizer.process(frame(time: 0.16, contacts: fixedContact)))
         _ = recognizer.process(frame(time: 0.18, contacts: fixedContact + [(3, 0.1, 0.5)]))
-        XCTAssertFalse(recognizer.process(frame(time: 0.22, contacts: fixedContact)))
+        XCTAssertTrue(recognizer.process(frame(time: 0.22, contacts: fixedContact)))
 
         _ = recognizer.process(frame(time: 0.24, contacts: []))
         _ = recognizer.process(frame(time: 0.50, contacts: [(4, 0.5, 0.5)]))
@@ -138,7 +138,7 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         XCTAssertTrue(recognizer.process(frame(time: 0.22, contacts: fixedContact)))
     }
 
-    func testTipTapIgnoredContactCannotBecomeCandidateAfterMaximumTapDuration() {
+    func testTipTapRejectedLongContactCannotBecomeCandidateButNextEpisodeCanRecognize() {
         var recognizer = TipTapRecognizer(fixedFingerCount: 1, region: .left)
         let fixedContact = [(1, 0.5, 0.5)]
         _ = recognizer.process(frame(time: 0, contacts: []))
@@ -153,10 +153,10 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         ])))
         XCTAssertFalse(recognizer.process(frame(time: 0.44, contacts: fixedContact)))
         _ = recognizer.process(frame(time: 0.46, contacts: fixedContact + [(3, 0.1, 0.5)]))
-        XCTAssertFalse(recognizer.process(frame(time: 0.50, contacts: fixedContact)))
+        XCTAssertTrue(recognizer.process(frame(time: 0.50, contacts: fixedContact)))
     }
 
-    func testTipTapTooBriefIgnoredContactCancelsUntilAllContactsReset() {
+    func testTipTapTooBriefWrongRegionEpisodeRearmsWithoutResettingFixedFinger() {
         var recognizer = TipTapRecognizer(fixedFingerCount: 1, region: .left)
         let fixedContact = [(1, 0.5, 0.5)]
         _ = recognizer.process(frame(time: 0, contacts: []))
@@ -166,7 +166,7 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         _ = recognizer.process(frame(time: 0.10, contacts: fixedContact + [(2, 0.9, 0.5)]))
         XCTAssertFalse(recognizer.process(frame(time: 0.11, contacts: fixedContact)))
         _ = recognizer.process(frame(time: 0.13, contacts: fixedContact + [(3, 0.1, 0.5)]))
-        XCTAssertFalse(recognizer.process(frame(time: 0.17, contacts: fixedContact)))
+        XCTAssertTrue(recognizer.process(frame(time: 0.17, contacts: fixedContact)))
 
         _ = recognizer.process(frame(time: 0.20, contacts: []))
         _ = recognizer.process(frame(time: 0.50, contacts: [(4, 0.5, 0.5)]))
@@ -175,6 +175,156 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
             (4, 0.5, 0.5), (5, 0.1, 0.5),
         ]))
         XCTAssertTrue(recognizer.process(frame(time: 0.63, contacts: [(4, 0.5, 0.5)])))
+    }
+
+    func testTipTapRearmsAfterEveryRecoverableAddedFingerFailure() {
+        let fixedContact = [(1, 0.5, 0.5)]
+
+        func makeRecognizer() -> TipTapRecognizer {
+            var recognizer = TipTapRecognizer(fixedFingerCount: 1, region: .left)
+            _ = recognizer.process(frame(time: 0, contacts: []))
+            _ = recognizer.process(frame(time: 0.01, contacts: fixedContact))
+            _ = recognizer.process(frame(time: 0.09, contacts: fixedContact))
+            return recognizer
+        }
+
+        func assertValidEpisode(
+            _ recognizer: inout TipTapRecognizer,
+            downAt: TimeInterval,
+            file: StaticString = #filePath,
+            line: UInt = #line
+        ) {
+            XCTAssertFalse(recognizer.process(frame(
+                time: downAt,
+                contacts: fixedContact + [(20, 0.1, 0.5)]
+            )), file: file, line: line)
+            XCTAssertTrue(recognizer.process(frame(
+                time: downAt + 0.04,
+                contacts: fixedContact
+            )), file: file, line: line)
+        }
+
+        XCTContext.runActivity(named: "too brief") { _ in
+            var recognizer = makeRecognizer()
+            _ = recognizer.process(frame(
+                time: 0.10,
+                contacts: fixedContact + [(2, 0.1, 0.5)]
+            ))
+            XCTAssertFalse(recognizer.process(frame(time: 0.11, contacts: fixedContact)))
+            XCTAssertEqual(recognizer.lastRejectionReason, .tooBrief)
+            assertValidEpisode(&recognizer, downAt: 0.13)
+        }
+
+        XCTContext.runActivity(named: "too long") { _ in
+            var recognizer = makeRecognizer()
+            _ = recognizer.process(frame(
+                time: 0.10,
+                contacts: fixedContact + [(2, 0.1, 0.5)]
+            ))
+            XCTAssertFalse(recognizer.process(frame(
+                time: 0.35,
+                contacts: fixedContact + [(2, 0.1, 0.5)]
+            )))
+            XCTAssertFalse(recognizer.process(frame(time: 0.36, contacts: fixedContact)))
+            XCTAssertEqual(recognizer.lastRejectionReason, .tooLong)
+            assertValidEpisode(&recognizer, downAt: 0.38)
+        }
+
+        XCTContext.runActivity(named: "movement") { _ in
+            var recognizer = makeRecognizer()
+            _ = recognizer.process(frame(
+                time: 0.10,
+                contacts: fixedContact + [(2, 0.1, 0.5)]
+            ))
+            XCTAssertFalse(recognizer.process(frame(
+                time: 0.13,
+                contacts: fixedContact + [(2, 0.2, 0.5)]
+            )))
+            XCTAssertFalse(recognizer.process(frame(time: 0.14, contacts: fixedContact)))
+            XCTAssertEqual(recognizer.lastRejectionReason, .movedTooFar)
+            assertValidEpisode(&recognizer, downAt: 0.16)
+        }
+
+        XCTContext.runActivity(named: "transient extra contact") { _ in
+            var recognizer = makeRecognizer()
+            XCTAssertFalse(recognizer.process(frame(
+                time: 0.10,
+                contacts: fixedContact + [(2, 0.1, 0.5), (3, 0.9, 0.5)]
+            )))
+            XCTAssertFalse(recognizer.process(frame(time: 0.13, contacts: fixedContact)))
+            XCTAssertEqual(recognizer.lastRejectionReason, .extraContact)
+            assertValidEpisode(&recognizer, downAt: 0.15)
+        }
+
+        XCTContext.runActivity(named: "wrong region") { _ in
+            var recognizer = makeRecognizer()
+            XCTAssertFalse(recognizer.process(frame(
+                time: 0.10,
+                contacts: fixedContact + [(2, 0.9, 0.5)]
+            )))
+            XCTAssertFalse(recognizer.process(frame(time: 0.13, contacts: fixedContact)))
+            XCTAssertEqual(recognizer.lastRejectionReason, .wrongRegion)
+            assertValidEpisode(&recognizer, downAt: 0.15)
+        }
+    }
+
+    func testTipTapFixedFingerMovementAndRemovalRemainSessionScopedFailures() {
+        var moved = TipTapRecognizer(fixedFingerCount: 1, region: .left)
+        _ = moved.process(frame(time: 0, contacts: []))
+        _ = moved.process(frame(time: 0.01, contacts: [(1, 0.5, 0.5)]))
+        _ = moved.process(frame(time: 0.09, contacts: [(1, 0.5, 0.5)]))
+        XCTAssertFalse(moved.process(frame(time: 0.10, contacts: [(1, 0.6, 0.5)])))
+        _ = moved.process(frame(time: 0.12, contacts: [(1, 0.5, 0.5), (2, 0.1, 0.5)]))
+        XCTAssertFalse(moved.process(frame(time: 0.16, contacts: [(1, 0.5, 0.5)])))
+
+        _ = moved.process(frame(time: 0.20, contacts: []))
+        _ = moved.process(frame(time: 0.50, contacts: [(3, 0.5, 0.5)]))
+        _ = moved.process(frame(time: 0.58, contacts: [(3, 0.5, 0.5)]))
+        _ = moved.process(frame(time: 0.59, contacts: [(3, 0.5, 0.5), (4, 0.1, 0.5)]))
+        XCTAssertTrue(moved.process(frame(time: 0.63, contacts: [(3, 0.5, 0.5)])))
+
+        var removed = TipTapRecognizer(fixedFingerCount: 2, region: .middle)
+        let fixed = [(1, 0.3, 0.5), (2, 0.7, 0.5)]
+        _ = removed.process(frame(time: 0, contacts: []))
+        _ = removed.process(frame(time: 0.01, contacts: fixed))
+        _ = removed.process(frame(time: 0.09, contacts: fixed))
+        XCTAssertFalse(removed.process(frame(time: 0.10, contacts: [fixed[0]])))
+        _ = removed.process(frame(time: 0.12, contacts: fixed + [(3, 0.5, 0.5)]))
+        XCTAssertFalse(removed.process(frame(time: 0.16, contacts: fixed)))
+    }
+
+    func testTipTapReportsTerminalEpisodeRejectionWhenFixedFingerBecomesUnstable() {
+        var recognizer = TipTapRecognizer(fixedFingerCount: 1, region: .left)
+        let fixed = [(1, 0.5, 0.5)]
+        _ = recognizer.process(frame(time: 0, contacts: []))
+        _ = recognizer.process(frame(time: 0.01, contacts: fixed))
+        _ = recognizer.process(frame(time: 0.09, contacts: fixed))
+        _ = recognizer.process(frame(time: 0.10, contacts: fixed + [(2, 0.1, 0.5)]))
+
+        XCTAssertFalse(recognizer.process(frame(
+            time: 0.12,
+            contacts: [(1, 0.6, 0.5), (2, 0.1, 0.5)]
+        )))
+        XCTAssertEqual(recognizer.lastRejectionReason, .fixedFingersBecameUnstable)
+        XCTAssertEqual(recognizer.rejectionSequence, 1)
+        XCTAssertEqual(
+            recognizer.testingSnapshot(for: .tipTapLeftOneFixed).phase,
+            .rejected(.fixedFingersBecameUnstable)
+        )
+        XCTAssertEqual(
+            recognizer.testingSnapshot(for: .tipTapLeftOneFixed).phase,
+            .waitingForReset
+        )
+
+        XCTAssertFalse(recognizer.process(frame(time: 0.15, contacts: fixed)))
+        XCTAssertFalse(recognizer.process(frame(time: 0.16, contacts: [])))
+        _ = recognizer.process(frame(time: 0.50, contacts: [(3, 0.5, 0.5)]))
+        _ = recognizer.process(frame(time: 0.58, contacts: [(3, 0.5, 0.5)]))
+        _ = recognizer.process(frame(
+            time: 0.59,
+            contacts: [(3, 0.5, 0.5), (4, 0.1, 0.5)]
+        ))
+        XCTAssertTrue(recognizer.process(frame(time: 0.63, contacts: [(3, 0.5, 0.5)])))
     }
 
     func testTipTapFullReleaseRearmsNewSessionWithoutRedundantZeroFrame() {
@@ -278,6 +428,65 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         XCTAssertTrue(middle.process(frame(time: 0.15, contacts: [
             (1, 0.08, 0.5), (2, 0.42, 0.5),
         ])))
+    }
+
+    func testMiddleTipTapAdaptsToNaturalFixedFingerSpacing() {
+        var recognizer = TipTapRecognizer(fixedFingerCount: 2, region: .middle)
+        let fixedContacts = [(1, 0.47, 0.5), (2, 0.53, 0.5)]
+        _ = recognizer.process(frame(time: 0, contacts: []))
+        _ = recognizer.process(frame(time: 0.01, contacts: fixedContacts))
+        _ = recognizer.process(frame(time: 0.09, contacts: fixedContacts))
+        _ = recognizer.process(frame(time: 0.10, contacts: fixedContacts + [(3, 0.50, 0.5)]))
+
+        XCTAssertTrue(recognizer.process(frame(time: 0.15, contacts: fixedContacts)))
+    }
+
+    func testMiddleTipTapStillRejectsContactsNearFixedFingerEdges() {
+        var recognizer = TipTapRecognizer(fixedFingerCount: 2, region: .middle)
+        let fixedContacts = [(1, 0.47, 0.5), (2, 0.53, 0.5)]
+        _ = recognizer.process(frame(time: 0, contacts: []))
+        _ = recognizer.process(frame(time: 0.01, contacts: fixedContacts))
+        _ = recognizer.process(frame(time: 0.09, contacts: fixedContacts))
+        _ = recognizer.process(frame(time: 0.10, contacts: fixedContacts + [(3, 0.475, 0.5)]))
+
+        XCTAssertFalse(recognizer.process(frame(time: 0.15, contacts: fixedContacts)))
+    }
+
+    func testMiddleTipTapRejectsVerticallyAlignedFixedContacts() {
+        for fixedContacts in [
+            [(1, 0.50, 0.40), (2, 0.50, 0.60)],
+            [(1, 0.49, 0.40), (2, 0.51, 0.60)],
+        ] {
+            var recognizer = TipTapRecognizer(fixedFingerCount: 2, region: .middle)
+            _ = recognizer.process(frame(time: 0, contacts: []))
+            _ = recognizer.process(frame(time: 0.01, contacts: fixedContacts))
+            _ = recognizer.process(frame(time: 0.09, contacts: fixedContacts))
+            _ = recognizer.process(frame(
+                time: 0.10,
+                contacts: fixedContacts + [(3, 0.50, 0.50)]
+            ))
+
+            XCTAssertFalse(recognizer.process(frame(time: 0.15, contacts: fixedContacts)))
+        }
+    }
+
+    func testLateStaggeredThreeFingerTapOutsideTipTapRegionStillRecognizes() {
+        var engine = TrackpadGestureEngine(gestures: [
+            .tipTapMiddleTwoFixed,
+            .threeFingerTap,
+        ])
+        let fixedContacts = [(1, 0.30, 0.5), (2, 0.70, 0.5)]
+        _ = engine.process(frame(time: 0, contacts: []))
+        _ = engine.process(frame(time: 0.01, contacts: fixedContacts))
+        _ = engine.process(frame(
+            time: 0.09,
+            contacts: fixedContacts + [(3, 0.90, 0.5)]
+        ))
+
+        XCTAssertEqual(
+            engine.process(frame(time: 0.14, contacts: [])).recognized,
+            [.threeFingerTap]
+        )
     }
 
     func testMultiFingerTapAllowsStaggeredReleaseAndPreventsCooldownDuplicate() {
@@ -512,6 +721,42 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         XCTAssertEqual(rearmedOtherTrackpad.recognized, [.threeFingerTap])
     }
 
+    func testLifecycleSuppressionRequiresACompleteEpisodeResetForReenumeratedDevices() {
+        var engine = TrackpadGestureEngine(gestures: [.threeFingerTap])
+        _ = engine.process(frame(device: 1, time: 0, contacts: []))
+        _ = engine.process(frame(device: 1, time: 0.01, contacts: threeContacts))
+
+        engine.beginLifecycleSuppression()
+
+        for (offset, deviceID) in [UInt64(1), 99].enumerated() {
+            let base = TimeInterval(offset + 1)
+            _ = engine.process(frame(
+                device: deviceID,
+                time: base,
+                contacts: threeContacts
+            ))
+            XCTAssertTrue(engine.process(frame(
+                device: deviceID,
+                time: base + 0.07,
+                contacts: []
+            )).recognized.isEmpty)
+
+            _ = engine.process(frame(
+                device: deviceID,
+                time: base + 0.20,
+                contacts: threeContacts
+            ))
+            XCTAssertEqual(
+                engine.process(frame(
+                    device: deviceID,
+                    time: base + 0.27,
+                    contacts: []
+                )).recognized,
+                [.threeFingerTap]
+            )
+        }
+    }
+
     func testInactiveTrackpadDoesNotBlockGlobalTypingReset() {
         var engine = TrackpadGestureEngine(gestures: [.threeFingerTap])
         _ = engine.process(frame(device: 2, time: 0, contacts: []))
@@ -638,11 +883,27 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         XCTAssertTrue(generation.isCurrent(second))
     }
 
+    func testTestingBoundaryRequiresZeroBeforeProductionRecognition() {
+        var engine = TrackpadGestureEngine(gestures: Set(TrackpadGesture.allCases))
+        _ = engine.process(frame(time: 0, contacts: []))
+        _ = engine.process(frame(time: 0.01, contacts: threeContacts))
+
+        engine.beginSuppression(activeDeviceIDs: [1])
+        engine.updateGestures([.threeFingerTap])
+        XCTAssertTrue(engine.process(frame(time: 0.10, contacts: [])).recognized.isEmpty)
+
+        _ = engine.process(frame(time: 0.20, contacts: threeContacts))
+        XCTAssertEqual(
+            engine.process(frame(time: 0.25, contacts: [])).recognized,
+            [.threeFingerTap]
+        )
+    }
+
     func testRecognitionWorkerDeliversEveryRepeatedTipTap() {
         let recognized = TrackpadGestureRecorder()
         let worker = TrackpadGestureRecognitionWorker(
             generation: TrackpadGestureRecognitionGeneration(),
-            onRecognized: { gesture, _, _ in recognized.append(gesture) }
+            onRecognized: { gesture, _, _, _, _ in recognized.append(gesture) }
         )
         let fixedContact = [(1, 0.5, 0.5)]
 
@@ -662,6 +923,149 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         ])
     }
 
+    func testRecognitionWorkerDeliversEveryAcceptedPhysicalClickInFIFOOrder() {
+        let queue = DispatchQueue(label: "trackpad-native-click-delivery-test")
+        let blocker = DispatchSemaphore(value: 0)
+        queue.async { blocker.wait() }
+        let recognized = TrackpadGestureRecorder()
+        let worker = TrackpadGestureRecognitionWorker(
+            generation: TrackpadGestureRecognitionGeneration(),
+            queue: queue,
+            onRecognized: { gesture, _, _, _, _ in recognized.append(gesture) }
+        )
+
+        worker.recognizeNativeClick(.twoFingerClick, deviceID: 1)
+        worker.recognizeNativeClick(.threeFingerClick, deviceID: 1)
+        blocker.signal()
+        worker.waitUntilIdleForTests()
+
+        XCTAssertEqual(recognized.values, [.twoFingerClick, .threeFingerClick])
+    }
+
+    func testPhysicalClickInvalidatesOnlyTheOriginatingDeviceDeliveryEpoch() {
+        let queue = DispatchQueue(label: "trackpad-native-click-device-epoch-test")
+        let blocker = DispatchSemaphore(value: 0)
+        let recognized = TrackpadGestureRecorder()
+        let worker = TrackpadGestureRecognitionWorker(
+            generation: TrackpadGestureRecognitionGeneration(),
+            queue: queue,
+            onRecognized: { gesture, _, _, _, _ in recognized.append(gesture) }
+        )
+        worker.configure(gestures: [.threeFingerTap], reset: true)
+        worker.waitUntilIdleForTests()
+
+        queue.async { blocker.wait() }
+        worker.process(frame(device: 2, time: 0, contacts: []))
+        worker.process(frame(device: 2, time: 0.01, contacts: threeContacts))
+        worker.process(frame(device: 2, time: 0.06, contacts: []))
+        worker.recognizeNativeClick(.twoFingerClick, deviceID: 1)
+        blocker.signal()
+        worker.waitUntilIdleForTests()
+
+        XCTAssertEqual(recognized.values, [.threeFingerTap, .twoFingerClick])
+    }
+
+    func testPhysicalClickInvalidatesQueuedFrameDeliveryFromItsOwnDevice() {
+        let queue = DispatchQueue(label: "trackpad-native-click-own-device-epoch-test")
+        let blocker = DispatchSemaphore(value: 0)
+        let recognized = TrackpadGestureRecorder()
+        let worker = TrackpadGestureRecognitionWorker(
+            generation: TrackpadGestureRecognitionGeneration(),
+            queue: queue,
+            onRecognized: { gesture, _, _, _, _ in recognized.append(gesture) }
+        )
+        worker.configure(gestures: [.threeFingerTap], reset: true)
+        worker.waitUntilIdleForTests()
+
+        queue.async { blocker.wait() }
+        worker.process(frame(device: 1, time: 0, contacts: []))
+        worker.process(frame(device: 1, time: 0.01, contacts: threeContacts))
+        worker.process(frame(device: 1, time: 0.06, contacts: []))
+        worker.recognizeNativeClick(.twoFingerClick, deviceID: 1)
+        blocker.signal()
+        worker.waitUntilIdleForTests()
+
+        XCTAssertEqual(recognized.values, [.twoFingerClick])
+    }
+
+    func testPhysicalClickSuppressionPreservesOtherDeviceContactState() {
+        var engine = TrackpadGestureEngine(gestures: [.threeFingerTap])
+        _ = engine.process(frame(device: 1, time: 0, contacts: []))
+        _ = engine.process(frame(device: 2, time: 0, contacts: []))
+        _ = engine.process(frame(device: 1, time: 0.01, contacts: threeContacts))
+        _ = engine.process(frame(device: 2, time: 0.01, contacts: threeContacts))
+
+        engine.beginSuppression(deviceID: 1)
+
+        XCTAssertTrue(engine.process(
+            frame(device: 1, time: 0.10, contacts: threeContacts)
+        ).recognized.isEmpty)
+        XCTAssertTrue(engine.process(
+            frame(device: 1, time: 0.15, contacts: [])
+        ).recognized.isEmpty)
+
+        _ = engine.process(frame(device: 2, time: 0.30, contacts: threeContacts))
+        XCTAssertTrue(engine.process(
+            frame(device: 2, time: 0.35, contacts: [])
+        ).recognized.isEmpty)
+
+        _ = engine.process(frame(device: 2, time: 0.40, contacts: threeContacts))
+        XCTAssertEqual(
+            engine.process(frame(device: 2, time: 0.45, contacts: [])).recognized,
+            [.threeFingerTap]
+        )
+    }
+
+    func testConfigurationInvalidationDropsQueuedFrameDeliveryButPreservesGestureShape() {
+        let queue = DispatchQueue(label: "trackpad-frame-configuration-epoch-test")
+        let blocker = DispatchSemaphore(value: 0)
+        let recognized = TrackpadGestureRecorder()
+        let worker = TrackpadGestureRecognitionWorker(
+            generation: TrackpadGestureRecognitionGeneration(),
+            queue: queue,
+            onRecognized: { gesture, _, _, _, _ in recognized.append(gesture) }
+        )
+        worker.configure(gestures: [.threeFingerTap], reset: true)
+        worker.waitUntilIdleForTests()
+
+        queue.async { blocker.wait() }
+        worker.process(frame(time: 0, contacts: []))
+        worker.process(frame(time: 0.01, contacts: threeContacts))
+        worker.process(frame(time: 0.05, contacts: []))
+        worker.invalidateDeliveriesPreservingRecognizerState()
+        blocker.signal()
+        worker.waitUntilIdleForTests()
+        XCTAssertTrue(recognized.values.isEmpty)
+
+        worker.process(frame(time: 0.10, contacts: []))
+        worker.process(frame(time: 0.11, contacts: threeContacts))
+        worker.process(frame(time: 0.15, contacts: []))
+        worker.waitUntilIdleForTests()
+        XCTAssertEqual(recognized.values, [.threeFingerTap])
+    }
+
+    func testConfigurationInvalidationDropsQueuedPhysicalClickDelivery() {
+        let queue = DispatchQueue(label: "trackpad-click-configuration-epoch-test")
+        let blocker = DispatchSemaphore(value: 0)
+        let recognized = TrackpadGestureRecorder()
+        let worker = TrackpadGestureRecognitionWorker(
+            generation: TrackpadGestureRecognitionGeneration(),
+            queue: queue,
+            onRecognized: { gesture, _, _, _, _ in recognized.append(gesture) }
+        )
+
+        queue.async { blocker.wait() }
+        worker.recognizeNativeClick(.twoFingerClick, deviceID: 1)
+        worker.invalidateDeliveriesPreservingRecognizerState()
+        blocker.signal()
+        worker.waitUntilIdleForTests()
+        XCTAssertTrue(recognized.values.isEmpty)
+
+        worker.recognizeNativeClick(.twoFingerClick, deviceID: 1)
+        worker.waitUntilIdleForTests()
+        XCTAssertEqual(recognized.values, [.twoFingerClick])
+    }
+
     func testStoppingTestModeOrdersConfigurationBeforeInFlightReleaseFrame() {
         let generation = TrackpadGestureRecognitionGeneration()
         let configurationGate = TrackpadGestureConfigurationSubmissionGate(pauseAtSubmission: 2)
@@ -669,7 +1073,7 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         let worker = TrackpadGestureRecognitionWorker(
             generation: generation,
             beforeConfigurationEnqueue: { configurationGate.pauseIfNeeded() },
-            onRecognized: { gesture, _, _ in recognized.append(gesture) }
+            onRecognized: { gesture, _, _, _, _ in recognized.append(gesture) }
         )
 
         worker.configure(gestures: Set(TrackpadGesture.allCases), reset: true)

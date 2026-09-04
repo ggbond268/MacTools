@@ -2,6 +2,13 @@ import Foundation
 import MacToolsPluginKit
 
 extension TrackpadGesture {
+    var producesNativeClick: Bool {
+        physicalClickFingerCount != nil
+            || fingerTapCount != nil
+            || doubleFingerTapCount != nil
+            || tipTapConfiguration != nil
+    }
+
     var settingsOrder: Int {
         Self.configurableCases.firstIndex(of: self) ?? Self.configurableCases.count
     }
@@ -172,6 +179,7 @@ final class TrackpadGestureStore: ObservableObject {
     @Published private(set) var mappings: [TrackpadGestureMapping]
     @Published private(set) var isTesting = false
     @Published private(set) var lastTestGesture: TrackpadGesture?
+    @Published private(set) var testRecognitionSequence: UInt64 = 0
     @Published private(set) var ignoresGesturesWhileTyping: Bool
     @Published private(set) var typingGracePeriod: TimeInterval
     @Published private(set) var mappingSort: TrackpadGestureMappingSort
@@ -227,6 +235,21 @@ final class TrackpadGestureStore: ObservableObject {
 
     var enabledGestures: Set<TrackpadGesture> {
         Set(mappings.lazy.filter(\.isEnabled).map(\.gesture))
+    }
+
+    var enabledOverlappingTapFingerCounts: [Int] {
+        enabledOverlappingTapFingerCounts { _ in true }
+    }
+
+    func enabledOverlappingTapFingerCounts(
+        where gestureIsActive: (TrackpadGesture) -> Bool
+    ) -> [Int] {
+        let enabled = Set(mappings
+            .filter { $0.isEnabled && gestureIsActive($0.gesture) }
+            .map(\.gesture))
+        let singleTapFingerCounts = Set(enabled.compactMap(\.fingerTapCount))
+        let doubleTapFingerCounts = Set(enabled.compactMap(\.doubleFingerTapCount))
+        return singleTapFingerCounts.intersection(doubleTapFingerCounts).sorted()
     }
 
     func mapping(for gesture: TrackpadGesture) -> TrackpadGestureMapping? {
@@ -312,6 +335,11 @@ final class TrackpadGestureStore: ObservableObject {
 
     func recordTestGesture(_ gesture: TrackpadGesture) {
         lastTestGesture = gesture
+        testRecognitionSequence &+= 1
+    }
+
+    func clearTestGesture() {
+        lastTestGesture = nil
     }
 
     @discardableResult
