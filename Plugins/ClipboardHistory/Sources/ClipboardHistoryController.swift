@@ -1261,6 +1261,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 candidates.insert(recaptured, at: 0)
                 applyCapturedItem(
                     recaptured,
+                    replacing: items[existingIndex],
                     candidates: candidates,
                     settings: currentSettings,
                     changeCount: currentChangeCount
@@ -1269,6 +1270,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             }
             self.applyCapturedItem(
                 capturedItem,
+                replacing: nil,
                 candidates: [capturedItem] + items,
                 settings: currentSettings,
                 changeCount: currentChangeCount
@@ -1293,11 +1295,11 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
 
     private func applyCapturedItem(
         _ item: ClipboardHistoryItem,
+        replacing previousItem: ClipboardHistoryItem?,
         candidates: [ClipboardHistoryItem],
         settings currentSettings: ClipboardHistorySettings,
         changeCount currentChangeCount: Int
     ) {
-        let previousItem = items.first(where: { $0.id == item.id })
         let retention: ClipboardRetentionResult?
         let updated: [ClipboardHistoryItem]
         if canApplyCaptureWithoutFullRetentionEvaluation(
@@ -1331,7 +1333,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         // moves an existing clip to the front. Avoid diffing every unchanged row.
         let evictedItemCount = retention?.evictedItemCount ?? 0
         publicationChanges = evictedItemCount == 0
-            ? [.init(id: item.id, before: items.first(where: { $0.id == item.id }), after: item)]
+            ? [.init(id: item.id, before: previousItem, after: item)]
             : nil
         items = updated
         publicationChanges = nil
