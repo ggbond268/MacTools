@@ -72,19 +72,6 @@ enum MenuBarGlobalMouseEventPolicy {
     }
 }
 
-private final class MenuBarStatusItemAppearanceObserverView: NSView {
-    var onEffectiveAppearanceChange: (() -> Void)?
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        onEffectiveAppearanceChange?()
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
-    }
-}
-
 @MainActor
 final class MenuBarStatusItemController: NSObject {
     private let pluginHost: PluginHost
@@ -97,7 +84,6 @@ final class MenuBarStatusItemController: NSObject {
     private var globalEventMonitor: Any?
     private var appActivationObserver: NSObjectProtocol?
     private var appearanceObserver: NSObjectProtocol?
-    private var statusItemAppearanceObserverView: MenuBarStatusItemAppearanceObserverView?
     private var appTerminationObserver: NSObjectProtocol?
     private var statusItemWindowMoveObserver: NSObjectProtocol?
     private var animationTimer: DispatchSourceTimer?
@@ -264,15 +250,6 @@ final class MenuBarStatusItemController: NSObject {
         guard let button = statusItem.button else {
             return
         }
-
-        statusItemAppearanceObserverView?.removeFromSuperview()
-        let appearanceObserverView = MenuBarStatusItemAppearanceObserverView(frame: button.bounds)
-        appearanceObserverView.autoresizingMask = [.width, .height]
-        appearanceObserverView.onEffectiveAppearanceChange = { [weak self] in
-            self?.updateStatusIcon()
-        }
-        button.addSubview(appearanceObserverView)
-        statusItemAppearanceObserverView = appearanceObserverView
 
         button.target = self
         button.action = #selector(handleStatusItemAction(_:))

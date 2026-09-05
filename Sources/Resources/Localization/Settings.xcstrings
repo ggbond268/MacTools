@@ -5054,67 +5054,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "قم بتعيين رمز شريط قائمة منفصل للمظهرين الفاتح والداكن. يتم الاحتفاظ بالصورة الأصلية عند الاستيراد."
+            "value": "قم بتعيين رمز شريط قائمة واحد للمظاهر الفاتحة والداكنة. يتم الاحتفاظ بالصورة الأصلية عند الاستيراد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Legen Sie separate Menüleistensymbole für helle und dunkle Darstellungen fest. Das Originalbild bleibt beim Import erhalten."
+            "value": "Legen Sie ein Menüleistensymbol für helle und dunkle Darstellungen fest. Das Originalbild bleibt beim Import erhalten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Set separate menu bar icons for light and dark appearances. The original image is preserved on import."
+            "value": "Set one menu bar icon for light and dark appearances. The original image is preserved on import."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Establezca iconos de barra de menú independientes para apariencias claras y oscuras. La imagen original se conserva al importar."
+            "value": "Establezca un ícono de barra de menú para apariencias claras y oscuras. La imagen original se conserva al importar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Définissez des icônes distinctes dans la barre de menus pour les apparences claires et sombres. L'image d'origine est conservée lors de l'importation."
+            "value": "Définissez une icône dans la barre de menus pour les apparences claires et sombres. L'image d'origine est conservée lors de l'importation."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "明るい外観と暗い外観に別々のメニュー バー アイコンを設定します。インポート時に元の画像が保持されます。"
+            "value": "明暗の外観用に 1 つのメニュー バー アイコンを設定します。インポート時に元の画像が保持されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "밝은 모양과 어두운 모양에 별도의 메뉴 표시줄 아이콘을 설정합니다. 가져올 때 원본 이미지를 유지합니다."
+            "value": "밝은 모양과 어두운 모양에 대해 하나의 메뉴 표시줄 아이콘을 설정합니다. 가져올 때 원본 이미지를 유지합니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Defina ícones de barra de menu separados para aparências claras e escuras. A imagem original é preservada na importação."
+            "value": "Defina um ícone na barra de menu para aparências claras e escuras. A imagem original é preservada na importação."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Установите отдельные значки строки меню для светлого и темного оформления. При импорте исходное изображение сохраняется."
+            "value": "Установите один значок в строке меню для светлого и темного внешнего вида. При импорте исходное изображение сохраняется."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "分别设置浅色和深色菜单栏图标，导入时会保留原图。"
+            "value": "统一设置浅色和深色菜单栏图标，导入时会保留原图。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "分別設定淺色和深色選單列圖標，導入時會保留原圖。"
+            "value": "統一設定淺色和深色選單列圖標，導入時會保留原圖。"
           }
         }
       }
@@ -7610,67 +7610,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يدعم استيراد رموز منفصلة للمظهرين الفاتح والداكن، بالإضافة إلى الصور وملفات GIF/MP4 خفيفة الوزن والأيقونات المتحركة عبر الإنترنت. يتم الاحتفاظ بالصورة الأصلية عند الاستيراد."
+            "value": "يدعم الصور وملفات GIF/MP4 خفيفة الوزن والأيقونات المتحركة عبر الإنترنت. يتم الاحتفاظ بالصورة الأصلية عند الاستيراد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unterstützt separate Symbole für helle und dunkle Darstellungen sowie Bilder, einfache GIF/MP4-Dateien und animierte Online-Symbole. Das Originalbild bleibt beim Import erhalten."
+            "value": "Unterstützt Bilder, einfache GIF/MP4-Dateien und animierte Online-Symbole. Das Originalbild bleibt beim Import erhalten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Supports separate icons for light and dark appearances, plus images, lightweight GIF/MP4 files, and online animated icons. The original image is preserved on import."
+            "value": "Supports images, lightweight GIF/MP4 files, and online animated icons. The original image is preserved on import."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Admite iconos independientes para apariencias claras y oscuras, además de imágenes, archivos ligeros GIF/MP4 e iconos animados en línea. La imagen original se conserva al importar."
+            "value": "Admite imágenes, archivos ligeros GIF/MP4 e íconos animados en línea. La imagen original se conserva al importar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prend en charge des icônes distinctes pour les apparences claires et sombres, ainsi que les images, les fichiers légers GIF/MP4 et les icônes animées en ligne. L'image d'origine est conservée lors de l'importation."
+            "value": "Prend en charge les images, les fichiers légers GIF/MP4 et les icônes animées en ligne. L'image d'origine est conservée lors de l'importation."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "明るい外観と暗い外観用の別々のアイコンに加え、画像、軽量の GIF/MP4 ファイル、オンライン アニメーション アイコンをサポートします。インポート時に元の画像が保持されます。"
+            "value": "画像、軽量の GIF/MP4 ファイル、オンライン アニメーション アイコンをサポートします。インポート時に元の画像が保持されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "밝은 모양과 어두운 모양에 사용할 별도의 아이콘과 이미지, 가벼운 GIF/MP4 파일 및 온라인 애니메이션 아이콘을 지원합니다. 가져올 때 원본 이미지를 유지합니다."
+            "value": "이미지, 가벼운 GIF/MP4 파일 및 온라인 애니메이션 아이콘을 지원합니다. 가져올 때 원본 이미지를 유지합니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suporta ícones separados para aparências claras e escuras, além de imagens, arquivos GIF/MP4 leves e ícones animados on-line. A imagem original é preservada na importação."
+            "value": "Suporta imagens, arquivos GIF/MP4 leves e ícones animados on-line. A imagem original é preservada na importação."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Поддерживает отдельные значки для светлого и темного оформления, а также изображения, легкие файлы GIF/MP4 и анимированные значки онлайн. При импорте исходное изображение сохраняется."
+            "value": "Поддерживает изображения, легкие файлы GIF/MP4 и анимированные значки онлайн. При импорте исходное изображение сохраняется."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "支持分别为浅色和深色模式导入图标，以及图片、轻量 GIF/MP4 和在线动态图标；导入时会保留原图。"
+            "value": "支持图片、轻量 GIF/MP4 和在线动态图标；导入时会保留原图。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "支援分別為淺色和深色模式導入圖標，以及圖片、輕量 GIF/MP4 和在線動態圖標；導入時會保留原圖。"
+            "value": "支持圖片、輕量 GIF/MP4 和在線動態圖標；導入時會保留原圖。"
           }
         }
       }
@@ -7813,77 +7813,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "上傳"
-          }
-        }
-      }
-    },
-    "menuBarIcon.uploadAppearance": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رفع للمظهر %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Für %@ hochladen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Upload for %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Subir para %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer pour %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@用にアップロード"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@용 업로드"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Carregar para %@"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Загрузить для %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上传%@图标"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上傳%@圖標"
           }
         }
       }

@@ -1,7 +1,7 @@
 ---
 release: app
-type: added
+type: changed
 area: Menu Bar Icon
 ---
 
-Added separate local menu bar icon choices for light and dark appearances, with automatic switching when macOS changes appearance.
+Local menu bar icons now automatically adapt to the current menu bar appearance.
