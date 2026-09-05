@@ -1,0 +1,944 @@
+{
+  "generatorVersion": 1,
+  "routes": [
+    {
+      "kind": "plugin",
+      "path": "/plugins/action-grid/",
+      "pluginID": "action-grid"
+    },
+    {
+      "actionID": "show",
+      "kind": "action",
+      "path": "/plugins/action-grid/actions/action-grid/show/",
+      "pluginID": "action-grid",
+      "providerID": "action-grid"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/activity-bar/",
+      "pluginID": "activity-bar"
+    },
+    {
+      "actionID": "reset-today",
+      "kind": "action",
+      "path": "/plugins/activity-bar/actions/activity-bar/reset-today/",
+      "pluginID": "activity-bar",
+      "providerID": "activity-bar"
+    },
+    {
+      "actionID": "set-tracking-enabled",
+      "kind": "action",
+      "path": "/plugins/activity-bar/actions/activity-bar/set-tracking-enabled/",
+      "pluginID": "activity-bar",
+      "providerID": "activity-bar"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/app-hotkey/",
+      "pluginID": "app-hotkey"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/app-volume/",
+      "pluginID": "app-volume"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/appearance/",
+      "pluginID": "appearance"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/appearance/actions/appearance/set-enabled/",
+      "pluginID": "appearance",
+      "providerID": "appearance"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/appearance/actions/appearance/toggle/",
+      "pluginID": "appearance",
+      "providerID": "appearance"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/apple-shortcuts/",
+      "pluginID": "apple-shortcuts"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/auto-hide-dock/",
+      "pluginID": "auto-hide-dock"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/auto-hide-dock/actions/auto-hide-dock/set-enabled/",
+      "pluginID": "auto-hide-dock",
+      "providerID": "auto-hide-dock"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/auto-hide-dock/actions/auto-hide-dock/toggle/",
+      "pluginID": "auto-hide-dock",
+      "providerID": "auto-hide-dock"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/auto-hide-menu-bar/",
+      "pluginID": "auto-hide-menu-bar"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/auto-hide-menu-bar/actions/auto-hide-menu-bar/set-enabled/",
+      "pluginID": "auto-hide-menu-bar",
+      "providerID": "auto-hide-menu-bar"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/auto-hide-menu-bar/actions/auto-hide-menu-bar/toggle/",
+      "pluginID": "auto-hide-menu-bar",
+      "providerID": "auto-hide-menu-bar"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/auto-input/",
+      "pluginID": "auto-input"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/auto-input/actions/auto-input/set-enabled/",
+      "pluginID": "auto-input",
+      "providerID": "auto-input"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/auto-input/actions/auto-input/toggle/",
+      "pluginID": "auto-input",
+      "providerID": "auto-input"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/battery-charge-limit/",
+      "pluginID": "battery-charge-limit"
+    },
+    {
+      "actionID": "discharge",
+      "kind": "action",
+      "path": "/plugins/battery-charge-limit/actions/battery-charge-limit/discharge/",
+      "pluginID": "battery-charge-limit",
+      "providerID": "battery-charge-limit"
+    },
+    {
+      "actionID": "hold",
+      "kind": "action",
+      "path": "/plugins/battery-charge-limit/actions/battery-charge-limit/hold/",
+      "pluginID": "battery-charge-limit",
+      "providerID": "battery-charge-limit"
+    },
+    {
+      "actionID": "resume",
+      "kind": "action",
+      "path": "/plugins/battery-charge-limit/actions/battery-charge-limit/resume/",
+      "pluginID": "battery-charge-limit",
+      "providerID": "battery-charge-limit"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/battery-charge-limit/actions/battery-charge-limit/set-enabled/",
+      "pluginID": "battery-charge-limit",
+      "providerID": "battery-charge-limit"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/calendar/",
+      "pluginID": "calendar"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/clipboard-clear/",
+      "pluginID": "clipboard-clear"
+    },
+    {
+      "actionID": "clear",
+      "kind": "action",
+      "path": "/plugins/clipboard-clear/actions/clipboard-clear/clear/",
+      "pluginID": "clipboard-clear",
+      "providerID": "clipboard-clear"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/cloudflare-r2/",
+      "pluginID": "cloudflare-r2"
+    },
+    {
+      "actionID": "upload-file",
+      "kind": "action",
+      "path": "/plugins/cloudflare-r2/actions/cloudflare-r2/upload-file/",
+      "pluginID": "cloudflare-r2",
+      "providerID": "cloudflare-r2"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/device-battery/",
+      "pluginID": "device-battery"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/disk-clean/",
+      "pluginID": "disk-clean"
+    },
+    {
+      "actionID": "scan-and-review",
+      "kind": "action",
+      "path": "/plugins/disk-clean/actions/disk-clean/scan-and-review/",
+      "pluginID": "disk-clean",
+      "providerID": "disk-clean"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/display-brightness/",
+      "pluginID": "display-brightness"
+    },
+    {
+      "actionID": "disable-built-in-display",
+      "kind": "action",
+      "path": "/plugins/display-brightness/actions/display-brightness/disable-built-in-display/",
+      "pluginID": "display-brightness",
+      "providerID": "display-brightness"
+    },
+    {
+      "actionID": "display-brightness.decrease",
+      "kind": "action",
+      "path": "/plugins/display-brightness/actions/display-brightness/display-brightness.decrease/",
+      "pluginID": "display-brightness",
+      "providerID": "display-brightness"
+    },
+    {
+      "actionID": "display-brightness.increase",
+      "kind": "action",
+      "path": "/plugins/display-brightness/actions/display-brightness/display-brightness.increase/",
+      "pluginID": "display-brightness",
+      "providerID": "display-brightness"
+    },
+    {
+      "actionID": "restore-built-in-display",
+      "kind": "action",
+      "path": "/plugins/display-brightness/actions/display-brightness/restore-built-in-display/",
+      "pluginID": "display-brightness",
+      "providerID": "display-brightness"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/display-resolution/",
+      "pluginID": "display-resolution"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/display-sleep/",
+      "pluginID": "display-sleep"
+    },
+    {
+      "actionID": "execute",
+      "kind": "action",
+      "path": "/plugins/display-sleep/actions/display-sleep/execute/",
+      "pluginID": "display-sleep",
+      "providerID": "display-sleep"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/display-true-color/",
+      "pluginID": "display-true-color"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/display-true-color/actions/display-true-color/set-enabled/",
+      "pluginID": "display-true-color",
+      "providerID": "display-true-color"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/display-true-color/actions/display-true-color/toggle/",
+      "pluginID": "display-true-color",
+      "providerID": "display-true-color"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/dock-click-minimize/",
+      "pluginID": "dock-click-minimize"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/dock-lock/",
+      "pluginID": "dock-lock"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/dock-lock/actions/dock-lock/set-enabled/",
+      "pluginID": "dock-lock",
+      "providerID": "dock-lock"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/dock-lock/actions/dock-lock/toggle/",
+      "pluginID": "dock-lock",
+      "providerID": "dock-lock"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/eject-disk/",
+      "pluginID": "eject-disk"
+    },
+    {
+      "actionID": "eject-all",
+      "kind": "action",
+      "path": "/plugins/eject-disk/actions/eject-disk/eject-all/",
+      "pluginID": "eject-disk",
+      "providerID": "eject-disk"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/empty-trash/",
+      "pluginID": "empty-trash"
+    },
+    {
+      "actionID": "empty",
+      "kind": "action",
+      "path": "/plugins/empty-trash/actions/empty-trash/empty/",
+      "pluginID": "empty-trash",
+      "providerID": "empty-trash"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/fan-control/",
+      "pluginID": "fan-control"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/fix-damaged-app/",
+      "pluginID": "fix-damaged-app"
+    },
+    {
+      "actionID": "choose-app",
+      "kind": "action",
+      "path": "/plugins/fix-damaged-app/actions/fix-damaged-app/choose-app/",
+      "pluginID": "fix-damaged-app",
+      "providerID": "fix-damaged-app"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/hide-notch/",
+      "pluginID": "hide-notch"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/hide-notch/actions/hide-notch/set-enabled/",
+      "pluginID": "hide-notch",
+      "providerID": "hide-notch"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/hide-notch/actions/hide-notch/toggle/",
+      "pluginID": "hide-notch",
+      "providerID": "hide-notch"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/homebrew/",
+      "pluginID": "homebrew"
+    },
+    {
+      "actionID": "cleanup",
+      "kind": "action",
+      "path": "/plugins/homebrew/actions/homebrew/cleanup/",
+      "pluginID": "homebrew",
+      "providerID": "homebrew"
+    },
+    {
+      "actionID": "doctor",
+      "kind": "action",
+      "path": "/plugins/homebrew/actions/homebrew/doctor/",
+      "pluginID": "homebrew",
+      "providerID": "homebrew"
+    },
+    {
+      "actionID": "update",
+      "kind": "action",
+      "path": "/plugins/homebrew/actions/homebrew/update/",
+      "pluginID": "homebrew",
+      "providerID": "homebrew"
+    },
+    {
+      "actionID": "upgrade-all",
+      "kind": "action",
+      "path": "/plugins/homebrew/actions/homebrew/upgrade-all/",
+      "pluginID": "homebrew",
+      "providerID": "homebrew"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/input-remapping/",
+      "pluginID": "input-remapping"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/ip-overview/",
+      "pluginID": "ip-overview"
+    },
+    {
+      "actionID": "copy-local-ipv4",
+      "kind": "action",
+      "path": "/plugins/ip-overview/actions/ip-overview/copy-local-ipv4/",
+      "pluginID": "ip-overview",
+      "providerID": "ip-overview"
+    },
+    {
+      "actionID": "copy-public-ipv4",
+      "kind": "action",
+      "path": "/plugins/ip-overview/actions/ip-overview/copy-public-ipv4/",
+      "pluginID": "ip-overview",
+      "providerID": "ip-overview"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/keep-awake/",
+      "pluginID": "keep-awake"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/keep-awake/actions/keep-awake/set-enabled/",
+      "pluginID": "keep-awake",
+      "providerID": "keep-awake"
+    },
+    {
+      "actionID": "start-for-duration",
+      "kind": "action",
+      "path": "/plugins/keep-awake/actions/keep-awake/start-for-duration/",
+      "pluginID": "keep-awake",
+      "providerID": "keep-awake"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/keep-awake/actions/keep-awake/toggle/",
+      "pluginID": "keep-awake",
+      "providerID": "keep-awake"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/launch-control/",
+      "pluginID": "launch-control"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/launchpad/",
+      "pluginID": "launchpad"
+    },
+    {
+      "actionID": "toggleLaunchpad",
+      "kind": "action",
+      "path": "/plugins/launchpad/actions/launchpad/toggleLaunchpad/",
+      "pluginID": "launchpad",
+      "providerID": "launchpad"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/lock-screen/",
+      "pluginID": "lock-screen"
+    },
+    {
+      "actionID": "execute",
+      "kind": "action",
+      "path": "/plugins/lock-screen/actions/lock-screen/execute/",
+      "pluginID": "lock-screen",
+      "providerID": "lock-screen"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/microphone-mute/",
+      "pluginID": "microphone-mute"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/microphone-mute/actions/microphone-mute/set-enabled/",
+      "pluginID": "microphone-mute",
+      "providerID": "microphone-mute"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/microphone-mute/actions/microphone-mute/toggle/",
+      "pluginID": "microphone-mute",
+      "providerID": "microphone-mute"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/middle-click/",
+      "pluginID": "middle-click"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/middle-click/actions/middle-click/toggle/",
+      "pluginID": "middle-click",
+      "providerID": "middle-click"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/mouse-enhancer/",
+      "pluginID": "mouse-enhancer"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/night-shift/",
+      "pluginID": "night-shift"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/night-shift/actions/night-shift/set-enabled/",
+      "pluginID": "night-shift",
+      "providerID": "night-shift"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/night-shift/actions/night-shift/toggle/",
+      "pluginID": "night-shift",
+      "providerID": "night-shift"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/physical-clean-mode/",
+      "pluginID": "physical-clean-mode"
+    },
+    {
+      "actionID": "enter",
+      "kind": "action",
+      "path": "/plugins/physical-clean-mode/actions/physical-clean-mode/enter/",
+      "pluginID": "physical-clean-mode",
+      "providerID": "physical-clean-mode"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/quit-apps/",
+      "pluginID": "quit-apps"
+    },
+    {
+      "actionID": "choose-apps",
+      "kind": "action",
+      "path": "/plugins/quit-apps/actions/quit-apps/choose-apps/",
+      "pluginID": "quit-apps",
+      "providerID": "quit-apps"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/right-click/",
+      "pluginID": "right-click"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/saved-scripts/",
+      "pluginID": "saved-scripts"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/sidecar/",
+      "pluginID": "sidecar"
+    },
+    {
+      "actionID": "connect-first-available",
+      "kind": "action",
+      "path": "/plugins/sidecar/actions/sidecar/connect-first-available/",
+      "pluginID": "sidecar",
+      "providerID": "sidecar"
+    },
+    {
+      "actionID": "disconnect-all",
+      "kind": "action",
+      "path": "/plugins/sidecar/actions/sidecar/disconnect-all/",
+      "pluginID": "sidecar",
+      "providerID": "sidecar"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/stage-manager/",
+      "pluginID": "stage-manager"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/stage-manager/actions/stage-manager/set-enabled/",
+      "pluginID": "stage-manager",
+      "providerID": "stage-manager"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/stage-manager/actions/stage-manager/toggle/",
+      "pluginID": "stage-manager",
+      "providerID": "stage-manager"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/system-mute/",
+      "pluginID": "system-mute"
+    },
+    {
+      "actionID": "set-enabled",
+      "kind": "action",
+      "path": "/plugins/system-mute/actions/system-mute/set-enabled/",
+      "pluginID": "system-mute",
+      "providerID": "system-mute"
+    },
+    {
+      "actionID": "toggle",
+      "kind": "action",
+      "path": "/plugins/system-mute/actions/system-mute/toggle/",
+      "pluginID": "system-mute",
+      "providerID": "system-mute"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/system-soft-restart/",
+      "pluginID": "system-soft-restart"
+    },
+    {
+      "actionID": "restart-user-services",
+      "kind": "action",
+      "path": "/plugins/system-soft-restart/actions/system-soft-restart/restart-user-services/",
+      "pluginID": "system-soft-restart",
+      "providerID": "system-soft-restart"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/system-status/",
+      "pluginID": "system-status"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/trackpad-gestures/",
+      "pluginID": "trackpad-gestures"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/translator/",
+      "pluginID": "translator"
+    },
+    {
+      "actionID": "screenshot-translation",
+      "kind": "action",
+      "path": "/plugins/translator/actions/translator/screenshot-translation/",
+      "pluginID": "translator",
+      "providerID": "translator"
+    },
+    {
+      "actionID": "select-translation",
+      "kind": "action",
+      "path": "/plugins/translator/actions/translator/select-translation/",
+      "pluginID": "translator",
+      "providerID": "translator"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/window-layouts/",
+      "pluginID": "window-layouts"
+    },
+    {
+      "actionID": "bottom-center-sixth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/bottom-center-sixth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "bottom-half",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/bottom-half/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "bottom-left-quarter",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/bottom-left-quarter/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "bottom-left-sixth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/bottom-left-sixth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "bottom-right-quarter",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/bottom-right-quarter/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "bottom-right-sixth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/bottom-right-sixth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "center-third",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/center-third/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "center",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/center/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "first-fourth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/first-fourth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "first-third",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/first-third/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "first-two-thirds",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/first-two-thirds/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "last-fourth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/last-fourth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "last-third",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/last-third/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "last-two-thirds",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/last-two-thirds/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "left-half",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/left-half/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "maximize-height",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/maximize-height/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "maximize-width",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/maximize-width/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "maximize",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/maximize/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "move-to-bottom-edge",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/move-to-bottom-edge/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "move-to-left-edge",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/move-to-left-edge/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "move-to-next-display",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/move-to-next-display/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "move-to-previous-display",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/move-to-previous-display/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "move-to-right-edge",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/move-to-right-edge/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "move-to-top-edge",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/move-to-top-edge/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "reasonable-size",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/reasonable-size/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "restore-previous-frame",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/restore-previous-frame/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "right-half",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/right-half/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "second-fourth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/second-fourth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "third-fourth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/third-fourth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "toggle-full-screen",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/toggle-full-screen/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "top-center-sixth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/top-center-sixth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "top-half",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/top-half/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "top-left-quarter",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/top-left-quarter/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "top-left-sixth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/top-left-sixth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "top-right-quarter",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/top-right-quarter/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "actionID": "top-right-sixth",
+      "kind": "action",
+      "path": "/plugins/window-layouts/actions/window-layouts/top-right-sixth/",
+      "pluginID": "window-layouts",
+      "providerID": "window-layouts"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/window-switcher/",
+      "pluginID": "window-switcher"
+    },
+    {
+      "actionID": "switch",
+      "kind": "action",
+      "path": "/plugins/window-switcher/actions/window-switcher/switch/",
+      "pluginID": "window-switcher",
+      "providerID": "window-switcher"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/xcode-clean/",
+      "pluginID": "xcode-clean"
+    },
+    {
+      "actionID": "scan-and-review",
+      "kind": "action",
+      "path": "/plugins/xcode-clean/actions/xcode-clean/scan-and-review/",
+      "pluginID": "xcode-clean",
+      "providerID": "xcode-clean"
+    },
+    {
+      "kind": "plugin",
+      "path": "/plugins/zsh-config/",
+      "pluginID": "zsh-config"
+    }
+  ]
+}

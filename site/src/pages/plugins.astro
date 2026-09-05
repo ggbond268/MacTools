@@ -774,6 +774,9 @@ const settingsModels: Record<string, SettingSection[]> = {
   ],
 };
 
+void iconByPlugin;
+void settingsModels;
+
 const catalog = await loadPluginCatalog();
 const plugins = catalog.plugins.filter((plugin) => plugin.id !== "menu-bar-hidden").sort((a, b) =>
   localizedPluginText(a).zh.displayName.localeCompare(localizedPluginText(b).zh.displayName, "zh-CN")
@@ -902,10 +905,18 @@ const structuredData = {
               {settingsPlugins.map((plugin) => {
                 const text = localizedPluginText(plugin);
                 return (
-                  <button type="button" class="settings-sidebar-item" data-settings-tab={plugin.id} aria-selected="false">
+                  <button
+                    type="button"
+                    class="settings-sidebar-item"
+                    data-settings-tab={plugin.id}
+                    data-plugin-name-zh={text.zh.displayName}
+                    data-plugin-name-en={text.en.displayName}
+                    data-plugin-id={plugin.id}
+                    aria-selected="false"
+                  >
                     <span
                       class="sidebar-icon"
-                      style={`--sidebar-icon: url("${symbol(iconByPlugin[plugin.id] ?? "slider.horizontal.3.png")}"); --sidebar-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
+                      style={`--sidebar-icon: url("${symbol(categoryIcons[plugin.category ?? "other"])}"); --sidebar-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
                     ></span>
                     <span>
                       <span data-i18n-zh>{text.zh.displayName}</span>
@@ -990,6 +1001,9 @@ const structuredData = {
                       data-market-plugin
                       data-category={category}
                       data-search={searchValue}
+                      data-plugin-name-zh={text.zh.displayName}
+                      data-plugin-name-en={text.en.displayName}
+                      data-plugin-id={plugin.id}
                       data-installed={String(isInitiallyInstalled)}
                     >
                       <span
@@ -1008,6 +1022,16 @@ const structuredData = {
                           <span data-i18n-zh>{text.zh.summary} · {capability.zh}</span>
                           <span data-i18n-en>{text.en.summary} · {capability.en}</span>
                         </p>
+                        <div class="market-plugin-links">
+                          <a class="market-plugin-detail-link" href={plugin.route ?? `/plugins/${plugin.id}`}>
+                            <span data-i18n-zh>查看详情</span>
+                            <span data-i18n-en>View details</span>
+                          </a>
+                          <a class="market-plugin-open-link" href={plugin.openInMacToolsURL}>
+                            <span data-i18n-zh>在 MacTools 中打开</span>
+                            <span data-i18n-en>Open in MacTools</span>
+                          </a>
+                        </div>
                       </div>
                       <div class="market-plugin-actions">
                         <button type="button" class="market-plugin-action" data-plugin-action>
@@ -1040,7 +1064,7 @@ const structuredData = {
 
             {settingsPlugins.map((plugin) => {
               const text = localizedPluginText(plugin);
-              const sections = settingsModels[plugin.id] ?? fallbackSections({
+              const sections = fallbackSections({
                 zh: text.zh.displayName,
                 en: text.en.displayName,
               });
@@ -1049,7 +1073,7 @@ const structuredData = {
                   <header class="plugin-settings-header">
                     <span
                       class="plugin-settings-icon"
-                      style={`--plugin-icon: url("${symbol(iconByPlugin[plugin.id] ?? "slider.horizontal.3.png")}"); --plugin-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
+                      style={`--plugin-icon: url("${symbol(categoryIcons[plugin.category ?? "other"])}"); --plugin-icon-color: ${categoryColors[plugin.category ?? "other"]};`}
                     ></span>
                     <div>
                       <h2>
@@ -1061,6 +1085,16 @@ const structuredData = {
                         <span data-i18n-zh>{text.zh.summary}</span>
                         <span data-i18n-en>{text.en.summary}</span>
                       </p>
+                      <div class="plugin-settings-catalog-links">
+                        <a href={plugin.route ?? `/plugins/${plugin.id}`}>
+                          <span data-i18n-zh>查看插件详情</span>
+                          <span data-i18n-en>View plugin details</span>
+                        </a>
+                        <a href={plugin.openInMacToolsURL}>
+                          <span data-i18n-zh>在 MacTools 中打开</span>
+                          <span data-i18n-en>Open in MacTools</span>
+                        </a>
+                      </div>
                     </div>
                   </header>
 

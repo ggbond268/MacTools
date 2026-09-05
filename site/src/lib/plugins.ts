@@ -1,5 +1,4 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import generatedPluginData from "@/generated/plugins.json";
 
 export type PluginCatalog = {
   generatedAt: string;
@@ -26,6 +25,9 @@ export type Plugin = {
     configuration?: boolean;
     settings?: "none" | "form" | "workspace";
   };
+  product?: Record<string, unknown>;
+  openInMacToolsURL?: string;
+  route?: string;
 };
 
 export type PluginLocalizedMetadata = {
@@ -38,46 +40,12 @@ export type PluginLocalizedText = {
   summary: string;
 };
 
-const legacyCatalogURL = "https://mactools.ggbond.app/plugins/catalog.json";
-const pluginKitVersion = Number(process.env.MACTOOLS_PLUGIN_KIT_VERSION ?? "5");
-const previousVersionedCatalogURL = `https://mactools.ggbond.app/plugins/v${pluginKitVersion - 1}/catalog.json`;
-const remoteCatalogURLs = pluginKitVersion === 2
-  ? [legacyCatalogURL]
-  : [
-      `https://mactools.ggbond.app/plugins/v${pluginKitVersion}/catalog.json`,
-      previousVersionedCatalogURL,
-      legacyCatalogURL,
-    ];
-const localCatalogPaths = pluginKitVersion === 2
-  ? [resolve(process.cwd(), "..", "docs", "plugins", "catalog.json")]
-  : [
-      resolve(process.cwd(), "..", "docs", "plugins", `v${pluginKitVersion}`, "catalog.json"),
-      resolve(process.cwd(), "..", "docs", "plugins", `v${pluginKitVersion - 1}`, "catalog.json"),
-      resolve(process.cwd(), "..", "docs", "plugins", "catalog.json"),
-    ];
-
 export async function loadPluginCatalog(): Promise<PluginCatalog> {
-  for (const url of remoteCatalogURLs) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        return await response.json() as PluginCatalog;
-      }
-    } catch {
-      // Try the next catalog source during the ABI catalog migration.
-    }
-  }
-
-  for (const path of localCatalogPaths) {
-    try {
-      const content = await readFile(path, "utf-8");
-      return JSON.parse(content) as PluginCatalog;
-    } catch {
-      // Try the next local catalog source.
-    }
-  }
-
-  throw new Error(`Plugin catalog unavailable for PluginKit ${pluginKitVersion}.`);
+  return {
+    generatedAt: "repository-generated",
+    minimumHostVersion: "",
+    plugins: generatedPluginData.plugins as unknown as Plugin[],
+  };
 }
 
 export function hasPluginSettings(plugin: Plugin): boolean {

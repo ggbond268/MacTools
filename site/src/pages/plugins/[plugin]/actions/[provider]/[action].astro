@@ -1,0 +1,45 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteNav from "@/components/SiteNav.astro";
+import LocalizedText from "@/components/LocalizedText.astro";
+import { localizedTokenList } from "@/lib/plugin-presentation";
+import actionData from "@/generated/actions.json";
+
+export async function getStaticPaths() {
+  return actionData.actions.map((entry) => ({
+    params: { plugin: entry.pluginID, provider: entry.providerID, action: entry.action.id }, props: { entry },
+  }));
+}
+
+const { entry } = Astro.props as { entry: typeof actionData.actions[number] };
+const localized = (value: Record<string, string>) => ({
+  zh: value["zh-Hans"] ?? value.en ?? "",
+  en: value.en ?? value["zh-Hans"] ?? "",
+});
+const ui = (zh: string, en: string) => ({ zh, en });
+---
+
+<BaseLayout title={`${entry.action.title.en ?? entry.action.id} · MacTools`} description={entry.action.description.en ?? ""} page="plugins">
+  <SiteNav />
+  <main class="plugin-detail-page">
+    <section class="plugin-detail-hero plugin-action-hero" aria-labelledby="action-title">
+      <a class="plugin-back-link" href={`/plugins/${entry.pluginID}`}>← <LocalizedText {...ui("返回插件", "Back to plugin")} /></a>
+      <p class="plugin-detail-eyebrow">{entry.pluginID} · {entry.providerID}</p>
+      <h1 id="action-title"><LocalizedText {...localized(entry.action.title)} /></h1>
+      <p class="plugin-detail-lead"><LocalizedText {...localized(entry.action.description)} /></p>
+      <div class="plugin-detail-actions">
+        <a class="button primary" href={entry.openInMacToolsURL}><LocalizedText {...ui("在 MacTools 中打开", "Open in MacTools")} /></a>
+      </div>
+      <div class="plugin-deep-link">
+        <span class="plugin-deep-link-label"><LocalizedText {...ui("仅用于导航的操作高亮", "Navigation-only action highlight")} /></span>
+        <a href={entry.openInMacToolsURL}><code>{entry.openInMacToolsURL}</code></a>
+      </div>
+    </section>
+    <section class="plugin-detail-section">
+      <h2><LocalizedText {...ui("操作详情", "Action details")} /></h2>
+      <p class="plugin-detail-muted">{entry.action.risk ? <LocalizedText {...localizedTokenList([entry.action.risk, ...entry.action.surfaces, ...entry.action.permissionIDs])} /> : <LocalizedText {...ui("未列出其他详情。", "No additional details listed.")} />}</p>
+    </section>
+  </main>
+  <SiteFooter />
+</BaseLayout>
