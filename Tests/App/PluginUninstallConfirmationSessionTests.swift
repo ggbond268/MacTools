@@ -29,4 +29,12 @@ final class PluginUninstallConfirmationSessionTests: XCTestCase {
         XCTAssertTrue(session.shouldConfirmUninstall)
         XCTAssertFalse(session.isConfirmationPaused)
     }
+
+    func testPrivateDataRemovalAlwaysRequiresConfirmation() {
+        let session = PluginUninstallConfirmationSession()
+        session.pauseConfirmation()
+
+        XCTAssertFalse(session.shouldConfirmUninstall(removesData: false))
+        XCTAssertTrue(session.shouldConfirmUninstall(removesData: true))
+    }
 }

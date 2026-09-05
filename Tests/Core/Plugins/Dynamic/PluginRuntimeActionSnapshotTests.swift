@@ -13,6 +13,7 @@ import AutoHideMenuBarPlugin
 import AutoInputPlugin
 import BatteryChargeLimitPlugin
 import ClipboardClearPlugin
+import ClipboardHistoryPlugin
 import CloudflareR2Plugin
 import DiskCleanPlugin
 import DisplayBrightnessPlugin
@@ -298,6 +299,7 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
         .init(pluginID: "auto-input", makeProvider: AutoInputPluginFactory.makeProvider),
         .init(pluginID: "battery-charge-limit", makeProvider: BatteryChargeLimitPluginFactory.makeProvider),
         .init(pluginID: "clipboard-clear", makeProvider: ClipboardClearPluginFactory.makeProvider),
+        .init(pluginID: "clipboard", makeProvider: ClipboardHistoryPluginFactory.makeProvider),
         .init(pluginID: "cloudflare-r2", makeProvider: CloudflareR2PluginFactory.makeProvider),
         .init(pluginID: "disk-clean", makeProvider: DiskCleanPluginFactory.makeProvider),
         .init(pluginID: "display-brightness", makeProvider: DisplayBrightnessPluginFactory.makeProvider),

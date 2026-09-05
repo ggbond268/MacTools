@@ -274,6 +274,114 @@ final class AppShortcutTests: XCTestCase {
         )
     }
 
+    func testActivePluginShortcutConflictCanSwapOrReplaceWithoutDuplicateBindings() throws {
+        let firstBinding = ShortcutBinding(keyCode: 0, modifiers: [.command, .option])
+        let secondBinding = ShortcutBinding(keyCode: 1, modifiers: [.command, .shift])
+        let host = makeHost(
+            defaults: try makeDefaults(),
+            plugins: [TwoShortcutTestPlugin(first: firstBinding, second: secondBinding)]
+        )
+
+        let swapConflict = try XCTUnwrap(host.shortcutBindingConflict(
+            for: secondBinding,
+            targetShortcutID: TwoShortcutTestPlugin.firstItemID
+        ))
+        XCTAssertTrue(swapConflict.canSwap)
+        XCTAssertNil(host.resolveShortcutBindingConflict(swapConflict, resolution: .swap))
+        XCTAssertEqual(
+            host.shortcutItems.first { $0.id == TwoShortcutTestPlugin.firstItemID }?.bindingText,
+            ShortcutFormatter.displayString(for: secondBinding)
+        )
+        XCTAssertEqual(
+            host.shortcutItems.first { $0.id == TwoShortcutTestPlugin.secondItemID }?.bindingText,
+            ShortcutFormatter.displayString(for: firstBinding)
+        )
+
+        let replaceConflict = try XCTUnwrap(host.shortcutBindingConflict(
+            for: firstBinding,
+            targetShortcutID: TwoShortcutTestPlugin.firstItemID
+        ))
+        XCTAssertNil(host.resolveShortcutBindingConflict(replaceConflict, resolution: .replace))
+        XCTAssertEqual(
+            host.shortcutItems.first { $0.id == TwoShortcutTestPlugin.firstItemID }?.bindingText,
+            ShortcutFormatter.displayString(for: firstBinding)
+        )
+        XCTAssertEqual(
+            host.shortcutItems.first { $0.id == TwoShortcutTestPlugin.secondItemID }?.bindingText,
+            ShortcutFormatter.displayString(for: nil)
+        )
+    }
+
+    func testSharedBindingGroupConflictReplacementClearsEveryOwner() throws {
+        let targetBinding = ShortcutBinding(keyCode: 0, modifiers: [.command, .option])
+        let sharedBinding = ShortcutBinding(keyCode: 1, modifiers: [.command, .shift])
+        let host = makeHost(
+            defaults: try makeDefaults(),
+            plugins: [SharedBindingConflictTestPlugin(target: targetBinding, shared: sharedBinding)]
+        )
+
+        let conflict = try XCTUnwrap(host.shortcutBindingConflict(
+            for: sharedBinding,
+            targetShortcutID: SharedBindingConflictTestPlugin.targetItemID
+        ))
+
+        XCTAssertFalse(conflict.canSwap)
+        XCTAssertEqual(
+            Set(conflict.conflictingShortcutIDs),
+            Set([
+                SharedBindingConflictTestPlugin.firstSharedItemID,
+                SharedBindingConflictTestPlugin.secondSharedItemID,
+            ])
+        )
+        XCTAssertNil(host.resolveShortcutBindingConflict(conflict, resolution: .replace))
+        XCTAssertEqual(
+            host.shortcutItems.first {
+                $0.id == SharedBindingConflictTestPlugin.targetItemID
+            }?.bindingText,
+            ShortcutFormatter.displayString(for: sharedBinding)
+        )
+        for ownerID in [
+            SharedBindingConflictTestPlugin.firstSharedItemID,
+            SharedBindingConflictTestPlugin.secondSharedItemID,
+        ] {
+            XCTAssertEqual(
+                host.shortcutItems.first { $0.id == ownerID }?.bindingText,
+                ShortcutFormatter.displayString(for: nil)
+            )
+        }
+    }
+
+    func testSharedBindingGroupConflictRejectsAmbiguousSwapWithoutMutation() throws {
+        let targetBinding = ShortcutBinding(keyCode: 0, modifiers: [.command, .option])
+        let sharedBinding = ShortcutBinding(keyCode: 1, modifiers: [.command, .shift])
+        let host = makeHost(
+            defaults: try makeDefaults(),
+            plugins: [SharedBindingConflictTestPlugin(target: targetBinding, shared: sharedBinding)]
+        )
+        let conflict = try XCTUnwrap(host.shortcutBindingConflict(
+            for: sharedBinding,
+            targetShortcutID: SharedBindingConflictTestPlugin.targetItemID
+        ))
+
+        XCTAssertFalse(conflict.canSwap)
+        XCTAssertNotNil(host.resolveShortcutBindingConflict(conflict, resolution: .swap))
+        XCTAssertEqual(
+            host.shortcutItems.first {
+                $0.id == SharedBindingConflictTestPlugin.targetItemID
+            }?.bindingText,
+            ShortcutFormatter.displayString(for: targetBinding)
+        )
+        for ownerID in [
+            SharedBindingConflictTestPlugin.firstSharedItemID,
+            SharedBindingConflictTestPlugin.secondSharedItemID,
+        ] {
+            XCTAssertEqual(
+                host.shortcutItems.first { $0.id == ownerID }?.bindingText,
+                ShortcutFormatter.displayString(for: sharedBinding)
+            )
+        }
+    }
+
     func testStoredCommonApplicationShortcutsRemainActive() throws {
         let defaults = try makeDefaults()
         let appBinding = ShortcutBinding(
@@ -680,6 +788,102 @@ private final class AppShortcutTestPlugin: MacToolsPlugin {
                 defaultBinding: defaultBinding,
                 isRequired: false
             )
+        ]
+    }
+}
+
+@MainActor
+private final class TwoShortcutTestPlugin: MacToolsPlugin {
+    static let firstItemID = "two-shortcut-test.shortcut.first"
+    static let secondItemID = "two-shortcut-test.shortcut.second"
+
+    let metadata = PluginMetadata(
+        id: "two-shortcut-test",
+        title: "Two Shortcut Test",
+        iconName: "keyboard",
+        iconTint: .blue,
+        order: 2,
+        defaultDescription: "Tests scoped shortcut conflicts"
+    )
+    let shortcutDefinitions: [PluginShortcutDefinition]
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+
+    init(first: ShortcutBinding, second: ShortcutBinding) {
+        shortcutDefinitions = [
+            PluginShortcutDefinition(
+                id: "first",
+                title: "First",
+                description: "First command",
+                actionID: "first",
+                scope: .whilePluginActive,
+                defaultBinding: first,
+                isRequired: false
+            ),
+            PluginShortcutDefinition(
+                id: "second",
+                title: "Second",
+                description: "Second command",
+                actionID: "second",
+                scope: .whilePluginActive,
+                defaultBinding: second,
+                isRequired: false
+            ),
+        ]
+    }
+}
+
+@MainActor
+private final class SharedBindingConflictTestPlugin: MacToolsPlugin {
+    static let targetItemID = "shared-binding-conflict-test.shortcut.target"
+    static let firstSharedItemID = "shared-binding-conflict-test.shortcut.first-shared"
+    static let secondSharedItemID = "shared-binding-conflict-test.shortcut.second-shared"
+
+    let metadata = PluginMetadata(
+        id: "shared-binding-conflict-test",
+        title: "Shared Binding Conflict Test",
+        iconName: "keyboard",
+        iconTint: .blue,
+        order: 3,
+        defaultDescription: "Tests shared shortcut conflict resolution"
+    )
+    let shortcutDefinitions: [PluginShortcutDefinition]
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+
+    init(target: ShortcutBinding, shared: ShortcutBinding) {
+        shortcutDefinitions = [
+            PluginShortcutDefinition(
+                id: "target",
+                title: "Target",
+                description: "Target command",
+                actionID: "target",
+                scope: .whilePluginActive,
+                defaultBinding: target,
+                isRequired: false
+            ),
+            PluginShortcutDefinition(
+                id: "first-shared",
+                title: "First Shared",
+                description: "First shared command",
+                actionID: "first-shared",
+                scope: .whilePluginActive,
+                defaultBinding: shared,
+                isRequired: false,
+                sharedBindingGroupID: "shared-group"
+            ),
+            PluginShortcutDefinition(
+                id: "second-shared",
+                title: "Second Shared",
+                description: "Second shared command",
+                actionID: "second-shared",
+                scope: .whilePluginActive,
+                defaultBinding: shared,
+                isRequired: false,
+                sharedBindingGroupID: "shared-group"
+            ),
         ]
     }
 }

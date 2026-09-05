@@ -2959,9 +2959,12 @@ private struct SurfaceLayoutSettingsView: View {
         let confirmation = PluginUninstallConfirmation(
             pluginID: item.id,
             pluginTitle: item.title,
-            surfaceCapabilitySummary: pluginCapabilitySummary(item.capabilities)
+            surfaceCapabilitySummary: pluginCapabilitySummary(item.capabilities),
+            removesDataOnUninstall: item.removesDataOnUninstall
         )
-        if uninstallConfirmationSession.shouldConfirmUninstall {
+        if uninstallConfirmationSession.shouldConfirmUninstall(
+            removesData: confirmation.removesDataOnUninstall
+        ) {
             pendingUninstallItem = confirmation
         } else {
             uninstall(confirmation)
@@ -3230,6 +3233,21 @@ private struct PluginFormPage: View {
                         layoutWidths: widths
                     )
                 }
+
+                ForEach(item.standaloneShortcutSettingsGroups.filter {
+                    $0.placementAfterSectionID == section.id
+                }) { configuration in
+                    PluginMixedShortcutFormSection(
+                        pluginHost: pluginHost,
+                        pluginID: item.pluginID,
+                        configuration: configuration,
+                        shortcutItems: item.shortcutItems,
+                        definitionsFirst: item.shortcutDefinitionFirstSettingsGroupIDs.contains(configuration.id),
+                        collapsesAllContent: item.collapsibleShortcutSettingsGroupIDs.contains(configuration.id),
+                        collapsesActionContent: item.collapsibleActionSettingsGroupIDs.contains(configuration.id),
+                        layoutWidths: widths
+                    )
+                }
             }
 
             if let configuration = item.actionShortcutSettingsConfiguration,
@@ -3241,6 +3259,24 @@ private struct PluginFormPage: View {
                     pluginHost: pluginHost,
                     pluginID: item.pluginID,
                     configuration: configuration,
+                    layoutWidths: widths
+                )
+            }
+
+            ForEach(item.standaloneShortcutSettingsGroups.filter { configuration in
+                configuration.placementAfterSectionID == nil
+                    || !item.sections.contains(where: {
+                        $0.isVisible && $0.id == configuration.placementAfterSectionID
+                    })
+            }) { configuration in
+                PluginMixedShortcutFormSection(
+                    pluginHost: pluginHost,
+                    pluginID: item.pluginID,
+                    configuration: configuration,
+                    shortcutItems: item.shortcutItems,
+                    definitionsFirst: item.shortcutDefinitionFirstSettingsGroupIDs.contains(configuration.id),
+                    collapsesAllContent: item.collapsibleShortcutSettingsGroupIDs.contains(configuration.id),
+                    collapsesActionContent: item.collapsibleActionSettingsGroupIDs.contains(configuration.id),
                     layoutWidths: widths
                 )
             }
@@ -3264,6 +3300,193 @@ private struct PluginFormPage: View {
                 }
             }
         }
+    }
+}
+
+private struct SettingsFullWidthDisclosure<Label: View, Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Binding var isExpanded: Bool
+    private let label: Label
+    private let content: Content
+
+    init(
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder label: () -> Label
+    ) {
+        _isExpanded = isExpanded
+        self.content = content()
+        self.label = label()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+            Button {
+                if accessibilityReduceMotion {
+                    isExpanded.toggle()
+                } else {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isExpanded.toggle()
+                    }
+                }
+            } label: {
+                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    label
+                    Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(Text(AppL10n.settings(
+                isExpanded
+                    ? "plugins.configuration.disclosure.expanded"
+                    : "plugins.configuration.disclosure.collapsed",
+                defaultValue: isExpanded ? "Expanded" : "Collapsed"
+            )))
+
+            if isExpanded {
+                content
+                    .transition(accessibilityReduceMotion
+                        ? .identity
+                        : .opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
+
+struct PluginMixedShortcutFormSection: View {
+    @Environment(\.pluginSettingsSearchTarget) private var searchTarget
+    @ObservedObject var pluginHost: PluginHost
+    let pluginID: String
+    let configuration: PluginShortcutSettingsGroupConfiguration
+    let shortcutItems: [ShortcutSettingsItem]
+    let definitionsFirst: Bool
+    let collapsesAllContent: Bool
+    let collapsesActionContent: Bool
+    let layoutWidths: SettingsGroupedFormWidths
+    @State private var isExpanded = false
+
+    static func searchTarget(pluginID: String, groupID: String) -> PluginSettingsSearchTarget {
+        PluginSettingsSearchTarget(pluginID: pluginID, entryID: groupID)
+    }
+
+    static func reveal(
+        target: PluginSettingsSearchTarget?,
+        pluginID: String,
+        groupID: String,
+        isExpanded: inout Bool
+    ) {
+        if target == searchTarget(pluginID: pluginID, groupID: groupID) {
+            isExpanded = true
+        }
+    }
+
+    private var matchingShortcutItems: [ShortcutSettingsItem] {
+        let itemIDs = Set(configuration.shortcutDefinitionIDs.map {
+            "\(pluginID).shortcut.\($0)"
+        })
+        return shortcutItems.filter { itemIDs.contains($0.id) }
+    }
+
+    var body: some View {
+        Section {
+            if collapsesAllContent {
+                SettingsFullWidthDisclosure(isExpanded: $isExpanded) {
+                    mixedRows
+                } label: {
+                    Text(AppL10n.settings(
+                        "plugins.configuration.shortcuts.show",
+                        defaultValue: "Show Shortcuts"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+                }
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+                .settingsGroupedFormRowWidth(layoutWidths.sectionLayout)
+            } else {
+                mixedRows
+            }
+
+        } header: {
+            SettingsGroupedFormSectionHeader(
+                title: configuration.title,
+                systemImage: configuration.systemImage,
+                layoutWidth: layoutWidths.readableContent
+            )
+        } footer: {
+            if let description = configuration.description {
+                Text(description)
+                    .frame(width: layoutWidths.sectionLayout, alignment: .leading)
+            }
+        }
+        .pluginSettingsSearchAnchor(
+            pluginID: pluginID,
+            entryID: Self.searchTarget(pluginID: pluginID, groupID: configuration.id).entryID
+        )
+        .onChange(of: searchTarget, initial: true) { _, target in
+            Self.reveal(target: target, pluginID: pluginID,
+                        groupID: configuration.id, isExpanded: &isExpanded)
+        }
+    }
+
+    @ViewBuilder
+    private var mixedRows: some View {
+        VStack(spacing: 0) {
+            if definitionsFirst, !matchingShortcutItems.isEmpty {
+                shortcutRows
+            }
+            if definitionsFirst,
+               !matchingShortcutItems.isEmpty,
+               !configuration.actionIDs.isEmpty {
+                PluginSettingsListDivider()
+            }
+            if collapsesActionContent, !configuration.actionIDs.isEmpty {
+                SettingsFullWidthDisclosure(isExpanded: $isExpanded) {
+                    actionRows
+                } label: {
+                    Text(AppL10n.settings(
+                        "plugins.configuration.shortcuts.advanced",
+                        defaultValue: "Advanced Controls"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+                }
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+            } else if !configuration.actionIDs.isEmpty {
+                actionRows
+            }
+            if !definitionsFirst,
+               !configuration.actionIDs.isEmpty,
+               !matchingShortcutItems.isEmpty {
+                PluginSettingsListDivider()
+            }
+            if !definitionsFirst, !matchingShortcutItems.isEmpty {
+                shortcutRows
+            }
+        }
+        .settingsGroupedFormRowWidth(layoutWidths.sectionLayout)
+    }
+
+    private var actionRows: some View {
+        PluginActionShortcutRowsContent(
+            pluginHost: pluginHost,
+            providerID: pluginID,
+            actionIDs: configuration.actionIDs,
+            hidesNeutralStatusBadges: true
+        )
+    }
+
+    private var shortcutRows: some View {
+        ShortcutSettingsRowsView(
+            pluginHost: pluginHost,
+            items: matchingShortcutItems,
+            alignsWithActionRows: true
+        )
     }
 }
 

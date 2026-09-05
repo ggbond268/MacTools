@@ -45,4 +45,31 @@ final class ShortcutBindingTests: XCTestCase {
             ShortcutValidationError.missingModifier.localizedDescription
         )
     }
+
+    func testRecorderAccessibilityAnnouncesAssignmentAndRecordingState() {
+        XCTAssertEqual(
+            PluginShortcutRecorderAccessibility.value(
+                displayText: "",
+                placeholder: "Not set",
+                isRecording: false
+            ),
+            "Not set"
+        )
+        XCTAssertEqual(
+            PluginShortcutRecorderAccessibility.value(
+                displayText: "⌘ + V",
+                placeholder: "Not set",
+                isRecording: false
+            ),
+            "⌘ + V"
+        )
+        XCTAssertEqual(
+            PluginShortcutRecorderAccessibility.value(
+                displayText: "⌘ + V",
+                placeholder: "Not set",
+                isRecording: true
+            ),
+            PluginKitLocalization.shortcutRecorderPreviewPlaceholder
+        )
+    }
 }

@@ -244,6 +244,35 @@ final class PluginPackageManifestTests: XCTestCase {
         let manifest = try JSONDecoder().decode(PluginPackageManifest.self, from: json)
         XCTAssertNil(manifest.category)
         XCTAssertNil(manifest.releaseChannel)
+        XCTAssertEqual(manifest.effectiveUninstallDataPolicy, .preserve)
+    }
+
+    func testManifestDecodesPrivateDataRemovalPolicy() throws {
+        let json = """
+        {
+          "id": "demo",
+          "displayName": "Demo",
+          "version": "1.0.0",
+          "minHostVersion": "1.2.0",
+          "pluginKitVersion": 5,
+          "bundleRelativePath": "Demo.bundle",
+          "capabilities": { "primaryPanel": true, "componentPanel": false, "settings": "workspace" },
+          "permissions": [],
+          "uninstallDataPolicy": "removePrivateData",
+          "presentation": {
+            "publisher": "Clipboard Tests",
+            "longDescription": { "en": "Encrypted clipboard history" },
+            "examples": [],
+            "screenshots": [],
+            "license": "Apache-2.0"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let manifest = try JSONDecoder().decode(PluginPackageManifest.self, from: json)
+
+        XCTAssertEqual(manifest.effectiveUninstallDataPolicy, .removePrivateData)
+        XCTAssertEqual(manifest.presentation?.publisher, "Clipboard Tests")
     }
 
     func testRichProjectedManifestDecodesProductMetadata() throws {
@@ -275,6 +304,8 @@ final class PluginPackageManifestTests: XCTestCase {
         )
         let toggleTitle = try XCTUnwrap(manifest.actions?.providers.first?.staticActions.first?.title)
         XCTAssertEqual(toggleTitle.values["en"], "Toggle Appearance")
+        let localizedActionTitle = try XCTUnwrap(toggleTitle.localizedValue())
+        XCTAssertTrue(searchKeywords.contains(localizedActionTitle))
         XCTAssertTrue(toggleTitle.values.values.contains(where: searchKeywords.contains))
         XCTAssertTrue(searchKeywords.contains("night-shift"))
     }

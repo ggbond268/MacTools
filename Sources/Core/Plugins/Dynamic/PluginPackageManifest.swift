@@ -2,6 +2,11 @@ import Foundation
 import MacToolsPluginKit
 
 struct PluginPackageManifest: Codable, Equatable {
+    enum UninstallDataPolicy: String, Codable, Equatable {
+        case preserve
+        case removePrivateData
+    }
+
     struct Capabilities: Codable, Equatable {
         enum Settings: String, Codable, CaseIterable {
             case none
@@ -79,6 +84,7 @@ struct PluginPackageManifest: Codable, Equatable {
     let category: String?
     let releaseChannel: String?
     let localizedMetadata: [String: PluginLocalizedMetadata]?
+    let uninstallDataPolicy: UninstallDataPolicy?
     let presentation: PluginProductMetadata.Presentation?
     let discovery: PluginProductMetadata.Discovery?
     let requirements: PluginProductMetadata.Requirements?
@@ -100,6 +106,7 @@ struct PluginPackageManifest: Codable, Equatable {
         category: String? = nil,
         releaseChannel: String? = nil,
         localizedMetadata: [String: PluginLocalizedMetadata]? = nil,
+        uninstallDataPolicy: UninstallDataPolicy? = nil,
         presentation: PluginProductMetadata.Presentation? = nil,
         discovery: PluginProductMetadata.Discovery? = nil,
         requirements: PluginProductMetadata.Requirements? = nil,
@@ -120,6 +127,7 @@ struct PluginPackageManifest: Codable, Equatable {
         self.category = category
         self.releaseChannel = releaseChannel
         self.localizedMetadata = localizedMetadata
+        self.uninstallDataPolicy = uninstallDataPolicy
         self.presentation = presentation
         self.discovery = discovery
         self.requirements = requirements
@@ -127,6 +135,10 @@ struct PluginPackageManifest: Codable, Equatable {
         self.actions = actions
         self.setup = setup
         self.relationships = relationships
+    }
+
+    var effectiveUninstallDataPolicy: UninstallDataPolicy {
+        uninstallDataPolicy ?? .preserve
     }
 
     var localizedDisplayName: String {

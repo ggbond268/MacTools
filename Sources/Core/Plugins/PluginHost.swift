@@ -199,6 +199,7 @@ struct PluginSurfaceLayoutItem: Identifiable {
     let isVisible: Bool
     let isActive: Bool
     let canUninstall: Bool
+    let removesDataOnUninstall: Bool
     let category: String?
     let releaseChannel: String?
 }
@@ -1511,6 +1512,10 @@ final class PluginHost: ObservableObject {
             return
         }
 
+        guard shortcutValidationMessage(binding, for: target.descriptor) == nil else {
+            return
+        }
+
         applyShortcutCustomization(
             .custom(binding),
             for: target.descriptor,
@@ -1523,11 +1528,222 @@ final class PluginHost: ObservableObject {
             return AppL10n.plugins("plugin.shortcut.unavailable", defaultValue: "快捷键不可用。")
         }
 
+        if let message = shortcutValidationMessage(binding, for: target.descriptor) {
+            return message
+        }
+
         return applyShortcutCustomization(
             .custom(binding),
             for: target.descriptor,
             assignmentID: target.assignmentID
         )
+    }
+
+    struct ShortcutBindingConflict: Identifiable, Equatable {
+        let targetShortcutID: String
+        let conflictingShortcutIDs: [String]
+        let binding: ShortcutBinding
+        let ownerDescription: String
+        let canSwap: Bool
+
+        var id: String {
+            "\(targetShortcutID)|\(conflictingShortcutIDs.joined(separator: ","))|\(binding.keyCode)|\(binding.modifiers.rawValue)"
+        }
+    }
+
+    enum ShortcutConflictResolution {
+        case swap
+        case replace
+    }
+
+    func shortcutBindingConflict(
+        for binding: ShortcutBinding,
+        targetShortcutID: String
+    ) -> ShortcutBindingConflict? {
+        guard let target = shortcutMutationTarget(for: targetShortcutID),
+              actionReference(for: target.descriptor) == nil
+        else { return nil }
+        let conflicts = shortcutDescriptors().filter {
+            $0.itemID != target.descriptor.itemID
+                && resolvedBinding(for: $0) == binding
+                && !canShareShortcutBinding(target.descriptor, with: $0)
+        }
+        guard !conflicts.isEmpty,
+              conflicts.allSatisfy({ actionReference(for: $0) == nil })
+        else { return nil }
+
+        return ShortcutBindingConflict(
+            targetShortcutID: target.descriptor.itemID,
+            conflictingShortcutIDs: conflicts.map(\.itemID),
+            binding: binding,
+            ownerDescription: conflicts.map {
+                "\($0.pluginTitle) · \($0.definition.title)"
+            }.joined(separator: ", "),
+            canSwap: conflicts.count == 1 && resolvedBinding(for: target.descriptor) != nil
+        )
+    }
+
+    @discardableResult
+    func resolveShortcutBindingConflict(
+        _ conflict: ShortcutBindingConflict,
+        resolution: ShortcutConflictResolution
+    ) -> String? {
+        guard let target = shortcutDescriptor(for: conflict.targetShortcutID),
+              actionReference(for: target) == nil,
+              !conflict.conflictingShortcutIDs.isEmpty
+        else {
+            let message = AppL10n.plugins(
+                "plugin.shortcut.conflictChanged",
+                defaultValue: "快捷键冲突已发生变化，请重试。"
+            )
+            shortcutErrors[conflict.targetShortcutID] = message
+            rebuildDerivedState()
+            return message
+        }
+        let previousOwners = conflict.conflictingShortcutIDs.compactMap(shortcutDescriptor(for:))
+        let currentConflictingOwnerIDs = Set(shortcutDescriptors().filter {
+            $0.itemID != target.itemID
+                && resolvedBinding(for: $0) == conflict.binding
+                && !canShareShortcutBinding(target, with: $0)
+        }.map(\.itemID))
+        guard previousOwners.count == conflict.conflictingShortcutIDs.count,
+              previousOwners.allSatisfy({ actionReference(for: $0) == nil }),
+              Set(conflict.conflictingShortcutIDs) == currentConflictingOwnerIDs
+        else {
+            let message = AppL10n.plugins(
+                "plugin.shortcut.conflictChanged",
+                defaultValue: "快捷键冲突已发生变化，请重试。"
+            )
+            shortcutErrors[conflict.targetShortcutID] = message
+            rebuildDerivedState()
+            return message
+        }
+
+        if let message = shortcutValidationMessage(conflict.binding, for: target) {
+            shortcutErrors[target.itemID] = message
+            rebuildDerivedState()
+            return message
+        }
+        let previousTargetBinding = resolvedBinding(for: target)
+        if resolution == .swap {
+            guard conflict.canSwap,
+                  previousOwners.count == 1,
+                  let previousOwner = previousOwners.first,
+                  let previousTargetBinding
+            else {
+                let message = AppL10n.plugins(
+                    "plugin.shortcut.conflictChanged",
+                    defaultValue: "快捷键冲突已发生变化，请重试。"
+                )
+                shortcutErrors[target.itemID] = message
+                rebuildDerivedState()
+                return message
+            }
+            if let message = shortcutValidationMessage(previousTargetBinding, for: previousOwner) {
+                shortcutErrors[target.itemID] = message
+                rebuildDerivedState()
+                return message
+            }
+            if let remainingConflict = shortcutDescriptors().first(where: {
+                $0.itemID != target.itemID
+                    && $0.itemID != previousOwner.itemID
+                    && resolvedBinding(for: $0) == previousTargetBinding
+                    && !canShareShortcutBinding(previousOwner, with: $0)
+            }) {
+                let message = ShortcutValidationError.duplicate(
+                    ownerDescription: "\(remainingConflict.pluginTitle) · \(remainingConflict.definition.title)"
+                ).localizedDescription
+                shortcutErrors[target.itemID] = message
+                rebuildDerivedState()
+                return message
+            }
+        }
+
+        let originalTargetCustomization = shortcutStore.customization(for: target.itemID)
+        let originalOwnerCustomizations = Dictionary(uniqueKeysWithValues: previousOwners.map {
+            ($0.itemID, shortcutStore.customization(for: $0.itemID))
+        })
+        for previousOwner in previousOwners {
+            let customization: ShortcutCustomization = if resolution == .swap {
+                previousTargetBinding.map(ShortcutCustomization.custom) ?? .cleared
+            } else {
+                .cleared
+            }
+            shortcutStore.setCustomization(customization, for: previousOwner.itemID)
+        }
+        shortcutStore.setCustomization(.custom(conflict.binding), for: target.itemID)
+
+        let ownersMatchExpectedBindings = previousOwners.allSatisfy { previousOwner in
+            let expectedBinding = resolution == .swap ? previousTargetBinding : nil
+            return legacyResolvedBinding(for: previousOwner) == expectedBinding
+        }
+        let destinationStillConflicts = shortcutDescriptors().contains {
+            $0.itemID != target.itemID
+                && resolvedBinding(for: $0) == conflict.binding
+                && !canShareShortcutBinding(target, with: $0)
+        }
+        let swappedBindingStillConflicts: Bool = if resolution == .swap,
+                                                   let previousOwner = previousOwners.first,
+                                                   let previousTargetBinding {
+            shortcutDescriptors().contains {
+                $0.itemID != target.itemID
+                    && $0.itemID != previousOwner.itemID
+                    && resolvedBinding(for: $0) == previousTargetBinding
+                    && !canShareShortcutBinding(previousOwner, with: $0)
+            }
+        } else {
+            false
+        }
+        guard legacyResolvedBinding(for: target) == conflict.binding,
+              ownersMatchExpectedBindings,
+              !destinationStillConflicts,
+              !swappedBindingStillConflicts
+        else {
+            shortcutStore.setCustomization(originalTargetCustomization, for: target.itemID)
+            for previousOwner in previousOwners {
+                shortcutStore.setCustomization(
+                    originalOwnerCustomizations[previousOwner.itemID] ?? .inheritDefault,
+                    for: previousOwner.itemID
+                )
+            }
+            let message = AppL10n.plugins(
+                "plugin.shortcut.saveFailed",
+                defaultValue: "无法保存快捷键。"
+            )
+            shortcutErrors[target.itemID] = message
+            rebuildDerivedState()
+            return message
+        }
+
+        shortcutErrors.removeValue(forKey: target.itemID)
+        notifyShortcutBindingChange(for: target, binding: conflict.binding)
+        for previousOwner in previousOwners {
+            shortcutErrors.removeValue(forKey: previousOwner.itemID)
+            notifyShortcutBindingChange(
+                for: previousOwner,
+                binding: resolution == .swap ? previousTargetBinding : nil
+            )
+        }
+        rebuildDerivedState()
+        syncGlobalShortcuts()
+        return nil
+    }
+
+    private func shortcutValidationMessage(
+        _ binding: ShortcutBinding,
+        for descriptor: ShortcutDescriptor
+    ) -> String? {
+        guard let validator = descriptor.plugin as? any PluginShortcutBindingValidating else {
+            return nil
+        }
+        return guardedValue(
+            for: descriptor.plugin,
+            operation: "validate shortcut binding",
+            validator.shortcutValidationMessage(
+                definitionID: descriptor.definition.id,
+                binding: binding
+            )
+        ) ?? nil
     }
 
     func setAppShortcutBindingAndReturnError(
@@ -1746,6 +1962,18 @@ final class PluginHost: ObservableObject {
 
     func installFocusedHostWindowProvider(_ provider: @escaping () -> NSWindow?) {
         focusedApplicationTargetProvider.currentHostWindowProvider = provider
+    }
+
+    func focusedPluginWindowLayoutTarget() -> NSWindow? {
+        activePlugins.lazy
+            .compactMap { plugin in
+                (plugin as? any PluginWindowLayoutTargetProviding)?.focusedWindowLayoutTarget
+            }
+            .first { window in
+                window.isVisible && (window.isKeyWindow || (window.childWindows ?? []).contains {
+                    $0.parent === window && $0.isVisible && $0.isKeyWindow
+                })
+            }
     }
 
     func captureCurrentFocusedWindowTarget() {
@@ -2816,6 +3044,13 @@ final class PluginHost: ObservableObject {
                     forPluginID: pluginID,
                     shortcutDefinitionID: shortcutDefinitionID
                 )
+            }
+            if let inlineShortcutConsumer = plugin as?
+                any PluginInlineShortcutSettingsContextConsuming {
+                inlineShortcutConsumer.inlineShortcutSettingsContextProvider = { [weak self] in
+                    self?.makePluginSettingsContext(pluginID: pluginID)
+                        ?? PluginSettingsContext(pluginID: pluginID)
+                }
             }
             if let focusTargetConsumer = plugin as? any PluginFocusedWindowTargetConsuming {
                 focusTargetConsumer.focusedWindowTargetProvider = { [weak self] in
@@ -4248,6 +4483,18 @@ final class PluginHost: ObservableObject {
         PluginSettingsContext(
             pluginID: pluginID,
             shortcutItems: shortcutItems.filter { $0.pluginID == pluginID },
+            actionShortcutItems: actionShortcutCatalogItems
+                .filter { $0.reference.key.providerID == pluginID }
+                .map {
+                    PluginSettingsActionShortcutItem(
+                        actionID: $0.reference.key.actionID,
+                        title: $0.title,
+                        description: $0.description,
+                        bindingText: $0.bindingText,
+                        canAssign: $0.canAssign,
+                        canClear: $0.assignmentID != nil
+                    )
+                },
             recordShortcut: { [weak self] itemID, binding in
                 self?.clearShortcutError(for: itemID)
                 return self?.setShortcutBindingAndReturnError(binding, for: itemID)
@@ -4262,6 +4509,36 @@ final class PluginHost: ObservableObject {
             resetShortcut: { [weak self] itemID in
                 self?.clearShortcutError(for: itemID)
                 self?.resetShortcut(for: itemID)
+            },
+            recordActionShortcut: { [weak self] actionID, binding in
+                guard let self,
+                      let item = self.actionShortcutCatalogItems.first(where: {
+                          $0.reference.key.providerID == pluginID
+                              && $0.reference.key.actionID == actionID
+                      })
+                else {
+                    return FeatureL10n.string("操作不可用。")
+                }
+                return self.setActionShortcutBindingAndReturnError(
+                    binding,
+                    for: item.reference,
+                    assignmentID: item.assignmentID
+                )
+            },
+            clearActionShortcut: { [weak self] actionID in
+                guard let self,
+                      let item = self.actionShortcutCatalogItems.first(where: {
+                          $0.reference.key.providerID == pluginID
+                              && $0.reference.key.actionID == actionID
+                              && $0.assignmentID != nil
+                      })
+                else {
+                    return
+                }
+                self.clearActionShortcut(
+                    for: item.reference,
+                    assignmentID: item.assignmentID
+                )
             }
         )
     }
@@ -4384,6 +4661,34 @@ final class PluginHost: ObservableObject {
                 matchingPermissionCards.map(\.id)
             )
             let matchingShortcutItems = shortcutItems.filter { $0.pluginID == pluginID }
+            let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
+            if descriptor.hasSettings,
+               let provider = descriptor.plugin as? any PluginGroupedShortcutSettingsProviding,
+               let configurations = guardedValue(
+                   for: descriptor.plugin,
+                   operation: "read grouped shortcut settings configuration",
+                   provider.shortcutSettingsGroups
+               ) {
+                var seenIDs: Set<String> = []
+                shortcutSettingsGroups = configurations.filter { configuration in
+                    let id = configuration.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let title = configuration.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let systemImage = configuration.systemImage.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let isValid = !id.isEmpty
+                        && !title.isEmpty
+                        && !systemImage.isEmpty
+                        && (!configuration.actionIDs.isEmpty || !configuration.shortcutDefinitionIDs.isEmpty)
+                        && seenIDs.insert(id).inserted
+                    if !isValid {
+                        AppLog.pluginHost.error(
+                            "Plugin \(pluginID, privacy: .public) returned an invalid grouped shortcut settings configuration"
+                        )
+                    }
+                    return isValid
+                }
+            } else {
+                shortcutSettingsGroups = []
+            }
             let rawPage: PluginSettingsPage?
             if descriptor.hasSettings {
                 rawPage = guardedOptionalValue(
@@ -4407,7 +4712,7 @@ final class PluginHost: ObservableObject {
                             rawPage,
                             availableShortcutGroupIDs: Set(
                                 matchingShortcutItems.compactMap(\.settingsGroupID)
-                            )
+                            ).union(shortcutSettingsGroups.map(\.id))
                         )
                         page = rawPage
                     }
@@ -4444,11 +4749,15 @@ final class PluginHost: ObservableObject {
             let hasSettingsSurface = !matchingMissingPermissionCardIDs.isEmpty
                 || !matchingShortcutItems.isEmpty
                 || actionShortcutSettingsConfiguration != nil
+                || !shortcutSettingsGroups.isEmpty
                 || page != nil
 
             guard hasSettingsSurface else {
                 return nil
             }
+
+            let shortcutGroupPresentation = descriptor.plugin as?
+                any PluginShortcutSettingsGroupPresentationProviding
 
             return PluginSettingsPageItem(
                 id: pluginID,
@@ -4462,7 +4771,16 @@ final class PluginHost: ObservableObject {
                 permissionCards: matchingPermissionCards,
                 missingPermissionCardIDs: matchingMissingPermissionCardIDs,
                 shortcutItems: matchingShortcutItems,
-                actionShortcutSettingsConfiguration: actionShortcutSettingsConfiguration
+                actionShortcutSettingsConfiguration: shortcutSettingsGroups.isEmpty
+                    ? actionShortcutSettingsConfiguration
+                    : nil,
+                shortcutSettingsGroups: shortcutSettingsGroups,
+                shortcutDefinitionFirstSettingsGroupIDs:
+                    shortcutGroupPresentation?.shortcutDefinitionFirstSettingsGroupIDs ?? [],
+                collapsibleShortcutSettingsGroupIDs:
+                    shortcutGroupPresentation?.collapsibleShortcutSettingsGroupIDs ?? [],
+                collapsibleActionSettingsGroupIDs:
+                    shortcutGroupPresentation?.collapsibleActionSettingsGroupIDs ?? []
             )
         }
     }
@@ -4492,6 +4810,8 @@ final class PluginHost: ObservableObject {
             isVisible: isVisible,
             isActive: isActive,
             canUninstall: dynamicPluginManifestsByID[metadata.id] != nil,
+            removesDataOnUninstall: dynamicPluginManifestsByID[metadata.id]?
+                .effectiveUninstallDataPolicy == .removePrivateData,
             category: dynamicPluginCategoriesByID[metadata.id] ?? nil,
             releaseChannel: dynamicPluginReleaseChannelsByID[metadata.id] ?? nil
         )
@@ -5533,8 +5853,9 @@ final class PluginHost: ObservableObject {
                     systemImage: action.definition.systemImage,
                     bindingText: assignmentItem?.bindingText ?? "",
                     status: status,
-                    canAssign: availability.isAvailable
-                        && action.definition.capabilities.contains(.foregroundInteractive)
+                    // Availability is live execution state, not configurability. Let users
+                    // prepare a shortcut while an interactive action is temporarily unavailable.
+                    canAssign: action.definition.capabilities.contains(.foregroundInteractive)
                 )
             }
         }

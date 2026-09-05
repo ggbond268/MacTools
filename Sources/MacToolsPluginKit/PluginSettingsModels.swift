@@ -443,9 +443,42 @@ public enum PluginSettingsAction: Equatable, Sendable {
     }
 }
 
+public struct PluginSettingsActionShortcutItem: Identifiable {
+    public let actionID: String
+    public let title: String
+    public let description: String
+    public let bindingText: String
+    public let canAssign: Bool
+    public let canClear: Bool
+
+    public var id: String { actionID }
+
+    public init(
+        actionID: String,
+        title: String,
+        description: String,
+        bindingText: String,
+        canAssign: Bool,
+        canClear: Bool
+    ) {
+        self.actionID = actionID
+        self.title = title
+        self.description = description
+        self.bindingText = bindingText
+        self.canAssign = canAssign
+        self.canClear = canClear
+    }
+}
+
 public struct PluginSettingsContext {
     public let pluginID: String
-    public let shortcutItems: [ShortcutSettingsItem]
+    private let allShortcutItems: [ShortcutSettingsItem]
+
+    /// Plugin-defined shortcuts exposed by the original PluginKit v5 API.
+    /// Host-owned canonical action shortcuts intentionally remain separate.
+    public var shortcutItems: [ShortcutSettingsItem] {
+        allShortcutItems.filter { $0.settingsGroupID != Self.actionShortcutSettingsGroupID }
+    }
 
     private let recordShortcutHandler: (String, ShortcutBinding) -> String?
     private let beginShortcutRecordingHandler: (String) -> Void
@@ -461,11 +494,70 @@ public struct PluginSettingsContext {
         resetShortcut: @escaping (String) -> Void = { _ in }
     ) {
         self.pluginID = pluginID
-        self.shortcutItems = shortcutItems
+        allShortcutItems = shortcutItems
         self.recordShortcutHandler = recordShortcut
         self.beginShortcutRecordingHandler = beginShortcutRecording
         self.clearShortcutHandler = clearShortcut
         self.resetShortcutHandler = resetShortcut
+    }
+
+    /// Extends the v5 settings context without changing its stored size or field order. Action
+    /// shortcuts use private synthetic storage but are filtered from the original public array,
+    /// so legacy plugins continue to observe only their own shortcut definitions.
+    public init(
+        pluginID: String,
+        shortcutItems: [ShortcutSettingsItem] = [],
+        actionShortcutItems: [PluginSettingsActionShortcutItem],
+        recordShortcut: @escaping (String, ShortcutBinding) -> String? = { _, _ in nil },
+        beginShortcutRecording: @escaping (String) -> Void = { _ in },
+        clearShortcut: @escaping (String) -> Void = { _ in },
+        resetShortcut: @escaping (String) -> Void = { _ in },
+        recordActionShortcut: @escaping (String, ShortcutBinding) -> String? = { _, _ in nil },
+        clearActionShortcut: @escaping (String) -> Void = { _ in }
+    ) {
+        let syntheticItems = actionShortcutItems.map { item in
+            ShortcutSettingsItem(
+                id: Self.actionShortcutItemID(pluginID: pluginID, actionID: item.actionID),
+                pluginID: pluginID,
+                pluginTitle: "",
+                title: item.title,
+                description: item.description,
+                bindingText: item.bindingText,
+                isRequired: item.canAssign,
+                canClear: item.canClear,
+                usesDefaultValue: false,
+                errorMessage: nil,
+                settingsGroupID: Self.actionShortcutSettingsGroupID
+            )
+        }
+        self.init(
+            pluginID: pluginID,
+            shortcutItems: shortcutItems + syntheticItems,
+            recordShortcut: { itemID, binding in
+                if let actionID = Self.actionID(from: itemID, pluginID: pluginID) {
+                    return recordActionShortcut(actionID, binding)
+                }
+                return recordShortcut(itemID, binding)
+            },
+            beginShortcutRecording: { itemID in
+                guard Self.actionID(from: itemID, pluginID: pluginID) == nil else { return }
+                beginShortcutRecording(itemID)
+            },
+            clearShortcut: { itemID in
+                if let actionID = Self.actionID(from: itemID, pluginID: pluginID) {
+                    clearActionShortcut(actionID)
+                } else {
+                    clearShortcut(itemID)
+                }
+            },
+            resetShortcut: { itemID in
+                if let actionID = Self.actionID(from: itemID, pluginID: pluginID) {
+                    clearActionShortcut(actionID)
+                } else {
+                    resetShortcut(itemID)
+                }
+            }
+        )
     }
 
     public func shortcutItem(definitionID: String) -> ShortcutSettingsItem? {
@@ -492,6 +584,64 @@ public struct PluginSettingsContext {
     public func resetShortcut(for itemID: String) {
         resetShortcutHandler(itemID)
     }
+
+    public func actionShortcutItem(actionID: String) -> PluginSettingsActionShortcutItem? {
+        actionShortcutItems.first { $0.actionID == actionID }
+    }
+
+    public var actionShortcutItems: [PluginSettingsActionShortcutItem] {
+        allShortcutItems.compactMap { item in
+            guard item.settingsGroupID == Self.actionShortcutSettingsGroupID,
+                  let actionID = Self.actionID(from: item.id, pluginID: pluginID) else {
+                return nil
+            }
+            return PluginSettingsActionShortcutItem(
+                actionID: actionID,
+                title: item.title,
+                description: item.description,
+                bindingText: item.bindingText,
+                canAssign: item.isRequired,
+                canClear: item.canClear
+            )
+        }
+    }
+
+    public func recordActionShortcut(
+        _ binding: ShortcutBinding,
+        for actionID: String
+    ) -> PluginShortcutRecordingResult {
+        PluginShortcutRecordingResult.from(
+            errorMessage: recordShortcutHandler(
+                Self.actionShortcutItemID(pluginID: pluginID, actionID: actionID),
+                binding
+            )
+        )
+    }
+
+    public func clearActionShortcut(for actionID: String) {
+        clearShortcutHandler(Self.actionShortcutItemID(pluginID: pluginID, actionID: actionID))
+    }
+
+    private static let actionShortcutSettingsGroupID = "mactools.internal.action-shortcut"
+
+    private static func actionShortcutItemID(pluginID: String, actionID: String) -> String {
+        "\(pluginID).action-shortcut.\(actionID)"
+    }
+
+    private static func actionID(from itemID: String, pluginID: String) -> String? {
+        let prefix = "\(pluginID).action-shortcut."
+        guard itemID.hasPrefix(prefix) else { return nil }
+        let actionID = String(itemID.dropFirst(prefix.count))
+        return actionID.isEmpty ? nil : actionID
+    }
+}
+
+/// Lets a plugin offer the host-owned shortcut recorder from focused plugin UI without exposing
+/// shortcut persistence to the plugin. The host supplies a fresh context whenever the UI asks for
+/// one so conflict state and display text stay current.
+@MainActor
+public protocol PluginInlineShortcutSettingsContextConsuming: AnyObject {
+    var inlineShortcutSettingsContextProvider: (() -> PluginSettingsContext)? { get set }
 }
 
 public enum PluginSettingsValidationError: Error, Equatable, CustomStringConvertible {

@@ -1,0 +1,460 @@
+{
+  "id": "clipboard",
+  "displayName": "剪贴板",
+  "summary": "搜索历史记录并管理可重复使用的片段和已存项目。",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "الحافظة",
+      "summary": "ابحث في السجل وأدر المقتطفات والعناصر المحفوظة القابلة لإعادة الاستخدام."
+    },
+    "de": {
+      "displayName": "Zwischenablage",
+      "summary": "Verlauf durchsuchen und wiederverwendbare Textbausteine und gespeicherte Elemente verwalten."
+    },
+    "en": {
+      "displayName": "Clipboard",
+      "summary": "Search history and manage reusable snippets and saved items."
+    },
+    "es": {
+      "displayName": "Portapapeles",
+      "summary": "Busca en el historial y gestiona fragmentos reutilizables y elementos guardados."
+    },
+    "fr": {
+      "displayName": "Presse-papiers",
+      "summary": "Recherchez dans l’historique et gérez les extraits réutilisables et les éléments enregistrés."
+    },
+    "ja": {
+      "displayName": "クリップボード",
+      "summary": "履歴を検索し、再利用できるスニペットと保存項目を管理します。"
+    },
+    "ko": {
+      "displayName": "클립보드",
+      "summary": "기록을 검색하고 재사용 가능한 스니펫과 저장된 항목을 관리합니다."
+    },
+    "pt": {
+      "displayName": "Área de transferência",
+      "summary": "Pesquise o histórico e gerencie trechos reutilizáveis e itens salvos."
+    },
+    "ru": {
+      "displayName": "Буфер обмена",
+      "summary": "Ищите в истории и управляйте повторно используемыми фрагментами и сохранёнными элементами."
+    },
+    "zh-Hans": {
+      "displayName": "剪贴板",
+      "summary": "搜索历史记录并管理可重复使用的片段和已存项目。"
+    },
+    "zh-Hant": {
+      "displayName": "剪貼簿",
+      "summary": "搜尋記錄並管理可重複使用的片段和已儲存項目。"
+    }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.3.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "ClipboardHistory.bundle",
+  "factoryClass": "ClipboardHistoryPlugin.ClipboardHistoryPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "ClipboardHistoryPlugin"
+  },
+  "package": {
+    "signPaths": [
+      "ClipboardHistory.bundle/Contents/Resources/PasteboardReaderHelper/mactools-clipboard-pasteboard-reader-helper"
+    ]
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": [
+    "accessibility"
+  ],
+  "uninstallDataPolicy": "removePrivateData",
+  "category": "productivity",
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup-storage-title": "@localizable.setup.storage.title",
+    "setup-storage-description": "@localizable.settings.storage.encrypted.description",
+    "setup-collection-title": "@localizable.settings.collection.toggleTitle",
+    "setup-collection-description": "@localizable.setup.collection.actionDescription",
+    "open-history-title": "@localizable.action.open.title",
+    "open-history-description": "@localizable.action.open.description",
+    "pause-collection-title": "@localizable.action.pause.title",
+    "pause-collection-description": "@localizable.action.pause.description",
+    "resume-collection-title": "@localizable.action.resume.title",
+    "resume-collection-description": "@localizable.action.resume.description",
+    "toggle-collection-title": "@localizable.action.toggle.title",
+    "toggle-collection-description": "@localizable.action.toggle.description",
+    "clear-all-history-title": "@localizable.action.clearAll.title",
+    "clear-all-history-description": "@localizable.action.clearAll.description",
+    "previous-sequential-queue-item-title": "@localizable.hud.queue.previous",
+    "previous-sequential-queue-item-description": "@localizable.action.queue.previous.description",
+    "skip-sequential-queue-item-title": "@localizable.hud.queue.skip",
+    "skip-sequential-queue-item-description": "@localizable.action.queue.skip.description",
+    "restart-sequential-queue-title": "@localizable.hud.queue.restart",
+    "restart-sequential-queue-description": "@localizable.action.queue.restart.description",
+    "cancel-sequential-queue-title": "@localizable.hud.queue.cancel",
+    "cancel-sequential-queue-description": "@localizable.action.queue.cancel.description"
+  },
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools/blob/main/docs/superpowers/specs/2026-08-19-clipboard-history.md",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "GPL-3.0-only"
+  },
+  "discovery": {
+    "keywords": [
+      "clipboard",
+      "history",
+      "paste",
+      "OCR",
+      "export"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "سجل الحافظة"
+      ],
+      "de": [
+        "Zwischenablageverlauf"
+      ],
+      "en": [
+        "Clipboard History"
+      ],
+      "es": [
+        "Historial del portapapeles"
+      ],
+      "fr": [
+        "Historique du presse-papiers"
+      ],
+      "ja": [
+        "クリップボード履歴"
+      ],
+      "ko": [
+        "클립보드 기록"
+      ],
+      "pt": [
+        "Histórico da área de transferência"
+      ],
+      "ru": [
+        "История буфера обмена"
+      ],
+      "zh-Hans": [
+        "剪贴板历史"
+      ],
+      "zh-Hant": [
+        "剪貼簿記錄"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "recall-copied-content",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [
+      "clipboard-clear"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "clipboard-content",
+      "frontmost-application",
+      "local-keyword-input-when-enabled"
+    ],
+    "dataPersisted": [
+      "encrypted-clipboard-history",
+      "local-encryption-key"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "secure-storage",
+        "title": "@productStrings.setup-storage-title",
+        "description": "@productStrings.setup-storage-description"
+      },
+      {
+        "id": "collection",
+        "title": "@productStrings.setup-collection-title",
+        "description": "@productStrings.setup-collection-description"
+      }
+    ],
+    "optionalSurfaces": [
+      "global-shortcut"
+    ],
+    "suggestedTestAction": {
+      "providerID": "clipboard",
+      "actionID": "open-history"
+    }
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "clipboard-clear"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "clipboard",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "open-history",
+            "title": "@productStrings.open-history-title",
+            "description": "@productStrings.open-history-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "clipboard",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "previous-sequential-queue-item",
+            "title": "@productStrings.previous-sequential-queue-item-title",
+            "description": "@productStrings.previous-sequential-queue-item-description",
+            "keywords": [
+              "clipboard",
+              "queue"
+            ],
+            "systemImage": "chevron.left",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "skip-sequential-queue-item",
+            "title": "@productStrings.skip-sequential-queue-item-title",
+            "description": "@productStrings.skip-sequential-queue-item-description",
+            "keywords": [
+              "clipboard",
+              "queue"
+            ],
+            "systemImage": "forward.end",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "restart-sequential-queue",
+            "title": "@productStrings.restart-sequential-queue-title",
+            "description": "@productStrings.restart-sequential-queue-description",
+            "keywords": [
+              "clipboard",
+              "queue"
+            ],
+            "systemImage": "backward.end",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "cancel-sequential-queue",
+            "title": "@productStrings.cancel-sequential-queue-title",
+            "description": "@productStrings.cancel-sequential-queue-description",
+            "keywords": [
+              "clipboard",
+              "queue"
+            ],
+            "systemImage": "xmark.circle",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "pause-collection",
+            "title": "@productStrings.pause-collection-title",
+            "description": "@productStrings.pause-collection-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "pause.circle",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual",
+              "automatic-rule",
+              "app-intent"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "resume-collection",
+            "title": "@productStrings.resume-collection-title",
+            "description": "@productStrings.resume-collection-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "play.circle",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual",
+              "automatic-rule",
+              "app-intent"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "toggle-collection",
+            "title": "@productStrings.toggle-collection-title",
+            "description": "@productStrings.toggle-collection-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "playpause",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual",
+              "automatic-rule",
+              "app-intent"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "unavailable"
+          },
+          {
+            "id": "clear-all-history",
+            "title": "@productStrings.clear-all-history-title",
+            "description": "@productStrings.clear-all-history-description",
+            "keywords": [
+              "clipboard",
+              "history"
+            ],
+            "systemImage": "trash.slash",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "confirmationRequired",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
+}

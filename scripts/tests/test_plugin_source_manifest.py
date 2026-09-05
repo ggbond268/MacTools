@@ -407,6 +407,10 @@ class PluginSourceManifestTests(unittest.TestCase):
         )
         self.assertEqual(schema["properties"]["releaseChannel"]["type"], "string")
         self.assertEqual(schema["properties"]["releaseNotesURL"]["pattern"], "^https://")
+        self.assertEqual(
+            schema["properties"]["uninstallDataPolicy"]["enum"],
+            ["preserve", "removePrivateData"],
+        )
         capabilities = definitions["capabilities"]
         self.assertEqual(
             set(capabilities["required"]),

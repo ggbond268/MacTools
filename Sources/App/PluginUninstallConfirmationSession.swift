@@ -9,6 +9,10 @@ final class PluginUninstallConfirmationSession: ObservableObject {
         !isConfirmationPaused
     }
 
+    func shouldConfirmUninstall(removesData: Bool) -> Bool {
+        removesData || shouldConfirmUninstall
+    }
+
     func pauseConfirmation() {
         isConfirmationPaused = true
     }
@@ -22,6 +26,7 @@ struct PluginUninstallConfirmation: Identifiable, Equatable {
     let pluginID: String
     let pluginTitle: String
     let surfaceCapabilitySummary: String
+    let removesDataOnUninstall: Bool
 
     var id: String {
         pluginID
@@ -46,24 +51,32 @@ struct PluginUninstallConfirmationSheet: View {
                 ))
                 .font(PluginSettingsTheme.Typography.pageTitle)
 
-                Text(AppL10n.pluginsFormat(
-                    "plugin.management.uninstall.confirmationMessage",
-                    defaultValue: "它将从%@移除，快捷键和设置入口也会移除，后台工作将停止。插件数据会保留。",
-                    confirmation.surfaceCapabilitySummary
-                ))
+                Text(confirmation.removesDataOnUninstall
+                    ? AppL10n.pluginsFormat(
+                        "plugin.management.uninstall.confirmationMessageRemovesData",
+                        defaultValue: "它将从%@移除，快捷键、设置入口和插件私密数据也会永久删除，后台工作将停止。此操作无法撤销。",
+                        confirmation.surfaceCapabilitySummary
+                    )
+                    : AppL10n.pluginsFormat(
+                        "plugin.management.uninstall.confirmationMessage",
+                        defaultValue: "它将从%@移除，快捷键和设置入口也会移除，后台工作将停止。插件数据会保留。",
+                        confirmation.surfaceCapabilitySummary
+                    ))
                 .font(PluginSettingsTheme.Typography.rowDescription)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
 
-            Toggle(
-                AppL10n.plugins(
-                    "plugin.management.uninstall.pauseConfirmation",
-                    defaultValue: "在本次设置会话中不再询问"
-                ),
-                isOn: $pausesConfirmationForSession
-            )
-            .toggleStyle(.checkbox)
+            if !confirmation.removesDataOnUninstall {
+                Toggle(
+                    AppL10n.plugins(
+                        "plugin.management.uninstall.pauseConfirmation",
+                        defaultValue: "在本次设置会话中不再询问"
+                    ),
+                    isOn: $pausesConfirmationForSession
+                )
+                .toggleStyle(.checkbox)
+            }
 
             HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
                 Spacer()

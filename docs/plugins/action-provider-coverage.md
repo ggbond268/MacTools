@@ -15,9 +15,13 @@ The following plugin source directories publish canonical actions:
 - Display and workspace control: `Appearance`, `DisplayBrightness`, `DisplayResolution`, `DisplaySleep`, `DisplayTrueColor`, `DockLock`, `HideNotch`, `NightShift`, `Sidecar`, `StageManager`.
 - Menu bar and Dock control: `AutoHideDock`, `AutoHideMenuBar`.
 - System and device control: `BatteryChargeLimit`, `FanControl`, `KeepAwake`, `LockScreen`, `MicrophoneMute`, `SystemMute`, `SystemPower`, `SystemSoftRestart`.
-- Productivity and maintenance: `ActivityBar`, `AppleShortcuts`, `ClipboardClear`, `CloudflareR2`, `DiskClean`, `EjectDisk`, `EmptyTrash`, `FixDamagedApp`, `Homebrew`, `IPOverview`, `LaunchControl`, `Launchpad`, `PhysicalCleanMode`, `QuitApps`, `Translator`, `WindowLayouts`, `XcodeClean`.
+- Productivity and maintenance: `ActivityBar`, `AppleShortcuts`, `ClipboardClear`, `ClipboardHistory`, `CloudflareR2`, `DiskClean`, `EjectDisk`, `EmptyTrash`, `FixDamagedApp`, `Homebrew`, `IPOverview`, `LaunchControl`, `Launchpad`, `PhysicalCleanMode`, `QuitApps`, `Translator`, `WindowLayouts`, `XcodeClean`.
 
 Parameterized actions publish concrete catalog entries rather than asking each action surface to construct parameters. For example, Sidecar publishes per-device entries, Display Resolution publishes current display modes, App Volume publishes current audio apps, Battery Charge Limit publishes useful limit presets, and Fan Control publishes saved presets. Availability is resolved again at execution time so stale hardware, processes, or configuration fail safely.
+
+Clipboard publishes its nine parameter-free actions in the source manifest and runtime
+consistency test. Product metadata describes local encrypted storage without embedding clipboard
+content, and remains independent of the manifest's private-data uninstall policy.
 
 Operations that eject storage, empty Trash, clear the clipboard, change hardware management, or enter a physical clean session preserve confirmation or foreground-only requirements. Machine-local parameters are marked local-only, and actions that require an interactive chooser or key lifecycle do not expose Run Links.
 
@@ -31,6 +35,7 @@ The maintenance providers use deliberately narrow contracts:
 - Launch Items exposes start, stop, and restart only for user-owned items that the user has marked as favorites. Item IDs are local-only, stop/restart require confirmation, and stale or no-longer-favorite targets become unavailable.
 - IP Check exposes refreshed copy actions for local and public IPv4 addresses. Keep Awake exposes useful timed sessions, Activity Stats exposes its existing reset flow with confirmation, Display Brightness exposes guarded built-in-display disable/restore operations, and App Volume includes a 50% preset.
 - Apple Shortcuts publishes every discovered shortcut. Folder membership is shown as context in MacTools, local confirmation defaults on, Run Links always confirm, and safety-policy changes rebuild the host action registry synchronously.
+- Clipboard publishes only its nine payload-free history and queue-control operations as canonical actions. Private Copy, Ignore Next Copy, Plain Text Paste, and Sequential Paste remain specialized global shortcuts so focus-dependent input synthesis and one-shot privacy suppression never enter unattended or externally invoked action surfaces.
 
 ## Intentionally specialized or non-operational
 

@@ -260,20 +260,27 @@ print -r -- \"$@\" >>\"$MACTOOLS_LSREGISTER_LOG\"
             self.assertIn(f"-f {installed.resolve()}", registrations)
             self.assertNotIn(f"-u {installed.resolve()}", registrations)
 
-    def test_stop_debug_app_targets_exact_installed_executable_path(self) -> None:
+    def test_stop_debug_app_targets_every_matching_app_bundle_executable(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = pathlib.Path(temporary_directory)
             installed_executable = (
                 root / "Applications/MacTools Test.app/Contents/MacOS/MacTools Test"
+            )
+            worktree_app = (
+                root
+                / "worktree/build/DerivedData/Build/Products/Debug/MacTools Test.app"
             )
             decoy_executable = root / "decoy/MacTools Test"
             decoy_executable.parent.mkdir(parents=True)
             installed_process = self.start_signed_sleep_app(
                 root / "Applications/MacTools Test.app"
             )
+            worktree_process = self.start_signed_sleep_app(worktree_app)
             decoy_process = self.start_signed_sleep_at_path(decoy_executable)
             installed_waiter = threading.Thread(target=installed_process.wait, daemon=True)
+            worktree_waiter = threading.Thread(target=worktree_process.wait, daemon=True)
             installed_waiter.start()
+            worktree_waiter.start()
             try:
                 result = subprocess.run(
                     [
@@ -292,13 +299,15 @@ print -r -- \"$@\" >>\"$MACTOOLS_LSREGISTER_LOG\"
 
                 self.assertEqual(result.returncode, 0, result.stderr)
                 installed_waiter.join(timeout=5)
+                worktree_waiter.join(timeout=5)
                 self.assertIsNotNone(installed_process.poll())
+                self.assertIsNotNone(worktree_process.poll())
                 self.assertIsNone(
                     decoy_process.poll(),
-                    "a same-basename process outside the retained app must survive",
+                    "a same-basename process outside an app bundle must survive",
                 )
             finally:
-                for process in (installed_process, decoy_process):
+                for process in (installed_process, worktree_process, decoy_process):
                     if process.poll() is None:
                         process.terminate()
                         process.wait(timeout=5)

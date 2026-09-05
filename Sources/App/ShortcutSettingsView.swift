@@ -39,13 +39,10 @@ func commonShortcutBindingWarningAlert(
 }
 
 private enum ShortcutSettingsLayout {
-    static let recorderWidth = PluginSettingsTheme.Size.shortcutRecorderWidth
     static let controlLabelMaxWidth: CGFloat = 160
     static let groupedControlMinWidth: CGFloat = 260
     static let groupedControlMaxWidth: CGFloat = 380
     static let summaryMinWidth: CGFloat = 220
-    static let actionButtonSize: CGFloat = 22
-    static let actionButtonsWidth: CGFloat = 50
 }
 
 struct ShortcutSettingsView: View {
@@ -417,6 +414,7 @@ struct PluginActionShortcutRowsContent: View {
     @ObservedObject var pluginHost: PluginHost
     let providerID: String
     let actionIDs: Set<String>
+    var hidesNeutralStatusBadges = false
     @State private var pendingReplacement: PendingActionShortcutReplacement?
 
     private var items: [ActionShortcutCatalogItem] {
@@ -445,6 +443,7 @@ struct PluginActionShortcutRowsContent: View {
                         pluginHost: pluginHost,
                         item: item,
                         displaysRunLink: false,
+                        hidesNeutralStatusBadge: hidesNeutralStatusBadges,
                         onRecord: { binding in record(binding, for: item) },
                         onClear: {
                             pluginHost.clearActionShortcut(
@@ -510,14 +509,10 @@ private struct ActionShortcutGroup {
 }
 
 private struct ActionShortcutCatalogRow: View {
-    private enum Layout {
-        static let recorderWidth = PluginSettingsTheme.Size.shortcutRecorderWidth
-        static let actionButtonSize: CGFloat = 22
-    }
-
     @ObservedObject var pluginHost: PluginHost
     let item: ActionShortcutCatalogItem
     var displaysRunLink = true
+    var hidesNeutralStatusBadge = false
     let onRecord: (ShortcutBinding) -> PluginShortcutRecordingResult
     let onClear: () -> Void
 
@@ -536,37 +531,30 @@ private struct ActionShortcutCatalogRow: View {
                         Text(item.title)
                             .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
                             .lineLimit(1)
-                        statusBadge
+                        if ActionShortcutStatusBadgePolicy.shouldShow(
+                            item.status,
+                            hidesNeutralStatus: hidesNeutralStatusBadge
+                        ) {
+                            statusBadge
+                        }
                     }
 
                     Text(supportingText)
                         .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(statusColor)
+                        .foregroundStyle(supportingColor)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                PluginShortcutRecorder(
+                PluginSettingsShortcutRecorderControl(
                     title: item.title,
                     displayText: item.bindingText,
-                    minWidth: Layout.recorderWidth,
-                    onRecord: onRecord
-                )
-                .frame(width: Layout.recorderWidth)
-                .disabled(!item.canAssign || pluginHost.actionShortcutLoadError != nil)
-
-                Button(action: onClear) {
-                    Image(systemName: "xmark.circle.fill")
-                        .frame(width: Layout.actionButtonSize, height: Layout.actionButtonSize)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(FeatureL10n.string("清除快捷键"))
-                .opacity(item.bindingText.isEmpty ? 0 : 1)
-                .disabled(
-                    item.bindingText.isEmpty
-                        || pluginHost.actionShortcutLoadError != nil
+                    canAssign: item.canAssign && pluginHost.actionShortcutLoadError == nil,
+                    canClear: !item.bindingText.isEmpty && pluginHost.actionShortcutLoadError == nil,
+                    clearTitle: FeatureL10n.string("清除快捷键"),
+                    onRecord: onRecord,
+                    onClear: onClear
                 )
             }
 
@@ -610,6 +598,17 @@ private struct ActionShortcutCatalogRow: View {
         }
     }
 
+    private var supportingColor: Color {
+        switch item.status {
+        case .assigned, .unassigned:
+            .secondary
+        case .conflicted:
+            .orange
+        case .unavailable:
+            .red
+        }
+    }
+
     private var supportingText: String {
         switch item.status {
         case .assigned, .unassigned:
@@ -624,10 +623,27 @@ private struct ActionShortcutCatalogRow: View {
     }
 }
 
+enum ActionShortcutStatusBadgePolicy {
+    static func shouldShow(
+        _ status: ActionShortcutCatalogStatus,
+        hidesNeutralStatus: Bool
+    ) -> Bool {
+        guard hidesNeutralStatus else { return true }
+        switch status {
+        case .assigned, .unassigned:
+            return false
+        case .conflicted, .unavailable:
+            return true
+        }
+    }
+}
+
 struct ShortcutSettingsRowsView: View {
     @ObservedObject var pluginHost: PluginHost
     let items: [ShortcutSettingsItem]
+    var alignsWithActionRows = false
     @State private var pendingWarning: CommonShortcutBindingWarning?
+    @State private var pendingConflict: PluginHost.ShortcutBindingConflict?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -645,7 +661,8 @@ struct ShortcutSettingsRowsView: View {
                     },
                     onReset: {
                         reset(item)
-                    }
+                    },
+                    alignsWithActionRows: alignsWithActionRows
                 )
                 .pluginSettingsSearchAnchor(
                     pluginID: item.pluginID,
@@ -665,6 +682,34 @@ struct ShortcutSettingsRowsView: View {
                 _ = save(item, binding: warning.binding)
             }
         }
+        .confirmationDialog(
+            FeatureL10n.string("处理快捷键冲突"),
+            isPresented: Binding(
+                get: { pendingConflict != nil },
+                set: { if !$0 { pendingConflict = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingConflict
+        ) { conflict in
+            if conflict.canSwap {
+                Button(FeatureL10n.string("交换快捷键")) {
+                    _ = pluginHost.resolveShortcutBindingConflict(conflict, resolution: .swap)
+                    pendingConflict = nil
+                }
+            }
+            Button(FeatureL10n.string("替换原快捷键"), role: .destructive) {
+                _ = pluginHost.resolveShortcutBindingConflict(conflict, resolution: .replace)
+                pendingConflict = nil
+            }
+            Button(FeatureL10n.string("取消"), role: .cancel) {
+                pendingConflict = nil
+            }
+        } message: { conflict in
+            Text(FeatureL10n.format(
+                "此快捷键已分配给“%@”。交换会保留两个操作的快捷键；替换会清除原操作的快捷键。",
+                conflict.ownerDescription
+            ))
+        }
     }
 
     private func configure(_ item: ShortcutSettingsItem, binding: ShortcutBinding) -> String? {
@@ -678,6 +723,13 @@ struct ShortcutSettingsRowsView: View {
 
     private func save(_ item: ShortcutSettingsItem, binding: ShortcutBinding) -> String? {
         pluginHost.clearShortcutError(for: item.id)
+        if let conflict = pluginHost.shortcutBindingConflict(
+            for: binding,
+            targetShortcutID: item.id
+        ) {
+            pendingConflict = conflict
+            return nil
+        }
         return pluginHost.setShortcutBindingAndReturnError(binding, for: item.id)
     }
 
@@ -696,6 +748,7 @@ struct GroupedShortcutSettingsRowsView: View {
     @ObservedObject var pluginHost: PluginHost
     let groups: [ShortcutSettingsGroup]
     @State private var pendingWarning: CommonShortcutBindingWarning?
+    @State private var pendingConflict: PluginHost.ShortcutBindingConflict?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -730,6 +783,34 @@ struct GroupedShortcutSettingsRowsView: View {
                 _ = save(item, binding: warning.binding)
             }
         }
+        .confirmationDialog(
+            FeatureL10n.string("处理快捷键冲突"),
+            isPresented: Binding(
+                get: { pendingConflict != nil },
+                set: { if !$0 { pendingConflict = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingConflict
+        ) { conflict in
+            if conflict.canSwap {
+                Button(FeatureL10n.string("交换快捷键")) {
+                    _ = pluginHost.resolveShortcutBindingConflict(conflict, resolution: .swap)
+                    pendingConflict = nil
+                }
+            }
+            Button(FeatureL10n.string("替换原快捷键"), role: .destructive) {
+                _ = pluginHost.resolveShortcutBindingConflict(conflict, resolution: .replace)
+                pendingConflict = nil
+            }
+            Button(FeatureL10n.string("取消"), role: .cancel) {
+                pendingConflict = nil
+            }
+        } message: { conflict in
+            Text(FeatureL10n.format(
+                "此快捷键已分配给“%@”。交换会保留两个操作的快捷键；替换会清除原操作的快捷键。",
+                conflict.ownerDescription
+            ))
+        }
     }
 
     private func configure(_ item: ShortcutSettingsItem, binding: ShortcutBinding) -> String? {
@@ -743,6 +824,13 @@ struct GroupedShortcutSettingsRowsView: View {
 
     private func save(_ item: ShortcutSettingsItem, binding: ShortcutBinding) -> String? {
         pluginHost.clearShortcutError(for: item.id)
+        if let conflict = pluginHost.shortcutBindingConflict(
+            for: binding,
+            targetShortcutID: item.id
+        ) {
+            pendingConflict = conflict
+            return nil
+        }
         return pluginHost.setShortcutBindingAndReturnError(binding, for: item.id)
     }
 
@@ -770,6 +858,7 @@ private struct ShortcutSettingsStandardRow: View {
     let onBeginRecording: () -> Void
     let onClear: () -> Void
     let onReset: () -> Void
+    let alignsWithActionRows: Bool
 
     private var supportingText: String {
         item.errorMessage ?? item.description
@@ -786,6 +875,19 @@ private struct ShortcutSettingsStandardRow: View {
     }
 
     var body: some View {
+        rowContent
+            .pluginSettingsListRowPadding(interactive: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
+        if alignsWithActionRows {
+            HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                summary
+                shortcutControl.fixedSize(horizontal: true, vertical: false)
+            }
+        } else {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                 summary
@@ -799,35 +901,50 @@ private struct ShortcutSettingsStandardRow: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
-        .pluginSettingsListRowPadding(interactive: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var summary: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-            HStack(spacing: 8) {
-                Text(item.title)
-                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(item.title)
+        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            if alignsWithActionRows, let systemImage = item.settingsControlSystemImage {
+                Image(systemName: PluginSystemImage.resolvedName(systemImage))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 24)
+            }
 
-                if item.isRequired {
-                    ShortcutStatusBadge(text: AppL10n.settings("shortcuts.required", defaultValue: "必填"))
+            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                HStack(spacing: 8) {
+                    Text(summaryTitle)
+                        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(summaryTitle)
+
+                    if item.isRequired {
+                        ShortcutStatusBadge(text: AppL10n.settings("shortcuts.required", defaultValue: "必填"))
+                    }
+                }
+
+                if !supportingText.isEmpty {
+                    Text(supportingText)
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(supportingColor)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .help(supportingText)
                 }
             }
-
-            if !supportingText.isEmpty {
-                Text(supportingText)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(supportingColor)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .help(supportingText)
-            }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .help(rowHelpText)
+    }
+
+    private var summaryTitle: String {
+        if alignsWithActionRows, let title = item.settingsControlTitle {
+            return title
+        }
+        return item.title
     }
 
     private var shortcutControl: some View {
@@ -841,8 +958,8 @@ private struct ShortcutSettingsStandardRow: View {
             onBeginRecording: onBeginRecording,
             onReset: onReset,
             onClear: onClear,
-            title: item.settingsControlTitle,
-            systemImage: item.settingsControlSystemImage
+            title: alignsWithActionRows ? nil : item.settingsControlTitle,
+            systemImage: alignsWithActionRows ? nil : item.settingsControlSystemImage
         )
     }
 }
@@ -980,14 +1097,10 @@ private struct ShortcutBindingControl: View {
                 maximumLabelWidth: ShortcutSettingsLayout.controlLabelMaxWidth
             ) {
                 controlLabel
-                recorderButton
-                actionButtons
+                recorderControl
             }
         } else {
-            HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.controlCluster) {
-                recorderButton
-                actionButtons
-            }
+            recorderControl
         }
     }
 
@@ -1010,53 +1123,28 @@ private struct ShortcutBindingControl: View {
         .help(title ?? item.title)
     }
 
-    private var recorderButton: some View {
-        PluginShortcutRecorder(
+    private var recorderControl: some View {
+        PluginSettingsShortcutRecorderControl(
             title: title ?? item.title,
             displayText: item.bindingText,
-            minWidth: ShortcutSettingsLayout.recorderWidth,
+            canClear: item.canClear,
+            resetTitle: shouldOfferReset
+                ? AppL10n.settings("shortcuts.resetHelp", defaultValue: "重置为默认快捷键")
+                : nil,
+            clearTitle: AppL10n.settings("shortcuts.clearHelp", defaultValue: "清除快捷键"),
             onRecord: onRecord,
-            onBeginRecording: onBeginRecording
+            onBeginRecording: onBeginRecording,
+            onReset: shouldOfferReset ? onReset : nil,
+            onClear: onClear
         )
-        .frame(width: ShortcutSettingsLayout.recorderWidth)
     }
 
     private var hasControlLabel: Bool {
         title != nil || systemImage != nil
     }
 
-    @ViewBuilder
-    private var actionButtons: some View {
-        if shouldShowReset || item.canClear {
-            HStack(spacing: 6) {
-                if shouldShowReset {
-                    ShortcutInlineActionButton(
-                        systemName: "arrow.counterclockwise",
-                        helpText: AppL10n.settings("shortcuts.resetHelp", defaultValue: "重置为默认快捷键"),
-                        action: onReset
-                    )
-                }
-
-                if item.canClear {
-                    ShortcutInlineActionButton(
-                        systemName: "xmark.circle.fill",
-                        helpText: AppL10n.settings("shortcuts.clearHelp", defaultValue: "清除快捷键"),
-                        action: onClear
-                    )
-                }
-            }
-            .frame(width: actionButtonsWidth, alignment: .leading)
-        }
-    }
-
-    private var shouldShowReset: Bool {
+    private var shouldOfferReset: Bool {
         !item.usesDefaultValue
-    }
-
-    private var actionButtonsWidth: CGFloat {
-        shouldShowReset && item.canClear
-            ? ShortcutSettingsLayout.actionButtonsWidth
-            : ShortcutSettingsLayout.actionButtonSize
     }
 }
 
@@ -1073,26 +1161,5 @@ private struct ShortcutStatusBadge: View {
                 Capsule(style: .continuous)
                     .fill(SettingsStyle.activeControlBackground)
             )
-    }
-}
-
-private struct ShortcutInlineActionButton: View {
-    let systemName: String
-    let helpText: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(PluginSettingsTheme.Typography.rowIcon)
-                .symbolRenderingMode(.monochrome)
-                .frame(
-                    width: ShortcutSettingsLayout.actionButtonSize,
-                    height: ShortcutSettingsLayout.actionButtonSize
-                )
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.secondary)
-        .help(helpText)
     }
 }

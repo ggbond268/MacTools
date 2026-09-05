@@ -1,5 +1,16 @@
 import Foundation
 
+public enum PluginPrivateDataKeychainIdentity {
+    public static let encryptionKeyAccount = "encryption-key.v1"
+
+    public static func service(
+        pluginID: String,
+        hostBundleIdentifier: String? = Bundle.main.bundleIdentifier
+    ) -> String {
+        "\(hostBundleIdentifier ?? "cc.ggbond.mactools").\(pluginID)"
+    }
+}
+
 @MainActor
 public struct PluginRuntimeContext {
     public let pluginID: String
