@@ -108,14 +108,17 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
             return .moveSelection(offset: 1)
         case #selector(NSResponder.moveUp(_:)):
             return .moveSelection(offset: -1)
-        case #selector(NSResponder.insertNewline(_:)),
-             #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+        case #selector(NSResponder.insertNewline(_:)):
             return matchesAlternateSubmit(
                 modifierFlags: modifierFlags,
                 alternateSubmitModifier: alternateSubmitModifier
             )
                 ? .alternateSubmit
                 : .submit
+        case #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            // AppKit uses this selector for the field editor's alternate Return path.
+            // Preserve that semantic even when the modifier flags are unavailable.
+            return alternateSubmitModifier == nil ? .submit : .alternateSubmit
         case #selector(NSResponder.cancelOperation(_:)):
             return .cancel
         default:

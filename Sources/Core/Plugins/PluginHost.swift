@@ -5853,6 +5853,8 @@ final class PluginHost: ObservableObject {
                     systemImage: action.definition.systemImage,
                     bindingText: assignmentItem?.bindingText ?? "",
                     status: status,
+                    // Availability is live execution state, not configurability. Let users
+                    // prepare a shortcut while an interactive action is temporarily unavailable.
                     canAssign: action.definition.capabilities.contains(.foregroundInteractive)
                 )
             }

@@ -1,5 +1,6 @@
 @preconcurrency import ApplicationServices
 import AppKit
+import Carbon.HIToolbox
 import Foundation
 
 struct ClipboardSnippetKeywordMatch: Equatable, Sendable {
@@ -120,8 +121,13 @@ struct ClipboardSnippetKeywordInputState: Sendable {
         keyCode: UInt16,
         modifiers: NSEvent.ModifierFlags,
         processIdentifier: pid_t,
+        isSecureEventInputEnabled: () -> Bool = { false },
         classifyEditor: (pid_t) -> ClipboardSnippetSecureTextClassification
     ) -> ClipboardSnippetKeywordMatch? {
+        guard !isSecureEventInputEnabled() else {
+            reset()
+            return nil
+        }
         let flags = modifiers.intersection(.deviceIndependentFlagsMask)
         if flags.contains(.command) || flags.contains(.control) || keyCode == 48 {
             reset()
@@ -425,6 +431,7 @@ final class ClipboardSnippetKeywordExpander {
             keyCode: keyCode,
             modifiers: NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)),
             processIdentifier: processIdentifier,
+            isSecureEventInputEnabled: { IsSecureEventInputEnabled() },
             classifyEditor: focusedEditorClassification
         ) else {
             return Unmanaged.passUnretained(event)

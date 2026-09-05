@@ -715,8 +715,8 @@ final class ClipboardHistoryPlugin:
             subtitle = localization.format(
                 "panel.status.count",
                 defaultValue: "%d history items · %d saved",
-                controller.historyItems.count,
-                controller.savedItems.count + savedLibraryController.items.count
+                controller.historyItemCount,
+                controller.savedItemCount + savedLibraryController.items.count
             )
         }
         return PluginPanelState(

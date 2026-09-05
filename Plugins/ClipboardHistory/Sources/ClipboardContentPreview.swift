@@ -41,6 +41,22 @@ enum ClipboardFilePreviewResult: @unchecked Sendable {
     case failed
 }
 
+/// Quick Look requires the exact request instance to cancel in-flight generation.
+/// The request is immutable after construction and this handle only forwards it
+/// to Quick Look's cancellation API, so crossing the cancellation-handler boundary
+/// is safe without weakening concurrency checks for the entire framework import.
+private final class ClipboardQuickLookRequestHandle: @unchecked Sendable {
+    let request: QLThumbnailGenerator.Request
+
+    init(_ request: QLThumbnailGenerator.Request) {
+        self.request = request
+    }
+
+    func cancel() {
+        QLThumbnailGenerator.shared.cancel(request)
+    }
+}
+
 enum ClipboardFilePreviewLoader {
     @MainActor
     static func load(
@@ -52,6 +68,7 @@ enum ClipboardFilePreviewLoader {
             fileAt: url, size: CGSize(width: 900, height: 650), scale: scale,
             representationTypes: .thumbnail
         )
+        let requestHandle = ClipboardQuickLookRequestHandle(request)
         return await withTaskCancellationHandler {
             do {
                 let image: NSImage
@@ -68,7 +85,7 @@ enum ClipboardFilePreviewLoader {
                 return exists ? .failed : .missing
             }
         } onCancel: {
-            QLThumbnailGenerator.shared.cancel(request)
+            requestHandle.cancel()
         }
     }
 }

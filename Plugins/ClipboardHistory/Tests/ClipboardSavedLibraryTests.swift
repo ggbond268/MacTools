@@ -634,6 +634,29 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         }
     }
 
+    func testKeywordInputStateFailsClosedWhileSecureEventInputIsEnabled() {
+        var state = ClipboardSnippetKeywordInputState()
+        state.snippetsByKeyword = [";bb": UUID()]
+        var classificationCount = 0
+
+        for character in ";bb" {
+            XCTAssertNil(state.consume(
+                text: String(character),
+                keyCode: 0,
+                modifiers: [],
+                processIdentifier: 42,
+                isSecureEventInputEnabled: { true },
+                classifyEditor: { _ in
+                    classificationCount += 1
+                    return .nonSecure
+                }
+            ))
+        }
+
+        XCTAssertEqual(classificationCount, 0)
+        XCTAssertEqual(state.bufferedTextForTesting, "")
+    }
+
     func testKeywordInputStateRevalidatesFocusAndUsesPassiveTap() {
         var state = ClipboardSnippetKeywordInputState()
         let itemID = UUID()

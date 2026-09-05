@@ -14,6 +14,7 @@ PLUGIN_RELEASE_WORKFLOW = REPO_ROOT / ".github/workflows/plugin-release.yml"
 MAKEFILE = REPO_ROOT / "Makefile"
 ACTION_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/ActionModels.swift"
 COMPONENT_THEME_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginComponentTheme.swift"
+PLUGIN_PALETTE_COMPONENTS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginPaletteComponents.swift"
 PLUGIN_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginModels.swift"
 PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swift"
 PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
@@ -111,6 +112,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginPaletteSearchToolbar": "1.3.0",
     "PluginPaletteSurface": "1.3.0",
     "PluginPaletteSelectableRowModifier": "1.3.0",
+    "pluginPaletteSelectableRow": "1.3.0",
     "PluginPaletteToolbarControlStyle": "1.3.0",
     "PluginPaletteKeyboardHint": "1.3.0",
     "PluginPaletteFooter": "1.3.0",
@@ -141,6 +143,29 @@ def public_top_level_type_names(source: str) -> set[str]:
         source,
         flags=re.MULTILINE,
     ))
+
+
+def public_extension_function_names(source: str, extended_type: str) -> set[str]:
+    names: set[str] = set()
+    depth = 0
+    inside_extension = False
+    extension_pattern = re.compile(
+        rf"^public\s+extension\s+{re.escape(extended_type)}\s*\{{"
+    )
+    for line in source.splitlines():
+        if not inside_extension:
+            if extension_pattern.search(line):
+                inside_extension = True
+                depth = line.count("{") - line.count("}")
+            continue
+        if depth == 1:
+            match = re.match(r"^\s*func\s+([A-Za-z_][A-Za-z0-9_]*)", line)
+            if match is not None:
+                names.add(match.group(1))
+        depth += line.count("{") - line.count("}")
+        if depth == 0:
+            inside_extension = False
+    return names
 
 
 def minimum_host_violations(plugin_id: str, declared: str, source: str) -> list[str]:
@@ -323,6 +348,25 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             used_symbols - NEW_API_MINIMUM_HOSTS.keys(),
             set(),
             "Public component-theme types used by plugins must declare their minimum host",
+        )
+
+    def test_palette_inventory_covers_every_public_api_used_by_plugins(self) -> None:
+        source = PLUGIN_PALETTE_COMPONENTS.read_text(encoding="utf-8")
+        palette_symbols = public_top_level_type_names(source)
+        palette_symbols |= public_extension_function_names(source, "View")
+        plugin_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(PLUGINS_ROOT.glob("*/Sources/**/*.swift"))
+        )
+        used_symbols = {
+            symbol
+            for symbol in palette_symbols
+            if source_uses_symbol(plugin_source, symbol)
+        }
+        self.assertEqual(
+            used_symbols - NEW_API_MINIMUM_HOSTS.keys(),
+            set(),
+            "Public palette APIs used by plugins must declare their minimum host",
         )
 
     def test_clipboard_shortcut_extension_apis_require_host_1_3(self) -> None:

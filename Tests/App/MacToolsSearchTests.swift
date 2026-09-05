@@ -828,7 +828,7 @@ final class MacToolsSearchTests: XCTestCase {
             PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)),
                 hasMarkedText: false,
-                modifierFlags: .command,
+                modifierFlags: [],
                 alternateSubmitModifier: .command
             ),
             .alternateSubmit

@@ -1,7 +1,12 @@
 import AppKit
 import Combine
-import SwiftUI
 import MacToolsPluginKit
+import SwiftUI
+
+private var unifiedSearchSelectedRowTextColor: Color {
+    // This is the list/table foreground paired with selectedContentBackgroundColor.
+    Color(nsColor: .alternateSelectedControlTextColor)
+}
 
 enum UnifiedSearchPaletteLayout {
     static let maximumWidth: CGFloat = 672
@@ -728,7 +733,7 @@ struct UnifiedSearchPaletteView: View {
                 HStack(spacing: PluginPaletteMetrics.rowContentSpacing) {
                     Image(systemName: PluginSystemImage.resolvedName(result.systemImage))
                         .frame(width: PluginPaletteMetrics.rowIconWidth)
-                        .foregroundStyle(isSelected ? Color.white : Color.accentColor)
+                        .foregroundStyle(isSelected ? unifiedSearchSelectedRowTextColor : Color.accentColor)
 
                     VStack(
                         alignment: .leading,
@@ -736,14 +741,14 @@ struct UnifiedSearchPaletteView: View {
                     ) {
                         Text(result.title)
                             .font(PluginSettingsTheme.Typography.rowTitle)
-                            .foregroundStyle(isSelected ? Color.white : Color.primary)
+                            .foregroundStyle(isSelected ? unifiedSearchSelectedRowTextColor : Color.primary)
                             .lineLimit(1)
 
                         Text(result.subtitle)
                             .font(UnifiedSearchResultRowLayout.subtitleFont)
                             .foregroundStyle(
                                 isSelected
-                                    ? Color.white.opacity(
+                                    ? unifiedSearchSelectedRowTextColor.opacity(
                                         UnifiedSearchResultRowLayout.selectedSubtitleOpacity
                                     )
                                     : Color.secondary
@@ -754,7 +759,9 @@ struct UnifiedSearchPaletteView: View {
 
                     Text(quickSelectionNumber.map { "⌘\($0)" } ?? "")
                         .font(PluginSettingsTheme.Typography.statusBadge)
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.78) : Color.secondary)
+                        .foregroundStyle(
+                            isSelected ? unifiedSearchSelectedRowTextColor.opacity(0.78) : Color.secondary
+                        )
                         .frame(
                             width: UnifiedSearchResultRowLayout.quickSelectionColumnWidth,
                             alignment: .trailing
@@ -763,14 +770,14 @@ struct UnifiedSearchPaletteView: View {
 
                     Text(result.kind.actionTitle)
                         .font(PluginSettingsTheme.Typography.statusBadge)
-                        .foregroundStyle(isSelected ? Color.white : Color.accentColor)
+                        .foregroundStyle(isSelected ? unifiedSearchSelectedRowTextColor : Color.accentColor)
                         .frame(width: UnifiedSearchResultRowLayout.primaryActionColumnWidth)
                         .padding(.vertical, 3)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(
                                     isSelected
-                                        ? Color.white.opacity(0.16)
+                                        ? unifiedSearchSelectedRowTextColor.opacity(0.16)
                                         : Color.accentColor.opacity(0.1)
                                 )
                         )
@@ -789,7 +796,7 @@ struct UnifiedSearchPaletteView: View {
                     Spacer(minLength: 42)
                     shortcutControls(for: result, isSelected: isSelected)
                 }
-                .tint(Color.white)
+                .tint(unifiedSearchSelectedRowTextColor)
             }
         }
         .pluginPaletteSelectableRow(isSelected: isSelected)
@@ -848,7 +855,9 @@ struct UnifiedSearchPaletteView: View {
                     Image(systemName: "xmark.circle.fill")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(isSelected ? Color.white.opacity(0.9) : Color.secondary)
+                .foregroundStyle(
+                    isSelected ? unifiedSearchSelectedRowTextColor.opacity(0.9) : Color.secondary
+                )
                 .help(FeatureL10n.string("清除快捷键"))
             }
 
@@ -864,7 +873,9 @@ struct UnifiedSearchPaletteView: View {
                     Image(systemName: "gearshape")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(isSelected ? Color.white.opacity(0.9) : Color.secondary)
+                .foregroundStyle(
+                    isSelected ? unifiedSearchSelectedRowTextColor.opacity(0.9) : Color.secondary
+                )
                 .help(FeatureL10n.string("打开所属功能的设置"))
                 .accessibilityLabel(FeatureL10n.string("打开所属功能的设置"))
             }

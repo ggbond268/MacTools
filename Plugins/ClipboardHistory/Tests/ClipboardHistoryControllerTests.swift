@@ -6,6 +6,32 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryControllerTests: XCTestCase {
+    func testCollectionSummaryTracksHistoryAndSavedMembership() async throws {
+        let fixture = makeFixture()
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+
+        XCTAssertEqual(fixture.controller.historyItemCount, 0)
+        XCTAssertEqual(fixture.controller.savedItemCount, 0)
+
+        fixture.pasteboard.simulateCopy("captured")
+        fixture.controller.processPasteboardChange()
+        let capturedID = try XCTUnwrap(fixture.controller.items.first?.id)
+        XCTAssertEqual(fixture.controller.historyItemCount, 1)
+        XCTAssertEqual(fixture.controller.savedItemCount, 0)
+
+        let didSave = await fixture.controller.toggleSaved(id: capturedID)
+        XCTAssertTrue(didSave)
+        XCTAssertEqual(fixture.controller.historyItemCount, 1)
+        XCTAssertEqual(fixture.controller.savedItemCount, 1)
+
+        let didClear = await fixture.controller.clearAllHistory()
+        XCTAssertTrue(didClear)
+        XCTAssertEqual(fixture.controller.historyItemCount, 0)
+        XCTAssertEqual(fixture.controller.savedItemCount, 1)
+        fixture.controller.stop()
+    }
+
     func testCommittedItemUpdatesPatchPanelAndDeletionStillReconciles() async throws {
         let fixture = makeFixture(initialItems: [item(text: "First", pinned: false), item(text: "Second", pinned: false)])
         fixture.controller.start()
