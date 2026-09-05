@@ -106,38 +106,60 @@ struct ClipboardColorSwatchView: View {
     }
 }
 
+enum ClipboardNativeColorPreviewResult: Sendable {
+    case value(ClipboardColorValue)
+    case unsupported
+    case failed
+}
+
+enum ClipboardNativeColorPreviewLoader {
+    static func load(item: ClipboardHistoryItem) async -> ClipboardNativeColorPreviewResult {
+        let worker = Task.detached(priority: .utility) {
+            defer { item.discardCachedPayloadIfReloadable() }
+            guard !Task.isCancelled else { return ClipboardNativeColorPreviewResult.failed }
+            guard item.payloadByteCount <= 1_024 * 1_024 else { return .unsupported }
+            guard let payload = try? item.loadPayload(), !Task.isCancelled else { return .failed }
+            guard let data = payload.representations.first(where: {
+                $0.typeIdentifier == ClipboardRepresentationType.color
+            })?.data else { return .unsupported }
+            guard let value = ClipboardColorValue.decodeNative(data), !Task.isCancelled else { return .failed }
+            return .value(value)
+        }
+        return await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: { worker.cancel() }
+    }
+}
+
 struct ClipboardNativeColorPreviewView: View {
     let item: ClipboardHistoryItem
     let localization: PluginLocalization
-    @State private var value: ClipboardColorValue?
-    @State private var isLoading = true
+    var resetID: UInt = 0
+    var isActive = true
+    @State private var result: ClipboardNativeColorPreviewResult?
+    @State private var retryID: UInt = 0
 
     var body: some View {
         Group {
-            if let value {
+            switch result {
+            case let .value(value):
                 ClipboardColorSwatchView(value: value, localization: localization)
-            } else if isLoading {
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 160)
-            } else {
-                Label(localization.string("content.kind.color", defaultValue: "颜色"), systemImage: "paintpalette")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 160)
+            case .unsupported:
+                ClipboardPreviewUnavailableView(localization: localization, isUnsupported: true)
+            case .failed:
+                ClipboardPreviewUnavailableView(localization: localization, retry: { retryID &+= 1 })
+            case nil:
+                ProgressView(localization.string("panel.preview.loading", defaultValue: "正在载入预览…"))
+                    .controlSize(.small).frame(maxWidth: .infinity, minHeight: 160)
             }
         }
-        .task(id: item.id) {
-            value = nil
-            isLoading = true
-            let loaded = await Task.detached(priority: .utility) {
-                guard item.payloadByteCount <= 1_024 * 1_024,
-                      let payload = try? item.loadPayload(),
-                      let data = payload.representations.first(where: {
-                          $0.typeIdentifier == ClipboardRepresentationType.color
-                      })?.data else { return Optional<ClipboardColorValue>.none }
-                return ClipboardColorValue.decodeNative(data)
-            }.value
+        .task(id: ClipboardPreviewRequestID(key: ClipboardEmbeddedPreviewKey(item), retry: retryID,
+                                            presentation: resetID, isActive: isActive)) {
+            result = nil
+            guard isActive else { return }
+            let loaded = await ClipboardNativeColorPreviewLoader.load(item: item)
             guard !Task.isCancelled else { return }
-            value = loaded
-            isLoading = false
+            result = loaded
         }
     }
 }

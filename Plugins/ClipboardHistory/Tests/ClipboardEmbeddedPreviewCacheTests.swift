@@ -31,6 +31,14 @@ final class ClipboardEmbeddedPreviewCacheTests: XCTestCase {
         XCTAssertEqual(preview.representations.first?.pixelsHigh, 1_200)
         XCTAssertEqual(cache.totalCost, 1_600 * 1_200 * 8)
         XCTAssertEqual(decodes, 1)
+        let alternate = ClipboardHistoryItem(id: UUID(), payload: .init(pasteboardItems: [
+            .init(representations: [
+                .init(typeIdentifier: ClipboardRepresentationType.tiff, data: Data([0])),
+                .init(typeIdentifier: ClipboardRepresentationType.png, data: png as Data),
+            ])
+        ]), capturedAt: .now, sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        let recovered = await ClipboardEmbeddedPreviewLoader.loadResult(for: alternate)
+        XCTAssertNotNil(recovered.image, "An unreadable first representation must not hide a valid alternative")
     }
 
     func testRevisitReusesPreviewButPayloadChangeDoesNot() async {
@@ -131,6 +139,69 @@ final class ClipboardEmbeddedPreviewCacheTests: XCTestCase {
         _ = await cache.image(for: clip)
         _ = await cache.image(for: clip)
         XCTAssertEqual(attempts, 2)
+    }
+
+    func testFailureIsExplicitAndRetryCanProduceAnImage() async {
+        var attempts = 0
+        let cache = ClipboardEmbeddedPreviewCache { _ in
+            attempts += 1
+            return attempts == 1 ? nil : NSImage(size: NSSize(width: 10, height: 10))
+        }
+        let presentation = ClipboardEmbeddedPreviewPresentation()
+        if case .loading = presentation.state {} else { XCTFail("Initial state must show loading") }
+        let clip = item("retry")
+        await presentation.load(clip, cache: cache)
+        if case .failed(.decodingFailed) = presentation.state {} else { XCTFail("Failure must be explicit") }
+        await presentation.load(clip, cache: cache)
+        if case .ready = presentation.state {} else { XCTFail("Retry must replace the error with a preview") }
+        XCTAssertEqual(attempts, 2)
+    }
+
+    func testLoadingIsVisibleUntilCompletionAndResetRejectsLateImage() async {
+        let gate = PreviewGate()
+        let cache = ClipboardEmbeddedPreviewCache { _ in await gate.load() }
+        let presentation = ClipboardEmbeddedPreviewPresentation()
+        let clip = item("pending")
+        let request = Task { await presentation.load(clip, cache: cache) }
+        await gate.waitForStart()
+        if case .loading = presentation.state {} else { XCTFail("A pending read must show loading") }
+        presentation.reset()
+        cache.cancelPendingLoads()
+        gate.resume()
+        await request.value
+        if case .loading = presentation.state {} else { XCTFail("Closed previews must reject late results") }
+        XCTAssertEqual(cache.count, 0)
+    }
+
+    func testOrdinaryCloseRetainsCompletedPreviewButDeletionEvictsIt() async {
+        var reads = 0
+        let cache = ClipboardEmbeddedPreviewCache { _ in
+            reads += 1
+            return NSImage(size: NSSize(width: 10, height: 10))
+        }
+        let clip = item("reopen")
+        _ = await cache.image(for: clip)
+        cache.cancelPendingLoads()
+        _ = await cache.image(for: clip)
+        XCTAssertEqual(reads, 1)
+        cache.retain { $0.itemID != clip.id }
+        XCTAssertNil(cache.cachedImage(for: clip))
+        XCTAssertEqual(cache.totalCost, 0)
+    }
+
+    func testDecodeFailureAndUnsupportedFormatHaveDifferentReasons() async {
+        let unsupported = await ClipboardEmbeddedPreviewLoader.loadResult(for: item("text"))
+        XCTAssertNil(unsupported.image)
+        if case .unsupportedRepresentation = unsupported.failure {} else { XCTFail("Missing representation must remain distinguishable") }
+        let invalidImage = ClipboardHistoryItem(id: UUID(), payload: .init(pasteboardItems: [
+            .init(representations: [.init(typeIdentifier: ClipboardRepresentationType.png, data: Data([0]))])
+        ]), capturedAt: .now, sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        let result = await ClipboardEmbeddedPreviewLoader.loadResult(for: invalidImage)
+        XCTAssertNil(result.image)
+        if case .decodingFailed = result.failure {} else { XCTFail("Corrupt image must report decoding failure") }
+        invalidImage.configurePayloadLoader({ throw CocoaError(.fileReadNoSuchFile) }, discardCachedPayload: true)
+        let unreadable = await ClipboardEmbeddedPreviewLoader.loadResult(for: invalidImage)
+        if case .payloadUnavailable = unreadable.failure {} else { XCTFail("Storage failure must remain distinguishable from decoding failure") }
     }
 
     private func item(_ text: String, id: UUID = UUID()) -> ClipboardHistoryItem {

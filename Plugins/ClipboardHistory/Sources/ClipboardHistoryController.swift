@@ -603,10 +603,12 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         let revision: UInt64
         /// Nil requests full reconciliation (load, deletion, retention or recovery).
         let changedIDs: Set<UUID>?
+        var changes: [ClipboardHistoryMutation.Change]? = nil
     }
 
     let itemUpdates = PassthroughSubject<ItemsUpdate, Never>()
     private var publicationChangedIDs: Set<UUID>?
+    private var publicationChanges: [ClipboardHistoryMutation.Change]?
     private(set) var presentationRevision: UInt64 = 0
     @Published private(set) var items: [ClipboardHistoryItem] = [] {
         didSet {
@@ -614,7 +616,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             itemUpdates.send(ItemsUpdate(
                 items: items,
                 revision: presentationRevision,
-                changedIDs: publicationChangedIDs
+                changedIDs: publicationChangedIDs,
+                changes: publicationChanges
             ))
         }
     }
@@ -1256,7 +1259,13 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         guard updated != items else {
             return
         }
+        // A capture with no eviction changes exactly one identity, even when it
+        // moves an existing clip to the front. Avoid diffing every unchanged row.
+        publicationChanges = retention.evictedItemCount == 0
+            ? [.init(id: item.id, before: items.first(where: { $0.id == item.id }), after: item)]
+            : nil
         items = updated
+        publicationChanges = nil
         isCaptureBlockedByProtectedItems = retention.isCaptureBlockedByProtectedItems
         if pasteboard.changeCount == currentChangeCount,
            updated.contains(where: { $0.id == item.id }) {

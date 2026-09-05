@@ -62,6 +62,7 @@ enum ClipboardRichTextPreviewResult: Sendable {
     case formatted(AttributedString)
     case plainText(String, isSimplified: Bool)
     case unavailable
+    case fallback(String, isTruncated: Bool)
 }
 
 enum ClipboardRichTextPreviewLoader {
@@ -71,11 +72,15 @@ enum ClipboardRichTextPreviewLoader {
     ) async -> ClipboardRichTextPreviewResult {
         let worker = Task.detached(priority: .userInitiated) {
             defer { item.discardCachedPayloadIfReloadable() }
-            guard !Task.isCancelled,
-                  let payload = try? item.loadPayload(),
-                  !Task.isCancelled else {
-                return ClipboardRichTextPreviewResult.unavailable
+            guard !Task.isCancelled else { return ClipboardRichTextPreviewResult.unavailable }
+            let payload: ClipboardHistoryPayload
+            do { payload = try item.loadPayload() }
+            catch {
+                guard !Task.isCancelled, !fallbackText.isEmpty else { return .unavailable }
+                let bounded = ClipboardRichTextPreviewPolicy.boundedPlainText(fallbackText)
+                return .fallback(bounded.text, isTruncated: item.isSearchTextTruncated || bounded.wasTruncated)
             }
+            guard !Task.isCancelled else { return .unavailable }
             return ClipboardRichTextPreviewPolicy.makePreview(
                 payload: payload,
                 fallbackText: fallbackText
@@ -104,7 +109,9 @@ enum ClipboardRichTextPreviewPolicy {
             return simplifiedPreview(for: fallbackText)
         }
         guard let imported = ClipboardRichText.attributedString(for: payload) else {
-            return simplifiedPreview(for: fallbackText)
+            guard !fallbackText.isEmpty else { return .unavailable }
+            let bounded = boundedPlainText(fallbackText)
+            return .fallback(bounded.text, isTruncated: bounded.wasTruncated)
         }
         guard imported.length <= maximumFormattedCharacterCount,
               let formatted = try? AttributedString(imported, including: \.appKit) else {

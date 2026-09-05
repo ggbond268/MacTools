@@ -1472,7 +1472,7 @@ final class ClipboardHistoryPlugin:
         }
         sequentialPasteCoordinator.resetImplicitQueueForExternalCopy()
         synchronizeSequentialPasteProtection()
-        panelController.close(restorePreviousApplication: false)
+        panelController.close(restorePreviousApplication: false, discardsPreviews: true)
         privacyHUDPresenter.dismiss()
         sequentialHUDPreviewTask?.cancel()
         sequentialHUDPreviewTask = nil

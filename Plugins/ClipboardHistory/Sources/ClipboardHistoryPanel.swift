@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import ImageIO
 import MacToolsPluginKit
 import QuickLookThumbnailing
@@ -276,8 +277,16 @@ enum ClipboardHistoryRowHitTesting {
     }
 }
 
+enum ClipboardEmbeddedPreviewFailure: Sendable {
+    case payloadUnavailable
+    case unsupportedRepresentation
+    case decodingFailed
+    case cancelled
+}
+
 struct ClipboardEmbeddedPreviewResult: @unchecked Sendable {
     let image: NSImage?
+    var failure: ClipboardEmbeddedPreviewFailure = .decodingFailed
 }
 
 enum ClipboardEmbeddedPreviewPolicy {
@@ -451,29 +460,36 @@ private actor ClipboardEmbeddedPreviewDecodeGate {
 
     func load(for item: ClipboardHistoryItem) -> ClipboardEmbeddedPreviewResult {
         defer { item.discardCachedPayloadIfReloadable() }
-        guard !Task.isCancelled,
-              let payload = try? item.loadPayload(),
-              !Task.isCancelled,
-              let representation = payload.representations.first(where: {
-                  ClipboardRepresentationType.isImage($0.typeIdentifier)
-                      || $0.typeIdentifier == ClipboardRepresentationType.pdf
-              }) else {
-            return ClipboardEmbeddedPreviewResult(image: nil)
+        guard !Task.isCancelled else { return .init(image: nil, failure: .cancelled) }
+        let payload: ClipboardHistoryPayload
+        do { payload = try item.loadPayload() }
+        catch { return .init(image: nil, failure: .payloadUnavailable) }
+        guard !Task.isCancelled else { return .init(image: nil, failure: .cancelled) }
+        let representations = payload.representations.filter {
+            ClipboardRepresentationType.isImage($0.typeIdentifier)
+                || $0.typeIdentifier == ClipboardRepresentationType.pdf
         }
-        let image: NSImage?
-        if representation.typeIdentifier == ClipboardRepresentationType.pdf {
-            image = ClipboardEmbeddedPreviewPolicy.pdfThumbnail(from: representation.data)
-        } else {
-            image = ClipboardEmbeddedPreviewPolicy.imageThumbnail(from: representation.data)
+        guard !representations.isEmpty else { return .init(image: nil, failure: .unsupportedRepresentation) }
+        // Some applications supply multiple representations, including an unreadable
+        // preferred format. Try the other captured formats before declaring failure.
+        for representation in representations {
+            guard !Task.isCancelled else { return .init(image: nil, failure: .cancelled) }
+            let image = representation.typeIdentifier == ClipboardRepresentationType.pdf
+                ? ClipboardEmbeddedPreviewPolicy.pdfThumbnail(from: representation.data)
+                : ClipboardEmbeddedPreviewPolicy.imageThumbnail(from: representation.data)
+            if let image { return .init(image: Task.isCancelled ? nil : image) }
         }
-        return ClipboardEmbeddedPreviewResult(image: Task.isCancelled ? nil : image)
+        return .init(image: nil, failure: .decodingFailed)
     }
 }
 
 enum ClipboardEmbeddedPreviewLoader {
     static func load(for item: ClipboardHistoryItem) async -> NSImage? {
-        let result = await ClipboardEmbeddedPreviewDecodeGate.shared.load(for: item)
-        return result.image
+        await loadResult(for: item).image
+    }
+
+    static func loadResult(for item: ClipboardHistoryItem) async -> ClipboardEmbeddedPreviewResult {
+        await ClipboardEmbeddedPreviewDecodeGate.shared.load(for: item)
     }
 }
 
@@ -630,6 +646,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     private var filterRefreshGeneration: UInt64 = 0
     private let searchProgressDelayNanoseconds: UInt64
     private var initialPage: InitialPage?
+    private var presentationIndex: ClipboardPanelPresentationIndex?
     private var currentHistoryRevision: UInt64 = 0
     private var currentSavedRevision: UInt64 = 0
     private let presentationPreparationCheckpointForTesting: (@Sendable () -> Void)?
@@ -649,6 +666,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     }
 
     private struct PresentationPreparationSnapshot: Sendable {
+        let index: ClipboardPanelPresentationIndex
         let itemIndexByID: [UUID: Int]
         let historyItemCount: Int
         let availableClipItemIDs: Set<UUID>
@@ -682,7 +700,8 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     func updateItems(
         _ items: [ClipboardHistoryItem],
         revision: UInt64? = nil,
-        changedIDs: Set<UUID>? = nil
+        changedIDs: Set<UUID>? = nil,
+        knownChanges: [ClipboardHistoryMutation.Change]? = nil
     ) {
         if let revision {
             guard revision != currentHistoryRevision else { return }
@@ -695,7 +714,9 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let hasKnownPositions = items.count == allItems.count && changedIDs?.allSatisfy({ id in
                itemIndexByID[id].map { items.indices.contains($0) && items[$0].id == id } == true
            }) == true
-        if let changedIDs, hasKnownPositions {
+        if let knownChanges {
+            changes = knownChanges
+        } else if let changedIDs, hasKnownPositions {
             changes = changedIDs.compactMap { id in
                 guard let index = itemIndexByID[id], allItems[index] != items[index] else { return nil }
                 return .init(id: id, before: allItems[index], after: items[index])
@@ -713,7 +734,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             }
             return
         }
-        initialPage = nil
+        for change in changes { presentationIndex?.update(change.after, id: change.id) }
         currentHistoryRevision = revision ?? (currentHistoryRevision &+ 1)
         let structural = changes.contains { $0.before == nil || $0.after == nil || $0.before?.capturedAt != $0.after?.capturedAt }
             || (!hasKnownPositions && !zip(allItems, items).allSatisfy { $0.0.id == $0.1.id })
@@ -739,6 +760,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 rebuildSelectionIndex()
             }
         }
+        refreshInitialPage()
         let removedIDs = Set(changes.lazy.filter { $0.after == nil }.map(\.id))
         let changedByID = Dictionary(uniqueKeysWithValues: changes.compactMap { change in
             change.after.map { (change.id, $0) }
@@ -802,7 +824,13 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         currentSavedRevision = revision ?? (currentSavedRevision &+ 1)
         let previousByID = Dictionary(uniqueKeysWithValues: allSavedItems.map { ($0.id, $0) })
         let changedItems = items.filter { previousByID[$0.id] != $0 }
+        let nextSavedIDs = Set(items.map(\.id))
+        for removed in allSavedItems where !nextSavedIDs.contains(removed.id) {
+            presentationIndex?.updateSnippet(nil, id: removed.id)
+        }
+        for item in changedItems { presentationIndex?.updateSnippet(item, id: item.id) }
         allSavedItems = items
+        refreshInitialPage()
         savedItemByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         availableSnippetIDs = Set(items.lazy.filter(\.isSnippet).map(\.id))
         appendAvailableFilterOptions(for: changedItems.lazy.filter(\.isSnippet).map {
@@ -878,6 +906,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         savedItemByID = Dictionary(uniqueKeysWithValues: savedItems.map { ($0.id, $0) })
         currentHistoryRevision = historyRevision ?? (currentHistoryRevision &+ 1)
         currentSavedRevision = savedRevision ?? (currentSavedRevision &+ 1)
+        presentationIndex = preparation.index
         itemIndexByID = preparation.itemIndexByID
         historyItemCount = preparation.historyItemCount
         availableClipItemIDs = preparation.availableClipItemIDs
@@ -1024,6 +1053,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let previousFamily = selectedFilterFamily
         updateItems(items, revision: historyRevision)
         updateSavedItems(savedItems, revision: savedRevision)
+        if let index = presentationIndex {
+            applyReactivatedFilterAvailability(index, previousFamily: previousFamily)
+            return
+        }
         filterRefreshTask?.cancel()
         filterRefreshGeneration &+= 1
         let generation = filterRefreshGeneration
@@ -1049,7 +1082,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                   preparedHistoryRevision == self.currentHistoryRevision,
                   preparedSavedRevision == self.currentSavedRevision else { return }
             self.applyReactivatedFilterAvailability(
-                preparation,
+                preparation.index,
                 previousFamily: previousFamily
             )
             self.filterRefreshTask = nil
@@ -1058,7 +1091,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     }
 
     private func applyReactivatedFilterAvailability(
-        _ preparation: PresentationPreparationSnapshot,
+        _ preparation: ClipboardPanelPresentationIndex,
         previousFamily: ClipboardHistoryFilterFamily
     ) {
         applyFilterAvailability(preparation)
@@ -1453,6 +1486,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         items: [ClipboardHistoryItem],
         savedItems: [ClipboardSavedItem]
     ) {
+        if let index = presentationIndex {
+            applyFilterAvailability(index)
+            return
+        }
         // Snapshot per active interaction. Background changes must not move the toolbar;
         // opening or returning from another app refreshes these choices.
         guard let preparation = Self.preparePresentationSnapshot(
@@ -1460,6 +1497,16 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             savedItems: savedItems
         ) else { return }
         applyFilterAvailability(preparation)
+    }
+
+    private func applyFilterAvailability(_ index: ClipboardPanelPresentationIndex) {
+        availableScopeModes = index.scopeModes
+        availableContentFilters = index.contentFilters
+        availableSemanticFilters = index.semanticFilters
+        availableFilterFamilies = index.filterFamilies
+        selectedFilterFamily = ClipboardHistoryFilterFamily.resolvedSelection(
+            current: .scope, available: index.filterFamilies
+        ) ?? .scope
     }
 
     private func applyFilterAvailability(_ snapshot: PresentationPreparationSnapshot) {
@@ -1523,6 +1570,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         allItems = items
         allSavedItems = savedItems
         savedItemByID = Dictionary(uniqueKeysWithValues: savedItems.map { ($0.id, $0) })
+        presentationIndex = preparation.index
         itemIndexByID = preparation.itemIndexByID
         historyItemCount = preparation.historyItemCount
         availableClipItemIDs = preparation.availableClipItemIDs
@@ -1631,6 +1679,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         )
         guard !cancelsWhenTaskIsCancelled || !Task.isCancelled else { return nil }
         return PresentationPreparationSnapshot(
+            index: ClipboardPanelPresentationIndex(items: items, savedItems: savedItems),
             itemIndexByID: itemIndexByID,
             historyItemCount: historyItemCount,
             availableClipItemIDs: availableClipItemIDs,
@@ -1660,8 +1709,49 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         return selectedItemID
     }
 
+    private func refreshInitialPage() {
+        guard let index = presentationIndex else { initialPage = nil; return }
+        let initialMode = index.scopeModes.first ?? .history
+        let page = index.page(in: initialMode, limit: Self.resultPageSize)
+        initialPage = InitialPage(
+            historyRevision: currentHistoryRevision, savedRevision: currentSavedRevision,
+            mode: initialMode, items: page.map(\.item),
+            snippetIDs: Set(page.filter(\.isSnippet).map { $0.item.id }),
+            hasMore: index.count(in: initialMode) > page.count,
+            selectedItemID: page.first?.item.id, scopeModes: index.scopeModes,
+            contentFilters: index.contentFilters, semanticFilters: index.semanticFilters,
+            filterFamilies: index.filterFamilies
+        )
+    }
+
     private func scheduleSearch(debounced: Bool, cachesInitialPage: Bool = false) {
         guard !isPreparingPresentation else { return }
+        if query.isEmpty, contentFilter == .all, semanticFilter == .any,
+           let index = presentationIndex {
+            searchGeneration &+= 1
+            searchTask?.cancel()
+            searchProgressTask?.cancel()
+            let page = index.page(in: mode, limit: visibleResultLimit)
+            var displayed = page.map(\.item)
+            if let anchorID = requestedScrollItemID,
+               !displayed.contains(where: { $0.id == anchorID }),
+               let anchor = item(forPresentationID: anchorID),
+               matchesCurrentSearch(anchor, query: .init("")) {
+                displayed.append(anchor)
+            }
+            if visibleItems != displayed { visibleItems = displayed }
+            let snippetIDs = Set(page.filter(\.isSnippet).map { $0.item.id })
+            if visibleSavedPresentationItemIDs != snippetIDs { visibleSavedPresentationItemIDs = snippetIDs }
+            let hasMore = index.count(in: mode) > page.count
+            if hasMoreResults != hasMore { hasMoreResults = hasMore }
+            if isSearching { isSearching = false }
+            if showsSearchProgress { showsSearchProgress = false }
+            refreshInitialPage()
+            if selectedItemID == nil || !visibleItems.contains(where: { $0.id == selectedItemID }) {
+                selectedItemID = visibleItems.first?.id
+            }
+            return
+        }
         searchGeneration &+= 1
         let generation = searchGeneration
         let items = allItems
@@ -1933,6 +2023,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private let model = ClipboardHistoryPanelModel()
     private var panel: KeyablePanel?
     private let previewCache = ClipboardEmbeddedPreviewCache()
+    private var itemSubscriptions = Set<AnyCancellable>()
     private var keyMonitor: Any?
     private var needsFilterRefreshOnActivation = false
     private var previousApplicationState = ClipboardHistoryPreviousApplicationState<NSRunningApplication>()
@@ -1985,6 +2076,14 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             hudPresenter: hudPresenter
         )
         super.init()
+        historyController.itemUpdates.sink { [weak self] update in
+            guard let self else { return }
+            self.model.updateItems(update.items, revision: update.revision, changedIDs: update.changedIDs, knownChanges: update.changes)
+            self.previewCache.retain(where: self.model.containsPreview)
+        }.store(in: &itemSubscriptions)
+        savedLibraryController.itemUpdates.sink { [weak self] update in
+            self?.model.updateSavedItems(update.items, revision: update.revision)
+        }.store(in: &itemSubscriptions)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(applicationDidResignActive),
@@ -2084,10 +2183,11 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         model.showSnippetScope()
     }
 
-    func close(restorePreviousApplication: Bool = true) {
+    func close(restorePreviousApplication: Bool = true, discardsPreviews: Bool = false) {
         model.cancelPresentationPreparation()
         model.resetPreviewPresentation()
-        previewCache.removeAll()
+        if discardsPreviews { previewCache.removeAll() }
+        else { previewCache.cancelPendingLoads() }
         exportCoordinator.cancel()
         shareCoordinator.cancel()
         combinedExportCoordinator.cancel()
@@ -2106,7 +2206,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         model.resetPreviewPresentation()
-        previewCache.removeAll()
+        previewCache.cancelPendingLoads()
         exportCoordinator.cancel()
         shareCoordinator.cancel()
         combinedExportCoordinator.cancel()
@@ -3130,6 +3230,9 @@ private struct ClipboardRichTextPreviewView: View {
     let item: ClipboardHistoryItem
     let localization: PluginLocalization
 
+    var resetID: UInt = 0
+    var isActive = true
+    @State private var retryID: UInt = 0
     @State private var preview: ClipboardRichTextPreviewResult?
     @State private var usesDarkCanvas = false
 
@@ -3175,14 +3278,23 @@ private struct ClipboardRichTextPreviewView: View {
                         Text(text)
                             .textSelection(.enabled)
                     }
+                case let .some(.fallback(text, isTruncated)):
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label(localization.string("panel.preview.cachedText", defaultValue: "格式预览不可用，显示已保存的文字。"), systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if isTruncated || item.isSearchTextTruncated {
+                            Text(localization.string("panel.preview.shortened", defaultValue: "预览已缩短，原始内容保持完整。"))
+                                .font(.caption)
+                        }
+                        Text(text).textSelection(.enabled)
+                        Button(localization.string("panel.preview.retry", defaultValue: "重试")) { retryID &+= 1 }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
                 case .some(.unavailable):
-                    Label(
-                        localization.string("content.kind.richText", defaultValue: "富文本"),
-                        systemImage: "doc.richtext.fill"
-                    )
-                    .foregroundStyle(.secondary)
+                    ClipboardPreviewUnavailableView(localization: localization, retry: { retryID &+= 1 })
                 case .none:
-                    ProgressView()
+                    ProgressView(localization.string("panel.preview.loading", defaultValue: "正在载入预览…"))
                         .controlSize(.small)
                         .frame(maxWidth: .infinity, minHeight: 80)
                 }
@@ -3200,8 +3312,10 @@ private struct ClipboardRichTextPreviewView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
         }
-        .task(id: item.id) {
+        .task(id: ClipboardPreviewRequestID(key: ClipboardEmbeddedPreviewKey(item), retry: retryID,
+                                            presentation: resetID, isActive: isActive)) {
             preview = nil
+            guard isActive else { return }
             let fallbackText = item.text
             let loadedPreview = await ClipboardRichTextPreviewLoader.load(
                 for: item,
@@ -3312,29 +3426,24 @@ private struct ClipboardFileReferenceRow: View {
 @MainActor
 private struct ClipboardFilePreviewView: View {
     let url: URL
-    let kind: ClipboardFileContentKind
-    let unavailableTitle: String
-
-    @State private var thumbnail: NSImage?
-    @State private var isAvailable: Bool?
-    @State private var didFinishLoading = false
+    let localization: PluginLocalization
+    var resetID: UInt = 0
+    var isActive = true
+    @State private var result: ClipboardFilePreviewResult?
+    @State private var retryID: UInt = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ZStack {
                 Color(nsColor: .underPageBackgroundColor)
-                if let thumbnail {
-                    Image(nsImage: thumbnail)
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
+                switch result {
+                case let .image(image):
+                    Image(nsImage: image).resizable().interpolation(.high).scaledToFit().padding(14)
+                case .missing, .failed:
+                    ClipboardPreviewUnavailableView(localization: localization, retry: { retryID &+= 1 })
                         .padding(14)
-                } else if didFinishLoading {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 48, weight: .light))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ProgressView()
+                case nil:
+                    ProgressView(localization.string("panel.preview.loading", defaultValue: "正在载入预览…"))
                         .controlSize(.small)
                 }
             }
@@ -3344,55 +3453,32 @@ private struct ClipboardFilePreviewView: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
             }
-
             VStack(alignment: .leading, spacing: 3) {
                 Text(url.lastPathComponent)
                     .font(PluginSettingsTheme.Typography.rowTitle)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                    .lineLimit(1).truncationMode(.middle)
                 Text(url.deletingLastPathComponent().path)
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if isAvailable == false {
-                    Label(unavailableTitle, systemImage: "exclamationmark.triangle.fill")
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.orange)
+                    .lineLimit(1).truncationMode(.middle)
+                if case .missing = result {
+                    Label(localization.string("content.file.unavailable", defaultValue: "文件不可用"),
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.orange)
                 }
             }
         }
-        .task(id: url) {
-            thumbnail = nil
-            isAvailable = nil
-            didFinishLoading = false
-
-            async let loadedAvailability = Task.detached(priority: .utility) {
-                FileManager.default.fileExists(atPath: url.path)
-            }.value
-            let request = QLThumbnailGenerator.Request(
-                fileAt: url,
-                size: CGSize(width: 900, height: 650),
-                scale: NSScreen.main?.backingScaleFactor ?? 2,
-                representationTypes: .thumbnail
-            )
-            let representation = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
+        .task(id: ClipboardPreviewRequestID(key: url, retry: retryID,
+                                            presentation: resetID, isActive: isActive)) {
+            result = nil
+            guard isActive else { return }
+            let loaded = await ClipboardFilePreviewLoader.load(url: url, scale: NSScreen.main?.backingScaleFactor ?? 2)
+            // Publish one result after every await; a cancelled request can never
+            // overwrite a newer file's availability or loading state.
             guard !Task.isCancelled else { return }
-            thumbnail = representation?.nsImage
-            isAvailable = await loadedAvailability
-            didFinishLoading = true
+            result = loaded
         }
     }
-
-    private var systemImage: String {
-        switch kind {
-        case .pdf: "doc.richtext"
-        case .image: "photo"
-        case .audio: "waveform"
-        case .video: "play.rectangle"
-        }
-    }
-
 }
 
 @MainActor
@@ -3604,13 +3690,6 @@ private struct ClipboardHistoryPanelView: View {
                 revision: savedLibraryController.presentationRevision
             )
             repairSelection()
-        }
-        .onReceive(controller.itemUpdates) { update in
-            model.updateItems(update.items, revision: update.revision, changedIDs: update.changedIDs)
-            previewCache.retain(where: model.containsPreview)
-        }
-        .onReceive(savedLibraryController.itemUpdates) { update in
-            model.updateSavedItems(update.items, revision: update.revision)
         }
         .onReceive(controller.objectWillChange) { _ in
             Task { @MainActor in
@@ -6144,22 +6223,22 @@ private struct ClipboardHistoryPanelView: View {
             ClipboardEmbeddedPreviewView(
                 item: item,
                 cache: previewCache,
+                loadingTitle: localization.string("panel.preview.loading", defaultValue: "正在载入预览…"),
+                retryTitle: localization.string("panel.preview.retry", defaultValue: "重试"),
                 resetID: model.previewResetRevision,
                 isActive: model.isPreviewPresentationActive
             ) { image in
                 imagePreviewCanvas(image, showsTransparencyGrid: item.kind == .image)
-            } unavailable: {
-                unavailablePreview(item)
+            } unavailable: { failure in
+                failedEmbeddedPreview(failure)
             }
         case .files:
             if let previewFile = previewableFile(item) {
                 ClipboardFilePreviewView(
                     url: previewFile.url,
-                    kind: previewFile.kind,
-                    unavailableTitle: localization.string(
-                        "content.file.unavailable",
-                        defaultValue: "文件不可用"
-                    )
+                    localization: localization,
+                    resetID: model.previewResetRevision,
+                    isActive: model.isPreviewPresentationActive
                 )
             } else {
                 ScrollView {
@@ -6167,6 +6246,14 @@ private struct ClipboardHistoryPanelView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .padding(12)
                 }
+            }
+        case .plainText, .link:
+            if let color = ClipboardColorValue.literal(for: item) {
+                ScrollView { ClipboardColorSwatchView(value: color, localization: localization) }
+            } else {
+                ClipboardTextPreviewView(item: item, localization: localization,
+                    resetID: model.previewResetRevision, isActive: model.isPreviewPresentationActive)
+                    .padding(12)
             }
         default:
             ScrollView {
@@ -6224,6 +6311,8 @@ private struct ClipboardHistoryPanelView: View {
             ClipboardEmbeddedPreviewView(
                 item: item,
                 cache: previewCache,
+                loadingTitle: localization.string("panel.preview.loading", defaultValue: "正在载入预览…"),
+                retryTitle: localization.string("panel.preview.retry", defaultValue: "重试"),
                 resetID: model.previewResetRevision,
                 isActive: model.isPreviewPresentationActive
             ) { image in
@@ -6232,8 +6321,8 @@ private struct ClipboardHistoryPanelView: View {
                     .interpolation(.high)
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } unavailable: {
-                unavailablePreview(item)
+            } unavailable: { failure in
+                failedEmbeddedPreview(failure)
             }
         case .files:
             VStack(alignment: .leading, spacing: 10) {
@@ -6260,23 +6349,39 @@ private struct ClipboardHistoryPanelView: View {
                 }
             }
         case .richText:
-            ClipboardRichTextPreviewView(item: item, localization: localization)
+            ClipboardRichTextPreviewView(item: item, localization: localization,
+                resetID: model.previewResetRevision, isActive: model.isPreviewPresentationActive)
         case .plainText, .link:
-            Text(item.text.isEmpty ? kindTitle(item.kind) : item.text)
-                .font(item.kind == .plainText ? .body.monospaced() : .body)
-                .textSelection(.enabled)
+            ClipboardTextPreviewView(item: item, localization: localization,
+                resetID: model.previewResetRevision, isActive: model.isPreviewPresentationActive)
         case .color:
-            ClipboardNativeColorPreviewView(item: item, localization: localization)
+            ClipboardNativeColorPreviewView(item: item, localization: localization,
+                resetID: model.previewResetRevision, isActive: model.isPreviewPresentationActive)
         case .media:
-            unavailablePreview(item)
+            ClipboardPreviewUnavailableView(localization: localization, isUnsupported: true)
         }
     }
 
-    private func unavailablePreview(_ item: ClipboardHistoryItem) -> some View {
-        Label(kindTitle(item.kind), systemImage: kindSystemImage(item.kind))
-            .font(.title3)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, minHeight: 160)
+    private func failedEmbeddedPreview(_ failure: ClipboardEmbeddedPreviewFailure) -> some View {
+        VStack(spacing: 8) {
+            Label(localization.string("panel.preview.failed", defaultValue: "无法载入预览"),
+                  systemImage: "exclamationmark.triangle")
+            Text(previewFailureDescription(failure))
+                .font(.caption)
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    private func previewFailureDescription(_ failure: ClipboardEmbeddedPreviewFailure) -> String {
+        switch failure {
+        case .payloadUnavailable:
+            localization.string("panel.preview.payloadUnavailable", defaultValue: "无法读取已保存的内容。")
+        case .unsupportedRepresentation:
+            localization.string("panel.preview.unsupported", defaultValue: "此内容没有可用的预览格式。")
+        case .decodingFailed, .cancelled:
+            localization.string("panel.preview.decodeFailed", defaultValue: "无法解码预览，可重试或使用原始内容。")
+        }
     }
 
     private func displayTitle(_ item: ClipboardHistoryItem) -> String {

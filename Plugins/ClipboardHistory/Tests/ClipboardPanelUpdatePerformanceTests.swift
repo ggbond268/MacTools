@@ -359,7 +359,7 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         XCTAssertFalse(model.visibleSavedPresentationItemIDs.contains(staleSnippet.id))
     }
 
-    func testSourceMutationInvalidatesSuspendedReactivationFilterRefresh() async throws {
+    func testReactivationUsesMaintainedFiltersAndAcceptsLaterSourceChanges() async throws {
         let gate = ClipboardPreparationSuspensionGate(initiallyArmed: false)
         var initialItems = makeItems(1)
         initialItems[0].setSavedMetadata(.init(title: "Saved", savedAt: .now))
@@ -385,7 +385,7 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
 
         gate.arm()
         model.refreshFiltersForReactivation(items: initialItems)
-        try await waitUntilPaused(gate)
+        XCTAssertFalse(gate.isPaused, "Reactivation must use maintained counts without starting a collection scan")
 
         let imagePayload = ClipboardHistoryPayload(pasteboardItems: [
             ClipboardStoredPasteboardItem(representations: [
@@ -416,6 +416,69 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
 
         XCTAssertTrue(model.availableContentFilters.contains(.image))
         XCTAssertTrue(model.availableScopeModes.contains(.snippets))
+    }
+
+    func testCopyThenReopenUsesReadyPageInLargeHistory() async {
+        var items = makeItems(50_000)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
+        model.cancelPresentationPreparation()
+        model.resetPreviewPresentation()
+        let copied = ClipboardHistoryItem(id: UUID(), text: "New copy", capturedAt: .now,
+            sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        items.insert(copied, at: 0)
+        for item in items.prefix(51) {
+            item.configurePayloadLoader({
+                XCTFail("Rendering recent rows must not read persisted payloads")
+                throw CocoaError(.fileReadNoSuchFile)
+            }, discardCachedPayload: true)
+        }
+        let mutationStart = ContinuousClock.now
+        model.updateItems(items, revision: 2, knownChanges: [.init(id: copied.id, before: nil, after: copied)])
+        let mutationTime = ContinuousClock.now - mutationStart
+        let start = ContinuousClock.now
+        model.prepareForPresentationAsynchronously(items: items, historyRevision: 2, savedRevision: 1)
+        let reopen = ContinuousClock.now - start
+        XCTAssertFalse(model.isPreparingPresentation)
+        XCTAssertFalse(model.isSearching)
+        XCTAssertEqual(model.visibleItems.map(\.id), Array(items.prefix(50)).map(\.id))
+        XCTAssertEqual(model.selectedItemID, copied.id)
+        XCTAssertTrue(model.hasMoreResults)
+        XCTAssertLessThan(reopen, .milliseconds(50))
+        print("Clipboard 50k copy update: \(mutationTime); copy-then-reopen: \(reopen)")
+    }
+
+    func testClosedPageHandlesRecopyDeletionAndSnippetScopeChanges() async {
+        var items = makeItems(80)
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: items, historyRevision: 1, savedRevision: 1)
+        model.query = "unmatched"
+        await model.waitForSearchForTesting()
+        let previous = items.removeLast()
+        let recopy = ClipboardHistoryItem(id: previous.id, text: previous.text, capturedAt: .now,
+            sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        items.insert(recopy, at: 0)
+        model.updateItems(items, revision: 2, knownChanges: [.init(id: recopy.id, before: previous, after: recopy)])
+        model.prepareForPresentationAsynchronously(items: items, historyRevision: 2, savedRevision: 1)
+        XCTAssertFalse(model.isPreparingPresentation)
+        XCTAssertEqual(model.visibleItems.first?.id, recopy.id)
+        XCTAssertEqual(Set(model.visibleItems.map(\.id)).count, 50)
+        items.removeFirst()
+        model.updateItems(items, revision: 3, knownChanges: [.init(id: recopy.id, before: recopy, after: nil)])
+        let snippet = ClipboardSavedItem(title: "Snippet", savedKind: .snippet, payload: .plainText("Body"))
+        model.updateSavedItems([snippet], revision: 2)
+        model.prepareForPresentationAsynchronously(items: items, savedItems: [snippet], historyRevision: 3, savedRevision: 2)
+        XCTAssertFalse(model.isPreparingPresentation)
+        XCTAssertFalse(model.isSearching)
+        XCTAssertEqual(model.mode, .all)
+        XCTAssertTrue(model.availableScopeModes.contains(.snippets))
+        XCTAssertTrue(model.visibleSavedPresentationItemIDs.contains(snippet.id))
+        XCTAssertFalse(model.visibleItems.contains { $0.id == recopy.id })
+        model.updateSavedItems([], revision: 3)
+        model.prepareForPresentationAsynchronously(items: items, historyRevision: 3, savedRevision: 3)
+        XCTAssertEqual(model.mode, .history)
+        XCTAssertFalse(model.availableScopeModes.contains(.snippets))
+        XCTAssertEqual(model.visibleItems.map(\.id), Array(items.prefix(50)).map(\.id))
     }
 
     private func waitUntilPaused(_ gate: ClipboardPreparationSuspensionGate) async throws {

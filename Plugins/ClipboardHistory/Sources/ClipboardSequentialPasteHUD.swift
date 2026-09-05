@@ -228,7 +228,8 @@ private struct ClipboardSequentialPasteHUDView: View {
             } else if !content.hidesPreview {
                 HStack(alignment: .top, spacing: 10) {
                     ClipboardSequentialPasteHUDPreview(
-                        data: content.justPastedPreviewImageData ?? content.nextPreviewImageData
+                        data: content.justPastedPreviewImageData ?? content.nextPreviewImageData,
+                        localization: localization
                     )
                     VStack(alignment: .leading, spacing: 3) {
                         if let justPastedTitle = content.justPastedTitle {
@@ -350,7 +351,10 @@ private struct ClipboardSequentialPasteHUDView: View {
 
 private struct ClipboardSequentialPasteHUDPreview: View {
     let data: Data?
+    let localization: PluginLocalization
     @State private var image: NSImage?
+    @State private var didFinishLoading = false
+    @State private var retryID: UInt = 0
 
     var body: some View {
         Group {
@@ -359,8 +363,20 @@ private struct ClipboardSequentialPasteHUDPreview: View {
                     .resizable()
                     .scaledToFit()
             } else if data != nil {
-                Image(systemName: "photo")
-                    .foregroundStyle(.tertiary)
+                if didFinishLoading {
+                    Button { retryID &+= 1 } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "exclamationmark.triangle")
+                            Image(systemName: "arrow.clockwise").font(.caption2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help(localization.string("panel.preview.failed", defaultValue: "无法载入预览"))
+                    .accessibilityLabel(localization.string("panel.preview.retry", defaultValue: "重试"))
+                } else {
+                    ProgressView().controlSize(.small)
+                        .accessibilityLabel(localization.string("panel.preview.loading", defaultValue: "正在载入预览…"))
+                }
             }
         }
         .frame(
@@ -374,14 +390,16 @@ private struct ClipboardSequentialPasteHUDPreview: View {
                     .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
             }
         }
-        .task(id: data) {
+        .task(id: ClipboardPreviewRequestID(key: data, retry: retryID)) {
             image = nil
+            didFinishLoading = false
             guard let data else {
                 return
             }
             let result = await ClipboardBoundedImagePreviewWork.image(from: data)
             guard !Task.isCancelled else { return }
             image = result
+            didFinishLoading = true
         }
     }
 }
