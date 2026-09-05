@@ -6,20 +6,20 @@ final class CLISignalCoordinatorTests: XCTestCase {
     func testCommandTaskStatePersistsCancellationAcrossInstallation() async {
         let cancelledBeforeInstall = CLICommandTaskState()
         cancelledBeforeInstall.cancel()
-        let firstGate = CommandTaskGate()
+        // The gate keeps the task suspended until installation, so the task cannot
+        // reach its cancellation check before the state has a chance to cancel it.
+        let installGate = TaskGate()
         let firstTask = Task<Int32, Error> {
-            // Task creation starts execution immediately. Keep this task pending
-            // until install has delivered the previously recorded cancellation.
-            await firstGate.wait()
+            await installGate.wait()
             try Task.checkCancellation()
             return 0
         }
         cancelledBeforeInstall.install(firstTask)
-        await firstGate.open()
+        installGate.open()
         await assertCancellation(firstTask)
 
         let cancelledAfterInstall = CLICommandTaskState()
-        let secondGate = CommandTaskGate()
+        let secondGate = TaskGate()
         let secondTask = Task<Int32, Error> {
             await secondGate.wait()
             try Task.checkCancellation()
@@ -27,20 +27,20 @@ final class CLISignalCoordinatorTests: XCTestCase {
         }
         cancelledAfterInstall.install(secondTask)
         cancelledAfterInstall.cancel()
-        await secondGate.open()
+        secondGate.open()
         await assertCancellation(secondTask)
     }
 
     func testCommandTaskStateDoesNotCancelAnInstalledTaskWithoutARequest() async throws {
         let state = CLICommandTaskState()
-        let gate = CommandTaskGate()
+        let gate = TaskGate()
         let task = Task<Int32, Error> {
             await gate.wait()
             try Task.checkCancellation()
             return 42
         }
         state.install(task)
-        await gate.open()
+        gate.open()
         let result = try await task.value
         XCTAssertEqual(result, 42)
     }
@@ -98,19 +98,31 @@ final class CLISignalCoordinatorTests: XCTestCase {
     }
 }
 
-private actor CommandTaskGate {
+private final class TaskGate: @unchecked Sendable {
+    private let lock = NSLock()
     private var isOpen = false
-    private var continuation: CheckedContinuation<Void, Never>?
+    private var waiters: [CheckedContinuation<Void, Never>] = []
 
     func wait() async {
-        guard !isOpen else { return }
-        await withCheckedContinuation { continuation = $0 }
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            guard !isOpen else {
+                lock.unlock()
+                continuation.resume()
+                return
+            }
+            waiters.append(continuation)
+            lock.unlock()
+        }
     }
 
     func open() {
+        lock.lock()
         isOpen = true
-        continuation?.resume()
-        continuation = nil
+        let pending = waiters
+        waiters = []
+        lock.unlock()
+        pending.forEach { $0.resume() }
     }
 }
 

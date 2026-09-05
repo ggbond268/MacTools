@@ -5,9 +5,9 @@
     <description>Unstable public Nightly updates for MacTools.</description>
     <language>en</language>
     <item>
-      <title>MacTools Nightly 1.2.1 (17.1)</title>
-      <link>https://github.com/ggbond268/MacTools/releases/tag/nightly-17-1</link>
-      <sparkle:version>17.1</sparkle:version>
+      <title>MacTools Nightly 1.2.1 (18.1)</title>
+      <link>https://github.com/ggbond268/MacTools/releases/tag/nightly-18-1</link>
+      <sparkle:version>18.1</sparkle:version>
       <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
       <description sparkle:format="markdown"><![CDATA[> [!WARNING]
 > **MacTools Nightly is unstable.** It may contain unfinished features, regressions, or data-format changes. Keep the stable app installed and do not rely on Nightly for critical workflows.
@@ -15,14 +15,14 @@
 This prerelease is an automated snapshot of the current MacTools source. It installs alongside stable MacTools and uses isolated preferences, Application Support data, plugins, URL routing, and update metadata.
 
 - App version: `1.2.1`
-- Nightly build: `17.1`
-- Source commit: [`f945f24b3f0960662e9c68e0b2d34d35136f6282`](https://github.com/ggbond268/MacTools/commit/f945f24b3f0960662e9c68e0b2d34d35136f6282)
+- Nightly build: `18.1`
+- Source commit: [`10c16a2c9671a0c5fa1816050f7dd244f009d7b8`](https://github.com/ggbond268/MacTools/commit/10c16a2c9671a0c5fa1816050f7dd244f009d7b8)
 
 To roll back, publish a known-good source commit as a new Nightly build. Signed assets for an existing Nightly tag are never replaced.
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/ggbond268/MacTools/releases/tag/nightly-17-1</sparkle:fullReleaseNotesLink>
-      <pubDate>Fri, 04 Sep 2026 11:24:21 +0000</pubDate>
-      <enclosure url="https://github.com/ggbond268/MacTools/releases/download/nightly-17-1/MacTools-Nightly.dmg" length="10854257" type="application/octet-stream" sparkle:edSignature="bzeKATkqq98lS4WB23DJuIz45l2aOvkgHx/SQragBnC0G36VLQZw6ZjuN55qTLDVnTT/XipEjiSVds9/GmhwDQ==" />
+      <sparkle:fullReleaseNotesLink>https://github.com/ggbond268/MacTools/releases/tag/nightly-18-1</sparkle:fullReleaseNotesLink>
+      <pubDate>Sat, 05 Sep 2026 10:48:36 +0000</pubDate>
+      <enclosure url="https://github.com/ggbond268/MacTools/releases/download/nightly-18-1/MacTools-Nightly.dmg" length="10898870" type="application/octet-stream" sparkle:edSignature="vgECZBxHW3zi0kzSWNxwhpiE0jxmWTJl3YU4zDVWwkBTTWCwWvdV7C4iOHXNkeSWSpugc8aaQZRObN51fBOqAQ==" />
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
     </item>
   </channel>

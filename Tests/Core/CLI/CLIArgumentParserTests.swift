@@ -12,9 +12,13 @@ final class CLIArgumentParserTests: XCTestCase {
         XCTAssertEqual(try CLIArgumentParser().parse(["doctor", "--json"]), .doctor(json: true))
     }
 
-    func testRejectsExecutionAndMalformedCommands() {
+    func testRejectsMalformedCommands() {
         for arguments in [
-            ["actions", "run", "test/run"],
+            ["actions", "run"],
+            ["actions", "run", "test/run", "--timeout", "0"],
+            ["actions", "run", "test/run", "--timeout", "301"],
+            ["actions", "run", "test/run", "--timeout", "1", "--timeout", "2"],
+            ["actions", "run", "test/run", "--parameter", "enabled=true"],
             ["actions", "list", "--parameter", "enabled=true"],
             ["actions", "list", "--page-size", "0"],
             ["actions", "list", "--page-size", "101"],
@@ -29,6 +33,23 @@ final class CLIArgumentParserTests: XCTestCase {
             ["help", "--json"],
         ] {
             XCTAssertThrowsError(try CLIArgumentParser().parse(arguments), arguments.joined(separator: " "))
+        }
+    }
+
+    func testRunProducesBoundedTypedRequest() throws {
+        for (arguments, expectedTimeout, json) in [
+            (["actions", "run", "test/run"], 60, false),
+            (["actions", "run", "test/run", "--json", "--timeout", "12"], 12, true),
+        ] {
+            guard case let .run(payload, actualJSON, timeout) = try CLIArgumentParser().parse(arguments) else {
+                return XCTFail("Expected run")
+            }
+            XCTAssertEqual(actualJSON, json)
+            XCTAssertEqual(timeout, expectedTimeout)
+            XCTAssertEqual(
+                try CLIExecutionValidation.decode(CLIActionRunRequest.self, from: payload),
+                CLIActionRunRequest(id: "test/run", timeoutSeconds: expectedTimeout)
+            )
         }
     }
 

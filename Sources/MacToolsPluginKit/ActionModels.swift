@@ -452,6 +452,7 @@ public enum ActionExecutionSource: String, Hashable, Codable, Sendable {
     case actionGrid
     case trackpadGesture
     case appIntent
+    case cli
     case manual
     case test
 }

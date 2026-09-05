@@ -159,7 +159,8 @@ public enum CLIDiscoveryValidation {
     public static func validate(_ action: CLIActionDescription, id: String) throws {
         guard action.id == id, validID(id), validText(action.title, allowEmpty: false),
               validText(action.description), action.parameterSchemaVersion > 0,
-              action.parameters.count <= 32, !action.executionSupported,
+              action.parameters.count <= 32,
+              !action.executionSupported || action.parameters.isEmpty,
               Set(action.parameters.map(\.id)).count == action.parameters.count,
               action.parameters.allSatisfy({ validComponent($0.id) }) else {
             throw CLIProtocolSemanticError.invalidResponse

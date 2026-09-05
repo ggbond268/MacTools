@@ -10,6 +10,10 @@ struct CLIStartupDeadline {
         instant = now.advanced(by: timeout)
     }
 
+    init(instant: ContinuousClock.Instant) {
+        self.instant = instant
+    }
+
     func cappedInstant(
         upTo maximum: Duration,
         reserving reserve: Duration = .zero,
@@ -19,6 +23,31 @@ struct CLIStartupDeadline {
         let operationDeadline = instant.advanced(by: .zero - reserve)
         guard now < operationDeadline else { return nil }
         return min(operationDeadline, now.advanced(by: maximum))
+    }
+}
+
+struct CLIRequestDeadlinePlan {
+    let requestDeadline: CLIStartupDeadline
+    let startupDeadline: CLIStartupDeadline
+    let responseBudget: Duration
+}
+
+struct CLIRequestDeadlinePolicy {
+    func makePlan(
+        responseTimeoutSeconds: Int?,
+        now: ContinuousClock.Instant = .now
+    ) -> CLIRequestDeadlinePlan {
+        let responseBudget = responseTimeoutSeconds.map { Duration.seconds($0 + 1) }
+            ?? .seconds(10)
+        let requestDeadline = CLIStartupDeadline(timeout: responseBudget, now: now)
+        let startupDeadline = CLIStartupDeadline(
+            instant: min(requestDeadline.instant, now.advanced(by: .seconds(10)))
+        )
+        return CLIRequestDeadlinePlan(
+            requestDeadline: requestDeadline,
+            startupDeadline: startupDeadline,
+            responseBudget: responseBudget
+        )
     }
 }
 

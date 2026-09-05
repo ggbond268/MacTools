@@ -82,6 +82,8 @@
 | Menu Bar Icon Customization | Use local images or lightweight GIF/MP4 animations as the menu bar icon, choose static or animated icons from the online gallery with clear animation badges, preserve original colors and transparency on local import, automatically adapt monochrome gallery icons to the menu bar appearance, restore the default icon, and preview every source with the same standard icon height and content inset as the default. |
 | Localization | Follow the system language by default, or choose a fixed app language in Settings > General > Appearance; the picker shows each language in the system language and its native spelling, while menu-bar action buttons and the Actions, Run Links, Automation, and Action Grid surfaces adapt their copy, accessibility labels, and layout to the selected language. |
 
+> **Window Switcher:** The catalog includes eligible windows from inactive macOS Spaces, so switching does not depend on the current Space.
+
 > **Shortcut settings:** Plugin and app shortcut rows keep the action icon/name beside the recorder field, wrapping groups between rows without splitting an individual shortcut control.
 
 > **System Status:** Both dashboard entry points keep readings current while open. Detail statistics use all retained readings in the selected range, independent of chart simplification, and pinned readings stay fixed until they leave that range. Expanded metric settings adapt to narrower windows. An optional global shortcut shows the menu-bar overview when available and otherwise opens the dashboard. The updated plugin requires MacTools 1.2.1 or later.
@@ -126,7 +128,7 @@ Activity Bar uses separate Nightly hook scripts and a separate socket, so instal
 
 ### Experimental command-line prototype
 
-The source tree includes a separately built `mactools` prototype for local testing. In addition to `help`, `version`, and `doctor`, Phase 1 provides read-only `actions list`, `actions describe`, and `actions availability`, with human-readable or `--json` output. Discovery uses the host's canonical action registry and independent CLI exposure policy; it never executes actions or accepts parameter values. The CLI is not embedded in the app or publicly packaged yet. Follow [the Phase 1 test guide](docs/testing/cli-phase-1.md) for signed local setup and sample commands.
+The source tree includes a separately built `mactools` prototype for local testing. It provides `help`, `version`, `doctor`, read-only action discovery, and Phase 2 execution with `actions run <id>`. Execution is limited to actions described as execution-supported: safe, background, automatic, portable, truly parameterless actions that the host revalidates immediately before running. Commands support human-readable or `--json` output, bounded timeouts, and Ctrl-C cancellation. Typed parameters and saved presets remain unsupported. The CLI is not embedded in the app or publicly packaged yet. Follow [the Phase 2 test guide](docs/testing/cli-phase-2.md) for signed local setup and sample commands.
 
 ## Upgrade
 

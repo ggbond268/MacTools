@@ -7,17 +7,24 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
     var onShortcutPressed: @MainActor (_ reversed: Bool, _ isRepeat: Bool) -> Void = { _, _ in }
     var onShortcutReleased: @MainActor () -> Void = {}
     var onEscape: @MainActor () -> Void = {}
+    var onAccessibilityRevoked: @MainActor () -> Void = {}
 
     private let lock = NSLock()
     private let userDefaults: UserDefaults
+    private let accessibilityTrusted: @Sendable () -> Bool
     private var currentBinding: ShortcutBinding?
     private var activeModifiers: ShortcutModifiers?
+    private var didReportAccessibilityRevocation = false
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var defaultsObserver: NSObjectProtocol?
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        accessibilityTrusted: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() }
+    ) {
         self.userDefaults = userDefaults
+        self.accessibilityTrusted = accessibilityTrusted
         self.currentBinding = WindowSwitcherShortcutBindingStore.resolvedBinding(userDefaults: userDefaults)
     }
 
@@ -67,6 +74,7 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
             runLoopSource = nil
             defaultsObserver = nil
             activeModifiers = nil
+            didReportAccessibilityRevocation = false
             return state
         }
 
@@ -123,7 +131,25 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
         }
     }
 
-    private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        guard accessibilityTrusted() else {
+            let shouldNotify = lock.withLock {
+                activeModifiers = nil
+                guard !didReportAccessibilityRevocation else {
+                    return false
+                }
+
+                didReportAccessibilityRevocation = true
+                return true
+            }
+            if shouldNotify {
+                Task { @MainActor in
+                    self.onAccessibilityRevoked()
+                }
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = lock.withLock({ tap }) {
                 CGEvent.tapEnable(tap: tap, enable: true)
@@ -131,9 +157,8 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        guard AXIsProcessTrusted() else {
-            setActiveModifiers(nil)
-            return Unmanaged.passUnretained(event)
+        lock.withLock {
+            didReportAccessibilityRevocation = false
         }
 
         switch type {
