@@ -639,7 +639,7 @@ final class SystemStatusPluginTests: XCTestCase {
 
         XCTAssertEqual(
             SystemStatusMenuBarMetricsFormatter.text(snapshot: snapshot, kinds: [.memory, .cpu, .network]),
-            "RAM 60% 5.9K | CPU 13% 42° | NET ↓1K ↑2K"
+            "RAM 60% \(SystemStatusMenuBarMetricsFormatter.localizedDecimal(5.9))K | CPU 13% 42° | NET ↓1K ↑2K"
         )
     }
 
@@ -829,8 +829,10 @@ final class SystemStatusPluginTests: XCTestCase {
 
         let block = SystemStatusMenuBarMetricsFormatter.blocks(snapshot: snapshot, items: items).first
         XCTAssertEqual(block?.valueKinds, [.power, .load])
-        XCTAssertEqual(block?.values, ["8.5W", "L4.2"])
-        XCTAssertEqual(block?.horizontalValue, "8.5W L4.2")
+        let power = "\(SystemStatusMenuBarMetricsFormatter.localizedDecimal(8.5))W"
+        let load = "L\(SystemStatusMenuBarMetricsFormatter.localizedDecimal(4.2))"
+        XCTAssertEqual(block?.values, [power, load])
+        XCTAssertEqual(block?.horizontalValue, "\(power) \(load)")
     }
 
     func testCompactDecimalFormattingUsesRequestedLocale() {
@@ -1219,7 +1221,7 @@ final class SystemStatusPluginTests: XCTestCase {
                 snapshot: snapshot,
                 kinds: [.network]
             ).first?.values,
-            ["↓0.1G", "↑16E"]
+            ["↓\(SystemStatusMenuBarMetricsFormatter.localizedDecimal(0.1))G", "↑16E"]
         )
     }
 

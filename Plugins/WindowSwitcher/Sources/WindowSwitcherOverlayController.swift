@@ -105,6 +105,14 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate {
         panel?.isVisible ?? false
     }
 
+    var displayedEntries: [WindowSwitcherAppEntry] {
+        model.entries
+    }
+
+    var selectedEntryID: String? {
+        model.selectedID
+    }
+
     func showDirect(
         entries: [WindowSwitcherAppEntry],
         selectedID: String?,
@@ -156,9 +164,13 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate {
     }
 
     func hide() {
+        model.entries.removeAll()
+        model.selectedID = nil
         model.recordingEntryID = nil
         model.recordingCandidate = nil
         model.recordingHasConflict = false
+        model.shortcutText = ""
+        model.columnCount = 1
         removeKeyMonitor()
         removeClickMonitor()
         isClosing = true

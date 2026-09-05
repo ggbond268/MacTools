@@ -159,7 +159,10 @@ final class DiskCleanPluginTests: XCTestCase {
         plugin.handleAction(.setDisclosureExpanded(true))
         let trashTitle = try XCTUnwrap(try cleanControl(of: plugin).actionTitle)
         XCTAssertTrue(trashTitle.hasPrefix("移到废纸篓 · 1 项 · 约"), "actual: \(trashTitle)")
-        XCTAssertTrue(trashTitle.contains("GB"), "actual: \(trashTitle)")
+        XCTAssertTrue(
+            trashTitle.hasSuffix("约 \(DiskCleanFormat.bytes(5_368_709_120))"),
+            "actual: \(trashTitle)"
+        )
 
         controller.snapshot = makeScannedSnapshot(
             candidates: candidates,
@@ -268,7 +271,10 @@ final class DiskCleanPluginTests: XCTestCase {
         let confirm = try XCTUnwrap(controls.first { $0.id == DiskCleanPlugin.ControlID.confirmClean })
         let confirmTitle = try XCTUnwrap(confirm.actionTitle)
         XCTAssertTrue(confirmTitle.hasPrefix("确认永久清理 3 项 · 约"), "actual: \(confirmTitle)")
-        XCTAssertTrue(confirmTitle.contains("GB"), "frozen byte count must appear in the confirmation copy")
+        XCTAssertTrue(
+            confirmTitle.hasSuffix("约 \(DiskCleanFormat.bytes(5_368_709_120))"),
+            "frozen byte count must appear in the confirmation copy: \(confirmTitle)"
+        )
     }
 
     func testConfirmAndCancelActionsForwardToController() {
@@ -308,7 +314,7 @@ final class DiskCleanPluginTests: XCTestCase {
         let subtitle = plugin.primaryPanelState.subtitle
         XCTAssertTrue(subtitle.hasPrefix("已移到废纸篓约"), "actual: \(subtitle)")
         XCTAssertFalse(subtitle.contains("已释放"), "objects in Trash have not truly freed space")
-        XCTAssertTrue(subtitle.contains("KB"), "actual: \(subtitle)")
+        XCTAssertTrue(subtitle.hasSuffix(DiskCleanFormat.bytes(1_024)), "actual: \(subtitle)")
     }
 
     /// Startup reconciliation must run on activate, or orphan staged objects have no second discovery path.
