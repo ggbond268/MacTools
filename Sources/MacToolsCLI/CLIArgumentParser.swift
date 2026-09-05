@@ -6,6 +6,7 @@ enum CLICommand: Equatable {
     case version(json: Bool)
     case doctor(json: Bool)
     case discovery(operation: CLIOperation, payload: Data, json: Bool)
+    case run(payload: Data, json: Bool, timeoutSeconds: Int)
 }
 
 enum CLIArgumentError: Error, Equatable {
@@ -34,6 +35,31 @@ struct CLIArgumentParser {
         let json = remaining.contains("--json")
         guard remaining.filter({ $0 == "--json" }).count <= 1 else { throw CLIArgumentError.invalidCommand }
         remaining.removeAll { $0 == "--json" }
+        if verb == "run" {
+            guard let id = remaining.first else { throw CLIArgumentError.invalidCommand }
+            remaining.removeFirst()
+            var timeout = CLIExecutionLimits.defaultTimeoutSeconds
+            var sawTimeout = false
+            while !remaining.isEmpty {
+                let flag = remaining.removeFirst()
+                guard flag == "--timeout", !sawTimeout, !remaining.isEmpty else {
+                    throw CLIArgumentError.invalidCommand
+                }
+                sawTimeout = true
+                let value = remaining.removeFirst()
+                guard let parsed = Int(value), String(parsed) == value else {
+                    throw CLIArgumentError.invalidCommand
+                }
+                timeout = parsed
+            }
+            let request = CLIActionRunRequest(id: id, timeoutSeconds: timeout)
+            try CLIExecutionValidation.validate(request)
+            return .run(
+                payload: try CLIProtocolCodec.encodeRequest(request),
+                json: json,
+                timeoutSeconds: timeout
+            )
+        }
         if verb == "list" {
             var pageSize = CLIDiscoveryLimits.defaultPageSize
             var cursor: String?

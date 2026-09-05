@@ -45,14 +45,33 @@ struct CLIApplication {
             return await interruptibleRequest(operation: .doctor, payload: nil, json: json)
         case let .discovery(operation, payload, json):
             return await interruptibleRequest(operation: operation, payload: payload, json: json)
+        case let .run(payload, json, timeoutSeconds):
+            return await interruptibleRequest(
+                operation: .actionsRun,
+                payload: payload,
+                json: json,
+                responseTimeoutSeconds: timeoutSeconds
+            )
         }
     }
 
-    private func interruptibleRequest(operation: CLIOperation, payload: Data?, json: Bool) async -> Int32 {
+    private func interruptibleRequest(
+        operation: CLIOperation,
+        payload: Data?,
+        json: Bool,
+        responseTimeoutSeconds: Int? = nil
+    ) async -> Int32 {
         let taskState = CLICommandTaskState()
         let signalCoordinator = CLISignalCoordinator { taskState.cancel() }
         defer { signalCoordinator.finish() }
-        let task = Task { try await request(operation: operation, payload: payload, json: json) }
+        let task = Task {
+            try await request(
+                operation: operation,
+                payload: payload,
+                json: json,
+                responseTimeoutSeconds: responseTimeoutSeconds
+            )
+        }
         taskState.install(task)
         do {
             return try await task.value
@@ -104,15 +123,30 @@ struct CLIApplication {
         }
     }
 
-    private func request(operation: CLIOperation, payload: Data?, json: Bool) async throws -> Int32 {
-        let deadline = CLIStartupDeadline(timeout: .seconds(10))
-        let handshake = try await client.prepareHost(deadline: deadline)
-        let response = try await client.send(operation: operation, payload: payload, deadline: deadline)
+    private func request(
+        operation: CLIOperation,
+        payload: Data?,
+        json: Bool,
+        responseTimeoutSeconds: Int?
+    ) async throws -> Int32 {
+        let deadlinePlan = CLIRequestDeadlinePolicy().makePlan(
+            responseTimeoutSeconds: responseTimeoutSeconds
+        )
+        let handshake = try await client.prepareHost(deadline: deadlinePlan.startupDeadline)
+        let response = try await client.send(
+            operation: operation,
+            payload: payload,
+            deadline: deadlinePlan.requestDeadline,
+            maximumResponseWait: deadlinePlan.responseBudget
+        )
         let rendered: String
         if response.outcome == .completed {
             do {
                 if operation == .doctor {
                     rendered = try output.renderDoctor(response, handshake: handshake, json: json)
+                } else if operation == .actionsRun {
+                    guard let payload else { throw CLIBrokerClientError.invalidPeerResponse }
+                    rendered = try output.renderExecution(response, requestPayload: payload, json: json)
                 } else {
                     guard let payload else { throw CLIBrokerClientError.invalidPeerResponse }
                     rendered = try output.renderDiscovery(response, requestPayload: payload, json: json)
@@ -138,6 +172,9 @@ struct CLIApplication {
         case .cancelled: .cancellation
         case .invalidInput: .invalidInput
         case .unknownTarget: .unknownTarget
+        case .unavailable: .unavailable
+        case .actionFailed: .actionFailure
+        case .timedOut: .timeout
         case .hostUnavailable: .transportFailure
         case .protocolIncompatible: .protocolIncompatible
         }
@@ -162,8 +199,9 @@ struct CLIApplication {
           actions list [--page-size 1...100] [--cursor <cursor>] [--json]
           actions describe <id-from-list> [--json]
           actions availability <id-from-list> [--json]
+          actions run <id-from-list> [--timeout 1...300] [--json]
 
-        Discovery is read-only. Action execution and parameter input are not supported.
+        Run supports only actions described as execution-supported. Parameter input is not supported.
         """
     }
 }

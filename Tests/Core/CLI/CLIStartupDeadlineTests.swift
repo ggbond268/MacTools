@@ -52,6 +52,41 @@ final class CLIStartupDeadlineTests: XCTestCase {
         )
     }
 
+    func testActionDeadlinePlanCapsStartupWithoutResettingResponseDeadline() throws {
+        let start = ContinuousClock.now
+        let plan = CLIRequestDeadlinePolicy().makePlan(
+            responseTimeoutSeconds: 300,
+            now: start
+        )
+        let afterPreparation = start.advanced(by: .seconds(9))
+        let policy = CLIRequestCleanupPolicy(budget: .milliseconds(250))
+        let responseDeadline = try XCTUnwrap(
+            policy.responseDeadline(
+                within: plan.requestDeadline,
+                maximumWait: plan.responseBudget,
+                now: afterPreparation
+            )
+        )
+
+        XCTAssertEqual(plan.startupDeadline.instant, start.advanced(by: .seconds(10)))
+        XCTAssertEqual(plan.requestDeadline.instant, start.advanced(by: .seconds(301)))
+        XCTAssertEqual(
+            responseDeadline,
+            plan.requestDeadline.instant.advanced(by: .milliseconds(-250))
+        )
+        XCTAssertLessThan(
+            responseDeadline,
+            afterPreparation.advanced(by: plan.responseBudget)
+        )
+
+        let shortPlan = CLIRequestDeadlinePolicy().makePlan(
+            responseTimeoutSeconds: 1,
+            now: start
+        )
+        XCTAssertEqual(shortPlan.startupDeadline.instant, shortPlan.requestDeadline.instant)
+        XCTAssertEqual(shortPlan.requestDeadline.instant, start.advanced(by: .seconds(2)))
+    }
+
     func testResponseDeadlineReservesCleanupBudgetInsideOverallDeadline() {
         let start = ContinuousClock.now
         let deadline = CLIStartupDeadline(timeout: .seconds(10), now: start)

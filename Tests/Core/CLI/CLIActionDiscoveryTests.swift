@@ -26,6 +26,7 @@ final class CLIActionDiscoveryTests: XCTestCase {
         }, exposure: { _, surface in surface == CLIActionDiscovery.surface && excluded ? .excluded : .automatic })])
         let discovery = ready(registry)
         XCTAssertEqual(try discovery.list(.init()).actions.map(\.id), ["test/a"])
+        XCTAssertTrue(try discovery.describe(.init(id: "test/a")).executionSupported)
         XCTAssertEqual(try discovery.availability(.init(id: "test/a")).reason, .providerUnavailable)
         available = true
         XCTAssertTrue(try discovery.availability(.init(id: "test/a")).available)
@@ -67,6 +68,47 @@ final class CLIActionDiscoveryTests: XCTestCase {
             XCTAssertEqual(record.parameters.count, 1)
             XCTAssertFalse(record.executionSupported)
         }
+    }
+
+    func testExecutionRejectsDeclaredOptionalParametersAndParameterizedWorkflowSteps() throws {
+        let registry = ActionRegistry()
+        let optional = definition("optional", parameters: [
+            .init(id: "value", title: "Value", kind: .string, isRequired: false),
+        ])
+        let leaf = definition("leaf", parameters: [
+            .init(id: "value", title: "Value", kind: .string, isRequired: false),
+        ])
+        let savedReference = ActionReference(
+            key: leaf.key,
+            parameters: try ActionParameterSet(["value": .string("saved")])
+        )
+        let workflow = WorkflowDefinition(
+            name: "Preset workflow",
+            steps: [.init(reference: savedReference)]
+        )
+        let workflowAction = ActionDefinition(
+            key: workflow.actionKey,
+            title: workflow.name,
+            description: "",
+            systemImage: "bolt",
+            capabilities: [.background, .automatic]
+        )
+        registry.synchronize([
+            registration(
+                [optional, leaf],
+                entries: [
+                    ActionCatalogEntry(reference: .init(key: optional.key), title: optional.title),
+                    ActionCatalogEntry(reference: savedReference, title: leaf.title),
+                ]
+            ),
+            registration([workflowAction], provider: AutomationController.providerID),
+        ])
+        let discovery = CLIActionDiscovery(registry: registry, workflows: { [workflow] })
+        discovery.markReady()
+        XCTAssertFalse(try discovery.describe(.init(id: optional.key.id)).executionSupported)
+        XCTAssertFalse(try discovery.describe(.init(id: workflow.actionKey.id)).executionSupported)
+        XCTAssertThrowsError(try discovery.executionTarget(.init(id: optional.key.id)))
+        XCTAssertThrowsError(try discovery.executionTarget(.init(id: workflow.actionKey.id)))
     }
 
     func testSensitiveAndLocalOnlyReferencesAreExcluded() throws {

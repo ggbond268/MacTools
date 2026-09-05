@@ -22,7 +22,8 @@ struct CLIOutput {
             let action = try CLIDiscoveryValidation.decode(CLIActionDescription.self, from: payload)
             try CLIDiscoveryValidation.validate(action, id: request.id)
             var lines = ["\(action.id)  \(action.title)", action.description,
-                         "Parameter schema: \(action.parameterSchemaVersion)", "Execution: not supported"]
+                         "Parameter schema: \(action.parameterSchemaVersion)",
+                         "Execution: \(action.executionSupported ? "supported" : "not supported")"]
             lines += action.parameters.map { "  \($0.id): \($0.kind.rawValue) (\($0.isRequired ? "required" : "optional"), \($0.privacy.rawValue), \($0.portability.rawValue))" }
             human = lines.joined(separator: "\n")
         case .actionsAvailability:
@@ -32,8 +33,32 @@ struct CLIOutput {
             human = "\(availability.id)\nCLI eligibility: eligible\nAvailability: \(availability.available ? "available" : "currently unavailable in MacTools")"
         case .doctor:
             throw CLIProtocolSemanticError.invalidResponse
+        case .actionsRun:
+            throw CLIProtocolSemanticError.invalidResponse
         }
         return json ? try envelopeJSON(response, data: JSONSerialization.jsonObject(with: payload)) : human
+    }
+
+    func renderExecution(
+        _ response: CLIResponseEnvelope,
+        requestPayload: Data,
+        json: Bool
+    ) throws -> String {
+        guard response.operation == .actionsRun,
+              response.outcome == .completed,
+              response.protocolVersion.map({ $0 >= 3 }) == true,
+              let payload = response.payload else {
+            throw CLIProtocolSemanticError.invalidResponse
+        }
+        let request = try CLIExecutionValidation.decode(CLIActionRunRequest.self, from: requestPayload)
+        try CLIExecutionValidation.validate(request)
+        let result = try CLIExecutionValidation.decode(CLIActionRunResult.self, from: payload)
+        try CLIExecutionValidation.validate(result, request: request)
+        if json {
+            return try envelopeJSON(response, data: JSONSerialization.jsonObject(with: payload))
+        }
+        return result.message.map { "\(result.id): succeeded — \($0)" }
+            ?? "\(result.id): succeeded"
     }
 
     func renderVersion(
