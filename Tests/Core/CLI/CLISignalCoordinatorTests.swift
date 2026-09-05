@@ -6,11 +6,16 @@ final class CLISignalCoordinatorTests: XCTestCase {
     func testCommandTaskStatePersistsCancellationAcrossInstallation() async {
         let cancelledBeforeInstall = CLICommandTaskState()
         cancelledBeforeInstall.cancel()
+        // The gate keeps the task suspended until installation, so the task cannot
+        // reach its cancellation check before the state has a chance to cancel it.
+        let installGate = TaskGate()
         let firstTask = Task<Int32, Error> {
+            await installGate.wait()
             try Task.checkCancellation()
             return 0
         }
         cancelledBeforeInstall.install(firstTask)
+        installGate.open()
         await assertCancellation(firstTask)
 
         let cancelledAfterInstall = CLICommandTaskState()
@@ -58,6 +63,34 @@ final class CLISignalCoordinatorTests: XCTestCase {
         } catch {
             XCTFail("Expected CancellationError, got \(error)")
         }
+    }
+}
+
+private final class TaskGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            guard !isOpen else {
+                lock.unlock()
+                continuation.resume()
+                return
+            }
+            waiters.append(continuation)
+            lock.unlock()
+        }
+    }
+
+    func open() {
+        lock.lock()
+        isOpen = true
+        let pending = waiters
+        waiters = []
+        lock.unlock()
+        pending.forEach { $0.resume() }
     }
 }
 
