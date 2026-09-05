@@ -77,6 +77,10 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginComponentDetailPresenting": "1.2.1",
     "PluginProcessGroupLease": "1.2.0",
     "PluginSystemImage": "1.2.0",
+    # Contextual plugin-settings search contracts introduced in host 1.2.1.
+    "PluginSettingsSearchFocusing": "1.2.1",
+    "PluginSettingsSearchFocusMetadataProviding": "1.2.1",
+    "PluginSettingsSearchTarget": "1.2.1",
     # Side-aware atomic keyboard output introduced in host 1.2.1.
     "KeyboardKeyTap": "1.2.1",
     "KeyboardKeyTapFormatter": "1.2.1",

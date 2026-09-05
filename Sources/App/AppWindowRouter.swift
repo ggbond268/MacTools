@@ -7,6 +7,7 @@ import MacToolsPluginKit
 enum MacToolsLocalKeyboardCommand: Equatable {
     case showSettings
     case focusSearch
+    case focusPluginSettingsSearch
     case showUnifiedSearch
     case selectNumber(Int)
     case goBack
@@ -30,6 +31,11 @@ enum MacToolsLocalKeyboardCommand: Equatable {
             default:
                 return nil
             }
+        }
+
+        if modifiers == [.command, .shift],
+           event.charactersIgnoringModifiers?.lowercased() == "f" {
+            return .focusPluginSettingsSearch
         }
 
         guard modifiers == .command else {
@@ -821,6 +827,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         case .general:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .general)
+        case .permissions:
+            pendingAppUpdateVersion = nil
+            settingsNavigationCoordinator?.navigate(to: .permissions)
         case .about:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .about)
@@ -873,6 +882,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             return true
         case .focusSearch:
             return settingsNavigationCoordinator?.requestSearch() ?? false
+        case .focusPluginSettingsSearch:
+            return settingsNavigationCoordinator?.requestPluginSidebarSearch() ?? false
         case .showUnifiedSearch:
             showUnifiedSearch()
             return true
@@ -885,7 +896,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 return true
             }
 
-            return settingsNavigationCoordinator.selectSidebarDestination(number: number)
+            return settingsNavigationCoordinator.performSidebarNumberShortcut(number: number)
         case .goBack:
             guard
                 let settingsNavigationCoordinator,

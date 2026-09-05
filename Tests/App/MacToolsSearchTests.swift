@@ -494,6 +494,7 @@ final class MacToolsSearchTests: XCTestCase {
                 "navigation.actions-and-shortcuts",
                 "navigation.automation",
                 "navigation.marketplace",
+                "navigation.permissions",
                 "navigation.general",
                 "navigation.about"
             ]

@@ -19,6 +19,24 @@
       "licenseFile": "Sources/Resources/ThirdPartyNotices/Sparkle-LICENSE.txt"
     },
     {
+      "id": "permission-flow",
+      "name": "PermissionFlow",
+      "repository": "https://github.com/jaywcjlove/PermissionFlow",
+      "revision": "2f2a4b76b1eb2ff7ab815b977be8229853f10bf8",
+      "license": "MIT",
+      "gpl3Compatibility": "compatible",
+      "relationship": "dependency",
+      "products": [
+        "app"
+      ],
+      "paths": [
+        "project.yml",
+        "Sources/App/SettingsView.swift",
+        "Sources/Core/Permissions/PermissionCoordinator.swift"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/PermissionFlow-LICENSE.txt"
+    },
+    {
       "id": "menubar-runcat",
       "name": "menubar_runcat",
       "repository": "https://github.com/Kyome22/menubar_runcat",

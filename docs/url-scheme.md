@@ -14,6 +14,7 @@ The three schemes route to the matching installation. Stable, development, and N
 | --- | --- |
 | Settings | `mactools://app/settings` |
 | General settings | `mactools://app/settings/general` |
+| Permissions | `mactools://app/settings/permissions` |
 | About | `mactools://app/settings/about` |
 | Actions & Shortcuts | `mactools://app/settings/features/actions-and-shortcuts` |
 | Automation | `mactools://app/settings/features/automation` |

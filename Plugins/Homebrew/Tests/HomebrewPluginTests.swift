@@ -99,6 +99,19 @@ final class HomebrewPluginTests: XCTestCase {
         XCTAssertEqual(plugin.metadata.title, "Homebrew")
     }
 
+    func testContextualSearchIsAvailableOnlyWhenHomebrewIsAvailable() {
+        let controller = HomebrewController(runner: FakeHomebrewCommandRunner())
+        let plugin = HomebrewPlugin(
+            controller: controller,
+            localization: PluginLocalization(bundle: .main)
+        )
+
+        controller.isBrewAvailable = false
+        XCTAssertFalse(plugin.isSettingsSearchAvailable)
+        controller.isBrewAvailable = true
+        XCTAssertTrue(plugin.isSettingsSearchAvailable)
+    }
+
     func testCanonicalMaintenanceActionsAreBoundedAndReportCommandCompletion() async throws {
         let runner = FakeHomebrewCommandRunner()
         let controller = HomebrewController(runner: runner)

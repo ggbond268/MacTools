@@ -38,6 +38,7 @@ private struct TrackpadGestureReadinessError: LocalizedError {
 @MainActor
 final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
     AccessibilityPermissionRefreshing, PluginSettingsPresenting,
+    PluginSettingsSearchFocusing, PluginSettingsSearchFocusMetadataProviding,
     PluginFeatureExtractionReadinessProviding, TrackpadActionHostContextConsuming,
     PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting,
     PluginPersistentPreferencesChangeSignaling,
@@ -50,6 +51,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
 
     let metadata: PluginMetadata
     let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    private let settingsSearchFocusController = TrackpadSettingsSearchFocusController()
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -286,7 +288,12 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
                         onChange: { [weak self] in self?.configurationDidChange() },
                         onSetTesting: { [weak self] enabled in self?.setTesting(enabled) },
                         onSetTestingMode: { [weak self] mode in self?.setTestingMode(mode) },
-                        section: .mappings
+                        section: .mappings,
+                        searchFocusController: self.settingsSearchFocusController
+                    )
+                    .pluginSettingsSearchAnchor(
+                        pluginID: self.metadata.id,
+                        entryID: "mappings"
                     )
                 }
             }
@@ -326,6 +333,14 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
             }
             self?.setTesting(false)
         }
+    }
+
+    func focusSettingsSearch() {
+        settingsSearchFocusController.requestFocus()
+    }
+
+    var settingsSearchFocusTarget: PluginSettingsSearchTarget? {
+        PluginSettingsSearchTarget(pluginID: metadata.id, entryID: "mappings")
     }
 
     func handleAction(_ action: PluginPanelAction) {

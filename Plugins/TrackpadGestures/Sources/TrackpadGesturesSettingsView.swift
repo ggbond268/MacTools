@@ -2,11 +2,36 @@ import AppKit
 import SwiftUI
 import MacToolsPluginKit
 
+@MainActor
+final class TrackpadSettingsSearchFocusController: ObservableObject {
+    @Published private(set) var requestID: UInt = 0
+    private var consumedRequestID: UInt = 0
+
+    func requestFocus() {
+        requestID &+= 1
+    }
+
+    func consumePendingFocusRequest() -> Bool {
+        guard consumedRequestID != requestID else { return false }
+        consumedRequestID = requestID
+        return true
+    }
+}
+
 struct TrackpadActionPickerAccessibility: Equatable {
     let confirmationValue: String?
 
     init(isSafe: Bool, confirmationRequiredText: String) {
         confirmationValue = isSafe ? nil : confirmationRequiredText
+    }
+}
+
+enum TrackpadMappingSearchPresentation {
+    static func showsSearchField(
+        isSearchRequested: Bool,
+        mappingsAreEmpty _: Bool
+    ) -> Bool {
+        isSearchRequested
     }
 }
 
@@ -71,6 +96,7 @@ struct TrackpadGesturesSettingsView: View {
     let onSetTesting: (Bool) -> Void
     let onSetTestingMode: (TrackpadGestureTestingMode?) -> Void
     let section: SectionKind
+    @ObservedObject var searchFocusController = TrackpadSettingsSearchFocusController()
 
     @State private var editingDraft: TrackpadGestureMappingDraft?
     @State private var isShowingTipTapGuide = false
@@ -80,11 +106,30 @@ struct TrackpadGesturesSettingsView: View {
 
     @ViewBuilder
     var body: some View {
-        switch section {
-        case .mappings:
-            mappingsContent
-        case .typingProtection:
-            typingProtectionSection
+        Group {
+            switch section {
+            case .mappings:
+                mappingsContent
+            case .typingProtection:
+                typingProtectionSection
+            }
+        }
+        .onAppear {
+            focusMappingSearchIfRequested()
+        }
+        .onChange(of: searchFocusController.requestID) {
+            focusMappingSearchIfRequested()
+        }
+    }
+
+    private func focusMappingSearchIfRequested() {
+        guard section == .mappings,
+              searchFocusController.consumePendingFocusRequest() else {
+            return
+        }
+        isShowingMappingSearch = true
+        DispatchQueue.main.async {
+            isMappingSearchFocused = true
         }
     }
 
@@ -234,6 +279,13 @@ struct TrackpadGesturesSettingsView: View {
             }
             .pluginSettingsListRowPadding()
 
+            if TrackpadMappingSearchPresentation.showsSearchField(
+                isSearchRequested: isShowingMappingSearch,
+                mappingsAreEmpty: store.mappings.isEmpty
+            ) {
+                mappingSearchField
+            }
+
             if store.isTesting {
                 testingStatusBanner
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -255,9 +307,6 @@ struct TrackpadGesturesSettingsView: View {
             if store.mappings.isEmpty {
                 emptyState
             } else {
-                if isShowingMappingSearch {
-                    mappingSearchField
-                }
                 if visibleMappings.isEmpty {
                     noMatchingMappingsState
                 } else {

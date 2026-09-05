@@ -1,8 +1,23 @@
 import SwiftUI
 import MacToolsPluginKit
 
+@MainActor
+final class HomebrewSettingsSearchFocusController: ObservableObject {
+    @Published private(set) var requestID: UInt = 0
+
+    func requestFocus() {
+        requestID &+= 1
+    }
+}
+
 struct HomebrewDetailView: View {
+    private enum SearchField {
+        case installed
+        case online
+    }
+
     @ObservedObject var controller: HomebrewController
+    @ObservedObject var searchFocusController: HomebrewSettingsSearchFocusController
     private let localization: PluginLocalization
     private let showsHeader: Bool
     private let contentPadding: CGFloat
@@ -21,6 +36,7 @@ struct HomebrewDetailView: View {
     @State private var customBrewPath = ""
     @State private var pendingAction: HomebrewPendingAction?
     @State private var didRequestInitialScan = false
+    @FocusState private var focusedSearchField: SearchField?
     
     enum BrewTabSection: String, CaseIterable, Identifiable {
         case installed
@@ -70,13 +86,15 @@ struct HomebrewDetailView: View {
         localization: PluginLocalization = PluginLocalization(bundle: .main),
         showsHeader: Bool = true,
         contentPadding: CGFloat = 16,
-        minimumContentHeight: CGFloat = 450
+        minimumContentHeight: CGFloat = 450,
+        searchFocusController: HomebrewSettingsSearchFocusController = .init()
     ) {
         self.controller = controller
         self.localization = localization
         self.showsHeader = showsHeader
         self.contentPadding = contentPadding
         self.minimumContentHeight = minimumContentHeight
+        self.searchFocusController = searchFocusController
     }
     
     var body: some View {
@@ -124,6 +142,14 @@ struct HomebrewDetailView: View {
                         }
                     }
                 }
+            }
+        }
+        .onChange(of: searchFocusController.requestID) {
+            if activeTab != .installed && activeTab != .search {
+                activeTab = .installed
+            }
+            DispatchQueue.main.async {
+                focusedSearchField = activeTab == .search ? .online : .installed
             }
         }
         .frame(minHeight: minimumContentHeight)
@@ -330,6 +356,7 @@ struct HomebrewDetailView: View {
     private var installedToolbar: some View {
         HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
             TextField(localization.string("detail.search.placeholder", defaultValue: "搜索已安装包"), text: $localSearchText)
+                .focused($focusedSearchField, equals: .installed)
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.small)
 
@@ -442,6 +469,7 @@ struct HomebrewDetailView: View {
     private var searchToolbar: some View {
         HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
             TextField(localization.string("detail.search.onlinePlaceholder", defaultValue: "搜索软件包"), text: $onlineSearchText)
+                .focused($focusedSearchField, equals: .online)
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.small)
                 .onSubmit {

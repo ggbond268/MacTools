@@ -1,6 +1,175 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "tab.permissions": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "الأذونات" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Berechtigungen" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Permissions" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Permisos" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Autorisations" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "アクセス権" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "권한" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Permissões" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Разрешения" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "权限" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "權限" } }
+    } },
+    "permissions.description": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "راجع أذونات macOS التي تستخدمها الميزات المثبتة في مكان واحد. يمكن لـ MacTools طلب الوصول أو فتح إعدادات النظام، لكنه لا يستطيع منح الإذن نيابةً عنك." } },
+      "de": { "stringUnit": { "state": "translated", "value": "Prüfe die von installierten Funktionen verwendeten macOS-Berechtigungen an einem Ort. MacTools kann Zugriff anfordern oder die Systemeinstellungen öffnen, aber keine Berechtigung selbst erteilen." } },
+      "en": { "stringUnit": { "state": "translated", "value": "Review the macOS permissions used by installed features in one place. MacTools can request access or open System Settings, but cannot grant permission for you." } },
+      "es": { "stringUnit": { "state": "translated", "value": "Revisa en un solo lugar los permisos de macOS que usan las funciones instaladas. MacTools puede solicitar acceso o abrir Ajustes del Sistema, pero no puede conceder permisos por ti." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Consultez au même endroit les autorisations macOS utilisées par les fonctionnalités installées. MacTools peut demander l’accès ou ouvrir Réglages Système, mais ne peut pas accorder une autorisation à votre place." } },
+      "ja": { "stringUnit": { "state": "translated", "value": "インストール済み機能が使用する macOS のアクセス権をまとめて確認します。MacTools はアクセスを要求したりシステム設定を開いたりできますが、代わりに許可することはできません。" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "설치된 기능이 사용하는 macOS 권한을 한곳에서 확인합니다. MacTools는 접근을 요청하거나 시스템 설정을 열 수 있지만 사용자를 대신해 권한을 부여할 수는 없습니다." } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Reveja em um só lugar as permissões do macOS usadas pelos recursos instalados. O MacTools pode solicitar acesso ou abrir os Ajustes do Sistema, mas não pode conceder permissões por você." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Просматривайте в одном месте разрешения macOS, используемые установленными функциями. MacTools может запросить доступ или открыть Системные настройки, но не может выдать разрешение за вас." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "集中查看已安装功能使用的 macOS 权限。MacTools 只能发起请求或打开系统设置，不能代替你授予权限。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "集中查看已安裝功能使用的 macOS 權限。MacTools 只能發起要求或開啟系統設定，不能代替你授予權限。" } }
+    } },
+    "permissions.recheck": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "إعادة التحقق" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Erneut prüfen" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Recheck" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Volver a comprobar" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Revérifier" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "再確認" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "다시 확인" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Verificar novamente" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Проверить снова" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "重新检查" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "重新檢查" } }
+    } },
+    "permissions.empty.title": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "لا توجد أذونات ذات صلة" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Keine relevanten Berechtigungen" } },
+      "en": { "stringUnit": { "state": "translated", "value": "No Relevant Permissions" } },
+      "es": { "stringUnit": { "state": "translated", "value": "No hay permisos relevantes" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Aucune autorisation concernée" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "関連するアクセス権はありません" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "관련 권한 없음" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Nenhuma permissão relevante" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Нет связанных разрешений" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "暂无相关权限" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "暫無相關權限" } }
+    } },
+    "permissions.empty.description": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "ستظهر هنا الإضافات المثبتة التي تتطلب أذونات macOS." } },
+      "de": { "stringUnit": { "state": "translated", "value": "Installierte Plugins, die macOS-Berechtigungen benötigen, werden hier angezeigt." } },
+      "en": { "stringUnit": { "state": "translated", "value": "Installed plugins that need macOS permissions will appear here." } },
+      "es": { "stringUnit": { "state": "translated", "value": "Los plugins instalados que necesiten permisos de macOS aparecerán aquí." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Les plugins installés qui nécessitent des autorisations macOS apparaîtront ici." } },
+      "ja": { "stringUnit": { "state": "translated", "value": "macOS のアクセス権が必要なインストール済みプラグインがここに表示されます。" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "macOS 권한이 필요한 설치된 플러그인이 여기에 표시됩니다." } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Plugins instalados que precisam de permissões do macOS aparecerão aqui." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Здесь появятся установленные плагины, которым нужны разрешения macOS." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "安装需要 macOS 权限的插件后，它们会显示在这里。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "安裝需要 macOS 權限的外掛程式後，它們會顯示在這裡。" } }
+    } },
+    "permissions.affectedFeatures": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "الميزات التي تستخدم هذا الإذن" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Funktionen mit dieser Berechtigung" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Features Using This Permission" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Funciones que usan este permiso" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Fonctionnalités utilisant cette autorisation" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "このアクセス権を使用する機能" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "이 권한을 사용하는 기능" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Recursos que usam esta permissão" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Функции, использующие это разрешение" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "使用此权限的功能" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "使用此權限的功能" } }
+    } },
+    "permissions.status.onDemand": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "يُطلب عند الحاجة" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Bei Bedarf angefragt" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Requested on Demand" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Se solicita cuando es necesario" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Demandée à l’utilisation" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "必要時に要求" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "필요할 때 요청" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Solicitada quando necessário" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Запрашивается по мере необходимости" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "按需请求" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "按需要求" } }
+    } },
+    "permissions.kind.automation": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "الأتمتة" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Automation" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Automation" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Automatización" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Automatisation" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "オートメーション" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "자동화" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Automação" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Автоматизация" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "自动化" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "自動化" } }
+    } },
+    "permissions.kind.systemAudio": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "تسجيل صوت النظام" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Systemaudioaufnahme" } },
+      "en": { "stringUnit": { "state": "translated", "value": "System Audio Recording" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Grabación de audio del sistema" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Enregistrement audio du système" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "システムオーディオ録音" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "시스템 오디오 녹음" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Gravação de áudio do sistema" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Запись системного аудио" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统音频录制" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "系統音訊錄製" } }
+    } },
+    "permissions.kind.finderExtension": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "امتداد Finder" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Finder-Erweiterung" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Finder Extension" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Extensión de Finder" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Extension Finder" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "Finder 機能拡張" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "Finder 확장 프로그램" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Extensão do Finder" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Расширение Finder" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Finder 扩展" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Finder 延伸功能" } }
+    } },
+    "permissions.fullDiskAccess.restartNote": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "بعد تغيير الوصول الكامل إلى القرص، قد تحتاج إلى إعادة فتح MacTools لتحديث نطاق الوصول الكامل." } },
+      "de": { "stringUnit": { "state": "translated", "value": "Nach einer Änderung des Festplattenvollzugriffs muss MacTools möglicherweise neu geöffnet werden, damit der vollständige Zugriffsumfang aktualisiert wird." } },
+      "en": { "stringUnit": { "state": "translated", "value": "After changing Full Disk Access, you may need to reopen MacTools to refresh the complete access scope." } },
+      "es": { "stringUnit": { "state": "translated", "value": "Después de cambiar el acceso total al disco, puede que tengas que volver a abrir MacTools para actualizar todo el alcance del acceso." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Après avoir modifié l’accès complet au disque, vous devrez peut-être rouvrir MacTools pour actualiser toute l’étendue de l’accès." } },
+      "ja": { "stringUnit": { "state": "translated", "value": "フルディスクアクセスを変更した後、完全なアクセス範囲を更新するには MacTools を開き直す必要がある場合があります。" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "전체 디스크 접근을 변경한 후 전체 접근 범위를 갱신하려면 MacTools를 다시 열어야 할 수 있습니다." } },
+      "pt": { "stringUnit": { "state": "translated", "value": "Depois de alterar o acesso total ao disco, talvez seja necessário reabrir o MacTools para atualizar todo o alcance do acesso." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "После изменения полного доступа к диску может потребоваться заново открыть MacTools, чтобы обновить весь объём доступа." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "更改完全磁盘访问后，可能需要重新打开 MacTools 才能刷新完整访问范围。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "更改完整磁碟存取後，可能需要重新開啟 MacTools 才能重新整理完整存取範圍。" } }
+    } },
+    "permissions.automation.onDemandNote": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "يطلب macOS إذن الأتمتة عند تحكم الميزة في التطبيق المستهدف لأول مرة." } },
+      "de": { "stringUnit": { "state": "translated", "value": "macOS fragt die Automationsberechtigung an, wenn eine Funktion erstmals eine Ziel-App steuert." } },
+      "en": { "stringUnit": { "state": "translated", "value": "macOS requests Automation permission when a feature first controls its target app." } },
+      "es": { "stringUnit": { "state": "translated", "value": "macOS solicita el permiso de Automatización cuando una función controla por primera vez su app de destino." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "macOS demande l’autorisation Automatisation lorsqu’une fonctionnalité contrôle pour la première fois son app cible." } },
+      "ja": { "stringUnit": { "state": "translated", "value": "機能が対象の App を初めて操作するときに、macOS がオートメーションの許可を要求します。" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "기능이 대상 앱을 처음 제어할 때 macOS가 자동화 권한을 요청합니다." } },
+      "pt": { "stringUnit": { "state": "translated", "value": "O macOS solicita a permissão de Automação quando um recurso controla seu app de destino pela primeira vez." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "macOS запрашивает разрешение на автоматизацию, когда функция впервые управляет целевым приложением." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "自动化权限由 macOS 在功能首次控制目标 App 时按需请求。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "自動化權限由 macOS 在功能首次控制目標 App 時按需要求。" } }
+    } },
+    "permissions.systemAudio.onDemandNote": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "يُطلب تسجيل صوت النظام عند التقاط الميزة المعنية للصوت لأول مرة." } },
+      "de": { "stringUnit": { "state": "translated", "value": "Die Systemaudioaufnahme wird angefragt, wenn eine zugehörige Funktion erstmals Audio aufnimmt." } },
+      "en": { "stringUnit": { "state": "translated", "value": "System Audio Recording is requested when a related feature first captures audio." } },
+      "es": { "stringUnit": { "state": "translated", "value": "La grabación de audio del sistema se solicita cuando una función relacionada captura audio por primera vez." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "L’enregistrement audio du système est demandé lorsqu’une fonctionnalité concernée capture du son pour la première fois." } },
+      "ja": { "stringUnit": { "state": "translated", "value": "関連機能が初めてオーディオを取り込むときに、システムオーディオ録音が要求されます。" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "관련 기능이 오디오를 처음 캡처할 때 시스템 오디오 녹음 권한을 요청합니다." } },
+      "pt": { "stringUnit": { "state": "translated", "value": "A gravação de áudio do sistema é solicitada quando um recurso relacionado captura áudio pela primeira vez." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Разрешение на запись системного аудио запрашивается, когда связанная функция впервые захватывает звук." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统音频录制由相关功能首次捕获音频时按需请求。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "系統音訊錄製由相關功能首次擷取音訊時按需要求。" } }
+    } },
     "general.section.commandLine": { "extractionState": "manual", "localizations": {
       "ar": { "stringUnit": { "state": "translated", "value": "سطر الأوامر" } },
       "de": { "stringUnit": { "state": "translated", "value": "Befehlszeile" } },
@@ -494,6 +663,134 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Панель функций" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "功能面板" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "功能面板" } }
+      }
+    },
+    "settings.sidebar.customizeSection": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تخصيص" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Anpassen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Customize" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Personalizar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Personnaliser" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "カスタマイズ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "사용자화" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Personalizar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Настройка" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂" } }
+      }
+    },
+    "settings.sidebar.pluginSearch.prompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تصفية المكونات الإضافية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Plugins filtern" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Filter Plugins" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Filtrar complementos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Filtrer les plugins" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "プラグインを絞り込む" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "플러그인 필터링" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Filtrar plug-ins" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Фильтр плагинов" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "筛选插件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "篩選外掛" } }
+      }
+    },
+    "settings.sidebar.pluginSearch.noResults": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "لا توجد إعدادات مطابقة. جرّب اسمًا أو معرّفًا مختلفًا." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Keine passenden Plugin-Einstellungen. Versuche einen anderen Namen oder eine andere ID." } },
+        "en": { "stringUnit": { "state": "translated", "value": "No matching plugin settings. Try a different name or ID." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No hay ajustes de complementos coincidentes. Prueba otro nombre o ID." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aucun réglage de plugin correspondant. Essayez un autre nom ou identifiant." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "一致するプラグイン設定がありません。別の名前または ID をお試しください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "일치하는 플러그인 설정이 없습니다. 다른 이름이나 ID를 사용해 보세요." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Nenhum ajuste de plug-in correspondente. Tente outro nome ou ID." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Нет подходящих настроек плагинов. Попробуйте другое имя или ID." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未找到匹配的插件设置。请尝试其他名称或 ID。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "找不到相符的外掛設定。請嘗試其他名稱或 ID。" } }
+      }
+    },
+    "settings.sidebar.pluginSearch.resultCountFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "%d نتيجة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%d Ergebnisse" } },
+        "en": { "stringUnit": { "state": "translated", "value": "%d results" } },
+        "es": { "stringUnit": { "state": "translated", "value": "%d resultados" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%d résultats" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%d件" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%d개 결과" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "%d resultados" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Результатов: %d" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "%d 个结果" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "%d 個結果" } }
+      }
+    },
+    "settings.sidebar.pluginSearch.clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مسح بحث المكونات الإضافية" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Plugin-Suche löschen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Clear Plugin Search" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Borrar búsqueda de complementos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Effacer la recherche de plugins" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "プラグイン検索を消去" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "플러그인 검색 지우기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Limpar busca de plug-ins" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Очистить поиск плагинов" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "清除插件搜索" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除外掛搜尋" } }
+      }
+    },
+    "settings.sidebar.searchCandidate.openHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "اضغط على Return للفتح" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zum Öffnen Return drücken" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Press Return to open" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Pulsa Retorno para abrir" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Appuyez sur Retour pour ouvrir" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Returnキーを押して開く" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Return 키를 눌러 열기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Pressione Return para abrir" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Нажмите Return, чтобы открыть" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按下 Return 打开" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "按下 Return 開啟" } }
+      }
+    },
+    "settings.sidebar.section.collapseFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "طي %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ reduzieren" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Collapse %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Contraer %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réduire %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@を折りたたむ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@ 접기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Recolher %@" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Свернуть %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "收起%@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "收合%@" } }
+      }
+    },
+    "settings.sidebar.section.expandFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "توسيع %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ erweitern" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Expand %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Expandir %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Développer %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@を展開" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@ 펼치기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Expandir %@" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Развернуть %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "展开%@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "展開%@" } }
       }
     },
     "settings.sidebar.accessibilityLabel": {

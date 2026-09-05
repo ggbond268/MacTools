@@ -2652,6 +2652,28 @@ final class AutoInputPluginPanelTests: XCTestCase {
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility"])
         XCTAssertFalse(plugin.permissionState(for: "accessibility").isGranted)
     }
+
+    func testAccessibilityPermissionRefreshReadsCurrentSystemStateWithoutPrompting() {
+        let accessibility = FakeAutoInputAccessibilityCheck(isTrusted: false)
+        let plugin = AutoInputPlugin(
+            context: PluginRuntimeContext(
+                pluginID: "auto-input",
+                storage: AutoInputMemoryStorage()
+            ),
+            sourceController: FakeAutoInputSourceController(sources: [], currentSourceID: nil),
+            applicationMonitor: FakeAutoInputApplicationMonitor(frontmostApplication: nil),
+            focusObserver: FakeAutoInputFocusObserver(),
+            hudPresenter: FakeInputSourceHUDPresenter(),
+            accessibilityCheck: accessibility
+        )
+        XCTAssertFalse(plugin.permissionState(for: "accessibility").isGranted)
+
+        accessibility.isTrusted = true
+        plugin.refreshAccessibilityPermission()
+
+        XCTAssertTrue(plugin.permissionState(for: "accessibility").isGranted)
+        XCTAssertEqual(accessibility.requestCount, 0)
+    }
 }
 
 private func makeRule(bundleID: String, sourceID: String) -> AutoInputRule {

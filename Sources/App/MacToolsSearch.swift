@@ -419,6 +419,18 @@ enum MacToolsSearchIndexBuilder {
                 ),
                 systemImage: "gearshape",
                 destination: .general,
+                suggestionPriority: 6
+            ),
+            navigationResult(
+                id: "navigation.permissions",
+                title: AppL10n.settings("tab.permissions", defaultValue: "权限"),
+                subtitle: AppL10n.search("search.subtitle.appSettings", defaultValue: "应用设置"),
+                detail: AppL10n.settings(
+                    "permissions.description",
+                    defaultValue: "集中查看已安装功能使用的 macOS 权限。"
+                ),
+                systemImage: "lock.shield",
+                destination: .permissions,
                 suggestionPriority: 5
             ),
             navigationResult(
@@ -467,7 +479,7 @@ enum MacToolsSearchIndexBuilder {
                 ),
                 systemImage: "info.circle",
                 destination: .about,
-                suggestionPriority: 6
+                suggestionPriority: 7
             )
         ]
 

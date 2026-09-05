@@ -6817,6 +6817,148 @@
         }
       }
     },
+    "permission.fullDiskAccess.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用于检查受保护的系统缓存位置；未授权时仍可清理其他项目。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used to inspect protected system cache locations; other items can still be cleaned without access."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用於檢查受保護的系統快取位置；未授權時仍可清理其他項目。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保護されたシステムキャッシュを確認するために使用します。許可しなくても、ほかの項目は引き続きクリーンアップできます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호된 시스템 캐시 위치를 확인하는 데 사용됩니다. 권한이 없어도 다른 항목은 계속 정리할 수 있습니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird zum Prüfen geschützter System-Cache-Speicherorte verwendet; andere Elemente können auch ohne Zugriff bereinigt werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se usa para revisar ubicaciones protegidas de caché del sistema; los demás elementos se pueden limpiar sin acceso."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permet d’analyser les emplacements protégés du cache système ; les autres éléments peuvent être nettoyés sans cet accès."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usado para verificar locais protegidos de cache do sistema; outros itens ainda podem ser limpos sem acesso."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Используется для проверки защищённых расположений системного кэша; остальные объекты можно очищать и без доступа."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُستخدم لفحص مواقع ذاكرة التخزين المؤقت المحمية في النظام؛ ويمكن تنظيف العناصر الأخرى من دون هذا الوصول."
+          }
+        }
+      }
+    },
+    "permission.fullDiskAccess.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完全磁盘访问"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full Disk Access"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完全磁碟存取"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フルディスクアクセス"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 디스크 접근"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vollzugriff auf den Festspeicher"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acceso total al disco"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accès complet au disque"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acesso Total ao Disco"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Полный доступ к диску"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الوصول الكامل إلى القرص"
+          }
+        }
+      }
+    },
     "detail.fda.title": {
       "extractionState": "manual",
       "localizations": {

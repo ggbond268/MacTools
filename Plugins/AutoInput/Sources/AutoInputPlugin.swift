@@ -27,7 +27,8 @@ private struct AutoInputPluginProvider: PluginProvider {
 
 @MainActor
 final class AutoInputPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginApplicationActivityStateHandling,
-    PluginActionProviding, PluginActionShortcutSettingsProviding, PluginSettingsSearchProviding
+    AccessibilityPermissionRefreshing, PluginActionProviding,
+    PluginActionShortcutSettingsProviding, PluginSettingsSearchProviding
 {
     private enum PermissionID {
         static let accessibility = "accessibility"
@@ -126,6 +127,10 @@ final class AutoInputPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginApplicati
                 )
             ),
         ]
+    }
+
+    func refreshAccessibilityPermission() {
+        controller.refreshAccessibilityPermissionState()
     }
 
     var actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration {
