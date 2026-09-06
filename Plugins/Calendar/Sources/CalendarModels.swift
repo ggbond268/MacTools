@@ -48,6 +48,7 @@ struct CalendarDayModel: Identifiable, Equatable, Sendable {
     let date: Date
     let dayNumber: String
     let lunarText: String
+    let lunarDateText: String
     let isInDisplayedMonth: Bool
     let isToday: Bool
     let isWeekend: Bool
@@ -157,6 +158,7 @@ struct CalendarMonthModelBuilder {
                 date: dayStart,
                 dayNumber: String(components.day ?? 0),
                 lunarText: lunarText(for: dayStart),
+                lunarDateText: lunarDateText(for: dayStart),
                 isInDisplayedMonth: isInDisplayedMonth,
                 isToday: calendar.isDate(dayStart, inSameDayAs: today),
                 isWeekend: calendar.isDateInWeekend(dayStart),
@@ -207,6 +209,17 @@ struct CalendarMonthModelBuilder {
         }
 
         return lunarDayName(day)
+    }
+
+    private func lunarDateText(for date: Date) -> String {
+        let components = lunarCalendar.dateComponents([.month, .day, .isLeapMonth], from: date)
+        let month = components.month ?? 1
+        let day = components.day ?? 1
+        let prefix = components.isLeapMonth == true
+            ? localization.string("lunar.leapPrefix", defaultValue: "闰")
+            : ""
+
+        return prefix + lunarMonthName(month) + lunarDayName(day)
     }
 
     private func isLastDayOfLunarYear(_ date: Date) -> Bool {

@@ -26,7 +26,7 @@ final class CalendarPluginIntegrationTests: XCTestCase {
         XCTAssertTrue(host.panelItems.isEmpty)
         XCTAssertEqual(host.componentItems.map(\.id), ["calendar"])
         XCTAssertEqual(host.componentItems.first?.span.width, 4)
-        XCTAssertEqual(host.componentItems.first?.span.height, 37)
+        XCTAssertEqual(host.componentItems.first?.span.height, 63)
         XCTAssertEqual(host.permissionCards.map(\.permissionID), ["calendar-events", "calendar-automation"])
         XCTAssertEqual(host.pluginSettingsItems.map(\.id), ["calendar"])
         XCTAssertEqual(host.pluginSettingsItems.first?.layout, .form)

@@ -1,5 +1,6 @@
 # Features
 
+- [Calendar selected-day details](calendar-selected-day-details.md)
 - [Dock Lock](dock-lock.md)
 - [Dock Click Hide](dock-click-minimize.md)
 - [Dock Icon for Settings Window](dock-icon-for-settings-window.md)
