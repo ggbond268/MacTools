@@ -2229,6 +2229,143 @@
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法恢复“%@”的插件设置。" } },
       "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法回復「%@」的外掛設定。" } }
     } }
+,
+    "preferencesBackup.cloudSync.changeFolder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Change…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "更改…" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "更改…" } }
+      }
+    },
+    "preferencesBackup.cloudSync.chooseFolder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Choose Folder…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择文件夹…" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇資料夾…" } }
+      }
+    },
+    "preferencesBackup.cloudSync.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Automatically sync preferences across multiple Macs using iCloud Drive or a shared folder." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "通过 iCloud 云盘或共享文件夹在多台 Mac 之间自动同步偏好设置。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "透過 iCloud 雲端硬碟或共享資料夾在多台 Mac 之間自動同步偏好設定。" } }
+      }
+    },
+    "preferencesBackup.cloudSync.enabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Enable Cloud Preferences Sync" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "启用云同步偏好设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "啟用雲端偏好設定同步" } }
+      }
+    },
+    "preferencesBackup.cloudSync.folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Sync Folder" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "同步文件夹" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "同步資料夾" } }
+      }
+    },
+    "preferencesBackup.cloudSync.folderPrompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Choose a folder to sync MacTools preferences (e.g. iCloud Drive or Dropbox)." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择用于同步 MacTools 偏好设置的文件夹（如 iCloud 云盘或 Dropbox）。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇用於同步 MacTools 偏好設定的資料夾（如 iCloud 雲端硬碟或 Dropbox）。" } }
+      }
+    },
+    "preferencesBackup.cloudSync.notConfigured": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Folder Not Configured" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未配置文件夹" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "未配置資料夾" } }
+      }
+    },
+    "preferencesBackup.cloudSync.openFolder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Open Folder" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开文件夹" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開資料夾" } }
+      }
+    },
+    "preferencesBackup.cloudSync.status.disabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cloud sync is disabled" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "云同步未启用" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "雲端同步未啟用" } }
+      }
+    },
+    "preferencesBackup.cloudSync.status.error": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Error" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "错误" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "錯誤" } }
+      }
+    },
+    "preferencesBackup.cloudSync.status.folderMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Configured sync folder does not exist" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "配置的同步文件夹不存在" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "配置的同步資料夾不存在" } }
+      }
+    },
+    "preferencesBackup.cloudSync.status.lastSynced": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Last synced: %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "上次同步：%@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "上次同步：%@" } }
+      }
+    },
+    "preferencesBackup.cloudSync.status.offline": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Offline" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "离线" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "離線" } }
+      }
+    },
+    "preferencesBackup.cloudSync.status.synced": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Synced" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已同步" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已同步" } }
+      }
+    },
+    "preferencesBackup.cloudSync.status.syncing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Syncing…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "同步中…" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "同步中…" } }
+      }
+    },
+    "preferencesBackup.cloudSync.syncNow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Sync Now" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "立即同步" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "立即同步" } }
+      }
+    },
+    "preferencesBackup.cloudSync.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cloud Preferences Sync" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "云同步偏好设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "雲端同步偏好設定" } }
+      }
+    }
   },
   "version": "1.0"
 }
