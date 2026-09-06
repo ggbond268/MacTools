@@ -334,6 +334,36 @@ final class AppHostCommandTests: XCTestCase {
         XCTAssertTrue(launch.keywords.contains("自启动"))
     }
 
+    func testResetCommandPalettePositionExecution() throws {
+        let defaults = makeDefaults()
+        var resetCalled = false
+        let context = AppHostCommandContext(
+            pluginHost: makePluginHostForTests(plugins: []),
+            launchAtLoginController: LaunchAtLoginController(
+                service: CommandTestLaunchAtLoginService(initialRegistered: false)
+            ),
+            appearanceUserDefaults: defaults,
+            resetCommandPalettePosition: { resetCalled = true }
+        )
+
+        let definition = try XCTUnwrap(
+            AppHostCommandCatalog.applicableDefinitions(in: context).first {
+                $0.action == .resetCommandPalettePosition
+            }
+        )
+
+        XCTAssertTrue(definition.keywords.contains("reset"))
+        XCTAssertTrue(definition.keywords.contains("重置"))
+        XCTAssertEqual(
+            AppHostCommandExecutor.perform(
+                expectedDefinition: definition,
+                context: context
+            ),
+            .performed(.refreshIndex)
+        )
+        XCTAssertTrue(resetCalled)
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "AppHostCommandTests-\(UUID().uuidString)"
         suiteNames.append(suiteName)

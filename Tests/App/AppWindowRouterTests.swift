@@ -631,6 +631,34 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertEqual(restorationCount, 1)
     }
 
+    func testResetCommandPalettePositionRestoresDefaultAnchorAndFrame() throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let positionStore = WindowPositionStore(userDefaults: defaults)
+        positionStore.savePosition(
+            .custom(normalizedPoint: CGPoint(x: 0.2, y: 0.8)),
+            for: .commandPalette
+        )
+
+        let router = makeRouter(defaults: defaults, windowPositionStore: positionStore)
+        router.toggleCommandPalette()
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+
+        router.resetCommandPalettePosition()
+        XCTAssertEqual(positionStore.position(for: .commandPalette), .defaultAnchor)
+
+        let defaultFrame = StandaloneCommandPaletteLayout.frame(
+            pointerLocation: NSEvent.mouseLocation,
+            visibleFrames: [panel.screen?.visibleFrame ?? .zero],
+            position: .defaultAnchor
+        )
+        XCTAssertEqual(panel.frame.origin.x, defaultFrame.origin.x, accuracy: 1.0)
+        XCTAssertEqual(panel.frame.origin.y, defaultFrame.origin.y, accuracy: 1.0)
+
+        router.dismissCommandPalette()
+    }
+
     func testSuccessfulStandalonePaletteActionRestoresOnlyWhilePaletteOwnsFocus() {
         XCTAssertTrue(
             StandaloneCommandPaletteSuccessfulExecutionFocusPolicy
@@ -978,6 +1006,7 @@ final class AppWindowRouterTests: XCTestCase {
         defaults: UserDefaults,
         appUpdater: AppUpdater? = nil,
         commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration? = nil,
+        windowPositionStore: WindowPositionStore? = nil,
         configureHost: (PluginHost) -> Void = { _ in }
     ) -> AppWindowRouter {
         let host = PluginHost(
@@ -995,7 +1024,8 @@ final class AppWindowRouterTests: XCTestCase {
             menuBarIconGallery: MenuBarIconGalleryLibrary(),
             launchAtLoginController: LaunchAtLoginController(service: AppWindowRouterFakeLaunchAtLoginService()),
             appearanceUserDefaults: defaults,
-            commandPaletteFocusRestoration: commandPaletteFocusRestoration ?? .init()
+            commandPaletteFocusRestoration: commandPaletteFocusRestoration ?? .init(),
+            windowPositionStore: windowPositionStore ?? WindowPositionStore(userDefaults: defaults)
         )
     }
 

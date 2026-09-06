@@ -489,7 +489,10 @@ struct UnifiedSearchPresentationView: View {
                         dismissAfterSuccessfulExecution: navigationCoordinator.dismissUnifiedSearch,
                         navigate: navigationCoordinator.navigateFromSearch,
                         consumeQuickSelection: navigationCoordinator.consumeUnifiedSearchQuickSelectionRequest,
-                        setPendingExecutionCancellation: { _ in }
+                        setPendingExecutionCancellation: { _ in },
+                        resetCommandPalettePosition: {
+                            WindowPositionStore.shared.resetPosition(for: .commandPalette)
+                        }
                     )
                 )
                 .padding(24)
@@ -504,6 +507,7 @@ struct UnifiedSearchPaletteActions {
     let navigate: (SettingsNavigationDestination, SettingsSearchRevealTarget?) -> Bool
     let consumeQuickSelection: (UnifiedSearchQuickSelectionRequest) -> Bool
     let setPendingExecutionCancellation: ((() -> Void)?) -> Void
+    var resetCommandPalettePosition: (() -> Void)? = nil
 }
 
 private struct UnifiedSearchPaletteShadowModifier: ViewModifier {
@@ -553,6 +557,7 @@ struct UnifiedSearchPaletteView: View {
     let quickSelectionRequest: UnifiedSearchQuickSelectionRequest?
     let showsCustomShadow: Bool
     let actions: UnifiedSearchPaletteActions
+    let dragCoordinator: WindowSnapCoordinator?
     @Environment(\.accessibilityReduceTransparency) private var accessibilityReduceTransparency
     @StateObject private var model: UnifiedSearchPaletteModel
     @State private var query = ""
@@ -574,13 +579,15 @@ struct UnifiedSearchPaletteView: View {
         resetRequestID: UInt?,
         quickSelectionRequest: UnifiedSearchQuickSelectionRequest?,
         showsCustomShadow: Bool,
-        actions: UnifiedSearchPaletteActions
+        actions: UnifiedSearchPaletteActions,
+        dragCoordinator: WindowSnapCoordinator? = nil
     ) {
         self.pluginHost = pluginHost
         let commandContext = AppHostCommandContext(
             pluginHost: pluginHost,
             launchAtLoginController: launchAtLoginController,
-            appearanceUserDefaults: appearanceUserDefaults
+            appearanceUserDefaults: appearanceUserDefaults,
+            resetCommandPalettePosition: actions.resetCommandPalettePosition
         )
         self.commandContext = commandContext
         self.availableSize = availableSize
@@ -591,6 +598,7 @@ struct UnifiedSearchPaletteView: View {
         self.quickSelectionRequest = quickSelectionRequest
         self.showsCustomShadow = showsCustomShadow
         self.actions = actions
+        self.dragCoordinator = dragCoordinator
         _model = StateObject(wrappedValue: UnifiedSearchPaletteModel(
             commandContext: commandContext,
             recentStore: recentStore
@@ -599,6 +607,12 @@ struct UnifiedSearchPaletteView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if dragCoordinator != nil {
+                WindowDragHandleBar(coordinator: dragCoordinator)
+                    .padding(.top, -6)
+                    .padding(.bottom, -4)
+            }
+
             searchField
 
             metadataRow

@@ -48,6 +48,7 @@ enum AppHostCommandAction: Hashable {
         surface: PluginDisplaySurface,
         isVisible: Bool
     )
+    case resetCommandPalettePosition
 }
 
 @MainActor
@@ -55,6 +56,7 @@ struct AppHostCommandContext {
     let pluginHost: PluginHost
     let launchAtLoginController: LaunchAtLoginController
     let appearanceUserDefaults: UserDefaults
+    var resetCommandPalettePosition: (() -> Void)? = nil
 }
 
 enum AppHostCommandContinuation: Equatable {
@@ -89,6 +91,8 @@ enum AppHostCommandCatalog {
                 return preference != currentAppearance
             case let .setLaunchAtLogin(isEnabled):
                 return isEnabled != context.launchAtLoginController.isEnabled
+            case .resetCommandPalettePosition:
+                return true
             case .setPluginVisibility:
                 return false
             }
@@ -126,6 +130,36 @@ enum AppHostCommandCatalog {
         sharedAppShortcutActions.map(appShortcutDefinition)
             + AppAppearancePreference.allCases.map(appearanceDefinition)
             + [launchAtLoginDefinition(isEnabled: true), launchAtLoginDefinition(isEnabled: false)]
+            + [resetCommandPalettePositionDefinition()]
+    }
+
+    private static func resetCommandPalettePositionDefinition() -> AppHostCommandDefinition {
+        AppHostCommandDefinition(
+            id: "app-command.command-palette.reset-position",
+            title: AppL10n.search(
+                "search.command.resetCommandPalettePosition.title",
+                defaultValue: "重置命令面板位置"
+            ),
+            description: AppL10n.search(
+                "search.command.resetCommandPalettePosition.description",
+                defaultValue: "将命令面板恢复到当前屏幕的默认位置。"
+            ),
+            keywords: [
+                "reset",
+                "command palette",
+                "position",
+                "snap",
+                "anchor",
+                "center",
+                "重置",
+                "位置",
+                "命令面板",
+                "居中",
+            ],
+            systemImage: "arrow.counterclockwise",
+            confirmation: nil,
+            action: .resetCommandPalettePosition
+        )
     }
 
     private static func appShortcutDefinition(
@@ -377,6 +411,13 @@ enum AppHostCommandExecutor {
             ) == isVisible else {
                 return .failed
             }
+            return .performed(.refreshIndex)
+
+        case .resetCommandPalettePosition:
+            guard let resetAction = context.resetCommandPalettePosition else {
+                return .failed
+            }
+            resetAction()
             return .performed(.refreshIndex)
         }
     }
