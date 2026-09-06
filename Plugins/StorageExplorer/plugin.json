@@ -1,0 +1,214 @@
+{
+  "id": "com.mactools.plugin.storage-explorer",
+  "displayName": "存储空间分析",
+  "summary": "以层级视图直观分析磁盘占用，找出大文件，在审阅确认后移至废纸篓",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "مستكشف التخزين",
+      "summary": "تحليل استخدام القرص بشكل مرئي مع التنقل الهرمي، وتحديد الملفات الكبيرة، والنقل إلى المهملات بعد المراجعة."
+    },
+    "de": {
+      "displayName": "Speicher-Explorer",
+      "summary": "Visuelle Festplattenanalyse mit hierarchischer Navigation, Erkennung großer Dateien und Verschieben in den Papierkorb nach Überprüfung."
+    },
+    "en": {
+      "displayName": "Storage Explorer",
+      "summary": "Visually analyze disk usage with hierarchical navigation, identify large files, and move to Trash after explicit review."
+    },
+    "es": {
+      "displayName": "Explorador de almacenamiento",
+      "summary": "Analiza visualmente el uso del disco con navegación jerárquica, identifica archivos grandes y muévelos a la Papelera tras su revisión."
+    },
+    "fr": {
+      "displayName": "Explorateur de stockage",
+      "summary": "Analysez visuellement l'utilisation du disque grâce à une navigation hiérarchique, repérez les gros fichiers et mettez-les à la corbeille après examen."
+    },
+    "ja": {
+      "displayName": "ストレージエクスプローラー",
+      "summary": "階層構造でディスク使用状況を視覚的に分析し、大容量ファイルを特定して確認後にゴミ箱へ移動します。"
+    },
+    "ko": {
+      "displayName": "저장 공간 탐색기",
+      "summary": "계층적 탐색으로 디스크 사용량을 시각적으로 분석하고, 대용량 파일을 식별하여 검토 후 휴지통으로 이동합니다."
+    },
+    "pt": {
+      "displayName": "Explorador de armazenamento",
+      "summary": "Analise visualmente o uso do disco com navegação hierárquica, identifique ficheiros grandes e mova para o Lixo após revisão."
+    },
+    "ru": {
+      "displayName": "Анализатор диска",
+      "summary": "Наглядный анализ использования диска с иерархической навигацией, поиск больших файлов и перемещение в корзину после проверки."
+    },
+    "zh-Hans": {
+      "displayName": "存储空间分析",
+      "summary": "以层级视图直观分析磁盘占用，找出大文件，在审阅确认后移至废纸篓"
+    },
+    "zh-Hant": {
+      "displayName": "儲存空間分析",
+      "summary": "以層級檢視直觀分析磁碟佔用，找出大檔案，在審閱確認後移至垃圾桶"
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "retention-description": {
+      "ar": "تظل إعدادات مستكشف التخزين محفوظة حتى إزالة بيانات الإضافة. لا يتم تخزين نتائج الفحص على القرص.",
+      "de": "Speicher-Explorer-Einstellungen bleiben bis zum Entfernen der Plug-in-Daten erhalten. Scan-Ergebnisse werden nicht dauerhaft gespeichert.",
+      "en": "Storage Explorer settings persist until plugin data is removed. Scan results are kept in memory and are not written to disk.",
+      "es": "Los ajustes del explorador se conservan hasta que se eliminan los datos del complemento. Los resultados del análisis no se guardan en el disco.",
+      "fr": "Les réglages de l'explorateur restent jusqu'à la suppression des données du module. Les résultats d'analyse ne sont pas écrits sur le disque.",
+      "ja": "ストレージエクスプローラーの設定はプラグインデータが削除されるまで保持されます。スキャン結果はディスクに保存されません。",
+      "ko": "저장 공간 탐색기 설정은 플러그인 데이터를 제거할 때까지 유지됩니다. 스캔 결과는 디스크에 저장되지 않습니다.",
+      "pt": "As definições do explorador permanecem até a remoção dos dados do plugin. Os resultados da análise não são guardados no disco.",
+      "ru": "Настройки анализатора сохраняются до удаления данных плагина. Результаты сканирования не сохраняются на диск.",
+      "zh-Hans": "存储空间分析设置会保留到插件数据被移除。扫描结果保存在内存中，不会写入磁盘。",
+      "zh-Hant": "儲存空間分析設定會保留到外掛資料被移除。掃描結果保存在記憶體中，不會寫入磁碟。"
+    }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "StorageExplorer.bundle",
+  "factoryClass": "StorageExplorerPlugin.StorageExplorerPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "StorageExplorerPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": false,
+    "componentPanel": false,
+    "settings": "workspace"
+  },
+  "permissions": [],
+  "category": "storage",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "GPL-3.0-only"
+  },
+  "discovery": {
+    "keywords": [
+      "storage",
+      "explorer",
+      "disk",
+      "usage",
+      "analyzer",
+      "space"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "مستكشف التخزين",
+        "تحليل القرص"
+      ],
+      "de": [
+        "Speicher-Explorer",
+        "Festplattenanalyse"
+      ],
+      "en": [
+        "Storage Explorer",
+        "Disk Usage",
+        "Disk Analyzer"
+      ],
+      "es": [
+        "Explorador de almacenamiento",
+        "Analizador de disco"
+      ],
+      "fr": [
+        "Explorateur de stockage",
+        "Analyseur de disque"
+      ],
+      "ja": [
+        "ストレージエクスプローラー",
+        "ディスク使用量"
+      ],
+      "ko": [
+        "저장 공간 탐색기",
+        "디스크 분석"
+      ],
+      "pt": [
+        "Explorador de armazenamento",
+        "Análise de disco"
+      ],
+      "ru": [
+        "Анализатор диска",
+        "Использование диска"
+      ],
+      "zh-Hans": [
+        "存储空间分析",
+        "磁盘分析",
+        "空间占用"
+      ],
+      "zh-Hant": [
+        "儲存空間分析",
+        "磁碟分析",
+        "空間佔用"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "storage"
+    ],
+    "relatedPluginIDs": [
+      "disk-clean"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "filesystem-paths",
+      "file-sizes"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled",
+      "description": "@productStrings.retention-description"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "disk-clean"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
+}
