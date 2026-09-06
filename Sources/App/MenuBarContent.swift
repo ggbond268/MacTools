@@ -550,6 +550,7 @@ struct MenuBarContent: View {
     let contentBodyHeight: CGFloat
     let maximumFeatureListHeight: CGFloat
     let isPanelVisible: Bool
+    var isEditingLayout: Bool = false
     let onDismiss: () -> Void
     let onOpenSettings: () -> Void
     let onPresentDiskCleanConfiguration: () -> Void
@@ -599,6 +600,11 @@ struct MenuBarContent: View {
             } else {
                 hoverCoordinator.dismissImmediately()
                 secondaryPanelController.setHostWindow(nil)
+            }
+        }
+        .onChange(of: isEditingLayout) { _, isEditing in
+            if isEditing {
+                hoverCoordinator.dismissImmediately()
             }
         }
         .onDisappear {
@@ -708,7 +714,10 @@ struct MenuBarContent: View {
     }
 
     private var isFeatureListScrollable: Bool {
-        featureContentHeight > visibleFeatureListHeight
+        if isEditingLayout {
+            return true
+        }
+        return featureContentHeight > visibleFeatureListHeight
     }
 
     private var featureContentHeight: CGFloat {
@@ -943,6 +952,10 @@ struct MenuBarContent: View {
         optionID: String,
         isHovering: Bool
     ) {
+        guard !isEditingLayout else {
+            return
+        }
+
         if isHovering {
             hoverCoordinator.hoverBegan(
                 pluginID: pluginID,
@@ -999,7 +1012,7 @@ struct MenuBarContent: View {
 
     private var featureCards: some View {
         VStack(spacing: MenuBarPanelLayout.featureRowSpacing) {
-            if pluginHost.panelItems.isEmpty {
+            if pluginHost.panelItems.isEmpty && (!isEditingLayout || pluginHost.featurePanelHiddenLayoutItems.isEmpty) {
                 PanelPluginEmptyState(
                     tab: .features,
                     onInstall: {
@@ -1007,6 +1020,60 @@ struct MenuBarContent: View {
                     }
                 )
                 .frame(height: contentBodyHeight)
+            } else if isEditingLayout {
+                ForEach(Array(pluginHost.panelItems.enumerated()), id: \.element.id) { index, item in
+                    FeaturePanelEditRowView(
+                        item: item,
+                        isFirst: index == 0,
+                        isLast: index == pluginHost.panelItems.count - 1,
+                        onMoveUp: {
+                            pluginHost.movePlugin(id: item.id, by: -1, on: .featurePanel)
+                        },
+                        onMoveDown: {
+                            pluginHost.movePlugin(id: item.id, by: 1, on: .featurePanel)
+                        },
+                        onMoveToTop: {
+                            pluginHost.movePlugin(id: item.id, toOffset: 0, on: .featurePanel)
+                        },
+                        onMoveToBottom: {
+                            pluginHost.movePlugin(id: item.id, toOffset: pluginHost.panelItems.count, on: .featurePanel)
+                        },
+                        onToggleVisible: {
+                            pluginHost.setPluginVisible(false, id: item.id, on: .featurePanel)
+                        },
+                        onDropTarget: { draggedID in
+                            guard draggedID != item.id,
+                                  let sourceIndex = pluginHost.panelItems.firstIndex(where: { $0.id == draggedID }) else {
+                                return
+                            }
+                            let targetOffset = index > sourceIndex ? index + 1 : index
+                            pluginHost.movePlugin(id: draggedID, toOffset: targetOffset, on: .featurePanel)
+                        }
+                    )
+                }
+
+                if !pluginHost.featurePanelHiddenLayoutItems.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 4) {
+                            Image(systemName: PluginSystemImage.resolvedName("eye.slash"))
+                                .font(.system(size: 10, weight: .medium))
+                            Text(AppL10n.settings("plugins.layout.hiddenSection", defaultValue: "已隐藏"))
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(theme.text.secondary)
+                        .padding(.top, 8)
+                        .padding(.horizontal, FeatureRowLayout.rowHorizontalPadding)
+
+                        ForEach(pluginHost.featurePanelHiddenLayoutItems) { hiddenItem in
+                            FeaturePanelHiddenEditRowView(
+                                item: hiddenItem,
+                                onToggleVisible: {
+                                    pluginHost.setPluginVisible(true, id: hiddenItem.id, on: .featurePanel)
+                                }
+                            )
+                        }
+                    }
+                }
             } else {
                 ForEach(pluginHost.panelItems) { item in
                     FeatureRowView(
@@ -1622,6 +1689,224 @@ struct FeatureRowView: View {
         if didPushDisabledCursor {
             NSCursor.pop()
             didPushDisabledCursor = false
+        }
+    }
+}
+
+struct FeaturePanelEditRowView: View {
+    let item: PluginPanelItem
+    let isFirst: Bool
+    let isLast: Bool
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    let onMoveToTop: () -> Void
+    let onMoveToBottom: () -> Void
+    let onToggleVisible: () -> Void
+    let onDropTarget: (String) -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
+    @State private var isTargetedForDrop = false
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: FeatureRowLayout.rowSpacing) {
+            Image(systemName: PluginSystemImage.resolvedName("line.3.horizontal"))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.text.secondary.opacity(0.7))
+                .frame(width: 14)
+                .accessibilityLabel(AppL10n.settings("plugins.layout.reorderHandle", defaultValue: "重新排序"))
+
+            ZStack {
+                RoundedRectangle(cornerRadius: FeatureRowLayout.iconCornerRadius, style: .continuous)
+                    .fill(theme.surfaces.control)
+
+                Image(systemName: PluginSystemImage.resolvedName(item.iconName))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.text.primary)
+            }
+            .frame(width: FeatureRowLayout.iconSize, height: FeatureRowLayout.iconSize)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.text.primary)
+                    .lineLimit(1)
+
+                Text(item.description)
+                    .font(.system(size: 10))
+                    .foregroundStyle(theme.text.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 2) {
+                Button(action: onMoveUp) {
+                    Image(systemName: PluginSystemImage.resolvedName("chevron.up"))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isFirst ? theme.text.disabled : theme.text.secondary)
+                        .frame(width: 22, height: 22)
+                        .background(
+                            Circle().fill(isHovered ? theme.surfaces.control : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isFirst)
+                .help(AppL10n.settings("plugins.layout.moveUp", defaultValue: "上移"))
+                .accessibilityLabel(AppL10n.settings("plugins.layout.moveUp", defaultValue: "上移"))
+
+                Button(action: onMoveDown) {
+                    Image(systemName: PluginSystemImage.resolvedName("chevron.down"))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isLast ? theme.text.disabled : theme.text.secondary)
+                        .frame(width: 22, height: 22)
+                        .background(
+                            Circle().fill(isHovered ? theme.surfaces.control : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isLast)
+                .help(AppL10n.settings("plugins.layout.moveDown", defaultValue: "下移"))
+                .accessibilityLabel(AppL10n.settings("plugins.layout.moveDown", defaultValue: "下移"))
+
+                Button(action: onToggleVisible) {
+                    Image(systemName: PluginSystemImage.resolvedName("eye"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(theme.text.secondary)
+                        .frame(width: 22, height: 22)
+                        .background(
+                            Circle().fill(isHovered ? theme.surfaces.control : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(AppL10n.settings("plugins.layout.hide", defaultValue: "隐藏"))
+                .accessibilityLabel(AppL10n.settings("plugins.layout.hide", defaultValue: "隐藏"))
+            }
+        }
+        .padding(.horizontal, FeatureRowLayout.rowHorizontalPadding)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(theme.surfaces.card)
+                .overlay {
+                    if isTargetedForDrop {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(theme.accent, lineWidth: 2)
+                    }
+                }
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .draggable(item.id)
+        .dropDestination(for: String.self) { items, _ in
+            guard let draggedID = items.first else { return false }
+            onDropTarget(draggedID)
+            return true
+        } isTargeted: { isTargeted in
+            isTargetedForDrop = isTargeted
+        }
+        .contextMenu {
+            Button(AppL10n.settings("plugins.layout.moveToTop", defaultValue: "移至顶部")) {
+                onMoveToTop()
+            }
+            .disabled(isFirst)
+
+            Button(AppL10n.settings("plugins.layout.moveUp", defaultValue: "上移")) {
+                onMoveUp()
+            }
+            .disabled(isFirst)
+
+            Button(AppL10n.settings("plugins.layout.moveDown", defaultValue: "下移")) {
+                onMoveDown()
+            }
+            .disabled(isLast)
+
+            Button(AppL10n.settings("plugins.layout.moveToBottom", defaultValue: "移至底部")) {
+                onMoveToBottom()
+            }
+            .disabled(isLast)
+
+            Divider()
+
+            Button(AppL10n.settings("plugins.layout.hide", defaultValue: "隐藏")) {
+                onToggleVisible()
+            }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.moveUp", defaultValue: "上移"))) {
+            if !isFirst { onMoveUp() }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.moveDown", defaultValue: "下移"))) {
+            if !isLast { onMoveDown() }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.moveToTop", defaultValue: "移至顶部"))) {
+            if !isFirst { onMoveToTop() }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.moveToBottom", defaultValue: "移至底部"))) {
+            if !isLast { onMoveToBottom() }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.hide", defaultValue: "隐藏"))) {
+            onToggleVisible()
+        }
+    }
+}
+
+struct FeaturePanelHiddenEditRowView: View {
+    let item: PluginSurfaceLayoutItem
+    let onToggleVisible: () -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: FeatureRowLayout.rowSpacing) {
+            ZStack {
+                RoundedRectangle(cornerRadius: FeatureRowLayout.iconCornerRadius, style: .continuous)
+                    .fill(theme.surfaces.control.opacity(0.6))
+
+                Image(systemName: PluginSystemImage.resolvedName(item.iconName))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.text.disabled)
+            }
+            .frame(width: FeatureRowLayout.iconSize, height: FeatureRowLayout.iconSize)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.text.secondary)
+                    .lineLimit(1)
+
+                Text(item.description)
+                    .font(.system(size: 10))
+                    .foregroundStyle(theme.text.disabled)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: onToggleVisible) {
+                Image(systemName: PluginSystemImage.resolvedName("eye.slash"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.text.secondary)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        Circle().fill(isHovered ? theme.surfaces.control : Color.clear)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(AppL10n.settings("plugins.layout.show", defaultValue: "显示"))
+            .accessibilityLabel(AppL10n.settings("plugins.layout.show", defaultValue: "显示"))
+        }
+        .padding(.horizontal, FeatureRowLayout.rowHorizontalPadding)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(theme.surfaces.card.opacity(0.5))
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .contextMenu {
+            Button(AppL10n.settings("plugins.layout.show", defaultValue: "显示")) {
+                onToggleVisible()
+            }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.show", defaultValue: "显示"))) {
+            onToggleVisible()
         }
     }
 }

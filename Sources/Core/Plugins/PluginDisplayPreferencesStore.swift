@@ -311,6 +311,36 @@ final class PluginDisplayPreferencesStore {
         )
     }
 
+    func setDashboardPluginOrder(
+        _ orderedPluginIDs: [String],
+        defaultPluginIDs: [String]
+    ) {
+        setVisiblePluginIDs(orderedPluginIDs, for: .dashboard, defaultPluginIDs: defaultPluginIDs)
+    }
+
+    func setFeaturePanelPluginOrder(
+        _ orderedPluginIDs: [String],
+        defaultPluginIDs: [String]
+    ) {
+        setVisiblePluginIDs(orderedPluginIDs, for: .featurePanel, defaultPluginIDs: defaultPluginIDs)
+    }
+
+    func setDashboardPluginVisible(
+        _ isVisible: Bool,
+        pluginID: String,
+        defaultPluginIDs: [String]
+    ) {
+        setPluginVisible(isVisible, pluginID: pluginID, on: .dashboard, defaultPluginIDs: defaultPluginIDs)
+    }
+
+    func setFeaturePanelPluginVisible(
+        _ isVisible: Bool,
+        pluginID: String,
+        defaultPluginIDs: [String]
+    ) {
+        setPluginVisible(isVisible, pluginID: pluginID, on: .featurePanel, defaultPluginIDs: defaultPluginIDs)
+    }
+
     func removePlugin(_ pluginID: String) {
         var preferences = loadPreferences()
         preferences.generalPluginOrder.removeAll { $0 == pluginID }
