@@ -184,7 +184,12 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
         )
 
         panel.setFrame(targetFrame, display: true)
+        let textEditingRestoration = PluginPresentationSafety.prepareForWindowOrdering(
+            panel,
+            restoringTextEditingIn: NSApp.isActive ? NSApp.keyWindow : nil
+        )
         panel.orderFrontRegardless()
+        textEditingRestoration?.restore()
     }
 
     func dismiss() {
