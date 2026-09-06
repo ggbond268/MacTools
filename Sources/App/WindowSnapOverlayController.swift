@@ -1,4 +1,5 @@
 import AppKit
+import MacToolsPluginKit
 
 final class WindowSnapOverlayView: NSView {
     var guides: [WindowSnapGuide] = [] {
@@ -60,7 +61,9 @@ final class WindowSnapOverlayController {
         if let window {
             panel.order(.below, relativeTo: window.windowNumber)
         } else {
+            let restoration = PluginPresentationSafety.prepareForWindowOrdering(panel)
             panel.orderFront(nil)
+            restoration?.restore()
         }
     }
 
