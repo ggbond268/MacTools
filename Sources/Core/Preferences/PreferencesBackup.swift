@@ -364,6 +364,10 @@ struct PreferencesImportPreview: Equatable {
     let installablePlugins: [PreferencesImportInstallablePlugin]
     let selection: PreferencesBackupSelection
 
+    var installableMissingPluginIDs: [String] {
+        installablePlugins.map(\.id)
+    }
+
     static func make(
         backup: PreferencesBackup,
         availablePluginIDs: Set<String>,

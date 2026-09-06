@@ -2078,6 +2078,163 @@ final class PreferencesBackupTests: XCTestCase {
             )
         )
     }
+
+    func testPreviewInstallableMissingPluginIDsCalculatesAvailableMissingPlugins() throws {
+        let installableA = PreferencesImportInstallablePlugin(
+            id: "plugin-a",
+            title: "Plugin A",
+            summary: "Summary A",
+            version: "1.0.0"
+        )
+        let installableB = PreferencesImportInstallablePlugin(
+            id: "plugin-b",
+            title: "Plugin B",
+            summary: "Summary B",
+            version: "2.0.0"
+        )
+        let preview = PreferencesImportPreview(
+            pluginCount: 0,
+            unavailablePluginIDs: [],
+            shortcutCount: 0,
+            unavailableShortcutIDs: [],
+            unavailableActionReferences: [],
+            retainedUnavailableActionReferences: [],
+            installablePlugins: [installableA, installableB],
+            selection: PreferencesBackupSelection(
+                includesApplicationPreferences: true,
+                includesPluginLayout: true,
+                includesShortcuts: true,
+                includesAutomation: true,
+                includesRunLinks: true,
+                pluginPreferenceIDs: ["plugin-a", "plugin-b"]
+            )
+        )
+
+        XCTAssertEqual(preview.installableMissingPluginIDs, ["plugin-a", "plugin-b"])
+    }
+
+    func testPreferencesImportPreviewSheetDefaultsToSelectingAllInstallableMissingPlugins() throws {
+        let installableA = PreferencesImportInstallablePlugin(
+            id: "plugin-a",
+            title: "Plugin A",
+            summary: "Summary A",
+            version: "1.0.0"
+        )
+        let installableB = PreferencesImportInstallablePlugin(
+            id: "plugin-b",
+            title: "Plugin B",
+            summary: "Summary B",
+            version: "2.0.0"
+        )
+        let preview = PreferencesImportPreview(
+            pluginCount: 0,
+            unavailablePluginIDs: [],
+            shortcutCount: 0,
+            unavailableShortcutIDs: [],
+            unavailableActionReferences: [],
+            retainedUnavailableActionReferences: [],
+            installablePlugins: [installableA, installableB],
+            selection: PreferencesBackupSelection(
+                includesApplicationPreferences: true,
+                includesPluginLayout: true,
+                includesShortcuts: true,
+                includesAutomation: true,
+                includesRunLinks: true,
+                pluginPreferenceIDs: ["plugin-a", "plugin-b"]
+            )
+        )
+
+        let sheet = PreferencesImportPreviewSheet(
+            preview: preview,
+            previewProvider: { _ in preview },
+            pluginOptions: [
+                PreferencesPluginOption(id: "plugin-a", title: "Plugin A"),
+                PreferencesPluginOption(id: "plugin-b", title: "Plugin B")
+            ],
+            isImporting: false,
+            onCancel: {},
+            onImport: { _, _ in }
+        )
+
+        XCTAssertEqual(sheet.selectedInstallablePluginIDs, ["plugin-a", "plugin-b"])
+        XCTAssertEqual(sheet.userDeselectedPluginIDs, [])
+    }
+
+    func testPreferencesImportSelectionModelBulkSelectionAndIndividualOptOut() throws {
+        let eligibleIDs: Set<String> = ["plugin-a", "plugin-b"]
+        var model = PreferencesImportSelectionModel(eligiblePluginIDs: eligibleIDs)
+
+        // Default: all selected
+        XCTAssertEqual(model.selectedInstallablePluginIDs, eligibleIDs)
+        XCTAssertTrue(model.userDeselectedPluginIDs.isEmpty)
+
+        // Deselect all
+        model.deselectAll(eligiblePluginIDs: eligibleIDs)
+        XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
+        XCTAssertEqual(model.userDeselectedPluginIDs, eligibleIDs)
+
+        // Select all
+        model.selectAll(eligiblePluginIDs: eligibleIDs)
+        XCTAssertEqual(model.selectedInstallablePluginIDs, eligibleIDs)
+        XCTAssertTrue(model.userDeselectedPluginIDs.isEmpty)
+
+        // Opt-out individual plugin
+        model.setPluginSelected("plugin-a", isSelected: false)
+        XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-b"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+
+        // Re-select individual plugin
+        model.setPluginSelected("plugin-a", isSelected: true)
+        XCTAssertEqual(model.selectedInstallablePluginIDs, eligibleIDs)
+        XCTAssertTrue(model.userDeselectedPluginIDs.isEmpty)
+    }
+
+    func testPreferencesImportSelectionModelCategoryChangePreservesUserOverridesAndRemovesIneligible() throws {
+        let initialEligible: Set<String> = ["plugin-a", "plugin-b"]
+        var model = PreferencesImportSelectionModel(eligiblePluginIDs: initialEligible)
+
+        // User explicitly unchecks plugin-a
+        model.setPluginSelected("plugin-a", isSelected: false)
+        XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-b"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+
+        // Category changes such that plugin-b is no longer eligible (only plugin-a is)
+        model.updateEligiblePlugins(["plugin-a"])
+        // plugin-b was removed because it is ineligible, and plugin-a remains deselected
+        XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+
+        // Category re-enables plugin-b and introduces newly eligible plugin-c
+        model.updateEligiblePlugins(["plugin-a", "plugin-b", "plugin-c"])
+        // plugin-b and plugin-c are selected; plugin-a was user-deselected so remains deselected
+        XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-b", "plugin-c"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+    }
+
+    func testPreferencesImportPreviewSheetTitlesAndSummariesReflectSelectedCount() throws {
+        // Confirm title
+        XCTAssertEqual(
+            PreferencesImportPreviewSheet.confirmTitle(selectedCount: 0),
+            AppL10n.preferencesBackup("preferencesBackup.preview.confirm", defaultValue: "导入")
+        )
+        let singleConfirm = PreferencesImportPreviewSheet.confirmTitle(selectedCount: 1)
+        XCTAssertTrue(singleConfirm.contains("1"))
+        let multiConfirm = PreferencesImportPreviewSheet.confirmTitle(selectedCount: 5)
+        XCTAssertTrue(multiConfirm.contains("5"))
+
+        // Preview description
+        let emptyDesc = PreferencesImportPreviewSheet.previewDescription(selectedCount: 0)
+        XCTAssertEqual(
+            emptyDesc,
+            AppL10n.preferencesBackup("preferencesBackup.preview.description", defaultValue: "")
+        )
+        let installDesc = PreferencesImportPreviewSheet.previewDescription(selectedCount: 3)
+        XCTAssertTrue(installDesc.contains("3"))
+
+        // Plugins count summary
+        let summary = PreferencesImportPreviewSheet.pluginsSelectedCountSummary(selectedCount: 2, totalCount: 5)
+        XCTAssertTrue(summary.contains("2") && summary.contains("5"))
+    }
 }
 
 @MainActor
