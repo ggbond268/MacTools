@@ -94,6 +94,38 @@ struct WindowModifierDragSettingsView: View {
             .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
             .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
             .disabled(!plugin.isModifierDragEnabled)
+
+            Divider()
+                .padding(.leading, PluginSettingsTheme.Spacing.rowHorizontal)
+
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    Text(plugin.localizedKey(
+                        "settings.modifierDrag.showsIndicator.title",
+                        "显示修饰键拖移指示器"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+
+                    Text(plugin.localizedKey(
+                        "settings.modifierDrag.showsIndicator.description",
+                        "按住修饰键或拖移窗口时，在指针旁显示状态提示。"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+                Toggle("", isOn: Binding(
+                    get: { plugin.showsModifierDragIndicator },
+                    set: { plugin.setShowsModifierDragIndicator($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+            }
+            .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
+            .disabled(!plugin.isModifierDragEnabled)
         }
     }
 

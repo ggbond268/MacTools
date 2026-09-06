@@ -27,6 +27,18 @@ final class WindowLayoutsStoreTests: XCTestCase {
         XCTAssertFalse(WindowLayoutsStore(storage: storage).showsCommandFeedback)
     }
 
+    func testPersistsAndResetsModifierDragShowsIndicatorPreference() {
+        let storage = StoreMemoryStorage()
+        let store = WindowLayoutsStore(storage: storage)
+
+        XCTAssertTrue(store.modifierDragShowsIndicator)
+        store.setModifierDragShowsIndicator(false)
+        XCTAssertFalse(WindowLayoutsStore(storage: storage).modifierDragShowsIndicator)
+
+        store.reset()
+        XCTAssertTrue(WindowLayoutsStore(storage: storage).modifierDragShowsIndicator)
+    }
+
     func testPersistsAndResetsModifierDragConfiguration() {
         let storage = StoreMemoryStorage()
         let store = WindowLayoutsStore(storage: storage)

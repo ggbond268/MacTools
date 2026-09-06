@@ -38,6 +38,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         static let respectsStageManager = "respects-stage-manager"
         static let showsCommandFeedback = "shows-command-feedback"
         static let modifierDragEnabled = "modifier-drag.enabled"
+        static let modifierDragShowsIndicator = "modifier-drag.shows-indicator"
         static let reset = "reset"
         static let addCustom = "add-custom"
     }
@@ -102,9 +103,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     init(
         context: PluginRuntimeContext = PluginRuntimeContext(pluginID: "window-layouts"),
         executor: WindowLayoutExecuting? = nil,
-        makeModifierDragSession: @escaping @MainActor () -> any WindowModifierDragSessionManaging = {
-            WindowModifierDragSession()
-        },
+        makeModifierDragSession: (@MainActor () -> any WindowModifierDragSessionManaging)? = nil,
         accessibilityTrusted: @escaping @MainActor @Sendable () -> Bool = AXIsProcessTrusted,
         requestAccessibilityTrust: @escaping @MainActor @Sendable (Bool) -> Bool = WindowLayoutsAccessibilityCheck.requestTrust
     ) {
@@ -114,7 +113,39 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         self.store = store
         self.accessibilityTrusted = accessibilityTrusted
         self.requestAccessibilityTrust = requestAccessibilityTrust
-        self.makeModifierDragSession = makeModifierDragSession
+        self.makeModifierDragSession = makeModifierDragSession ?? {
+            WindowModifierDragSession(
+                hudPresenter: WindowModifierDragHUDController(
+                    moveTitleProvider: {
+                        localization.string("settings.modifierDrag.hud.move", defaultValue: "Move")
+                    }
+                ),
+                localizedErrorMessage: { error in
+                    switch error {
+                    case .noWindowUnderPointer:
+                        return localization.string(
+                            "error.noWindowUnderPointer",
+                            defaultValue: "No movable window under pointer"
+                        )
+                    case .windowCannotMove:
+                        return localization.string(
+                            "error.windowCannotMove",
+                            defaultValue: "Window cannot move"
+                        )
+                    case .accessibilityRequired:
+                        return localization.string(
+                            "error.accessibilityRequired",
+                            defaultValue: "Accessibility required"
+                        )
+                    default:
+                        return localization.string(
+                            "error.frameWriteFailed",
+                            defaultValue: "Unable to move window"
+                        )
+                    }
+                }
+            )
+        }
         self.isAccessibilityGranted = accessibilityTrusted()
         let applicationTarget = WindowLayoutsApplicationTarget()
         self.applicationTarget = applicationTarget
@@ -375,6 +406,8 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
                 store.setShowsCommandFeedback(value)
             } else if controlID == SettingsID.modifierDragEnabled {
                 setModifierDragEnabled(value)
+            } else if controlID == SettingsID.modifierDragShowsIndicator {
+                setShowsModifierDragIndicator(value)
             } else {
                 updateBoolean(controlID: controlID, value: value)
             }
@@ -466,6 +499,12 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
 
     var isModifierDragEnabled: Bool { store.modifierDragEnabled }
     var modifierDragModifiers: ShortcutModifiers { store.modifierDragModifiers }
+    var showsModifierDragIndicator: Bool { store.modifierDragShowsIndicator }
+
+    func setShowsModifierDragIndicator(_ enabled: Bool) {
+        store.setModifierDragShowsIndicator(enabled)
+        applyModifierDragConfiguration()
+    }
 
     func setModifierDragModifiers(_ modifiers: ShortcutModifiers) {
         modifierDragError = nil
@@ -531,7 +570,10 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
             modifierDragSession = newSession
             session = newSession
         }
-        session.configure(modifiers: store.modifierDragModifiers)
+        session.configure(
+            modifiers: store.modifierDragModifiers,
+            showsIndicator: store.modifierDragShowsIndicator
+        )
         switch session.start() {
         case .success:
             modifierDragMonitorStartFailed = false
