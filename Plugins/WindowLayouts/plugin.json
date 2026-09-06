@@ -119,6 +119,14 @@
     "action.bottom-center-sixth.description": "@localizable.action.bottom-center-sixth.description",
     "action.bottom-right-sixth.title": "@localizable.action.bottom-right-sixth.title",
     "action.bottom-right-sixth.description": "@localizable.action.bottom-right-sixth.description",
+    "action.increase-width.title": "@localizable.action.increase-width.title",
+    "action.increase-width.description": "@localizable.action.increase-width.description",
+    "action.decrease-width.title": "@localizable.action.decrease-width.title",
+    "action.decrease-width.description": "@localizable.action.decrease-width.description",
+    "action.increase-height.title": "@localizable.action.increase-height.title",
+    "action.increase-height.description": "@localizable.action.increase-height.description",
+    "action.decrease-height.title": "@localizable.action.decrease-height.title",
+    "action.decrease-height.description": "@localizable.action.decrease-height.description",
     "action.move-to-next-display.title": "@localizable.action.move-to-next-display.title",
     "action.move-to-next-display.description": "@localizable.action.move-to-next-display.description",
     "action.move-to-previous-display.title": "@localizable.action.move-to-previous-display.title",
@@ -1327,6 +1335,142 @@
               "sixth"
             ],
             "systemImage": "rectangle.split.3x3",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "increase-width",
+            "title": "@productStrings.action.increase-width.title",
+            "description": "@productStrings.action.increase-width.description",
+            "keywords": [
+              "窗口布局",
+              "增加窗口宽度",
+              "增加宽度",
+              "window",
+              "layout",
+              "tile",
+              "layouts",
+              "increase",
+              "width",
+              "grow"
+            ],
+            "systemImage": "arrow.left.and.line.vertical.and.arrow.right",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "decrease-width",
+            "title": "@productStrings.action.decrease-width.title",
+            "description": "@productStrings.action.decrease-width.description",
+            "keywords": [
+              "窗口布局",
+              "减少窗口宽度",
+              "减少宽度",
+              "window",
+              "layout",
+              "tile",
+              "layouts",
+              "decrease",
+              "width",
+              "shrink"
+            ],
+            "systemImage": "arrow.right.and.line.vertical.and.arrow.left",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "increase-height",
+            "title": "@productStrings.action.increase-height.title",
+            "description": "@productStrings.action.increase-height.description",
+            "keywords": [
+              "窗口布局",
+              "增加窗口高度",
+              "增加高度",
+              "window",
+              "layout",
+              "tile",
+              "layouts",
+              "increase",
+              "height",
+              "grow"
+            ],
+            "systemImage": "arrow.up.and.line.horizontal.and.arrow.down",
+            "parameters": [],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "decrease-height",
+            "title": "@productStrings.action.decrease-height.title",
+            "description": "@productStrings.action.decrease-height.description",
+            "keywords": [
+              "窗口布局",
+              "减少窗口高度",
+              "减少高度",
+              "window",
+              "layout",
+              "tile",
+              "layouts",
+              "decrease",
+              "height",
+              "shrink"
+            ],
+            "systemImage": "arrow.down.and.line.horizontal.and.arrow.up",
             "parameters": [],
             "permissionIDs": [
               "accessibility"

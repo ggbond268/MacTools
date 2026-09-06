@@ -13,7 +13,7 @@ final class WindowLayoutsPluginTests: XCTestCase {
             plugin.actionDefinitions.map(\.key.actionID),
             WindowLayoutOperation.allCases.map(\.rawValue)
         )
-        XCTAssertEqual(plugin.actionDefinitions.count, 36)
+        XCTAssertEqual(plugin.actionDefinitions.count, 40)
         for definition in plugin.actionDefinitions {
             XCTAssertEqual(definition.risk, .safe)
             XCTAssertEqual(definition.externalInvocationPolicy, .allowed)
@@ -28,7 +28,7 @@ final class WindowLayoutsPluginTests: XCTestCase {
         XCTAssertTrue(plugin.shortcutDefinitions.isEmpty)
         XCTAssertEqual(
             plugin.actionShortcutSettingsConfiguration.actionIDs.count,
-            36
+            40
         )
     }
 
@@ -832,6 +832,51 @@ final class WindowLayoutsPluginTests: XCTestCase {
                 .externalInvocationPolicy,
             .unavailable
         )
+    }
+
+    func testIncrementalResizeActionDefinitionsAndExecution() async throws {
+        let executor = MockWindowLayoutExecutor()
+        let plugin = makePlugin(executor: executor)
+
+        let incrementalOps: [WindowLayoutOperation] = [
+            .increaseWidth,
+            .decreaseWidth,
+            .increaseHeight,
+            .decreaseHeight,
+        ]
+
+        for op in incrementalOps {
+            let definition = try XCTUnwrap(
+                plugin.actionDefinitions.first(where: { $0.key.actionID == op.rawValue })
+            )
+            XCTAssertFalse(definition.title.isEmpty)
+            XCTAssertFalse(definition.description.isEmpty)
+            XCTAssertFalse(definition.systemImage.isEmpty)
+            XCTAssertEqual(definition.risk, .safe)
+            XCTAssertEqual(definition.externalInvocationPolicy, .allowed)
+            XCTAssertEqual(
+                plugin.permissionRequirementIDs(for: definition.key),
+                ["accessibility"]
+            )
+
+            let handle = try plugin.beginAction(ActionInvocation(
+                reference: ActionReference(key: definition.key),
+                source: .unifiedSearch,
+                mode: .foreground
+            ))
+            let result = await handle.result()
+            XCTAssertEqual(result, .succeeded())
+        }
+        XCTAssertEqual(executor.executions.map(\.operation), incrementalOps)
+
+        executor.executionError = .windowCannotResizeFurther
+        let failureHandle = try plugin.beginAction(ActionInvocation(
+            reference: ActionReference(key: ActionKey(providerID: "window-layouts", actionID: "increase-width")),
+            source: .unifiedSearch,
+            mode: .foreground
+        ))
+        let failureResult = await failureHandle.result()
+        XCTAssertEqual(failureResult, .failed(message: "窗口无法进一步调整大小。"))
     }
 
     private func makePlugin(
