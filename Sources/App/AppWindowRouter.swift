@@ -113,7 +113,8 @@ enum StandaloneCommandPaletteLayout {
     static func frame(
         contentSize: NSSize = contentSize,
         pointerLocation: NSPoint,
-        visibleFrames: [NSRect]
+        visibleFrames: [NSRect],
+        position: WindowPosition = .defaultAnchor
     ) -> NSRect {
         guard let visibleFrame = visibleFrames.first(where: { $0.contains(pointerLocation) })
             ?? visibleFrames.first
@@ -121,19 +122,11 @@ enum StandaloneCommandPaletteLayout {
             return NSRect(origin: .zero, size: contentSize)
         }
 
-        let size = NSSize(
-            width: min(contentSize.width, visibleFrame.width),
-            height: min(contentSize.height, visibleFrame.height)
+        return WindowSnapGeometry.frame(
+            for: position,
+            contentSize: contentSize,
+            visibleFrame: visibleFrame
         )
-        let proposedOrigin = NSPoint(
-            x: visibleFrame.midX - (size.width / 2),
-            y: visibleFrame.midY - (size.height / 2)
-        )
-        let origin = NSPoint(
-            x: min(max(proposedOrigin.x, visibleFrame.minX), visibleFrame.maxX - size.width),
-            y: min(max(proposedOrigin.y, visibleFrame.minY), visibleFrame.maxY - size.height)
-        )
-        return NSRect(origin: origin, size: size)
     }
 }
 
@@ -286,6 +279,7 @@ struct StandaloneCommandPaletteRootView: View {
     let commandPaletteRecentStore: CommandPaletteRecentStore
     @ObservedObject var state: StandaloneCommandPaletteState
     let actions: UnifiedSearchPaletteActions
+    let dragCoordinator: WindowSnapCoordinator?
 
     var body: some View {
         GeometryReader { geometry in
@@ -301,7 +295,8 @@ struct StandaloneCommandPaletteRootView: View {
                 resetRequestID: state.resetRequestID,
                 quickSelectionRequest: state.quickSelectionRequest,
                 showsCustomShadow: false,
-                actions: actions
+                actions: actions,
+                dragCoordinator: dragCoordinator
             )
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -399,6 +394,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     private let menuBarPanelThemeStore: MenuBarPanelThemeStore
     private let appearanceUserDefaults: UserDefaults
     let commandPaletteRecentStore: CommandPaletteRecentStore
+    let windowPositionStore: WindowPositionStore
+    private(set) var commandPaletteSnapCoordinator: WindowSnapCoordinator?
     private let settingsSidebarPreferences: SettingsSidebarPreferencesStore
     private let commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration
     private(set) var settingsWindow: NSWindow?
@@ -448,7 +445,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         launchAtLoginController: LaunchAtLoginController,
         menuBarPanelThemeStore: MenuBarPanelThemeStore = .shared,
         appearanceUserDefaults: UserDefaults = .standard,
-        commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration = .init()
+        commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration = .init(),
+        windowPositionStore: WindowPositionStore = .shared
     ) {
         self.pluginHost = pluginHost
         self.appUpdater = appUpdater
@@ -457,6 +455,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         self.launchAtLoginController = launchAtLoginController
         self.menuBarPanelThemeStore = menuBarPanelThemeStore
         self.appearanceUserDefaults = appearanceUserDefaults
+        self.windowPositionStore = windowPositionStore
         self.commandPaletteRecentStore = CommandPaletteRecentStore(
             userDefaults: appearanceUserDefaults
         )
@@ -569,10 +568,12 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             .map(\.visibleFrame)
             + [NSScreen.main?.visibleFrame].compactMap { $0 }
             + screens.map(\.visibleFrame)
+        let storedPosition = windowPositionStore.position(for: .commandPalette)
         panel.setFrame(
             StandaloneCommandPaletteLayout.frame(
                 pointerLocation: pointerLocation,
-                visibleFrames: orderedVisibleFrames
+                visibleFrames: orderedVisibleFrames,
+                position: storedPosition
             ),
             display: true
         )
@@ -730,6 +731,13 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
+        let coordinator = WindowSnapCoordinator(
+            role: .commandPalette,
+            positionStore: windowPositionStore
+        )
+        commandPaletteSnapCoordinator = coordinator
+        coordinator.attach(to: panel)
+
         let actions = UnifiedSearchPaletteActions(
             dismiss: { [weak self] in
                 self?.dismissCommandPalette()
@@ -743,6 +751,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             consumeQuickSelection: state.consumeQuickSelectionRequest,
             setPendingExecutionCancellation: { [weak state] cancellation in
                 state?.setPendingExecutionCancellation(cancellation)
+            },
+            resetCommandPalettePosition: { [weak self] in
+                self?.resetCommandPalettePosition()
             }
         )
         let hostingView = NSHostingView(
@@ -752,7 +763,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 appearanceUserDefaults: appearanceUserDefaults,
                 commandPaletteRecentStore: commandPaletteRecentStore,
                 state: state,
-                actions: actions
+                actions: actions,
+                dragCoordinator: coordinator
             )
         )
         hostingView.sizingOptions = []
@@ -775,6 +787,25 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             self?.dismissCommandPalette()
         }
         return panel
+    }
+
+    func resetCommandPalettePosition() {
+        windowPositionStore.resetPosition(for: .commandPalette)
+        if let panel = commandPalettePanel, panel.isVisible {
+            let pointerLocation = NSEvent.mouseLocation
+            let screens = NSScreen.screens
+            let orderedVisibleFrames = screens
+                .filter { $0.frame.contains(pointerLocation) }
+                .map(\.visibleFrame)
+                + [NSScreen.main?.visibleFrame].compactMap { $0 }
+                + screens.map(\.visibleFrame)
+            let defaultFrame = StandaloneCommandPaletteLayout.frame(
+                pointerLocation: pointerLocation,
+                visibleFrames: orderedVisibleFrames,
+                position: .defaultAnchor
+            )
+            panel.setFrame(defaultFrame, display: true, animate: true)
+        }
     }
 
     private func dismissCommandPaletteAfterSuccessfulExecution() {
