@@ -646,7 +646,7 @@ final class MenuBarIconSettings: ObservableObject {
            let payload = customImagePayload(
                frames: renderedImages(for: selection),
                frameDuration: selection.frameDuration,
-               renderingMode: .original
+               renderingMode: .template
            ) {
             return payload
         }
