@@ -143,6 +143,13 @@ struct DiskCleanCleanupHistoryEntry: Identifiable, Equatable, Sendable {
 /// Read seam for cleanup history. The audit log is on disk; loading must not block the main thread.
 protocol DiskCleanCleanupHistoryProviding: Sendable {
     func recentEntries(limit: Int) async -> [DiskCleanCleanupHistoryEntry]
+    func recentRuns(limit: Int) async -> [DiskCleanRunHistoryEntry]
+}
+
+extension DiskCleanCleanupHistoryProviding {
+    func recentRuns(limit: Int) async -> [DiskCleanRunHistoryEntry] {
+        []
+    }
 }
 
 struct DiskCleanAuditLogHistoryProvider: DiskCleanCleanupHistoryProviding {
@@ -155,6 +162,13 @@ struct DiskCleanAuditLogHistoryProvider: DiskCleanCleanupHistoryProviding {
         }.value
         return DiskCleanCleanupHistoryEntry.entries(from: records)
     }
+
+    func recentRuns(limit: Int) async -> [DiskCleanRunHistoryEntry] {
+        let directory = directory
+        return await Task.detached(priority: .utility) {
+            DiskCleanAuditLog(directory: directory).recentRuns(limit: limit)
+        }.value
+    }
 }
 
 // MARK: - View
@@ -166,9 +180,19 @@ struct DiskCleanCleanupHistorySection: View {
 
     private static let recordLimit = 100
 
+    enum HistoryViewMode: String, CaseIterable, Identifiable {
+        case runs
+        case items
+
+        var id: String { rawValue }
+    }
+
     @State private var isExpanded = false
     @State private var entries: [DiskCleanCleanupHistoryEntry] = []
+    @State private var runs: [DiskCleanRunHistoryEntry] = []
     @State private var isLoading = false
+    @State private var viewMode: HistoryViewMode = .runs
+    @State private var isCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
@@ -182,17 +206,22 @@ struct DiskCleanCleanupHistorySection: View {
         }
         .task(id: isExpanded) {
             guard isExpanded else { return }
-            isLoading = true
-            entries = await provider.recentEntries(limit: Self.recordLimit)
-            isLoading = false
+            await loadData()
         }
     }
 
-    /// Place the reload button in the content area, not the DisclosureGroup label:
-    /// the label's hit target belongs to expand/collapse; a button there would fight for clicks.
+    private func loadData() async {
+        isLoading = true
+        async let loadedEntries = provider.recentEntries(limit: Self.recordLimit)
+        async let loadedRuns = provider.recentRuns(limit: Self.recordLimit)
+        entries = await loadedEntries
+        runs = await loadedRuns
+        isLoading = false
+    }
+
     private var reloadButton: some View {
         Button {
-            Task { entries = await provider.recentEntries(limit: Self.recordLimit) }
+            Task { await loadData() }
         } label: {
             Label(
                 localization.string("detail.history.reload", defaultValue: "刷新"),
@@ -205,6 +234,47 @@ struct DiskCleanCleanupHistorySection: View {
         .disabled(isLoading)
     }
 
+    private var copyDiagnosticsButton: some View {
+        Button {
+            copyDiagnostics()
+            isCopied = true
+            Task {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                isCopied = false
+            }
+        } label: {
+            Label(
+                isCopied
+                    ? localization.string("detail.history.copied", defaultValue: "已复制")
+                    : localization.string("detail.history.copyDiagnostics", defaultValue: "复制诊断"),
+                systemImage: isCopied ? "checkmark" : "doc.on.doc"
+            )
+            .font(PluginSettingsTheme.Typography.controlLabel)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(isLoading || (entries.isEmpty && runs.isEmpty))
+    }
+
+    private func copyDiagnostics() {
+        let home = NSHomeDirectory()
+        var lines: [String] = ["=== DiskClean Cleanup History Diagnostics ==="]
+        for run in runs {
+            let mode = run.isTrash ? "Trash" : "Permanent"
+            lines.append("Run [\(DiskCleanFormat.timestamp(run.timestamp))] Status: \(run.status), Mode: \(mode), Removed: \(run.itemsRemoved) items (\(run.bytesRemoved) bytes), Categories: \(run.categoriesCleaned.joined(separator: ", "))")
+            for error in run.errorsEncountered {
+                lines.append("  Error: \(error.replacingOccurrences(of: home, with: "~"))")
+            }
+        }
+        lines.append("\n=== Recent Items ===")
+        for entry in entries.prefix(50) {
+            let path = (entry.path ?? "nil").replacingOccurrences(of: home, with: "~")
+            lines.append("[\(entry.timestamp)] \(path) - Status: \(entry.status.symbolName) - \(entry.estimatedBytes ?? 0) bytes")
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+    }
+
     @ViewBuilder
     private var content: some View {
         if isLoading {
@@ -215,7 +285,7 @@ struct DiskCleanCleanupHistorySection: View {
                     .foregroundStyle(.secondary)
             }
             .pluginSettingsListRowPadding()
-        } else if entries.isEmpty {
+        } else if entries.isEmpty && runs.isEmpty {
             Text(localization.string("detail.history.empty", defaultValue: "还没有清理记录"))
                 .font(PluginSettingsTheme.Typography.rowDescription)
                 .foregroundStyle(.secondary)
@@ -229,21 +299,42 @@ struct DiskCleanCleanupHistorySection: View {
                 }
 
                 HStack {
+                    Picker("", selection: $viewMode) {
+                        Text(localization.format("detail.history.view.runs", defaultValue: "按次汇总 (%d)", runs.count))
+                            .tag(HistoryViewMode.runs)
+                        Text(localization.format("detail.history.view.items", defaultValue: "全部明细 (%d)", entries.count))
+                            .tag(HistoryViewMode.items)
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .frame(maxWidth: 240)
+
                     Spacer()
+
+                    copyDiagnosticsButton
                     reloadButton
                 }
 
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(entries) { entry in
-                            DiskCleanCleanupHistoryRow(entry: entry, localization: localization)
-                            if entry.id != entries.last?.id {
-                                PluginSettingsListDivider()
+                        if viewMode == .runs {
+                            ForEach(runs) { run in
+                                DiskCleanRunHistoryRow(run: run, localization: localization)
+                                if run.id != runs.last?.id {
+                                    PluginSettingsListDivider()
+                                }
+                            }
+                        } else {
+                            ForEach(entries) { entry in
+                                DiskCleanCleanupHistoryRow(entry: entry, localization: localization)
+                                if entry.id != entries.last?.id {
+                                    PluginSettingsListDivider()
+                                }
                             }
                         }
                     }
                 }
-                .frame(maxHeight: 260)
+                .frame(maxHeight: 280)
                 .pluginSettingsCardBackground(.standard)
             }
         }
@@ -349,5 +440,103 @@ private struct DiskCleanCleanupHistoryRow: View {
             }
         }
         .pluginSettingsListRowPadding()
+    }
+}
+
+
+private struct DiskCleanRunHistoryRow: View {
+    let run: DiskCleanRunHistoryEntry
+    let localization: PluginLocalization
+
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                Image(systemName: run.needsAttention ? "exclamationmark.triangle.fill" : (run.isTrash ? "trash" : "checkmark.circle.fill"))
+                    .foregroundStyle(run.needsAttention ? Color.orange : (run.isTrash ? Color.secondary : Color.green))
+                    .frame(width: PluginSettingsTheme.Size.rowIcon)
+
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    HStack(alignment: .firstTextBaseline, spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                        Text(DiskCleanFormat.timestamp(run.timestamp))
+                            .font(PluginSettingsTheme.Typography.rowTitle)
+
+                        Text(run.isTrash
+                            ? localization.string("detail.history.mode.trash", defaultValue: "废纸篓")
+                            : localization.string("detail.history.mode.permanent", defaultValue: "永久删除"))
+                            .font(PluginSettingsTheme.Typography.statusBadge)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color(nsColor: .quaternaryLabelColor).opacity(0.4)))
+
+                        if run.needsAttention {
+                            Text(localization.string("detail.history.attentionBadge", defaultValue: "需关注"))
+                                .font(PluginSettingsTheme.Typography.statusBadge)
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.orange.opacity(0.2)))
+                        }
+
+                        Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+                        Text(DiskCleanFormat.approximateBytes(run.bytesRemoved, localization: localization))
+                            .font(PluginSettingsTheme.Typography.monospacedValue)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                        Text(localization.format("detail.history.runItems", defaultValue: "清理 %d 项", run.itemsRemoved))
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+
+                        if !run.categoriesCleaned.isEmpty {
+                            Text("·")
+                                .font(PluginSettingsTheme.Typography.rowDescription)
+                                .foregroundStyle(.secondary)
+                            Text(run.categoriesCleaned.joined(separator: ", "))
+                                .font(PluginSettingsTheme.Typography.statusBadge)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    }
+
+                    if !run.errorsEncountered.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(run.errorsEncountered.prefix(2).enumerated()), id: \.offset) { _, err in
+                                Text(err)
+                                    .font(PluginSettingsTheme.Typography.rowDescription)
+                                    .foregroundStyle(.orange)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                }
+
+                if !run.itemEntries.isEmpty {
+                    Button {
+                        isExpanded.toggle()
+                    } label: {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(PluginSettingsTheme.Typography.rowIcon)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            .pluginSettingsListRowPadding()
+
+            if isExpanded && !run.itemEntries.isEmpty {
+                VStack(spacing: 0) {
+                    PluginSettingsListDivider()
+                    ForEach(run.itemEntries) { entry in
+                        DiskCleanCleanupHistoryRow(entry: entry, localization: localization)
+                    }
+                }
+                .padding(.leading, 24)
+            }
+        }
     }
 }

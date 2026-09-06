@@ -131,4 +131,128 @@ final class DiskCleanAuditLogTests: XCTestCase {
             status: status
         )
     }
+
+    func testRunSummaryRecordRoundTripsEveryField() throws {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        let timestamp = Date(timeIntervalSince1970: 1_700_100_000)
+
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: timestamp,
+                action: .runSummary,
+                runID: "run-12345",
+                targetID: "summary",
+                path: "run://run-12345",
+                estimatedBytes: 104_857_600,
+                status: "completed",
+                categoriesCleaned: ["appCaches", "logs"],
+                itemsRemoved: 42,
+                bytesRemoved: 104_857_600,
+                errorsEncountered: ["Permission denied for /var/log/system.log"],
+                isTrash: false
+            )
+        )
+
+        let record = try XCTUnwrap(log.recentRecords(limit: 1).first)
+        XCTAssertEqual(record.timestamp.timeIntervalSince1970, timestamp.timeIntervalSince1970, accuracy: 1)
+        XCTAssertEqual(record.action, .runSummary)
+        XCTAssertEqual(record.runID, "run-12345")
+        XCTAssertEqual(record.categoriesCleaned, ["appCaches", "logs"])
+        XCTAssertEqual(record.itemsRemoved, 42)
+        XCTAssertEqual(record.bytesRemoved, 104_857_600)
+        XCTAssertEqual(record.errorsEncountered, ["Permission denied for /var/log/system.log"])
+        XCTAssertEqual(record.isTrash, false)
+    }
+
+    func testRecentRunsReadsRunSummaryRecords() {
+        let log = DiskCleanAuditLog(directory: storage.url)
+
+        for i in 1...3 {
+            log.append(
+                DiskCleanAuditLog.Record(
+                    timestamp: Date(timeIntervalSince1970: Double(2_000 + i * 100)),
+                    action: .runSummary,
+                    runID: "run-\(i)",
+                    targetID: "summary",
+                    path: "run://run-\(i)",
+                    estimatedBytes: Int64(i * 1024),
+                    status: "completed",
+                    categoriesCleaned: ["cat-\(i)"],
+                    itemsRemoved: i * 5,
+                    bytesRemoved: Int64(i * 1024),
+                    errorsEncountered: i == 2 ? ["warn"] : [],
+                    isTrash: i % 2 == 0
+                )
+            )
+        }
+
+        let runs = log.recentRuns(limit: 2)
+        XCTAssertEqual(runs.count, 2)
+        XCTAssertEqual(runs[0].id, "run-3")
+        XCTAssertEqual(runs[0].itemsRemoved, 15)
+        XCTAssertEqual(runs[0].bytesRemoved, 3072)
+        XCTAssertFalse(runs[0].isTrash)
+
+        XCTAssertEqual(runs[1].id, "run-2")
+        XCTAssertEqual(runs[1].itemsRemoved, 10)
+        XCTAssertEqual(runs[1].bytesRemoved, 2048)
+        XCTAssertTrue(runs[1].isTrash)
+        XCTAssertTrue(runs[1].needsAttention)
+    }
+
+    func testRecentRunsClustersLegacyRecordsWhenSummaryAbsent() {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        let baseTime = Date(timeIntervalSince1970: 3_000)
+
+        // Cluster 1 (timestamp 3000-3002)
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime,
+                action: .trash,
+                category: "appCaches",
+                path: "/cache/item1",
+                estimatedBytes: 1024,
+                status: "ok"
+            )
+        )
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(2),
+                action: .trash,
+                category: "systemLogs",
+                path: "/cache/item2",
+                estimatedBytes: 2048,
+                status: "ok"
+            )
+        )
+
+        // Cluster 2 (timestamp 3100)
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(100),
+                action: .delete,
+                category: "downloads",
+                path: "/downloads/old",
+                estimatedBytes: 4096,
+                status: "partiallyDeleted",
+                error: "Locked file"
+            )
+        )
+
+        let runs = log.recentRuns(limit: 10)
+        XCTAssertEqual(runs.count, 2, "Must cluster by time window into 2 runs")
+
+        // Most recent first: cluster 2
+        XCTAssertEqual(runs[0].itemsRemoved, 0)
+        XCTAssertEqual(runs[0].bytesRemoved, 4096)
+        XCTAssertTrue(runs[0].needsAttention)
+        XCTAssertFalse(runs[0].isTrash)
+
+        // Earlier cluster 1
+        XCTAssertEqual(runs[1].itemsRemoved, 2)
+        XCTAssertEqual(runs[1].bytesRemoved, 3072)
+        XCTAssertFalse(runs[1].needsAttention)
+        XCTAssertTrue(runs[1].isTrash)
+    }
+
 }

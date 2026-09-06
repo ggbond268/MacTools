@@ -135,4 +135,26 @@ final class DiskCleanSafetyPolicyTests: XCTestCase {
         }
         XCTFail("Expected protected status, got \(status). \(message)", file: file, line: line)
     }
+
+    func testExpandedCocoaPodsCarthageAndRotatedLogPathsAreAllowed() {
+        let policy = DiskCleanSafetyPolicy(homeDirectory: home)
+
+        XCTAssertEqual(
+            policy.safetyStatus(for: "\(home)/Library/Caches/CocoaPods/Pods/Release/AFNetworking"),
+            .allowed
+        )
+        XCTAssertEqual(
+            policy.safetyStatus(for: "\(home)/Library/Caches/org.carthage.CarthageKit/dependencies/Alamofire"),
+            .allowed
+        )
+        XCTAssertEqual(
+            policy.safetyStatus(for: "\(home)/Library/Logs/MyApp/app.log.2026-09-06"),
+            .allowed
+        )
+        XCTAssertEqual(
+            policy.safetyStatus(for: "\(home)/Library/Logs/MyApp/system.old"),
+            .allowed
+        )
+    }
+
 }
