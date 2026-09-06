@@ -323,6 +323,16 @@ final class WindowLayoutService: WindowLayoutExecuting {
                 throw WindowLayoutError.windowCannotResize
             }
             targetFrame = safePreviousFrame
+        case .increaseWidth, .decreaseWidth, .increaseHeight, .decreaseHeight:
+            guard window.canResize else {
+                throw WindowLayoutError.windowCannotResize
+            }
+            targetFrame = try calculator.incrementalFrame(
+                for: operation,
+                windowFrame: currentFrame,
+                visibleFrame: effectiveCurrentScreen.visibleFrame,
+                gap: options.gap
+            )
         default:
             if operation.requiresResize, !window.canResize {
                 throw WindowLayoutError.windowCannotResize
@@ -526,18 +536,20 @@ final class WindowLayoutService: WindowLayoutExecuting {
     }
 
     private func approximatelyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
-        abs(lhs.minX - rhs.minX) <= 2
-            && abs(lhs.minY - rhs.minY) <= 2
-            && abs(lhs.width - rhs.width) <= 2
-            && abs(lhs.height - rhs.height) <= 2
+        abs(lhs.minX - rhs.minX) <= WindowLayoutCalculator.geometryTolerance
+            && abs(lhs.minY - rhs.minY) <= WindowLayoutCalculator.geometryTolerance
+            && abs(lhs.width - rhs.width) <= WindowLayoutCalculator.geometryTolerance
+            && abs(lhs.height - rhs.height) <= WindowLayoutCalculator.geometryTolerance
     }
 
     private func approximatelyEqual(_ lhs: CGSize, _ rhs: CGSize) -> Bool {
-        abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
+        abs(lhs.width - rhs.width) <= WindowLayoutCalculator.geometryTolerance
+            && abs(lhs.height - rhs.height) <= WindowLayoutCalculator.geometryTolerance
     }
 
     private func approximatelyEqual(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {
-        abs(lhs.x - rhs.x) <= 2 && abs(lhs.y - rhs.y) <= 2
+        abs(lhs.x - rhs.x) <= WindowLayoutCalculator.geometryTolerance
+            && abs(lhs.y - rhs.y) <= WindowLayoutCalculator.geometryTolerance
     }
 }
 
