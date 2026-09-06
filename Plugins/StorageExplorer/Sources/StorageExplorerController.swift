@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import MacToolsPluginKit
 import SwiftUI
 
 @MainActor
@@ -78,6 +79,7 @@ public final class StorageExplorerController: ObservableObject {
         openPanel.canChooseDirectories = true
         openPanel.allowsMultipleSelection = false
         openPanel.canCreateDirectories = false
+        PluginPresentationSafety.prepareForWindowOrdering()
 
         if openPanel.runModal() == .OK, let selectedURL = openPanel.url {
             startScan(at: selectedURL)
