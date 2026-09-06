@@ -11,6 +11,7 @@ final class WindowLayoutsStore {
         static let showsCommandFeedback = "shows-command-feedback"
         static let modifierDragEnabled = "modifier-drag.enabled"
         static let modifierDragModifiers = "modifier-drag.modifiers"
+        static let modifierDragShowsIndicator = "modifier-drag.shows-indicator"
         static let shortcutPreset = "shortcut-preset"
         static let library = "library.v1"
         static let quarantinedLibrary = "library.v1.quarantined"
@@ -36,6 +37,7 @@ final class WindowLayoutsStore {
     private(set) var showsCommandFeedback: Bool
     private(set) var modifierDragEnabled: Bool
     private(set) var modifierDragModifiers: ShortcutModifiers
+    private(set) var modifierDragShowsIndicator: Bool
     private(set) var shortcutPreset: WindowShortcutPreset
     private(set) var customCommands: [WindowCustomCommand] = []
     private(set) var revision: UInt64 = 0
@@ -51,6 +53,7 @@ final class WindowLayoutsStore {
         self.respectsStageManager = (storage.object(forKey: StorageKey.respectsStageManager) as? NSNumber)?.boolValue ?? true
         self.showsCommandFeedback = (storage.object(forKey: StorageKey.showsCommandFeedback) as? NSNumber)?.boolValue ?? false
         self.modifierDragEnabled = (storage.object(forKey: StorageKey.modifierDragEnabled) as? NSNumber)?.boolValue ?? false
+        self.modifierDragShowsIndicator = (storage.object(forKey: StorageKey.modifierDragShowsIndicator) as? NSNumber)?.boolValue ?? true
         let storedModifierRawValue = (storage.object(forKey: StorageKey.modifierDragModifiers) as? NSNumber)?.uint8Value
         let storedModifiers = storedModifierRawValue.map(ShortcutModifiers.init(rawValue:))
         if let storedModifiers,
@@ -108,6 +111,12 @@ final class WindowLayoutsStore {
         recordMutation()
     }
 
+    func setModifierDragShowsIndicator(_ enabled: Bool) {
+        modifierDragShowsIndicator = enabled
+        storage.set(enabled, forKey: StorageKey.modifierDragShowsIndicator)
+        recordMutation()
+    }
+
     func setShortcutPreset(_ preset: WindowShortcutPreset) {
         shortcutPreset = preset
         storage.set(preset.rawValue, forKey: StorageKey.shortcutPreset)
@@ -121,12 +130,14 @@ final class WindowLayoutsStore {
         showsCommandFeedback = false
         modifierDragEnabled = false
         modifierDragModifiers = Self.defaultModifierDragModifiers
+        modifierDragShowsIndicator = true
         storage.removeObject(forKey: StorageKey.gap)
         storage.removeObject(forKey: StorageKey.cyclesHalves)
         storage.removeObject(forKey: StorageKey.respectsStageManager)
         storage.removeObject(forKey: StorageKey.showsCommandFeedback)
         storage.removeObject(forKey: StorageKey.modifierDragEnabled)
         storage.removeObject(forKey: StorageKey.modifierDragModifiers)
+        storage.removeObject(forKey: StorageKey.modifierDragShowsIndicator)
         recordMutation()
     }
 

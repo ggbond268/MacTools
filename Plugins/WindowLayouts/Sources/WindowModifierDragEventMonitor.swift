@@ -103,6 +103,7 @@ nonisolated final class SystemWindowModifierDragEventMonitor: @unchecked Sendabl
             | CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.rightMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.otherMouseDown.rawValue)
+            | CGEventMask(1 << CGEventType.keyDown.rawValue)
         let callbackContext = CallbackContext(owner: self)
         let callbackPointer = Unmanaged.passRetained(callbackContext).toOpaque()
         guard let tap = CGEvent.tapCreate(

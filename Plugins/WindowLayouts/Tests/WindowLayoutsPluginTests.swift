@@ -226,13 +226,18 @@ final class WindowLayoutsPluginTests: XCTestCase {
 
         XCTAssertEqual(session.startCount, 1)
         XCTAssertEqual(session.configuredModifiers, [.control, .option])
+        XCTAssertEqual(session.configuredShowsIndicator, true)
         XCTAssertEqual(
             plugin.activeInputGestureClaims.map(\.id),
             ["pointer.move.modifiers.6"]
         )
 
+        plugin.setShowsModifierDragIndicator(false)
+        XCTAssertEqual(session.configuredShowsIndicator, false)
+
         plugin.setModifierDragModifiers([.shift, .command])
         XCTAssertEqual(session.configuredModifiers, [.shift, .command])
+        XCTAssertEqual(session.configuredShowsIndicator, false)
         XCTAssertEqual(
             plugin.activeInputGestureClaims.map(\.id),
             ["pointer.move.modifiers.9"]
@@ -901,15 +906,21 @@ private final class MockWindowModifierDragSession: WindowModifierDragSessionMana
     var onFailure: (WindowLayoutError) -> Void = { _ in }
     var onSuccess: () -> Void = {}
     private(set) var configuredModifiers: ShortcutModifiers?
+    private(set) var configuredShowsIndicator: Bool?
     private(set) var configureCount = 0
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var isRunning = false
     var startResult: Result<Void, WindowModifierDragMonitorStartError> = .success(())
 
-    func configure(modifiers: ShortcutModifiers) {
+    func configure(modifiers: ShortcutModifiers, showsIndicator: Bool) {
         configureCount += 1
         configuredModifiers = modifiers
+        configuredShowsIndicator = showsIndicator
+    }
+
+    func configure(modifiers: ShortcutModifiers) {
+        configure(modifiers: modifiers, showsIndicator: true)
     }
 
     func start() -> Result<Void, WindowModifierDragMonitorStartError> {

@@ -8,9 +8,16 @@ protocol WindowModifierDragSessionManaging: AnyObject {
     var onFailure: (WindowLayoutError) -> Void { get set }
     var onSuccess: () -> Void { get set }
     var isRunning: Bool { get }
+    func configure(modifiers: ShortcutModifiers, showsIndicator: Bool)
     func configure(modifiers: ShortcutModifiers)
     func start() -> Result<Void, WindowModifierDragMonitorStartError>
     func stop()
+}
+
+extension WindowModifierDragSessionManaging {
+    func configure(modifiers: ShortcutModifiers) {
+        configure(modifiers: modifiers, showsIndicator: true)
+    }
 }
 
 @MainActor
@@ -120,6 +127,16 @@ final class WindowModifierDragController {
     private let resolver: any WindowUnderPointerResolving
     private let frameReader: any WindowFrameReading
     private let frameWriter: any WindowFrameWriting
+    private let hudPresenter: (any WindowModifierDragHUDPresenting)?
+    private let pointerLocation: () -> CGPoint
+    private let localizedErrorMessage: (WindowLayoutError) -> String
+    private let armDelay: TimeInterval
+    private let activeDuration: TimeInterval
+    private let failureDuration: TimeInterval
+
+    var showsIndicator: Bool
+    var requiredModifiers: ShortcutModifiers
+
     private var generation: UInt64?
     private var originPointer = CGPoint.zero
     private var pendingPointer = CGPoint.zero
@@ -127,20 +144,94 @@ final class WindowModifierDragController {
     private var originalFrame: CGRect?
     private var resolutionTask: Task<Void, Never>?
     private var writeTask: Task<Void, Never>?
+    private var armTask: Task<Void, Never>?
+    private var activeDismissTask: Task<Void, Never>?
+    private var failureDismissTask: Task<Void, Never>?
+    private var isHUDPresented = false
 
     init(
         resolver: any WindowUnderPointerResolving,
         frameReader: any WindowFrameReading,
-        frameWriter: any WindowFrameWriting
+        frameWriter: any WindowFrameWriting,
+        hudPresenter: (any WindowModifierDragHUDPresenting)? = nil,
+        pointerLocation: @escaping () -> CGPoint = { NSEvent.mouseLocation },
+        localizedErrorMessage: @escaping (WindowLayoutError) -> String = { error in
+            switch error {
+            case .noWindowUnderPointer:
+                return "No movable window under pointer"
+            case .windowCannotMove:
+                return "Window cannot move"
+            case .accessibilityRequired:
+                return "Accessibility required"
+            case .windowUnavailable:
+                return "Window unavailable"
+            case .frameWriteFailed:
+                return "Unable to move window"
+            default:
+                return "Unable to move window"
+            }
+        },
+        armDelay: TimeInterval = 0.18,
+        activeDuration: TimeInterval = 0.6,
+        failureDuration: TimeInterval = 1.2,
+        showsIndicator: Bool = true,
+        requiredModifiers: ShortcutModifiers = WindowLayoutsStore.defaultModifierDragModifiers
     ) {
         self.resolver = resolver
         self.frameReader = frameReader
         self.frameWriter = frameWriter
+        self.hudPresenter = hudPresenter
+        self.pointerLocation = pointerLocation
+        self.localizedErrorMessage = localizedErrorMessage
+        self.armDelay = armDelay
+        self.activeDuration = activeDuration
+        self.failureDuration = failureDuration
+        self.showsIndicator = showsIndicator
+        self.requiredModifiers = requiredModifiers
+    }
+
+    func arm(generation: UInt64, pointer: CGPoint) {
+        if self.generation == generation && armTask != nil {
+            return
+        }
+        self.generation = generation
+        originPointer = pointer
+        pendingPointer = pointer
+
+        armTask?.cancel()
+        activeDismissTask?.cancel()
+        failureDismissTask?.cancel()
+        if isHUDPresented {
+            isHUDPresented = false
+            hudPresenter?.dismiss()
+        }
+
+        guard showsIndicator, hudPresenter != nil else { return }
+
+        armTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(nanoseconds: UInt64(self.armDelay * 1_000_000_000))
+                guard !Task.isCancelled, self.generation == generation, self.showsIndicator else { return }
+                let location = self.pointerLocation()
+                self.isHUDPresented = true
+                self.hudPresenter?.present(.armed(modifiers: self.requiredModifiers, pointer: location))
+            } catch {
+                return
+            }
+        }
     }
 
     func begin(generation: UInt64, origin: CGPoint, pointer: CGPoint) {
-        cancelAll()
-        self.generation = generation
+        armTask?.cancel()
+        armTask = nil
+        activeDismissTask?.cancel()
+        failureDismissTask?.cancel()
+
+        if self.generation != generation {
+            cancelAll(dismissHUD: false)
+            self.generation = generation
+        }
         originPointer = origin
         pendingPointer = pointer
         resolutionTask = Task { [weak self] in
@@ -153,6 +244,12 @@ final class WindowModifierDragController {
                 self.window = window
                 self.originalFrame = frame
                 self.resolutionTask = nil
+                if self.showsIndicator {
+                    self.isHUDPresented = true
+                    let location = self.pointerLocation()
+                    self.hudPresenter?.present(.active(modifiers: self.requiredModifiers, pointer: location))
+                    self.scheduleActiveDismiss(generation: generation)
+                }
                 self.flush(generation: generation)
             } catch is CancellationError {
                 return
@@ -170,7 +267,7 @@ final class WindowModifierDragController {
     }
 
     func cancel(generation: UInt64) {
-        guard self.generation == generation else { return }
+        guard self.generation == generation || self.generation == nil else { return }
         cancelAll()
     }
 
@@ -213,13 +310,66 @@ final class WindowModifierDragController {
     }
 
     private func fail(_ error: WindowLayoutError) {
-        cancelAll()
+        cancelAll(dismissHUD: false)
+        if showsIndicator {
+            let message = localizedErrorMessage(error)
+            let location = pointerLocation()
+            isHUDPresented = true
+            hudPresenter?.present(.failure(message: message, pointer: location))
+            scheduleFailureDismiss()
+        }
         onFailure(error)
     }
 
-    private func cancelAll() {
+    private func scheduleActiveDismiss(generation: UInt64) {
+        activeDismissTask?.cancel()
+        activeDismissTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(nanoseconds: UInt64(self.activeDuration * 1_000_000_000))
+                guard !Task.isCancelled, self.generation == generation else { return }
+                if self.isHUDPresented {
+                    self.isHUDPresented = false
+                    self.hudPresenter?.dismiss()
+                }
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func scheduleFailureDismiss() {
+        failureDismissTask?.cancel()
+        failureDismissTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(nanoseconds: UInt64(self.failureDuration * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                if self.isHUDPresented {
+                    self.isHUDPresented = false
+                    self.hudPresenter?.dismiss()
+                }
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func cancelAll(dismissHUD: Bool = true) {
+        armTask?.cancel()
+        activeDismissTask?.cancel()
+        if dismissHUD {
+            failureDismissTask?.cancel()
+            failureDismissTask = nil
+            if isHUDPresented {
+                isHUDPresented = false
+                hudPresenter?.dismiss()
+            }
+        }
         resolutionTask?.cancel()
         writeTask?.cancel()
+        armTask = nil
+        activeDismissTask = nil
         resolutionTask = nil
         writeTask = nil
         generation = nil
@@ -299,28 +449,69 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
     @MainActor
     init(
         modifiers: ShortcutModifiers = WindowLayoutsStore.defaultModifierDragModifiers,
+        showsIndicator: Bool = true,
         resolver: (any WindowUnderPointerResolving)? = nil,
         frameAdapter: AccessibilityWindowFrameAdapter? = nil,
-        eventMonitor: (any WindowModifierDragEventMonitoring)? = nil
+        eventMonitor: (any WindowModifierDragEventMonitoring)? = nil,
+        hudPresenter: (any WindowModifierDragHUDPresenting)? = nil,
+        pointerLocation: (() -> CGPoint)? = nil,
+        localizedErrorMessage: ((WindowLayoutError) -> String)? = nil,
+        armDelay: TimeInterval = 0.18,
+        activeDuration: TimeInterval = 0.6,
+        failureDuration: TimeInterval = 1.2
     ) {
         let adapter = frameAdapter ?? AccessibilityWindowFrameAdapter()
+        let resolvedHUDPresenter = hudPresenter ?? WindowModifierDragHUDController()
         self.controller = WindowModifierDragController(
             resolver: resolver ?? SystemWindowUnderPointerResolver(),
             frameReader: adapter,
-            frameWriter: adapter
+            frameWriter: adapter,
+            hudPresenter: resolvedHUDPresenter,
+            pointerLocation: pointerLocation ?? { NSEvent.mouseLocation },
+            localizedErrorMessage: localizedErrorMessage ?? { error in
+                switch error {
+                case .noWindowUnderPointer:
+                    return "No movable window under pointer"
+                case .windowCannotMove:
+                    return "Window cannot move"
+                case .accessibilityRequired:
+                    return "Accessibility required"
+                case .windowUnavailable:
+                    return "Window unavailable"
+                case .frameWriteFailed:
+                    return "Unable to move window"
+                default:
+                    return "Unable to move window"
+                }
+            },
+            armDelay: armDelay,
+            activeDuration: activeDuration,
+            failureDuration: failureDuration,
+            showsIndicator: showsIndicator,
+            requiredModifiers: modifiers
         )
         self.eventMonitor = eventMonitor ?? SystemWindowModifierDragEventMonitor()
         self.gesture = WindowModifierDragGesture(requiredModifiers: modifiers)
     }
 
     @MainActor
-    func configure(modifiers: ShortcutModifiers) {
+    func configure(modifiers: ShortcutModifiers, showsIndicator: Bool) {
+        controller.showsIndicator = showsIndicator
+        controller.requiredModifiers = modifiers
+        if !showsIndicator {
+            controller.cancel(generation: 0)
+        }
         let cancellation = lock.withLock { () -> WindowModifierDragGestureAction? in
             let cancellation = gesture.reset()
             gesture.requiredModifiers = modifiers
             return cancellation
         }
         dispatch(cancellation)
+    }
+
+    @MainActor
+    func configure(modifiers: ShortcutModifiers) {
+        configure(modifiers: modifiers, showsIndicator: controller.showsIndicator)
     }
 
     @MainActor
@@ -373,6 +564,8 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
                 return gesture.pointerMoved(to: event.location, modifiers: modifiers)
             case .leftMouseDown, .rightMouseDown, .otherMouseDown:
                 return gesture.mouseButtonPressed()
+            case .keyDown:
+                return gesture.keyPressed()
             default:
                 return nil
             }
@@ -393,6 +586,8 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
     private func drainActions(epoch: UInt64) {
         while let action = lock.withLock({ actionQueue.nextAction(for: epoch) }) {
             switch action {
+            case let .arm(generation, pointer):
+                controller.arm(generation: generation, pointer: pointer)
             case let .begin(generation, origin, pointer):
                 controller.begin(generation: generation, origin: origin, pointer: pointer)
             case let .update(generation, pointer):
@@ -402,7 +597,6 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
             }
         }
     }
-
 }
 
 private extension NSLock {
