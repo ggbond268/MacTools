@@ -45,4 +45,20 @@ password confirmation, keyboard navigation, progress cancellation, precise parti
 replacement labels, destructive confirmation, report paging, and recovery after
 reopening Local Data. Do not install or sync this branch over a shared Debug app.
 
-Backup copy is included for every locale declared by the plugin manifest.
+Backup copy is included for every locale declared by the plugin manifest. The
+view test resolves compiled backup strings and renders creation, restore entry,
+password entry, and completion in all 11 locales, including Arabic right-to-left
+layout. Counts and file sizes follow the runtime locale.
+
+The sheet selects the file or destination before requesting a password. Choosing a
+save location does not write an archive: Create Backup starts that operation.
+Restore validation only stages a preview; the merge action or destructive
+replacement confirmation commits it. Cancelling replacement confirmation keeps
+the preview available without changing local data. Completed operations offer
+Done only, with conflict and missing-file reports still accessible. The scrolling
+content keeps the footer visible when reports expand.
+
+New backup passwords require at least 12 user-perceived characters (Swift
+`String.count`). Key derivation retains the 1,024-byte resource limit and the
+original UTF-8 encoding. Restore does not apply the new character minimum, so
+existing archives with shorter multibyte passwords remain readable.

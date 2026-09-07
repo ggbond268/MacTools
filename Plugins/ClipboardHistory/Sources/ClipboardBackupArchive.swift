@@ -23,13 +23,14 @@ struct ClipboardBackupManifest: Codable, Equatable, Sendable {
 }
 
 enum ClipboardBackupError: Error, LocalizedError {
-    case invalidArchive, unsupportedVersion, invalidPassword, limitExceeded, storage, changedSincePreview
+    case invalidArchive, unsupportedVersion, invalidPassword, passwordTooLong, limitExceeded, storage, changedSincePreview
 
     var errorDescription: String? {
         switch self {
         case .invalidArchive: "备份无效、已损坏或密码错误。当前数据未更改。"
         case .unsupportedVersion: "此备份版本暂不受支持。"
-        case .invalidPassword: "请输入 12 至 1,024 字节的备份密码。MacTools 无法找回密码。"
+        case .invalidPassword: "请使用至少 12 个字符的备份密码。"
+        case .passwordTooLong: "密码过长，请缩短后重试。"
         case .limitExceeded: "备份超过安全上限或当前单项大小限制。"
         case .storage: "无法读写备份。请检查可用磁盘空间和文件权限。"
         case .changedSincePreview: "本机剪贴板数据已更改。请重新预览备份。"
@@ -56,7 +57,8 @@ enum ClipboardBackupArchive {
     static func derive(password: String, salt: Data, rounds: UInt32) throws -> SymmetricKey {
         guard (600_000...2_000_000).contains(rounds) else { throw ClipboardBackupError.limitExceeded }
         let passwordBytes = Array(password.utf8)
-        guard !passwordBytes.isEmpty, passwordBytes.count <= 1_024 else { throw ClipboardBackupError.invalidPassword }
+        guard !passwordBytes.isEmpty else { throw ClipboardBackupError.invalidPassword }
+        guard passwordBytes.count <= 1_024 else { throw ClipboardBackupError.passwordTooLong }
         try Task.checkCancellation()
         var output = [UInt8](repeating: 0, count: 32)
         let status = passwordBytes.withUnsafeBytes { passwordBuffer in
@@ -95,7 +97,7 @@ enum ClipboardBackupArchive {
         private var digest = SHA256()
 
         init(url: URL, password: String) throws {
-            guard (12...1_024).contains(password.utf8.count) else { throw ClipboardBackupError.invalidPassword }
+            guard password.count >= 12 else { throw ClipboardBackupError.invalidPassword }
             let salt = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
             let header = magic + integer(1, bytes: 4) + integer(UInt64(iterations), bytes: 4) + salt
             let wrappingKey = try derive(password: password, salt: salt, rounds: iterations)

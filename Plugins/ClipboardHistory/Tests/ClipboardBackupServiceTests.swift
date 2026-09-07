@@ -48,6 +48,48 @@ final class ClipboardBackupServiceTests: XCTestCase {
                            lastUsedAt: Date(timeIntervalSince1970: 250), payload: .plainText(text), templateText: text)
     }
 
+    func testNewPasswordMinimumCountsUserPerceivedCharacters() throws {
+        let fixture = try Fixture()
+        for password in ["12345678901", "中文密码", String(repeating: "e\u{301}", count: 11)] {
+            XCTAssertThrowsError(try fixture.service.backUp(to: fixture.archive, password: password, scope: full)) {
+                guard case ClipboardBackupError.invalidPassword = $0 else { return XCTFail("Expected short password error") }
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.archive.path))
+        }
+        for password in ["123456789012", String(repeating: "中", count: 12), String(repeating: "e\u{301}", count: 12)] {
+            _ = try fixture.service.backUp(to: fixture.archive, password: password, scope: full)
+            let preview = try fixture.service.preview(url: fixture.archive, password: password)
+            XCTAssertEqual(preview.manifest.records, 0)
+        }
+        XCTAssertThrowsError(try fixture.service.backUp(to: fixture.archive,
+            password: String(repeating: "中", count: 342), scope: full)) {
+            guard case ClipboardBackupError.passwordTooLong = $0 else { return XCTFail("Expected long password error") }
+        }
+    }
+
+    func testRestoreAcceptsLegacyPasswordWithFewerThanTwelveCharacters() throws {
+        let fixture = try Fixture()
+        let password = "中文密码" // Four characters, twelve UTF-8 bytes: valid under the original rule.
+        // Construct an empty version-one archive with the original password policy.
+        let salt = Data(repeating: 7, count: 32)
+        let key = SymmetricKey(size: .bits256)
+        let header = ClipboardBackupArchive.magic + ClipboardBackupArchive.integer(1, bytes: 4)
+            + ClipboardBackupArchive.integer(UInt64(ClipboardBackupArchive.iterations), bytes: 4) + salt
+        let wrappingKey = try ClipboardBackupArchive.derive(password: password, salt: salt, rounds: ClipboardBackupArchive.iterations)
+        let wrapped = try XCTUnwrap(AES.GCM.seal(key.withUnsafeBytes { Data($0) }, using: wrappingKey, authenticating: header).combined)
+        var manifest = ClipboardBackupManifest(scope: full)
+        manifest.digest = Data(SHA256.hash(data: Data()))
+        let terminal = Data([2]) + (try JSONEncoder().encode(manifest))
+        let authentication = Data(SHA256.hash(data: header + wrapped)) + ClipboardBackupArchive.integer(0)
+        let sealed = try XCTUnwrap(AES.GCM.seal(terminal, using: key,
+            nonce: AES.GCM.Nonce(data: Data(repeating: 0, count: 12)), authenticating: authentication).combined)
+        let archive = header + wrapped + ClipboardBackupArchive.integer(UInt64(sealed.count), bytes: 4) + sealed
+        try archive.write(to: fixture.archive)
+        let preview = try fixture.service.preview(url: fixture.archive, password: password)
+        XCTAssertEqual(preview.manifest.records, 0)
+        XCTAssertFalse(preview.replacement)
+    }
+
     func testRoundTripAllCategoriesPreservesMetadataAndUsesDestinationKey() throws {
         let source = try Fixture(), destination = try Fixture()
         let item = clip(), saved = snippet()
@@ -157,6 +199,27 @@ final class ClipboardBackupServiceTests: XCTestCase {
         _ = try source.service.backUp(to: source.archive, password: password, scope: full)
         try destination.service.commit(destination.service.preview(url: source.archive, password: password))
         XCTAssertEqual(try destination.history.load().count, 2)
+    }
+
+    func testDiscardingReplacementPreviewLeavesLocalDataAndRollbackUntouched() throws {
+        let source = try Fixture(), destination = try Fixture()
+        try source.history.save([clip(text: "incoming")])
+        try destination.history.save([clip(text: "local")])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let before = try destination.fingerprint()
+        var stagingDirectory: URL?
+        do {
+            let preview = try destination.service.preview(url: source.archive, password: password, replacing: true)
+            stagingDirectory = preview.directory
+            XCTAssertGreaterThan(preview.summary.removed, 0)
+            XCTAssertEqual(try destination.fingerprint(), before)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: destination.service.rollbackURL.path))
+            // Dismissing the preview without calling commit is the confirmation's Cancel path.
+            withExtendedLifetime(preview) {}
+        }
+        XCTAssertEqual(try destination.fingerprint(), before)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.service.rollbackURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(stagingDirectory).path))
     }
 
     func testPartialReplacementKeepsOtherMembershipAndRollbackRecoversEverything() throws {
