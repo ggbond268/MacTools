@@ -412,18 +412,33 @@ jobs:
         run: |
           API_KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_API_KEY_ID}.p8"
           echo "$ASC_API_KEY_P8_BASE64" | base64 --decode > "$API_KEY_PATH"
-          xcrun notarytool submit "$DMG_PATH" \
-            --key "$API_KEY_PATH" \
-            --key-id "$ASC_API_KEY_ID" \
-            --issuer "$ASC_API_ISSUER_ID" \
-            --wait \
-            --timeout 30m
-          xcrun notarytool submit "$CLI_ARCHIVE_PATH" \
-            --key "$API_KEY_PATH" \
-            --key-id "$ASC_API_KEY_ID" \
-            --issuer "$ASC_API_ISSUER_ID" \
-            --wait \
-            --timeout 30m
+
+          notarize_and_require_accepted() {
+            local artifact="$1"
+            local result_path="$2"
+            local submit_status=0
+            xcrun notarytool submit "$artifact" \
+              --key "$API_KEY_PATH" \
+              --key-id "$ASC_API_KEY_ID" \
+              --issuer "$ASC_API_ISSUER_ID" \
+              --wait \
+              --timeout 30m \
+              --output-format json > "$result_path" || submit_status=$?
+            if [[ "$submit_status" -ne 0 ]] \
+              || ! scripts/nightly-release.py verify-notarization --input "$result_path"; then
+              request_id="$(jq -r 'if (.id | type) == "string" then .id else empty end' "$result_path" 2>/dev/null || true)"
+              if [[ -n "$request_id" ]]; then
+                xcrun notarytool log "$request_id" \
+                  --key "$API_KEY_PATH" \
+                  --key-id "$ASC_API_KEY_ID" \
+                  --issuer "$ASC_API_ISSUER_ID" || true
+              fi
+              return 1
+            fi
+          }
+
+          notarize_and_require_accepted "$DMG_PATH" "$RUNNER_TEMP/dmg-notarization.json"
+          notarize_and_require_accepted "$CLI_ARCHIVE_PATH" "$RUNNER_TEMP/cli-notarization.json"
           xcrun stapler staple "$DMG_PATH"
           spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
           rm -f "$API_KEY_PATH"

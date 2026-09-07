@@ -32,6 +32,7 @@ RELEASE_DOWNLOAD_TAG_PATTERN = re.compile(
     r"/releases/download/(nightly-[0-9]+-[0-9]+)/"
 )
 MAX_CLI_SIZE_BYTES = 64 * 1024 * 1024
+CLI_ARCHITECTURES = ("arm64", "x86_64")
 
 
 def fail(message: str) -> None:
@@ -322,28 +323,48 @@ def verify_cli_signature(
     expected_identifier: str,
     expected_team_identifier: str,
 ) -> None:
+    def requirement_literal(value: str) -> str:
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+    requirement = (
+        f"anchor apple generic and identifier {requirement_literal(expected_identifier)} "
+        f"and certificate leaf[subject.OU] = {requirement_literal(expected_team_identifier)} "
+        "and certificate 1[field.1.2.840.113635.100.6.2.6] exists "
+        "and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"
+    )
     try:
         subprocess.run(
             [
                 "/usr/bin/codesign", "--verify", "--strict", "--verbose=2",
-                "--all-architectures", str(cli_path),
+                "--all-architectures", f"-R={requirement}", str(cli_path),
             ],
             capture_output=True, text=True, check=True, timeout=30,
         )
-        signature = subprocess.run(
-            ["/usr/bin/codesign", "--display", "--verbose=4", str(cli_path)],
-            capture_output=True, text=True, check=True, timeout=30,
-        ).stderr
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         fail("Nightly CLI signature verification failed")
-    identifiers = re.findall(r"^Identifier=(.+)$", signature, re.MULTILINE)
-    teams = re.findall(r"^TeamIdentifier=(.+)$", signature, re.MULTILINE)
-    if identifiers != [expected_identifier] or teams != [expected_team_identifier]:
-        fail("Nightly CLI signature identity does not match the Nightly broker policy")
-    if not re.search(r"^Authority=Developer ID Application:", signature, re.MULTILINE):
-        fail("Nightly CLI is not signed with a Developer ID Application certificate")
-    if not re.search(r"^CodeDirectory .+\(runtime\)", signature, re.MULTILINE):
-        fail("Nightly CLI signature does not enable the hardened runtime")
+
+    for architecture in CLI_ARCHITECTURES:
+        try:
+            signature = subprocess.run(
+                [
+                    "/usr/bin/codesign", "--display", "--verbose=4",
+                    "--arch", architecture, str(cli_path),
+                ],
+                capture_output=True, text=True, check=True, timeout=30,
+            ).stderr
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            fail(f"Cannot inspect Nightly CLI {architecture} signature")
+        identifiers = re.findall(r"^Identifier=(.+)$", signature, re.MULTILINE)
+        teams = re.findall(r"^TeamIdentifier=(.+)$", signature, re.MULTILINE)
+        if identifiers != [expected_identifier] or teams != [expected_team_identifier]:
+            fail(
+                f"Nightly CLI {architecture} signature identity does not match "
+                "the Nightly broker policy"
+            )
+        if not re.search(r"^Authority=Developer ID Application:", signature, re.MULTILINE):
+            fail(f"Nightly CLI {architecture} is not signed with Developer ID Application")
+        if not re.search(r"^CodeDirectory .+\(runtime\)", signature, re.MULTILINE):
+            fail(f"Nightly CLI {architecture} signature does not enable the hardened runtime")
 
 
 def verify_cli_architectures(cli_path: pathlib.Path) -> None:
@@ -354,8 +375,35 @@ def verify_cli_architectures(cli_path: pathlib.Path) -> None:
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         fail("Cannot inspect Nightly CLI architectures")
-    if set(result.stdout.split()) != {"arm64", "x86_64"}:
+    if set(result.stdout.split()) != set(CLI_ARCHITECTURES):
         fail("Nightly CLI must contain exactly the arm64 and x86_64 architectures")
+
+
+def verify_cli_slice_metadata(
+    cli_path: pathlib.Path,
+    expected_identifier: str,
+    expected_version: str,
+    expected_build_number: str,
+) -> None:
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        for architecture in CLI_ARCHITECTURES:
+            slice_path = pathlib.Path(temporary_directory) / f"mactools-{architecture}"
+            try:
+                subprocess.run(
+                    [
+                        "/usr/bin/lipo", str(cli_path), "-thin", architecture,
+                        "-output", str(slice_path),
+                    ],
+                    capture_output=True, text=True, check=True, timeout=30,
+                )
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                fail(f"Cannot extract Nightly CLI {architecture} metadata")
+            if executable_bundle_identifier(slice_path) != expected_identifier:
+                fail(f"Nightly CLI {architecture} embedded identifier does not match")
+            if executable_bundle_versions(slice_path) != (
+                expected_version, expected_build_number,
+            ):
+                fail(f"Nightly CLI {architecture} embedded version does not match")
 
 
 def verify_cli_dependencies(cli_path: pathlib.Path) -> None:
@@ -408,6 +456,17 @@ def verify_cli_version_output(
         fail("Nightly CLI version output does not match its release metadata")
 
 
+def verify_notarization_result(result_path: pathlib.Path) -> None:
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        fail("Nightly notarization result is missing or malformed")
+    if not isinstance(result, dict) or result.get("status") != "Accepted":
+        fail("Nightly notarization status is not Accepted")
+    if not isinstance(result.get("id"), str) or not result["id"].strip():
+        fail("Nightly notarization result is missing its request ID")
+
+
 def verify_cli_archive(
     archive_path: pathlib.Path,
     checksum_path: pathlib.Path,
@@ -439,11 +498,10 @@ def verify_cli_archive(
         cli_path.write_bytes(cli_bytes)
         cli_path.chmod(0o755)
         expected_identifier = f"{bundle_identifier_prefix}.mactools.nightly.cli"
-        if executable_bundle_identifier(cli_path) != expected_identifier:
-            fail("Nightly CLI embedded identifier does not match the Nightly broker policy")
-        if executable_bundle_versions(cli_path) != (version, build_number):
-            fail("Nightly CLI embedded version does not match its release metadata")
         verify_cli_architectures(cli_path)
+        verify_cli_slice_metadata(
+            cli_path, expected_identifier, version, build_number,
+        )
         verify_cli_signature(cli_path, expected_identifier, team_identifier)
         verify_cli_dependencies(cli_path)
         verify_cli_version_output(cli_path, version, build_number)
@@ -739,6 +797,9 @@ def parser() -> argparse.ArgumentParser:
     verify_cli.add_argument("--version", required=True)
     verify_cli.add_argument("--build-number", required=True)
 
+    verify_notarization = subparsers.add_parser("verify-notarization")
+    verify_notarization.add_argument("--input", type=pathlib.Path, required=True)
+
     stale_tags = subparsers.add_parser("stale-tags")
     stale_tags.add_argument("--input", type=pathlib.Path, required=True)
     stale_tags.add_argument("--keep", type=int, default=14)
@@ -829,6 +890,8 @@ def main() -> None:
             args.version,
             args.build_number,
         )
+    elif args.command == "verify-notarization":
+        verify_notarization_result(args.input)
     elif args.command == "stale-tags":
         releases = json.loads(args.input.read_text(encoding="utf-8"))
         for tag in stale_nightly_tags(releases, args.keep, args.preserve_tag):

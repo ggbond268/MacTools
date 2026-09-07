@@ -527,11 +527,8 @@ class NightlyCLIArchiveTests(unittest.TestCase):
     def test_archive_verifier_accepts_exact_matching_artifact(self) -> None:
         self.package()
         with mock.patch.object(
-            nightly_release, "executable_bundle_identifier",
-            return_value="com.example.mactools.nightly.cli",
-        ), mock.patch.object(
-            nightly_release, "executable_bundle_versions", return_value=("1.2.1", "512.1"),
-        ), mock.patch.object(
+            nightly_release, "verify_cli_slice_metadata",
+        ) as metadata, mock.patch.object(
             nightly_release, "verify_cli_architectures",
         ) as architectures, mock.patch.object(
             nightly_release, "verify_cli_signature",
@@ -544,11 +541,47 @@ class NightlyCLIArchiveTests(unittest.TestCase):
                 self.archive, self.checksum, "com.example", "TEAM123", "1.2.1", "512.1",
             )
         extracted = architectures.call_args.args[0]
+        metadata.assert_called_once_with(
+            extracted, "com.example.mactools.nightly.cli", "1.2.1", "512.1",
+        )
         signature.assert_called_once_with(
             extracted, "com.example.mactools.nightly.cli", "TEAM123",
         )
         dependencies.assert_called_once_with(extracted)
         version_output.assert_called_once_with(extracted, "1.2.1", "512.1")
+
+    def test_slice_metadata_verifier_checks_both_architectures(self) -> None:
+        with mock.patch.object(
+            nightly_release.subprocess, "run",
+            return_value=subprocess.CompletedProcess([], 0, "", ""),
+        ) as run, mock.patch.object(
+            nightly_release, "executable_bundle_identifier",
+            side_effect=["com.example.cli", "com.example.cli"],
+        ), mock.patch.object(
+            nightly_release, "executable_bundle_versions",
+            side_effect=[("1.2.1", "512.1"), ("1.2.1", "512.1")],
+        ):
+            nightly_release.verify_cli_slice_metadata(
+                self.cli, "com.example.cli", "1.2.1", "512.1",
+            )
+        self.assertEqual(
+            [call.args[0][3] for call in run.call_args_list],
+            list(nightly_release.CLI_ARCHITECTURES),
+        )
+
+        with mock.patch.object(
+            nightly_release.subprocess, "run",
+            return_value=subprocess.CompletedProcess([], 0, "", ""),
+        ), mock.patch.object(
+            nightly_release, "executable_bundle_identifier",
+            side_effect=["com.example.cli", "com.example.other"],
+        ), mock.patch.object(
+            nightly_release, "executable_bundle_versions",
+            return_value=("1.2.1", "512.1"),
+        ), self.assertRaisesRegex(SystemExit, "x86_64 embedded identifier"):
+            nightly_release.verify_cli_slice_metadata(
+                self.cli, "com.example.cli", "1.2.1", "512.1",
+            )
 
     def test_archive_verifier_rejects_checksum_and_contents(self) -> None:
         self.package()
@@ -597,17 +630,64 @@ class NightlyCLIArchiveTests(unittest.TestCase):
                 side_effect=[
                     subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", signature),
+                    subprocess.CompletedProcess([], 0, "", signature),
                 ],
-            ):
+            ) as run:
                 if accepted:
                     nightly_release.verify_cli_signature(
                         self.cli, "com.example.mactools.nightly.cli", "TEAM123",
+                    )
+                    verification = run.call_args_list[0].args[0]
+                    self.assertIn("--all-architectures", verification)
+                    requirement = next(arg for arg in verification if arg.startswith("-R="))
+                    self.assertIn("anchor apple generic", requirement)
+                    self.assertIn("certificate leaf[subject.OU]", requirement)
+                    displayed_architectures = [
+                        call.args[0][call.args[0].index("--arch") + 1]
+                        for call in run.call_args_list[1:]
+                    ]
+                    self.assertEqual(
+                        displayed_architectures, list(nightly_release.CLI_ARCHITECTURES),
                     )
                 else:
                     with self.assertRaises(SystemExit):
                         nightly_release.verify_cli_signature(
                             self.cli, "com.example.mactools.nightly.cli", "TEAM123",
                         )
+
+    def test_signature_verifier_rejects_untrusted_signature(self) -> None:
+        error = subprocess.CalledProcessError(3, ["codesign"])
+        with mock.patch.object(
+            nightly_release.subprocess, "run", side_effect=error,
+        ) as run, self.assertRaisesRegex(SystemExit, "signature verification failed"):
+            nightly_release.verify_cli_signature(
+                self.cli, "com.example.mactools.nightly.cli", "TEAM123",
+            )
+        requirement = next(
+            arg for arg in run.call_args.args[0] if arg.startswith("-R=")
+        )
+        self.assertIn("anchor apple generic", requirement)
+        self.assertIn("1.2.840.113635.100.6.1.13", requirement)
+
+    def test_signature_verifier_rejects_nonconforming_second_slice(self) -> None:
+        valid = (
+            "Identifier=com.example.mactools.nightly.cli\n"
+            "Authority=Developer ID Application: Example (TEAM123)\n"
+            "TeamIdentifier=TEAM123\n"
+            "CodeDirectory v=20500 size=1 flags=0x10000(runtime) hashes=1 location=embedded\n"
+        )
+        invalid = valid.replace("(runtime)", "(none)")
+        with mock.patch.object(
+            nightly_release.subprocess, "run",
+            side_effect=[
+                subprocess.CompletedProcess([], 0, "", ""),
+                subprocess.CompletedProcess([], 0, "", valid),
+                subprocess.CompletedProcess([], 0, "", invalid),
+            ],
+        ), self.assertRaisesRegex(SystemExit, "x86_64 signature"):
+            nightly_release.verify_cli_signature(
+                self.cli, "com.example.mactools.nightly.cli", "TEAM123",
+            )
 
     def test_dependency_verifier_allows_only_system_paths(self) -> None:
         allowed = (
@@ -641,6 +721,23 @@ class NightlyCLIArchiveTests(unittest.TestCase):
             nightly_release.verify_cli_version_output(self.cli, "1.2.1", "512.1")
         with mock.patch.object(nightly_release.subprocess, "run", return_value=result("1.2.0", "512.1")), self.assertRaisesRegex(SystemExit, "does not match"):
             nightly_release.verify_cli_version_output(self.cli, "1.2.1", "512.1")
+
+    def test_notarization_verifier_requires_accepted_status_and_request_id(self) -> None:
+        result_path = self.root / "notarization.json"
+        result_path.write_text(
+            json.dumps({"id": "request-id", "status": "Accepted"}), encoding="utf-8",
+        )
+        nightly_release.verify_notarization_result(result_path)
+
+        for result in [
+            {"id": "request-id", "status": "Invalid"},
+            {"id": "request-id", "status": "Rejected"},
+            {"status": "Accepted"},
+        ]:
+            with self.subTest(result=result):
+                result_path.write_text(json.dumps(result), encoding="utf-8")
+                with self.assertRaises(SystemExit):
+                    nightly_release.verify_notarization_result(result_path)
 
 
 if __name__ == "__main__":

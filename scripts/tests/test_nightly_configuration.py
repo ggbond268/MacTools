@@ -77,7 +77,11 @@ class NightlyConfigurationTests(unittest.TestCase):
 
         self.assertIn("scripts/nightly-release.py package-cli", package)
         self.assertIn('--output "$CLI_ARCHIVE_PATH"', package)
-        self.assertIn('notarytool submit "$CLI_ARCHIVE_PATH"', notarize)
+        self.assertIn('notarytool submit "$artifact"', notarize)
+        self.assertIn('notarize_and_require_accepted "$CLI_ARCHIVE_PATH"', notarize)
+        self.assertGreaterEqual(notarize.count("--output-format json"), 1)
+        self.assertIn("scripts/nightly-release.py verify-notarization", notarize)
+        self.assertIn("notarytool log", notarize)
         self.assertIn('shasum -a 256 "$CLI_NAME"', checksums)
         self.assertIn("scripts/nightly-release.py verify-cli-archive", checksums)
         self.assertIn('--team-identifier "${{ secrets.APPLE_DEVELOPMENT_TEAM }}"', checksums)
