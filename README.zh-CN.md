@@ -103,7 +103,7 @@ brew install --cask mactools
 
 ### 实验性命令行原型
 
-源码中包含一个需要单独构建的 `mactools` 本地测试原型。Phase 0 仅支持 `help`、`version` 和 `doctor`，不会打包进应用，也暂不提供应用操作。请按 [Phase 0 测试指南](docs/testing/cli-phase-0.md)构建并配合已签名的本地应用测试。
+Nightly 发布会提供可单独下载的 `mactools` 测试原型，它不会打包进应用。当前支持 `help`、`version`、`doctor`、只读操作发现，以及通过 `actions run <id>` 执行安全、后台、自动、可移植且无参数的操作；同时支持 `--json`、超时与 Ctrl-C 取消。类型化参数和预设仍不受支持。请按 [Nightly CLI 下载与安装指南](docs/testing/cli-nightly-distribution.md)测试发布产物；开发 CLI 本身时可使用 [Phase 2 源码构建指南](docs/testing/cli-phase-2.md)。
 
 ## 升级
 

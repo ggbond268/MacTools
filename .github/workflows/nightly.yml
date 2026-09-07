@@ -292,6 +292,11 @@ jobs:
           [[ -f "$CLI_BROKER" ]] || { echo "Nightly CLI broker is missing" >&2; exit 1; }
           sign_path "$CLI_BROKER"
 
+          # The separately downloadable CLI is not embedded in the app.
+          CLI_PATH="$DERIVED_DATA/Build/Products/Nightly/mactools"
+          [[ -f "$CLI_PATH" ]] || { echo "Nightly CLI is missing" >&2; exit 1; }
+          sign_path "$CLI_PATH"
+
           [[ ! -d "$SPARKLE_FRAMEWORK" ]] || sign_path "$SPARKLE_FRAMEWORK"
           /usr/bin/codesign \
             --force \
@@ -323,10 +328,17 @@ jobs:
           fi
           /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           scripts/nightly-release.py verify-app \
-            --app "$APP_PATH" --signed \
+            --app "$APP_PATH" --cli "$CLI_PATH" --signed \
             --bundle-identifier-prefix "${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}" \
             --version "$VERSION" --build-number "$BUILD_NUMBER" \
             --plugin-kit-version "$PLUGIN_KIT_VERSION"
+
+      - name: Package signed Nightly CLI
+        if: steps.nightly_gate.outputs.decision == 'publish'
+        run: |
+          scripts/nightly-release.py package-cli \
+            --cli "$DERIVED_DATA/Build/Products/Nightly/mactools" \
+            --output "$CLI_ARCHIVE_PATH"
 
       - name: Build and sign same-commit Nightly plugins
         if: steps.nightly_gate.outputs.decision == 'publish'
@@ -391,7 +403,7 @@ jobs:
             "$DMG_PATH"
           /usr/bin/codesign --verify --verbose=2 "$DMG_PATH"
 
-      - name: Notarize and staple Nightly DMG
+      - name: Notarize Nightly app and CLI distributions
         if: steps.nightly_gate.outputs.decision == 'publish'
         env:
           ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
@@ -400,17 +412,38 @@ jobs:
         run: |
           API_KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_API_KEY_ID}.p8"
           echo "$ASC_API_KEY_P8_BASE64" | base64 --decode > "$API_KEY_PATH"
-          xcrun notarytool submit "$DMG_PATH" \
-            --key "$API_KEY_PATH" \
-            --key-id "$ASC_API_KEY_ID" \
-            --issuer "$ASC_API_ISSUER_ID" \
-            --wait \
-            --timeout 30m
+
+          notarize_and_require_accepted() {
+            local artifact="$1"
+            local result_path="$2"
+            local submit_status=0
+            xcrun notarytool submit "$artifact" \
+              --key "$API_KEY_PATH" \
+              --key-id "$ASC_API_KEY_ID" \
+              --issuer "$ASC_API_ISSUER_ID" \
+              --wait \
+              --timeout 30m \
+              --output-format json > "$result_path" || submit_status=$?
+            if [[ "$submit_status" -ne 0 ]] \
+              || ! scripts/nightly-release.py verify-notarization --input "$result_path"; then
+              request_id="$(jq -r 'if (.id | type) == "string" then .id else empty end' "$result_path" 2>/dev/null || true)"
+              if [[ -n "$request_id" ]]; then
+                xcrun notarytool log "$request_id" \
+                  --key "$API_KEY_PATH" \
+                  --key-id "$ASC_API_KEY_ID" \
+                  --issuer "$ASC_API_ISSUER_ID" || true
+              fi
+              return 1
+            fi
+          }
+
+          notarize_and_require_accepted "$DMG_PATH" "$RUNNER_TEMP/dmg-notarization.json"
+          notarize_and_require_accepted "$CLI_ARCHIVE_PATH" "$RUNNER_TEMP/cli-notarization.json"
           xcrun stapler staple "$DMG_PATH"
           spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
           rm -f "$API_KEY_PATH"
 
-      - name: Generate Nightly notes, checksum, and appcast
+      - name: Generate Nightly notes, checksums, and appcast
         if: steps.nightly_gate.outputs.decision == 'publish'
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -418,6 +451,16 @@ jobs:
           DMG_DIRECTORY="$(dirname "$DMG_PATH")"
           DMG_NAME="$(basename "$DMG_PATH")"
           (cd "$DMG_DIRECTORY" && shasum -a 256 "$DMG_NAME") | tee "$SHA256_PATH"
+          CLI_DIRECTORY="$(dirname "$CLI_ARCHIVE_PATH")"
+          CLI_NAME="$(basename "$CLI_ARCHIVE_PATH")"
+          (cd "$CLI_DIRECTORY" && shasum -a 256 "$CLI_NAME") | tee "$CLI_SHA256_PATH"
+          scripts/nightly-release.py verify-cli-archive \
+            --archive "$CLI_ARCHIVE_PATH" \
+            --checksum "$CLI_SHA256_PATH" \
+            --bundle-identifier-prefix "${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}" \
+            --team-identifier "${{ secrets.APPLE_DEVELOPMENT_TEAM }}" \
+            --version "$VERSION" \
+            --build-number "$BUILD_NUMBER"
           RELEASE_NOTES_PATH="$RUNNER_TEMP/nightly-release-notes.md"
           NIGHTLY_APPCAST_PATH="$RUNNER_TEMP/nightly-appcast.xml"
           scripts/nightly-release.py notes \
@@ -485,6 +528,8 @@ jobs:
           assets=(
             "$DMG_PATH"
             "$SHA256_PATH"
+            "$CLI_ARCHIVE_PATH"
+            "$CLI_SHA256_PATH"
             "$RELEASE_CATALOG_PATH"
           )
           while IFS= read -r asset; do
@@ -496,6 +541,8 @@ jobs:
           {
             echo "MacTools-Nightly.dmg"
             echo "MacTools-Nightly.sha256"
+            basename "$CLI_ARCHIVE_PATH"
+            basename "$CLI_SHA256_PATH"
             echo "catalog.json"
             find "$PLUGIN_ASSETS_DIR" -maxdepth 1 -name "*.mactoolsplugin.zip" -type f -exec basename {} \; | sort
           } | sort > "$EXPECTED_ASSETS_PATH"
@@ -570,6 +617,8 @@ jobs:
           path: |
             ${{ env.DMG_PATH }}
             ${{ env.SHA256_PATH }}
+            ${{ env.CLI_ARCHIVE_PATH }}
+            ${{ env.CLI_SHA256_PATH }}
             ${{ env.SIGNED_PLUGIN_CATALOG_PATH }}
           if-no-files-found: error
           retention-days: 30
