@@ -155,6 +155,9 @@ final class DiskCleanAuditLog: @unchecked Sendable {
 
         let summaryRecords = allRecords.filter { $0.action == .runSummary }
         let itemRecords = allRecords.filter { $0.action == .trash || $0.action == .delete }
+        let summarizedRunIDs = Set(
+            summaryRecords.compactMap(\.runID).filter { !$0.isEmpty }
+        )
 
         var itemRecordsByRunID: [String: [Record]] = [:]
         var unassignedRecords: [Record] = []
@@ -186,10 +189,38 @@ final class DiskCleanAuditLog: @unchecked Sendable {
                     status: summary.status,
                     categoriesCleaned: summary.categoriesCleaned ?? [],
                     itemsRemoved: summary.itemsRemoved ?? matchedRecords.filter { $0.status == "ok" }.count,
-                    bytesRemoved: summary.bytesRemoved ?? matchedRecords.compactMap(\.estimatedBytes).reduce(0, +),
+                    bytesRemoved: summary.bytesRemoved ?? verifiedRemovedBytes(in: matchedRecords),
                     errorsEncountered: summary.errorsEncountered ?? [],
                     needsAttention: hasAttention,
                     itemEntries: matchedItems
+                )
+            )
+        }
+
+        // A process can stop after appending item records but before its final summary. Keep each
+        // unmatched run visible so a partial deletion or blocked rollback is never hidden in the
+        // default history view. A run ID is supplied by the executor and is therefore stable across
+        // refreshes; completed runs remain represented by their authoritative summary above.
+        for (runID, records) in itemRecordsByRunID where !summarizedRunIDs.contains(runID) {
+            let sortedRecords = records.sorted { $0.timestamp > $1.timestamp }
+            guard let latestRecord = sortedRecords.first else { continue }
+
+            let entries = DiskCleanCleanupHistoryEntry.entries(from: sortedRecords)
+            let categories = Array(Set(sortedRecords.compactMap(\.category))).sorted()
+            let errors = sortedRecords.compactMap(\.error)
+
+            runs.append(
+                DiskCleanRunHistoryEntry(
+                    id: runID,
+                    timestamp: latestRecord.timestamp,
+                    isTrash: sortedRecords.allSatisfy { $0.action == .trash },
+                    status: "interrupted",
+                    categoriesCleaned: categories,
+                    itemsRemoved: sortedRecords.filter { $0.status == "ok" }.count,
+                    bytesRemoved: verifiedRemovedBytes(in: sortedRecords),
+                    errorsEncountered: errors,
+                    needsAttention: entries.contains(where: \.needsAttention),
+                    itemEntries: entries
                 )
             )
         }
@@ -221,7 +252,7 @@ final class DiskCleanAuditLog: @unchecked Sendable {
                 let isTrash = cluster.contains { $0.action == .trash }
                 let categories = Array(Set(cluster.compactMap(\.category))).sorted()
                 let removed = cluster.filter { $0.status == "ok" }.count
-                let bytes = cluster.compactMap(\.estimatedBytes).reduce(0, +)
+                let bytes = verifiedRemovedBytes(in: cluster)
                 let errors = cluster.compactMap(\.error)
                 let hasAttention = clusterEntries.contains(where: \.needsAttention)
                 let runID = "session-\(Int(first.timestamp.timeIntervalSince1970))"
@@ -244,6 +275,15 @@ final class DiskCleanAuditLog: @unchecked Sendable {
         }
 
         return Array(runs.sorted { $0.timestamp > $1.timestamp }.prefix(limit))
+    }
+
+    /// Audit records carry estimated source sizes. Only a verified `ok` record proves that those
+    /// bytes were removed; failed, skipped, and partial results must not inflate history totals.
+    private func verifiedRemovedBytes(in records: [Record]) -> Int64 {
+        records.reduce(into: 0) { total, record in
+            guard record.status == "ok", let bytes = record.estimatedBytes else { return }
+            total += max(bytes, 0)
+        }
     }
 
     private func rotateIfNeeded() {

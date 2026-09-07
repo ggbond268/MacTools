@@ -244,7 +244,7 @@ final class DiskCleanAuditLogTests: XCTestCase {
 
         // Most recent first: cluster 2
         XCTAssertEqual(runs[0].itemsRemoved, 0)
-        XCTAssertEqual(runs[0].bytesRemoved, 4096)
+        XCTAssertEqual(runs[0].bytesRemoved, 0, "partial deletion does not prove any bytes were removed")
         XCTAssertTrue(runs[0].needsAttention)
         XCTAssertFalse(runs[0].isTrash)
 
@@ -253,6 +253,96 @@ final class DiskCleanAuditLogTests: XCTestCase {
         XCTAssertEqual(runs[1].bytesRemoved, 3072)
         XCTAssertFalse(runs[1].needsAttention)
         XCTAssertTrue(runs[1].isTrash)
+    }
+
+    func testRecentRunsProjectsInterruptedRunIDWithoutDuplicatingCompletedSummary() throws {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        let baseTime = Date(timeIntervalSince1970: 4_000)
+
+        // The process can stop after item records have been appended, before the final summary.
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime,
+                action: .delete,
+                runID: "interrupted-run",
+                category: "appCaches",
+                path: "/cache/removed",
+                estimatedBytes: 1_024,
+                status: "ok"
+            )
+        )
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(1),
+                action: .delete,
+                runID: "interrupted-run",
+                category: "logs",
+                path: "/cache/blocked",
+                stagedName: ".mactools-staged-blocked",
+                estimatedBytes: 8_192,
+                status: "rollbackBlocked",
+                error: "Destination occupied"
+            )
+        )
+
+        // Item records with this run ID belong to this authoritative completed summary only.
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(2),
+                action: .trash,
+                runID: "completed-run",
+                path: "/cache/completed",
+                estimatedBytes: 4_096,
+                status: "ok"
+            )
+        )
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(3),
+                action: .runSummary,
+                runID: "completed-run",
+                status: "ok",
+                itemsRemoved: 1,
+                bytesRemoved: 4_096,
+                errorsEncountered: [],
+                isTrash: true
+            )
+        )
+
+        let runs = log.recentRuns(limit: 10)
+        XCTAssertEqual(runs.map(\.id), ["completed-run", "interrupted-run"])
+
+        let interrupted = try XCTUnwrap(runs.first { $0.id == "interrupted-run" })
+        XCTAssertEqual(interrupted.status, "interrupted")
+        XCTAssertFalse(interrupted.isTrash)
+        XCTAssertEqual(interrupted.categoriesCleaned, ["appCaches", "logs"])
+        XCTAssertEqual(interrupted.itemsRemoved, 1)
+        XCTAssertEqual(interrupted.bytesRemoved, 1_024)
+        XCTAssertEqual(interrupted.errorsEncountered, ["Destination occupied"])
+        XCTAssertTrue(interrupted.needsAttention)
+        XCTAssertEqual(interrupted.itemEntries.map(\.path), ["/cache/blocked", "/cache/removed"])
+    }
+
+    func testRecentRunsLegacyBytesIncludeOnlyVerifiedSuccesses() {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        let timestamp = Date(timeIntervalSince1970: 5_000)
+
+        for (status, bytes) in [("ok", 1_024), ("failed", 2_048), ("skipped", 4_096), ("partiallyDeleted", 8_192)] {
+            log.append(
+                DiskCleanAuditLog.Record(
+                    timestamp: timestamp,
+                    action: .delete,
+                    path: "/cache/\(status)",
+                    estimatedBytes: Int64(bytes),
+                    status: status,
+                    error: status == "failed" ? "Permission denied" : nil
+                )
+            )
+        }
+
+        let run = log.recentRuns(limit: 1).first
+        XCTAssertEqual(run?.itemsRemoved, 1)
+        XCTAssertEqual(run?.bytesRemoved, 1_024)
     }
 
 }
