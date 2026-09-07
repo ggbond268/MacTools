@@ -98,6 +98,68 @@ final class PluginHostInPlaceLayoutTests: XCTestCase {
         XCTAssertEqual(host.componentItems.map(\.id), ["p1", "p2"])
     }
 
+    func testInPlaceLayoutCanReopenAndRestoreCardsAfterHidingAllItemsOnEitherSurface() {
+        for (tab, surface) in [
+            (MenuBarPanelTab.components, PluginDisplaySurface.dashboard),
+            (MenuBarPanelTab.features, PluginDisplaySurface.featurePanel)
+        ] {
+            let p1 = MockDualPanelPlugin(id: "\(surface)-p1", order: 1)
+            let p2 = MockDualPanelPlugin(id: "\(surface)-p2", order: 2)
+            let host = makeHost(plugins: [p1, p2])
+            let model = MenuBarUnifiedPanelModel(
+                selectedTab: tab,
+                contentHeight: 300,
+                maximumFeatureListHeight: 400,
+                isPanelVisible: true
+            )
+
+            XCTAssertEqual(tab.displaySurface, surface)
+            XCTAssertTrue(host.canEditLayout(on: surface))
+
+            model.toggleEditLayout()
+            host.setPluginVisible(false, id: p1.metadata.id, on: surface)
+            XCTAssertEqual(layoutItemIDs(in: host, on: surface).visible, [p2.metadata.id])
+            XCTAssertTrue(host.canEditLayout(on: surface))
+
+            host.setPluginVisible(false, id: p2.metadata.id, on: surface)
+            XCTAssertTrue(layoutItemIDs(in: host, on: surface).visible.isEmpty)
+            XCTAssertEqual(
+                layoutItemIDs(in: host, on: surface).hidden,
+                [p1.metadata.id, p2.metadata.id]
+            )
+            XCTAssertTrue(host.canEditLayout(on: surface))
+
+            model.toggleEditLayout()
+            XCTAssertFalse(model.isEditingLayout)
+            XCTAssertTrue(host.canEditLayout(on: tab.displaySurface))
+
+            model.toggleEditLayout()
+            XCTAssertTrue(model.isEditingLayout)
+            host.setPluginVisible(true, id: p1.metadata.id, on: surface)
+            XCTAssertEqual(layoutItemIDs(in: host, on: surface).visible, [p1.metadata.id])
+            XCTAssertEqual(layoutItemIDs(in: host, on: surface).hidden, [p2.metadata.id])
+            XCTAssertTrue(host.canEditLayout(on: surface))
+        }
+    }
+
+    private func layoutItemIDs(
+        in host: PluginHost,
+        on surface: PluginDisplaySurface
+    ) -> (visible: [String], hidden: [String]) {
+        switch surface {
+        case .dashboard:
+            return (
+                host.dashboardLayoutItems.map(\.id),
+                host.dashboardHiddenLayoutItems.map(\.id)
+            )
+        case .featurePanel:
+            return (
+                host.featurePanelLayoutItems.map(\.id),
+                host.featurePanelHiddenLayoutItems.map(\.id)
+            )
+        }
+    }
+
     private func makeHost(
         plugins: [any MacToolsPlugin]
     ) -> PluginHost {

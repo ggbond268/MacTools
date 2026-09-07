@@ -1930,6 +1930,17 @@ final class PluginHost: ObservableObject {
         rebuildDerivedState()
     }
 
+    /// Keeps in-place editing available while a surface has cards that can be
+    /// shown again, including when every card is currently hidden.
+    func canEditLayout(on surface: PluginDisplaySurface) -> Bool {
+        switch surface {
+        case .dashboard:
+            return !dashboardLayoutItems.isEmpty || !dashboardHiddenLayoutItems.isEmpty
+        case .featurePanel:
+            return !featurePanelLayoutItems.isEmpty || !featurePanelHiddenLayoutItems.isEmpty
+        }
+    }
+
     func resetPluginOrder(on surface: PluginDisplaySurface) {
         pluginDisplayPreferencesStore.resetOrder(
             for: surface,

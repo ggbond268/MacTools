@@ -888,6 +888,15 @@ enum MenuBarPanelTab: CaseIterable, Equatable {
     case components
     case features
 
+    var displaySurface: PluginDisplaySurface {
+        switch self {
+        case .components:
+            return .dashboard
+        case .features:
+            return .featurePanel
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .components:
@@ -1050,12 +1059,7 @@ struct MenuBarUnifiedPanelContent: View {
     }
 
     private var canEditLayout: Bool {
-        switch model.selectedTab {
-        case .components:
-            return pluginHost.componentItems.count >= 2
-        case .features:
-            return pluginHost.panelItems.count >= 2
-        }
+        pluginHost.canEditLayout(on: model.selectedTab.displaySurface)
     }
 
     private func panelContent(contentBodyHeight: CGFloat) -> some View {
