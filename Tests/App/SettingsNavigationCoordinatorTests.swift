@@ -672,10 +672,12 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
             to: .plugins(.configuration("keep-awake")),
             target: .plugin(target)
         )
+        let initialFocusRequestID = coordinator.sidebarFocusRequestID
         coordinator.navigateFromSearch(to: .about, target: nil)
 
         XCTAssertEqual(coordinator.destination, .about)
         XCTAssertNil(coordinator.searchRevealRequest)
+        XCTAssertGreaterThan(coordinator.sidebarFocusRequestID, initialFocusRequestID)
     }
 
     func testGeneralSettingSearchNavigationPublishesExactRevealTarget() throws {
@@ -693,5 +695,6 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.destination, .general)
         let request = try XCTUnwrap(coordinator.searchRevealRequest)
         XCTAssertEqual(request.target, .general(.language))
+        XCTAssertEqual(coordinator.sidebarFocusRequestID, 0)
     }
 }

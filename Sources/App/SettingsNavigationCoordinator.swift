@@ -259,6 +259,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
     @Published private(set) var unifiedSearchPresentationOrigin: UnifiedSearchPresentationOrigin?
     @Published private(set) var unifiedSearchFocusRequestID: UInt = 0
     @Published private(set) var sidebarSelectionRevealRequestID: UInt = 0
+    @Published private(set) var sidebarFocusRequestID: UInt = 0
     @Published private(set) var sidebarNumberShortcutRequest: SidebarNumberShortcutRequest?
     @Published private(set) var sidebarMoveShortcutRequest: SidebarMoveShortcutRequest?
     @Published private(set) var unifiedSearchQuickSelectionRequest: UnifiedSearchQuickSelectionRequest?
@@ -529,6 +530,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
 
         guard let target else {
             searchRevealRequest = nil
+            sidebarFocusRequestID &+= 1
             return true
         }
 

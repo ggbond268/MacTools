@@ -213,6 +213,21 @@ final class AppWindowRouterTests: XCTestCase {
             )
         }
 
+        coordinator.presentUnifiedSearch(origin: .settingsSidebar)
+        await settleWindowLayout(window)
+        XCTAssertFalse(window.firstResponder === sidebarListView)
+        XCTAssertTrue(coordinator.navigateFromSearch(to: .about, target: nil))
+        for _ in 0..<3 {
+            await settleWindowLayout(window)
+        }
+
+        XCTAssertTrue(settingsSidebarScrollView(in: hostingView) === sidebarScrollView)
+        XCTAssertEqual(sidebarListView.numberOfRows, initialRowCount)
+        XCTAssertTrue(
+            window.firstResponder === sidebarListView,
+            "Expected page-level search navigation to restore focus to the sidebar"
+        )
+
         XCTAssertTrue(
             window.performKeyEquivalent(
                 with: keyEvent(

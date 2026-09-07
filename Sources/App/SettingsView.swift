@@ -95,6 +95,8 @@ struct SettingsView: View {
                     selection: settingsSelection,
                     selectionRevealRequestID:
                         navigationCoordinator.sidebarSelectionRevealRequestID,
+                    focusRequestID:
+                        navigationCoordinator.sidebarFocusRequestID,
                     numberShortcutRequest:
                         navigationCoordinator.sidebarNumberShortcutRequest,
                     moveShortcutRequest:
@@ -2463,12 +2465,14 @@ private struct SettingsSidebar: View {
     @ObservedObject var sidebarPreferences: SettingsSidebarPreferencesStore
     @Binding var selection: SettingsNavigationDestination
     let selectionRevealRequestID: UInt
+    let focusRequestID: UInt
     let numberShortcutRequest: SidebarNumberShortcutRequest?
     let moveShortcutRequest: SidebarMoveShortcutRequest?
     let onSearch: () -> Void
     @State private var highlightedCollapsedSection: SettingsSidebarSection?
     @StateObject private var commandHintMonitor = SettingsSidebarCommandHintMonitor()
     @AccessibilityFocusState private var accessibilityFocusedCollapsedSection: SettingsSidebarSection?
+    @FocusState private var isListFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2532,12 +2536,18 @@ private struct SettingsSidebar: View {
                     }
                 }
                 .listStyle(.sidebar)
+                .focused($isListFocused)
                 .onChange(of: selection) { _, destination in
                     highlightedCollapsedSection = nil
                     reveal(destination, using: proxy)
                 }
                 .onChange(of: selectionRevealRequestID) {
                     reveal(selection, using: proxy)
+                }
+                .task(id: focusRequestID) {
+                    guard focusRequestID > 0 else { return }
+                    await Task.yield()
+                    isListFocused = true
                 }
                 .onChange(of: numberShortcutRequest) { _, request in
                     guard let request else { return }
