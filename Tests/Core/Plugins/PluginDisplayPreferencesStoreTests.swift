@@ -336,6 +336,34 @@ final class PluginDisplayPreferencesStoreTests: XCTestCase {
         )
     }
 
+    func testSetDashboardPluginOrderAndSetFeaturePanelPluginOrder() {
+        let defaultIDs = ["a", "b", "c"]
+        store.setDashboardPluginOrder(["c", "b", "a"], defaultPluginIDs: defaultIDs)
+        XCTAssertEqual(store.orderedPluginIDs(for: .dashboard, defaultPluginIDs: defaultIDs), ["c", "b", "a"])
+        XCTAssertEqual(store.orderedPluginIDs(for: .featurePanel, defaultPluginIDs: defaultIDs), ["a", "b", "c"])
+
+        store.setFeaturePanelPluginOrder(["b", "c", "a"], defaultPluginIDs: defaultIDs)
+        XCTAssertEqual(store.orderedPluginIDs(for: .featurePanel, defaultPluginIDs: defaultIDs), ["b", "c", "a"])
+        XCTAssertEqual(store.orderedPluginIDs(for: .dashboard, defaultPluginIDs: defaultIDs), ["c", "b", "a"])
+    }
+
+    func testSetDashboardPluginVisibleAndSetFeaturePanelPluginVisible() {
+        let defaultIDs = ["a", "b", "c"]
+        store.setDashboardPluginVisible(false, pluginID: "b", defaultPluginIDs: defaultIDs)
+        XCTAssertEqual(store.visiblePluginIDs(for: .dashboard, defaultPluginIDs: defaultIDs), ["a", "c"])
+        XCTAssertEqual(store.hiddenPluginIDs(for: .dashboard, defaultPluginIDs: defaultIDs), ["b"])
+        XCTAssertEqual(store.visiblePluginIDs(for: .featurePanel, defaultPluginIDs: defaultIDs), ["a", "b", "c"])
+
+        store.setFeaturePanelPluginVisible(false, pluginID: "a", defaultPluginIDs: defaultIDs)
+        XCTAssertEqual(store.visiblePluginIDs(for: .featurePanel, defaultPluginIDs: defaultIDs), ["b", "c"])
+        XCTAssertEqual(store.hiddenPluginIDs(for: .featurePanel, defaultPluginIDs: defaultIDs), ["a"])
+        XCTAssertEqual(store.visiblePluginIDs(for: .dashboard, defaultPluginIDs: defaultIDs), ["a", "c"])
+
+        store.setDashboardPluginVisible(true, pluginID: "b", defaultPluginIDs: defaultIDs)
+        XCTAssertEqual(store.visiblePluginIDs(for: .dashboard, defaultPluginIDs: defaultIDs), ["a", "b", "c"])
+        XCTAssertEqual(store.hiddenPluginIDs(for: .dashboard, defaultPluginIDs: defaultIDs), [])
+    }
+
     private func storeLegacyPreferences(order: [String], hidden: Set<String>) throws {
         let data = try JSONEncoder().encode(
             LegacyPreferences(orderedPluginIDs: order, hiddenPluginIDs: hidden)

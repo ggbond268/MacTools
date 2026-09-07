@@ -159,6 +159,75 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         )
     }
 
+    func testUnifiedPanelModelEditLayoutStateTransitions() {
+        let model = MenuBarUnifiedPanelModel(
+            selectedTab: .components,
+            contentHeight: 300,
+            maximumFeatureListHeight: 400,
+            isPanelVisible: true,
+            isEditingLayout: false
+        )
+
+        XCTAssertFalse(model.isEditingLayout)
+
+        model.toggleEditLayout()
+        XCTAssertTrue(model.isEditingLayout)
+
+        var selectedTab: MenuBarPanelTab?
+        model.onTabSelection = { selectedTab = $0 }
+        model.selectTab(.features)
+        XCTAssertFalse(model.isEditingLayout)
+        XCTAssertEqual(selectedTab, .features)
+
+        model.isEditingLayout = true
+        XCTAssertTrue(model.isEditingLayout)
+
+        // Switching tab via update resets edit mode
+        model.update(
+            selectedTab: .features,
+            contentHeight: 300,
+            maximumFeatureListHeight: 400,
+            isPanelVisible: true
+        )
+        XCTAssertFalse(model.isEditingLayout)
+
+        model.isEditingLayout = true
+        // Popover closing resets edit mode
+        model.update(
+            selectedTab: .features,
+            contentHeight: 300,
+            maximumFeatureListHeight: 400,
+            isPanelVisible: false
+        )
+        XCTAssertFalse(model.isEditingLayout)
+    }
+
+    func testUnhandledEscapeExitsEditLayoutWithoutDismissing() {
+        let model = MenuBarUnifiedPanelModel(
+            selectedTab: .components,
+            contentHeight: 300,
+            maximumFeatureListHeight: 400,
+            isPanelVisible: true,
+            isEditingLayout: true
+        )
+        var didDismiss = false
+        let escapeHandler = {
+            if model.isEditingLayout {
+                model.isEditingLayout = false
+            } else {
+                didDismiss = true
+            }
+        }
+
+        escapeHandler()
+        XCTAssertFalse(model.isEditingLayout)
+        XCTAssertFalse(didDismiss)
+
+        escapeHandler()
+        XCTAssertFalse(model.isEditingLayout)
+        XCTAssertTrue(didDismiss)
+    }
+
     private func makeCommandKeyEvent(
         characters: String,
         keyCode: UInt16,

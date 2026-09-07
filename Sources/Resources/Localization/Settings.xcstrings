@@ -464,6 +464,215 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "恢復預設排列" } }
       }
     },
+    "plugins.layout.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تم" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Fertig" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Done" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Listo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Terminé" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "完了" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "완료" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Concluído" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Готово" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "完成" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "完成" } }
+      }
+    },
+    "plugins.layout.edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تعديل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Bearbeiten" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Edit" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Editar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Modifier" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "編集" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "편집" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Editar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Изменить" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "编辑" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "編輯" } }
+      }
+    },
+    "plugins.layout.editLayout": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تعديل التخطيط" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Layout bearbeiten" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Edit Layout" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Editar diseño" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Modifier la disposition" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "レイアウトを編集" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "레이아웃 편집" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Editar layout" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Изменить макет" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "编辑布局" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "編輯佈局" } }
+      }
+    },
+    "plugins.layout.hiddenSection": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مخفي" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ausgeblendet" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Hidden" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Oculto" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Masqué" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "非表示" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "숨김" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Oculto" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скрыто" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已隐藏" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已隱藏" } }
+      }
+    },
+    "plugins.layout.hide": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إخفاء" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ausblenden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Hide" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Ocultar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Masquer" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "非表示" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "숨기기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Ocultar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скрыть" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "隐藏" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "隱藏" } }
+      }
+    },
+    "plugins.layout.moveDown": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تحريك لأسفل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nach unten bewegen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Move Down" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mover hacia abajo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Déplacer vers le bas" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "下に移動" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "아래로 이동" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mover para baixo" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Вниз" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "下移" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "下移" } }
+      }
+    },
+    "plugins.layout.moveEarlier": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تحريك للأمام" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nach vorne bewegen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Move Earlier" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mover adelante" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Déplacer avant" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "前に移動" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "앞으로 이동" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mover para trás" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Переместить назад" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "向前移动" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "向前移動" } }
+      }
+    },
+    "plugins.layout.moveLater": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تحريك للخلف" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nach hinten bewegen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Move Later" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mover atrás" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Déplacer après" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "後に移動" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "뒤로 이동" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mover para frente" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Переместить вперед" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "向后移动" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "向後移動" } }
+      }
+    },
+    "plugins.layout.moveToBottom": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نقل إلى الأسفل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ganz nach unten" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Move to Bottom" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mover abajo del todo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Déplacer tout en bas" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "末尾に移動" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "맨 아래로 이동" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mover para o fim" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "В самый низ" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "移至底部" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "移至底部" } }
+      }
+    },
+    "plugins.layout.moveToTop": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "نقل إلى الأعلى" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ganz nach oben" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Move to Top" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mover arriba del todo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Déplacer tout en haut" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "先頭に移動" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "맨 위로 이동" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mover para o topo" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "В самый верх" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "移至顶部" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "移至頂部" } }
+      }
+    },
+    "plugins.layout.moveUp": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تحريك لأعلى" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nach oben bewegen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Move Up" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mover hacia arriba" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Déplacer vers le haut" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "上に移動" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "위로 이동" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mover para cima" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Вверх" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "上移" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "上移" } }
+      }
+    },
+    "plugins.layout.reorderHandle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إعادة ترتيب" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Neu anordnen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Reorder" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Reordenar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réorganiser" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "並べ替え" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "순서 변경" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Reordenar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Изменить порядок" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "重新排序" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "重新排序" } }
+      }
+    },
+    "plugins.layout.show": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إظهار" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Einblenden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Show" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mostrar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Afficher" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "表示" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "보기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Mostrar" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Показать" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "显示" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "顯示" } }
+      }
+    },
+
     "plugins.sidebar.dashboard": {
       "extractionState": "manual",
       "localizations": {

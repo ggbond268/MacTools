@@ -1930,12 +1930,71 @@ final class PluginHost: ObservableObject {
         rebuildDerivedState()
     }
 
+    /// Keeps in-place editing available while a surface has cards that can be
+    /// shown again, including when every card is currently hidden.
+    func canEditLayout(on surface: PluginDisplaySurface) -> Bool {
+        switch surface {
+        case .dashboard:
+            return !dashboardLayoutItems.isEmpty || !dashboardHiddenLayoutItems.isEmpty
+        case .featurePanel:
+            return !featurePanelLayoutItems.isEmpty || !featurePanelHiddenLayoutItems.isEmpty
+        }
+    }
+
     func resetPluginOrder(on surface: PluginDisplaySurface) {
         pluginDisplayPreferencesStore.resetOrder(
             for: surface,
             defaultPluginIDs: defaultPluginIDs(for: surface)
         )
         rebuildDerivedState()
+    }
+
+    func setDashboardPluginOrder(_ orderedPluginIDs: [String]) {
+        pluginDisplayPreferencesStore.setDashboardPluginOrder(
+            orderedPluginIDs,
+            defaultPluginIDs: defaultPluginIDs(for: .dashboard)
+        )
+        rebuildDerivedState()
+    }
+
+    func setFeaturePanelPluginOrder(_ orderedPluginIDs: [String]) {
+        pluginDisplayPreferencesStore.setFeaturePanelPluginOrder(
+            orderedPluginIDs,
+            defaultPluginIDs: defaultPluginIDs(for: .featurePanel)
+        )
+        rebuildDerivedState()
+    }
+
+    func setDashboardPluginVisible(_ isVisible: Bool, id pluginID: String) {
+        setPluginVisible(isVisible, id: pluginID, on: .dashboard)
+    }
+
+    func setFeaturePanelPluginVisible(_ isVisible: Bool, id pluginID: String) {
+        setPluginVisible(isVisible, id: pluginID, on: .featurePanel)
+    }
+
+    func canMovePlugin(id pluginID: String, by offset: Int, on surface: PluginDisplaySurface) -> Bool {
+        guard offset != 0 else { return false }
+        let orderedPluginIDs = visiblePluginIDs(for: surface)
+        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
+            return false
+        }
+        let targetIndex = currentIndex + offset
+        return orderedPluginIDs.indices.contains(targetIndex)
+    }
+
+    func movePlugin(id pluginID: String, by offset: Int, on surface: PluginDisplaySurface) {
+        guard offset != 0 else { return }
+        let orderedPluginIDs = visiblePluginIDs(for: surface)
+        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
+            return
+        }
+        let targetIndex = currentIndex + offset
+        guard orderedPluginIDs.indices.contains(targetIndex) else {
+            return
+        }
+        let targetOffset = offset > 0 ? targetIndex + 1 : targetIndex
+        movePlugin(id: pluginID, toOffset: targetOffset, on: surface)
     }
 
     func canMoveFeatureManagementItem(id pluginID: String, by offset: Int) -> Bool {

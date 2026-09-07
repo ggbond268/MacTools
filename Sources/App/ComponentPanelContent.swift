@@ -237,6 +237,7 @@ struct ComponentPanelContent: View {
     @ObservedObject var pluginHost: PluginHost
     let contentBodyHeight: CGFloat
     let isPanelVisible: Bool
+    var isEditingLayout: Bool = false
     let onDismiss: () -> Void
     @Environment(\.menuBarPanelTheme) private var theme
 
@@ -299,6 +300,11 @@ struct ComponentPanelContent: View {
                 secondaryPanelController.setHostWindow(nil)
             }
         }
+        .onChange(of: isEditingLayout) { _, isEditing in
+            if isEditing {
+                dismissDetail()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppAppearancePreference.didChangeNotification)) { _ in
             secondaryPanelController.applyCurrentAppearance()
         }
@@ -312,19 +318,26 @@ struct ComponentPanelContent: View {
 
     @ViewBuilder
     private var dashboardContent: some View {
-        if pluginHost.componentItems.isEmpty {
+        if pluginHost.componentItems.isEmpty && (!isEditingLayout || pluginHost.dashboardHiddenLayoutItems.isEmpty) {
             emptyState
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView(.vertical, showsIndicators: false) {
-                ComponentGridView(
-                    pluginHost: pluginHost,
-                    items: pluginHost.componentItems,
-                    placements: placements,
-                    detailAnchorPluginID: detailCoordinator.state.selection?.pluginID,
-                    onDismiss: onDismiss,
-                    onCardFrameChange: detailCoordinator.updateCardFrame
-                )
+                VStack(alignment: .leading, spacing: 10) {
+                    ComponentGridView(
+                        pluginHost: pluginHost,
+                        items: pluginHost.componentItems,
+                        placements: placements,
+                        detailAnchorPluginID: detailCoordinator.state.selection?.pluginID,
+                        isEditingLayout: isEditingLayout,
+                        onDismiss: onDismiss,
+                        onCardFrameChange: detailCoordinator.updateCardFrame
+                    )
+
+                    if isEditingLayout && !pluginHost.dashboardHiddenLayoutItems.isEmpty {
+                        hiddenComponentsSection
+                    }
+                }
             }
             .background(ScrollViewScrollerVisibilityConfigurator())
             .clipShape(
@@ -333,6 +346,29 @@ struct ComponentPanelContent: View {
                     style: .continuous
                 )
             )
+        }
+    }
+
+    private var hiddenComponentsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: PluginSystemImage.resolvedName("eye.slash"))
+                    .font(.system(size: 10, weight: .medium))
+                Text(AppL10n.settings("plugins.layout.hiddenSection", defaultValue: "已隐藏"))
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(theme.text.secondary)
+            .padding(.top, 8)
+            .padding(.horizontal, 4)
+
+            ForEach(pluginHost.dashboardHiddenLayoutItems) { hiddenItem in
+                ComponentPanelHiddenEditRowView(
+                    item: hiddenItem,
+                    onToggleVisible: {
+                        pluginHost.setPluginVisible(true, id: hiddenItem.id, on: .dashboard)
+                    }
+                )
+            }
         }
     }
 
@@ -399,6 +435,7 @@ private struct ComponentGridView: View {
     let items: [PluginComponentItem]
     let placements: [ComponentGridPlacement]
     let detailAnchorPluginID: String?
+    let isEditingLayout: Bool
     let onDismiss: () -> Void
     let onCardFrameChange: (String, CGRect?) -> Void
 
@@ -410,21 +447,55 @@ private struct ComponentGridView: View {
         let itemLookup = itemsByID
 
         ZStack(alignment: .topLeading) {
-            ForEach(placements) { placement in
+            ForEach(Array(placements.enumerated()), id: \.element.id) { index, placement in
                 if let item = itemLookup[placement.id] {
                     let itemSize = CGSize(
                         width: ComponentPanelLayout.itemWidth(for: placement.span),
                         height: ComponentPanelLayout.itemHeight(for: placement.span)
                     )
-                    ComponentCardContainer(
-                        item: item,
-                        componentViewItem: pluginHost.componentViewItem(
-                            for: item.id,
-                            dismiss: onDismiss
-                        ),
-                        measuresDetailAnchor: item.id == detailAnchorPluginID,
-                        onFrameChange: { onCardFrameChange(item.id, $0) }
-                    )
+                    ZStack(alignment: .topLeading) {
+                        ComponentCardContainer(
+                            item: item,
+                            componentViewItem: pluginHost.componentViewItem(
+                                for: item.id,
+                                dismiss: onDismiss
+                            ),
+                            measuresDetailAnchor: !isEditingLayout && item.id == detailAnchorPluginID,
+                            onFrameChange: { onCardFrameChange(item.id, $0) }
+                        )
+                        .allowsHitTesting(!isEditingLayout)
+
+                        if isEditingLayout {
+                            ComponentCardEditOverlay(
+                                item: item,
+                                isFirst: index == 0,
+                                isLast: index == placements.count - 1,
+                                onMoveEarlier: {
+                                    pluginHost.movePlugin(id: item.id, by: -1, on: .dashboard)
+                                },
+                                onMoveLater: {
+                                    pluginHost.movePlugin(id: item.id, by: 1, on: .dashboard)
+                                },
+                                onMoveToTop: {
+                                    pluginHost.movePlugin(id: item.id, toOffset: 0, on: .dashboard)
+                                },
+                                onMoveToBottom: {
+                                    pluginHost.movePlugin(id: item.id, toOffset: placements.count, on: .dashboard)
+                                },
+                                onToggleVisible: {
+                                    pluginHost.setPluginVisible(false, id: item.id, on: .dashboard)
+                                },
+                                onDropTarget: { draggedID in
+                                    guard draggedID != item.id,
+                                          let sourceIndex = items.firstIndex(where: { $0.id == draggedID }) else {
+                                        return
+                                    }
+                                    let targetOffset = index > sourceIndex ? index + 1 : index
+                                    pluginHost.movePlugin(id: draggedID, toOffset: targetOffset, on: .dashboard)
+                                }
+                            )
+                        }
+                    }
                     .frame(
                         width: itemSize.width,
                         height: itemSize.height
@@ -441,6 +512,207 @@ private struct ComponentGridView: View {
             height: ComponentPanelLayout.gridContentHeight(for: placements),
             alignment: .topLeading
         )
+    }
+}
+
+private struct ComponentCardEditOverlay: View {
+    let item: PluginComponentItem
+    let isFirst: Bool
+    let isLast: Bool
+    let onMoveEarlier: () -> Void
+    let onMoveLater: () -> Void
+    let onMoveToTop: () -> Void
+    let onMoveToBottom: () -> Void
+    let onToggleVisible: () -> Void
+    let onDropTarget: (String) -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
+    @State private var isTargetedForDrop = false
+    @State private var isHovered = false
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(
+                    isTargetedForDrop ? theme.accent : theme.accent.opacity(0.6),
+                    lineWidth: isTargetedForDrop ? 2.5 : 1.5
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(theme.surfaces.panel.opacity(0.12))
+                )
+
+            Button(action: onToggleVisible) {
+                Image(systemName: PluginSystemImage.resolvedName("eye"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.text.primary)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        Circle().fill(theme.surfaces.panel.opacity(0.85))
+                    )
+                    .shadow(color: Color.black.opacity(0.12), radius: 2, y: 1)
+            }
+            .buttonStyle(.plain)
+            .padding(6)
+            .help(AppL10n.settings("plugins.layout.hide", defaultValue: "隐藏"))
+            .accessibilityLabel(AppL10n.settings("plugins.layout.hide", defaultValue: "隐藏"))
+
+            VStack {
+                Spacer()
+                HStack(spacing: 2) {
+                    Button(action: onMoveEarlier) {
+                        Image(systemName: PluginSystemImage.resolvedName("chevron.backward"))
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(isFirst ? theme.text.disabled : theme.text.primary)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isFirst)
+                    .help(AppL10n.settings("plugins.layout.moveEarlier", defaultValue: "向前移动"))
+                    .accessibilityLabel(AppL10n.settings("plugins.layout.moveEarlier", defaultValue: "向前移动"))
+
+                    Image(systemName: PluginSystemImage.resolvedName("line.3.horizontal"))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(theme.text.secondary)
+                        .frame(width: 14, height: 20)
+                        .accessibilityLabel(AppL10n.settings("plugins.layout.reorderHandle", defaultValue: "重新排序"))
+
+                    Button(action: onMoveLater) {
+                        Image(systemName: PluginSystemImage.resolvedName("chevron.forward"))
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(isLast ? theme.text.disabled : theme.text.primary)
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLast)
+                    .help(AppL10n.settings("plugins.layout.moveLater", defaultValue: "向后移动"))
+                    .accessibilityLabel(AppL10n.settings("plugins.layout.moveLater", defaultValue: "向后移动"))
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background {
+                    Capsule()
+                        .fill(theme.surfaces.panel.opacity(0.92))
+                        .shadow(color: Color.black.opacity(0.18), radius: 3, y: 1)
+                }
+                .padding(.bottom, 6)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .draggable(item.id)
+        .dropDestination(for: String.self) { items, _ in
+            guard let draggedID = items.first else { return false }
+            onDropTarget(draggedID)
+            return true
+        } isTargeted: { isTargeted in
+            isTargetedForDrop = isTargeted
+        }
+        .contextMenu {
+            Button(AppL10n.settings("plugins.layout.moveToTop", defaultValue: "移至顶部")) {
+                onMoveToTop()
+            }
+            .disabled(isFirst)
+
+            Button(AppL10n.settings("plugins.layout.moveEarlier", defaultValue: "向前移动")) {
+                onMoveEarlier()
+            }
+            .disabled(isFirst)
+
+            Button(AppL10n.settings("plugins.layout.moveLater", defaultValue: "向后移动")) {
+                onMoveLater()
+            }
+            .disabled(isLast)
+
+            Button(AppL10n.settings("plugins.layout.moveToBottom", defaultValue: "移至底部")) {
+                onMoveToBottom()
+            }
+            .disabled(isLast)
+
+            Divider()
+
+            Button(AppL10n.settings("plugins.layout.hide", defaultValue: "隐藏")) {
+                onToggleVisible()
+            }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.moveEarlier", defaultValue: "向前移动"))) {
+            if !isFirst { onMoveEarlier() }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.moveLater", defaultValue: "向后移动"))) {
+            if !isLast { onMoveLater() }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.moveToTop", defaultValue: "移至顶部"))) {
+            if !isFirst { onMoveToTop() }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.moveToBottom", defaultValue: "移至底部"))) {
+            if !isLast { onMoveToBottom() }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.hide", defaultValue: "隐藏"))) {
+            onToggleVisible()
+        }
+    }
+}
+
+private struct ComponentPanelHiddenEditRowView: View {
+    let item: PluginSurfaceLayoutItem
+    let onToggleVisible: () -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(theme.surfaces.control.opacity(0.6))
+
+                Image(systemName: PluginSystemImage.resolvedName(item.iconName))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.text.disabled)
+            }
+            .frame(width: 26, height: 26)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.text.secondary)
+                    .lineLimit(1)
+
+                Text(item.description)
+                    .font(.system(size: 10))
+                    .foregroundStyle(theme.text.disabled)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: onToggleVisible) {
+                Image(systemName: PluginSystemImage.resolvedName("eye.slash"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.text.secondary)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        Circle().fill(isHovered ? theme.surfaces.control : Color.clear)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(AppL10n.settings("plugins.layout.show", defaultValue: "显示"))
+            .accessibilityLabel(AppL10n.settings("plugins.layout.show", defaultValue: "显示"))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(theme.surfaces.card.opacity(0.5))
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .contextMenu {
+            Button(AppL10n.settings("plugins.layout.show", defaultValue: "显示")) {
+                onToggleVisible()
+            }
+        }
+        .accessibilityAction(named: Text(AppL10n.settings("plugins.layout.show", defaultValue: "显示"))) {
+            onToggleVisible()
+        }
     }
 }
 
