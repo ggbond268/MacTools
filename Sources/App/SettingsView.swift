@@ -176,21 +176,17 @@ struct SettingsView: View {
                 : 0
         )
         .allowsHitTesting(!navigationCoordinator.isUnifiedSearchPresented)
-        .accessibilityHidden(navigationCoordinator.isUnifiedSearchPresented)
         .overlay {
-            Group {
-                if navigationCoordinator.isUnifiedSearchPresented {
-                    UnifiedSearchPresentationView(
-                        pluginHost: pluginHost,
-                        launchAtLoginController: launchAtLoginController,
-                        appearanceUserDefaults: appearanceUserDefaults,
-                        recentStore: commandPaletteRecentStore,
-                        navigationCoordinator: navigationCoordinator
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                }
+            if navigationCoordinator.isUnifiedSearchPresented {
+                UnifiedSearchPresentationView(
+                    pluginHost: pluginHost,
+                    launchAtLoginController: launchAtLoginController,
+                    appearanceUserDefaults: appearanceUserDefaults,
+                    recentStore: commandPaletteRecentStore,
+                    navigationCoordinator: navigationCoordinator
+                )
+                .accessibilityAddTraits(.isModal)
             }
-            .animation(.easeOut(duration: 0.14), value: navigationCoordinator.isUnifiedSearchPresented)
         }
         .id(runtimeLocale.revision)
         .frame(minWidth: 720, maxWidth: .infinity, minHeight: 480, maxHeight: .infinity)

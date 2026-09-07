@@ -176,35 +176,42 @@ final class AppWindowRouterTests: XCTestCase {
         let hostingView = try XCTUnwrap(window.contentView as? NSHostingView<SettingsView>)
         await settleWindowLayout(window)
         let sidebarScrollView = try XCTUnwrap(settingsSidebarScrollView(in: hostingView))
+        let sidebarListView = try XCTUnwrap(sidebarScrollView.documentView as? NSTableView)
+        let initialRowCount = sidebarListView.numberOfRows
+        XCTAssertGreaterThan(initialRowCount, 0)
         let initialBoundsOrigin = sidebarScrollView.contentView.bounds.origin
         let initialContentInsets = sidebarScrollView.contentInsets
         let initialFrame = sidebarScrollView.convert(sidebarScrollView.bounds, to: hostingView)
 
-        coordinator.presentUnifiedSearch(origin: .settingsSidebar)
-        await settleWindowLayout(window)
+        for _ in 0..<3 {
+            coordinator.presentUnifiedSearch(origin: .settingsSidebar)
+            await settleWindowLayout(window)
 
-        XCTAssertTrue(settingsSidebarScrollView(in: hostingView) === sidebarScrollView)
-        XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.x, initialBoundsOrigin.x, accuracy: 0.5)
-        XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.y, initialBoundsOrigin.y, accuracy: 0.5)
-        XCTAssertEqual(sidebarScrollView.contentInsets.top, initialContentInsets.top, accuracy: 0.5)
-        XCTAssertEqual(sidebarScrollView.contentInsets.bottom, initialContentInsets.bottom, accuracy: 0.5)
-        assertEqual(
-            sidebarScrollView.convert(sidebarScrollView.bounds, to: hostingView),
-            initialFrame
-        )
+            XCTAssertTrue(settingsSidebarScrollView(in: hostingView) === sidebarScrollView)
+            XCTAssertEqual(sidebarListView.numberOfRows, initialRowCount)
+            XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.x, initialBoundsOrigin.x, accuracy: 0.5)
+            XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.y, initialBoundsOrigin.y, accuracy: 0.5)
+            XCTAssertEqual(sidebarScrollView.contentInsets.top, initialContentInsets.top, accuracy: 0.5)
+            XCTAssertEqual(sidebarScrollView.contentInsets.bottom, initialContentInsets.bottom, accuracy: 0.5)
+            assertEqual(
+                sidebarScrollView.convert(sidebarScrollView.bounds, to: hostingView),
+                initialFrame
+            )
 
-        coordinator.dismissUnifiedSearch()
-        await settleWindowLayout(window)
+            coordinator.dismissUnifiedSearch()
+            await settleWindowLayout(window)
 
-        XCTAssertTrue(settingsSidebarScrollView(in: hostingView) === sidebarScrollView)
-        XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.x, initialBoundsOrigin.x, accuracy: 0.5)
-        XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.y, initialBoundsOrigin.y, accuracy: 0.5)
-        XCTAssertEqual(sidebarScrollView.contentInsets.top, initialContentInsets.top, accuracy: 0.5)
-        XCTAssertEqual(sidebarScrollView.contentInsets.bottom, initialContentInsets.bottom, accuracy: 0.5)
-        assertEqual(
-            sidebarScrollView.convert(sidebarScrollView.bounds, to: hostingView),
-            initialFrame
-        )
+            XCTAssertTrue(settingsSidebarScrollView(in: hostingView) === sidebarScrollView)
+            XCTAssertEqual(sidebarListView.numberOfRows, initialRowCount)
+            XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.x, initialBoundsOrigin.x, accuracy: 0.5)
+            XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.y, initialBoundsOrigin.y, accuracy: 0.5)
+            XCTAssertEqual(sidebarScrollView.contentInsets.top, initialContentInsets.top, accuracy: 0.5)
+            XCTAssertEqual(sidebarScrollView.contentInsets.bottom, initialContentInsets.bottom, accuracy: 0.5)
+            assertEqual(
+                sidebarScrollView.convert(sidebarScrollView.bounds, to: hostingView),
+                initialFrame
+            )
+        }
 
         XCTAssertTrue(
             window.performKeyEquivalent(
@@ -218,6 +225,7 @@ final class AppWindowRouterTests: XCTestCase {
         await settleWindowLayout(window)
 
         XCTAssertTrue(settingsSidebarScrollView(in: hostingView) === sidebarScrollView)
+        XCTAssertEqual(sidebarListView.numberOfRows, initialRowCount)
         XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.x, initialBoundsOrigin.x, accuracy: 0.5)
         XCTAssertEqual(sidebarScrollView.contentView.bounds.origin.y, initialBoundsOrigin.y, accuracy: 0.5)
         XCTAssertEqual(sidebarScrollView.contentInsets.top, initialContentInsets.top, accuracy: 0.5)
