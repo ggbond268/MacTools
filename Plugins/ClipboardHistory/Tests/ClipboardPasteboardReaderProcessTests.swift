@@ -200,7 +200,8 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
 
         let reader = ClipboardPasteboardReaderProcess(
             helperURL: { helperURL },
-            requestTimeout: .milliseconds(75)
+            // Include cold process startup; the dedicated deadline test covers short timeouts.
+            requestTimeout: .seconds(2)
         )
         let access = GeneralClipboardPasteboard(
             pasteboard: pasteboard,
