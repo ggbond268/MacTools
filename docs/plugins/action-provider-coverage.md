@@ -41,6 +41,7 @@ These plugins should not publish a canonical action merely to appear in action p
 - `InputRemapping` is an input-lifecycle and configuration surface rather than one stable repeatable operation. If it adopts canonical MacTools actions as mapping outputs, it remains an action consumer rather than publishing a parallel provider surface.
 - `DockClickMinimize` observes native Dock clicks and hides the active app only after macOS processes the click. Its enable switch and event-monitor lifecycle are configuration, not a user-invoked canonical action.
 - `RightClick` extends Finder context menus rather than representing one repeatable operation.
+- `StorageExplorer` is a visual disk-usage analysis workspace with interactive folder navigation and reviewed Trash confirmation. File analysis and removal are foreground-interactive and not exposed as unattended canonical actions.
 - `TrackpadGestures` is an input surface that consumes canonical actions; it is not itself an action provider.
 
 Specialized shortcuts may remain when their input lifecycle cannot be represented by one invocation. Window Switcher keeps its press, release, and repeat shortcut behavior in addition to a canonical action that opens the interactive chooser. Physical Clean Mode keeps its emergency exit binding separate from the canonical enter action.
