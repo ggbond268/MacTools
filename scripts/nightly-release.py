@@ -8,6 +8,7 @@ import hashlib
 import json
 import pathlib
 import plistlib
+import posixpath
 import re
 import stat
 import subprocess
@@ -421,7 +422,8 @@ def verify_cli_dependencies(cli_path: pathlib.Path) -> None:
     ]
     unexpected = [
         dependency for dependency in dependencies
-        if not dependency.startswith(("/System/Library/", "/usr/lib/"))
+        if dependency != posixpath.normpath(dependency)
+        or not dependency.startswith(("/System/Library/", "/usr/lib/"))
     ]
     if unexpected:
         fail(f"Nightly CLI has unexpected dynamic-library dependencies: {unexpected}")

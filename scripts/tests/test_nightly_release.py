@@ -708,6 +708,17 @@ class NightlyCLIArchiveTests(unittest.TestCase):
             return_value=subprocess.CompletedProcess([], 0, allowed + "\t@rpath/Unexpected.framework/Unexpected\n", ""),
         ), self.assertRaisesRegex(SystemExit, "unexpected"):
             nightly_release.verify_cli_dependencies(self.cli)
+        for dependency in [
+            "/usr/lib/../local/libevil.dylib",
+            "/System/Library/../../tmp/libevil.dylib",
+        ]:
+            with self.subTest(dependency=dependency), mock.patch.object(
+                nightly_release.subprocess, "run",
+                return_value=subprocess.CompletedProcess(
+                    [], 0, allowed + f"\t{dependency} (compatibility version 1.0.0)\n", "",
+                ),
+            ), self.assertRaisesRegex(SystemExit, "unexpected"):
+                nightly_release.verify_cli_dependencies(self.cli)
 
     def test_version_output_verifier_requires_matching_json(self) -> None:
         def result(version: str, build: str) -> subprocess.CompletedProcess:
