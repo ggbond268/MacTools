@@ -409,6 +409,7 @@ final class PluginHost: ObservableObject {
     private let pluginDisplayPreferencesStore: PluginDisplayPreferencesStore
     private let preferencesBackupStore: any PreferencesBackupApplicationStoring
     private let automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator?
+    private let cloudPreferencesSyncCoordinator: CloudPreferencesSyncCoordinator?
     let preferencesBackupChangeReporter: PreferencesBackupChangeReporter
     private let globalShortcutManager: GlobalShortcutManager
     private let displayConfigurationObserver: (any DisplayConfigurationObserving)?
@@ -504,6 +505,9 @@ final class PluginHost: ObservableObject {
     @Published private(set) var automaticPreferencesBackupEnabled = false
     @Published private(set) var automaticPreferencesBackupSummary =
         AutomaticPreferencesBackupSummary.empty
+    @Published private(set) var cloudPreferencesSyncEnabled = false
+    @Published private(set) var cloudPreferencesSyncStatus: CloudPreferencesSyncStatus = .offline(reason: .disabled)
+    @Published private(set) var cloudPreferencesSyncDirectoryURL: URL?
 
     /// The app shell installs this while the application is running. The host
     /// emits typed requests but never manipulates windows or popovers directly.
@@ -557,6 +561,9 @@ final class PluginHost: ObservableObject {
             automaticPreferencesBackupCoordinator: enablesAutomaticPreferencesBackups
                 ? AutomaticPreferencesBackupCoordinator(userDefaults: shortcutStore.userDefaults)
                 : nil,
+            cloudPreferencesSyncCoordinator: enablesAutomaticPreferencesBackups
+                ? CloudPreferencesSyncCoordinator(userDefaults: shortcutStore.userDefaults)
+                : nil,
             globalShortcutManager: GlobalShortcutManager(),
             displayConfigurationObserver: SystemDisplayConfigurationObserver(),
             accessibilityPermissionObserver: AccessibilityPermissionObserver(),
@@ -575,6 +582,7 @@ final class PluginHost: ObservableObject {
         preferencesBackupChangeReporter providedPreferencesBackupChangeReporter:
             PreferencesBackupChangeReporter? = nil,
         automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator? = nil,
+        cloudPreferencesSyncCoordinator: CloudPreferencesSyncCoordinator? = nil,
         globalShortcutManager: GlobalShortcutManager,
         displayConfigurationObserver: (any DisplayConfigurationObserving)? = nil,
         accessibilityPermissionObserver: (any AccessibilityPermissionObserving)? = nil,
@@ -604,6 +612,7 @@ final class PluginHost: ObservableObject {
         self.pluginDisplayPreferencesStore = pluginDisplayPreferencesStore
         self.preferencesBackupStore = preferencesBackupStore
         self.automaticPreferencesBackupCoordinator = automaticPreferencesBackupCoordinator
+        self.cloudPreferencesSyncCoordinator = cloudPreferencesSyncCoordinator
         self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         self.globalShortcutManager = globalShortcutManager
         self.openPermissionSettings = openPermissionSettings
@@ -662,8 +671,9 @@ final class PluginHost: ObservableObject {
         )
 
         preferencesBackupChangeReporter.onCommittedChange = {
-            [weak automaticPreferencesBackupCoordinator] _ in
+            [weak automaticPreferencesBackupCoordinator, weak cloudPreferencesSyncCoordinator] _ in
             automaticPreferencesBackupCoordinator?.committedPreferencesDidChange()
+            cloudPreferencesSyncCoordinator?.committedPreferencesDidChange()
         }
 
         self.automationController.onCatalogChange = { [weak self] in
@@ -763,6 +773,26 @@ final class PluginHost: ObservableObject {
             }
         }
 
+        if let cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncEnabled = cloudPreferencesSyncCoordinator.isEnabled
+            cloudPreferencesSyncStatus = cloudPreferencesSyncCoordinator.status
+            cloudPreferencesSyncDirectoryURL = cloudPreferencesSyncCoordinator.syncDirectoryURL
+            cloudPreferencesSyncCoordinator.snapshotProvider = { [weak self] in
+                self?.makePreferencesBackup()
+            }
+            cloudPreferencesSyncCoordinator.importHandler = { [weak self] backup in
+                guard let self else { return }
+                _ = try self.importPreferences(backup)
+            }
+            cloudPreferencesSyncCoordinator.statusHandler = { [weak self] status in
+                self?.cloudPreferencesSyncStatus = status
+            }
+            cloudPreferencesSyncCoordinator.directoryURLHandler = { [weak self] url in
+                self?.cloudPreferencesSyncDirectoryURL = url
+            }
+            cloudPreferencesSyncCoordinator.start()
+        }
+
         refreshAll()
     }
 
@@ -808,6 +838,37 @@ final class PluginHost: ObservableObject {
 
     func flushAutomaticPreferencesBackupBeforeTermination() {
         automaticPreferencesBackupCoordinator?.flushPendingBackupBeforeTermination()
+        cloudPreferencesSyncCoordinator?.flushPendingExportBeforeTermination()
+    }
+
+    func setCloudPreferencesSyncEnabled(_ enabled: Bool) {
+        cloudPreferencesSyncCoordinator?.setEnabled(enabled)
+        cloudPreferencesSyncEnabled = cloudPreferencesSyncCoordinator?.isEnabled ?? false
+        if let coordinator = cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncStatus = coordinator.status
+        }
+    }
+
+    func setCloudPreferencesSyncDirectoryURL(_ url: URL?) {
+        cloudPreferencesSyncCoordinator?.setSyncDirectoryURL(url)
+        cloudPreferencesSyncDirectoryURL = url
+        if let coordinator = cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncStatus = coordinator.status
+        }
+    }
+
+    func triggerCloudPreferencesSync() async throws {
+        guard let cloudPreferencesSyncCoordinator else {
+            throw CocoaError(.featureUnsupported)
+        }
+        try await cloudPreferencesSyncCoordinator.syncNow()
+    }
+
+    func openCloudPreferencesSyncFolder() {
+        guard let url = cloudPreferencesSyncDirectoryURL ?? cloudPreferencesSyncCoordinator?.syncDirectoryURL else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     func deactivateAllPlugins(reason: PluginDeactivationReason = .hostShutdown) {

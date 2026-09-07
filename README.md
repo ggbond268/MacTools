@@ -83,6 +83,8 @@
 
 > **Window Switcher:** The catalog includes eligible windows from inactive macOS Spaces, so switching does not depend on the current Space.
 
+> **Preferences sync:** Sync portable preferences through iCloud Drive or a custom shared folder. Workflow icons, enabled states, and timestamps are preserved. Pending local edits take precedence over incoming conflicts and are exported above the observed remote generation.
+
 > **Shortcut settings:** Plugin and app shortcut rows keep the action icon/name beside the recorder field, wrapping groups between rows without splitting an individual shortcut control.
 
 > **System Status:** Both dashboard entry points keep readings current while open. Detail statistics use all retained readings in the selected range, independent of chart simplification, and pinned readings stay fixed until they leave that range. Expanded metric settings adapt to narrower windows. An optional global shortcut shows the menu-bar overview when available and otherwise opens the dashboard. The updated plugin requires MacTools 1.2.1 or later.
