@@ -1,0 +1,243 @@
+{
+  "id": "menu-bar-hidden",
+  "displayName": "隐藏菜单栏图标",
+  "summary": "菜单栏图标隐藏功能的设置与弹窗界面",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "إخفاء أيقونات شريط القوائم",
+      "summary": "إخفاء أيقونات شريط القائمة، وترتيبها عن طريق السحب، وفتح الأيقونات المخفية من اللوحة."
+    },
+    "de": {
+      "displayName": "Menüleistensymbole ausblenden",
+      "summary": "Menüleistensymbole ausblenden, durch Ziehen anordnen und ausgeblendete Symbole in einem Bedienfeld öffnen."
+    },
+    "en": {
+      "displayName": "Hide Menu Bar Icons",
+      "summary": "Hide menu bar icons, arrange them by dragging, and open hidden icons from a panel."
+    },
+    "es": {
+      "displayName": "Ocultar iconos de la barra de menús",
+      "summary": "Ocultar iconos de la barra de menú, organizarlos arrastrándolos y abrir iconos ocultos desde un panel."
+    },
+    "fr": {
+      "displayName": "Masquer les icônes de la barre des menus",
+      "summary": "Masquer les icônes de la barre de menus, les organiser en les faisant glisser et ouvrir les icônes masquées à partir d'un panneau."
+    },
+    "ja": {
+      "displayName": "メニューバーアイコンを隠す",
+      "summary": "メニュー バー アイコンを非表示にし、ドラッグして配置し、パネルから非表示のアイコンを開きます。"
+    },
+    "ko": {
+      "displayName": "메뉴 막대 아이콘 숨기기",
+      "summary": "메뉴 표시줄 아이콘을 숨기고 드래그하여 정렬하고 패널에서 숨겨진 아이콘을 엽니다."
+    },
+    "pt": {
+      "displayName": "Ocultar ícones da barra de menus",
+      "summary": "Oculte os ícones da barra de menu, organize-os arrastando e abra ícones ocultos em um painel."
+    },
+    "ru": {
+      "displayName": "Скрыть значки строки меню",
+      "summary": "Скрыть значки строки меню, упорядочить их путем перетаскивания и открыть скрытые значки на панели."
+    },
+    "zh-Hans": {
+      "displayName": "隐藏菜单栏图标",
+      "summary": "菜单栏图标隐藏功能的设置与弹窗界面"
+    },
+    "zh-Hant": {
+      "displayName": "隱藏選單列圖示",
+      "summary": "選單列圖標隱藏功能的設定與彈窗界面"
+    }
+  },
+  "version": "1.1.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 5,
+  "bundleRelativePath": "MenuBarHidden.bundle",
+  "factoryClass": "MenuBarHiddenPlugin.MenuBarHiddenPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "MenuBarHiddenPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": true,
+    "settings": "form"
+  },
+  "permissions": [
+    "accessibility",
+    "screen-recording"
+  ],
+  "category": "productivity",
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description"
+  },
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools/blob/main/docs/plugins/menu-bar-hidden.md",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "GPL-3.0-only"
+  },
+  "discovery": {
+    "keywords": [
+      "menu bar",
+      "icons",
+      "hide",
+      "layout"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "إخفاء أيقونات شريط القوائم"
+      ],
+      "de": [
+        "Menüleistensymbole ausblenden"
+      ],
+      "en": [
+        "Hide Menu Bar Icons"
+      ],
+      "es": [
+        "Ocultar iconos de la barra de menús"
+      ],
+      "fr": [
+        "Masquer les icônes de la barre des menus"
+      ],
+      "ja": [
+        "メニューバーアイコンを隠す"
+      ],
+      "ko": [
+        "메뉴 막대 아이콘 숨기기"
+      ],
+      "pt": [
+        "Ocultar ícones da barra de menus"
+      ],
+      "ru": [
+        "Скрыть значки строки меню"
+      ],
+      "zh-Hans": [
+        "隐藏菜单栏图标"
+      ],
+      "zh-Hant": [
+        "隱藏選單列圖示"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility",
+      "screen-recording"
+    ],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "menu-bar-items",
+      "menu-bar-icon-images",
+      "running-applications",
+      "pointer-events"
+    ],
+    "dataPersisted": [
+      "plugin-configuration",
+      "menu-bar-item-layout"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "menu-bar-hidden",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "set-enabled",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "隐藏菜单栏图标",
+              "菜单栏图标隐藏功能的设置与弹窗界面",
+              "menu bar"
+            ],
+            "systemImage": "menubar.arrow.up.rectangle",
+            "parameters": [
+              {
+                "id": "enabled",
+                "kind": "boolean",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
+            "parameterSummary": "@productStrings.summary",
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
+}

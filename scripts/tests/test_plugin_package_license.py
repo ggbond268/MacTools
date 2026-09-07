@@ -84,6 +84,44 @@ class PluginPackageLicenseTests(unittest.TestCase):
 
             self.assertFalse((output / source.name / "LICENSE").exists())
 
+    def test_menu_bar_hidden_zip_contains_gpl_and_upstream_notices(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = pathlib.Path(temporary_directory)
+            source = self.make_package(root)
+            notice_path = source / "THIRD_PARTY_NOTICES.txt"
+            subprocess.run(
+                [
+                    str(REPO_ROOT / "scripts/licenses/generate-third-party-notices.py"),
+                    "--manifest",
+                    str(REPO_ROOT / "Sources/Resources/ThirdPartyNotices/manifest.json"),
+                    "--repo-root", str(REPO_ROOT),
+                    "--product", "plugin:menu-bar-hidden",
+                    "--output", str(notice_path),
+                ],
+                check=True, capture_output=True, text=True,
+            )
+
+            result = subprocess.run(
+                [
+                    str(PACKAGE_BUILDER),
+                    "--source", str(source),
+                    "--output-dir", str(root / "dist"),
+                    "--license-file", str(REPO_ROOT / "LICENSE"),
+                    "--zip",
+                ],
+                check=True, capture_output=True, text=True,
+            )
+
+            with zipfile.ZipFile(pathlib.Path(result.stdout.strip())) as archive:
+                self.assertEqual(
+                    archive.read(f"{source.name}/LICENSE"),
+                    (REPO_ROOT / "LICENSE").read_bytes(),
+                )
+                notices = archive.read(f"{source.name}/THIRD_PARTY_NOTICES.txt")
+                self.assertEqual(notices, notice_path.read_bytes())
+                self.assertIn(b"Jordan Baird", notices)
+                self.assertIn("Toni Förster".encode("utf-8"), notices)
+
     def test_missing_explicit_license_fails_before_copying(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = pathlib.Path(temporary_directory)

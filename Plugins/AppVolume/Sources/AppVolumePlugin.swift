@@ -64,6 +64,7 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
     private let router: any ApplicationVolumeRouting
     private let storage: PluginStorage
     private let localization: PluginLocalization
+    private let openSystemAudioPrivacySettings: () -> Void
 
     private var snapshot = AudioApplicationSnapshot.empty
     private var volumes: [String: Double]
@@ -71,6 +72,7 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
     private var isExpanded = false
     private var accessState = AppVolumeAccessState.unknown
     private var accessTask: Task<Void, Never>?
+    private var shouldRecheckSystemAudioAccessOnRefresh = false
     private var pendingPanelVolumes: [String: Double] = [:]
     private var lastRouteErrorMessage: String?
     private var canonicalRoutingVolumes: [String: Double]?
@@ -86,7 +88,10 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
         storage: PluginStorage? = nil,
         monitor: (any AudioApplicationMonitoring)? = nil,
         router: (any ApplicationVolumeRouting)? = nil,
-        localization: PluginLocalization? = nil
+        localization: PluginLocalization? = nil,
+        openSystemAudioPrivacySettings: @escaping () -> Void = {
+            AppVolumePlugin.openSystemAudioPrivacySettings()
+        }
     ) {
         let storage = storage ?? UserDefaultsPluginStorage(pluginID: "app-volume")
         let monitor = monitor ?? CoreAudioApplicationMonitor()
@@ -97,6 +102,7 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
         self.monitor = monitor
         self.router = router
         self.localization = localization
+        self.openSystemAudioPrivacySettings = openSystemAudioPrivacySettings
         self.volumes = Self.loadVolumes(storage: storage)
         self.metadata = PluginMetadata(
             id: "app-volume",
@@ -238,6 +244,7 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
         lastRouteErrorMessage = nil
         accessTask?.cancel()
         accessTask = nil
+        shouldRecheckSystemAudioAccessOnRefresh = false
         if accessState == .requesting {
             accessState = .unknown
         }
@@ -249,6 +256,9 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
 
     func refresh() {
         monitor.refresh()
+        guard shouldRecheckSystemAudioAccessOnRefresh else { return }
+        shouldRecheckSystemAudioAccessOnRefresh = false
+        requestAccess(force: true, openSettingsOnFailure: false)
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
@@ -297,7 +307,11 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
             return
         }
 
-        requestAccess(force: true, openSettingsOnFailure: true)
+        requestAccess(
+            force: true,
+            openSettingsOnFailure: accessState != .granted,
+            recheckGrantedAccess: accessState == .granted
+        )
     }
 
     func handleAction(_ action: PluginPanelAction) {
@@ -586,14 +600,20 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
         }
     }
 
-    private func requestAccess(force: Bool, openSettingsOnFailure: Bool) {
-        if accessState == .granted {
+    private func requestAccess(
+        force: Bool,
+        openSettingsOnFailure: Bool,
+        recheckGrantedAccess: Bool = false
+    ) {
+        if accessState == .granted, !recheckGrantedAccess {
+            shouldRecheckSystemAudioAccessOnRefresh = false
             applyCurrentTargets()
             return
         }
         guard accessTask == nil, force || accessState == .unknown else {
             if openSettingsOnFailure, accessState == .denied {
-                Self.openSystemAudioPrivacySettings()
+                shouldRecheckSystemAudioAccessOnRefresh = true
+                openSystemAudioPrivacySettings()
             }
             return
         }
@@ -617,7 +637,8 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
             } else {
                 router.update(targets: [], outputDeviceUID: snapshot.outputDeviceUID)
                 if openSettingsOnFailure {
-                    Self.openSystemAudioPrivacySettings()
+                    shouldRecheckSystemAudioAccessOnRefresh = true
+                    openSystemAudioPrivacySettings()
                 }
             }
             onStateChange?()
