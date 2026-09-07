@@ -208,6 +208,37 @@ final class PluginHostActionRegistryTests: XCTestCase {
         )
     }
 
+    func testTemporarilyUnavailableActionStillAcceptsShortcutAssignment() throws {
+        let suiteName = "PluginHostActionRegistryTests.temporarily-unavailable.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let plugin = NativeActionTestPlugin()
+        plugin.availability = .unavailable("Collection is already enabled.")
+        let host = makeIsolatedHost(
+            plugin: plugin,
+            defaults: defaults,
+            shortcutManager: GlobalShortcutManager(registrar: FakeCarbonHotKeyRegistrar())
+        )
+        let reference = ActionReference(key: plugin.definition.key)
+        let item = try XCTUnwrap(
+            host.actionShortcutCatalogItems.first { $0.reference == reference }
+        )
+
+        XCTAssertEqual(item.status, .unavailable("Collection is already enabled."))
+        XCTAssertTrue(item.canAssign)
+
+        let binding = ShortcutBinding(
+            keyCode: UInt16(kVK_ANSI_R),
+            modifiers: [.command, .option]
+        )
+        XCTAssertEqual(host.setActionShortcutBinding(binding, to: reference), .success)
+        XCTAssertEqual(
+            host.shortcutAssignmentService.assignment(for: reference)?.binding,
+            binding
+        )
+    }
+
     func testPluginStateChangeUnregistersShortcutWhenDynamicActionDisappears() async throws {
         let suiteName = "PluginHostActionRegistryTests.dynamic-removal.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

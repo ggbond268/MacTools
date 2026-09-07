@@ -4,6 +4,23 @@ import XCTest
 
 @MainActor
 final class SettingsSidebarPreferencesStoreTests: XCTestCase {
+    func testSectionExpansionDefaultsToExpandedAndPersistsIndependently() throws {
+        let defaults = try makeDefaults()
+        var store = SettingsSidebarPreferencesStore(userDefaults: defaults)
+
+        XCTAssertTrue(store.isAppSectionExpanded)
+        XCTAssertTrue(store.isCustomizeSectionExpanded)
+        XCTAssertTrue(store.isPluginSettingsSectionExpanded)
+
+        store.setSection(.app, expanded: false)
+        store.setSection(.pluginSettings, expanded: false)
+        store = SettingsSidebarPreferencesStore(userDefaults: defaults)
+
+        XCTAssertFalse(store.isAppSectionExpanded)
+        XCTAssertTrue(store.isCustomizeSectionExpanded)
+        XCTAssertFalse(store.isPluginSettingsSectionExpanded)
+    }
+
     func testNameSortingIsTheDefaultAndUsesAvailableItems() throws {
         let defaults = try makeDefaults()
         let store = SettingsSidebarPreferencesStore(
@@ -203,7 +220,14 @@ final class SettingsSidebarPreferencesStoreTests: XCTestCase {
                 .map(\.rawValue)
         )
         let keys = [
+            "settings.sidebar.customizeSection",
             "settings.sidebar.shortcutAccessibilityHint",
+            "settings.sidebar.pluginSearch.prompt",
+            "settings.sidebar.pluginSearch.noResults",
+            "settings.sidebar.pluginSearch.clear",
+            "settings.sidebar.pluginSearch.resultCountFormat",
+            "settings.sidebar.section.collapseFormat",
+            "settings.sidebar.section.expandFormat",
             "settings.sidebar.pluginSortHelp",
             "settings.sidebar.pluginSort.installedOldestFirst",
             "settings.sidebar.pluginSort.installedNewestFirst",

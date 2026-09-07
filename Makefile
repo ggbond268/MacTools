@@ -161,13 +161,9 @@ package-plugins-release: generate
 # only when a deliberately isolated bundle needs to coexist.
 stop-debug-app:
 	@if [[ "$(ALLOW_MULTIPLE_DEBUG_APPS)" == "1" ]]; then exit 0; fi
-	@PIDS=(); \
-	while read -r PID COMMAND; do \
-		if [[ "$$COMMAND" == "$(INSTALLED_APP_EXECUTABLE)" \
-			|| "$$COMMAND" == "$(INSTALLED_APP_EXECUTABLE) "* ]]; then \
-			PIDS+=("$$PID"); \
-		fi; \
-	done < <(/bin/ps -axo pid=,command=); \
+	@PIDS=($$(/usr/bin/pgrep -f -x \
+		".*/$(APP_PRODUCT_NAME)[.]app/Contents/MacOS/$(APP_PRODUCT_NAME)( .*)?" \
+		2>/dev/null || true)); \
 	if (( $${#PIDS[@]} == 0 )); then \
 		exit 0; \
 	fi; \
@@ -233,10 +229,10 @@ run: stop-debug-app install-debug-app
 	for ENVIRONMENT_VARIABLE in "$${RUN_ENV[@]}"; do \
 		OPEN_ENV+=(--env "$$ENVIRONMENT_VARIABLE"); \
 	done; \
-	open "$${OPEN_ENV[@]}" -W "$(INSTALLED_APP_PATH)"
+	open -n "$${OPEN_ENV[@]}" -W "$(INSTALLED_APP_PATH)"
 
 run-open: stop-debug-app install-debug-app
-	@open -W "$(INSTALLED_APP_PATH)"
+	@open -n -W "$(INSTALLED_APP_PATH)"
 
 e2e-preflight:
 	@$(E2E_SCRIPT) preflight

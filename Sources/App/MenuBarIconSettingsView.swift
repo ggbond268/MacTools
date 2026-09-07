@@ -65,7 +65,7 @@ struct MenuBarIconSettingsView: View {
     @ObservedObject var gallery: MenuBarIconGalleryLibrary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
             header
 
             MenuBarIconEditorControls(iconSettings: iconSettings, gallery: gallery)
@@ -93,7 +93,7 @@ struct MenuBarIconSettingsView: View {
 
                 Text(AppL10n.settings(
                     "menuBarIcon.description",
-                    defaultValue: "统一设置浅色和深色菜单栏图标，导入时会保留原图。"
+                    defaultValue: "统一设置菜单栏图标，自动适应浅色和深色外观。"
                 ))
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
@@ -101,17 +101,39 @@ struct MenuBarIconSettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button {
-                iconSettings.resetToDefault()
-            } label: {
-                Label(AppL10n.settings("menuBarIcon.restoreDefault", defaultValue: "恢复默认"), systemImage: "arrow.counterclockwise")
+            HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                currentIconPreview
+
+                Button {
+                    iconSettings.resetToDefault()
+                } label: {
+                    Label(AppL10n.settings("menuBarIcon.restoreDefault", defaultValue: "恢复默认"), systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!iconSettings.hasCustomIcon)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(!iconSettings.hasCustomIcon)
+            .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
         .help(AppL10n.settings("menuBarIcon.help", defaultValue: "设置菜单栏图标"))
+    }
+
+    private var currentIconPreview: some View {
+        MenuBarIconThumbnail(
+            image: iconSettings.previewImage(for: .light),
+            height: PluginSettingsTheme.Size.rowIcon,
+            maxWidth: 26
+        )
+        .frame(width: 34, height: PluginSettingsTheme.Size.controlHeight)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+        .help(AppL10n.settings("menuBarIcon.title", defaultValue: "菜单栏图标"))
+        .accessibilityLabel(AppL10n.settings("menuBarIcon.title", defaultValue: "菜单栏图标"))
     }
 }
 
@@ -123,7 +145,7 @@ private struct MenuBarIconEditorControls: View {
     private let contentMaxWidth: CGFloat = 520
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.controlCluster) {
             controlRow(AppL10n.settings("menuBarIcon.source", defaultValue: "图标来源")) {
                 actionButtons
             }
@@ -131,11 +153,12 @@ private struct MenuBarIconEditorControls: View {
             contentOnlyRow {
                 Text(AppL10n.settings(
                     "menuBarIcon.sourceDescription",
-                    defaultValue: "支持图片、轻量 GIF/MP4 和在线动态图标；导入时会保留原图。"
+                    defaultValue: "支持透明背景的图标和轻量动画，也可从在线图库选择。"
                 ))
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: contentMaxWidth, alignment: .leading)
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let errorMessage = iconSettings.lastErrorMessage {
@@ -143,6 +166,8 @@ private struct MenuBarIconEditorControls: View {
                     Label(errorMessage, systemImage: "xmark.circle")
                         .font(PluginSettingsTheme.Typography.rowDescription)
                         .foregroundStyle(.red)
+                        .multilineTextAlignment(.trailing)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -173,7 +198,7 @@ private struct MenuBarIconEditorControls: View {
                 .frame(width: rowLabelWidth, height: 1)
 
             content()
-                .frame(maxWidth: contentMaxWidth, alignment: .leading)
+                .frame(maxWidth: contentMaxWidth, alignment: .trailing)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -182,11 +207,6 @@ private struct MenuBarIconEditorControls: View {
     private var actionButtons: some View {
         HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
             Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-
-            currentIconPreview
-
-            Divider()
-                .frame(height: PluginSettingsTheme.Size.rowIcon)
 
             Button {
                 selectMedia()
@@ -203,23 +223,6 @@ private struct MenuBarIconEditorControls: View {
             alignment: .trailing
         )
         .controlSize(.regular)
-    }
-
-    private var currentIconPreview: some View {
-        MenuBarIconThumbnail(
-            image: iconSettings.previewImage(for: .light),
-            height: PluginSettingsTheme.Size.rowIcon,
-            maxWidth: 26
-        )
-        .frame(width: 34, height: PluginSettingsTheme.Size.controlHeight)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-        )
-        .help(AppL10n.settings("menuBarIcon.title", defaultValue: "菜单栏图标"))
-        .accessibilityLabel(AppL10n.settings("menuBarIcon.title", defaultValue: "菜单栏图标"))
     }
 
     private func selectMedia() {

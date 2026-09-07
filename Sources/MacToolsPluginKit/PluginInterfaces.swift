@@ -38,6 +38,20 @@ public protocol PluginSettingsSearchFocusing: AnyObject {
     func focusSettingsSearch()
 }
 
+/// Optional metadata for a plugin settings page with contextual search.
+/// The host uses this to avoid routing Command-F to an unavailable field and to
+/// reveal lazily rendered search content before requesting focus.
+@MainActor
+public protocol PluginSettingsSearchFocusMetadataProviding: AnyObject {
+    var isSettingsSearchAvailable: Bool { get }
+    var settingsSearchFocusTarget: PluginSettingsSearchTarget? { get }
+}
+
+public extension PluginSettingsSearchFocusMetadataProviding {
+    var isSettingsSearchAvailable: Bool { true }
+    var settingsSearchFocusTarget: PluginSettingsSearchTarget? { nil }
+}
+
 public enum PluginShortcutEventPhase: Sendable {
     case pressed
     case released
@@ -46,6 +60,16 @@ public enum PluginShortcutEventPhase: Sendable {
 @MainActor
 public protocol PluginShortcutEventHandling: AnyObject {
     func handleShortcutEvent(id: String, phase: PluginShortcutEventPhase)
+}
+
+/// Lets a plugin reject a shortcut binding whose modifiers have a feature-specific meaning.
+/// The host still performs its ordinary conflict and modifier validation after this check.
+@MainActor
+public protocol PluginShortcutBindingValidating: AnyObject {
+    func shortcutValidationMessage(
+        definitionID: String,
+        binding: ShortcutBinding
+    ) -> String?
 }
 
 public extension MacToolsPlugin {
@@ -237,6 +261,13 @@ public struct PluginFocusedWindowTarget {
 @MainActor
 public protocol PluginFocusedWindowTargetConsuming: AnyObject {
     var focusedWindowTargetProvider: (() -> PluginFocusedWindowTarget?)? { get set }
+}
+
+/// Optional window-layout target supplied by a plugin that owns a normal, user-positionable window.
+/// Transient command, confirmation, and feedback surfaces should not adopt this protocol.
+@MainActor
+public protocol PluginWindowLayoutTargetProviding: AnyObject {
+    var focusedWindowLayoutTarget: NSWindow? { get }
 }
 
 /// Optional hook for built-in plugins that cache localized descriptors or

@@ -7,6 +7,7 @@ import MacToolsPluginKit
 enum MacToolsLocalKeyboardCommand: Equatable {
     case showSettings
     case focusSearch
+    case focusPluginSettingsSearch
     case showUnifiedSearch
     case selectNumber(Int)
     case goBack
@@ -30,6 +31,11 @@ enum MacToolsLocalKeyboardCommand: Equatable {
             default:
                 return nil
             }
+        }
+
+        if modifiers == [.command, .shift],
+           event.charactersIgnoringModifiers?.lowercased() == "f" {
+            return .focusPluginSettingsSearch
         }
 
         guard modifiers == .command else {
@@ -201,7 +207,6 @@ enum AppDockVisibilityController {
 @MainActor
 final class StandaloneCommandPaletteState: ObservableObject {
     @Published private(set) var presentationOrigin: UnifiedSearchPresentationOrigin?
-    @Published private(set) var shortcutHint: String?
     @Published private(set) var focusRequestID: UInt = 0
     @Published private(set) var resetRequestID: UInt = 0
     @Published private(set) var quickSelectionRequest: UnifiedSearchQuickSelectionRequest?
@@ -212,7 +217,6 @@ final class StandaloneCommandPaletteState: ObservableObject {
 
     func prepareForPresentation(shortcutLabel: String) {
         presentationOrigin = .globalShortcut(shortcutLabel)
-        shortcutHint = shortcutLabel
         quickSelectionRequest = nil
         resetRequestID &+= 1
         focusRequestID &+= 1
@@ -296,7 +300,6 @@ struct StandaloneCommandPaletteRootView: View {
                 recentStore: commandPaletteRecentStore,
                 availableSize: geometry.size,
                 presentationOrigin: state.presentationOrigin,
-                shortcutHint: state.shortcutHint,
                 focusRequestID: state.focusRequestID,
                 resetRequestID: state.resetRequestID,
                 quickSelectionRequest: state.quickSelectionRequest,
@@ -420,16 +423,15 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     var focusedWindowLayoutTarget: NSWindow? {
-        guard let settingsWindow,
-              Self.isEligibleFocusedWindowLayoutTarget(
-                  isKeyWindow: settingsWindow.isKeyWindow,
-                  isVisible: settingsWindow.isVisible,
-                  isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
-              )
-        else {
-            return nil
+        if let settingsWindow,
+           Self.isEligibleFocusedWindowLayoutTarget(
+               isKeyWindow: settingsWindow.isKeyWindow,
+               isVisible: settingsWindow.isVisible,
+               isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
+           ) {
+            return settingsWindow
         }
-        return settingsWindow
+        return pluginHost.focusedPluginWindowLayoutTarget()
     }
 
     static func isEligibleFocusedWindowLayoutTarget(
@@ -821,6 +823,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         case .general:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .general)
+        case .permissions:
+            pendingAppUpdateVersion = nil
+            settingsNavigationCoordinator?.navigate(to: .permissions)
         case .about:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .about)
@@ -873,6 +878,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             return true
         case .focusSearch:
             return settingsNavigationCoordinator?.requestSearch() ?? false
+        case .focusPluginSettingsSearch:
+            return settingsNavigationCoordinator?.requestPluginSidebarSearch() ?? false
         case .showUnifiedSearch:
             showUnifiedSearch()
             return true
@@ -885,7 +892,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 return true
             }
 
-            return settingsNavigationCoordinator.selectSidebarDestination(number: number)
+            return settingsNavigationCoordinator.performSidebarNumberShortcut(number: number)
         case .goBack:
             guard
                 let settingsNavigationCoordinator,

@@ -14,6 +14,10 @@ struct PluginSettingsPageItem: Identifiable {
     let missingPermissionCardIDs: Set<String>
     let shortcutItems: [ShortcutSettingsItem]
     let actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration?
+    let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
+    let shortcutDefinitionFirstSettingsGroupIDs: Set<String>
+    let collapsibleShortcutSettingsGroupIDs: Set<String>
+    let collapsibleActionSettingsGroupIDs: Set<String>
 
     var layout: PluginSettingsLayout {
         page?.body.layout ?? .form
@@ -45,8 +49,18 @@ struct PluginSettingsPageItem: Identifiable {
         page?.body.integratedShortcutGroupIDs ?? []
     }
 
+    var standaloneShortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] {
+        shortcutSettingsGroups.filter { !integratedShortcutGroupIDs.contains($0.id) }
+    }
+
     var remainingShortcutItems: [ShortcutSettingsItem] {
-        shortcutItems.filter { item in
+        let configuredItemIDs = shortcutSettingsGroups.reduce(into: Set<String>()) { result, group in
+            result.formUnion(group.shortcutDefinitionIDs.map { "\(pluginID).shortcut.\($0)" })
+        }
+        return shortcutItems.filter { item in
+            if configuredItemIDs.contains(item.id) {
+                return false
+            }
             guard let groupID = item.settingsGroupID else {
                 return true
             }

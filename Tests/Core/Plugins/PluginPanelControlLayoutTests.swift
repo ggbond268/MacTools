@@ -17,6 +17,15 @@ private struct PluginShortcutRecorderV5Layout {
     @State private var isHovered = false
 }
 
+private struct PluginSettingsContextV5Layout {
+    let pluginID: String
+    let shortcutItems: [ShortcutSettingsItem]
+    let recordShortcutHandler: (String, ShortcutBinding) -> String?
+    let beginShortcutRecordingHandler: (String) -> Void
+    let clearShortcutHandler: (String) -> Void
+    let resetShortcutHandler: (String) -> Void
+}
+
 final class PluginPanelControlLayoutTests: XCTestCase {
     func testControlKindTagsMatchDynamicPluginABI() {
         XCTAssertEqual(tag(of: PluginPanelControlKind.segmented), 0)
@@ -108,6 +117,58 @@ final class PluginPanelControlLayoutTests: XCTestCase {
         )
     }
 
+    func testSettingsContextStoredPropertyLayoutMatchesPluginKitV5ABI() {
+        let context = PluginSettingsContext(pluginID: "test")
+        XCTAssertEqual(
+            Mirror(reflecting: context).children.compactMap(\.label),
+            [
+                "pluginID",
+                "allShortcutItems",
+                "recordShortcutHandler",
+                "beginShortcutRecordingHandler",
+                "clearShortcutHandler",
+                "resetShortcutHandler",
+            ]
+        )
+        XCTAssertEqual(
+            MemoryLayout<PluginSettingsContext>.size,
+            MemoryLayout<PluginSettingsContextV5Layout>.size
+        )
+    }
+
+    func testSettingsContextKeepsV5ShortcutsSeparateFromCanonicalActions() {
+        let ordinary = ShortcutSettingsItem(
+            id: "test.shortcut.open",
+            pluginID: "test",
+            pluginTitle: "Test",
+            title: "Open",
+            description: "Open the plugin",
+            bindingText: "⌘O",
+            isRequired: false,
+            canClear: true,
+            usesDefaultValue: false,
+            errorMessage: nil,
+            settingsGroupID: "test.shortcuts"
+        )
+        let action = PluginSettingsActionShortcutItem(
+            actionID: "run",
+            title: "Run",
+            description: "Run the action",
+            bindingText: "⌘R",
+            canAssign: true,
+            canClear: true
+        )
+
+        let context = PluginSettingsContext(
+            pluginID: "test",
+            shortcutItems: [ordinary],
+            actionShortcutItems: [action]
+        )
+
+        XCTAssertEqual(context.shortcutItems.map(\.id), [ordinary.id])
+        XCTAssertEqual(context.actionShortcutItems.map(\.actionID), [action.actionID])
+    }
+
     @MainActor
     func testShortcutRecorderFieldKeepsStableHeightWhenDisplayTextScales() {
         let ordinary = NSHostingView(rootView:
@@ -133,6 +194,33 @@ final class PluginPanelControlLayoutTests: XCTestCase {
             accuracy: 0.5
         )
         XCTAssertEqual(long.fittingSize.height, ordinary.fittingSize.height, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testShortcutRecorderControlReservesClearButtonSpaceWhenUnassigned() {
+        let assigned = NSHostingView(rootView:
+            PluginSettingsShortcutRecorderControl(
+                title: "Shortcut",
+                displayText: "⌥ + ⌘ + V",
+                canClear: true,
+                clearTitle: "Clear",
+                onRecord: { _ in .accepted },
+                onClear: {}
+            )
+        )
+        let unassigned = NSHostingView(rootView:
+            PluginSettingsShortcutRecorderControl(
+                title: "Shortcut",
+                displayText: "",
+                canClear: false,
+                clearTitle: "Clear",
+                onRecord: { _ in .accepted },
+                onClear: {}
+            )
+        )
+
+        XCTAssertEqual(assigned.fittingSize.width, unassigned.fittingSize.width, accuracy: 0.5)
+        XCTAssertEqual(assigned.fittingSize.height, unassigned.fittingSize.height, accuracy: 0.5)
     }
 
     @MainActor
