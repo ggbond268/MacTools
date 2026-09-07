@@ -253,6 +253,57 @@ final class AppWindowRouterTests: XCTestCase {
         window.close()
     }
 
+    func testClickingSelectedSidebarRowRestoresListFocus() async throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let router = makeRouter(defaults: defaults)
+
+        router.showSettings()
+
+        let window = try XCTUnwrap(router.settingsWindow)
+        let hostingView = try XCTUnwrap(window.contentView as? NSHostingView<SettingsView>)
+        for _ in 0..<3 {
+            await settleWindowLayout(window)
+        }
+        let sidebarScrollView = try XCTUnwrap(settingsSidebarScrollView(in: hostingView))
+        let sidebarListView = try XCTUnwrap(sidebarScrollView.documentView as? NSTableView)
+        let selectedRow = sidebarListView.selectedRow
+        XCTAssertGreaterThanOrEqual(selectedRow, 0)
+        let differentRow = selectedRow + 1
+        XCTAssertLessThan(differentRow, sidebarListView.numberOfRows)
+
+        XCTAssertTrue(window.makeFirstResponder(window))
+        await settleWindowLayout(window)
+        XCTAssertFalse(window.firstResponder === sidebarListView)
+        try clickRow(differentRow, in: sidebarListView, window: window)
+        for _ in 0..<3 {
+            await settleWindowLayout(window)
+        }
+
+        XCTAssertEqual(sidebarListView.selectedRow, differentRow)
+        XCTAssertTrue(
+            window.firstResponder === sidebarListView,
+            "Expected clicking a different sidebar row to restore list focus"
+        )
+
+        XCTAssertTrue(window.makeFirstResponder(window))
+        await settleWindowLayout(window)
+        XCTAssertFalse(window.firstResponder === sidebarListView)
+        try clickRow(differentRow, in: sidebarListView, window: window)
+        for _ in 0..<3 {
+            await settleWindowLayout(window)
+        }
+
+        XCTAssertEqual(sidebarListView.selectedRow, differentRow)
+        XCTAssertTrue(
+            window.firstResponder === sidebarListView,
+            "Expected clicking the selected sidebar row to restore list focus"
+        )
+
+        window.close()
+    }
+
     func testFeatureSettingsPresentationRoutesToRequestedPage() throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -312,6 +363,43 @@ final class AppWindowRouterTests: XCTestCase {
             .max { lhs, rhs in
                 lhs.bounds.height < rhs.bounds.height
             }
+    }
+
+    private func clickRow(
+        _ row: Int,
+        in tableView: NSTableView,
+        window: NSWindow
+    ) throws {
+        tableView.scrollRowToVisible(row)
+        let rowFrame = tableView.rect(ofRow: row)
+        let location = tableView.convert(
+            NSPoint(x: rowFrame.midX, y: rowFrame.midY),
+            to: nil
+        )
+        let mouseDown = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: location,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 1
+        ))
+        let mouseUp = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: location,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 0
+        ))
+        window.sendEvent(mouseDown)
+        window.sendEvent(mouseUp)
     }
 
     private func descendantViews(of view: NSView) -> [NSView] {

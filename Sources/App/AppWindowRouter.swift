@@ -90,6 +90,22 @@ enum MacToolsLocalKeyboardCommand: Equatable {
 @MainActor
 final class MacToolsCommandWindow: NSWindow {
     var onLocalKeyboardCommand: ((MacToolsLocalKeyboardCommand) -> Bool)?
+    weak var sidebarListView: NSTableView?
+
+    override func sendEvent(_ event: NSEvent) {
+        if
+            event.type == .leftMouseDown,
+            let sidebarListView,
+            sidebarListView.window === self
+        {
+            let location = sidebarListView.convert(event.locationInWindow, from: nil)
+            if sidebarListView.row(at: location) >= 0 {
+                makeFirstResponder(sidebarListView)
+            }
+        }
+
+        super.sendEvent(event)
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard
@@ -627,7 +643,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     private func configureSettingsInitialResponder(
-        in window: NSWindow,
+        in window: MacToolsCommandWindow,
         hostingView: NSView
     ) {
         window.layoutIfNeeded()
@@ -652,6 +668,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
 
         if sidebarList?.acceptsFirstResponder == true {
             window.initialFirstResponder = sidebarList
+            window.sidebarListView = sidebarList
         }
     }
 
