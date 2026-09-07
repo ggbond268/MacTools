@@ -202,19 +202,8 @@ enum SettingsSidebarNumberingPolicy {
         appExpanded: Bool,
         customizeExpanded: Bool,
         pluginSettingsExpanded: Bool,
-        pluginSearchIsActive: Bool,
         limit: Int? = maximumShortcutCount
     ) -> [SettingsSidebarNumberTarget] {
-        if pluginSearchIsActive, pluginSettingsExpanded {
-            let results: [SettingsSidebarNumberTarget] = pluginDestinations.map {
-                .destination($0)
-            }
-            return limit.map { Array(results.prefix($0)) } ?? results
-        }
-        if pluginSearchIsActive {
-            return [.collapsedSection(.pluginSettings)]
-        }
-
         var targets: [SettingsSidebarNumberTarget] = []
         targets += appExpanded
             ? appDestinations.map(SettingsSidebarNumberTarget.destination)
@@ -249,16 +238,6 @@ enum SettingsSidebarHeaderAccessibility {
     }
 }
 
-enum SettingsSidebarHighlightPolicy {
-    static func showsSearchCandidate(
-        candidate: SettingsNavigationDestination?,
-        selection: SettingsNavigationDestination,
-        destination: SettingsNavigationDestination
-    ) -> Bool {
-        candidate == destination && selection != destination
-    }
-}
-
 struct SidebarNumberShortcutRequest: Equatable {
     let id: UInt
     let number: Int
@@ -279,7 +258,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
     @Published private(set) var isUnifiedSearchPresented = false
     @Published private(set) var unifiedSearchPresentationOrigin: UnifiedSearchPresentationOrigin?
     @Published private(set) var unifiedSearchFocusRequestID: UInt = 0
-    @Published private(set) var pluginSidebarSearchFocusRequestID: UInt = 0
     @Published private(set) var sidebarSelectionRevealRequestID: UInt = 0
     @Published private(set) var sidebarNumberShortcutRequest: SidebarNumberShortcutRequest?
     @Published private(set) var sidebarMoveShortcutRequest: SidebarMoveShortcutRequest?
@@ -487,14 +465,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
             id: nextSidebarNumberShortcutRequestID,
             number: number
         )
-        return true
-    }
-
-    func requestPluginSidebarSearch() -> Bool {
-        if isUnifiedSearchPresented {
-            dismissUnifiedSearch()
-        }
-        pluginSidebarSearchFocusRequestID &+= 1
         return true
     }
 

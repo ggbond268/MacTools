@@ -435,7 +435,7 @@ final class AppWindowRouterTests: XCTestCase {
                     modifiers: [.command, .shift]
                 )
             ),
-            .focusPluginSettingsSearch
+            nil
         )
         XCTAssertEqual(
             MacToolsLocalKeyboardCommand.resolve(
@@ -498,7 +498,7 @@ final class AppWindowRouterTests: XCTestCase {
                     modifiers: [.command, .shift]
                 )
             ),
-            .focusPluginSettingsSearch
+            nil
         )
     }
 
@@ -809,7 +809,6 @@ final class AppWindowRouterTests: XCTestCase {
             coordinator.sidebarNumberShortcutRequest?.number,
             9
         )
-        XCTAssertEqual(coordinator.pluginSidebarSearchFocusRequestID, 0)
         XCTAssertEqual(coordinator.destination, .general)
 
         window.close()
@@ -882,8 +881,7 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertFalse(coordinator.isUnifiedSearchPresented)
         XCTAssertNil(coordinator.unifiedSearchPresentationOrigin)
 
-        let previousRequestID = coordinator.pluginSidebarSearchFocusRequestID
-        XCTAssertTrue(
+        XCTAssertFalse(
             window.performKeyEquivalent(
                 with: keyEvent(
                     keyCode: UInt16(kVK_ANSI_F),
@@ -893,86 +891,48 @@ final class AppWindowRouterTests: XCTestCase {
                 )
             )
         )
-        XCTAssertEqual(
-            coordinator.pluginSidebarSearchFocusRequestID,
-            previousRequestID + 1
-        )
 
         window.close()
     }
 
-    func testCommandShiftFExpandsAndFocusesCollapsedPluginSettingsSearch() async throws {
+    func testPluginSidebarHasNoPersistentFilterAndKeepsUnifiedSearch() async throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(false, forKey: "settings.sidebar.pluginSettingsSectionExpanded")
-        let plugins = [AppWindowRouterSettingsPlugin(id: "settings-plugin")]
-        let router = makeRouter(defaults: defaults, plugins: plugins)
-
-        router.showSettings()
-        let window = try XCTUnwrap(router.settingsWindow)
-        defer { window.close() }
-        let hostingView = try XCTUnwrap(window.contentView as? NSHostingView<SettingsView>)
-        await settleWindowLayout(window)
-        XCTAssertNil(pluginSettingsFilterField(in: hostingView))
-
-        XCTAssertTrue(window.performKeyEquivalent(with: keyEvent(
-            keyCode: UInt16(kVK_ANSI_F),
-            characters: "F",
-            modifiers: [.command, .shift],
-            windowNumber: window.windowNumber
-        )))
-
-        let deadline = ContinuousClock.now + .seconds(2)
-        var focusedFilterField: NSTextField?
-        repeat {
-            await settleWindowLayout(window)
-            if let filterField = pluginSettingsFilterField(in: hostingView),
-               window.firstResponder === filterField.currentEditor() {
-                focusedFilterField = filterField
-                break
-            }
-            try await Task.sleep(for: .milliseconds(20))
-        } while ContinuousClock.now < deadline
-        XCTAssertNotNil(
-            focusedFilterField,
-            "Expected Command-Shift-F to reveal and focus the offscreen plugin filter field."
+        defaults.set(true, forKey: "settings.sidebar.pluginSettingsSectionExpanded")
+        let router = makeRouter(
+            defaults: defaults,
+            plugins: [AppWindowRouterSettingsPlugin(id: "settings-plugin")]
         )
-    }
-
-    func testCommandShiftFRevealsPluginSettingsSearchWhenNoPluginsAreConfigurable() async throws {
-        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(false, forKey: "settings.sidebar.pluginSettingsSectionExpanded")
-        let router = makeRouter(defaults: defaults, plugins: [])
-
         router.showSettings()
         let window = try XCTUnwrap(router.settingsWindow)
         defer { window.close() }
+        let coordinator = try XCTUnwrap(router.settingsNavigationCoordinator)
         let hostingView = try XCTUnwrap(window.contentView as? NSHostingView<SettingsView>)
         await settleWindowLayout(window)
-        XCTAssertNil(pluginSettingsFilterField(in: hostingView))
 
-        XCTAssertTrue(window.performKeyEquivalent(with: keyEvent(
+        XCTAssertNil(pluginSettingsFilterField(in: hostingView))
+        let launcher = try XCTUnwrap(descendantViews(of: hostingView)
+            .compactMap { $0 as? NSSearchField }
+            .first { !$0.isEditable })
+        XCTAssertTrue(launcher.sendAction(launcher.action, to: launcher.target))
+        await settleWindowLayout(window)
+        XCTAssertTrue(coordinator.isUnifiedSearchPresented)
+        XCTAssertEqual(coordinator.unifiedSearchPresentationOrigin, .settingsSidebar)
+
+        XCTAssertFalse(window.performKeyEquivalent(with: keyEvent(
             keyCode: UInt16(kVK_ANSI_F),
             characters: "F",
             modifiers: [.command, .shift],
             windowNumber: window.windowNumber
         )))
+        XCTAssertTrue(coordinator.isUnifiedSearchPresented)
+        coordinator.dismissUnifiedSearch()
+        coordinator.navigate(to: .plugins(.configuration("settings-plugin")))
+        await settleWindowLayout(window)
+        XCTAssertEqual(coordinator.destination, .plugins(.configuration("settings-plugin")))
+        XCTAssertNil(pluginSettingsFilterField(in: hostingView))
 
-        let deadline = ContinuousClock.now + .seconds(2)
-        var focusedFilterField: NSTextField?
-        repeat {
-            await settleWindowLayout(window)
-            if let filterField = pluginSettingsFilterField(in: hostingView),
-               window.firstResponder === filterField.currentEditor() {
-                focusedFilterField = filterField
-                break
-            }
-            try await Task.sleep(for: .milliseconds(20))
-        } while ContinuousClock.now < deadline
-        XCTAssertNotNil(focusedFilterField)
     }
 
     func testAppUpdateRequestNavigatesDirectlyToAbout() throws {
