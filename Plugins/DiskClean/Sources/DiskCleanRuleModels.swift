@@ -230,6 +230,8 @@ struct DiskCleanRuleTarget: Identifiable, Sendable {
     let lockedByBundleIDs: [String]
     /// Process names that lock the target while running (batched pgrep snapshot; covers non-app processes).
     let skipWhenProcessIsRunning: [String]
+    /// Structured rule explanation for auditability, user review, and consequence disclosure.
+    let explanation: DiskCleanRuleExplanation?
 
     init(
         id: String,
@@ -240,7 +242,8 @@ struct DiskCleanRuleTarget: Identifiable, Sendable {
         reservedRootPaths: [String],
         requiresFullDiskAccess: Bool = false,
         lockedByBundleIDs: [String] = [],
-        skipWhenProcessIsRunning: [String] = []
+        skipWhenProcessIsRunning: [String] = [],
+        explanation: DiskCleanRuleExplanation? = nil
     ) {
         self.id = id
         self.legacyRuleID = legacyRuleID
@@ -251,6 +254,7 @@ struct DiskCleanRuleTarget: Identifiable, Sendable {
         self.requiresFullDiskAccess = requiresFullDiskAccess
         self.lockedByBundleIDs = lockedByBundleIDs
         self.skipWhenProcessIsRunning = skipWhenProcessIsRunning
+        self.explanation = explanation
     }
 
     var pathGlobs: [String] {
@@ -279,5 +283,145 @@ struct DiskCleanRuleTarget: Identifiable, Sendable {
     static func expandHome(in path: String, homeDirectory: String) -> String {
         guard path == "~" || path.hasPrefix("~/") else { return path }
         return homeDirectory + String(path.dropFirst())
+    }
+
+    /// Structured explanation for this target, deriving safe fallbacks when not explicitly declared.
+    var resolvedExplanation: DiskCleanRuleExplanation {
+        if let explanation {
+            return explanation
+        }
+        return DiskCleanRuleExplanation(
+            whyMatched: "Matches cleanup target pattern for \(id)",
+            consequence: category.consequence(),
+            safetyTier: DiskCleanSafetyTier(risk: risk),
+            requiresFullDiskAccess: requiresFullDiskAccess,
+            confidence: .high,
+            title: id,
+            dataClass: category == .logs ? .log : .cache,
+            discoveryMethod: isDynamic ? .systemQuery : .knownPathPattern,
+            defaultSelectionReason: risk == .low ? "低风险缓存，可自动清理" : "需要用户确认",
+            provenance: .builtInMacToolsRule
+        )
+    }
+
+    var whyMatched: String { resolvedExplanation.whyMatched }
+    var consequence: String { resolvedExplanation.consequence }
+    var safetyTier: DiskCleanSafetyTier { resolvedExplanation.safetyTier }
+    var confidence: DiskCleanConfidence { resolvedExplanation.confidence }
+}
+
+// MARK: - Rule explainability
+
+enum DiskCleanConfidence: String, Codable, Equatable, Sendable, CaseIterable {
+    case high
+    case medium
+    case low
+}
+
+enum DiskCleanSafetyTier: String, Codable, Equatable, Sendable, CaseIterable {
+    case safe
+    case moderate
+    case sensitive
+
+    init(risk: DiskCleanRisk) {
+        switch risk {
+        case .low:
+            self = .safe
+        case .medium:
+            self = .moderate
+        case .high:
+            self = .sensitive
+        }
+    }
+
+    var titleKey: String {
+        "safetyTier.\(rawValue).title"
+    }
+
+    func title(localization: PluginLocalization = PluginLocalization(bundle: .main)) -> String {
+        switch self {
+        case .safe:
+            return localization.string("safetyTier.safe.title", defaultValue: "安全")
+        case .moderate:
+            return localization.string("safetyTier.moderate.title", defaultValue: "中等")
+        case .sensitive:
+            return localization.string("safetyTier.sensitive.title", defaultValue: "敏感")
+        }
+    }
+}
+
+enum DiskCleanDataClass: String, Codable, Equatable, Sendable, CaseIterable {
+    case cache
+    case log
+    case diagnostic
+    case downloadedResource
+    case generatedDependency
+    case buildArtifact
+    case installer
+    case temporaryState
+}
+
+enum DiskCleanDiscoveryMethod: String, Codable, Equatable, Sendable, CaseIterable {
+    case knownPath
+    case knownPathPattern
+    case systemQuery
+    case applicationVersionComparison
+    case userConfiguredRoot
+    case projectMarker
+}
+
+enum DiskCleanRuleProvenance: String, Codable, Equatable, Sendable, CaseIterable {
+    case builtInMacToolsRule
+    case macOSDocumentedLocation
+    case applicationDocumentedLocation
+    case independentlyVerifiedBehavior
+}
+
+struct DiskCleanRuleExplanation: Codable, Equatable, Sendable {
+    let whyMatched: String
+    let consequence: String
+    let safetyTier: DiskCleanSafetyTier
+    let requiresFullDiskAccess: Bool
+    let confidence: DiskCleanConfidence
+
+    let title: String?
+    let summary: String?
+    let dataClass: DiskCleanDataClass?
+    let owner: String?
+    let discoveryMethod: DiskCleanDiscoveryMethod?
+    let defaultSelectionReason: String?
+    let regeneration: String?
+    let provenance: DiskCleanRuleProvenance?
+
+    var whyFound: String { whyMatched }
+
+    init(
+        whyMatched: String,
+        consequence: String,
+        safetyTier: DiskCleanSafetyTier = .safe,
+        requiresFullDiskAccess: Bool = false,
+        confidence: DiskCleanConfidence = .high,
+        title: String? = nil,
+        summary: String? = nil,
+        dataClass: DiskCleanDataClass? = nil,
+        owner: String? = nil,
+        discoveryMethod: DiskCleanDiscoveryMethod? = nil,
+        defaultSelectionReason: String? = nil,
+        regeneration: String? = nil,
+        provenance: DiskCleanRuleProvenance? = nil
+    ) {
+        self.whyMatched = whyMatched
+        self.consequence = consequence
+        self.safetyTier = safetyTier
+        self.requiresFullDiskAccess = requiresFullDiskAccess
+        self.confidence = confidence
+        self.title = title
+        self.summary = summary
+        self.dataClass = dataClass
+        self.owner = owner
+        self.discoveryMethod = discoveryMethod
+        self.defaultSelectionReason = defaultSelectionReason
+        self.regeneration = regeneration
+        self.provenance = provenance
     }
 }

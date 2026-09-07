@@ -491,7 +491,8 @@ struct DiskCleanScanEngine: DiskCleanScanning {
             risk: owned.facts.risk ?? target.risk,
             safety: safety,
             notes: owned.facts.notes,
-            sizeResult: nil
+            sizeResult: nil,
+            explanation: target.resolvedExplanation
         )
     }
 

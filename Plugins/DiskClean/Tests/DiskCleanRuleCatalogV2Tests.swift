@@ -16,6 +16,12 @@ final class DiskCleanRuleCatalogV2Tests: XCTestCase {
         // two v1 package-manager dynamic rules not covered by other rules
         "~/.cache/go-build/*",
         "~/Library/Caches/mise/*",
+        // expanded standard developer caches
+        "~/Library/Caches/CocoaPods/*",
+        "~/Library/Caches/org.carthage.CarthageKit/*",
+        // expanded standard app log rotations
+        "~/Library/Logs/*/*.log.*",
+        "~/Library/Logs/*/*.old",
         // v1 `.serviceWorkerCache` fallback
         "~/Library/Application Support/Google/Chrome/*/Service Worker/CacheStorage/*/*",
         "~/Library/Application Support/Arc/*/Service Worker/CacheStorage/*/*",
