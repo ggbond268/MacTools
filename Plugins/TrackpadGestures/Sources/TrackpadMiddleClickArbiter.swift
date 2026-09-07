@@ -655,6 +655,15 @@ final class TrackpadMiddleClickCandidateTimeline: @unchecked Sendable {
             let wasAwaitingAddedContact = recognizer.isAwaitingAddedContact
             let previousRejectionSequence = recognizer.rejectionSequence
             let recognized = recognizer.process(frame)
+            if recognizer.isRejectingAddedContactEpisode,
+               recognizer.lastRejectionReason == .fixedFingersNotSettled {
+                // Contacts arriving in separate frames can still form one ordinary multi-finger
+                // tap. Until the fixed fingers settle, TipTap has no claim on its native click.
+                // Keep the recognizer's practice feedback, but do not create rejected ownership
+                // that would replay or pass through the ordinary tap's buffered native pair.
+                recognizers[gesture] = recognizer
+                continue
+            }
             var update = groupUpdates[recognizer.fixedFingerCount] ?? TipTapGroupUpdate()
             if recognized {
                 update.recognizedGestures.append(gesture)

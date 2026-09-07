@@ -932,6 +932,102 @@ final class TrackpadNativeClickSourceInventoryTests: XCTestCase {
 
 @MainActor
 final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
+    func testStaggeredMultiFingerTapKeepsNativePairWithMixedTipTapMappings() throws {
+        let gestures: [(TrackpadGesture, Int)] = [
+            (.threeFingerTap, 3), (.fourFingerTap, 4), (.fiveFingerTap, 5),
+            (.threeFingerDoubleTap, 3), (.fourFingerDoubleTap, 4), (.fiveFingerDoubleTap, 5),
+        ]
+        for (gesture, count) in gestures {
+            for resolution in [TrackpadNativeClickResolution.middleClick, .consume] {
+                for nativeBeforeRelease in [true, false] {
+                    let clock = LockedMiddleClickTestClock()
+                    var postedTypes: [CGEventType] = []
+                    var synthesizedCount = 0
+                    let timeline = TrackpadMiddleClickCandidateTimeline()
+                    let coordinator = TrackpadMiddleClickCoordinator(
+                        clock: { clock.value },
+                        synthesizeMiddleClick: { synthesizedCount += 1 },
+                        releaseMiddleButton: {},
+                        postEvent: { postedTypes.append($0.type) },
+                        candidateTimeline: timeline,
+                        eventOrigin: { _ in .unknown }
+                    )
+                    let resolutions: [TrackpadGesture: TrackpadNativeClickResolution] = [
+                        gesture: resolution,
+                        .tipTapLeftOneFixed: .consume,
+                        .tipTapRightOneFixed: .consume,
+                        .tipTapLeftTwoFixed: .consume,
+                        .tipTapMiddleTwoFixed: .middleClick,
+                        .tipTapRightTwoFixed: .consume,
+                    ]
+                    coordinator.updateClickResolutions(resolutions)
+                    var engine = TrackpadGestureEngine(gestures: Set(resolutions.keys))
+                    let contacts = (1...count).map {
+                        TrackpadContactSnapshot(
+                            identifier: $0, x: Double($0) / Double(count + 1), y: 0.5
+                        )
+                    }
+                    var recognized: [TrackpadGesture] = []
+                    func observe(_ contacts: [TrackpadContactSnapshot], at time: TimeInterval) {
+                        clock.value = time
+                        let frame = TrackpadContactFrame(deviceID: 1, timestamp: time, contacts: contacts)
+                        coordinator.observe(frame: frame)
+                        recognized.append(contentsOf: engine.process(frame).recognized)
+                    }
+                    observe([], at: 0)
+                    let pairCount = gesture.doubleFingerTapCount == nil ? 1 : 2
+                    for pairIndex in 0..<pairCount {
+                        let offset = Double(pairIndex) * 0.20
+                        for contactCount in 1...count {
+                            observe(
+                                Array(contacts.prefix(contactCount)),
+                                at: offset + Double(contactCount) * 0.01
+                            )
+                        }
+                        if !nativeBeforeRelease {
+                            observe([], at: offset + 0.08)
+                        }
+                        clock.value = offset + (nativeBeforeRelease ? 0.06 : 0.09)
+                        XCTAssertNil(coordinator.handleNativeEvent(
+                            type: .leftMouseDown,
+                            event: try XCTUnwrap(makeMouseEvent(
+                                type: .leftMouseDown, eventNumber: Int64(78 + pairIndex)
+                            ))
+                        ), gesture.rawValue)
+                        clock.value += 0.005
+                        XCTAssertNil(coordinator.handleNativeEvent(
+                            type: .leftMouseUp,
+                            event: try XCTUnwrap(makeMouseEvent(
+                                type: .leftMouseUp, eventNumber: Int64(78 + pairIndex)
+                            ))
+                        ), gesture.rawValue)
+                        if nativeBeforeRelease {
+                            observe([], at: offset + 0.08)
+                        }
+                    }
+                    XCTAssertEqual(recognized, [gesture])
+                    let evidence = try XCTUnwrap(timeline.contactEpisodeID(deviceID: 1, at: clock.value))
+                    clock.value += 0.01
+                    XCTAssertTrue(coordinator.recognize(
+                        gesture: gesture,
+                        deviceID: 1,
+                        evidence: .contactEpisode(evidence),
+                        resolution: resolution
+                    ), gesture.rawValue)
+                    clock.value = 0.50
+                    coordinator.candidateTimelineDidUpdate()
+                    XCTAssertEqual(
+                        postedTypes,
+                        resolution == .middleClick && pairCount == 1 ? [.otherMouseDown, .otherMouseUp] : [],
+                        gesture.rawValue
+                    )
+                    XCTAssertEqual(synthesizedCount, resolution == .middleClick && pairCount == 2 ? 1 : 0)
+                    coordinator.reset()
+                }
+            }
+        }
+    }
+
     func testRejectedTwoFixedTipTapNativePassThroughDoesNotDuplicateThreeFingerTap() throws {
         let clock = LockedMiddleClickTestClock()
         var synthesizedCount = 0
@@ -960,20 +1056,21 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
             timestamp: 0.01,
             contacts: fixedContacts
         ))
-        clock.value = 0.02
+        // Settled fixed fingers followed by a wrong-region contact are a real rejected TipTap.
+        clock.value = 0.11
         coordinator.observe(frame: .init(
             deviceID: 1,
-            timestamp: 0.02,
-            contacts: fixedContacts + [.init(identifier: 3, x: 0.1, y: 0.5)]
+            timestamp: 0.11,
+            contacts: fixedContacts + [.init(identifier: 3, x: 0.9, y: 0.5)]
         ))
         let contactEpisodeID = try XCTUnwrap(
-            timeline.contactEpisodeID(deviceID: 1, at: 0.02)
+            timeline.contactEpisodeID(deviceID: 1, at: 0.11)
         )
-        clock.value = 0.03
-        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.03, contacts: []))
-        XCTAssertTrue(timeline.isQuarantiningRejectedTipTap(deviceID: 1, at: 0.03))
+        clock.value = 0.12
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.12, contacts: []))
+        XCTAssertTrue(timeline.isQuarantiningRejectedTipTap(deviceID: 1, at: 0.12))
 
-        clock.value = 0.04
+        clock.value = 0.13
         let nativeDown = try XCTUnwrap(
             makeMouseEvent(type: .leftMouseDown, eventNumber: 77)
         )
@@ -981,7 +1078,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
             type: .leftMouseDown,
             event: nativeDown
         ))
-        clock.value = 0.045
+        clock.value = 0.135
         let nativeUp = try XCTUnwrap(
             makeMouseEvent(type: .leftMouseUp, eventNumber: 77)
         )
@@ -990,7 +1087,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
             event: nativeUp
         ))
 
-        clock.value = 0.05
+        clock.value = 0.14
         XCTAssertFalse(coordinator.recognize(
             gesture: .threeFingerTap,
             deviceID: 1,
@@ -1045,16 +1142,16 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
                 timestamp: 0.01,
                 contacts: fixedContacts
             ))
-            clock.value = 0.02
+            clock.value = 0.11
             coordinator.observe(frame: .init(
                 deviceID: 1,
-                timestamp: 0.02,
+                timestamp: 0.11,
                 contacts: contacts
             ))
-            clock.value = 0.03
-            coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.03, contacts: []))
+            clock.value = 0.12
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.12, contacts: []))
 
-            clock.value = 0.04
+            clock.value = 0.13
             let firstDown = try XCTUnwrap(
                 makeMouseEvent(type: .leftMouseDown, eventNumber: 501)
             )
@@ -1062,7 +1159,7 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
                 type: .leftMouseDown,
                 event: firstDown
             ), gesture.rawValue)
-            clock.value = 0.045
+            clock.value = 0.135
             let firstUp = try XCTUnwrap(
                 makeMouseEvent(type: .leftMouseUp, eventNumber: 501)
             )
