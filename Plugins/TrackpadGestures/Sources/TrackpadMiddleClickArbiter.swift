@@ -949,6 +949,19 @@ struct TrackpadMiddleClickArbiter: Sendable {
         if let contactEpisodeID {
             candidateEpisodeIDsByDevice[deviceID] = contactEpisodeID
         }
+        // A double tap spans two contact episodes. Keep a passed-through first episode alive
+        // through the second candidate's arbitration window so delayed worker recognition cannot
+        // treat the second episode as an isolated safe gesture.
+        let passedThroughEpisodeIDs = passedThroughContactEpisodeDeadlines.compactMap {
+            episodeID, existingDeadline in
+            episodeID.deviceID == deviceID && existingDeadline > time ? episodeID : nil
+        }
+        for episodeID in passedThroughEpisodeIDs {
+            passedThroughContactEpisodeDeadlines[episodeID] = max(
+                passedThroughContactEpisodeDeadlines[episodeID] ?? deadline,
+                deadline
+            )
+        }
         if isAmbiguous
             || ambiguousDeadlinesByDevice[deviceID] != nil
             || uncorrelatableNativeEventDeadline.map({ $0 > time }) == true
@@ -986,13 +999,18 @@ struct TrackpadMiddleClickArbiter: Sendable {
     ) -> [DeferredAction] {
         var actions = expire(at: time)
         passedThroughContactEpisodeDeadlines[contactEpisodeID] = time + candidateWindow
-        let matchingRecognitions = pendingRecognitions.filter {
-            $0.contactEpisodeID == contactEpisodeID
+        pendingRecognitions.removeAll { recognition in
+            recognition.tipTapEpisodeID == nil
+                && (recognition.contactEpisodeID == contactEpisodeID
+                    || (recognition.requiredNativeClickPairCount > 1
+                        && recognition.deviceID == contactEpisodeID.deviceID))
         }
-        pendingRecognitions.removeAll { $0.contactEpisodeID == contactEpisodeID }
-        actions.append(contentsOf: matchingRecognitions.compactMap { recognition in
-            recognition.tipTapEpisodeID.map(DeferredAction.abandonTipTapRecognition)
-        })
+        if !bufferedEvents.isEmpty,
+           bufferedDeviceID == contactEpisodeID.deviceID,
+           bufferedTipTapEpisodeID == nil {
+            actions.append(.replayBuffered)
+            clearBufferedState()
+        }
         return actions
     }
 
@@ -1006,12 +1024,26 @@ struct TrackpadMiddleClickArbiter: Sendable {
         hasNewerTipTapEpisode: Bool = false
     ) -> RecognitionAttempt {
         var actions = expire(at: time)
-        if let contactEpisodeID,
-           passedThroughContactEpisodeDeadlines[contactEpisodeID] != nil {
-            if let tipTapEpisodeID {
-                actions.append(contentsOf: abandonRecognition(
-                    tipTapEpisodeID: tipTapEpisodeID
-                ))
+        let conflictsWithPassedThroughClick: Bool
+        if tipTapEpisodeID != nil {
+            // A valid TipTap retry has its own exact sub-episode identity even when its fixed
+            // fingers remain in the broader contact episode that contained an earlier rejection.
+            conflictsWithPassedThroughClick = false
+        } else if requiredNativeClickPairCount > 1 {
+            conflictsWithPassedThroughClick = passedThroughContactEpisodeDeadlines.keys.contains {
+                $0.deviceID == deviceID
+            }
+        } else {
+            conflictsWithPassedThroughClick = contactEpisodeID.map {
+                passedThroughContactEpisodeDeadlines[$0] != nil
+            } ?? false
+        }
+        if conflictsWithPassedThroughClick {
+            if !bufferedEvents.isEmpty,
+               bufferedDeviceID == deviceID,
+               bufferedTipTapEpisodeID == nil {
+                actions.append(.replayBuffered)
+                clearBufferedState()
             }
             return RecognitionAttempt(deferredActions: actions, disposition: .rejected)
         }

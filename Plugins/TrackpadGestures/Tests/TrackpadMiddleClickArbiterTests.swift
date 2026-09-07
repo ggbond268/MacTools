@@ -632,6 +632,102 @@ final class TrackpadMiddleClickArbiterTests: XCTestCase {
         XCTAssertEqual(arbiter.expire(at: 0.34), [.synthesizeMiddleClick])
     }
 
+    func testPassedThroughFirstEpisodeRejectsDoubleTapAndReplaysSecondPair() {
+        var arbiter = makeArbiter()
+        let firstEpisode = TrackpadContactEpisodeID(deviceID: 1, sequence: 10)
+        let secondEpisode = TrackpadContactEpisodeID(deviceID: 1, sequence: 11)
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: firstEpisode, at: 0)
+        arbiter.observePassedThroughNativeClick(contactEpisodeID: firstEpisode, at: 0.01)
+
+        // The second tap begins near the end of the first episode's original candidate window.
+        // Its candidate must extend the double-tap arbitration boundary through worker delivery.
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: secondEpisode, at: 0.30)
+        XCTAssertEqual(arbiter.handleNativeEvent(
+            .down(.left),
+            origin: .trackpad(deviceID: 1),
+            at: 0.31,
+            contactEpisodeID: secondEpisode,
+            pairCapacity: 2
+        ).decision, .suppressAndBuffer)
+        XCTAssertEqual(arbiter.handleNativeEvent(
+            .up(.left),
+            origin: .trackpad(deviceID: 1),
+            at: 0.32,
+            contactEpisodeID: secondEpisode,
+            pairCapacity: 2
+        ).decision, .suppressAndBuffer)
+
+        let attempt = arbiter.attemptRecognition(
+            deviceID: 1,
+            contactEpisodeID: secondEpisode,
+            resolution: .middleClick,
+            requiredNativeClickPairCount: 2,
+            at: 0.40
+        )
+
+        XCTAssertEqual(attempt.disposition, .rejected)
+        XCTAssertEqual(attempt.deferredActions, [.replayBuffered])
+        XCTAssertTrue(arbiter.expire(at: 1).isEmpty)
+    }
+
+    func testPassedThroughContactEpisodeDoesNotRejectDistinctValidTipTapEpisode() {
+        var arbiter = makeArbiter()
+        let contactEpisode = TrackpadContactEpisodeID(deviceID: 1, sequence: 10)
+        let tipTapEpisode = TrackpadTipTapEpisodeID(
+            deviceID: 1,
+            fixedFingerCount: 2,
+            sequence: 2
+        )
+        arbiter.observeCandidate(deviceID: 1, contactEpisodeID: contactEpisode, at: 0)
+        arbiter.observePassedThroughNativeClick(contactEpisodeID: contactEpisode, at: 0.01)
+
+        let attempt = arbiter.attemptRecognition(
+            deviceID: 1,
+            contactEpisodeID: contactEpisode,
+            tipTapEpisodeID: tipTapEpisode,
+            resolution: .consume,
+            at: 0.02
+        )
+
+        XCTAssertEqual(attempt.disposition, .pending)
+        XCTAssertTrue(attempt.deferredActions.isEmpty)
+        XCTAssertEqual(arbiter.expire(at: 0.33), [
+            .abandonTipTapRecognition(tipTapEpisode),
+        ])
+    }
+
+    func testPassedThroughEpisodeOnOtherDeviceDoesNotRejectDoubleTap() {
+        var arbiter = makeArbiter()
+        let passedThroughEpisode = TrackpadContactEpisodeID(deviceID: 1, sequence: 10)
+        let otherDeviceEpisode = TrackpadContactEpisodeID(deviceID: 2, sequence: 11)
+        arbiter.observeCandidate(
+            deviceID: 1,
+            contactEpisodeID: passedThroughEpisode,
+            at: 0
+        )
+        arbiter.observePassedThroughNativeClick(
+            contactEpisodeID: passedThroughEpisode,
+            at: 0.01
+        )
+        arbiter.observeCandidate(
+            deviceID: 2,
+            contactEpisodeID: otherDeviceEpisode,
+            at: 0.10
+        )
+
+        let attempt = arbiter.attemptRecognition(
+            deviceID: 2,
+            contactEpisodeID: otherDeviceEpisode,
+            resolution: .middleClick,
+            requiredNativeClickPairCount: 2,
+            at: 0.11
+        )
+
+        XCTAssertEqual(attempt.disposition, .pending)
+        XCTAssertTrue(attempt.deferredActions.isEmpty)
+        XCTAssertEqual(arbiter.expire(at: 0.41), [.synthesizeMiddleClick])
+    }
+
     private func makeArbiter() -> TrackpadMiddleClickArbiter {
         TrackpadMiddleClickArbiter(
             candidateWindow: 0.30,
@@ -906,6 +1002,112 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(synthesizedCount, 0)
         coordinator.reset()
+    }
+
+    func testRejectedTipTapFirstPairCannotDualDispatchMultiFingerDoubleTap() throws {
+        let cases: [(TrackpadGesture, Int, TrackpadNativeClickResolution)] = [
+            (.threeFingerDoubleTap, 3, .middleClick),
+            (.fourFingerDoubleTap, 4, .middleClick),
+            (.fiveFingerDoubleTap, 5, .middleClick),
+            (.threeFingerDoubleTap, 3, .consume),
+            (.fourFingerDoubleTap, 4, .consume),
+            (.fiveFingerDoubleTap, 5, .consume),
+        ]
+
+        for (gesture, fingerCount, resolution) in cases {
+            let clock = LockedMiddleClickTestClock()
+            var synthesizedCount = 0
+            var postedTypes: [CGEventType] = []
+            let coordinator = TrackpadMiddleClickCoordinator(
+                clock: { clock.value },
+                synthesizeMiddleClick: { synthesizedCount += 1 },
+                releaseMiddleButton: {},
+                postEvent: { postedTypes.append($0.type) },
+                eventOrigin: { _ in .unknown }
+            )
+            coordinator.updateClickResolutions([
+                gesture: resolution,
+                .tipTapLeftTwoFixed: .consume,
+            ])
+            let contacts = (1 ... fingerCount).map { identifier in
+                TrackpadContactSnapshot(
+                    identifier: identifier,
+                    x: Double(identifier) / Double(fingerCount + 1),
+                    y: 0.5
+                )
+            }
+            let fixedContacts = Array(contacts.prefix(2))
+
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
+            clock.value = 0.01
+            coordinator.observe(frame: .init(
+                deviceID: 1,
+                timestamp: 0.01,
+                contacts: fixedContacts
+            ))
+            clock.value = 0.02
+            coordinator.observe(frame: .init(
+                deviceID: 1,
+                timestamp: 0.02,
+                contacts: contacts
+            ))
+            clock.value = 0.03
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.03, contacts: []))
+
+            clock.value = 0.04
+            let firstDown = try XCTUnwrap(
+                makeMouseEvent(type: .leftMouseDown, eventNumber: 501)
+            )
+            XCTAssertNotNil(coordinator.handleNativeEvent(
+                type: .leftMouseDown,
+                event: firstDown
+            ), gesture.rawValue)
+            clock.value = 0.045
+            let firstUp = try XCTUnwrap(
+                makeMouseEvent(type: .leftMouseUp, eventNumber: 501)
+            )
+            XCTAssertNotNil(coordinator.handleNativeEvent(
+                type: .leftMouseUp,
+                event: firstUp
+            ), gesture.rawValue)
+
+            clock.value = 0.20
+            coordinator.observe(frame: .init(
+                deviceID: 1,
+                timestamp: 0.20,
+                contacts: contacts
+            ))
+            clock.value = 0.21
+            let secondDown = try XCTUnwrap(
+                makeMouseEvent(type: .leftMouseDown, eventNumber: 502)
+            )
+            XCTAssertNil(coordinator.handleNativeEvent(
+                type: .leftMouseDown,
+                event: secondDown
+            ), gesture.rawValue)
+            clock.value = 0.22
+            let secondUp = try XCTUnwrap(
+                makeMouseEvent(type: .leftMouseUp, eventNumber: 502)
+            )
+            XCTAssertNil(coordinator.handleNativeEvent(
+                type: .leftMouseUp,
+                event: secondUp
+            ), gesture.rawValue)
+            clock.value = 0.23
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: 0.23, contacts: []))
+
+            XCTAssertFalse(coordinator.recognize(
+                gesture: gesture,
+                deviceID: 1,
+                resolution: resolution
+            ), gesture.rawValue)
+            XCTAssertEqual(synthesizedCount, 0, gesture.rawValue)
+            XCTAssertEqual(postedTypes, [
+                .leftMouseDown,
+                .leftMouseUp,
+            ], gesture.rawValue)
+            coordinator.reset()
+        }
     }
 
     func testMixedFixedCountTipTapsUseDistinctEpisodeIDsAcrossRepeatedTwoFixedTaps() throws {
