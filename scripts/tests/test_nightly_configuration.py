@@ -60,10 +60,30 @@ class NightlyConfigurationTests(unittest.TestCase):
         workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")
         signing = workflow.split("- name: Sign app bundle", 1)[1].split("\n      - name:", 1)[0]
         self.assertIn('CLI_BROKER="$APP_PATH/Contents/MacOS/MacToolsCLIBroker"', signing)
-        self.assertLess(signing.index('sign_path "$CLI_BROKER"'), signing.index('"$APP_PATH" --signed'))
-        self.assertIn('--app "$APP_PATH" --signed', signing)
+        self.assertLess(signing.index('sign_path "$CLI_BROKER"'), signing.index('--app "$APP_PATH"'))
+        self.assertIn('CLI_PATH="$DERIVED_DATA/Build/Products/Nightly/mactools"', signing)
+        self.assertLess(signing.index('sign_path "$CLI_PATH"'), signing.index('--app "$APP_PATH"'))
+        self.assertIn('--app "$APP_PATH" --cli "$CLI_PATH" --signed', signing)
         for name in ["nightly.yml", "build.yml"]:
             self.assertRegex((REPO_ROOT / ".github/workflows" / name).read_text(), r'--cli "[^\n]+/Nightly/mactools"')
+
+    def test_nightly_workflow_packages_notarizes_verifies_and_publishes_cli(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")
+        package = workflow.split("- name: Package signed Nightly CLI", 1)[1].split("\n      - name:", 1)[0]
+        notarize = workflow.split("- name: Notarize Nightly app and CLI distributions", 1)[1].split("\n      - name:", 1)[0]
+        checksums = workflow.split("- name: Generate Nightly notes, checksums, and appcast", 1)[1].split("\n      - name:", 1)[0]
+        publication = workflow.split("- name: Upload and publish verified Nightly assets", 1)[1].split("\n      - name:", 1)[0]
+        artifact = workflow.split("- name: Upload Nightly workflow artifact", 1)[1].split("\n      - name:", 1)[0]
+
+        self.assertIn("scripts/nightly-release.py package-cli", package)
+        self.assertIn('--output "$CLI_ARCHIVE_PATH"', package)
+        self.assertIn('notarytool submit "$CLI_ARCHIVE_PATH"', notarize)
+        self.assertIn('shasum -a 256 "$CLI_NAME"', checksums)
+        self.assertIn("scripts/nightly-release.py verify-cli-archive", checksums)
+        self.assertIn('--team-identifier "${{ secrets.APPLE_DEVELOPMENT_TEAM }}"', checksums)
+        for variable in ["CLI_ARCHIVE_PATH", "CLI_SHA256_PATH"]:
+            self.assertIn(f'"${variable}"', publication)
+            self.assertIn(f'${{{{ env.{variable} }}}}', artifact)
 
     def test_generated_plugin_targets_map_nightly_to_release_settings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

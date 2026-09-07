@@ -1,6 +1,6 @@
 # CLI Phase 2 implementation and test checklist
 
-Phase 2 adds narrow action execution to the separately built development CLI. Follow the [Phase 2 contract](../superpowers/specs/2026-08-30-cli-phase-2-execution.md) and the [Phase 0 setup guide](cli-phase-0.md) for signed local installation. This is prototype evidence, not public-release readiness.
+Phase 2 adds narrow action execution to the separately built development CLI. Follow the [Phase 2 contract](../superpowers/specs/2026-08-30-cli-phase-2-execution.md) and the [Phase 0 setup guide](cli-phase-0.md) for signed local installation. Use the [Nightly distribution guide](cli-nightly-distribution.md) when testing a downloadable release artifact. Both paths remain prototype evidence rather than a stable CLI compatibility commitment.
 
 ## Clean-machine contributor smoke test
 
@@ -122,6 +122,6 @@ Confirm success exits 0; malformed/ineligible input 2; unknown targets 3; unavai
 - Timeout and SIGINT cancel the host task and action handle without retrying uncertain delivery.
 - Focused XCTest classes: `CLIActionRunnerTests`, `CLIActionDiscoveryTests`, `CLIDiscoveryProtocolTests`, `CLIArgumentParserTests`, `CLIHostRequestStateTests`, `CLIHostDiscoveryTests`, `CLIExecutableTests`, and existing action-executor/transport/security tests.
 - Run `make ci`, including script tests, changelog validation, the full XCTest suite, and PluginKit v5 binary compatibility.
-- Use isolated, development-signed Phase 2 app/broker/CLI identities on macOS 26 and 27. Verify signatures, hot/cold launch, doctor, discovery, one harmless real action, negative cases, timeout/cancellation where a harmless long-running action exists, and that no existing MacTools installation is stopped or overwritten.
+- Use isolated, development-signed Phase 2 app/broker/CLI identities or same-release Nightly artifacts on macOS 26 and 27. Verify signatures, hot/cold launch, doctor, discovery, one harmless real action, negative cases, timeout/cancellation where a harmless long-running action exists, and that no existing MacTools installation is stopped or overwritten.
 
-Do not execute destructive, privileged, privacy-sensitive, or user-disruptive actions merely to expand smoke coverage. Unit-level fake providers are the acceptance evidence for timeout/cancellation if no harmless real action can exercise those paths. macOS 14/15 and public packaging remain separate follow-ups.
+Do not execute destructive, privileged, privacy-sensitive, or user-disruptive actions merely to expand smoke coverage. Unit-level fake providers are the acceptance evidence for timeout/cancellation if no harmless real action can exercise those paths. macOS 14/15 and stable CLI packaging remain separate follow-ups.
