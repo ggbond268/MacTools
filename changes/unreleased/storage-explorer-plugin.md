@@ -4,4 +4,4 @@ type: added
 area: Storage Explorer
 ---
 
-Added Storage Explorer with nested package size totals and reviewed Trash removal that preserves exact filenames and protects sensitive locations and their containing folders.
+Added Storage Explorer with faster progressive scans, an interactive treemap, largest-file and file-type views, in-memory refresh caching, and reviewed Trash removal.

@@ -29,6 +29,11 @@ public struct StorageItem: Identifiable, Sendable, Equatable {
     public var childCount: Int
     public var children: [StorageItem]
     public var isAccessDenied: Bool
+    public var parentPath: String?
+    public var isIncomplete: Bool = false
+    public var isCloudPlaceholder: Bool = false
+    public var scannedCount: Int = 1
+    public var skippedCount: Int = 0
 
     public init(
         id: String? = nil,
@@ -43,7 +48,8 @@ public struct StorageItem: Identifiable, Sendable, Equatable {
         modificationDate: Date? = nil,
         childCount: Int = 0,
         children: [StorageItem] = [],
-        isAccessDenied: Bool = false
+        isAccessDenied: Bool = false,
+        parentPath: String? = nil
     ) {
         self.id = id ?? path
         self.name = name
@@ -57,6 +63,7 @@ public struct StorageItem: Identifiable, Sendable, Equatable {
         self.modificationDate = modificationDate
         self.childCount = childCount
         self.children = children
+        self.parentPath = parentPath
         self.isAccessDenied = isAccessDenied
     }
 
@@ -99,7 +106,11 @@ public struct StorageItem: Identifiable, Sendable, Equatable {
     }
 
     public static func == (lhs: StorageItem, rhs: StorageItem) -> Bool {
-        lhs.path == rhs.path && lhs.size == rhs.size && lhs.childCount == rhs.childCount
+        lhs.path == rhs.path && lhs.size == rhs.size && lhs.allocatedSize == rhs.allocatedSize
+            && lhs.childCount == rhs.childCount && lhs.isIncomplete == rhs.isIncomplete
+            && lhs.isAccessDenied == rhs.isAccessDenied && lhs.modificationDate == rhs.modificationDate
+            && lhs.skippedCount == rhs.skippedCount && lhs.scannedCount == rhs.scannedCount
+            && lhs.isCloudPlaceholder == rhs.isCloudPlaceholder
     }
 }
 
@@ -109,6 +120,9 @@ public struct StorageExplorerScanProgress: Sendable, Equatable {
     public var filesScanned: Int
     public var bytesScanned: Int64
     public var currentPath: String
+    public var elapsed: TimeInterval = 0
+    public var skippedCount: Int = 0
+    public var cachedDirectories: Int = 0
 
     public init(filesScanned: Int = 0, bytesScanned: Int64 = 0, currentPath: String = "") {
         self.filesScanned = filesScanned

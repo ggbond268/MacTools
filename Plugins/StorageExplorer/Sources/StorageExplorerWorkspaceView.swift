@@ -1,556 +1,287 @@
 import AppKit
-import Foundation
 import MacToolsPluginKit
 import SwiftUI
 
 public struct StorageExplorerWorkspaceView: View {
     @ObservedObject public var controller: StorageExplorerController
     public let localization: PluginLocalization
+    @State private var showsInspector = false
+    @State private var sortOrder = [KeyPathComparator(\StorageExplorerRow.bytes, order: .reverse)]
 
-    public init(
-        controller: StorageExplorerController,
-        localization: PluginLocalization = PluginLocalization(bundle: .main)
-    ) {
+    public init(controller: StorageExplorerController,
+                localization: PluginLocalization = PluginLocalization(bundle: .main)) {
         self.controller = controller
         self.localization = localization
     }
 
+    private func text(_ key: String, _ fallback: String) -> String {
+        localization.string("storageExplorer." + key, defaultValue: fallback)
+    }
+
     public var body: some View {
-        VStack(spacing: PluginSettingsTheme.Spacing.section) {
-            topControlBar
-
-            if case let .scanning(progress) = controller.scanState {
-                scanningBanner(progress: progress)
-            }
-
-            if let current = controller.currentDirectory {
-                navigationAndFilterBar
-                selectionBanner
-                fileListView(current: current)
-            } else if case .scanning = controller.scanState {
-                scanningPlaceholderView
+        GeometryReader { geometry in
+            if geometry.size.height < 520 {
+                ScrollView { workspace(width: geometry.size.width, height: 520).frame(height: 520) }
             } else {
-                emptyStateView
-            }
-        }
-        .padding(.horizontal, PluginSettingsTheme.Spacing.pagePadding)
-        .padding(.vertical, PluginSettingsTheme.Spacing.section)
-        .sheet(isPresented: $controller.isConfirmingTrash) {
-            trashConfirmationSheet
-        }
-    }
-
-    // MARK: - Top Control Bar
-
-    private var topControlBar: some View {
-        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-            Button {
-                controller.scanHomeFolder()
-            } label: {
-                Label(
-                    localization.string("storageExplorer.homeFolder", defaultValue: "个人目录"),
-                    systemImage: "house"
-                )
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Button {
-                controller.selectFolderAndScan()
-            } label: {
-                Label(
-                    localization.string("storageExplorer.selectFolder", defaultValue: "选择文件夹..."),
-                    systemImage: "folder.badge.plus"
-                )
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Spacer()
-
-            if case .scanning = controller.scanState {
-                Button(role: .cancel) {
-                    controller.cancelScan()
-                } label: {
-                    Label(
-                        localization.string("storageExplorer.cancel", defaultValue: "取消"),
-                        systemImage: "xmark"
-                    )
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            } else if let rootURL = controller.scanRootURL {
-                Button {
-                    controller.startScan(at: rootURL)
-                } label: {
-                    Label(
-                        localization.string("storageExplorer.rescan", defaultValue: "重新扫描"),
-                        systemImage: "arrow.clockwise"
-                    )
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                workspace(width: geometry.size.width, height: geometry.size.height)
             }
         }
     }
 
-    // MARK: - Scanning Banner
-
-    private func scanningBanner(progress: StorageExplorerScanProgress) -> some View {
-        HStack(spacing: 12) {
-            ProgressView()
-                .controlSize(.small)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(localization.string("storageExplorer.scanning", defaultValue: "正在扫描..."))
-                    .font(PluginSettingsTheme.Typography.rowTitle)
-                Text(progress.currentPath)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer()
-            Text(String(format: localization.string("storageExplorer.filesScannedFormat", defaultValue: "已扫描 %d 个项目"), progress.filesScanned))
-                .font(PluginSettingsTheme.Typography.monospacedValue)
-                .foregroundStyle(.secondary)
-        }
-        .padding(PluginSettingsTheme.Spacing.cardContent)
-        .pluginSettingsCardBackground(.standard)
-    }
-
-    // MARK: - Navigation & Filter Bar
-
-    private var navigationAndFilterBar: some View {
-        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-            Button {
-                controller.navigateUp()
-            } label: {
-                Image(systemName: "chevron.left")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(controller.navigationStack.count <= 1)
-
-            // Breadcrumbs
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(Array(controller.navigationStack.enumerated()), id: \.offset) { index, item in
-                        Button {
-                            controller.navigateToBreadcrumb(at: index)
-                        } label: {
-                            Text(index == 0 ? (item.name.isEmpty ? "/" : item.name) : item.name)
-                                .font(index == controller.navigationStack.count - 1
-                                    ? PluginSettingsTheme.Typography.emphasizedRowTitle
-                                    : PluginSettingsTheme.Typography.rowTitle)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(index == controller.navigationStack.count - 1 ? .primary : .secondary)
-
-                        if index < controller.navigationStack.count - 1 {
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
+    private func workspace(width: CGFloat, height: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+            controls
+            if controller.rootItem != nil || controller.isScanning {
+                StorageExplorerProgressView(status: controller.status, scanning: controller.isScanning, localization: localization)
+                navigation(compact: width < 780)
+                if width >= 780 {
+                    HSplitView {
+                        explorer(height: height).frame(minWidth: 400)
+                        inspector.frame(minWidth: 190, idealWidth: 220, maxWidth: 280,
+                                        maxHeight: .infinity, alignment: .topLeading)
                     }
-                }
-            }
-
-            Spacer()
-
-            // Search filter field
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField(
-                    localization.string("storageExplorer.searchPlaceholder", defaultValue: "过滤当前目录..."),
-                    text: $controller.searchQuery
-                )
-                .textFieldStyle(.plain)
-                .frame(width: 140)
-
-                if !controller.searchQuery.isEmpty {
-                    Button {
-                        controller.searchQuery = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(PluginSettingsTheme.Palette.recessedControlBackground)
-            .clipShape(RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.field, style: .continuous))
-        }
-    }
-
-    // MARK: - Selection Review Banner
-
-    @ViewBuilder
-    private var selectionBanner: some View {
-        if !controller.basket.isEmpty {
-            HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color.accentColor)
-
-                Text(String(
-                    format: localization.string("storageExplorer.selectedItemsFormat", defaultValue: "已选 %d 个项目（共 %@）"),
-                    controller.basket.count,
-                    ByteCountFormatter.string(fromByteCount: controller.totalSelectedBytes, countStyle: .file)
-                ))
-                .font(PluginSettingsTheme.Typography.rowTitle)
-
-                Spacer()
-
-                Button {
-                    controller.clearSelection()
-                } label: {
-                    Text(localization.string("storageExplorer.clearSelection", defaultValue: "取消选择"))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Button(role: .destructive) {
-                    controller.confirmTrash()
-                } label: {
-                    Label(
-                        localization.string("storageExplorer.moveToTrash", defaultValue: "移至废纸篓..."),
-                        systemImage: "trash"
-                    )
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding(PluginSettingsTheme.Spacing.cardContent)
-            .pluginSettingsCardBackground(.standard)
-        }
-    }
-
-    // MARK: - File List View
-
-    private func fileListView(current: StorageItem) -> some View {
-        let items = filteredItems(in: current)
-        let totalSize = max(current.size, 1)
-
-        return VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                Button {
-                    if controller.basket.count == items.count {
-                        controller.clearSelection()
-                    } else {
-                        controller.selectAllVisible(items: items)
-                    }
-                } label: {
-                    Image(systemName: controller.basket.count == items.count && !items.isEmpty
-                        ? "checkmark.square.fill"
-                        : (controller.basket.isEmpty ? "square" : "minus.square.fill"))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-
-                Text(localization.string("storageExplorer.nameColumn", defaultValue: "名称"))
-                    .font(PluginSettingsTheme.Typography.secondaryLabel)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text(localization.string("storageExplorer.proportionColumn", defaultValue: "占比"))
-                    .font(PluginSettingsTheme.Typography.secondaryLabel)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 140, alignment: .leading)
-
-                Text(localization.string("storageExplorer.sizeColumn", defaultValue: "大小"))
-                    .font(PluginSettingsTheme.Typography.secondaryLabel)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 80, alignment: .trailing)
-
-                Text(localization.string("storageExplorer.actionsColumn", defaultValue: "操作"))
-                    .font(PluginSettingsTheme.Typography.secondaryLabel)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 60, alignment: .trailing)
-            }
-            .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
-            .padding(.vertical, 8)
-
-            PluginSettingsListDivider()
-
-            if items.isEmpty {
-                HStack {
-                    Spacer()
-                    Text(localization.string("storageExplorer.noMatchingItems", defaultValue: "没有匹配的项目"))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 32)
-                    Spacer()
-                }
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(items) { item in
-                            fileRow(item: item, totalDirectorySize: totalSize)
-                            if item.id != items.last?.id {
-                                PluginSettingsListDivider()
-                            }
-                        }
-                    }
-                }
-                .frame(maxHeight: .infinity)
-            }
-        }
-        .pluginSettingsCardBackground(.standard)
-    }
-
-    private func fileRow(item: StorageItem, totalDirectorySize: Int64) -> some View {
-        let isSelected = controller.basket.contains(item.path)
-        let proportion = totalDirectorySize > 0 ? Double(item.size) / Double(totalDirectorySize) : 0.0
-
-        return HStack(spacing: 12) {
-            // Checkbox
-            Button {
-                controller.toggleSelection(path: item.path)
-            } label: {
-                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-
-            // Icon
-            Image(systemName: item.iconSystemName)
-                .pluginSettingsRowIconStyle(item.isDirectory ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(HierarchicalShapeStyle.secondary))
-
-            // Name and detail
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name)
-                    .font(PluginSettingsTheme.Typography.rowTitle)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                if item.isDirectory && !item.isPackage {
-                    Text(String(format: localization.string("storageExplorer.itemsCountFormat", defaultValue: "%d 个项目"), item.childCount))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                } else if let modDate = item.modificationDate {
-                    Text(modDate.formatted(date: .abbreviated, time: .shortened))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            // Proportional Size Bar
-            HStack(spacing: 6) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(PluginSettingsTheme.Palette.recessedControlBackground)
-                        Capsule()
-                            .fill(item.isDirectory ? Color.accentColor : Color.orange)
-                            .frame(width: max(geo.size.width * CGFloat(proportion), 3))
-                    }
-                }
-                .frame(width: 80, height: 8)
-
-                Text(String(format: "%.1f%%", proportion * 100))
-                    .font(PluginSettingsTheme.Typography.monospacedValue)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 50, alignment: .trailing)
-            }
-            .frame(width: 140, alignment: .leading)
-
-            // Formatted Size
-            Text(item.formattedSize)
-                .font(PluginSettingsTheme.Typography.monospacedValue)
-                .frame(width: 80, alignment: .trailing)
-
-            // Actions
-            HStack(spacing: 6) {
-                Button {
-                    controller.revealInFinder(path: item.path)
-                } label: {
-                    Image(systemName: "arrow.up.forward.app")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(localization.string("storageExplorer.revealInFinder", defaultValue: "在访达中显示"))
-
-                if item.isDirectory && !item.isPackage {
-                    Button {
-                        controller.drillDown(to: item)
-                    } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
                 } else {
-                    Spacer().frame(width: 14)
+                    explorer(height: height)
                 }
+                reviewBar
+            } else {
+                ContentUnavailableView(text("emptyStateTitle", "选择要分析的文件夹"), systemImage: "internaldrive",
+                    description: Text(text("exploreDescription", "查看空间分布、查找大文件，审阅后移至废纸篓。")))
             }
-            .frame(width: 60, alignment: .trailing)
+            if controller.isStale {
+                Label(text("changedOnDisk", "文件已更改，刷新后可继续审阅。"), systemImage: "arrow.triangle.2.circlepath")
+                    .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.orange)
+            }
+            if let error = controller.lastErrorMessage {
+                Text(error).font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.red).textSelection(.enabled)
+            }
+            if let success = controller.lastSuccessMessage {
+                Text(success).font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
+            }
         }
-        .pluginSettingsListRowPadding()
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            if item.isDirectory && !item.isPackage {
+        .padding(PluginSettingsTheme.Spacing.section)
+        .sheet(isPresented: $controller.isConfirmingTrash) { confirmation }
+        .onChange(of: sortOrder) { _, order in
+            guard let first = order.first else { return }
+            let key: StorageExplorerSort = first.keyPath == \StorageExplorerRow.name ? .name
+                : first.keyPath == \StorageExplorerRow.kind ? .kind
+                : first.keyPath == \StorageExplorerRow.modified ? .modified : .size
+            controller.setSort(key, ascending: first.order == .forward)
+        }
+    }
+
+    private func explorer(height: CGFloat) -> some View {
+        VStack(spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+            StorageExplorerTreemapView(rows: controller.chartRows, selection: $controller.selectedPath,
+                otherLabel: text("other", "其他"), emptyLabel: text("noSizedItems", "尚无可显示的大小")) { row in
+                controller.drillDown(to: row.item)
+            }
+            .frame(minHeight: 90, idealHeight: min(height * 0.28, 230), maxHeight: min(height * 0.38, 290))
+            fileTable.frame(minHeight: 110, maxHeight: .infinity)
+            if controller.matchingCount > controller.rows.count {
+                Text(String(format: text("limitedRows", "显示前 %d 项，共 %d 项；搜索可缩小范围。"),
+                            controller.rows.count, controller.matchingCount))
+                    .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var controls: some View {
+        HStack {
+            Button { controller.scanHomeFolder() } label: { Label(text("homeFolder", "个人目录"), systemImage: "house") }
+            Button { controller.selectFolderAndScan() } label: { Label(text("selectFolder", "选择文件夹…"), systemImage: "folder.badge.plus") }
+            Spacer()
+            if controller.isScanning {
+                Button(text("cancel", "取消"), role: .cancel) { controller.cancelScan() }
+            } else if let root = controller.scanRootURL {
+                Button { controller.startScan(at: root) } label: { Label(text("refresh", "刷新"), systemImage: "arrow.clockwise") }
+                    .contextMenu {
+                        Button(text("rescan", "重新扫描")) { controller.startScan(at: root, force: true) }
+                    }
+            }
+        }
+        .buttonStyle(.bordered).controlSize(.small)
+        .disabled(controller.isExecutingTrash)
+    }
+
+    private func navigation(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(controller.navigationStack.enumerated()), id: \.element.path) { index, item in
+                        if index > 0 { Image(systemName: "chevron.right").foregroundStyle(.tertiary) }
+                        Button(item.name.isEmpty ? "/" : item.name) { controller.navigateToBreadcrumb(at: index) }
+                            .buttonStyle(.plain)
+                    }
+                }
+                .font(PluginSettingsTheme.Typography.rowTitle)
+            }
+            HStack {
+                Picker(text("viewMode", "视图"), selection: $controller.mode) {
+                    Text(text("folders", "文件夹")).tag(StorageExplorerMode.folders)
+                    Text(text("largestFiles", "大文件")).tag(StorageExplorerMode.largestFiles)
+                    Text(text("fileTypes", "文件类型")).tag(StorageExplorerMode.fileTypes)
+                }.pickerStyle(.segmented).frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
+                Picker(text("sizeMetric", "大小"), selection: $controller.metric) {
+                    Text(text("logicalSize", "文件大小")).tag(StorageExplorerMetric.logical)
+                    Text(text("allocatedSize", "占用空间")).tag(StorageExplorerMetric.allocated)
+                }.labelsHidden().frame(width: 120)
+                Spacer(minLength: 8)
+                if compact {
+                    Button { showsInspector.toggle() } label: { Image(systemName: "info.circle") }
+                        .help(text("details", "详细信息"))
+                        .popover(isPresented: $showsInspector) { inspector.frame(width: 280, height: 420).padding(12) }
+                } else {
+                    TextField(text("search", "搜索…"), text: $controller.searchQuery)
+                        .textFieldStyle(.roundedBorder).frame(minWidth: 100, idealWidth: 150, maxWidth: 200)
+                }
+            }.controlSize(.small)
+            if compact {
+                TextField(text("search", "搜索…"), text: $controller.searchQuery).textFieldStyle(.roundedBorder)
+            }
+        }
+    }
+
+    private var fileTable: some View {
+        Table(controller.rows, selection: $controller.selectedPath, sortOrder: $sortOrder) {
+            TableColumn(text("nameColumn", "名称"), value: \.name) { row in
+                HStack(spacing: 6) {
+                    Image(systemName: row.item.iconSystemName).foregroundStyle(.secondary)
+                    Text(row.name).lineLimit(1).truncationMode(.middle)
+                    if row.item.isIncomplete { Image(systemName: "exclamationmark.circle").foregroundStyle(.orange) }
+                    if controller.basket.contains(row.id) { Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint) }
+                }
+                .help(row.item.path)
+            }.width(min: 140, ideal: 220)
+            TableColumn(text("sizeColumn", "大小"), value: \.bytes) { row in
+                Text(row.sizeLabel).monospacedDigit()
+            }.width(min: 70, ideal: 90)
+            TableColumn(text("proportionColumn", "占比")) { row in Text(row.percentage).monospacedDigit() }
+                .width(min: 45, ideal: 55)
+            TableColumn(text("kind", "类型"), value: \.kind) { row in
+                Text(row.item.isDirectory && !row.item.isPackage ? text("folders", "文件夹") : row.kind)
+            }.width(min: 60, ideal: 80)
+            TableColumn(text("modified", "修改日期"), value: \.modified) { row in Text(row.dateLabel) }
+                .width(min: 80, ideal: 95)
+        }
+        .contextMenu(forSelectionType: String.self) { paths in
+            if let path = paths.first, let item = controller.rows.first(where: { $0.id == path })?.item {
+                Button(text("openFolder", "打开文件夹")) { controller.drillDown(to: item) }
+                    .disabled(!item.isDirectory || item.isPackage)
+                Button(text("revealInFinder", "在访达中显示")) { controller.revealInFinder(path: path) }
+                    .disabled(path.hasPrefix("type:"))
+                Button(text("addToReview", "加入审阅")) { controller.toggleSelection(path: path) }
+                    .disabled(!controller.canStage(item))
+            }
+        } primaryAction: { paths in
+            if let path = paths.first, let item = controller.rows.first(where: { $0.id == path })?.item {
                 controller.drillDown(to: item)
             }
         }
+        .accessibilityLabel(text("results", "扫描结果"))
     }
 
-    private func filteredItems(in directory: StorageItem) -> [StorageItem] {
-        let query = controller.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if query.isEmpty {
-            return directory.children
-        }
-        return directory.children.filter { $0.name.lowercased().contains(query) }
-    }
-
-    // MARK: - Empty State & Placeholders
-
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "internaldrive")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-
-            Text(localization.string("storageExplorer.emptyStateTitle", defaultValue: "选择要分析的文件夹"))
-                .font(PluginSettingsTheme.Typography.pageTitle)
-
-            Text(localization.string("storageExplorer.emptyStateDescription", defaultValue: "快速扫描任意文件夹或个人目录，直观了解磁盘占用分布。"))
-                .font(PluginSettingsTheme.Typography.pageDescription)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 400)
-
-            HStack(spacing: 12) {
-                Button {
-                    controller.scanHomeFolder()
-                } label: {
-                    Label(
-                        localization.string("storageExplorer.homeFolder", defaultValue: "扫描个人目录"),
-                        systemImage: "house.fill"
-                    )
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-
-                Button {
-                    controller.selectFolderAndScan()
-                } label: {
-                    Label(
-                        localization.string("storageExplorer.selectFolder", defaultValue: "选择文件夹..."),
-                        systemImage: "folder.badge.plus"
-                    )
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-            }
-            .padding(.top, 8)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.vertical, 48)
-        .pluginSettingsCardBackground(.standard)
-    }
-
-    private var scanningPlaceholderView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .controlSize(.large)
-            Text(localization.string("storageExplorer.scanning", defaultValue: "正在扫描目录结构..."))
-                .font(PluginSettingsTheme.Typography.rowTitle)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.vertical, 48)
-        .pluginSettingsCardBackground(.standard)
-    }
-
-    // MARK: - Trash Confirmation Sheet
-
-    private var trashConfirmationSheet: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.section) {
-            HStack(spacing: 8) {
-                Image(systemName: "trash.fill")
-                    .foregroundStyle(Color.red)
-                    .font(.title2)
-                Text(localization.string("storageExplorer.confirmTrashTitle", defaultValue: "移至废纸篓确认"))
-                    .font(PluginSettingsTheme.Typography.sectionTitle)
-            }
-
-            Text(localization.string("storageExplorer.confirmTrashMessage", defaultValue: "所选项目将被移动至 macOS 废纸篓。如有需要，您可以从废纸篓恢复它们。"))
-                .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(.secondary)
-
-            // Items list with safety validation
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(Array(controller.basket), id: \.self) { path in
-                        let validation = controller.safetyPolicy.validatePathForRemoval(
-                            path,
-                            withinRoot: controller.scanRootURL?.path ?? ""
-                        )
-
-                        HStack {
-                            Image(systemName: validation.isAllowed ? "doc.fill" : "exclamationmark.triangle.fill")
-                                .foregroundStyle(validation.isAllowed ? Color.secondary : Color.orange)
-
-                            Text(path)
-                                .font(PluginSettingsTheme.Typography.monospacedValue)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-
-                            Spacer()
-
-                            if !validation.isAllowed {
-                                Text(validation.reason ?? "受保护")
-                                    .font(PluginSettingsTheme.Typography.statusBadge)
-                                    .foregroundStyle(.red)
-                            }
+    private var inspector: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+                Label(text("details", "详细信息"), systemImage: "info.circle")
+                    .font(PluginSettingsTheme.Typography.sectionTitle).foregroundStyle(.secondary)
+                if let item = controller.inspectedItem {
+                    Text(item.name).font(PluginSettingsTheme.Typography.emphasizedRowTitle).textSelection(.enabled)
+                    if !item.path.hasPrefix("type:") {
+                        Text(item.path).font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    }
+                    detail(text("logicalSize", "文件大小"), ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file))
+                    detail(text("allocatedSize", "占用空间"), ByteCountFormatter.string(fromByteCount: item.allocatedSize, countStyle: .file))
+                    if item.isAccessDenied { Label(text("accessDenied", "无访问权限"), systemImage: "lock.fill").foregroundStyle(.orange) }
+                    if item.isCloudPlaceholder { Label(text("cloudPlaceholder", "仅在云端"), systemImage: "icloud").foregroundStyle(.secondary) }
+                    if item.isIncomplete { Text(text("incomplete", "大小尚不完整" )).foregroundStyle(.orange) }
+                    Text(text("spaceNote", "占用空间不等于可释放空间；共享数据和废纸篓会影响实际可用容量。"))
+                        .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
+                    if !item.path.hasPrefix("type:") {
+                        Button(text("revealInFinder", "在访达中显示")) { controller.revealInFinder(path: item.path) }
+                        Button(controller.basket.contains(item.path) ? text("removeFromReview", "移出审阅") : text("addToReview", "加入审阅")) {
+                            controller.toggleSelection(path: item.path)
+                        }.disabled(!controller.canStage(item))
+                        if !item.isDirectory && !item.isSymlink && !item.isCloudPlaceholder {
+                            StorageExplorerQuickLookView(url: item.url).frame(height: 170)
                         }
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(PluginSettingsTheme.Palette.recessedControlBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.field, style: .continuous))
                     }
+                } else {
+                    Text(text("selectToInspect", "选择图块或列表项目以查看详情。"))
+                        .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
                 }
-            }
-            .frame(maxHeight: 200)
-
-            HStack {
-                Text(String(
-                    format: localization.string("storageExplorer.selectedItemsFormat", defaultValue: "共 %d 个项目（%@）"),
-                    controller.basket.count,
-                    ByteCountFormatter.string(fromByteCount: controller.totalSelectedBytes, countStyle: .file)
-                ))
-                .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-
-                Spacer()
-
-                Button(localization.string("storageExplorer.cancel", defaultValue: "取消")) {
-                    controller.isConfirmingTrash = false
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-
-                Button(role: .destructive) {
-                    Task {
-                        await controller.executeTrash()
-                    }
-                } label: {
-                    if controller.isExecutingTrash {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text(localization.string("storageExplorer.confirmTrashButton", defaultValue: "确认移至废纸篓"))
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .disabled(controller.isExecutingTrash)
-            }
+            }.padding(.leading, 12).padding(.trailing, 4)
         }
-        .padding(PluginSettingsTheme.Spacing.pagePadding)
-        .frame(minWidth: 480, minHeight: 340)
+        .buttonStyle(.bordered).controlSize(.small)
+    }
+
+    private func detail(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
+            Text(value).font(PluginSettingsTheme.Typography.monospacedValue)
+        }
+    }
+
+    private var reviewBar: some View {
+        HStack {
+            Button(text("selectVisible", "选择列表项目")) { controller.selectAllVisible(items: controller.rows.map(\.item)) }
+                .disabled(controller.isScanning || controller.isStale || controller.mode == .fileTypes)
+            Spacer()
+            Text(String(format: text("selectedItemsFormat", "已选 %d 个项目（共 %@）"), controller.basket.count,
+                ByteCountFormatter.string(fromByteCount: controller.totalSelectedBytes, countStyle: .file)))
+                .font(PluginSettingsTheme.Typography.rowDescription).monospacedDigit()
+            Button(text("clearSelection", "取消选择")) { controller.clearSelection() }.disabled(controller.basket.isEmpty)
+            Button(text("review", "审阅…")) { controller.confirmTrash() }
+                .buttonStyle(.borderedProminent)
+                .disabled(controller.basket.isEmpty || controller.isScanning || controller.isStale)
+        }.buttonStyle(.bordered).controlSize(.small)
+    }
+
+    private var confirmation: some View {
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.section) {
+            Label(text("confirmTrashTitle", "移至废纸篓确认"), systemImage: "trash")
+                .font(PluginSettingsTheme.Typography.sectionTitle)
+            Text(text("confirmTrashMessage", "所选项目将移至 macOS 废纸篓，可从废纸篓恢复。"))
+            List(controller.reviewItems) { item in
+                VStack(alignment: .leading) {
+                    Text(item.name)
+                    Text(item.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+            }.frame(height: 220)
+            Text(String(format: text("selectedItemsFormat", "已选 %d 个项目（共 %@）"), controller.reviewItems.count,
+                ByteCountFormatter.string(fromByteCount: controller.reviewItems.reduce(0) { $0 + controller.metric.bytes($1) }, countStyle: .file)))
+            HStack {
+                Spacer()
+                Button(text("cancel", "取消"), role: .cancel) { controller.isConfirmingTrash = false }
+                Button(text("moveToTrash", "移至废纸篓…"), role: .destructive) { Task { await controller.executeTrash() } }
+                    .disabled(controller.isStale || controller.isExecutingTrash)
+            }
+        }.padding(24).frame(width: 540)
+            .interactiveDismissDisabled(controller.isExecutingTrash)
+    }
+}
+
+private struct StorageExplorerProgressView: View {
+    @ObservedObject var status: StorageExplorerScanStatus
+    let scanning: Bool
+    let localization: PluginLocalization
+    var body: some View {
+        HStack(spacing: 16) {
+            if scanning { ProgressView().controlSize(.small) }
+            Text(ByteCountFormatter.string(fromByteCount: status.progress.bytesScanned, countStyle: .file))
+                .font(PluginSettingsTheme.Typography.emphasizedRowTitle).monospacedDigit()
+            Text(String(format: localization.string("storageExplorer.filesScannedFormat", defaultValue: "已扫描 %d 个项目"), status.progress.filesScanned))
+            Text(String(format: "%.1f s", status.progress.elapsed)).monospacedDigit()
+            if status.progress.skippedCount > 0 {
+                Label(String(format: localization.string("storageExplorer.skippedCount", defaultValue: "跳过 %d 项"), status.progress.skippedCount),
+                      systemImage: "exclamationmark.circle").foregroundStyle(.orange)
+            }
+            Spacer()
+            if scanning { Text(status.progress.currentPath).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary) }
+        }
+        .font(PluginSettingsTheme.Typography.rowDescription)
+        .padding(12).pluginSettingsCardBackground(.standard)
     }
 }

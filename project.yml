@@ -13,6 +13,17 @@ packages:
 include:
 - path: Configs/GeneratedPlugins.yml
 targets:
+  MacToolsFileSystem:
+    type: library.static
+    platform: macOS
+    deploymentTarget: '14.0'
+    sources:
+    - path: Sources/MacToolsFileSystem
+    settings:
+      base:
+        PRODUCT_MODULE_NAME: MacToolsFileSystem
+        SWIFT_VERSION: 6.0
+        CODE_SIGNING_ALLOWED: false
   MacToolsCLIProtocol:
     type: library.static
     platform: macOS
@@ -89,6 +100,7 @@ targets:
     - path: Sources
       excludes:
       - "**/.gitkeep"
+      - MacToolsFileSystem/**
       - MacToolsPluginKit/**
       - MacToolsAppIntents/**
       - MacToolsCLIProtocol/**

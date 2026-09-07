@@ -65,6 +65,8 @@ Unless a file is clearly identified as third-party material under separate terms
 - Plugins that intercept pointer events must declare Accessibility permission, stop their event tap on deactivation, and re-enable a tap disabled by macOS.
 - Plugins that move or resize windows must use public Accessibility APIs for ordinary position and size writes, revalidate the focused window immediately before writing, calculate against the current display visible frame, and keep pure multi-display geometry independently testable. Capabilities unavailable through Accessibility may use a narrowly scoped, dynamically loaded, version-gated private API after review and must fail closed when unsupported.
 
+Shared filesystem metadata code lives in `Sources/MacToolsFileSystem`. Disk Clean and Storage Explorer link this static module into their bundles; their core targets use it as a build dependency. Keep cleanup policy in the owning plugin and run both plugins' filesystem tests after changing the shared parser.
+
 ## Testing
 - Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
