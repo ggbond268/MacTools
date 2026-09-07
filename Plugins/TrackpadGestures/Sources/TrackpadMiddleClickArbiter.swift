@@ -889,6 +889,7 @@ struct TrackpadMiddleClickArbiter: Sendable {
     private var bufferedPairCapacity = 1
     private var bufferedDeadline: TimeInterval?
     private var pendingRecognitions: [PendingRecognition] = []
+    private var passedThroughContactEpisodeDeadlines: [TrackpadContactEpisodeID: TimeInterval] = [:]
     private var convertedButton: Button?
     private var convertedDeviceID: UInt64?
     private var convertedReleaseDeadline: TimeInterval?
@@ -948,6 +949,19 @@ struct TrackpadMiddleClickArbiter: Sendable {
         if let contactEpisodeID {
             candidateEpisodeIDsByDevice[deviceID] = contactEpisodeID
         }
+        // A double tap spans two contact episodes. Keep a passed-through first episode alive
+        // through the second candidate's arbitration window so delayed worker recognition cannot
+        // treat the second episode as an isolated safe gesture.
+        let passedThroughEpisodeIDs = passedThroughContactEpisodeDeadlines.compactMap {
+            episodeID, existingDeadline in
+            episodeID.deviceID == deviceID && existingDeadline > time ? episodeID : nil
+        }
+        for episodeID in passedThroughEpisodeIDs {
+            passedThroughContactEpisodeDeadlines[episodeID] = max(
+                passedThroughContactEpisodeDeadlines[episodeID] ?? deadline,
+                deadline
+            )
+        }
         if isAmbiguous
             || ambiguousDeadlinesByDevice[deviceID] != nil
             || uncorrelatableNativeEventDeadline.map({ $0 > time }) == true
@@ -976,6 +990,30 @@ struct TrackpadMiddleClickArbiter: Sendable {
             .deferredActions
     }
 
+    /// Records that the native click for an exact contact episode was already delivered to macOS.
+    /// A later recognition for the same episode must not synthesize a second click.
+    @discardableResult
+    mutating func observePassedThroughNativeClick(
+        contactEpisodeID: TrackpadContactEpisodeID,
+        at time: TimeInterval
+    ) -> [DeferredAction] {
+        var actions = expire(at: time)
+        passedThroughContactEpisodeDeadlines[contactEpisodeID] = time + candidateWindow
+        pendingRecognitions.removeAll { recognition in
+            recognition.tipTapEpisodeID == nil
+                && (recognition.contactEpisodeID == contactEpisodeID
+                    || (recognition.requiredNativeClickPairCount > 1
+                        && recognition.deviceID == contactEpisodeID.deviceID))
+        }
+        if !bufferedEvents.isEmpty,
+           bufferedDeviceID == contactEpisodeID.deviceID,
+           bufferedTipTapEpisodeID == nil {
+            actions.append(.replayBuffered)
+            clearBufferedState()
+        }
+        return actions
+    }
+
     mutating func attemptRecognition(
         deviceID: UInt64,
         contactEpisodeID: TrackpadContactEpisodeID? = nil,
@@ -986,6 +1024,29 @@ struct TrackpadMiddleClickArbiter: Sendable {
         hasNewerTipTapEpisode: Bool = false
     ) -> RecognitionAttempt {
         var actions = expire(at: time)
+        let conflictsWithPassedThroughClick: Bool
+        if tipTapEpisodeID != nil {
+            // A valid TipTap retry has its own exact sub-episode identity even when its fixed
+            // fingers remain in the broader contact episode that contained an earlier rejection.
+            conflictsWithPassedThroughClick = false
+        } else if requiredNativeClickPairCount > 1 {
+            conflictsWithPassedThroughClick = passedThroughContactEpisodeDeadlines.keys.contains {
+                $0.deviceID == deviceID
+            }
+        } else {
+            conflictsWithPassedThroughClick = contactEpisodeID.map {
+                passedThroughContactEpisodeDeadlines[$0] != nil
+            } ?? false
+        }
+        if conflictsWithPassedThroughClick {
+            if !bufferedEvents.isEmpty,
+               bufferedDeviceID == deviceID,
+               bufferedTipTapEpisodeID == nil {
+                actions.append(.replayBuffered)
+                clearBufferedState()
+            }
+            return RecognitionAttempt(deferredActions: actions, disposition: .rejected)
+        }
         let hasExactEvidence = contactEpisodeID != nil || tipTapEpisodeID != nil
         let candidateMatches = candidateDeadlinesByDevice[deviceID] != nil
             && (contactEpisodeID == nil
@@ -1377,6 +1438,9 @@ struct TrackpadMiddleClickArbiter: Sendable {
     }
 
     mutating func expire(at time: TimeInterval) -> [DeferredAction] {
+        passedThroughContactEpisodeDeadlines = passedThroughContactEpisodeDeadlines.filter {
+            $0.value > time
+        }
         candidateDeadlinesByDevice = candidateDeadlinesByDevice.filter { $0.value > time }
         candidateEpisodeIDsByDevice = candidateEpisodeIDsByDevice.filter {
             candidateDeadlinesByDevice[$0.key] != nil
@@ -1442,6 +1506,7 @@ struct TrackpadMiddleClickArbiter: Sendable {
         candidateDeadlinesByDevice.removeAll()
         candidateEpisodeIDsByDevice.removeAll()
         ambiguousDeadlinesByDevice.removeAll()
+        passedThroughContactEpisodeDeadlines.removeAll()
         uncorrelatableNativeEventDeadline = nil
         uncorrelatedTrackpadDeadlinesByDevice.removeAll()
         clearBufferedState()
@@ -1462,6 +1527,7 @@ struct TrackpadMiddleClickArbiter: Sendable {
         candidateDeadlinesByDevice.removeAll()
         candidateEpisodeIDsByDevice.removeAll()
         ambiguousDeadlinesByDevice.removeAll()
+        passedThroughContactEpisodeDeadlines.removeAll()
         uncorrelatableNativeEventDeadline = nil
         uncorrelatedTrackpadDeadlinesByDevice.removeAll()
         clearBufferedState()
@@ -1970,6 +2036,14 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
                 )
             } else if let rejectedEpisodeID {
                 candidateTimeline.completeRejectedNativeClick(rejectedEpisodeID)
+            }
+            if nativeEvent.isDown,
+               let contactEpisodeID = nativeOriginsByClick[clickKey]?.contactEpisodeID {
+                synchronizeCandidates(at: now)
+                process(arbiter.observePassedThroughNativeClick(
+                    contactEpisodeID: contactEpisodeID,
+                    at: now
+                ))
             }
             scheduleExpiration()
             return Unmanaged.passUnretained(event)
