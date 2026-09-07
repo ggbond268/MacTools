@@ -331,6 +331,7 @@ struct ClipboardBackupSheet: View {
         panel.allowedContentTypes = [UTType(filenameExtension: "mactoolsclipboard") ?? .data]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
+        PluginPresentationSafety.prepareForWindowOrdering()
         if panel.runModal() == .OK { sourceURL = panel.url; model.preview = nil }
     }
 
@@ -344,6 +345,7 @@ struct ClipboardBackupSheet: View {
             let panel = NSSavePanel()
             panel.allowedContentTypes = [UTType(filenameExtension: "mactoolsclipboard") ?? .data]
             panel.nameFieldStringValue = "Clipboard.mactoolsclipboard"
+            PluginPresentationSafety.prepareForWindowOrdering()
             guard panel.runModal() == .OK, let selected = panel.url else { return }
             let url = selected.pathExtension.lowercased() == "mactoolsclipboard" ? selected : selected.appendingPathExtension("mactoolsclipboard")
             let password = password, scope = scope
