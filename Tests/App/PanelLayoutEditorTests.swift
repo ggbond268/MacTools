@@ -115,6 +115,107 @@ final class PanelLayoutEditorTests: XCTestCase {
         XCTAssertNil(session.token)
     }
 
+    func testCardBodyAndHandleReceivePointerDragsWhileMoveMenuRemainsSeparate() async throws {
+        for surface in [PluginDisplaySurface.dashboard, .featurePanel] {
+            for direction in [LayoutDirection.leftToRight, .rightToLeft] {
+                let host = makeHost([LayoutEditorTestPlugin("a", order: 0), LayoutEditorTestPlugin("b", order: 1)])
+                let window = mount(PanelLayoutEditor(pluginHost: host, surface: surface, onDismiss: {})
+                    .environment(\.layoutDirection, direction))
+                defer { window.close() }
+                try await settle()
+                let root = try XCTUnwrap(window.contentView)
+                let source = try XCTUnwrap(descendants(root).compactMap { $0 as? PanelLayoutDragSourceView }
+                    .first { $0.identifier?.rawValue == "panel.layout.drag.a" })
+                var starts = 0
+                source.onBegin = { starts += 1; return nil }
+                for point in [CGPoint(x: source.bounds.midX, y: 8),
+                              CGPoint(x: direction == .leftToRight ? source.bounds.width - 46 : 46,
+                                      y: source.bounds.height - 18)] {
+                    let location = source.convert(point, to: nil)
+                    XCTAssertTrue(root.hitTest(location) === source)
+                    sendMouse(.leftMouseDown, at: location, to: window)
+                    sendMouse(.leftMouseDragged, at: CGPoint(x: location.x + 6, y: location.y), to: window)
+                    sendMouse(.leftMouseUp, at: location, to: window)
+                }
+                XCTAssertEqual(starts, 2, "The card body and handle must both reach the native drag source")
+                let menuLocation = source.convert(CGPoint(x: source.menuFrame.midX, y: source.menuFrame.midY), to: nil)
+                XCTAssertNotNil(root.hitTest(menuLocation))
+                XCTAssertFalse(root.hitTest(menuLocation) === source, "The overlay must not swallow the move menu")
+            }
+        }
+    }
+
+    func testUndoButtonRestoresPersistedOrderAndPreservesHiddenSlots() async throws {
+        for surface in [PluginDisplaySurface.dashboard, .featurePanel] {
+            let host = makeHost(["a", "hidden", "b", "c"].enumerated().map { LayoutEditorTestPlugin($0.element, order: $0.offset) })
+            host.setPluginVisible(false, id: "hidden", on: surface)
+            let session = PanelLayoutEditingSession()
+            let window = mount(PanelLayoutEditor(pluginHost: host, surface: surface, onDismiss: {}, session: session))
+            defer { window.close() }
+            try await settle()
+            let before = renderedIDs(host, surface: surface)
+            host.moveRenderedPlugin(id: "a", toOffset: 3, on: surface)
+            session.didSave(.init(id: "a", offset: 3), beforeIDs: before, afterIDs: renderedIDs(host, surface: surface))
+            try await settle()
+            let freshStore = PluginDisplayPreferencesStore(userDefaults: UserDefaults(suiteName: suites.last!)!)
+            XCTAssertEqual(freshStore.visiblePluginIDs(for: surface, defaultPluginIDs: ["a", "hidden", "b", "c"]), ["b", "c", "a"])
+            sendMouse(.leftMouseDown, at: CGPoint(x: 275, y: 20), to: window)
+            sendMouse(.leftMouseUp, at: CGPoint(x: 275, y: 20), to: window)
+            try await settle()
+            XCTAssertEqual(renderedIDs(host, surface: surface), before)
+            XCTAssertEqual(session.feedback, .undone)
+            XCTAssertFalse(session.canUndo(ids: before))
+            let restoredStore = PluginDisplayPreferencesStore(userDefaults: UserDefaults(suiteName: suites.last!)!)
+            XCTAssertEqual(restoredStore.visiblePluginIDs(for: surface, defaultPluginIDs: ["a", "hidden", "b", "c"]), before)
+            host.setPluginVisible(true, id: "hidden", on: surface)
+            XCTAssertEqual(renderedIDs(host, surface: surface), ["a", "hidden", "b", "c"])
+        }
+    }
+
+    func testScrollingCannotClearPendingDropAndUsesScrolledCoordinates() throws {
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let scroll = NSScrollView(frame: CGRect(x: 0, y: 0, width: 304, height: 200))
+        let document = LayoutScrollTestDocument(frame: CGRect(x: 0, y: 0, width: 304, height: 1040))
+        scroll.documentView = document
+        window.contentView = scroll
+        window.orderFront(nil)
+        let scroller = PanelLayoutDragScroller()
+        scroller.anchor = document
+        let session = PanelLayoutEditingSession()
+        let ids = (0..<20).map(String.init)
+        let token = try XCTUnwrap(session.begin(id: "0", ids: ids))
+        var reportedPoint: CGPoint?
+        scroller.start { point in
+            reportedPoint = point
+            session.preview(offset: PanelLayoutDestination.listOffset(at: point, count: ids.count), ids: ids)
+        }
+        defer { scroller.stop() }
+        let clip = scroll.contentView
+        let local = CGPoint(x: 30, y: clip.isFlipped ? clip.bounds.maxY - 2 : clip.bounds.minY + 2)
+        let screenPoint = window.convertPoint(toScreen: clip.convert(local, to: nil))
+        for _ in 0..<5 { scroller.scroll(at: screenPoint) }
+        XCTAssertGreaterThan(clip.bounds.minY, 0)
+        XCTAssertGreaterThan(try XCTUnwrap(reportedPoint).y, 200)
+        XCTAssertEqual(session.token, token, "Scrolling never owns drag cancellation, even after physical release")
+        XCTAssertNotNil(session.finish(ids: ids))
+        session.sourceEnded(token: token)
+        XCTAssertNil(session.token)
+    }
+
+    private func descendants(_ view: NSView) -> [NSView] {
+        [view] + view.subviews.flatMap(descendants)
+    }
+
+    private func sendMouse(_ type: NSEvent.EventType, at point: CGPoint, to window: NSWindow) {
+        let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                                      timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                      context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)!
+        window.sendEvent(event)
+    }
+
     private func checkDrag(surface: PluginDisplaySurface, changeDashboardSpan: Bool) async throws {
         let a = LayoutEditorTestPlugin("a", order: 1)
         let b = LayoutEditorTestPlugin("b", order: 2)
@@ -173,8 +274,9 @@ final class PanelLayoutEditorTests: XCTestCase {
 private final class LayoutEditorTestPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginComponentPanel {
     let metadata: PluginMetadata
     let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(controlStyle: .switch, menuActionBehavior: .keepPresented)
-    var descriptor: PluginComponentDescriptor { .init(span: PluginComponentSpan(width: 2, height: spanHeight)!) }
+    var descriptor: PluginComponentDescriptor { .init(span: PluginComponentSpan(width: spanWidth, height: spanHeight)!) }
     var runtimeVisible = true
+    var spanWidth = 2
     var spanHeight = 12
     var subtitle = "Reading"
     var contexts: [PluginComponentContext] = []
@@ -201,4 +303,9 @@ private final class LayoutEditorTestPlugin: MacToolsPlugin, PluginPrimaryPanel, 
     }
 
     func handleAction(_ action: PluginPanelAction) {}
+}
+
+@MainActor
+private final class LayoutScrollTestDocument: NSView {
+    override var isFlipped: Bool { true }
 }

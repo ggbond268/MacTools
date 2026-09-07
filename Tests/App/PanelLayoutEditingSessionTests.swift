@@ -107,7 +107,7 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
     }
 
     func testDragTransferAcceptsRegisteredPayloadWithoutSuggestedName() {
-        let provider = PanelLayoutDragTransfer.provider(token: "session-token")
+        let provider = providerFromPasteboard(token: "session-token")
 
         XCTAssertNil(provider.suggestedName)
         XCTAssertTrue(PanelLayoutDragTransfer.accepts(
@@ -118,7 +118,7 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
     }
 
     func testDragTransferRejectsMissingPayloadOrInvalidSession() {
-        let provider = PanelLayoutDragTransfer.provider(token: "session-token")
+        let provider = providerFromPasteboard(token: "session-token")
 
         XCTAssertFalse(PanelLayoutDragTransfer.accepts(
             providers: [NSItemProvider()],
@@ -158,6 +158,87 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
         XCTAssertFalse(model.isEditingLayout)
         model.beginLayoutEditing(visibleItemCount: 2)
         XCTAssertFalse(model.isEditingLayout)
+    }
+
+    func testNativeCompletionDoesNotCancelACommittedMoveOrANewerDrag() throws {
+        let session = PanelLayoutEditingSession()
+        let ids = ["a", "b", "c"]
+        let oldToken = try XCTUnwrap(session.begin(id: "a", ids: ids))
+        session.preview(offset: 3, ids: ids)
+        let move = try XCTUnwrap(session.finish(ids: ids))
+        let after = PanelLayoutDestination.moving(move.id, toOffset: move.offset, in: ids)
+        session.didSave(move, beforeIDs: ids, afterIDs: after)
+        session.sourceEnded(token: oldToken)
+        XCTAssertEqual(session.feedback, .saved)
+        let newToken = try XCTUnwrap(session.begin(id: "b", ids: after))
+        session.sourceEnded(token: oldToken)
+        XCTAssertEqual(session.token, newToken)
+        session.sourceEnded(token: newToken)
+        XCTAssertNil(session.token)
+        XCTAssertEqual(session.feedback, .cancelled)
+    }
+
+    func testUndoRestoresBothDirectionsAndBoundariesAndCannotOverwriteAnExternalMove() throws {
+        for (id, offset) in [("a", 3), ("c", 0), ("b", 0), ("b", 3)] {
+            let session = PanelLayoutEditingSession()
+            let before = ["a", "b", "c"]
+            let after = PanelLayoutDestination.moving(id, toOffset: offset, in: before)
+            session.didSave(.init(id: id, offset: offset), beforeIDs: before, afterIDs: after)
+            XCTAssertTrue(session.canUndo(ids: after))
+            let undo = try XCTUnwrap(session.takeUndo(ids: after))
+            XCTAssertEqual(PanelLayoutDestination.moving(undo.id, toOffset: undo.offset, in: after), before)
+            XCTAssertNil(session.takeUndo(ids: after), "Undo is consumed exactly once")
+            session.didSave(.init(id: id, offset: offset), beforeIDs: before, afterIDs: after)
+            session.reconcile(ids: ["c", "b"])
+            XCTAssertNil(session.takeUndo(ids: after), "A changed item list must invalidate history")
+        }
+    }
+
+    func testInvalidationAndNoOpDropHaveDifferentFeedback() throws {
+        let session = PanelLayoutEditingSession()
+        let ids = ["a", "b"]
+        _ = session.begin(id: "a", ids: ids)
+        session.preview(offset: 1, ids: ids)
+        XCTAssertNil(session.finish(ids: ids))
+        XCTAssertEqual(session.feedback, .unchanged)
+        _ = session.begin(id: "a", ids: ids)
+        session.preview(offset: 2, ids: ids)
+        session.reconcile(ids: ["b"])
+        XCTAssertNil(session.token)
+        XCTAssertEqual(session.feedback, .invalidated)
+    }
+
+    func testGridInsertionMarkerUsesTheSameStableBoundaryInBothDirections() throws {
+        let placements = ComponentGridPlacementEngine.placements(for: [
+            item("a", PluginComponentSpan(width: 2, height: 12)!),
+            item("b", PluginComponentSpan(width: 1, height: 24)!),
+            item("c", PluginComponentSpan(width: 4, height: 12)!)
+        ])
+        for offset in 0...placements.count {
+            let marker = try XCTUnwrap(PanelLayoutDestination.gridInsertionFrame(
+                offset: offset, placements: placements, rightToLeft: false))
+            let mirrored = try XCTUnwrap(PanelLayoutDestination.gridInsertionFrame(
+                offset: offset, placements: placements, rightToLeft: true))
+            XCTAssertEqual(marker.minX, ComponentPanelLayout.gridWidth - mirrored.maxX)
+            XCTAssertEqual(marker.minY, mirrored.minY)
+            let point = CGPoint(x: marker.midX, y: marker.midY)
+            XCTAssertEqual(PanelLayoutDestination.gridOffset(at: point, placements: placements, rightToLeft: false), offset)
+        }
+    }
+
+    func testEditorSizingKeepsShortCardsVisibleAndBoundsLongLayouts() {
+        let short = PanelLayoutDestination.editorContentHeight(itemHeight: 96, maximumHeight: 600)
+        let viewport = short - MenuBarPanelLayout.contentVerticalPadding
+            - PanelLayoutDestination.footerHeight - PanelLayoutDestination.footerSpacing
+        XCTAssertGreaterThanOrEqual(viewport, 96 + PanelLayoutDestination.dropTailHeight)
+        XCTAssertEqual(PanelLayoutDestination.editorContentHeight(itemHeight: 2000, maximumHeight: 600), 600)
+    }
+
+    private func providerFromPasteboard(token: String) -> NSItemProvider {
+        let item = PanelLayoutDragTransfer.pasteboardItem(token: token)
+        XCTAssertEqual(item.string(forType: PanelLayoutDragTransfer.pasteboardType), token)
+        return NSItemProvider(item: item.data(forType: PanelLayoutDragTransfer.pasteboardType)! as NSData,
+                              typeIdentifier: PanelLayoutDragTransfer.type.identifier)
     }
 
     private func item(_ id: String, _ span: PluginComponentSpan) -> PluginComponentItem {

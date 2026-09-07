@@ -7,11 +7,9 @@ final class PanelLayoutDragScroller: ObservableObject {
     weak var anchor: NSView?
     private var timer: Timer?
     private var onScroll: ((CGPoint) -> Void)?
-    private var onCancel: (() -> Void)?
 
-    func start(onScroll: @escaping (CGPoint) -> Void, onCancel: @escaping () -> Void) {
+    func start(onScroll: @escaping (CGPoint) -> Void) {
         self.onScroll = onScroll
-        self.onCancel = onCancel
         guard timer == nil else { return }
         let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -24,19 +22,18 @@ final class PanelLayoutDragScroller: ObservableObject {
         timer?.invalidate()
         timer = nil
         onScroll = nil
-        onCancel = nil
     }
 
     private func tick() {
-        guard NSEvent.pressedMouseButtons & 1 != 0 else {
-            let cancel = onCancel
-            stop()
-            cancel?()
-            return
-        }
+        // Physical button state is not the native drag lifetime (for example with
+        // trackpad drag lock). Only the source's completion callback ends a drag.
+        scroll(at: NSEvent.mouseLocation)
+    }
+
+    func scroll(at screenPoint: CGPoint) {
         guard let anchor, let window = anchor.window, let scrollView = anchor.enclosingScrollView,
               let document = scrollView.documentView else { stop(); return }
-        let windowPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let windowPoint = window.convertPoint(fromScreen: screenPoint)
         let clip = scrollView.contentView
         let clipPoint = clip.convert(windowPoint, from: nil)
         guard clip.bounds.contains(clipPoint) else { return }

@@ -638,6 +638,15 @@ final class MenuBarPanelPresenter: NSObject {
     }
 
     private func observePanelItemChanges() {
+        panelModel.$isEditingLayout
+            .dropFirst()
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { [weak self] in
+                    self?.refreshHeightForVisiblePanel()
+                }
+            }
+            .store(in: &heightRefreshCancellables)
+
         pluginHost.$panelItems
             .dropFirst()
             .receive(on: RunLoop.main)
@@ -791,6 +800,20 @@ final class MenuBarPanelPresenter: NSObject {
         screen: NSScreen?
     ) -> MenuBarPanelHeightResolution {
         let maximumFeatureListHeight = MenuBarPanelLayout.maximumFeatureListHeight(for: screen)
+
+        if panelModel.isEditingLayout, tab == panelModel.selectedTab {
+            let itemHeight = tab == .components
+                ? ComponentPanelLayout.gridContentHeight(for: ComponentGridPlacementEngine.placements(for: pluginHost.componentItems))
+                : CGFloat(pluginHost.panelItems.count) * PanelLayoutDestination.rowHeight
+                    + CGFloat(max(0, pluginHost.panelItems.count - 1)) * PanelLayoutDestination.rowSpacing
+            let maximumHeight = tab == .components
+                ? MenuBarPanelLayout.maximumContentHeight(for: screen)
+                : max(MenuBarPanelLayout.minimumContentHeight, maximumFeatureListHeight + MenuBarPanelLayout.contentVerticalPadding)
+            return MenuBarPanelHeightResolution(
+                contentHeight: PanelLayoutDestination.editorContentHeight(itemHeight: itemHeight, maximumHeight: maximumHeight),
+                maximumFeatureListHeight: maximumFeatureListHeight
+            )
+        }
 
         switch tab {
         case .components:
@@ -1136,7 +1159,7 @@ private struct MenuBarPanelContentSurface<Content: View>: View {
     }
 }
 
-private struct MenuBarPanelToolbar: View {
+struct MenuBarPanelToolbar: View {
     let selectedTab: MenuBarPanelTab
     let availableUpdateVersion: String?
     let canEditLayout: Bool
@@ -1150,10 +1173,16 @@ private struct MenuBarPanelToolbar: View {
     var body: some View {
         ZStack {
             HStack {
-                if canEditLayout || isEditingLayout {
+                if isEditingLayout {
+                    Button(PanelLayoutCopy.done, action: onEditLayout)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("panel.layout.edit")
+                } else if canEditLayout {
                     MenuBarPanelIconButton(
-                        systemImage: isEditingLayout ? "checkmark" : "arrow.up.arrow.down",
-                        accessibilityTitle: isEditingLayout ? PanelLayoutCopy.done : PanelLayoutCopy.edit,
+                        systemImage: "arrow.up.arrow.down",
+                        accessibilityTitle: PanelLayoutCopy.edit,
                         action: onEditLayout
                     )
                     .accessibilityIdentifier("panel.layout.edit")

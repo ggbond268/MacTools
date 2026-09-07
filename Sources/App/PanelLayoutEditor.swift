@@ -30,14 +30,31 @@ struct PanelLayoutEditor: View {
         surface == .dashboard ? ComponentGridPlacementEngine.placements(for: pluginHost.componentItems) : []
     }
 
-    private var previewPlacements: [ComponentGridPlacement] {
-        let lookup = Dictionary(uniqueKeysWithValues: pluginHost.componentItems.map { ($0.id, $0) })
-        return ComponentGridPlacementEngine.placements(
-            for: session.previewIDs(currentIDs: ids).compactMap { lookup[$0] }
-        )
+    var body: some View {
+        VStack(spacing: PanelLayoutDestination.footerSpacing) {
+            editor
+            HStack(spacing: 8) {
+                Text(destinationDescription ?? session.feedback.message)
+                    .font(.caption)
+                    .foregroundStyle(theme.text.secondary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button(PanelLayoutCopy.undo, action: undo)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(!session.canUndo(ids: ids))
+                    .accessibilityIdentifier("panel.layout.undo")
+            }
+            .padding(.horizontal, 4)
+            .frame(height: PanelLayoutDestination.footerHeight)
+        }
+        .onChange(of: session.feedback) { _, feedback in
+            guard feedback != .guidance else { return }
+            announce(feedback.message)
+        }
     }
 
-    var body: some View {
+    private var editor: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 VStack(spacing: 0) {
@@ -46,7 +63,7 @@ struct PanelLayoutEditor: View {
                     } else {
                         featureList
                     }
-                    Color.clear.frame(height: 24)
+                    Color.clear.frame(height: PanelLayoutDestination.dropTailHeight)
                 }
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
@@ -60,12 +77,12 @@ struct PanelLayoutEditor: View {
                 ))
             }
             .onChange(of: ids) {
-                session.cancel()
+                session.reconcile(ids: ids)
                 scroller.stop()
             }
             .onChange(of: placements) {
                 // A span change also invalidates the drag's geometry snapshot.
-                session.cancel()
+                session.invalidate()
                 scroller.stop()
             }
             .onDisappear {
@@ -111,7 +128,7 @@ struct PanelLayoutEditor: View {
     private var dashboard: some View {
         let lookup = Dictionary(uniqueKeysWithValues: pluginHost.componentItems.map { ($0.id, $0) })
         return ZStack(alignment: .topLeading) {
-            ForEach(previewPlacements) { placement in
+            ForEach(placements) { placement in
                 if let item = lookup[placement.id], let index = ids.firstIndex(of: item.id) {
                     reorderItem(id: item.id, title: item.title, icon: item.iconName, index: index) {
                         pluginHost.componentViewItem(for: item.id, dismiss: onDismiss).content
@@ -130,37 +147,44 @@ struct PanelLayoutEditor: View {
                 }
             }
         }
-        // Keep canvas coordinates physical; mirror card positions explicitly for RTL.
+        // Cards and hit regions remain stationary until the drop commits.
         .frame(width: ComponentPanelLayout.gridWidth,
-               height: max(ComponentPanelLayout.gridContentHeight(for: placements),
-                           ComponentPanelLayout.gridContentHeight(for: previewPlacements)), alignment: .topLeading)
+               height: ComponentPanelLayout.gridContentHeight(for: placements), alignment: .topLeading)
+        .overlay(alignment: .topLeading) {
+            if let destination = session.destination,
+               let marker = PanelLayoutDestination.gridInsertionFrame(
+                offset: destination, placements: placements, rightToLeft: layoutDirection == .rightToLeft
+               ) {
+                Rectangle().fill(theme.accent)
+                    .frame(width: marker.width, height: marker.height)
+                    .offset(x: marker.minX, y: marker.minY)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
         .environment(\.layoutDirection, .leftToRight)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: previewPlacements)
     }
 
     private func reorderItem<Content: View>(id: String, title: String, icon: String, index: Int,
                                             @ViewBuilder content: @escaping () -> Content) -> some View {
-        PanelLayoutReorderItem(id: id, title: title, index: index, count: ids.count,
-                               isDragTarget: session.sourceID == id && session.destination != nil,
+        PanelLayoutReorderItem(id: id, title: title, icon: icon, index: index, count: ids.count,
+                               isDragging: session.sourceID == id,
                                move: { offset in commit(.init(id: id, offset: offset)) }) {
             content()
-        } dragProvider: {
+        } beginDrag: {
             scroller.stop()
-            guard let token = session.begin(id: id, ids: ids) else {
-                return NSItemProvider()
-            }
-            return PanelLayoutDragTransfer.provider(token: token)
-        } dragPreview: {
-            Label(title, systemImage: PluginSystemImage.resolvedName(icon))
-                .padding(12)
-                .background(theme.surfaces.panel, in: RoundedRectangle(cornerRadius: 10))
+            return session.begin(id: id, ids: ids)
+        } endDrag: { token in
+            guard session.token == token else { return }
+            scroller.stop()
+            session.sourceEnded(token: token)
         }
     }
 
     private func updateDestination(_ point: CGPoint) {
         guard session.validate(ids: ids) else { scroller.stop(); return }
         preview(at: point)
-        scroller.start(onScroll: preview, onCancel: session.cancel)
+        scroller.start(onScroll: preview)
     }
 
     private func preview(at point: CGPoint) {
@@ -176,22 +200,48 @@ struct PanelLayoutEditor: View {
     }
 
     private func commit(_ move: PanelLayoutEditingSession.Move) {
+        save(move, isUndo: false)
+    }
+
+    private func undo() {
+        guard let move = session.takeUndo(ids: ids) else { return }
+        save(move, isUndo: true)
+    }
+
+    private func save(_ move: PanelLayoutEditingSession.Move, isUndo: Bool) {
         scroller.stop()
         session.cancel()
-        guard ids.contains(move.id) else { return }
-        let result = PanelLayoutDestination.moving(move.id, toOffset: move.offset, in: ids)
-        guard result != ids, let index = result.firstIndex(of: move.id) else { return }
+        let before = ids
+        guard before.contains(move.id) else { session.rejectMove(); return }
+        let result = PanelLayoutDestination.moving(move.id, toOffset: move.offset, in: before)
+        guard result != before else { return }
         pluginHost.moveRenderedPlugin(id: move.id, toOffset: move.offset, on: surface)
-        announce(id: move.id, index: index)
+        guard ids == result else { session.rejectMove(); return }
+        if isUndo { session.didUndo() }
+        else { session.didSave(move, beforeIDs: before, afterIDs: result) }
+    }
+
+    private var destinationDescription: String? {
+        guard let source = session.sourceID, session.destination != nil,
+              let index = session.previewIDs(currentIDs: ids).firstIndex(of: source),
+              let title = title(for: source) else { return nil }
+        return PanelLayoutCopy.position(title, index: index, count: ids.count)
+    }
+
+    private func title(for id: String) -> String? {
+        surface == .dashboard
+            ? pluginHost.componentItems.first { $0.id == id }?.title
+            : pluginHost.panelItems.first { $0.id == id }?.title
     }
 
     private func announce(id: String, index: Int) {
-        let title = surface == .dashboard
-            ? pluginHost.componentItems.first { $0.id == id }?.title
-            : pluginHost.panelItems.first { $0.id == id }?.title
-        guard let title else { return }
+        guard let title = title(for: id) else { return }
+        announce(PanelLayoutCopy.position(title, index: index, count: ids.count))
+    }
+
+    private func announce(_ message: String) {
         NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested, userInfo: [
-            .announcement: PanelLayoutCopy.position(title, index: index, count: ids.count),
+            .announcement: message,
             .priority: NSAccessibilityPriorityLevel.medium.rawValue
         ])
     }
@@ -208,16 +258,17 @@ private extension EnvironmentValues {
     }
 }
 
-private struct PanelLayoutReorderItem<Content: View, Preview: View>: View {
+private struct PanelLayoutReorderItem<Content: View>: View {
     let id: String
     let title: String
+    let icon: String
     let index: Int
     let count: Int
-    let isDragTarget: Bool
+    let isDragging: Bool
     let move: (Int) -> Void
     @ViewBuilder let content: () -> Content
-    let dragProvider: () -> NSItemProvider
-    @ViewBuilder let dragPreview: () -> Preview
+    let beginDrag: () -> String?
+    let endDrag: (String) -> Void
     @Environment(\.menuBarPanelTheme) private var theme
     @Environment(\.panelLayoutScrollToItem) private var scrollToItem
     @FocusState private var isFocused: Bool
@@ -227,13 +278,14 @@ private struct PanelLayoutReorderItem<Content: View, Preview: View>: View {
             content()
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 .clipped()
+                .opacity(isDragging ? 0.45 : 1)
                 .accessibilityHidden(true)
             HStack(spacing: 2) {
                 Image(systemName: "line.3.horizontal")
                     .font(.body.weight(.semibold))
                     .frame(width: 24, height: 28)
                     .contentShape(Rectangle())
-                    .onDrag(dragProvider, preview: dragPreview)
+                    .allowsHitTesting(false)
                     .accessibilityHidden(true)
                 Menu {
                     Button(PanelLayoutCopy.earlier) { perform(index - 1) }.disabled(index == 0)
@@ -264,9 +316,13 @@ private struct PanelLayoutReorderItem<Content: View, Preview: View>: View {
             .background(theme.surfaces.control, in: RoundedRectangle(cornerRadius: 6))
         }
         .overlay {
+            PanelLayoutDragSource(id: id, title: title, icon: icon, begin: beginDrag, end: endDrag)
+                .accessibilityHidden(true)
+        }
+        .overlay {
             RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(isDragTarget || isFocused ? theme.accent : theme.text.secondary,
-                              style: StrokeStyle(lineWidth: isDragTarget || isFocused ? 2 : 1, dash: [4, 3]))
+                .strokeBorder(isDragging || isFocused ? theme.accent : theme.text.secondary,
+                              style: StrokeStyle(lineWidth: isDragging || isFocused ? 2 : 1, dash: [4, 3]))
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
@@ -282,16 +338,12 @@ private struct PanelLayoutReorderItem<Content: View, Preview: View>: View {
 enum PanelLayoutDragTransfer {
     static let type = UTType(exportedAs: "com.mactools.panel-layout-item")
 
-    static func provider(token: String) -> NSItemProvider {
-        let provider = NSItemProvider()
-        provider.registerDataRepresentation(
-            forTypeIdentifier: type.identifier,
-            visibility: .ownProcess
-        ) { completion in
-            completion(Data(token.utf8), nil)
-            return nil
-        }
-        return provider
+    static let pasteboardType = NSPasteboard.PasteboardType(type.identifier)
+
+    static func pasteboardItem(token: String) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        item.setString(token, forType: pasteboardType)
+        return item
     }
 
     static func accepts(
