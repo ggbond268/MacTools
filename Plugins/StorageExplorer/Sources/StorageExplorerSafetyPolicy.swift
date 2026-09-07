@@ -70,21 +70,20 @@ public struct StorageExplorerSafetyPolicy: Sendable {
         homeDirectory: String = NSHomeDirectory()
     ) {
         self.trashRecycler = trashRecycler
-        self.homeDirectory = Self.normalizeSlashes(Self.stripTrailingSlash(homeDirectory))
+        self.homeDirectory = Self.stripTrailingSlash(Self.normalizeSlashes(homeDirectory))
     }
 
     public func validatePathShape(_ path: String) -> StorageExplorerSafetyStatus {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        guard !path.isEmpty else {
             return .blocked(reason: "Empty path")
         }
-        guard trimmed.hasPrefix("/") else {
+        guard path.hasPrefix("/") else {
             return .blocked(reason: "Path must be absolute")
         }
-        guard !Self.containsTraversalComponent(trimmed) else {
+        guard !Self.containsTraversalComponent(path) else {
             return .blocked(reason: "Path traversal is not allowed")
         }
-        guard !Self.containsControlCharacter(trimmed) else {
+        guard !Self.containsControlCharacter(path) else {
             return .blocked(reason: "Path contains control characters")
         }
         return .allowed
@@ -94,6 +93,10 @@ public struct StorageExplorerSafetyPolicy: Sendable {
         let shapeStatus = validatePathShape(path)
         guard case .allowed = shapeStatus else {
             return shapeStatus
+        }
+
+        guard validatePathShape(root).isAllowed else {
+            return .blocked(reason: "Invalid scan root")
         }
 
         let normalizedPath = normalizePath(path)
@@ -158,12 +161,24 @@ public struct StorageExplorerSafetyPolicy: Sendable {
     // MARK: - Internal Helpers
 
     private func normalizePath(_ path: String) -> String {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        return Self.normalizeSlashes(Self.stripTrailingSlash(trimmed))
+        // Whitespace is part of a filename and must never retarget a removal.
+        return Self.stripTrailingSlash(Self.normalizeSlashes(path))
     }
 
     private func sensitiveProtectionReason(for path: String) -> String? {
         let lower = path.lowercased()
+        let protectedLocations = [
+            homeDirectory + "/Library/Keychains",
+            homeDirectory + "/Library/Application Support/com.apple.TCC",
+            homeDirectory + "/Library/Mobile Documents",
+            homeDirectory + "/.ssh",
+            homeDirectory + "/.gnupg",
+            "/Library/Keychains",
+            "/Library/Application Support/com.apple.TCC"
+        ]
+        if protectedLocations.contains(where: { Self.pathsOverlap(lower, $0.lowercased()) }) {
+            return "Sensitive location or its containing directory is protected"
+        }
 
         if lower.contains("/library/keychains") || lower.contains("/.ssh") || lower.contains("/.gnupg")
             || lower.contains("keychain") || lower.contains("credential") {
@@ -182,7 +197,7 @@ public struct StorageExplorerSafetyPolicy: Sendable {
     }
 
     private static func containsTraversalComponent(_ path: String) -> Bool {
-        path.split(separator: "/", omittingEmptySubsequences: false).contains("..")
+        path.split(separator: "/").contains { $0 == "." || $0 == ".." }
     }
 
     private static func containsControlCharacter(_ path: String) -> Bool {
@@ -192,7 +207,7 @@ public struct StorageExplorerSafetyPolicy: Sendable {
     }
 
     private static func isProtectedSystemRoot(_ path: String) -> Bool {
-        let normalized = stripTrailingSlash(normalizeSlashes(path))
+        let normalized = stripTrailingSlash(normalizeSlashes(path)).lowercased()
         if normalized == "/" {
             return true
         }
@@ -206,7 +221,7 @@ public struct StorageExplorerSafetyPolicy: Sendable {
             "/Volumes",
             "/Network"
         ]
-        if exactRoots.contains(normalized) {
+        if exactRoots.contains(where: { isEqualOrDescendant($0.lowercased(), of: normalized) }) {
             return true
         }
 
@@ -222,9 +237,17 @@ public struct StorageExplorerSafetyPolicy: Sendable {
         ]
 
         return protectedPrefixes.contains { root in
-            normalized == root || normalized.hasPrefix(root + "/")
+            pathsOverlap(normalized, root.lowercased())
         } || normalized.hasPrefix("/var/db/")
             || normalized.hasPrefix("/private/var/db/")
+    }
+
+    private static func isEqualOrDescendant(_ path: String, of root: String) -> Bool {
+        path == root || (root == "/" ? path.hasPrefix("/") : path.hasPrefix(root + "/"))
+    }
+
+    private static func pathsOverlap(_ path: String, _ protectedPath: String) -> Bool {
+        isEqualOrDescendant(path, of: protectedPath) || isEqualOrDescendant(protectedPath, of: path)
     }
 
     private static func normalizeSlashes(_ path: String) -> String {

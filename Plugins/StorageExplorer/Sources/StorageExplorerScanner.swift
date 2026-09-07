@@ -30,6 +30,24 @@ public final class StorageExplorerScanner: @unchecked Sendable {
             }
         }
 
+        func measuredSize(url: URL, values: URLResourceValues) -> (logical: Int64, allocated: Int64) {
+            var fileStat = stat()
+            if lstat(url.path, &fileStat) == 0 {
+                let inode = StorageFileInode(device: fileStat.st_dev, inode: fileStat.st_ino)
+                guard seenInodes.insert(inode).inserted else { return (0, 0) }
+
+                // Measure the link itself, never the destination's payload.
+                if values.isSymbolicLink == true {
+                    return (max(Int64(fileStat.st_size), 0), max(Int64(fileStat.st_blocks) * 512, 0))
+                }
+                return (
+                    max(Int64(values.fileSize ?? Int(fileStat.st_size)), 0),
+                    max(Int64(values.totalFileAllocatedSize ?? (Int(fileStat.st_blocks) * 512)), 0)
+                )
+            }
+            return (Int64(values.fileSize ?? 0), Int64(values.totalFileAllocatedSize ?? 0))
+        }
+
         func crawl(url: URL) throws -> StorageItem {
             try Task.checkCancellation()
 
@@ -62,29 +80,8 @@ public final class StorageExplorerScanner: @unchecked Sendable {
             let modDate = resourceValues.contentModificationDate
             let name = resourceValues.name ?? url.lastPathComponent
 
-            // Check hard link inode for regular files
-            var addedSize: Int64 = 0
-            var logicalSize: Int64 = 0
-            var allocatedSize: Int64 = 0
-
-            var fileStat = stat()
-            if lstat(url.path, &fileStat) == 0 {
-                let inode = StorageFileInode(device: fileStat.st_dev, inode: fileStat.st_ino)
-                let isDuplicate = !seenInodes.insert(inode).inserted
-
-                let rawLogical = Int64(resourceValues.fileSize ?? Int(fileStat.st_size))
-                let rawAllocated = Int64(resourceValues.totalFileAllocatedSize ?? (Int(fileStat.st_blocks) * 512))
-
-                if !isDuplicate {
-                    logicalSize = max(rawLogical, 0)
-                    allocatedSize = max(rawAllocated, 0)
-                    addedSize = logicalSize
-                }
-            } else {
-                logicalSize = Int64(resourceValues.fileSize ?? 0)
-                allocatedSize = Int64(resourceValues.totalFileAllocatedSize ?? 0)
-                addedSize = logicalSize
-            }
+            let (logicalSize, allocatedSize) = measuredSize(url: url, values: resourceValues)
+            let addedSize = logicalSize
 
             try checkCancellationAndReport(path: url.path, addedSize: addedSize)
 
@@ -113,14 +110,16 @@ public final class StorageExplorerScanner: @unchecked Sendable {
 
                 if let enumerator = fileManager.enumerator(
                     at: url,
-                    includingPropertiesForKeys: [.fileSizeKey, .totalFileAllocatedSizeKey, .isDirectoryKey],
-                    options: [.skipsPackageDescendants]
+                    includingPropertiesForKeys: [.fileSizeKey, .totalFileAllocatedSizeKey, .isSymbolicLinkKey],
+                    options: []
                 ) {
                     for case let fileURL as URL in enumerator {
                         try Task.checkCancellation()
-                        if let childValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey]) {
-                            let childLogical = Int64(childValues.fileSize ?? 0)
-                            let childAllocated = Int64(childValues.totalFileAllocatedSize ?? 0)
+                        if let childValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey, .isSymbolicLinkKey]) {
+                            if childValues.isSymbolicLink == true {
+                                enumerator.skipDescendants()
+                            }
+                            let (childLogical, childAllocated) = measuredSize(url: fileURL, values: childValues)
                             totalPackageSize += childLogical
                             totalPackageAllocated += childAllocated
                             packageChildCount += 1

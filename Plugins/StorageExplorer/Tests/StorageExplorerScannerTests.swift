@@ -121,6 +121,66 @@ final class StorageExplorerScannerTests: XCTestCase {
         XCTAssertTrue(symlinkChild?.isSymlink ?? false)
     }
 
+    func testNestedPackagesIncludePayloadAndRemainAtomic() async throws {
+        let package = tempDirectory.appendingPathComponent("Outer.app")
+        let nestedApp = package.appendingPathComponent("Contents/Helpers/Nested.app/Contents/MacOS")
+        let nestedFramework = package.appendingPathComponent("Contents/Frameworks/Nested.framework/Versions/A")
+        for directory in [nestedApp, nestedFramework] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        try Data(repeating: 0x41, count: 1_000_000).write(to: nestedApp.appendingPathComponent("binary"))
+        try Data(repeating: 0x42, count: 500_000).write(to: nestedFramework.appendingPathComponent("binary"))
+
+        let result = try await scanner.scan(rootURL: tempDirectory)
+        let item = try XCTUnwrap(result.children.first)
+
+        XCTAssertEqual(result.children.count, 1)
+        XCTAssertTrue(item.isPackage)
+        XCTAssertTrue(item.children.isEmpty)
+        XCTAssertGreaterThanOrEqual(item.size, 1_500_000)
+        XCTAssertLessThan(item.size, 1_510_000)
+        XCTAssertGreaterThan(item.childCount, 2)
+    }
+
+    func testPackageHardLinksAreCountedOnceAcrossPackageBoundary() async throws {
+        let package = tempDirectory.appendingPathComponent("Outer.app")
+        let nested = package.appendingPathComponent("Contents/Helpers/Nested.app/Contents/MacOS")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let payload = nested.appendingPathComponent("binary")
+        try Data(repeating: 0x55, count: 1_000_000).write(to: payload)
+        try FileManager.default.linkItem(at: payload, to: package.appendingPathComponent("second-copy"))
+        try FileManager.default.linkItem(at: payload, to: tempDirectory.appendingPathComponent("outside-copy"))
+        let allocated = try XCTUnwrap(payload.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize)
+
+        let result = try await scanner.scan(rootURL: tempDirectory)
+
+        XCTAssertGreaterThanOrEqual(result.size, 1_000_000)
+        XCTAssertLessThan(result.size, 1_010_000)
+        XCTAssertGreaterThanOrEqual(result.allocatedSize, Int64(allocated))
+        XCTAssertLessThan(result.allocatedSize, Int64(allocated) + 100_000)
+    }
+
+    func testPackageSymlinksDoNotIncludeExternalFilesOrDirectories() async throws {
+        let package = tempDirectory.appendingPathComponent("Outer.app")
+        let external = tempDirectory.appendingPathComponent("external")
+        for directory in [package, external] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        let payload = external.appendingPathComponent("payload")
+        try Data(repeating: 0x99, count: 1_000_000).write(to: payload)
+        try Data(repeating: 0x11, count: 5_000).write(to: package.appendingPathComponent("internal"))
+        try FileManager.default.createSymbolicLink(at: package.appendingPathComponent("directory-link"), withDestinationURL: external)
+        try FileManager.default.createSymbolicLink(at: package.appendingPathComponent("file-link"), withDestinationURL: payload)
+
+        let result = try await scanner.scan(rootURL: package)
+
+        XCTAssertTrue(result.isPackage)
+        XCTAssertTrue(result.children.isEmpty)
+        XCTAssertGreaterThanOrEqual(result.size, 5_000)
+        XCTAssertLessThan(result.size, 10_000)
+        XCTAssertEqual(result.childCount, 3)
+    }
+
     func testScanCancellation() async throws {
         for i in 0..<100 {
             let file = tempDirectory.appendingPathComponent("file_\(i).bin")

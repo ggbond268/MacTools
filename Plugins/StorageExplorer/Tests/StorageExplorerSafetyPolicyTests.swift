@@ -83,7 +83,7 @@ final class StorageExplorerSafetyPolicyTests: XCTestCase {
     }
 
     func testSensitiveUserPathsAreBlocked() {
-        let root = tempDirectory.path
+        let root = "/Users/testuser"
         let sensitive = [
             "/Users/testuser/Library/Keychains/login.keychain-db",
             "/Users/testuser/.ssh/id_rsa",
@@ -95,6 +95,51 @@ final class StorageExplorerSafetyPolicyTests: XCTestCase {
             let result = policy.validatePathForRemoval(path, withinRoot: root)
             XCTAssertFalse(result.isAllowed, "Sensitive path \(path) should be blocked")
         }
+    }
+
+    func testAncestorsOfSensitiveLocationsAreBlockedInsideHomeScan() {
+        for path in [
+            "/Users/testuser/Library",
+            "/Users/testuser/Library/Application Support",
+            "/Users/testuser/library",
+            "/Users/testuser/Library/.",
+            "/Users/testuser/Library//"
+        ] {
+            XCTAssertFalse(policy.validatePathForRemoval(path, withinRoot: "/Users/testuser").isAllowed, path)
+        }
+    }
+
+    func testAncestorsOfProtectedSystemLocationsAreBlockedInsideRootScan() {
+        for path in ["/Library", "/Applications", "/applications", "/private", "/var"] {
+            let result = policy.validatePathForRemoval(path, withinRoot: "/")
+            XCTAssertEqual(result.reason, "Critical macOS system path is protected", path)
+        }
+    }
+
+    func testProtectedLocationChecksRespectDirectoryBoundaries() {
+        for (path, root) in [
+            ("/Users/testuser/Library/Caches", "/Users/testuser"),
+            ("/Users/testuser/Library/Application Support/Example", "/Users/testuser"),
+            ("/Users/testuser/Library Backup", "/Users/testuser"),
+            ("/Users/testuser/Downloads", "/Users/testuser"),
+            ("/Applications/Example.app", "/Applications"),
+            ("/Library/Extensions Backup", "/Library")
+        ] {
+            XCTAssertTrue(policy.validatePathForRemoval(path, withinRoot: root).isAllowed, path)
+        }
+    }
+
+    func testBatchWithSensitiveAncestorDoesNotCallRecycler() async {
+        do {
+            _ = try await policy.recycleItems(
+                at: ["/Users/testuser/Downloads/report", "/Users/testuser/Library"],
+                withinRoot: "/Users/testuser"
+            )
+            XCTFail("A parent containing sensitive data must block the whole batch")
+        } catch {
+            XCTAssertTrue(error is StorageExplorerSafetyError)
+        }
+        XCTAssertTrue(mockRecycler.recycledURLs.isEmpty)
     }
 
     func testUserHomeRootIsBlocked() {
@@ -133,6 +178,33 @@ final class StorageExplorerSafetyPolicyTests: XCTestCase {
         XCTAssertEqual(mockRecycler.recycledURLs.count, 1)
         XCTAssertEqual(mockRecycler.recycledURLs.first?.path, validFile)
         XCTAssertTrue(trashedURL.path.contains(".Trash"))
+    }
+
+    func testRecycleItemPreservesTrailingSpaceInFilename() async throws {
+        let selected = tempDirectory.appendingPathComponent("report ")
+        let sibling = tempDirectory.appendingPathComponent("report")
+        try Data([1]).write(to: selected)
+        try Data([2]).write(to: sibling)
+
+        _ = try await policy.recycleItem(at: selected.path, withinRoot: tempDirectory.path)
+
+        XCTAssertEqual(mockRecycler.recycledURLs.map(\.path), [selected.path])
+        XCTAssertNotEqual(mockRecycler.recycledURLs.first?.path, sibling.path)
+    }
+
+    func testRecycleBatchPreservesDistinctWhitespaceFilenames() async throws {
+        let selected = ["report ", "report", " leading space"].map { tempDirectory.appendingPathComponent($0) }
+        for url in selected { try Data([1]).write(to: url) }
+
+        _ = try await policy.recycleItems(at: selected.map(\.path), withinRoot: tempDirectory.path)
+
+        XCTAssertEqual(mockRecycler.recycledURLs.map(\.path), selected.map(\.path))
+    }
+
+    func testInvalidWhitespacePathsCannotBeRetargeted() {
+        for path in [" /Users/testuser/Downloads/report", "/Users/testuser/Downloads/report\n"] {
+            XCTAssertFalse(policy.validatePathShape(path).isAllowed, path)
+        }
     }
 
     func testRecycleItemFailsWhenBlocked() async {
