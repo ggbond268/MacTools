@@ -150,6 +150,11 @@ final class AppWindowRouterTests: XCTestCase {
 
         let sidebarScrollView = try XCTUnwrap(settingsSidebarScrollView(in: hostingView))
         let sidebarListView = try XCTUnwrap(sidebarScrollView.documentView as? NSTableView)
+        XCTAssertGreaterThan(
+            sidebarListView.numberOfRows,
+            0,
+            "Expected the settings sidebar to contain navigation rows"
+        )
         XCTAssertTrue(
             window.firstResponder === sidebarListView,
             "Expected the settings sidebar to own initial focus, got \(String(describing: window.firstResponder))"
