@@ -1540,12 +1540,12 @@ struct PreferencesImportSelectionModel: Equatable {
     }
 
     mutating func selectAll(eligiblePluginIDs: Set<String>) {
-        userDeselectedPluginIDs.removeAll()
+        userDeselectedPluginIDs.subtract(eligiblePluginIDs)
         selectedInstallablePluginIDs = eligiblePluginIDs
     }
 
     mutating func deselectAll(eligiblePluginIDs: Set<String>) {
-        userDeselectedPluginIDs = eligiblePluginIDs
+        userDeselectedPluginIDs.formUnion(eligiblePluginIDs)
         selectedInstallablePluginIDs.removeAll()
     }
 
@@ -1560,7 +1560,6 @@ struct PreferencesImportSelectionModel: Equatable {
     }
 
     mutating func updateEligiblePlugins(_ eligiblePluginIDs: Set<String>) {
-        userDeselectedPluginIDs.formIntersection(eligiblePluginIDs)
         selectedInstallablePluginIDs = eligiblePluginIDs.subtracting(userDeselectedPluginIDs)
     }
 }

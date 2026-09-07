@@ -2189,7 +2189,7 @@ final class PreferencesBackupTests: XCTestCase {
         XCTAssertTrue(model.userDeselectedPluginIDs.isEmpty)
     }
 
-    func testPreferencesImportSelectionModelCategoryChangePreservesUserOverridesAndRemovesIneligible() throws {
+    func testPreferencesImportSelectionModelCategoryChangesPreserveOptOutsAcrossTemporaryIneligibility() throws {
         let initialEligible: Set<String> = ["plugin-a", "plugin-b"]
         var model = PreferencesImportSelectionModel(eligiblePluginIDs: initialEligible)
 
@@ -2198,17 +2198,37 @@ final class PreferencesBackupTests: XCTestCase {
         XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-b"])
         XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
 
-        // Category changes such that plugin-b is no longer eligible (only plugin-a is)
-        model.updateEligiblePlugins(["plugin-a"])
-        // plugin-b was removed because it is ineligible, and plugin-a remains deselected
+        // The category that made plugin-a eligible is temporarily deselected.
+        model.updateEligiblePlugins([])
         XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
         XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
 
-        // Category re-enables plugin-b and introduces newly eligible plugin-c
+        // Re-enabling the category must not undo the explicit opt-out.
         model.updateEligiblePlugins(["plugin-a", "plugin-b", "plugin-c"])
-        // plugin-b and plugin-c are selected; plugin-a was user-deselected so remains deselected
         XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-b", "plugin-c"])
         XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+    }
+
+    func testPreferencesImportSelectionModelBulkSelectionPreservesTemporarilyIneligibleOptOuts() throws {
+        var model = PreferencesImportSelectionModel(eligiblePluginIDs: ["plugin-a", "plugin-b"])
+
+        model.deselectAll(eligiblePluginIDs: ["plugin-a", "plugin-b"])
+        XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a", "plugin-b"])
+
+        model.updateEligiblePlugins(["plugin-c"])
+        XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-c"])
+
+        // Selecting current items must not change opt-outs for hidden items.
+        model.selectAll(eligiblePluginIDs: ["plugin-c"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a", "plugin-b"])
+
+        // Deselecting current items adds to the persistent opt-out set.
+        model.deselectAll(eligiblePluginIDs: ["plugin-c"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a", "plugin-b", "plugin-c"])
+
+        model.updateEligiblePlugins(["plugin-a", "plugin-b", "plugin-c"])
+        XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
     }
 
     func testPreferencesImportPreviewSheetTitlesAndSummariesReflectSelectedCount() throws {
