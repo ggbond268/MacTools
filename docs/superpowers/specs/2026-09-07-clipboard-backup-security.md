@@ -33,9 +33,12 @@ is created. External references remain references; referenced files are never re
 Restore stages only persistent clipboard tables, encrypted with the destination key.
 It never stages queue or preference tables for import. A fingerprint binds the preview
 to the current local rows; concurrent changes invalidate the preview. Replacement
-creates a local encrypted rollback database before one SQLite transaction copies the
-staged tables into the live database. Cancellation is checked through staging and
-before the final transaction, and is disabled during that transaction. Errors shown
+copies current rows into the local encrypted rollback database in the same SQLite
+transaction that replaces the live tables. Both files use durable rollback journals;
+a failed transaction preserves the previous recovery point. The first rollback's
+schema is also transactional, so an interrupted attempt cannot become a valid empty
+snapshot. Cancellation is checked through staging and snapshot copying, then disabled
+before the live tables change. Errors shown
 to users are fixed messages, never decoded metadata or underlying parser errors.
 
 This is a focused design review, not an independent cryptographic audit. Adversarial

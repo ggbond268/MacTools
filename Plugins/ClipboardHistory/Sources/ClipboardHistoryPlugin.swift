@@ -262,6 +262,7 @@ final class ClipboardHistoryPlugin:
             || !pendingSequentialPasteTargets.isEmpty
     }
     var hasPrivateCopyOperationForTesting: Bool { privateCopyTask != nil }
+    var sequentialPasteHUDForTesting: ClipboardSequentialPasteHUDController { sequentialPasteHUD }
     var isKeywordExpansionRunningForTesting: Bool { keywordExpander.isRunning }
     var hasConfiguredKeywordExpansionForTesting: Bool { keywordExpander.hasConfiguredKeywords }
     var snippetPasteboardReaderForTesting: ClipboardPasteboardReaderProcess { snippetPasteboardReader }
@@ -279,6 +280,7 @@ final class ClipboardHistoryPlugin:
         hud.onPrevious = { [weak self] in
             guard let self, !self.isSequentialQueueMutationLocked else { return }
             Task { @MainActor in
+                guard !self.isSequentialQueueMutationLocked else { return }
                 if await self.sequentialPasteCoordinator.moveToPrevious() {
                     self.sequentialQueueDidChange()
                 } else {
@@ -289,6 +291,7 @@ final class ClipboardHistoryPlugin:
         hud.onSkip = { [weak self] in
             guard let self, !self.isSequentialQueueMutationLocked else { return }
             Task { @MainActor in
+                guard !self.isSequentialQueueMutationLocked else { return }
                 if await self.sequentialPasteCoordinator.skip() {
                     self.sequentialQueueDidChange()
                 } else {
@@ -299,6 +302,7 @@ final class ClipboardHistoryPlugin:
         hud.onRestart = { [weak self] in
             guard let self, !self.isSequentialQueueMutationLocked else { return }
             Task { @MainActor in
+                guard !self.isSequentialQueueMutationLocked else { return }
                 if await self.sequentialPasteCoordinator.restart() {
                     self.sequentialQueueDidChange()
                 } else {
@@ -307,11 +311,12 @@ final class ClipboardHistoryPlugin:
             }
         }
         hud.onCancel = { [weak self] in
-            self?.cancelPendingSequentialPastes()
-            self?.sequentialHUDPreviewTask?.cancel()
-            self?.sequentialHUDPreviewTask = nil
+            guard let self, !self.isBackingUpClipboard else { return }
+            self.cancelPendingSequentialPastes()
+            self.sequentialHUDPreviewTask?.cancel()
+            self.sequentialHUDPreviewTask = nil
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, !self.isBackingUpClipboard else { return }
                 if await self.sequentialPasteCoordinator.cancel() {
                     self.synchronizeSequentialPasteProtection()
                     self.sequentialPasteHUD.dismiss()
@@ -1444,20 +1449,27 @@ final class ClipboardHistoryPlugin:
         onStateChange?()
     }
 
-    private func suspendForClipboardBackup() {
+    func suspendForClipboardBackup() {
         guard !isBackingUpClipboard else { return }
         isBackingUpClipboard = true
         cancelPendingSequentialPastes()
         cancelSequentialQueueCreation()
+        sequentialHUDPreviewTask?.cancel()
+        sequentialHUDPreviewTask = nil
+        sequentialPasteHUD.dismiss()
         panelController.close(restorePreviousApplication: false, discardsPreviews: true)
         keywordExpander.stop()
         controller.suspendForBackup()
         savedLibraryController.stop()
     }
 
-    private func resumeAfterClipboardBackup(restored: Bool) {
+    func resumeAfterClipboardBackup(restored: Bool) {
         guard isBackingUpClipboard else { return }
         isBackingUpClipboard = false
+        // A dispatched private copy can arrive after the backup sheet closes.
+        if let lease = privateCopyLeaseStore.load() {
+            _ = controller.restorePrivateCopySuppression(lease)
+        }
         controller.resumeAfterBackup(restored: restored)
         savedLibraryController.start()
         synchronizeKeywordExpansion()
@@ -1525,6 +1537,7 @@ final class ClipboardHistoryPlugin:
     }
 
     func refresh() {
+        guard !isBackingUpClipboard else { return }
         controller.settingsDidChange()
         controller.start()
         savedLibraryController.start()
@@ -1687,6 +1700,7 @@ final class ClipboardHistoryPlugin:
     }
 
     private func enqueueSequentialPaste(targetProcessIdentifier: pid_t?) {
+        guard !isBackingUpClipboard else { return }
         guard pendingSequentialPasteTargets.count
                 + (isSequentialPasteInFlight ? 1 : 0)
                 < ClipboardSequentialPasteSession.maximumItemCount else {
@@ -1935,7 +1949,7 @@ final class ClipboardHistoryPlugin:
     }
 
     private var isSequentialQueueMutationLocked: Bool {
-        isSequentialPasteInFlight || !pendingSequentialPasteTargets.isEmpty
+        isBackingUpClipboard || isSequentialPasteInFlight || !pendingSequentialPasteTargets.isEmpty
     }
 
     private func markSequentialItemUnavailable(
@@ -1954,7 +1968,7 @@ final class ClipboardHistoryPlugin:
     }
 
     private func isCurrentSequentialPasteWorker(generation: Int) -> Bool {
-        sequentialPasteWorkerGeneration == generation && !Task.isCancelled
+        !isBackingUpClipboard && sequentialPasteWorkerGeneration == generation && !Task.isCancelled
     }
 
     private func synchronizeSequentialPasteProtection() {
@@ -1983,6 +1997,7 @@ final class ClipboardHistoryPlugin:
 
     @discardableResult
     private func requestSequentialQueueCreation(itemIDs: [UUID]) async -> Bool {
+        guard !isBackingUpClipboard else { return false }
         guard sequentialQueueCreationTask == nil else {
             privacyHUDPresenter.showFailure(localization.string(
                 "hud.queue.active",
@@ -2108,6 +2123,10 @@ final class ClipboardHistoryPlugin:
     private func showSequentialPasteHUD() {
         sequentialHUDPreviewTask?.cancel()
         sequentialHUDPreviewTask = nil
+        guard !isBackingUpClipboard else {
+            sequentialPasteHUD.dismiss()
+            return
+        }
         guard let session = sequentialPasteCoordinator.session else {
             sequentialPasteHUD.dismiss()
             return

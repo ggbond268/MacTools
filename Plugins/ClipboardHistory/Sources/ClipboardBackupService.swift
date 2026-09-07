@@ -276,6 +276,13 @@ final class ClipboardBackupService: @unchecked Sendable {
     func commit(_ preview: ClipboardBackupPreview, progress: @Sendable (ClipboardBackupPhase) -> Void = { _ in }) throws {
         let key = try key()
         try access.withActiveAccess {
+            let hadRollback = FileManager.default.fileExists(atPath: rollbackURL.path)
+            var committed = false
+            defer {
+                if preview.replacement, !hadRollback, !committed {
+                    try? FileManager.default.removeItem(at: rollbackURL)
+                }
+            }
             let live = try ClipboardBackupDatabase(url: databaseURL, key: key)
             let staged = try ClipboardBackupDatabase(url: preview.databaseURL, key: key)
             if let limit = commitPageLimitForTesting {
@@ -286,27 +293,42 @@ final class ClipboardBackupService: @unchecked Sendable {
             guard try staged.fingerprint() == preview.stagedFingerprint else { throw ClipboardBackupError.invalidArchive }
             try live.execute("ATTACH DATABASE ?1 AS restored", text: preview.databaseURL.path)
             defer { try? live.execute("DETACH DATABASE restored") }
+            if preview.replacement {
+                // Rollback journals let SQLite commit both files atomically, including recovery
+                // after a process crash. WAL cannot provide that multi-database guarantee.
+                try live.useDurableRollbackJournal()
+                do {
+                    // Create the schema inside the transaction: a crash before the first commit
+                    // must not leave an empty database that could be mistaken for valid recovery.
+                    let rollback = try ClipboardBackupDatabase(url: rollbackURL, key: key, create: true, createTables: false)
+                    try rollback.useDurableRollbackJournal()
+                }
+                try live.execute("ATTACH DATABASE ?1 AS recovery", text: rollbackURL.path)
+                try live.execute("PRAGMA recovery.synchronous=FULL")
+            }
+            defer { if preview.replacement { try? live.execute("DETACH DATABASE recovery") } }
             try live.transaction {
                 guard try live.fingerprint() == preview.fingerprint else { throw ClipboardBackupError.changedSincePreview }
                 try checkpoint?("beforeSnapshot")
                 if preview.replacement {
-                    let temporary = preview.directory.appendingPathComponent("rollback.sqlite3")
-                    do {
-                        let rollback = try ClipboardBackupDatabase(url: temporary, key: key, create: true)
-                        try live.copyRows(to: rollback)
+                    for table in ClipboardBackupRecord.Table.allCases {
+                        try Task.checkCancellation()
+                        try live.execute("CREATE TABLE IF NOT EXISTS recovery.\(table.rawValue) (id TEXT PRIMARY KEY NOT NULL, metadata BLOB NOT NULL, payload BLOB NOT NULL)")
+                        try live.execute("DELETE FROM recovery.\(table.rawValue)")
+                        try live.execute("INSERT INTO recovery.\(table.rawValue) SELECT id,metadata,payload FROM main.\(table.rawValue)")
                     }
-                    guard rename(temporary.path, rollbackURL.path) == 0 else { throw ClipboardBackupError.storage }
                 }
-                try Task.checkCancellation()
                 try checkpoint?("beforeCommit")
+                try Task.checkCancellation()
                 progress(.finishing)
-                // No cancellation checks after this point. Both tables change in one transaction.
+                // No cancellation checks after this point. Live data and its rollback change together.
                 for table in ClipboardBackupRecord.Table.allCases {
-                    try live.execute("DELETE FROM \(table.rawValue)")
+                    try live.execute("DELETE FROM main.\(table.rawValue)")
                     try checkpoint?("duringCommit")
-                    try live.execute("INSERT INTO \(table.rawValue) SELECT id,metadata,payload FROM restored.\(table.rawValue)")
+                    try live.execute("INSERT INTO main.\(table.rawValue) SELECT id,metadata,payload FROM restored.\(table.rawValue)")
                 }
             }
+            committed = true
         }
     }
 }

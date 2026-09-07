@@ -8,7 +8,7 @@ final class ClipboardBackupDatabase {
     let key: SymmetricKey
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-    init(url: URL, key: SymmetricKey, create: Bool = false) throws {
+    init(url: URL, key: SymmetricKey, create: Bool = false, createTables: Bool = true) throws {
         var database: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | (create ? SQLITE_OPEN_CREATE : 0)
         guard sqlite3_open_v2(url.path, &database, flags, nil) == SQLITE_OK, let database else {
@@ -24,14 +24,25 @@ final class ClipboardBackupDatabase {
             try execute("PRAGMA cache_size=-2048")
             if create {
                 try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-                for table in ClipboardBackupRecord.Table.allCases {
-                    try execute("CREATE TABLE IF NOT EXISTS \(table.rawValue) (id TEXT PRIMARY KEY NOT NULL, metadata BLOB NOT NULL, payload BLOB NOT NULL)")
+                if createTables {
+                    for table in ClipboardBackupRecord.Table.allCases {
+                        try execute("CREATE TABLE IF NOT EXISTS \(table.rawValue) (id TEXT PRIMARY KEY NOT NULL, metadata BLOB NOT NULL, payload BLOB NOT NULL)")
+                    }
                 }
             }
         } catch { sqlite3_close(database); throw error }
     }
 
     deinit { sqlite3_close(handle) }
+
+    func useDurableRollbackJournal() throws {
+        let statement = try statement("PRAGMA journal_mode=DELETE")
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW,
+              let mode = sqlite3_column_text(statement, 0),
+              String(cString: mode) == "delete" else { throw ClipboardBackupError.storage }
+        try execute("PRAGMA synchronous=FULL")
+    }
 
     func execute(_ sql: String, values: [Data] = [], text: String? = nil) throws {
         let statement = try statement(sql)

@@ -29,7 +29,9 @@ backup counts. Counts and category membership are checked against every staged r
 
 Local rollback snapshots contain only the two persistent clipboard tables and
 remain encrypted under the current Mac's key. They are intentionally not portable.
-A subsequent replacement refreshes that snapshot. Use Restore Local Rollback
+A successful replacement refreshes that snapshot in the same SQLite transaction as
+the live data. Cancellation or storage failure preserves the previous recovery point.
+Both databases use durable rollback journals for atomic commits across the files. Use Restore Local Rollback
 Snapshot from Local Data to preview and confirm recovery. Plugin private-data
 removal also removes these files. Temporary work directories use mode 0700 and
 files use 0600; interrupted-process leftovers contain destination-encrypted data.

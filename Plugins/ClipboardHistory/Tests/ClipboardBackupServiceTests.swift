@@ -295,6 +295,81 @@ final class ClipboardBackupServiceTests: XCTestCase {
         destination.service.commitPageLimitForTesting = 1
         XCTAssertThrowsError(try destination.service.commit(preview))
         XCTAssertEqual(try destination.fingerprint(), before)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.service.rollbackURL.path))
+    }
+
+    private func replacedFixture(originalText: String = "original") throws -> Fixture {
+        let source = try Fixture(), destination = try Fixture()
+        try destination.history.save([clip(text: originalText)])
+        try destination.snippets.save(snippet(title: "Original snippet"), payloadChanged: true)
+        try source.history.save([clip(text: "replacement")])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        try destination.service.commit(destination.service.preview(url: source.archive, password: password, replacing: true))
+        return destination
+    }
+
+    private func rollbackFingerprint(_ fixture: Fixture) throws -> Data {
+        try ClipboardBackupDatabase(url: fixture.service.rollbackURL,
+            key: SymmetricKey(data: XCTUnwrap(fixture.keyStore.currentKey))).fingerprint()
+    }
+
+    func testFailedRecoveryPreservesExistingRollbackAndAllowsRetry() throws {
+        for point in ["beforeCommit", "duringCommit"] {
+            let destination = try replacedFixture()
+            let live = try destination.fingerprint(), rollback = try rollbackFingerprint(destination)
+            let preview = try destination.service.previewRollback()
+            destination.service.checkpoint = { phase in
+                if phase == point { throw ClipboardBackupError.storage }
+            }
+            XCTAssertThrowsError(try destination.service.commit(preview))
+            XCTAssertEqual(try destination.fingerprint(), live)
+            XCTAssertEqual(try rollbackFingerprint(destination), rollback)
+            destination.service.checkpoint = nil
+            try destination.service.commit(destination.service.previewRollback())
+            XCTAssertEqual(try destination.history.load().map(\.text), ["original"])
+            XCTAssertEqual(try destination.snippets.load().map(\.title), ["Original snippet"])
+            XCTAssertEqual(try rollbackFingerprint(destination), live)
+        }
+    }
+
+    func testActualTaskCancellationAfterSnapshotPreservesExistingRollback() async throws {
+        let destination = try replacedFixture()
+        let live = try destination.fingerprint(), rollback = try rollbackFingerprint(destination)
+        let preview = try destination.service.previewRollback(), service = destination.service
+        service.checkpoint = { phase in
+            if phase == "beforeCommit" { withUnsafeCurrentTask { $0?.cancel() } }
+        }
+        let worker = Task.detached { try service.commit(preview) }
+        do { try await worker.value; XCTFail("Expected cancellation after snapshot copy") }
+        catch is CancellationError { }
+        XCTAssertEqual(try destination.fingerprint(), live)
+        XCTAssertEqual(try rollbackFingerprint(destination), rollback)
+    }
+
+    func testSQLiteFullDuringRecoveryPreservesExistingRollback() throws {
+        let destination = try replacedFixture(originalText: String(repeating: "x", count: 512 * 1_024))
+        let database = try ClipboardBackupDatabase(url: destination.url,
+            key: SymmetricKey(data: XCTUnwrap(destination.keyStore.currentKey)))
+        try database.execute("VACUUM")
+        let live = try destination.fingerprint(), rollback = try rollbackFingerprint(destination)
+        let preview = try destination.service.previewRollback()
+        destination.service.commitPageLimitForTesting = 1
+        XCTAssertThrowsError(try destination.service.commit(preview))
+        XCTAssertEqual(try destination.fingerprint(), live)
+        XCTAssertEqual(try rollbackFingerprint(destination), rollback)
+    }
+
+    func testIncompleteFirstRollbackCannotBeRestored() throws {
+        let destination = try Fixture()
+        try destination.history.save([clip(text: "keep local")])
+        let live = try destination.fingerprint()
+        // Models a process stopping after creating the file but before committing its schema.
+        do {
+            _ = try ClipboardBackupDatabase(url: destination.service.rollbackURL,
+                key: SymmetricKey(data: XCTUnwrap(destination.keyStore.currentKey)), create: true, createTables: false)
+        }
+        XCTAssertThrowsError(try destination.service.previewRollback())
+        XCTAssertEqual(try destination.fingerprint(), live)
     }
 
     func testConcurrentMutationInvalidatesPreview() throws {
