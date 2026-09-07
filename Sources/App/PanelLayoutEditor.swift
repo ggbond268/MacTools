@@ -3,22 +3,31 @@ import SwiftUI
 import UniformTypeIdentifiers
 import MacToolsPluginKit
 
-/// Temporary presentation state only; completed moves go through the same host path as Settings.
+/// Temporary presentation state only; the host persists completed moves in the rendered order.
 struct PanelLayoutEditor: View {
     @ObservedObject var pluginHost: PluginHost
     let surface: PluginDisplaySurface
+    let onDismiss: () -> Void
     @StateObject private var session = PanelLayoutEditingSession()
     @StateObject private var scroller = PanelLayoutDragScroller()
     @Environment(\.menuBarPanelTheme) private var theme
     @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    init(pluginHost: PluginHost, surface: PluginDisplaySurface, onDismiss: @escaping () -> Void,
+         session: @autoclosure @escaping () -> PanelLayoutEditingSession = PanelLayoutEditingSession()) {
+        self.pluginHost = pluginHost
+        self.surface = surface
+        self.onDismiss = onDismiss
+        self._session = StateObject(wrappedValue: session())
+    }
+
     private var ids: [String] {
         surface == .dashboard ? pluginHost.componentItems.map(\.id) : pluginHost.panelItems.map(\.id)
     }
 
     private var placements: [ComponentGridPlacement] {
-        ComponentGridPlacementEngine.placements(for: pluginHost.componentItems)
+        surface == .dashboard ? ComponentGridPlacementEngine.placements(for: pluginHost.componentItems) : []
     }
 
     private var previewPlacements: [ComponentGridPlacement] {
@@ -105,7 +114,7 @@ struct PanelLayoutEditor: View {
             ForEach(previewPlacements) { placement in
                 if let item = lookup[placement.id], let index = ids.firstIndex(of: item.id) {
                     reorderItem(id: item.id, title: item.title, icon: item.iconName, index: index) {
-                        pluginHost.componentViewItem(for: item.id, dismiss: {}).content
+                        pluginHost.componentViewItem(for: item.id, dismiss: onDismiss).content
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .disabled(true)
                         .allowsHitTesting(false)
@@ -178,7 +187,7 @@ struct PanelLayoutEditor: View {
         guard ids.contains(move.id) else { return }
         let result = PanelLayoutDestination.moving(move.id, toOffset: move.offset, in: ids)
         guard result != ids, let index = result.firstIndex(of: move.id) else { return }
-        pluginHost.movePlugin(id: move.id, toOffset: move.offset, on: surface)
+        pluginHost.moveRenderedPlugin(id: move.id, toOffset: move.offset, on: surface)
         announce(id: move.id, index: index)
     }
 

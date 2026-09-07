@@ -29,7 +29,7 @@ final class PanelLayoutEditorRenderingTests: XCTestCase {
         ] {
             let theme = MenuBarPanelThemeResolver.resolve(definition: nil, colorScheme: scheme, contrast: contrast)
             let view = NSHostingView(rootView:
-                PanelLayoutEditor(pluginHost: host, surface: surface)
+                PanelLayoutEditor(pluginHost: host, surface: surface, onDismiss: {})
                     .environment(\.layoutDirection, direction)
                     .environment(\.colorScheme, scheme)
                     .environment(\.menuBarPanelTheme, theme)
@@ -42,7 +42,7 @@ final class PanelLayoutEditorRenderingTests: XCTestCase {
             window.appearance = NSAppearance(named: scheme == .dark ? .accessibilityHighContrastDarkAqua : .aqua)
             window.isReleasedWhenClosed = false
             window.contentView = view
-            window.makeKeyAndOrderFront(nil)
+            window.orderFront(nil)
             defer { window.close() }
             try await Task.sleep(for: .milliseconds(250))
             view.layoutSubtreeIfNeeded()

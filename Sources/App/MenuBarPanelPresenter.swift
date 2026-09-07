@@ -1055,7 +1055,8 @@ struct MenuBarUnifiedPanelContent: View {
         if model.isEditingLayout {
             PanelLayoutEditor(
                 pluginHost: pluginHost,
-                surface: model.selectedTab == .components ? .dashboard : .featurePanel
+                surface: model.selectedTab == .components ? .dashboard : .featurePanel,
+                onDismiss: onDismiss
             )
             .id(model.selectedTab)
             .frame(height: contentBodyHeight)
