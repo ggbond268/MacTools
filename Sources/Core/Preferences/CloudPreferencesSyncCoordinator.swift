@@ -12,6 +12,8 @@ final class CloudPreferencesSyncCoordinator {
     private let userDefaults: UserDefaults
     private let fileManager: FileManager
     private let debounceDelay: Duration
+    private let readSnapshot: @Sendable (URL) async throws -> Data
+    private let writeQueue: DispatchQueue
     private let observerQueue = DispatchQueue(
         label: "app.ggbond.MacTools.CloudPreferencesSyncCoordinator.observer",
         qos: .utility
@@ -33,6 +35,11 @@ final class CloudPreferencesSyncCoordinator {
     private var pendingExportTask: Task<Void, Never>?
     private var pendingCheckTask: Task<Void, Never>?
     private var isApplyingExternalSnapshot = false
+    private var hasPendingLocalChanges = false
+    private var mustRepublish = false
+    private var localRevision: UInt64 = 0
+    private var syncSession = UUID()
+    private var exportTask: Task<Void, Error>?
     private var lastMeaningfulBackup: PreferencesBackup?
     private var directorySource: DispatchSourceFileSystemObject?
     private var fileDescriptor: Int32 = -1
@@ -41,11 +48,22 @@ final class CloudPreferencesSyncCoordinator {
     init(
         userDefaults: UserDefaults = .standard,
         fileManager: FileManager = .default,
-        debounceDelay: Duration = .seconds(2)
+        debounceDelay: Duration = .seconds(2),
+        writeQueue: DispatchQueue = DispatchQueue(
+            label: "app.ggbond.MacTools.CloudPreferencesSyncCoordinator.writer",
+            qos: .utility
+        ),
+        readSnapshot: @escaping @Sendable (URL) async throws -> Data = { url in
+            try await Task.detached(priority: .utility) {
+                try Data(contentsOf: url)
+            }.value
+        }
     ) {
         self.userDefaults = userDefaults
         self.fileManager = fileManager
         self.debounceDelay = debounceDelay
+        self.writeQueue = writeQueue
+        self.readSnapshot = readSnapshot
 
         let savedDeviceID = userDefaults.string(forKey: Self.deviceIDUserDefaultsKey)
         if let savedDeviceID, !savedDeviceID.isEmpty {
@@ -100,13 +118,14 @@ final class CloudPreferencesSyncCoordinator {
 
     func setEnabled(_ enabled: Bool) {
         guard isEnabled != enabled else { return }
+        syncSession = UUID()
         isEnabled = enabled
         userDefaults.set(enabled, forKey: Self.enabledUserDefaultsKey)
 
         if enabled {
             startObservingDirectory()
             updateStatus()
-            committedPreferencesDidChange()
+            scheduleExport()
             Task { [weak self] in
                 await self?.checkForIncomingSnapshots()
             }
@@ -124,6 +143,7 @@ final class CloudPreferencesSyncCoordinator {
         guard syncDirectoryURL != url else { return }
         stopObservingDirectory()
 
+        syncSession = UUID()
         syncDirectoryURL = url
         if let url {
             userDefaults.set(url.path, forKey: Self.directoryPathUserDefaultsKey)
@@ -135,7 +155,7 @@ final class CloudPreferencesSyncCoordinator {
         if isEnabled, url != nil {
             startObservingDirectory()
             updateStatus()
-            committedPreferencesDidChange()
+            scheduleExport()
             Task { [weak self] in
                 await self?.checkForIncomingSnapshots()
             }
@@ -146,6 +166,12 @@ final class CloudPreferencesSyncCoordinator {
 
     func committedPreferencesDidChange() {
         guard isEnabled, !isApplyingExternalSnapshot, syncDirectoryURL != nil else { return }
+        localRevision &+= 1
+        hasPendingLocalChanges = true
+        scheduleExport()
+    }
+
+    private func scheduleExport() {
         pendingExportTask?.cancel()
         pendingExportTask = Task { [weak self] in
             guard let self else { return }
@@ -186,10 +212,13 @@ final class CloudPreferencesSyncCoordinator {
         guard isEnabled, !isApplyingExternalSnapshot, let url = syncDirectoryURL else { return }
         pendingExportTask?.cancel()
         pendingExportTask = nil
+        // Invalidate suspended operations; the serial writer finishes any older write first.
+        syncSession = UUID()
 
         guard let backup = snapshotProvider?() else { return }
         let sanitized = Self.filterMachineSpecificPreferences(backup)
-        if let last = lastMeaningfulBackup, last.hasSameMeaningfulContent(as: sanitized) {
+        if !mustRepublish, exportTask == nil,
+           let last = lastMeaningfulBackup, last.hasSameMeaningfulContent(as: sanitized) {
             return
         }
 
@@ -209,11 +238,15 @@ final class CloudPreferencesSyncCoordinator {
             )
             let data = try snapshot.encodedJSON()
             let destinationURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
-            try data.write(to: destinationURL, options: .atomic)
+            try writeQueue.sync {
+                try data.write(to: destinationURL, options: .atomic)
+            }
 
             lastSyncedAt = now
             userDefaults.set(now.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
             lastMeaningfulBackup = sanitized
+            hasPendingLocalChanges = false
+            mustRepublish = false
         } catch {
             handleError(error)
         }
@@ -222,38 +255,67 @@ final class CloudPreferencesSyncCoordinator {
     // MARK: - Export Logic
 
     private func performExport() async throws {
+        // Debounce cancellation must not start a second writer while an atomic write is in flight.
+        if let exportTask {
+            try await exportTask.value
+            return
+        }
+        guard snapshotProvider?() != nil else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let task = Task { @MainActor in
+            defer { self.exportTask = nil }
+            while self.isEnabled, self.syncDirectoryURL != nil {
+                let session = self.syncSession
+                do {
+                    try await self.exportSnapshot()
+                } catch {
+                    guard session != self.syncSession else { throw error }
+                }
+                guard self.hasPendingLocalChanges || session != self.syncSession else { return }
+            }
+        }
+        exportTask = task
+        try await task.value
+    }
+
+    private func exportSnapshot() async throws {
         guard isEnabled, let url = syncDirectoryURL else {
             updateStatus()
             return
         }
-
-        guard let backup = snapshotProvider?() else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-
-        let sanitized = Self.filterMachineSpecificPreferences(backup)
-        let destinationURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
-
-        if let last = lastMeaningfulBackup,
-           last.hasSameMeaningfulContent(as: sanitized),
-           fileManager.fileExists(atPath: destinationURL.path) {
-            updateStatus()
-            return
-        }
-
+        let session = syncSession
         updateStatus(to: .syncing)
 
         try await Task.detached(priority: .utility) { [url] in
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         }.value
+        guard isEnabled, syncSession == session else { return }
+
+        // Capture after suspension so the write includes edits made while creating the folder.
+        guard let backup = snapshotProvider?() else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let revision = localRevision
+        let sanitized = Self.filterMachineSpecificPreferences(backup)
+        let destinationURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+
+        if !mustRepublish, let last = lastMeaningfulBackup,
+           last.hasSameMeaningfulContent(as: sanitized),
+           fileManager.fileExists(atPath: destinationURL.path) {
+            hasPendingLocalChanges = false
+            updateStatus()
+            return
+        }
 
         currentGeneration &+= 1
-        userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
+        let generation = currentGeneration
+        userDefaults.set(String(generation), forKey: Self.generationUserDefaultsKey)
 
         let now = Date.now
         let snapshot = CloudPreferencesSnapshot(
             version: CloudPreferencesSnapshot.currentVersion,
-            generation: currentGeneration,
+            generation: generation,
             timestamp: now,
             deviceID: localDeviceID,
             deviceName: Host.current().localizedName ?? "Mac",
@@ -261,14 +323,26 @@ final class CloudPreferencesSyncCoordinator {
         )
         let data = try snapshot.encodedJSON()
 
-        try await Task.detached(priority: .utility) {
-            try data.write(to: destinationURL, options: .atomic)
-        }.value
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            writeQueue.async {
+                do {
+                    try data.write(to: destinationURL, options: .atomic)
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+        guard isEnabled, syncSession == session else { return }
 
         lastSyncedAt = now
         userDefaults.set(now.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
         lastMeaningfulBackup = sanitized
-
+        // An edit or remote conflict observed during the write needs another export.
+        if localRevision == revision, currentGeneration == generation {
+            hasPendingLocalChanges = false
+            mustRepublish = false
+        }
         updateStatus(to: .synced(lastSyncedAt: lastSyncedAt))
     }
 
@@ -280,6 +354,9 @@ final class CloudPreferencesSyncCoordinator {
             return
         }
 
+        let session = syncSession
+        let revision = localRevision
+        let hadPendingLocalChanges = hasPendingLocalChanges || exportTask != nil
         let fileURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
         guard fileManager.fileExists(atPath: fileURL.path) else {
             updateStatus()
@@ -287,9 +364,8 @@ final class CloudPreferencesSyncCoordinator {
         }
 
         do {
-            let data = try await Task.detached(priority: .utility) {
-                try Data(contentsOf: fileURL)
-            }.value
+            let data = try await readSnapshot(fileURL)
+            guard !Task.isCancelled, isEnabled, syncSession == session else { return }
 
             let snapshot = try CloudPreferencesSnapshot.decodeJSON(data)
 
@@ -306,6 +382,17 @@ final class CloudPreferencesSyncCoordinator {
                 || (snapshot.generation == currentGeneration && snapshot.timestamp > (lastSyncedAt ?? .distantPast))
 
             if isNewer {
+                // Local commits are already durable preferences even before debounce exports them.
+                // Keep them and publish above the observed generation instead of importing a conflict.
+                if hadPendingLocalChanges || localRevision != revision
+                    || hasPendingLocalChanges || exportTask != nil {
+                    currentGeneration = max(currentGeneration, snapshot.generation)
+                    userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
+                    hasPendingLocalChanges = true
+                    mustRepublish = true
+                    scheduleExport()
+                    return
+                }
                 updateStatus(to: .syncing)
                 let sanitized = Self.filterMachineSpecificPreferences(snapshot.backup)
                 isApplyingExternalSnapshot = true
@@ -324,6 +411,7 @@ final class CloudPreferencesSyncCoordinator {
                 updateStatus()
             }
         } catch {
+            guard !Task.isCancelled, isEnabled, syncSession == session else { return }
             handleError(error)
         }
     }
@@ -452,15 +540,12 @@ final class CloudPreferencesSyncCoordinator {
             !isMachineSpecificActionReference(preset.reference)
         }
 
-        let workflows = backup.workflows?.compactMap { workflow -> WorkflowDefinition? in
-            let filteredSteps = workflow.steps.filter { step in
+        let workflows = backup.workflows?.map { workflow in
+            var sanitized = workflow
+            sanitized.steps = workflow.steps.filter { step in
                 !isMachineSpecificActionReference(step.reference)
             }
-            return WorkflowDefinition(
-                id: workflow.id,
-                name: workflow.name,
-                steps: filteredSteps
-            )
+            return sanitized
         }
 
         let automationRules = backup.automationRules?.filter { rule in

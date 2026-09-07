@@ -361,11 +361,266 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinatorA.currentGeneration, 2)
     }
 
+    func testWorkflowFilteringPreservesDisabledStateAndAllMetadata() throws {
+        let portableStep = WorkflowStep(
+            reference: ActionReference(key: ActionKey(providerID: "portable", actionID: "run")),
+            label: "Portable step",
+            delaySeconds: 2,
+            errorPolicy: .continueRunning
+        )
+        let localStep = WorkflowStep(reference: ActionReference(
+            key: ActionKey(providerID: "display-brightness", actionID: "adjust"),
+            parameters: try ActionParameterSet(["displayID": .integer(12345)])
+        ))
+        let workflow = WorkflowDefinition(
+            name: "Disabled workflow",
+            systemImage: "star.fill",
+            isEnabled: false,
+            steps: [localStep, portableStep],
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        let backup = makeBackup(marker: "workflow", workflows: [workflow])
+        let sanitized = CloudPreferencesSyncCoordinator.filterMachineSpecificPreferences(backup)
+        var expected = workflow
+        expected.steps = [portableStep]
+
+        XCTAssertEqual(sanitized.workflows, [expected])
+        let repeated = CloudPreferencesSyncCoordinator.filterMachineSpecificPreferences(backup)
+        XCTAssertTrue(sanitized.hasSameMeaningfulContent(as: repeated))
+        XCTAssertTrue(sanitized.hasSameMeaningfulContent(
+            as: CloudPreferencesSyncCoordinator.filterMachineSpecificPreferences(sanitized)
+        ))
+    }
+
+    func testUnchangedWorkflowDoesNotAdvanceExportGeneration() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        let workflow = WorkflowDefinition(name: "Disabled", systemImage: "star", isEnabled: false)
+        coordinator.snapshotProvider = { [unowned self] in
+            self.makeBackup(marker: "same", workflows: [workflow])
+        }
+        defer { coordinator.setEnabled(false) }
+
+        try await coordinator.syncNow()
+        let firstGeneration = coordinator.currentGeneration
+        coordinator.committedPreferencesDidChange()
+        try await coordinator.syncNow()
+
+        XCTAssertEqual(coordinator.currentGeneration, firstGeneration)
+        let saved = try readSnapshot(in: directory)
+        XCTAssertFalse(try XCTUnwrap(saved.backup.workflows?.first).isEnabled)
+    }
+
+    func testPendingLocalEditWinsOverHigherGenerationSnapshot() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        var localBackup = makeBackup(marker: "initial")
+        var importCount = 0
+        coordinator.snapshotProvider = { localBackup }
+        coordinator.importHandler = { localBackup = $0; importCount += 1 }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+
+        localBackup = makeBackup(marker: "newer-local")
+        coordinator.committedPreferencesDidChange()
+        let remote = CloudPreferencesSnapshot(
+            generation: 15,
+            timestamp: Date.now.addingTimeInterval(-10),
+            deviceID: "remote",
+            deviceName: "Remote Mac",
+            backup: makeBackup(marker: "older-remote")
+        )
+        try remote.encodedJSON().write(to: directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName))
+        await coordinator.checkForIncomingSnapshots()
+
+        XCTAssertEqual(importCount, 0)
+        XCTAssertEqual(localBackup.pluginDisplay.orderedPluginIDs, ["newer-local"])
+        XCTAssertEqual(coordinator.currentGeneration, 15)
+        try await coordinator.syncNow()
+        let saved = try readSnapshot(in: directory)
+        XCTAssertEqual(saved.generation, 16)
+        XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["newer-local"])
+    }
+
+    func testLocalEditDuringIncomingReadSurvivesEvenAfterItsExportCompletes() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let gate = CloudSnapshotReadGate()
+        let coordinator = makeConfiguredCoordinator(directory: directory, debounceDelay: .zero) { url in
+            let data = try Data(contentsOf: url)
+            await gate.suspendIfArmed()
+            return data
+        }
+        var localBackup = makeBackup(marker: "initial")
+        var importCount = 0
+        coordinator.snapshotProvider = { localBackup }
+        coordinator.importHandler = { localBackup = $0; importCount += 1 }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+        let remote = CloudPreferencesSnapshot(
+            generation: 100,
+            deviceID: "remote",
+            deviceName: "Remote Mac",
+            backup: makeBackup(marker: "remote-before-local-edit")
+        )
+        try remote.encodedJSON().write(to: directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName))
+        await gate.arm()
+        let check = Task { await coordinator.checkForIncomingSnapshots() }
+        await gate.waitUntilSuspended()
+
+        let exported = expectation(description: "Local edit exported while remote read is suspended")
+        coordinator.statusHandler = { status in
+            if case .synced = status, coordinator.currentGeneration == 2 {
+                exported.fulfill()
+            }
+        }
+        localBackup = makeBackup(marker: "local-edit-during-read")
+        coordinator.committedPreferencesDidChange()
+        await fulfillment(of: [exported], timeout: 5)
+        coordinator.statusHandler = nil
+        await gate.resume()
+        await check.value
+
+        XCTAssertEqual(importCount, 0)
+        XCTAssertEqual(localBackup.pluginDisplay.orderedPluginIDs, ["local-edit-during-read"])
+        try await coordinator.syncNow()
+        let saved = try readSnapshot(in: directory)
+        XCTAssertGreaterThan(saved.generation, 100)
+        XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["local-edit-during-read"])
+    }
+
+    func testDisablingSyncDuringIncomingReadPreventsImport() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let gate = CloudSnapshotReadGate()
+        let coordinator = makeConfiguredCoordinator(directory: directory) { url in
+            let data = try Data(contentsOf: url)
+            await gate.suspendIfArmed()
+            return data
+        }
+        var imported = false
+        coordinator.importHandler = { _ in imported = true }
+        let remote = CloudPreferencesSnapshot(
+            generation: 15, deviceID: "remote", deviceName: "Remote Mac",
+            backup: makeBackup(marker: "remote")
+        )
+        try remote.encodedJSON().write(to: directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName))
+        await gate.arm()
+        let check = Task { await coordinator.checkForIncomingSnapshots() }
+        await gate.waitUntilSuspended()
+        coordinator.setEnabled(false)
+        await gate.resume()
+        await check.value
+
+        XCTAssertFalse(imported)
+        XCTAssertEqual(coordinator.currentGeneration, 0)
+        XCTAssertEqual(coordinator.status, .offline(reason: .disabled))
+    }
+
+    func testLocalEditDuringExportPreparationIsIncluded() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        var localBackup = makeBackup(marker: "before-export")
+        coordinator.snapshotProvider = { localBackup }
+        coordinator.statusHandler = { [unowned self] status in
+            guard case .syncing = status else { return }
+            coordinator.statusHandler = nil
+            localBackup = self.makeBackup(marker: "during-export")
+            coordinator.committedPreferencesDidChange()
+        }
+        defer { coordinator.setEnabled(false) }
+
+        try await coordinator.syncNow()
+
+        let saved = try readSnapshot(in: directory)
+        XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["during-export"])
+        XCTAssertEqual(saved.generation, 1)
+    }
+
+    func testChangingFolderDuringExportWritesTheNewFolder() async throws {
+        let oldDirectory = makeTemporaryDirectoryURL()
+        let newDirectory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: oldDirectory)
+        coordinator.snapshotProvider = { [unowned self] in self.makeBackup(marker: "local") }
+        coordinator.statusHandler = { status in
+            guard case .syncing = status else { return }
+            coordinator.statusHandler = nil
+            coordinator.setSyncDirectoryURL(newDirectory)
+        }
+        defer { coordinator.setEnabled(false) }
+
+        try await coordinator.syncNow()
+
+        let saved = try readSnapshot(in: newDirectory)
+        XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["local"])
+        XCTAssertEqual(coordinator.syncDirectoryURL, newDirectory)
+    }
+
+    func testEditDuringSuspendedWriteIsExportedAfterTheOlderWrite() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let writer = DispatchQueue(label: "CloudPreferencesSyncCoordinatorTests.writer")
+        let coordinator = makeConfiguredCoordinator(directory: directory, writeQueue: writer)
+        var localBackup = makeBackup(marker: "initial")
+        coordinator.snapshotProvider = { localBackup }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+
+        writer.suspend()
+        let captured = expectation(description: "First edit captured for the suspended writer")
+        var reads = 0
+        coordinator.snapshotProvider = {
+            reads += 1
+            // performExport checks availability, then exportSnapshot captures the value.
+            if reads == 2 { captured.fulfill() }
+            return localBackup
+        }
+        localBackup = makeBackup(marker: "first-edit")
+        coordinator.committedPreferencesDidChange()
+        let firstSync = Task { try await coordinator.syncNow() }
+        await fulfillment(of: [captured], timeout: 5)
+
+        localBackup = makeBackup(marker: "second-edit")
+        coordinator.committedPreferencesDidChange()
+        let secondSync = Task { try await coordinator.syncNow() }
+        writer.resume()
+        try await firstSync.value
+        try await secondSync.value
+
+        let saved = try readSnapshot(in: directory)
+        XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["second-edit"])
+        XCTAssertEqual(saved.generation, 3)
+        XCTAssertEqual(coordinator.currentGeneration, saved.generation)
+    }
+
     // MARK: - Helpers
+
+    private func makeConfiguredCoordinator(
+        directory: URL,
+        debounceDelay: Duration = .seconds(60),
+        writeQueue: DispatchQueue = DispatchQueue(label: "CloudPreferencesSyncCoordinatorTests.writer"),
+        readSnapshot: @escaping @Sendable (URL) async throws -> Data = { url in
+            try Data(contentsOf: url)
+        }
+    ) -> CloudPreferencesSyncCoordinator {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: CloudPreferencesSyncCoordinator.enabledUserDefaultsKey)
+        defaults.set(directory.path, forKey: CloudPreferencesSyncCoordinator.directoryPathUserDefaultsKey)
+        return CloudPreferencesSyncCoordinator(
+            userDefaults: defaults, debounceDelay: debounceDelay,
+            writeQueue: writeQueue, readSnapshot: readSnapshot
+        )
+    }
+
+    private func readSnapshot(in directory: URL) throws -> CloudPreferencesSnapshot {
+        try CloudPreferencesSnapshot.decodeJSON(Data(contentsOf:
+            directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        ))
+    }
+
 
     private func makeBackup(
         marker: String,
-        appearance: AppAppearancePreference = .system
+        appearance: AppAppearancePreference = .system,
+        workflows: [WorkflowDefinition] = []
     ) -> PreferencesBackup {
         PreferencesBackup(
             application: PreferencesBackup.ApplicationPreferences(
@@ -379,6 +634,7 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
             ),
             shortcutCustomizations: [:],
             pluginPreferences: [:],
+            workflows: workflows,
             exportedAt: .now
         )
     }
@@ -397,5 +653,33 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         temporaryURLs.append(url)
         return url
+    }
+}
+
+private actor CloudSnapshotReadGate {
+    private var isArmed = false
+    private var suspendedRead: CheckedContinuation<Void, Never>?
+    private var suspensionObserver: CheckedContinuation<Void, Never>?
+
+    func arm() { isArmed = true }
+
+    func suspendIfArmed() async {
+        guard isArmed else { return }
+        isArmed = false
+        await withCheckedContinuation { continuation in
+            suspendedRead = continuation
+            suspensionObserver?.resume()
+            suspensionObserver = nil
+        }
+    }
+
+    func waitUntilSuspended() async {
+        guard suspendedRead == nil else { return }
+        await withCheckedContinuation { suspensionObserver = $0 }
+    }
+
+    func resume() {
+        suspendedRead?.resume()
+        suspendedRead = nil
     }
 }

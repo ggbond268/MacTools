@@ -4,4 +4,4 @@ type: added
 area: Preferences
 ---
 
-Added folder-based cloud synchronization for user preferences across Macs with support for iCloud Drive and custom folders, atomic versioned snapshot exports, and conflict prevention.
+Added preference sync through iCloud Drive or custom folders, preserving workflow metadata and protecting pending local edits from incoming conflicts.
