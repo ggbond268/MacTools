@@ -1,0 +1,418 @@
+import CryptoKit
+import Darwin
+import Foundation
+import XCTest
+@testable import ClipboardHistoryPlugin
+
+final class ClipboardBackupServiceTests: XCTestCase {
+    private let password = "a-long-test-password-394"
+    private let full = ClipboardBackupScope(history: true, saved: true, snippets: true)
+
+    private final class Fixture {
+        let directory: URL
+        let keyStore = InMemoryClipboardHistoryKeyStore()
+        let history: IncrementalEncryptedClipboardHistoryStore
+        let snippets: IncrementalEncryptedClipboardSavedLibraryStore
+        let service: ClipboardBackupService
+        let url: URL
+        init(maximumItemBytes: Int = 5 * 1_024 * 1_024) throws {
+            directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            url = directory.appendingPathComponent("clipboard.sqlite3")
+            let access = ClipboardDatabaseAccessCoordinator()
+            history = IncrementalEncryptedClipboardHistoryStore(databaseURL: url, keyStore: keyStore, databaseAccess: access)
+            snippets = IncrementalEncryptedClipboardSavedLibraryStore(databaseURL: url, keyStore: keyStore, databaseAccess: access)
+            service = ClipboardBackupService(databaseURL: url, keyStore: keyStore, access: access, maximumItemBytes: maximumItemBytes)
+            try history.prepare()
+            try snippets.prepare()
+        }
+        deinit { try? FileManager.default.removeItem(at: directory) }
+        var archive: URL { directory.appendingPathComponent("test.mactoolsclipboard") }
+        func fingerprint() throws -> Data {
+            try ClipboardBackupDatabase(url: url, key: SymmetricKey(data: XCTUnwrap(keyStore.currentKey))).fingerprint()
+        }
+    }
+
+    private func clip(id: UUID = UUID(), text: String = "private-original-representation", history: Bool = true,
+                      saved: Bool = true, updated: Date = Date(timeIntervalSince1970: 300)) -> ClipboardHistoryItem {
+        ClipboardHistoryItem(id: id, payload: .plainText(text), capturedAt: Date(timeIntervalSince1970: 100),
+            sourceApplication: ClipboardSourceApplication(bundleIdentifier: "test.private.app", name: "Private App"),
+            isPinned: false, lastUsedAt: Date(timeIntervalSince1970: 200), imageSearchText: "private OCR metadata",
+            hasCompletedImageTextIndexing: true, isInHistory: history,
+            savedMetadata: saved ? ClipboardHistorySavedMetadata(title: "Private saved title", tags: ["tag"], savedAt: Date(timeIntervalSince1970: 150), updatedAt: updated) : nil)
+    }
+
+    private func snippet(id: UUID = UUID(), title: String = "Snippet", keyword: String? = "hello", text: String = "Hello {{cursor}}") -> ClipboardSavedItem {
+        ClipboardSavedItem(id: id, title: title, tags: ["private tag"], keyword: keyword, savedKind: .snippet,
+                           createdAt: Date(timeIntervalSince1970: 120), updatedAt: Date(timeIntervalSince1970: 200),
+                           lastUsedAt: Date(timeIntervalSince1970: 250), payload: .plainText(text), templateText: text)
+    }
+
+    func testRoundTripAllCategoriesPreservesMetadataAndUsesDestinationKey() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let item = clip(), saved = snippet()
+        try source.history.save([item])
+        try source.snippets.save(saved, payloadChanged: true)
+        let manifest = try source.service.backUp(to: source.archive, password: password, scope: full)
+        XCTAssertEqual(manifest.records, 2)
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.summary.added, 2)
+        XCTAssertFalse(preview.replacement)
+        try destination.service.commit(preview)
+        let restored = try XCTUnwrap(destination.history.load().first)
+        XCTAssertEqual(restored, item)
+        XCTAssertEqual(try restored.loadPayload(), try item.loadPayload())
+        let restoredSnippet = try XCTUnwrap(destination.snippets.load().first)
+        XCTAssertEqual(restoredSnippet.id, saved.id)
+        XCTAssertEqual(restoredSnippet.title, saved.title)
+        XCTAssertEqual(restoredSnippet.tags, saved.tags)
+        XCTAssertEqual(restoredSnippet.keyword, saved.keyword)
+        XCTAssertEqual(restoredSnippet.createdAt, saved.createdAt)
+        XCTAssertEqual(restoredSnippet.updatedAt, saved.updatedAt)
+        XCTAssertEqual(restoredSnippet.lastUsedAt, saved.lastUsedAt)
+        XCTAssertEqual(try restoredSnippet.loadPayload(), try saved.loadPayload())
+        XCTAssertNotEqual(source.keyStore.currentKey, destination.keyStore.currentKey)
+        let sourceKeyReader = try ClipboardBackupDatabase(url: destination.url, key: SymmetricKey(data: XCTUnwrap(source.keyStore.currentKey)))
+        XCTAssertThrowsError(try sourceKeyReader.forEach { _ in })
+        let raw = try Data(contentsOf: source.archive)
+        for secret in ["private-original-representation", "Private saved title", "private OCR metadata", "test.private.app", "Hello {{cursor}}", password] {
+            XCTAssertNil(raw.range(of: Data(secret.utf8)))
+        }
+        XCTAssertNil(raw.range(of: try XCTUnwrap(source.keyStore.currentKey)))
+    }
+
+    func testSelectiveScopesStripUnselectedMembership() throws {
+        let source = try Fixture()
+        try source.history.save([clip()])
+        try source.snippets.save(snippet(), payloadChanged: true)
+        for scope in [ClipboardBackupScope(), ClipboardBackupScope(history: true, saved: false, snippets: false), ClipboardBackupScope(history: false, saved: true, snippets: false)] {
+            let destination = try Fixture()
+            _ = try source.service.backUp(to: source.archive, password: password, scope: scope)
+            let preview = try destination.service.preview(url: source.archive, password: password)
+            try destination.service.commit(preview)
+            let restored = try XCTUnwrap(destination.history.load().first)
+            XCTAssertEqual(restored.isInHistory, scope.history)
+            XCTAssertEqual(restored.isSaved, scope.saved)
+            XCTAssertEqual(try destination.snippets.load().count, scope.snippets ? 1 : 0)
+        }
+    }
+
+    func testMergeMatchingIDsCombinesMembershipAndNewerMetadata() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let id = UUID()
+        try source.history.save([clip(id: id, history: false, updated: Date(timeIntervalSince1970: 500))])
+        try destination.history.save([clip(id: id, saved: false)])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.summary.merged, 1)
+        try destination.service.commit(preview)
+        let result = try XCTUnwrap(destination.history.load().first)
+        XCTAssertTrue(result.isSaved)
+        XCTAssertTrue(result.isInHistory)
+        XCTAssertEqual(result.savedMetadata?.updatedAt, Date(timeIntervalSince1970: 500))
+    }
+
+    func testUnchangedMatchingIDIsSkippedAndPartialReplacementDoesNotCountUntouchedCategories() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let item = clip()
+        try source.history.save([item])
+        try destination.history.save([item])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        XCTAssertEqual(try destination.service.preview(url: source.archive, password: password).summary.skipped, 1)
+        let historyOnly = clip(text: "untouched history", saved: false)
+        try destination.history.save([historyOnly])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: ClipboardBackupScope())
+        let preview = try destination.service.preview(url: source.archive, password: password, replacing: true)
+        XCTAssertEqual(preview.summary.removed, 0)
+        try destination.service.commit(preview)
+        XCTAssertTrue(try destination.history.load().contains { $0.id == historyOnly.id && $0.isInHistory })
+    }
+
+    func testConflictingIDsPreserveBothAndDuplicateSnippetBodiesRemainDistinct() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let id = UUID()
+        try source.history.save([clip(id: id, text: "incoming")])
+        try destination.history.save([clip(id: id, text: "local")])
+        try source.snippets.save(snippet(title: "Incoming", keyword: "HELLO"), payloadChanged: true)
+        try destination.snippets.save(snippet(title: "Local", keyword: "hello"), payloadChanged: true)
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.summary.conflicts, 1)
+        XCTAssertEqual(preview.summary.disabledKeywords, 1)
+        let notices = try destination.service.notices(preview, offset: 0)
+        XCTAssertEqual(notices.filter { $0.kind == .identifierConflict }.count, 1)
+        XCTAssertEqual(notices.first { $0.kind == .disabledKeyword }?.title, "Incoming")
+        try destination.service.commit(preview)
+        XCTAssertEqual(Set(try destination.history.load().map(\.text)), ["local", "incoming"])
+        let snippets = try destination.snippets.load()
+        XCTAssertEqual(snippets.count, 2)
+        XCTAssertEqual(snippets.first { $0.title == "Local" }?.keyword, "hello")
+        XCTAssertNil(snippets.first { $0.title == "Incoming" }?.keyword)
+    }
+
+    func testDuplicateClipDigestsKeepMeaningfulDistinctMetadata() throws {
+        let source = try Fixture(), destination = try Fixture()
+        try source.history.save([clip()])
+        try destination.history.save([clip()])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        try destination.service.commit(destination.service.preview(url: source.archive, password: password))
+        XCTAssertEqual(try destination.history.load().count, 2)
+    }
+
+    func testPartialReplacementKeepsOtherMembershipAndRollbackRecoversEverything() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let local = clip(), incoming = clip(text: "incoming")
+        try destination.history.save([local])
+        try destination.snippets.save(snippet(), payloadChanged: true)
+        try source.history.save([incoming])
+        let before = try destination.fingerprint()
+        _ = try source.service.backUp(to: source.archive, password: password, scope: ClipboardBackupScope())
+        let preview = try destination.service.preview(url: source.archive, password: password, replacing: true)
+        XCTAssertEqual(preview.summary.removed, 2)
+        try destination.service.commit(preview)
+        let items = try destination.history.load()
+        XCTAssertEqual(items.first { $0.id == local.id }?.isInHistory, true)
+        XCTAssertEqual(items.first { $0.id == local.id }?.isSaved, false)
+        XCTAssertEqual(items.first { $0.id == incoming.id }?.isInHistory, false)
+        XCTAssertTrue(try destination.snippets.load().isEmpty)
+        let rollback = try destination.service.previewRollback()
+        try destination.service.commit(rollback)
+        XCTAssertEqual(try destination.history.load().map(\.id), [local.id])
+        XCTAssertEqual(try destination.snippets.load().count, 1)
+        // Payloads are resealed during staging, so compare decoded content rather than ciphertext.
+        XCTAssertNotEqual(try destination.fingerprint(), before)
+        XCTAssertEqual(try destination.history.load().first?.savedMetadata, local.savedMetadata)
+    }
+
+    func testEveryReplacementScopeKeepsUnselectedLocalCategories() throws {
+        for flags in 1...7 {
+            let scope = ClipboardBackupScope(history: flags & 1 != 0, saved: flags & 2 != 0, snippets: flags & 4 != 0)
+            let source = try Fixture(), destination = try Fixture()
+            let local = clip(text: "local"), incoming = clip(text: "incoming"), localSnippet = snippet()
+            try source.history.save([incoming])
+            try source.snippets.save(snippet(keyword: "incoming"), payloadChanged: true)
+            try destination.history.save([local])
+            try destination.snippets.save(localSnippet, payloadChanged: true)
+            _ = try source.service.backUp(to: source.archive, password: password, scope: scope)
+            let preview = try destination.service.preview(url: source.archive, password: password, replacing: true)
+            try destination.service.commit(preview)
+            let items = try destination.history.load()
+            if scope.history && scope.saved { XCTAssertFalse(items.contains { $0.id == local.id }) }
+            else {
+                let kept = try XCTUnwrap(items.first { $0.id == local.id })
+                XCTAssertEqual(kept.isInHistory, !scope.history)
+                XCTAssertEqual(kept.isSaved, !scope.saved)
+            }
+            XCTAssertEqual(try destination.snippets.load().contains { $0.id == localSnippet.id }, !scope.snippets)
+        }
+    }
+
+    func testFullReplacementAndCommitFailuresAreAtomic() throws {
+        let source = try Fixture(), destination = try Fixture()
+        try source.history.save([clip(text: "new")])
+        try source.snippets.save(snippet(title: "New"), payloadChanged: true)
+        try destination.history.save([clip(text: "old")])
+        try destination.snippets.save(snippet(title: "Old"), payloadChanged: true)
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let before = try destination.fingerprint()
+        for point in ["beforeSnapshot", "beforeCommit", "duringCommit"] {
+            let preview = try destination.service.preview(url: source.archive, password: password, replacing: true)
+            destination.service.checkpoint = { phase in if phase == point { throw ClipboardBackupError.storage } }
+            XCTAssertThrowsError(try destination.service.commit(preview))
+            XCTAssertEqual(try destination.fingerprint(), before)
+        }
+        destination.service.checkpoint = nil
+        try destination.service.commit(destination.service.preview(url: source.archive, password: password, replacing: true))
+        XCTAssertEqual(try destination.history.load().map(\.text), ["new"])
+        XCTAssertEqual(try destination.snippets.load().map(\.title), ["New"])
+    }
+
+    func testWrongPasswordCorruptionTruncationReorderAndOversizedFramesDoNotChangeLiveData() throws {
+        let source = try Fixture(), destination = try Fixture()
+        try source.history.save([clip(), clip(text: "second")])
+        try destination.history.save([clip(text: "local")])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let before = try destination.fingerprint(), original = try Data(contentsOf: source.archive)
+        XCTAssertThrowsError(try destination.service.preview(url: source.archive, password: "wrong password"))
+        var tag = original; tag[tag.count - 1] ^= 1
+        var future = original; future[11] = 2
+        var kdf = original; kdf.replaceSubrange(12..<16, with: ClipboardBackupArchive.integer(2_000_001, bytes: 4))
+        var oversized = original; oversized.replaceSubrange(108..<112, with: ClipboardBackupArchive.integer(UInt64.max, bytes: 4))
+        let frames = splitFrames(original)
+        let reordered = original.prefix(108) + frames[1] + frames[0] + frames[2]
+        let duplicated = original.prefix(108) + frames[0] + frames[0] + frames[1] + frames[2]
+        for invalid in [tag, future, kdf, oversized, Data(original.dropLast()), Data(original.prefix(112)), reordered, duplicated, original + Data([0])] {
+            try invalid.write(to: source.archive)
+            XCTAssertThrowsError(try destination.service.preview(url: source.archive, password: password))
+            XCTAssertEqual(try destination.fingerprint(), before)
+        }
+    }
+
+    func testAuthenticatedMalformedRecordsAndManifestMismatchAreRejected() throws {
+        let source = try Fixture(), destination = try Fixture()
+        try source.history.save([clip()])
+        let database = try ClipboardBackupDatabase(url: source.url, key: SymmetricKey(data: XCTUnwrap(source.keyStore.currentKey)))
+        var records: [ClipboardBackupRecord] = []
+        try database.forEach { records.append($0) }
+        var bad = records[0]; bad.id = UUID()
+        for values in [[bad], [records[0], records[0]]] {
+            let writer = try ClipboardBackupArchive.Writer(url: source.archive, password: password)
+            for record in values { try writer.append(record) }
+            try writer.finish(ClipboardBackupManifest(scope: full, records: values.count))
+            XCTAssertThrowsError(try destination.service.preview(url: source.archive, password: password))
+        }
+        let writer = try ClipboardBackupArchive.Writer(url: source.archive, password: password)
+        try writer.append(records[0])
+        try writer.finish(ClipboardBackupManifest(scope: ClipboardBackupScope(history: false, saved: false, snippets: true), records: 1))
+        XCTAssertThrowsError(try destination.service.preview(url: source.archive, password: password))
+    }
+
+    func testConfiguredItemLimitIsEnforcedAndMissingFileReferenceIsReported() throws {
+        let source = try Fixture(), destination = try Fixture(maximumItemBytes: 16)
+        try source.history.save([clip(text: String(repeating: "x", count: 100))])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        XCTAssertThrowsError(try destination.service.preview(url: source.archive, password: password))
+        let missing = source.directory.appendingPathComponent("does-not-exist.txt")
+        let payload = ClipboardHistoryPayload(pasteboardItems: [.init(representations: [.init(typeIdentifier: "public.file-url", data: Data(missing.absoluteString.utf8))])])
+        let item = ClipboardHistoryItem(id: UUID(), payload: payload, capturedAt: Date(), sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        try source.history.save([item])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let target = try Fixture()
+        let preview = try target.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.summary.missingFileReferences, 1)
+        XCTAssertEqual(try target.service.missingReferences(preview, offset: 0), [missing.path])
+        try target.service.commit(preview)
+        XCTAssertEqual(try target.history.load().first?.loadPayload().fileURLs, [missing])
+    }
+
+    func testSQLiteFullDuringCommitRollsBackBothTables() throws {
+        let source = try Fixture(), destination = try Fixture()
+        try source.history.save([clip(text: String(repeating: "x", count: 256 * 1_024))])
+        try destination.history.save([clip(text: "local")])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let preview = try destination.service.preview(url: source.archive, password: password, replacing: true)
+        let before = try destination.fingerprint()
+        destination.service.commitPageLimitForTesting = 1
+        XCTAssertThrowsError(try destination.service.commit(preview))
+        XCTAssertEqual(try destination.fingerprint(), before)
+    }
+
+    func testConcurrentMutationInvalidatesPreview() throws {
+        let source = try Fixture(), destination = try Fixture()
+        try source.history.save([clip()])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        try destination.history.save([clip(text: "changed")])
+        let before = try destination.fingerprint()
+        XCTAssertThrowsError(try destination.service.commit(preview))
+        XCTAssertEqual(try destination.fingerprint(), before)
+    }
+
+    func testCancellationBeforeEveryPrecommitPhaseLeavesDataAndArchiveUnchanged() async throws {
+        let source = try Fixture(), destination = try Fixture()
+        try source.history.save([clip()])
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let before = try destination.fingerprint(), archive = try Data(contentsOf: source.archive)
+        for point in ["reading", "encrypting", "validating", "staging", "beforeSnapshot", "beforeCommit"] {
+            let isBackup = ["reading", "encrypting"].contains(point)
+            let service = isBackup ? source.service : destination.service
+            service.checkpoint = { phase in if phase == point { throw CancellationError() } }
+            do {
+                if isBackup { _ = try service.backUp(to: source.archive, password: password, scope: full) }
+                else {
+                    let preview = try service.preview(url: source.archive, password: password, replacing: true)
+                    try service.commit(preview)
+                }
+                XCTFail("Expected cancellation at \(point)")
+            } catch is CancellationError { }
+            service.checkpoint = nil
+            XCTAssertEqual(try destination.fingerprint(), before)
+            XCTAssertEqual(try Data(contentsOf: source.archive), archive)
+        }
+        let service = destination.service, url = source.archive, password = password
+        let cancelled = Task.detached { try Task.checkCancellation(); return try service.preview(url: url, password: password) }
+        cancelled.cancel()
+        do { _ = try await cancelled.value; XCTFail("Expected cancelled task") } catch is CancellationError { }
+    }
+
+    func testArchiveOmitsQueueAndPreferencesTables() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let database = try ClipboardBackupDatabase(url: source.url, key: SymmetricKey(data: XCTUnwrap(source.keyStore.currentKey)))
+        try database.execute("CREATE TABLE runtime_secret (value TEXT)")
+        try database.execute("INSERT INTO runtime_secret VALUES ('queue-and-preferences-secret')")
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.manifest.records, 0)
+        try destination.service.commit(preview)
+        let raw = try Data(contentsOf: source.archive)
+        XCTAssertNil(raw.range(of: Data("queue-and-preferences-secret".utf8)))
+        let target = try ClipboardBackupDatabase(url: destination.url, key: SymmetricKey(data: XCTUnwrap(destination.keyStore.currentKey)))
+        XCTAssertThrowsError(try target.execute("DELETE FROM runtime_secret"))
+    }
+
+    func testLargeSyntheticArchiveKeepsMemoryBoundedAndMainActorResponsive() async throws {
+        let source = try Fixture(), destination = try Fixture()
+        let database = try ClipboardBackupDatabase(url: source.url, key: SymmetricKey(data: XCTUnwrap(source.keyStore.currentKey)))
+        // 128 MiB of independently encrypted representations, generated one record at a time.
+        try database.transaction {
+            for _ in 0..<512 {
+                try autoreleasepool {
+                    let payload = ClipboardHistoryPayload(pasteboardItems: [.init(representations: [
+                        .init(typeIdentifier: "public.data", data: Data(repeating: 0xA7, count: 256 * 1_024))
+                    ])])
+                    let item = ClipboardHistoryItem(id: UUID(), payload: payload, capturedAt: Date(), sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+                    let encoder = PropertyListEncoder(); encoder.outputFormat = .binary
+                    try database.put(ClipboardBackupRecord(table: .items, id: item.id,
+                        metadata: JSONEncoder().encode(IncrementalEncryptedClipboardHistoryStore.StoredMetadata(item: item)),
+                        payload: encoder.encode(payload)))
+                }
+            }
+        }
+        let before = residentBytes()
+        let peaks = BackupMemorySamples()
+        let service = source.service, target = destination.service, url = source.archive, password = password
+        let heartbeat = expectation(description: "main actor stays responsive during archive work")
+        let work = Task.detached {
+            _ = try service.backUp(to: url, password: password, scope: ClipboardBackupScope(history: true, saved: true, snippets: true)) { phase in
+                if case .encrypting(1) = phase { Task { @MainActor in heartbeat.fulfill() } }
+                peaks.sample()
+            }
+            let preview = try target.preview(url: url, password: password) { _ in peaks.sample() }
+            try target.commit(preview)
+            return preview.manifest.records
+        }
+        await fulfillment(of: [heartbeat], timeout: 1)
+        let restoredCount = try await work.value
+        XCTAssertEqual(restoredCount, 512)
+        // The archive exceeds this allowance; retaining its full plaintext would fail this bound.
+        XCTAssertLessThan(peaks.peak - min(before, peaks.peak), 96 * 1_024 * 1_024)
+    }
+
+    private func splitFrames(_ data: Data) -> [Data] {
+        var offset = 108, frames: [Data] = []
+        while offset < data.count {
+            let length = Int(ClipboardBackupArchive.number(data.subdata(in: offset..<(offset + 4)))) + 4
+            frames.append(data.subdata(in: offset..<(offset + length)))
+            offset += length
+        }
+        return frames
+    }
+}
+
+private func residentBytes() -> UInt64 {
+    var info = mach_task_basic_info()
+    var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+    let result = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+            task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+        }
+    }
+    return result == KERN_SUCCESS ? UInt64(info.resident_size) : 0
+}
+
+private final class BackupMemorySamples: @unchecked Sendable {
+    private let lock = NSLock()
+    private var maximum: UInt64 = 0
+    var peak: UInt64 { lock.withLock { maximum } }
+    func sample() { lock.withLock { maximum = max(maximum, residentBytes()) } }
+}

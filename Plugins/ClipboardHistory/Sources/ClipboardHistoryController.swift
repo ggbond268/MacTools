@@ -448,7 +448,8 @@ private final class ClipboardHistoryPersistenceWorker: @unchecked Sendable {
 
     func load(
         settings: ClipboardHistorySettings,
-        protectedItemIDs: Set<UUID>
+        protectedItemIDs: Set<UUID>,
+        preservingRestoredItems: Bool = false
     ) async throws -> LoadOutcome {
         try await withCheckedThrowingContinuation { continuation in
             queue.async { [self] in
@@ -456,7 +457,7 @@ private final class ClipboardHistoryPersistenceWorker: @unchecked Sendable {
                     let loadedItems = try persistence.load()
                     durableItems = loadedItems
                     latestFailure = nil
-                    let retainedItems = ClipboardRetentionPolicy.prune(
+                    let retainedItems = preservingRestoredItems ? loadedItems : ClipboardRetentionPolicy.prune(
                         loadedItems,
                         settings: settings,
                         protectedItemIDs: protectedItemIDs
@@ -728,6 +729,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private var pendingDurableItemIDReferenceCounts: [UUID: Int] = [:]
     private var pendingDeletedItemIDs = Set<UUID>()
     private var storageGeneration: UInt64 = 0
+    private var isSuspendedForBackup = false
+    private var preservesRestoredHistory = false
     private var reloadAfterStop = false
     private var needsSettingsReconciliation = false
     private var lastSeenChangeCount: Int
@@ -818,7 +821,21 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         isCollectionOperational && !settings.isPaused && timer != nil
     }
 
-    func start() {
+    func cancelBackupSuspension() { isSuspendedForBackup = false }
+
+    func suspendForBackup() {
+        isSuspendedForBackup = true
+        stop()
+    }
+
+    func resumeAfterBackup(restored: Bool) {
+        isSuspendedForBackup = false
+        start(preservingRestoredItems: restored)
+    }
+
+    func start(preservingRestoredItems: Bool = false) {
+        guard !isSuspendedForBackup else { return }
+        preservesRestoredHistory = preservingRestoredItems
         copyEventMonitor?.start { [weak self] in self?.scheduleEventAssistedCapture() }
         if reloadAfterStop {
             reloadAfterStop = false
@@ -841,7 +858,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             do {
                 let outcome = try await worker.load(
                     settings: initialSettings,
-                    protectedItemIDs: initialProtectedItemIDs
+                    protectedItemIDs: initialProtectedItemIDs,
+                    preservingRestoredItems: preservingRestoredItems
                 )
                 guard !Task.isCancelled, let self else { return }
                 var retainedItems = outcome.retainedItems
@@ -908,6 +926,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     func settingsDidChange() {
+        guard !isSuspendedForBackup else { return }
+        preservesRestoredHistory = false
         capturePolicyRevision &+= 1
         if hasPendingDurableItemIDs { needsSettingsReconciliation = true }
         if settings.isPaused {
@@ -981,6 +1001,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         currentHistoryItemPasteboardState = nil
         // Internal writes advance `lastSeenChangeCount` at their source. A delta that reaches the
         // monitor is therefore external and must end an implicit queue before retention runs.
+        preservesRestoredHistory = false
         onExternalPasteboardChange?()
 
         // Consume suppression before asking for types, source context, or text. Private copies must
@@ -1590,6 +1611,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     func recordCombinedItemUsage(ids: [UUID]) {
+        guard !isSuspendedForBackup else { return }
         let usedAt = Date()
         let selectedIDs = Set(ids)
         var updated = items
@@ -1651,6 +1673,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     private func recordItemUsage(at index: Int) {
+        guard !isSuspendedForBackup else { return }
         var updated = items
         updated[index].lastUsedAt = Date()
         publishItems(updated, changedIDs: [updated[index].id])
@@ -1834,6 +1857,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     private func pruneExpiredItemsIfNeeded(now: Date) {
+        guard !isSuspendedForBackup, !preservesRestoredHistory else { return }
         let currentSettings = settings.snapshot
         guard let interval = currentSettings.expiration.interval else { return }
         let cutoff = now.addingTimeInterval(-interval)
@@ -1866,7 +1890,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private func scheduleRetentionExpiration(now: Date = Date()) {
         retentionTimer?.invalidate()
         retentionTimer = nil
-        guard isLoaded,
+        guard isLoaded, !preservesRestoredHistory, !isSuspendedForBackup,
               errorMessage == nil,
               let interval = settings.snapshot.expiration.interval else { return }
         let protectedIDs = effectiveRetentionProtectedItemIDs

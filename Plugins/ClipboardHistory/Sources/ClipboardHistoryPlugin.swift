@@ -240,6 +240,8 @@ final class ClipboardHistoryPlugin:
         onPasteboardWrite: { [weak self] in self?.controller.markCurrentPasteboardChangeAsInternal() }
     )
     private let privacyHUDPresenter: any ClipboardPrivacyHUDPresenting
+    private let backupPersistence: IncrementalEncryptedClipboardHistoryStore?
+    private var isBackingUpClipboard = false
     private let databaseAccess: ClipboardDatabaseAccessCoordinator
     private let sequentialPasteCoordinator: ClipboardSequentialPasteCoordinator
     private var pendingSequentialPasteTargets: [pid_t?] = []
@@ -451,6 +453,7 @@ final class ClipboardHistoryPlugin:
         self.copyCommandSender = copyCommandSender ?? SystemClipboardCopyCommandSender()
         self.pasteCommandSender = pasteCommandSender ?? SystemClipboardPasteCommandSender()
         self.privacyHUDPresenter = privacyHUDPresenter ?? ClipboardPrivacyHUDController(localization: localization)
+        self.backupPersistence = resolvedPersistence as? IncrementalEncryptedClipboardHistoryStore
         self.databaseAccess = databaseAccess
         self.sequentialPasteCoordinator = sequentialPasteCoordinator
         self.accessibilityTrusted = accessibilityTrusted
@@ -691,7 +694,13 @@ final class ClipboardHistoryPlugin:
                             controller: self.controller,
                             savedLibraryController: self.savedLibraryController,
                             localization: self.localization,
-                            contentSections: [.data]
+                            contentSections: [.data],
+                            backupService: { [weak self] in
+                                guard let self else { return nil }
+                                return self.backupPersistence?.backupService(maximumItemBytes: self.settingsStore.snapshot.maximumItemByteCount)
+                            },
+                            onBackupSuspend: { [weak self] in self?.suspendForClipboardBackup() },
+                            onBackupResume: { [weak self] restored in self?.resumeAfterClipboardBackup(restored: restored) }
                         )
                     } else {
                         EmptyView()
@@ -1223,6 +1232,7 @@ final class ClipboardHistoryPlugin:
     }
 
     func actionAvailability(for reference: ActionReference) -> ActionAvailability {
+        if isBackingUpClipboard { return .unavailable(localization.string("backup.busy", defaultValue: "请先完成剪贴板备份操作。")) }
         switch reference.key.actionID {
         case ActionID.openHistory:
             return controller.isLoaded
@@ -1276,6 +1286,10 @@ final class ClipboardHistoryPlugin:
     }
 
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
+        if isBackingUpClipboard {
+            let message = localization.string("backup.busy", defaultValue: "请先完成剪贴板备份操作。")
+            return ActionExecutionHandle { .failed(message: message) }
+        }
         if [ActionID.pauseCollection, ActionID.resumeCollection, ActionID.toggleCollection]
             .contains(invocation.reference.key.actionID),
            let message = collectionActionBlockingMessage() {
@@ -1365,11 +1379,13 @@ final class ClipboardHistoryPlugin:
     }
 
     func handleAction(_ action: PluginPanelAction) {
+        guard !isBackingUpClipboard else { return }
         guard case let .invokeAction(controlID) = action, controlID == "execute" else { return }
         panelController.show()
     }
 
     func handleShortcutAction(id: String) {
+        guard !isBackingUpClipboard else { return }
         switch id {
         case ShortcutID.privateCopy:
             guard privateCopyTask == nil, !controller.isIgnoringNextCopy else { return }
@@ -1428,6 +1444,26 @@ final class ClipboardHistoryPlugin:
         onStateChange?()
     }
 
+    private func suspendForClipboardBackup() {
+        guard !isBackingUpClipboard else { return }
+        isBackingUpClipboard = true
+        cancelPendingSequentialPastes()
+        cancelSequentialQueueCreation()
+        panelController.close(restorePreviousApplication: false, discardsPreviews: true)
+        keywordExpander.stop()
+        controller.suspendForBackup()
+        savedLibraryController.stop()
+    }
+
+    private func resumeAfterClipboardBackup(restored: Bool) {
+        guard isBackingUpClipboard else { return }
+        isBackingUpClipboard = false
+        controller.resumeAfterBackup(restored: restored)
+        savedLibraryController.start()
+        synchronizeKeywordExpansion()
+        onStateChange?()
+    }
+
     func activate(context: PluginRuntimeContext) {
         if let lease = privateCopyLeaseStore.load() {
             _ = controller.restorePrivateCopySuppression(lease)
@@ -1452,6 +1488,8 @@ final class ClipboardHistoryPlugin:
     }
 
     func deactivate(reason: PluginDeactivationReason) {
+        isBackingUpClipboard = false
+        controller.cancelBackupSuspension()
         if reason == .uninstalling {
             // Establish the storage barrier before cancellation. A task already queued behind a
             // database operation will wake to an invalidated coordinator instead of recreating
@@ -1494,6 +1532,7 @@ final class ClipboardHistoryPlugin:
     }
 
     private func synchronizeKeywordExpansion() {
+        guard !isBackingUpClipboard else { keywordExpander.stop(); return }
         keywordExpander.onDiagnostic = { [weak settingsStore] diagnostic in
             settingsStore?.keywordExpansionDiagnostic = diagnostic
         }
