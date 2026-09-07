@@ -51,7 +51,7 @@ struct PanelLayoutEditor: View {
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .background(PanelLayoutScrollAnchor(scroller: scroller))
-                .onDrop(of: [PanelLayoutDropDelegate.type], delegate: PanelLayoutDropDelegate(
+                .onDrop(of: [PanelLayoutDragTransfer.type], delegate: PanelLayoutDropDelegate(
                     session: session,
                     ids: { ids },
                     update: updateDestination,
@@ -146,16 +146,10 @@ struct PanelLayoutEditor: View {
             content()
         } dragProvider: {
             scroller.stop()
-            let provider = NSItemProvider()
-            if let token = session.begin(id: id, ids: ids) {
-                provider.suggestedName = token
-                provider.registerDataRepresentation(forTypeIdentifier: PanelLayoutDropDelegate.type.identifier,
-                                                    visibility: .ownProcess) { completion in
-                    completion(Data(token.utf8), nil)
-                    return nil
-                }
+            guard let token = session.begin(id: id, ids: ids) else {
+                return NSItemProvider()
             }
-            return provider
+            return PanelLayoutDragTransfer.provider(token: token)
         } dragPreview: {
             Label(title, systemImage: PluginSystemImage.resolvedName(icon))
                 .padding(12)
@@ -285,8 +279,34 @@ private struct PanelLayoutReorderItem<Content: View, Preview: View>: View {
     }
 }
 
-private struct PanelLayoutDropDelegate: DropDelegate {
+enum PanelLayoutDragTransfer {
     static let type = UTType(exportedAs: "com.mactools.panel-layout-item")
+
+    static func provider(token: String) -> NSItemProvider {
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(
+            forTypeIdentifier: type.identifier,
+            visibility: .ownProcess
+        ) { completion in
+            completion(Data(token.utf8), nil)
+            return nil
+        }
+        return provider
+    }
+
+    static func accepts(
+        providers: [NSItemProvider],
+        hasActiveSession: Bool,
+        sessionIsValid: Bool
+    ) -> Bool {
+        guard hasActiveSession, sessionIsValid else { return false }
+        return providers.contains {
+            $0.hasItemConformingToTypeIdentifier(type.identifier)
+        }
+    }
+}
+
+private struct PanelLayoutDropDelegate: DropDelegate {
     let session: PanelLayoutEditingSession
     let ids: () -> [String]
     let update: (CGPoint) -> Void
@@ -294,8 +314,11 @@ private struct PanelLayoutDropDelegate: DropDelegate {
     let commit: (PanelLayoutEditingSession.Move) -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
-        guard let token = session.token, session.validate(ids: ids()) else { return false }
-        return info.itemProviders(for: [Self.type]).contains { $0.suggestedName == token }
+        PanelLayoutDragTransfer.accepts(
+            providers: info.itemProviders(for: [PanelLayoutDragTransfer.type]),
+            hasActiveSession: session.token != nil,
+            sessionIsValid: session.validate(ids: ids())
+        )
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {

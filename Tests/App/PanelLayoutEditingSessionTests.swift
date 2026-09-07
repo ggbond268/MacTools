@@ -106,6 +106,37 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
         XCTAssertEqual(PanelLayoutDestination.scrollDelta(pointerY: -1, viewportHeight: 200), 0)
     }
 
+    func testDragTransferAcceptsRegisteredPayloadWithoutSuggestedName() {
+        let provider = PanelLayoutDragTransfer.provider(token: "session-token")
+
+        XCTAssertNil(provider.suggestedName)
+        XCTAssertTrue(PanelLayoutDragTransfer.accepts(
+            providers: [provider],
+            hasActiveSession: true,
+            sessionIsValid: true
+        ))
+    }
+
+    func testDragTransferRejectsMissingPayloadOrInvalidSession() {
+        let provider = PanelLayoutDragTransfer.provider(token: "session-token")
+
+        XCTAssertFalse(PanelLayoutDragTransfer.accepts(
+            providers: [NSItemProvider()],
+            hasActiveSession: true,
+            sessionIsValid: true
+        ))
+        XCTAssertFalse(PanelLayoutDragTransfer.accepts(
+            providers: [provider],
+            hasActiveSession: false,
+            sessionIsValid: true
+        ))
+        XCTAssertFalse(PanelLayoutDragTransfer.accepts(
+            providers: [provider],
+            hasActiveSession: true,
+            sessionIsValid: false
+        ))
+    }
+
     func testEditModeEligibilityDoneEscapeTabChangeAndDismissal() {
         let model = MenuBarUnifiedPanelModel(selectedTab: .components, contentHeight: 400,
                                              maximumFeatureListHeight: 400, isPanelVisible: true)
