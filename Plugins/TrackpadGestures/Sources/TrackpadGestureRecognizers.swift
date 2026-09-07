@@ -714,6 +714,8 @@ struct MultiFingerDoubleTapRecognizer: Sendable {
 
     private var tapRecognizer: MultiFingerTapRecognizer
     private var firstTapRecognizedAt: TimeInterval?
+    private var firstTapContactEpisodeID: TrackpadContactEpisodeID?
+    private(set) var recognitionEvidence: TrackpadGestureRecognitionEvidence?
     private var hasActiveEpisode = false
 
     init(
@@ -730,10 +732,15 @@ struct MultiFingerDoubleTapRecognizer: Sendable {
         )
     }
 
-    mutating func process(_ frame: TrackpadContactFrame) -> Bool {
+    mutating func process(
+        _ frame: TrackpadContactFrame,
+        contactEpisodeID: TrackpadContactEpisodeID? = nil
+    ) -> Bool {
+        recognitionEvidence = nil
         if let firstTapRecognizedAt,
            frame.timestamp - firstTapRecognizedAt > thresholds.doubleTapMaximumInterval {
             self.firstTapRecognizedAt = nil
+            self.firstTapContactEpisodeID = nil
         }
 
         let wasActiveEpisode = hasActiveEpisode
@@ -747,6 +754,7 @@ struct MultiFingerDoubleTapRecognizer: Sendable {
                 // break the pair instead of allowing the recognizer to skip over it.
                 hasActiveEpisode = false
                 firstTapRecognizedAt = nil
+                firstTapContactEpisodeID = nil
             }
             return false
         }
@@ -755,11 +763,19 @@ struct MultiFingerDoubleTapRecognizer: Sendable {
 
         if let firstTapRecognizedAt,
            frame.timestamp - firstTapRecognizedAt <= thresholds.doubleTapMaximumInterval {
+            if let firstTapContactEpisodeID, let contactEpisodeID {
+                recognitionEvidence = .doubleTapEpisodes(
+                    first: firstTapContactEpisodeID,
+                    second: contactEpisodeID
+                )
+            }
             self.firstTapRecognizedAt = nil
+            self.firstTapContactEpisodeID = nil
             return true
         }
 
         firstTapRecognizedAt = frame.timestamp
+        firstTapContactEpisodeID = contactEpisodeID
         return false
     }
 
@@ -928,7 +944,15 @@ private enum TrackpadGestureRecognizer: Sendable {
     case longTouch(LongTouchRecognizer)
     case nativeClick
 
-    mutating func process(_ frame: TrackpadContactFrame) -> Bool {
+    var recognitionEvidence: TrackpadGestureRecognitionEvidence? {
+        guard case let .doubleTap(recognizer) = self else { return nil }
+        return recognizer.recognitionEvidence
+    }
+
+    mutating func process(
+        _ frame: TrackpadContactFrame,
+        contactEpisodeID: TrackpadContactEpisodeID? = nil
+    ) -> Bool {
         switch self {
         case .tipTap(var recognizer):
             let recognized = recognizer.process(frame)
@@ -939,7 +963,7 @@ private enum TrackpadGestureRecognizer: Sendable {
             self = .tap(recognizer)
             return recognized
         case .doubleTap(var recognizer):
-            let recognized = recognizer.process(frame)
+            let recognized = recognizer.process(frame, contactEpisodeID: contactEpisodeID)
             self = .doubleTap(recognizer)
             return recognized
         case .longTouch(var recognizer):
@@ -986,6 +1010,7 @@ private enum TrackpadGestureRecognizer: Sendable {
 
 struct TrackpadGestureProcessingResult: Equatable, Sendable {
     let recognized: [TrackpadGesture]
+    var recognitionEvidence: [TrackpadGesture: TrackpadGestureRecognitionEvidence] = [:]
 }
 
 struct TrackpadGestureEngine: Sendable {
@@ -1056,7 +1081,8 @@ struct TrackpadGestureEngine: Sendable {
 
     mutating func process(
         _ frame: TrackpadContactFrame,
-        suppressRecognition: Bool = false
+        suppressRecognition: Bool = false,
+        contactEpisodeID: TrackpadContactEpisodeID? = nil
     ) -> TrackpadGestureProcessingResult {
         if frame.contacts.isEmpty {
             devicesWithActiveContacts.remove(frame.deviceID)
@@ -1136,13 +1162,15 @@ struct TrackpadGestureEngine: Sendable {
             }
         }
         var recognized: [TrackpadGesture] = []
+        var recognitionEvidence: [TrackpadGesture: TrackpadGestureRecognitionEvidence] = [:]
 
         for gesture in configuredGestures.sorted(by: { $0.rawValue < $1.rawValue }) {
             guard var recognizer = deviceRecognizers[gesture] else {
                 continue
             }
-            if recognizer.process(frame) {
+            if recognizer.process(frame, contactEpisodeID: contactEpisodeID) {
                 recognized.append(gesture)
+                recognitionEvidence[gesture] = recognizer.recognitionEvidence
             }
             deviceRecognizers[gesture] = recognizer
         }
@@ -1170,7 +1198,10 @@ struct TrackpadGestureEngine: Sendable {
         }
 
         recognizersByDevice[frame.deviceID] = deviceRecognizers
-        return TrackpadGestureProcessingResult(recognized: recognized)
+        return TrackpadGestureProcessingResult(
+            recognized: recognized,
+            recognitionEvidence: recognitionEvidence
+        )
     }
 
     mutating func removeDevice(_ deviceID: UInt64) {

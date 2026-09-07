@@ -4,4 +4,4 @@ type: fixed
 area: Trackpad Gestures
 ---
 
-Multi-finger taps and double taps keep their assigned action when fingers arrive slightly apart, and no longer run alongside native clicks after rejected TipTap attempts.
+Multi-finger taps keep their assigned action when fingers arrive slightly apart. Rapid TipTap retries keep their own click, and rejected attempts no longer block unrelated double taps or produce duplicate native clicks.
