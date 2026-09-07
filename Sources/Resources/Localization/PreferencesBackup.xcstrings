@@ -1096,6 +1096,73 @@
         }
       }
     },
+    "preferencesBackup.preview.descriptionWithInstall": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "variations": { "plural": {
+          "zero": { "stringUnit": { "state": "translated", "value": "يرجى تأكيد التغييرات التالية. لن يتم تعديل الأذونات أو ذاكرة التخزين المؤقت أو عناصر Keychain أو البيانات الخاصة بالإضافات." } },
+          "one": { "stringUnit": { "state": "translated", "value": "يرجى تأكيد التغييرات أدناه. سيقوم الاستيراد بتثبيت إضافة مفقودة محددة (%d)؛ ولن يتم تعديل الأذونات أو ذاكرة التخزين المؤقت أو عناصر Keychain أو البيانات الخاصة بالإضافات." } },
+          "two": { "stringUnit": { "state": "translated", "value": "يرجى تأكيد التغييرات أدناه. سيقوم الاستيراد بتثبيت إضافتين مفقودتين محددتين (%d)؛ ولن يتم تعديل الأذونات أو ذاكرة التخزين المؤقت أو عناصر Keychain أو البيانات الخاصة بالإضافات." } },
+          "few": { "stringUnit": { "state": "translated", "value": "يرجى تأكيد التغييرات أدناه. سيقوم الاستيراد بتثبيت %d إضافات مفقودة محددة؛ ولن يتم تعديل الأذونات أو ذاكرة التخزين المؤقت أو عناصر Keychain أو البيانات الخاصة بالإضافات." } },
+          "many": { "stringUnit": { "state": "translated", "value": "يرجى تأكيد التغييرات أدناه. سيقوم الاستيراد بتثبيت %d إضافة مفقودة محددة؛ ولن يتم تعديل الأذونات أو ذاكرة التخزين المؤقت أو عناصر Keychain أو البيانات الخاصة بالإضافات." } },
+          "other": { "stringUnit": { "state": "translated", "value": "يرجى تأكيد التغييرات أدناه. سيقوم الاستيراد بتثبيت %d إضافة مفقودة محددة؛ ولن يتم تعديل الأذونات أو ذاكرة التخزين المؤقت أو عناصر Keychain أو البيانات الخاصة بالإضافات." } }
+        } } },
+        "de": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Bitte bestätige die folgenden Änderungen. Beim Import wird %d ausgewähltes fehlendes Plugin installiert; Berechtigungen, Caches, Schlüsselbund-Einträge oder private Plugin-Daten werden nicht geändert." } },
+          "other": { "stringUnit": { "state": "translated", "value": "Bitte bestätige die folgenden Änderungen. Beim Import werden %d ausgewählte fehlende Plugins installiert; Berechtigungen, Caches, Schlüsselbund-Einträge oder private Plugin-Daten werden nicht geändert." } }
+        } } },
+        "en": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Please review the changes below. Importing will install %d selected missing plugin; permissions, caches, Keychain items, or plugin private data will not be modified." } },
+          "other": { "stringUnit": { "state": "translated", "value": "Please review the changes below. Importing will install %d selected missing plugins; permissions, caches, Keychain items, or plugin private data will not be modified." } }
+        } } },
+        "es": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Confirma los siguientes cambios. La importación instalará %d plugin faltante seleccionado; no se modificarán permisos, cachés, elementos del Llavero ni datos privados de plugins." } },
+          "other": { "stringUnit": { "state": "translated", "value": "Confirma los siguientes cambios. La importación instalará %d plugins faltantes seleccionados; no se modificarán permisos, cachés, elementos del Llavero ni datos privados de plugins." } }
+        } } },
+        "fr": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Veuillez vérifier les modifications ci-dessous. L’importation installera %d extension manquante sélectionnée ; les autorisations, caches, éléments du trousseau d’accès et données privées d’extensions ne seront pas modifiés." } },
+          "other": { "stringUnit": { "state": "translated", "value": "Veuillez vérifier les modifications ci-dessous. L’importation installera %d extensions manquantes sélectionnées ; les autorisations, caches, éléments du trousseau d’accès et données privées d’extensions ne seront pas modifiés." } }
+        } } },
+        "ja": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "以下の変更を確認してください。読み込み時に選択した%d個の不足プラグインをインストールします。権限、キャッシュ、キーチェーン項目、プラグイン非公開データは変更されません。" } }
+        } } },
+        "ko": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "아래 변경 사항을 확인하십시오. 가져올 때 선택한 누락 플러그인 %d개를 설치합니다. 권한, 캐시, 키체인 항목 또는 플러그인 개인 데이터는 수정되지 않습니다." } }
+        } } },
+        "pt": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Confirme as alterações abaixo. A importação instalará %d plugin ausente selecionado; permissões, caches, itens das Chaves e dados privados de plugins não serão modificados." } },
+          "other": { "stringUnit": { "state": "translated", "value": "Confirme as alterações abaixo. A importação instalará %d plugins ausentes selecionados; permissões, caches, itens das Chaves e dados privados de plugins não serão modificados." } }
+        } } },
+        "ru": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Подтвердите следующие изменения. При импорте будет установлен %d выбранный отсутствующий плагин; разрешения, кэши, объекты Связки ключей и личные данные плагинов не изменятся." } },
+          "few": { "stringUnit": { "state": "translated", "value": "Подтвердите следующие изменения. При импорте будут установлены %d выбранных отсутствующих плагина; разрешения, кэши, объекты Связки ключей и личные данные плагинов не изменятся." } },
+          "many": { "stringUnit": { "state": "translated", "value": "Подтвердите следующие изменения. При импорте будут установлены %d выбранных отсутствующих плагинов; разрешения, кэши, объекты Связки ключей и личные данные плагинов не изменятся." } },
+          "other": { "stringUnit": { "state": "translated", "value": "Подтвердите следующие изменения. При импорте будут установлены %d выбранных отсутствующих плагинов; разрешения, кэши, объекты Связки ключей и личные данные плагинов не изменятся." } }
+        } } },
+        "zh-Hans": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "请确认以下更改。导入将自动安装 %d 个选中的缺失插件；不会修改权限、缓存、Keychain 密钥或插件私有数据。" } }
+        } } },
+        "zh-Hant": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "請確認以下變更。匯入將自動安裝 %d 個選取缺少的外掛；不會修改權限、快取、Keychain 密鑰或外掛私有資料。" } }
+        } } }
+      }
+    },
+    "preferencesBackup.preview.deselectAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إلغاء تحديد الكل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Alle abwählen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Deselect All" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Deseleccionar todo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Tout désélectionner" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "すべて選択解除" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "모두 선택 해제" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Desmarcar tudo" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Снять выделение" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "全不选" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "全部取消選取" } }
+      }
+    },
     "preferencesBackup.preview.application": {
       "extractionState": "manual",
       "localizations": {
@@ -1536,6 +1603,38 @@
         "ru": { "stringUnit": { "state": "translated", "value": "%d временно недоступных действий будут сохранены и станут доступны после восстановления соответствующих плагинов." } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "将保留 %d 个当前不可用的操作；对应插件恢复后可继续使用。" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "將保留 %d 個目前無法使用的操作；還原對應插件後即可繼續使用。" } }
+      }
+    },
+    "preferencesBackup.preview.selectAllMissingPlugins": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تحديد جميع الإضافات المفقودة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Alle fehlenden Plugins auswählen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Select All Missing Plugins" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Seleccionar todos los plugins faltantes" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Tout sélectionner les extensions manquantes" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "不足しているプラグインをすべて選択" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "누락된 플러그인 모두 선택" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Selecionar todos os plugins ausentes" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выбрать все отсутствующие плагины" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "全选缺失插件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "全選缺少的外掛" } }
+      }
+    },
+    "preferencesBackup.preview.selectedPluginsSummary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تم تحديد %d من %d" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%d von %d ausgewählt" } },
+        "en": { "stringUnit": { "state": "translated", "value": "%d of %d selected" } },
+        "es": { "stringUnit": { "state": "translated", "value": "%d de %d seleccionados" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%d sur %d sélectionnés" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%d / %d 件選択中" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%d개 / %d개 선택됨" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "%d de %d seleccionados" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выбрано: %d из %d" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已选 %d / %d 个插件" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已選 %d / %d 個外掛" } }
       }
     },
     "preferencesBackup.preview.skipped": {
@@ -2104,6 +2203,57 @@
             "value": "安裝所選插件並匯入"
           }
         }
+      }
+    },
+    "preferencesBackup.preview.installAndImportCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "variations": { "plural": {
+          "zero": { "stringUnit": { "state": "translated", "value": "استيراد (%d)" } },
+          "one": { "stringUnit": { "state": "translated", "value": "تثبيت إضافة واحدة (%d) واستيرادها" } },
+          "two": { "stringUnit": { "state": "translated", "value": "تثبيت إضافتين (%d) واستيرادهما" } },
+          "few": { "stringUnit": { "state": "translated", "value": "تثبيت %d إضافات واستيرادها" } },
+          "many": { "stringUnit": { "state": "translated", "value": "تثبيت %d إضافة واستيرادها" } },
+          "other": { "stringUnit": { "state": "translated", "value": "تثبيت %d إضافة واستيرادها" } }
+        } } },
+        "de": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%d Plugin installieren und importieren" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%d Plugins installieren und importieren" } }
+        } } },
+        "en": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Install %d Plugin and Import" } },
+          "other": { "stringUnit": { "state": "translated", "value": "Install %d Plugins and Import" } }
+        } } },
+        "es": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Instalar %d plugin e importar" } },
+          "other": { "stringUnit": { "state": "translated", "value": "Instalar %d plugins e importar" } }
+        } } },
+        "fr": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Installer %d extension et importer" } },
+          "other": { "stringUnit": { "state": "translated", "value": "Installer %d extensions et importer" } }
+        } } },
+        "ja": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "%d個のプラグインをインストールして読み込む" } }
+        } } },
+        "ko": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "플러그인 %d개 설치 및 가져오기" } }
+        } } },
+        "pt": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Instalar %d plugin e importar" } },
+          "other": { "stringUnit": { "state": "translated", "value": "Instalar %d plugins e importar" } }
+        } } },
+        "ru": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "Установить %d плагин и импортировать" } },
+          "few": { "stringUnit": { "state": "translated", "value": "Установить %d плагина и импортировать" } },
+          "many": { "stringUnit": { "state": "translated", "value": "Установить %d плагинов и импортировать" } },
+          "other": { "stringUnit": { "state": "translated", "value": "Установить %d плагинов и импортировать" } }
+        } } },
+        "zh-Hans": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "安装 %d 个插件并导入" } }
+        } } },
+        "zh-Hant": { "variations": { "plural": {
+          "other": { "stringUnit": { "state": "translated", "value": "安裝 %d 個外掛並匯入" } }
+        } } }
       }
     },
     "preferencesBackup.exportSelection.confirm": { "extractionState": "manual", "localizations": {
