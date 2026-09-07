@@ -26,6 +26,7 @@ final class SavedScriptsPlugin:
     PluginActionProviding,
     PluginActionExecutionRevisionProviding,
     PluginSettingsPresenting,
+    PluginSettingsSearchFocusing,
     PluginPrimaryPanelIndicatorProviding,
     PluginPortablePreferencesProviding,
     PluginPersistentPreferencesChangeSignaling,
@@ -55,6 +56,7 @@ final class SavedScriptsPlugin:
     private let localization: PluginLocalization
     private let runner: any SavedScriptRunning
     private let persistentPreferencesChanges = PluginPersistentPreferencesChangeEmitter()
+    private let settingsSearchFocusController = SavedScriptsSettingsSearchFocusController()
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools",
         category: "SavedScriptsPlugin"
@@ -116,11 +118,18 @@ final class SavedScriptsPlugin:
             scrolling: .host
         ) { [weak self] _ in
             if let self {
-                SavedScriptsSettingsView(plugin: self)
+                SavedScriptsSettingsView(
+                    plugin: self,
+                    searchFocusController: self.settingsSearchFocusController
+                )
             } else {
                 EmptyView()
             }
         }
+    }
+
+    func focusSettingsSearch() {
+        settingsSearchFocusController.requestFocus()
     }
 
     var primaryPanelState: PluginPanelState {

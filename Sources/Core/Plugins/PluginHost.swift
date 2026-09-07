@@ -16,6 +16,7 @@ enum FeatureSettingsPane: Hashable {
 enum SettingsPresentationRequest: Equatable {
     case settings
     case general
+    case permissions
     case about
     case appUpdate
     case pluginMarketplace
@@ -199,6 +200,7 @@ struct PluginSurfaceLayoutItem: Identifiable {
     let isVisible: Bool
     let isActive: Bool
     let canUninstall: Bool
+    let removesDataOnUninstall: Bool
     let category: String?
     let releaseChannel: String?
 }
@@ -482,6 +484,20 @@ final class PluginHost: ObservableObject {
     @Published private(set) var featurePanelHiddenLayoutItems: [PluginSurfaceLayoutItem] = []
     @Published private(set) var pluginSettingsItems: [PluginSettingsPageItem] = []
     @Published private(set) var permissionCards: [PluginPermissionCard] = []
+    private(set) lazy var permissionCoordinator = PermissionCoordinator(
+        specializedActionHandler: { [weak self] pluginID, permissionID in
+            self?.performSpecializedPermissionAction(
+                pluginID: pluginID,
+                permissionID: permissionID
+            )
+        },
+        refreshHandler: { [weak self] targets in
+            self?.refreshPermissionState(targets: targets)
+        },
+        guidanceHandler: { [weak self] kind, sourceFrame in
+            self?.permissionGuidanceHandler(kind, sourceFrame)
+        }
+    )
     @Published private(set) var shortcutItems: [ShortcutSettingsItem] = []
     private var shortcutMutationMetadataByRowID: [String: ShortcutMutationMetadata] = [:]
     @Published private(set) var appShortcutItems: [AppShortcutSettingsItem] = []
@@ -511,6 +527,7 @@ final class PluginHost: ObservableObject {
     var componentDetailPresentationHandler: ((String, String) -> Void)?
 
     private let openPermissionSettings: (URL) -> Void
+    private let permissionGuidanceHandler: PermissionCoordinator.GuidanceHandler
 
     /// The app shell installs this to present source-appropriate feedback for actions invoked from
     /// headless surfaces such as global shortcuts and trackpad gestures.
@@ -584,7 +601,15 @@ final class PluginHost: ObservableObject {
         pluginStateChangeRebuildDelay: Duration = .milliseconds(80),
         loadDynamicPluginsOnInit: Bool = true,
         actionURLScheme: String = RightClickURLRouter.bundleURLSchemes().sorted().first ?? "mactools",
-        openPermissionSettings: @escaping (URL) -> Void = { _ = NSWorkspace.shared.open($0) }
+        openPermissionSettings: @escaping (URL) -> Void = { _ = NSWorkspace.shared.open($0) },
+        permissionGuidanceHandler: @escaping PermissionCoordinator.GuidanceHandler = {
+            kind,
+            sourceFrame in
+            PermissionFlowGuidancePresenter.shared.present(
+                kind: kind,
+                sourceFrame: sourceFrame
+            )
+        }
     ) {
         let preferencesBackupChangeReporter = providedPreferencesBackupChangeReporter
             ?? PreferencesBackupChangeReporter()
@@ -607,6 +632,7 @@ final class PluginHost: ObservableObject {
         self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         self.globalShortcutManager = globalShortcutManager
         self.openPermissionSettings = openPermissionSettings
+        self.permissionGuidanceHandler = permissionGuidanceHandler
         self.displayConfigurationObserver = displayConfigurationObserver
         self.accessibilityPermissionObserver = accessibilityPermissionObserver
         self.applicationActivityObserver = applicationActivityObserver
@@ -1481,7 +1507,28 @@ final class PluginHost: ObservableObject {
         return true
     }
 
-    func performPermissionAction(pluginID: String, permissionID: String) {
+    func performPermissionAction(
+        pluginID: String,
+        permissionID: String,
+        sourceFrame: CGRect? = nil
+    ) {
+        if permissionCoordinator.performAction(
+            pluginID: pluginID,
+            permissionID: permissionID,
+            sourceFrame: sourceFrame
+        ) {
+            return
+        }
+        performSpecializedPermissionAction(
+            pluginID: pluginID,
+            permissionID: permissionID
+        )
+    }
+
+    private func performSpecializedPermissionAction(
+        pluginID: String,
+        permissionID: String
+    ) {
         guard let plugin = corePlugin(for: pluginID) else {
             return
         }
@@ -1511,6 +1558,10 @@ final class PluginHost: ObservableObject {
             return
         }
 
+        guard shortcutValidationMessage(binding, for: target.descriptor) == nil else {
+            return
+        }
+
         applyShortcutCustomization(
             .custom(binding),
             for: target.descriptor,
@@ -1523,11 +1574,222 @@ final class PluginHost: ObservableObject {
             return AppL10n.plugins("plugin.shortcut.unavailable", defaultValue: "快捷键不可用。")
         }
 
+        if let message = shortcutValidationMessage(binding, for: target.descriptor) {
+            return message
+        }
+
         return applyShortcutCustomization(
             .custom(binding),
             for: target.descriptor,
             assignmentID: target.assignmentID
         )
+    }
+
+    struct ShortcutBindingConflict: Identifiable, Equatable {
+        let targetShortcutID: String
+        let conflictingShortcutIDs: [String]
+        let binding: ShortcutBinding
+        let ownerDescription: String
+        let canSwap: Bool
+
+        var id: String {
+            "\(targetShortcutID)|\(conflictingShortcutIDs.joined(separator: ","))|\(binding.keyCode)|\(binding.modifiers.rawValue)"
+        }
+    }
+
+    enum ShortcutConflictResolution {
+        case swap
+        case replace
+    }
+
+    func shortcutBindingConflict(
+        for binding: ShortcutBinding,
+        targetShortcutID: String
+    ) -> ShortcutBindingConflict? {
+        guard let target = shortcutMutationTarget(for: targetShortcutID),
+              actionReference(for: target.descriptor) == nil
+        else { return nil }
+        let conflicts = shortcutDescriptors().filter {
+            $0.itemID != target.descriptor.itemID
+                && resolvedBinding(for: $0) == binding
+                && !canShareShortcutBinding(target.descriptor, with: $0)
+        }
+        guard !conflicts.isEmpty,
+              conflicts.allSatisfy({ actionReference(for: $0) == nil })
+        else { return nil }
+
+        return ShortcutBindingConflict(
+            targetShortcutID: target.descriptor.itemID,
+            conflictingShortcutIDs: conflicts.map(\.itemID),
+            binding: binding,
+            ownerDescription: conflicts.map {
+                "\($0.pluginTitle) · \($0.definition.title)"
+            }.joined(separator: ", "),
+            canSwap: conflicts.count == 1 && resolvedBinding(for: target.descriptor) != nil
+        )
+    }
+
+    @discardableResult
+    func resolveShortcutBindingConflict(
+        _ conflict: ShortcutBindingConflict,
+        resolution: ShortcutConflictResolution
+    ) -> String? {
+        guard let target = shortcutDescriptor(for: conflict.targetShortcutID),
+              actionReference(for: target) == nil,
+              !conflict.conflictingShortcutIDs.isEmpty
+        else {
+            let message = AppL10n.plugins(
+                "plugin.shortcut.conflictChanged",
+                defaultValue: "快捷键冲突已发生变化，请重试。"
+            )
+            shortcutErrors[conflict.targetShortcutID] = message
+            rebuildDerivedState()
+            return message
+        }
+        let previousOwners = conflict.conflictingShortcutIDs.compactMap(shortcutDescriptor(for:))
+        let currentConflictingOwnerIDs = Set(shortcutDescriptors().filter {
+            $0.itemID != target.itemID
+                && resolvedBinding(for: $0) == conflict.binding
+                && !canShareShortcutBinding(target, with: $0)
+        }.map(\.itemID))
+        guard previousOwners.count == conflict.conflictingShortcutIDs.count,
+              previousOwners.allSatisfy({ actionReference(for: $0) == nil }),
+              Set(conflict.conflictingShortcutIDs) == currentConflictingOwnerIDs
+        else {
+            let message = AppL10n.plugins(
+                "plugin.shortcut.conflictChanged",
+                defaultValue: "快捷键冲突已发生变化，请重试。"
+            )
+            shortcutErrors[conflict.targetShortcutID] = message
+            rebuildDerivedState()
+            return message
+        }
+
+        if let message = shortcutValidationMessage(conflict.binding, for: target) {
+            shortcutErrors[target.itemID] = message
+            rebuildDerivedState()
+            return message
+        }
+        let previousTargetBinding = resolvedBinding(for: target)
+        if resolution == .swap {
+            guard conflict.canSwap,
+                  previousOwners.count == 1,
+                  let previousOwner = previousOwners.first,
+                  let previousTargetBinding
+            else {
+                let message = AppL10n.plugins(
+                    "plugin.shortcut.conflictChanged",
+                    defaultValue: "快捷键冲突已发生变化，请重试。"
+                )
+                shortcutErrors[target.itemID] = message
+                rebuildDerivedState()
+                return message
+            }
+            if let message = shortcutValidationMessage(previousTargetBinding, for: previousOwner) {
+                shortcutErrors[target.itemID] = message
+                rebuildDerivedState()
+                return message
+            }
+            if let remainingConflict = shortcutDescriptors().first(where: {
+                $0.itemID != target.itemID
+                    && $0.itemID != previousOwner.itemID
+                    && resolvedBinding(for: $0) == previousTargetBinding
+                    && !canShareShortcutBinding(previousOwner, with: $0)
+            }) {
+                let message = ShortcutValidationError.duplicate(
+                    ownerDescription: "\(remainingConflict.pluginTitle) · \(remainingConflict.definition.title)"
+                ).localizedDescription
+                shortcutErrors[target.itemID] = message
+                rebuildDerivedState()
+                return message
+            }
+        }
+
+        let originalTargetCustomization = shortcutStore.customization(for: target.itemID)
+        let originalOwnerCustomizations = Dictionary(uniqueKeysWithValues: previousOwners.map {
+            ($0.itemID, shortcutStore.customization(for: $0.itemID))
+        })
+        for previousOwner in previousOwners {
+            let customization: ShortcutCustomization = if resolution == .swap {
+                previousTargetBinding.map(ShortcutCustomization.custom) ?? .cleared
+            } else {
+                .cleared
+            }
+            shortcutStore.setCustomization(customization, for: previousOwner.itemID)
+        }
+        shortcutStore.setCustomization(.custom(conflict.binding), for: target.itemID)
+
+        let ownersMatchExpectedBindings = previousOwners.allSatisfy { previousOwner in
+            let expectedBinding = resolution == .swap ? previousTargetBinding : nil
+            return legacyResolvedBinding(for: previousOwner) == expectedBinding
+        }
+        let destinationStillConflicts = shortcutDescriptors().contains {
+            $0.itemID != target.itemID
+                && resolvedBinding(for: $0) == conflict.binding
+                && !canShareShortcutBinding(target, with: $0)
+        }
+        let swappedBindingStillConflicts: Bool = if resolution == .swap,
+                                                   let previousOwner = previousOwners.first,
+                                                   let previousTargetBinding {
+            shortcutDescriptors().contains {
+                $0.itemID != target.itemID
+                    && $0.itemID != previousOwner.itemID
+                    && resolvedBinding(for: $0) == previousTargetBinding
+                    && !canShareShortcutBinding(previousOwner, with: $0)
+            }
+        } else {
+            false
+        }
+        guard legacyResolvedBinding(for: target) == conflict.binding,
+              ownersMatchExpectedBindings,
+              !destinationStillConflicts,
+              !swappedBindingStillConflicts
+        else {
+            shortcutStore.setCustomization(originalTargetCustomization, for: target.itemID)
+            for previousOwner in previousOwners {
+                shortcutStore.setCustomization(
+                    originalOwnerCustomizations[previousOwner.itemID] ?? .inheritDefault,
+                    for: previousOwner.itemID
+                )
+            }
+            let message = AppL10n.plugins(
+                "plugin.shortcut.saveFailed",
+                defaultValue: "无法保存快捷键。"
+            )
+            shortcutErrors[target.itemID] = message
+            rebuildDerivedState()
+            return message
+        }
+
+        shortcutErrors.removeValue(forKey: target.itemID)
+        notifyShortcutBindingChange(for: target, binding: conflict.binding)
+        for previousOwner in previousOwners {
+            shortcutErrors.removeValue(forKey: previousOwner.itemID)
+            notifyShortcutBindingChange(
+                for: previousOwner,
+                binding: resolution == .swap ? previousTargetBinding : nil
+            )
+        }
+        rebuildDerivedState()
+        syncGlobalShortcuts()
+        return nil
+    }
+
+    private func shortcutValidationMessage(
+        _ binding: ShortcutBinding,
+        for descriptor: ShortcutDescriptor
+    ) -> String? {
+        guard let validator = descriptor.plugin as? any PluginShortcutBindingValidating else {
+            return nil
+        }
+        return guardedValue(
+            for: descriptor.plugin,
+            operation: "validate shortcut binding",
+            validator.shortcutValidationMessage(
+                definitionID: descriptor.definition.id,
+                binding: binding
+            )
+        ) ?? nil
     }
 
     func setAppShortcutBindingAndReturnError(
@@ -1748,12 +2010,29 @@ final class PluginHost: ObservableObject {
         focusedApplicationTargetProvider.currentHostWindowProvider = provider
     }
 
+    func focusedPluginWindowLayoutTarget() -> NSWindow? {
+        activePlugins.lazy
+            .compactMap { plugin in
+                (plugin as? any PluginWindowLayoutTargetProviding)?.focusedWindowLayoutTarget
+            }
+            .first { window in
+                window.isVisible && (window.isKeyWindow || (window.childWindows ?? []).contains {
+                    $0.parent === window && $0.isVisible && $0.isKeyWindow
+                })
+            }
+    }
+
     func captureCurrentFocusedWindowTarget() {
         focusedApplicationTargetProvider.captureCurrentTarget()
     }
 
     func presentPluginMarketplace() {
         appPresentationHandler?(.settings(.pluginMarketplace))
+    }
+
+    func presentPermissionCenter() {
+        rebuildDerivedState()
+        appPresentationHandler?(.settings(.permissions))
     }
 
     func presentActionsAndShortcutsSettings() {
@@ -1824,12 +2103,27 @@ final class PluginHost: ObservableObject {
 
     func hasPluginSettingsSearchField(pluginID: String) -> Bool {
         guard hasPluginSettings(pluginID: pluginID) else { return false }
-        return corePlugin(for: pluginID) is any PluginSettingsSearchFocusing
+        guard let plugin = corePlugin(for: pluginID),
+              plugin is any PluginSettingsSearchFocusing else {
+            return false
+        }
+        return (plugin as? any PluginSettingsSearchFocusMetadataProviding)?
+            .isSettingsSearchAvailable ?? true
+    }
+
+    func pluginSettingsSearchFocusTarget(pluginID: String) -> PluginSettingsSearchTarget? {
+        guard hasPluginSettingsSearchField(pluginID: pluginID),
+              let metadata = corePlugin(for: pluginID)
+                as? any PluginSettingsSearchFocusMetadataProviding else {
+            return nil
+        }
+        return metadata.settingsSearchFocusTarget
     }
 
     @discardableResult
     func focusPluginSettingsSearch(pluginID: String) -> Bool {
-        guard let plugin = corePlugin(for: pluginID),
+        guard hasPluginSettingsSearchField(pluginID: pluginID),
+              let plugin = corePlugin(for: pluginID),
               let searchFocusing = plugin as? any PluginSettingsSearchFocusing else {
             return false
         }
@@ -2817,6 +3111,13 @@ final class PluginHost: ObservableObject {
                     shortcutDefinitionID: shortcutDefinitionID
                 )
             }
+            if let inlineShortcutConsumer = plugin as?
+                any PluginInlineShortcutSettingsContextConsuming {
+                inlineShortcutConsumer.inlineShortcutSettingsContextProvider = { [weak self] in
+                    self?.makePluginSettingsContext(pluginID: pluginID)
+                        ?? PluginSettingsContext(pluginID: pluginID)
+                }
+            }
             if let focusTargetConsumer = plugin as? any PluginFocusedWindowTargetConsuming {
                 focusTargetConsumer.focusedWindowTargetProvider = { [weak self] in
                     self?.focusedApplicationTargetProvider.target()
@@ -3011,6 +3312,94 @@ final class PluginHost: ObservableObject {
         dynamicPluginInstalledAtByID = dynamicPluginManager?.installedAtByID() ?? [:]
         pluginManagementItems = dynamicPluginManager?.pluginManagementItems ?? []
         pluginCatalogStatus = pluginCatalogManager?.status ?? .unavailable
+    }
+
+    private func refreshPermissionState(targets: [PermissionCenterAffectedFeature]) {
+        var refreshedPluginIDs: Set<String> = []
+        for target in targets where refreshedPluginIDs.insert(target.pluginID).inserted {
+            guard let plugin = corePlugin(for: target.pluginID) else { continue }
+            handlePluginAction(rebuildAfterAction: false) {
+                if target.status == .granted,
+                   target.permissionID == "system-audio-recording" {
+                    guardPluginCall(plugin, operation: "recheck granted permission state") {
+                        plugin.handlePermissionAction(id: target.permissionID)
+                    }
+                } else {
+                    guardPluginCall(plugin, operation: "refresh permission state") {
+                        plugin.refresh()
+                    }
+                }
+            }
+        }
+
+        rebuildDerivedState()
+    }
+
+    @discardableResult
+    private func rebuildPermissionProjections() -> Set<String> {
+        var permissionCenterRequirements: [PermissionCenterRequirement] = []
+        var missingPermissionCardIDs = Set<String>()
+        permissionCards = orderedCorePlugins().flatMap { plugin -> [PluginPermissionCard] in
+            let requirements = guardedValue(
+                for: plugin,
+                operation: "read permission requirements",
+                plugin.permissionRequirements
+            ) ?? []
+
+            return requirements.compactMap { requirement -> PluginPermissionCard? in
+                guard let state = guardedValue(
+                    for: plugin,
+                    operation: "read permission state",
+                    plugin.permissionState(for: requirement.id)
+                ) else {
+                    return nil
+                }
+
+                let hostKind = HostPermissionKind.resolve(
+                    permissionID: requirement.id,
+                    pluginKind: requirement.kind
+                )
+                let cardID = "\(plugin.metadata.id).permission.\(requirement.id)"
+                if !state.isGranted {
+                    missingPermissionCardIDs.insert(cardID)
+                }
+                permissionCenterRequirements.append(
+                    PermissionCenterRequirement(
+                        pluginID: plugin.metadata.id,
+                        pluginTitle: plugin.metadata.title,
+                        permissionID: requirement.id,
+                        kind: hostKind,
+                        description: requirement.description,
+                        isGranted: state.isGranted,
+                        footnote: state.footnote,
+                        statusText: state.statusText,
+                        statusSystemImage: state.statusSystemImage,
+                        statusTone: state.statusTone
+                    )
+                )
+
+                return PluginPermissionCard(
+                    id: cardID,
+                    pluginID: plugin.metadata.id,
+                    permissionID: requirement.id,
+                    title: requirement.title,
+                    description: requirement.description,
+                    iconSystemImage: permissionIconName(for: hostKind),
+                    statusText: state.statusText ?? (state.isGranted
+                        ? AppL10n.plugins("plugin.permission.granted", defaultValue: "已授权")
+                        : AppL10n.plugins("plugin.permission.notGranted", defaultValue: "未授权")),
+                    statusSystemImage: state.statusSystemImage ?? (state.isGranted ? "checkmark.shield.fill" : "exclamationmark.triangle.fill"),
+                    statusTone: state.statusTone ?? (state.isGranted ? .positive : .caution),
+                    footnote: state.footnote,
+                    buttonTitle: permissionActionTitle(
+                        for: hostKind,
+                        isGranted: state.isGranted
+                    )
+                )
+            }
+        }
+        permissionCoordinator.replaceRequirements(permissionCenterRequirements)
+        return missingPermissionCardIDs
     }
 
     private func rebuildDerivedState(dirtyPluginIDs: Set<String>? = nil) {
@@ -3291,48 +3680,7 @@ final class PluginHost: ObservableObject {
             )
         }
 
-        var missingPermissionCardIDs = Set<String>()
-        permissionCards = orderedCorePlugins().flatMap { plugin -> [PluginPermissionCard] in
-            let requirements = guardedValue(
-                for: plugin,
-                operation: "read permission requirements",
-                plugin.permissionRequirements
-            ) ?? []
-
-            return requirements.compactMap { requirement -> PluginPermissionCard? in
-                guard let state = guardedValue(
-                    for: plugin,
-                    operation: "read permission state",
-                    plugin.permissionState(for: requirement.id)
-                ) else {
-                    return nil
-                }
-
-                let cardID = "\(plugin.metadata.id).permission.\(requirement.id)"
-                if !state.isGranted {
-                    missingPermissionCardIDs.insert(cardID)
-                }
-
-                return PluginPermissionCard(
-                    id: cardID,
-                    pluginID: plugin.metadata.id,
-                    permissionID: requirement.id,
-                    title: requirement.title,
-                    description: requirement.description,
-                    iconSystemImage: permissionIconName(for: requirement),
-                    statusText: state.statusText ?? (state.isGranted
-                        ? AppL10n.plugins("plugin.permission.granted", defaultValue: "已授权")
-                        : AppL10n.plugins("plugin.permission.notGranted", defaultValue: "未授权")),
-                    statusSystemImage: state.statusSystemImage ?? (state.isGranted ? "checkmark.shield.fill" : "exclamationmark.triangle.fill"),
-                    statusTone: state.statusTone ?? (state.isGranted ? .positive : .caution),
-                    footnote: state.footnote,
-                    buttonTitle: permissionActionTitle(
-                        for: requirement,
-                        isGranted: state.isGranted
-                    )
-                )
-            }
-        }
+        let missingPermissionCardIDs = rebuildPermissionProjections()
 
         synchronizeActionRegistry()
 
@@ -4248,6 +4596,18 @@ final class PluginHost: ObservableObject {
         PluginSettingsContext(
             pluginID: pluginID,
             shortcutItems: shortcutItems.filter { $0.pluginID == pluginID },
+            actionShortcutItems: actionShortcutCatalogItems
+                .filter { $0.reference.key.providerID == pluginID }
+                .map {
+                    PluginSettingsActionShortcutItem(
+                        actionID: $0.reference.key.actionID,
+                        title: $0.title,
+                        description: $0.description,
+                        bindingText: $0.bindingText,
+                        canAssign: $0.canAssign,
+                        canClear: $0.assignmentID != nil
+                    )
+                },
             recordShortcut: { [weak self] itemID, binding in
                 self?.clearShortcutError(for: itemID)
                 return self?.setShortcutBindingAndReturnError(binding, for: itemID)
@@ -4262,6 +4622,36 @@ final class PluginHost: ObservableObject {
             resetShortcut: { [weak self] itemID in
                 self?.clearShortcutError(for: itemID)
                 self?.resetShortcut(for: itemID)
+            },
+            recordActionShortcut: { [weak self] actionID, binding in
+                guard let self,
+                      let item = self.actionShortcutCatalogItems.first(where: {
+                          $0.reference.key.providerID == pluginID
+                              && $0.reference.key.actionID == actionID
+                      })
+                else {
+                    return FeatureL10n.string("操作不可用。")
+                }
+                return self.setActionShortcutBindingAndReturnError(
+                    binding,
+                    for: item.reference,
+                    assignmentID: item.assignmentID
+                )
+            },
+            clearActionShortcut: { [weak self] actionID in
+                guard let self,
+                      let item = self.actionShortcutCatalogItems.first(where: {
+                          $0.reference.key.providerID == pluginID
+                              && $0.reference.key.actionID == actionID
+                              && $0.assignmentID != nil
+                      })
+                else {
+                    return
+                }
+                self.clearActionShortcut(
+                    for: item.reference,
+                    assignmentID: item.assignmentID
+                )
             }
         )
     }
@@ -4384,6 +4774,34 @@ final class PluginHost: ObservableObject {
                 matchingPermissionCards.map(\.id)
             )
             let matchingShortcutItems = shortcutItems.filter { $0.pluginID == pluginID }
+            let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
+            if descriptor.hasSettings,
+               let provider = descriptor.plugin as? any PluginGroupedShortcutSettingsProviding,
+               let configurations = guardedValue(
+                   for: descriptor.plugin,
+                   operation: "read grouped shortcut settings configuration",
+                   provider.shortcutSettingsGroups
+               ) {
+                var seenIDs: Set<String> = []
+                shortcutSettingsGroups = configurations.filter { configuration in
+                    let id = configuration.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let title = configuration.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let systemImage = configuration.systemImage.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let isValid = !id.isEmpty
+                        && !title.isEmpty
+                        && !systemImage.isEmpty
+                        && (!configuration.actionIDs.isEmpty || !configuration.shortcutDefinitionIDs.isEmpty)
+                        && seenIDs.insert(id).inserted
+                    if !isValid {
+                        AppLog.pluginHost.error(
+                            "Plugin \(pluginID, privacy: .public) returned an invalid grouped shortcut settings configuration"
+                        )
+                    }
+                    return isValid
+                }
+            } else {
+                shortcutSettingsGroups = []
+            }
             let rawPage: PluginSettingsPage?
             if descriptor.hasSettings {
                 rawPage = guardedOptionalValue(
@@ -4407,7 +4825,7 @@ final class PluginHost: ObservableObject {
                             rawPage,
                             availableShortcutGroupIDs: Set(
                                 matchingShortcutItems.compactMap(\.settingsGroupID)
-                            )
+                            ).union(shortcutSettingsGroups.map(\.id))
                         )
                         page = rawPage
                     }
@@ -4444,11 +4862,15 @@ final class PluginHost: ObservableObject {
             let hasSettingsSurface = !matchingMissingPermissionCardIDs.isEmpty
                 || !matchingShortcutItems.isEmpty
                 || actionShortcutSettingsConfiguration != nil
+                || !shortcutSettingsGroups.isEmpty
                 || page != nil
 
             guard hasSettingsSurface else {
                 return nil
             }
+
+            let shortcutGroupPresentation = descriptor.plugin as?
+                any PluginShortcutSettingsGroupPresentationProviding
 
             return PluginSettingsPageItem(
                 id: pluginID,
@@ -4462,7 +4884,16 @@ final class PluginHost: ObservableObject {
                 permissionCards: matchingPermissionCards,
                 missingPermissionCardIDs: matchingMissingPermissionCardIDs,
                 shortcutItems: matchingShortcutItems,
-                actionShortcutSettingsConfiguration: actionShortcutSettingsConfiguration
+                actionShortcutSettingsConfiguration: shortcutSettingsGroups.isEmpty
+                    ? actionShortcutSettingsConfiguration
+                    : nil,
+                shortcutSettingsGroups: shortcutSettingsGroups,
+                shortcutDefinitionFirstSettingsGroupIDs:
+                    shortcutGroupPresentation?.shortcutDefinitionFirstSettingsGroupIDs ?? [],
+                collapsibleShortcutSettingsGroupIDs:
+                    shortcutGroupPresentation?.collapsibleShortcutSettingsGroupIDs ?? [],
+                collapsibleActionSettingsGroupIDs:
+                    shortcutGroupPresentation?.collapsibleActionSettingsGroupIDs ?? []
             )
         }
     }
@@ -4492,6 +4923,8 @@ final class PluginHost: ObservableObject {
             isVisible: isVisible,
             isActive: isActive,
             canUninstall: dynamicPluginManifestsByID[metadata.id] != nil,
+            removesDataOnUninstall: dynamicPluginManifestsByID[metadata.id]?
+                .effectiveUninstallDataPolicy == .removePrivateData,
             category: dynamicPluginCategoriesByID[metadata.id] ?? nil,
             releaseChannel: dynamicPluginReleaseChannelsByID[metadata.id] ?? nil
         )
@@ -5533,8 +5966,9 @@ final class PluginHost: ObservableObject {
                     systemImage: action.definition.systemImage,
                     bindingText: assignmentItem?.bindingText ?? "",
                     status: status,
-                    canAssign: availability.isAvailable
-                        && action.definition.capabilities.contains(.foregroundInteractive)
+                    // Availability is live execution state, not configurability. Let users
+                    // prepare a shortcut while an interactive action is temporarily unavailable.
+                    canAssign: action.definition.capabilities.contains(.foregroundInteractive)
                 )
             }
         }
@@ -5734,7 +6168,7 @@ final class PluginHost: ObservableObject {
     }
 
     private func requestPermissionGuidance(forPluginID pluginID: String, permissionID: String) {
-        guard let plugin = activePlugins.first(where: { $0.metadata.id == pluginID }),
+        guard let plugin = corePlugin(for: pluginID),
               (guardedValue(
                   for: plugin,
                   operation: "read permission requirements",
@@ -5743,67 +6177,52 @@ final class PluginHost: ObservableObject {
             return
         }
 
-        // Keep the user's current context. The unresolved requirement is rendered at the
-        // top of this plugin's settings page when they choose to open it.
+        // A plugin may report missing permission while refreshing in the background.
+        // Update its presentation without opening guidance or System Settings; those
+        // transitions require an explicit click in Settings.
         rebuildDerivedState(dirtyPluginIDs: [pluginID])
     }
 
     private func permissionActionTitle(
-        for requirement: PluginPermissionRequirement,
+        for kind: HostPermissionKind,
         isGranted: Bool
     ) -> String {
-        switch permissionPresentationRole(for: requirement) {
+        switch kind {
+        case .accessibility, .inputMonitoring, .screenRecording:
+            return isGranted
+                ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
+                : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
         case .fullDiskAccess:
             return isGranted
                 ? AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
                 : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
-        case .extensionManagement:
+        case .calendarFullAccess, .systemAudioRecording:
+            return isGranted
+                ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
+                : AppL10n.plugins("plugin.permission.requestAuthorization", defaultValue: "请求授权")
+        case .automation, .finderExtension:
             return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
-        case let .system(kind):
-            switch kind {
-            case .accessibility:
-                return isGranted
-                    ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
-                    : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
-            case .inputMonitoring:
-                return isGranted
-                    ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
-                    : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
-            case .calendarFullAccess:
-                return isGranted
-                    ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
-                    : AppL10n.plugins("plugin.permission.requestAuthorization", defaultValue: "请求授权")
-            case .automation, .finderExtension:
-                return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
-            case .screenRecording:
-                return isGranted
-                    ? AppL10n.plugins("plugin.permission.checkStatus", defaultValue: "检查授权状态")
-                    : AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
-            }
         }
     }
 
-    private func permissionIconName(for requirement: PluginPermissionRequirement) -> String {
-        switch permissionPresentationRole(for: requirement) {
+    private func permissionIconName(for kind: HostPermissionKind) -> String {
+        switch kind {
+        case .accessibility:
+            return "accessibility"
+        case .inputMonitoring:
+            return "keyboard.badge.eye"
+        case .calendarFullAccess:
+            return "calendar"
+        case .automation:
+            return "cursorarrow.click.2"
+        case .finderExtension:
+            return "puzzlepiece.extension"
+        case .screenRecording:
+            return "rectangle.dashed.badge.record"
+        case .systemAudioRecording:
+            return "waveform.badge.mic"
         case .fullDiskAccess:
             return "externaldrive.badge.checkmark"
-        case .extensionManagement:
-            return "puzzlepiece.extension"
-        case let .system(kind):
-            switch kind {
-            case .accessibility:
-                return "accessibility"
-            case .inputMonitoring:
-                return "keyboard.badge.eye"
-            case .calendarFullAccess:
-                return "calendar"
-            case .automation:
-                return "cursorarrow.click.2"
-            case .finderExtension:
-                return "puzzlepiece.extension"
-            case .screenRecording:
-                return "rectangle.dashed.badge.record"
-            }
         }
     }
 

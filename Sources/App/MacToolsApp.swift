@@ -13,6 +13,7 @@ struct MacToolsApp: App, AppIntentsPackage {
     }
 
     init() {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         AppLanguagePreference.applyStoredPreference()
         MacToolsAppShortcuts.refreshParameters()
     }
@@ -89,7 +90,10 @@ final class MacToolsAppDelegate: NSObject, NSApplicationDelegate, UNUserNotifica
     }
 
     private func startRuntime(recoveryRequested: Bool) {
-        guard runtime == nil else { return }
+        // applicationWillFinishLaunching deliberately skips instance coordination in
+        // XCTest. Its synthetic primary disposition must not start live plugins,
+        // clipboard capture, Keychain access, or preference backups in test hosts.
+        guard !isRunningTests, runtime == nil else { return }
         let runtime = MacToolsAppRuntime()
         self.runtime = runtime
         runtime.start(notificationDelegate: self)
@@ -230,6 +234,8 @@ final class MacToolsAppDelegate: NSObject, NSApplicationDelegate, UNUserNotifica
     }
 
     #if DEBUG
+    var hasStartedRuntimeForTesting: Bool { runtime != nil }
+
     func setShowSettingsForRecoveryForTesting(_ action: @escaping () -> Void) {
         showSettingsForTesting = action
     }

@@ -150,6 +150,12 @@ LOCALIZED_REQUIREMENT_NAMES = {
         ko="시스템 오디오 녹음 권한", pt="permissão de gravação de áudio do sistema",
         ru="доступ к записи системного аудио", zh_hans="系统音频录制权限", zh_hant="系統音訊錄製權限",
     ),
+    "full-disk-access": _localized_requirement(
+        "Full Disk Access", ar="الوصول الكامل إلى القرص", de="Festplattenvollzugriff",
+        es="acceso total al disco", fr="accès complet au disque", ja="フルディスクアクセス",
+        ko="전체 디스크 접근", pt="acesso total ao disco", ru="полный доступ к диску",
+        zh_hans="完全磁盘访问", zh_hant="完整磁碟存取",
+    ),
     "built-in battery": _localized_requirement(
         "built-in battery", ar="بطارية مدمجة", de="integrierter Akku", es="batería integrada",
         fr="batterie intégrée", ja="内蔵バッテリー", ko="내장 배터리", pt="bateria integrada",
@@ -180,7 +186,7 @@ VALID_CATEGORIES = {
 }
 VALID_PERMISSION_IDS = {
     "accessibility", "automation", "calendarFullAccess", "inputMonitoring",
-    "screen-recording", "system-audio-recording"
+    "screen-recording", "system-audio-recording", "full-disk-access"
 }
 VALID_SURFACES = {
     "unified-search", "global-shortcut", "run-link", "workflow", "automatic-rule",

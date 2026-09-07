@@ -24,6 +24,22 @@ enum PluginShortcutRecorderValidation {
     }
 }
 
+enum PluginShortcutRecorderAccessibility {
+    static func value(
+        displayText: String,
+        placeholder: String,
+        isRecording: Bool
+    ) -> String {
+        if isRecording {
+            return PluginKitLocalization.shortcutRecorderPreviewPlaceholder
+        }
+        if displayText.isEmpty || displayText == "None" {
+            return placeholder
+        }
+        return displayText
+    }
+}
+
 @MainActor
 private final class PluginShortcutRecorderDisplayState: ObservableObject {
     @Published var previewText = PluginKitLocalization.shortcutRecorderPreviewPlaceholder
@@ -199,6 +215,125 @@ public struct PluginShortcutRecorder: View {
     }
 }
 
+/// Presents the standard shortcut recording popover from a caller-owned interactive control.
+/// This keeps normal clicks available for the control's primary action while allowing an
+/// Option-click or context-menu command to set `isPresented` and edit the displayed shortcut.
+public struct PluginShortcutRecordingAnchor: View {
+    @Binding private var isPresented: Bool
+    private let onRecord: (ShortcutBinding) -> PluginShortcutRecordingResult
+    private let onBeginRecording: (() -> Void)?
+    private let onEndRecording: (() -> Void)?
+
+    public init(
+        isPresented: Binding<Bool>,
+        onRecord: @escaping (ShortcutBinding) -> PluginShortcutRecordingResult,
+        onBeginRecording: (() -> Void)? = nil,
+        onEndRecording: (() -> Void)? = nil
+    ) {
+        _isPresented = isPresented
+        self.onRecord = onRecord
+        self.onBeginRecording = onBeginRecording
+        self.onEndRecording = onEndRecording
+    }
+
+    public var body: some View {
+        GeometryReader { proxy in
+            PluginShortcutRecorderPopoverAnchor(
+                isPresented: $isPresented,
+                onRecord: onRecord,
+                onBeginRecording: onBeginRecording,
+                onEndRecording: onEndRecording
+            )
+            .frame(width: max(proxy.size.width, 1), height: max(proxy.size.height, 1))
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+/// Keeps the recorder and its trailing clear affordance in stable columns.
+/// Reset remains available from the recorder's context menu when a caller supports it.
+public struct PluginSettingsShortcutRecorderControl: View {
+    private static let shortcutActionButtonSize: CGFloat = 22
+    public let title: String
+    public let displayText: String
+    public let canAssign: Bool
+    public let canClear: Bool
+    public let resetTitle: String?
+    public let clearTitle: String
+    public let onRecord: (ShortcutBinding) -> PluginShortcutRecordingResult
+    public let onBeginRecording: (() -> Void)?
+    public let onReset: (() -> Void)?
+    public let onClear: () -> Void
+
+    public init(
+        title: String,
+        displayText: String,
+        canAssign: Bool = true,
+        canClear: Bool,
+        resetTitle: String? = nil,
+        clearTitle: String,
+        onRecord: @escaping (ShortcutBinding) -> PluginShortcutRecordingResult,
+        onBeginRecording: (() -> Void)? = nil,
+        onReset: (() -> Void)? = nil,
+        onClear: @escaping () -> Void
+    ) {
+        self.title = title
+        self.displayText = displayText
+        self.canAssign = canAssign
+        self.canClear = canClear
+        self.resetTitle = resetTitle
+        self.clearTitle = clearTitle
+        self.onRecord = onRecord
+        self.onBeginRecording = onBeginRecording
+        self.onReset = onReset
+        self.onClear = onClear
+    }
+
+    public var body: some View {
+        HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            recorder
+
+            Button(action: onClear) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(PluginSettingsTheme.Typography.rowIcon)
+                    .symbolRenderingMode(.monochrome)
+                    .frame(
+                        width: Self.shortcutActionButtonSize,
+                        height: Self.shortcutActionButtonSize
+                    )
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.secondary)
+            .help(clearTitle)
+            .accessibilityLabel(clearTitle)
+            .opacity(canClear ? 1 : 0)
+            .disabled(!canClear)
+            .accessibilityHidden(!canClear)
+        }
+    }
+
+    @ViewBuilder
+    private var recorder: some View {
+        let recorder = PluginShortcutRecorder(
+            title: title,
+            displayText: displayText,
+            minWidth: PluginSettingsTheme.Size.shortcutRecorderWidth,
+            onRecord: onRecord,
+            onBeginRecording: onBeginRecording
+        )
+        .frame(width: PluginSettingsTheme.Size.shortcutRecorderWidth)
+        .disabled(!canAssign)
+
+        if let resetTitle, let onReset {
+            recorder.contextMenu {
+                Button(resetTitle, systemImage: "arrow.counterclockwise", action: onReset)
+            }
+        } else {
+            recorder
+        }
+    }
+}
+
 private struct PluginShortcutRecorderButton: View {
     let title: String
     let displayText: String
@@ -209,6 +344,14 @@ private struct PluginShortcutRecorderButton: View {
     let onRecord: (ShortcutBinding) -> PluginShortcutRecordingResult
     let onBeginRecording: (() -> Void)?
     let onEndRecording: (() -> Void)?
+
+    private var accessibilityValue: String {
+        PluginShortcutRecorderAccessibility.value(
+            displayText: displayText,
+            placeholder: placeholder,
+            isRecording: isPresented
+        )
+    }
 
     var body: some View {
         Button {
@@ -236,9 +379,7 @@ private struct PluginShortcutRecorderButton: View {
         }
         .help(PluginKitLocalization.shortcutRecorderHelp(title: title))
         .accessibilityLabel(Text(title))
-        .accessibilityValue(Text(
-            isPresented ? PluginKitLocalization.shortcutRecorderPreviewPlaceholder : displayText
-        ))
+        .accessibilityValue(Text(accessibilityValue))
         .accessibilityHint(Text(PluginKitLocalization.shortcutRecorderHelp(title: title)))
         .onHover { hovering in
             isHovered = hovering

@@ -13,6 +13,7 @@ import AutoHideMenuBarPlugin
 import AutoInputPlugin
 import BatteryChargeLimitPlugin
 import ClipboardClearPlugin
+import ClipboardHistoryPlugin
 import CloudflareR2Plugin
 import DiskCleanPlugin
 import DisplayBrightnessPlugin
@@ -32,6 +33,7 @@ import LaunchControlPlugin
 import LaunchpadPlugin
 import LockScreenPlugin
 import MacSettingsPlugin
+import MenuBarHiddenPlugin
 import MicrophoneMutePlugin
 import MiddleClickPlugin
 import NightShiftPlugin
@@ -298,6 +300,7 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
         .init(pluginID: "auto-input", makeProvider: AutoInputPluginFactory.makeProvider),
         .init(pluginID: "battery-charge-limit", makeProvider: BatteryChargeLimitPluginFactory.makeProvider),
         .init(pluginID: "clipboard-clear", makeProvider: ClipboardClearPluginFactory.makeProvider),
+        .init(pluginID: "clipboard", makeProvider: ClipboardHistoryPluginFactory.makeProvider),
         .init(pluginID: "cloudflare-r2", makeProvider: CloudflareR2PluginFactory.makeProvider),
         .init(pluginID: "disk-clean", makeProvider: DiskCleanPluginFactory.makeProvider),
         .init(pluginID: "display-brightness", makeProvider: DisplayBrightnessPluginFactory.makeProvider),
@@ -317,6 +320,7 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
         .init(pluginID: "launchpad", makeProvider: LaunchpadPluginFactory.makeProvider),
         .init(pluginID: "lock-screen", makeProvider: LockScreenPluginFactory.makeProvider),
         .init(pluginID: "mac-settings", makeProvider: MacSettingsPluginFactory.makeProvider),
+        .init(pluginID: "menu-bar-hidden", makeProvider: MenuBarHiddenPluginFactory.makeProvider),
         .init(pluginID: "microphone-mute", makeProvider: MicrophoneMutePluginFactory.makeProvider),
         .init(pluginID: "middle-click", makeProvider: MiddleClickPluginFactory.makeProvider),
         .init(pluginID: "night-shift", makeProvider: NightShiftPluginFactory.makeProvider),

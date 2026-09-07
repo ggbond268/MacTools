@@ -79,7 +79,9 @@
     "componentPanel": false,
     "settings": "workspace"
   },
-  "permissions": [],
+  "permissions": [
+    "full-disk-access"
+  ],
   "category": "storage",
   "presentation": {
     "longDescription": "@productStrings.summary",
@@ -158,8 +160,10 @@
     "hardware": [],
     "applications": [],
     "executables": [],
-    "permissionIDs": [],
-    "setupComplexity": "none",
+    "permissionIDs": [
+      "full-disk-access"
+    ],
+    "setupComplexity": "simple",
     "requiresRelaunch": false
   },
   "privacy": {

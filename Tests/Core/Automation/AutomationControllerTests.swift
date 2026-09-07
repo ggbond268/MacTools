@@ -90,6 +90,18 @@ final class AutomationControllerTests: XCTestCase {
             .replacingOccurrences(of: "\u{2069}", with: "")
     }
 
+    private func waitUntil(
+        timeout: Duration = .seconds(5),
+        condition: () -> Bool
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return condition()
+    }
+
     func testExistingErrorRelocalizesOnSameControllerInstance() throws {
         let originalPreference = UserDefaults.standard.string(
             forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey
@@ -634,11 +646,21 @@ final class AutomationControllerTests: XCTestCase {
         controller.addStep(workflowID: workflow.id, reference: provider.reference)
         let runID = try XCTUnwrap(controller.startWorkflow(id: workflow.id))
 
-        await waitUntil { controller.activeRunIDs(for: workflow.id) == [runID] }
+        let didStart = await waitUntil {
+            provider.beginCount == 1
+                && controller.activeRunIDs(for: workflow.id) == [runID]
+        }
+        XCTAssertTrue(didStart)
+        XCTAssertEqual(controller.activeRunIDs(for: workflow.id), [runID])
 
         controller.cancel(runID: runID)
-        await waitUntil { !controller.activeRunIDs.contains(runID) }
+        let didCancel = await waitUntil {
+            !controller.activeRunIDs.contains(runID)
+                && controller.recentRuns(workflowID: workflow.id).first?.status == .cancelled
+                && provider.cancelCount == 1
+        }
 
+        XCTAssertTrue(didCancel)
         XCTAssertFalse(controller.activeRunIDs.contains(runID))
         XCTAssertEqual(controller.recentRuns(workflowID: workflow.id).first?.status, .cancelled)
         XCTAssertEqual(provider.cancelCount, 1)
@@ -659,11 +681,20 @@ final class AutomationControllerTests: XCTestCase {
         let workflow = try XCTUnwrap(controller.createWorkflow())
         controller.addStep(workflowID: workflow.id, reference: provider.reference)
         let runID = try XCTUnwrap(controller.startWorkflow(id: workflow.id))
-        await waitUntil { controller.activeRunIDs(for: workflow.id) == [runID] }
+        let didStart = await waitUntil {
+            provider.beginCount == 1
+                && controller.activeRunIDs(for: workflow.id) == [runID]
+        }
+        XCTAssertTrue(didStart)
 
         XCTAssertTrue(controller.deleteWorkflow(id: workflow.id))
-        await waitUntil { !controller.activeRunIDs.contains(runID) }
+        let didCancel = await waitUntil {
+            !controller.activeRunIDs.contains(runID)
+                && controller.history.first { $0.id == runID }?.status == .cancelled
+                && provider.cancelCount == 1
+        }
 
+        XCTAssertTrue(didCancel)
         XCTAssertNil(controller.workflows.first { $0.id == workflow.id })
         XCTAssertEqual(provider.cancelCount, 1)
         XCTAssertEqual(
@@ -697,18 +728,6 @@ final class AutomationControllerTests: XCTestCase {
         XCTAssertEqual(provider.cancelCount, 0)
     }
 
-    private func waitUntil(
-        _ condition: @MainActor () -> Bool,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(1))
-        while !condition(), clock.now < deadline {
-            await Task.yield()
-        }
-        XCTAssertTrue(condition(), file: file, line: line)
-    }
 }
 
 @MainActor

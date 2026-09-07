@@ -63,7 +63,7 @@
     "action.cleanup.description": "@localizable.detail.diagnostics.cleanup.desc"
   },
   "version": "1.1.0",
-  "minHostVersion": "1.2.0",
+  "minHostVersion": "1.2.1",
   "pluginKitVersion": 5,
   "bundleRelativePath": "Homebrew.bundle",
   "factoryClass": "HomebrewPlugin.HomebrewPluginFactory",

@@ -125,7 +125,7 @@ final class PluginPresentationSafetyTests: XCTestCase {
                 #"\.(?:makeKeyAndOrderFront|orderFrontRegardless|orderFront)\("#,
                 #"(?m)^\s*(?:makeKeyAndOrderFront|orderFrontRegardless)\("#,
                 #"\.(?:runModal|beginSheetModal)\("#,
-                #"\.show\(relativeTo:"#,
+                #"\.show\(\s*relativeTo:"#,
             ]
             return try patterns.flatMap { pattern -> [String] in
                 let regex = try NSRegularExpression(pattern: pattern)
