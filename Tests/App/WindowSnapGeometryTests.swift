@@ -296,5 +296,13 @@ final class WindowSnapOverlayControllerTests: XCTestCase {
         XCTAssertTrue(overlay.ignoresMouseEvents)
         XCTAssertFalse(overlay.canBecomeKey)
         XCTAssertGreaterThan(overlay.level.rawValue, relativeWindow.level.rawValue)
+        XCTAssertEqual(controller.renderedLayerCountForTests, 2)
+
+        let renderedGuide = try XCTUnwrap(controller.renderedGuidesForTests.first)
+        XCTAssertEqual(renderedGuide.id, guide.id)
+        XCTAssertEqual(renderedGuide.start.x, screen.frame.width / 2, accuracy: 0.001)
+        XCTAssertEqual(renderedGuide.start.y, 0, accuracy: 0.001)
+        XCTAssertEqual(renderedGuide.end.x, screen.frame.width / 2, accuracy: 0.001)
+        XCTAssertEqual(renderedGuide.end.y, screen.frame.height, accuracy: 0.001)
     }
 }
