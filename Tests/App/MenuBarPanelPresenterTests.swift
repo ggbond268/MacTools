@@ -1,10 +1,25 @@
 import AppKit
 import Carbon
+import Combine
 import XCTest
 @testable import MacTools
 
 @MainActor
 final class MenuBarPanelPresenterTests: XCTestCase {
+    func testHidingAnAlreadyHiddenSecondaryPanelDoesNotPublishAStateChange() {
+        let controller = SecondaryPanelController()
+        var updateCount = 0
+        let cancellable = controller.objectWillChange.sink {
+            updateCount += 1
+        }
+
+        controller.hide()
+        controller.hide()
+
+        XCTAssertEqual(updateCount, 0)
+        withExtendedLifetime(cancellable) {}
+    }
+
     func testFullSizePopoverPreservesOriginalContentArea() {
         let contentSize = NSSize(width: 316, height: 500)
         let insets = NSEdgeInsets(top: 13, left: 13, bottom: 13, right: 13)

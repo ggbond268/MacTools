@@ -183,6 +183,7 @@ while IFS= read -r package; do
     zip_path="$("$REPO_ROOT/scripts/plugins/build-plugin-package.sh" \
         --source "$package" \
         --output-dir "$ASSETS_DIR" \
+        --license-file "$REPO_ROOT/LICENSE" \
         --zip)"
     asset_paths+=("$zip_path")
 done < <(find "$BUILD_DIR/Packages" -maxdepth 1 -type d -name '*.mactoolsplugin' -print | sort)

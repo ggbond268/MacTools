@@ -17,8 +17,8 @@ final class AppearancePluginTests: XCTestCase {
     func testPublishesIdempotentLightAndDarkActions() {
         let plugin = AppearancePlugin()
 
-        XCTAssertEqual(plugin.actionDefinitions.map(\.key.actionID), ["toggle", "set-enabled"])
-        XCTAssertEqual(Array(plugin.actionCatalogEntries.dropFirst().map(\.title)), [
+        XCTAssertEqual(plugin.actionDefinitions.map(\.key.actionID), ["toggle", "set-enabled", "set-mode"])
+        XCTAssertEqual(Array(plugin.actionCatalogEntries.dropFirst().prefix(2).map(\.title)), [
             "启用深色模式",
             "启用浅色模式",
         ])

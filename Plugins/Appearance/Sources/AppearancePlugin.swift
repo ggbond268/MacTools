@@ -26,6 +26,7 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
     private enum ActionID {
         static let setEnabled = "set-enabled"
         static let toggle = "toggle"
+        static let setMode = "set-mode"
     }
     private enum PermissionID {
         static let automation = "automation"
@@ -44,10 +45,14 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools", category: "AppearancePlugin")
     private let localization: PluginLocalization
     private var isDarkMode: Bool = false
+    private let appearanceController: any SystemAppearanceControlling
+    private var appearanceSnapshot: SystemAppearanceSnapshot?
     private nonisolated(unsafe) var themeObserver: NSObjectProtocol?
 
-    init(localization: PluginLocalization = PluginLocalization(bundle: .main)) {
+    init(localization: PluginLocalization = PluginLocalization(bundle: .main),
+         appearanceController: (any SystemAppearanceControlling)? = nil) {
         self.localization = localization
+        self.appearanceController = appearanceController ?? SystemAppearanceController()
         self.metadata = PluginMetadata(
             id: "appearance",
             title: localization.string("metadata.title", defaultValue: "深色模式"),
@@ -60,6 +65,8 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
             )
         )
         isDarkMode = Self.readSystemDarkMode()
+        appearanceSnapshot = try? self.appearanceController.read()
+        if let appearanceSnapshot { isDarkMode = appearanceSnapshot.isDark }
         observeSystemAppearanceChanges()
     }
 
@@ -137,6 +144,16 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
                 externalInvocationPolicy: .allowed,
                 capabilities: [.automatic, .background, .foregroundInteractive]
             ),
+            ActionDefinition(
+                key: ActionKey(providerID: metadata.id, actionID: ActionID.setMode),
+                title: localization.string("action.setMode.title", defaultValue: "设置系统外观"),
+                description: localization.string("action.setMode.description", defaultValue: "选择自动、浅色或深色系统外观。"),
+                keywords: ["appearance", "auto", "light", "dark", "系统外观"],
+                systemImage: metadata.iconName,
+                parameters: [.init(id: "mode", title: localization.string("parameter.mode.title", defaultValue: "Appearance"), kind: .string)],
+                externalInvocationPolicy: .allowed,
+                capabilities: [.automatic, .background, .foregroundInteractive]
+            ),
         ]
     }
 
@@ -160,7 +177,13 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
                 reference: actionReference(enabled: false),
                 title: localization.string("action.enableLight.title", defaultValue: "启用浅色模式")
             ),
-        ]
+        ] + SystemAppearanceMode.allCases.map { mode in
+            ActionCatalogEntry(
+                reference: modeReference(mode),
+                title: localization.string("action.mode.\(mode.rawValue)", defaultValue: "System Appearance: \(mode.title)"),
+                presentationState: appearanceSnapshot?.mode == mode ? .active : .inactive
+            )
+        }
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
@@ -186,12 +209,40 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
     }
     func permissionRequirementIDs(for actionKey: ActionKey) -> [String] {
         guard actionKey.providerID == metadata.id else { return [] }
+        if actionKey.actionID == ActionID.setMode { return [] }
         return [PermissionID.automation]
     }
     func handleSettingsAction(_ action: PluginSettingsAction) {}
     func handleShortcutAction(id: String) {}
 
+    func actionAvailability(for reference: ActionReference) -> ActionAvailability {
+        guard reference.key.actionID == ActionID.setMode else { return .available }
+        guard case let .string(rawMode)? = reference.parameters["mode"], SystemAppearanceMode(rawValue: rawMode) != nil else {
+            return .unavailable(PluginKitLocalization.actionInvalidParameters)
+        }
+        return appearanceSnapshot == nil
+            ? .unavailable(SystemAppearanceError.unavailable.localizedDescription) : .available
+    }
+
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
+        if invocation.reference.key.actionID == ActionID.setMode {
+            guard case let .string(rawMode)? = invocation.reference.parameters["mode"],
+                  let mode = SystemAppearanceMode(rawValue: rawMode) else {
+                return ActionExecutionHandle { .failed(message: PluginKitLocalization.actionInvalidParameters) }
+            }
+            return ActionExecutionHandle { [weak self] in
+                guard let self else { return .cancelled }
+                do {
+                    try appearanceController.setMode(mode)
+                    refresh()
+                    guard appearanceSnapshot?.mode == mode else { throw SystemAppearanceError.verificationFailed(restored: false) }
+                    return .succeeded()
+                } catch {
+                    refresh()
+                    return .failed(message: error.localizedDescription)
+                }
+            }
+        }
         let enabled: Bool
         switch invocation.reference.key.actionID {
         case ActionID.toggle:
@@ -217,9 +268,11 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
     }
 
     func refresh() {
-        let current = Self.readSystemDarkMode()
-        if current != isDarkMode {
+        let snapshot = try? appearanceController.read()
+        let current = snapshot?.isDark ?? Self.readSystemDarkMode()
+        if current != isDarkMode || snapshot != appearanceSnapshot {
             isDarkMode = current
+            appearanceSnapshot = snapshot
             onStateChange?()
         }
     }
@@ -247,6 +300,11 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
         ActionReference(key: ActionKey(providerID: metadata.id, actionID: ActionID.toggle))
     }
 
+    private func modeReference(_ mode: SystemAppearanceMode) -> ActionReference {
+        ActionReference(key: .init(providerID: metadata.id, actionID: ActionID.setMode),
+                        parameters: try! .init(["mode": .string(mode.rawValue)]))
+    }
+
     @discardableResult
     private func setDarkMode(_ enable: Bool) -> Bool {
         let script = """
@@ -263,8 +321,7 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
             logger.error("Failed to set dark mode: \(error)")
             return false
         } else {
-            isDarkMode = enable
-            onStateChange?()
+            refresh()
             return true
         }
     }
@@ -277,11 +334,7 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
         ) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
-                let current = Self.readSystemDarkMode()
-                if current != self.isDarkMode {
-                    self.isDarkMode = current
-                    self.onStateChange?()
-                }
+                self.refresh()
             }
         }
     }

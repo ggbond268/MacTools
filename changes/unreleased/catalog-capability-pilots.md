@@ -1,7 +1,7 @@
 ---
 release: plugin
-type: added
+type: changed
 area: Plugins
 ---
 
-Every bundled plugin now publishes validated pre-install product, requirement, privacy, setup, relationship, and applicable action metadata in every supported language.
+Official plugins now provide localized Marketplace descriptions, actions, requirements, privacy disclosures, and setup instructions.

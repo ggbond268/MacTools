@@ -5,6 +5,9 @@ import MacToolsCLIProtocol
 @MainActor
 final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
     private let serviceController: CLIBrokerServiceController
+    private let discovery: CLIActionDiscovery?
+    private let runner: CLIActionRunner?
+    private let readinessTimeout: Duration
     private let identityValidator = CLIPeerIdentityValidator()
     nonisolated private let callerIsBroker: @Sendable () -> Bool
     nonisolated private let requestState = CLIHostRequestState()
@@ -28,12 +31,18 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
 
     init(
         serviceController: CLIBrokerServiceController = .shared,
+        discovery: CLIActionDiscovery? = nil,
+        runner: CLIActionRunner? = nil,
+        readinessTimeout: Duration = .seconds(8),
         callerIsBroker: @escaping @Sendable () -> Bool = {
             guard let connection = NSXPCConnection.current() else { return false }
             return CLIPeerIdentityValidator().accepts(connection, as: .broker)
         }
     ) {
         self.serviceController = serviceController
+        self.discovery = discovery
+        self.runner = runner
+        self.readinessTimeout = readinessTimeout
         self.callerIsBroker = callerIsBroker
         super.init()
         serviceStatusObservation = serviceController.$status
@@ -89,7 +98,7 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
             ))
             return
         }
-        Task { @MainActor in
+        let task = Task { @MainActor in
             defer { requestState.finish(request.requestID) }
             let response: Data
             if requestState.isCancelled(request.requestID) {
@@ -101,10 +110,11 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
                     startedAt: .now
                 )
             } else {
-                response = Self.response(to: request)
+                response = await self.response(to: request)
             }
             reply.call(response)
         }
+        requestState.installCancellationHandler(request.requestID) { task.cancel() }
     }
 
     nonisolated func cancel(_ requestID: UUID, withReply reply: @escaping (Bool) -> Void) {
@@ -115,13 +125,12 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
         reply(requestState.cancel(requestID))
     }
 
-    private static func response(to request: CLIRequestEnvelope) -> Data {
+    private func response(to request: CLIRequestEnvelope) async -> Data {
         let startedAt = Date()
-        guard request.operation == .doctor,
-              request.payload == nil,
+        guard request.protocolVersion >= request.operation.minimumProtocolVersion,
               (CLIProtocolVersion.minimum...CLIProtocolVersion.current)
                 .contains(request.protocolVersion) else {
-            return encodedFailure(
+            return Self.encodedFailure(
                 request: request,
                 outcome: .protocolIncompatible,
                 category: "protocolIncompatible",
@@ -129,14 +138,83 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
                 startedAt: startedAt
             )
         }
-        let record = CLIDoctorRecord(
-            hostVersion: AppMetadata.shortVersion ?? "unknown",
-            hostBuild: AppMetadata.buildNumber ?? "unknown",
-            protocolVersion: request.protocolVersion,
-            brokerServiceStatus: CLIBrokerServiceController.shared.status.rawValue
-        )
         do {
-            let payload = try CLIProtocolCodec.encodeResponse(record)
+            let payload: Data
+            if request.operation == .doctor {
+                guard request.payload == nil else { throw CLIProtocolCodecError.invalidObject }
+                payload = try CLIProtocolCodec.encodeResponse(CLIDoctorRecord(
+                    hostVersion: AppMetadata.shortVersion ?? "unknown",
+                    hostBuild: AppMetadata.buildNumber ?? "unknown",
+                    protocolVersion: request.protocolVersion,
+                    brokerServiceStatus: serviceController.status.rawValue
+                ))
+            } else {
+                guard let data = request.payload else { throw CLIProtocolCodecError.invalidObject }
+                // Validate before waiting; malformed requests must not consume the readiness budget.
+                let runRequest: CLIActionRunRequest?
+                if request.operation == .actionsList {
+                    try CLIDiscoveryValidation.validate(CLIDiscoveryValidation.decode(CLIActionListRequest.self, from: data))
+                    runRequest = nil
+                } else if request.operation == .actionsRun {
+                    let decoded = try CLIExecutionValidation.decode(CLIActionRunRequest.self, from: data)
+                    try CLIExecutionValidation.validate(decoded)
+                    runRequest = decoded
+                } else {
+                    try CLIDiscoveryValidation.validate(CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data))
+                    runRequest = nil
+                }
+                guard let discovery else { throw CLIActionDiscoveryError.notReady }
+                let executionDeadline = runRequest.map {
+                    ContinuousClock.now.advanced(by: .seconds($0.timeoutSeconds))
+                }
+                let ordinaryReadinessDeadline = ContinuousClock.now.advanced(by: readinessTimeout)
+                let readinessDeadline = executionDeadline.map {
+                    min(ordinaryReadinessDeadline, $0)
+                } ?? ordinaryReadinessDeadline
+                while !discovery.isReady && ContinuousClock.now < readinessDeadline {
+                    guard !requestState.isCancelled(request.requestID) else { throw CancellationError() }
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+                guard !requestState.isCancelled(request.requestID) else { throw CancellationError() }
+                if !discovery.isReady,
+                   let executionDeadline,
+                   ContinuousClock.now >= executionDeadline {
+                    throw CLIActionRunError.timedOut
+                }
+                switch request.operation {
+                case .actionsList:
+                    payload = try CLIProtocolCodec.encodeResponse(discovery.list(
+                        CLIDiscoveryValidation.decode(CLIActionListRequest.self, from: data)))
+                case .actionsDescribe:
+                    let description = try discovery.describe(
+                        CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data))
+                    if request.protocolVersion >= 3 {
+                        payload = try CLIProtocolCodec.encodeResponse(description)
+                    } else {
+                        payload = try CLIProtocolCodec.encodeResponse(CLIActionDescription(
+                            id: description.id,
+                            title: description.title,
+                            description: description.description,
+                            parameterSchemaVersion: description.parameterSchemaVersion,
+                            parameters: description.parameters,
+                            executionSupported: false
+                        ))
+                    }
+                case .actionsAvailability:
+                    payload = try CLIProtocolCodec.encodeResponse(discovery.availability(
+                        CLIDiscoveryValidation.decode(CLIActionTargetRequest.self, from: data)))
+                case .actionsRun:
+                    guard let runner, let runRequest, let executionDeadline else {
+                        throw CLIActionDiscoveryError.notReady
+                    }
+                    payload = try CLIProtocolCodec.encodeResponse(try await runner.run(
+                        runRequest,
+                        deadline: executionDeadline
+                    ))
+                case .doctor:
+                    throw CLIProtocolCodecError.invalidObject
+                }
+            }
             return try CLIProtocolCodec.encodeResponse(CLIResponseEnvelope(
                 protocolVersion: request.protocolVersion,
                 requestID: request.requestID,
@@ -149,13 +227,35 @@ final class CLIHostBridge: NSObject, CLIHostXPCProtocol {
                 payload: payload
             ))
         } catch {
-            return encodedFailure(
-                request: request,
-                outcome: .hostUnavailable,
-                category: "responseEncodingFailed",
-                message: "MacTools could not encode the doctor response.",
-                startedAt: startedAt
-            )
+            let failure: (CLIOutcome, String, String)
+            switch error {
+            case is CancellationError:
+                failure = (.cancelled, "cancelled", "The request was cancelled.")
+            case CLIActionDiscoveryError.notReady:
+                failure = (.hostUnavailable, "registryNotReady", "The action registry is not ready. Try again after MacTools finishes starting.")
+            case CLIActionDiscoveryError.unknownTarget:
+                failure = (.unknownTarget, "unknownAction", "The requested action is not discoverable.")
+            case CLIActionDiscoveryError.executionUnsupported:
+                failure = (.invalidInput, "executionUnsupported", "The requested action is not parameterless and executable from the CLI.")
+            case CLIActionDiscoveryError.unavailable, CLIActionRunError.unavailable:
+                failure = (.unavailable, "actionUnavailable", "The requested action is currently unavailable.")
+            case CLIActionRunError.busy:
+                failure = (.unavailable, "actionBusy", "The requested action is already running.")
+            case CLIActionRunError.timedOut:
+                failure = (.timedOut, "executionTimedOut", "The action exceeded the requested timeout and was cancelled.")
+            case CLIActionRunError.failed:
+                failure = (.actionFailed, "actionFailed", "The action failed.")
+            case CLIActionRunError.eligibilityChanged:
+                failure = (.invalidInput, "eligibilityChanged", "The action is no longer eligible for CLI execution.")
+            case CLIActionDiscoveryError.staleCursor:
+                failure = (.invalidInput, "staleCursor", "The catalog changed. Restart actions list without a cursor.")
+            case CLIActionDiscoveryError.catalogTooLarge, CLIProtocolCodecError.responseTooLarge:
+                failure = (.hostUnavailable, "catalogLimitExceeded", "The action catalog exceeds the discovery limits.")
+            default:
+                failure = (.invalidInput, "invalidRequest", "The discovery request is invalid.")
+            }
+            return Self.encodedFailure(request: request, outcome: failure.0, category: failure.1,
+                                       message: failure.2, startedAt: startedAt)
         }
     }
 
@@ -300,6 +400,7 @@ final class CLIHostRequestState: @unchecked Sendable {
     private let lock = NSLock()
     private var active = Set<UUID>()
     private var cancelled = Set<UUID>()
+    private var cancellationHandlers: [UUID: @Sendable () -> Void] = [:]
 
     func begin(_ requestID: UUID) -> Bool {
         lock.withLock {
@@ -311,11 +412,29 @@ final class CLIHostRequestState: @unchecked Sendable {
     }
 
     func cancel(_ requestID: UUID) -> Bool {
-        lock.withLock {
+        var handler: (@Sendable () -> Void)?
+        let accepted = lock.withLock {
             guard active.contains(requestID) else { return false }
-            cancelled.insert(requestID)
+            if cancelled.insert(requestID).inserted {
+                handler = cancellationHandlers[requestID]
+            }
             return true
         }
+        guard accepted else { return false }
+        handler?()
+        return true
+    }
+
+    func installCancellationHandler(
+        _ requestID: UUID,
+        handler: @escaping @Sendable () -> Void
+    ) {
+        let invoke = lock.withLock {
+            guard active.contains(requestID) else { return false }
+            cancellationHandlers[requestID] = handler
+            return cancelled.contains(requestID)
+        }
+        if invoke { handler() }
     }
 
     func isCancelled(_ requestID: UUID) -> Bool {
@@ -326,6 +445,7 @@ final class CLIHostRequestState: @unchecked Sendable {
         lock.withLock {
             active.remove(requestID)
             cancelled.remove(requestID)
+            cancellationHandlers.removeValue(forKey: requestID)
         }
     }
 }

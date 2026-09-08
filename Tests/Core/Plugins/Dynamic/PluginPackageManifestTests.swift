@@ -103,15 +103,15 @@ final class PluginPackageManifestTests: XCTestCase {
         let expectations = [
             (
                 path: "Plugins/MouseEnhancer/plugin.json",
-                minimum: "1.2.0",
-                compatibleHost: "1.2.0",
-                incompatibleHost: "1.1.6" as String?
+                minimum: "1.3.0",
+                compatibleHost: "1.3.0",
+                incompatibleHost: "1.2.0" as String?
             ),
             (
                 path: "Plugins/TrackpadGestures/plugin.json",
-                minimum: "1.2.0",
-                compatibleHost: "1.2.0",
-                incompatibleHost: "1.1.6"
+                minimum: "1.3.0",
+                compatibleHost: "1.3.0",
+                incompatibleHost: "1.2.0"
             ),
         ]
         for expectation in expectations {
@@ -244,6 +244,35 @@ final class PluginPackageManifestTests: XCTestCase {
         let manifest = try JSONDecoder().decode(PluginPackageManifest.self, from: json)
         XCTAssertNil(manifest.category)
         XCTAssertNil(manifest.releaseChannel)
+        XCTAssertEqual(manifest.effectiveUninstallDataPolicy, .preserve)
+    }
+
+    func testManifestDecodesPrivateDataRemovalPolicy() throws {
+        let json = """
+        {
+          "id": "demo",
+          "displayName": "Demo",
+          "version": "1.0.0",
+          "minHostVersion": "1.2.0",
+          "pluginKitVersion": 5,
+          "bundleRelativePath": "Demo.bundle",
+          "capabilities": { "primaryPanel": true, "componentPanel": false, "settings": "workspace" },
+          "permissions": [],
+          "uninstallDataPolicy": "removePrivateData",
+          "presentation": {
+            "publisher": "Clipboard Tests",
+            "longDescription": { "en": "Encrypted clipboard history" },
+            "examples": [],
+            "screenshots": [],
+            "license": "Apache-2.0"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let manifest = try JSONDecoder().decode(PluginPackageManifest.self, from: json)
+
+        XCTAssertEqual(manifest.effectiveUninstallDataPolicy, .removePrivateData)
+        XCTAssertEqual(manifest.presentation?.publisher, "Clipboard Tests")
     }
 
     func testRichProjectedManifestDecodesProductMetadata() throws {
@@ -260,7 +289,7 @@ final class PluginPackageManifestTests: XCTestCase {
         XCTAssertEqual(manifest.actions?.providers.first?.kind, "static")
         XCTAssertEqual(
             manifest.actions?.providers.first?.staticActions.map(\.id),
-            ["toggle", "set-enabled"]
+            ["toggle", "set-enabled", "set-mode"]
         )
         XCTAssertEqual(manifest.requirements?.architectures, ["arm64", "x86_64"])
         XCTAssertEqual(manifest.privacy?.networkUse, "none")
@@ -273,7 +302,11 @@ final class PluginPackageManifestTests: XCTestCase {
             setup: manifest.setup,
             relationships: manifest.relationships
         )
-        XCTAssertTrue(searchKeywords.contains("Toggle Appearance"))
+        let toggleTitle = try XCTUnwrap(manifest.actions?.providers.first?.staticActions.first?.title)
+        XCTAssertEqual(toggleTitle.values["en"], "Toggle Appearance")
+        let localizedActionTitle = try XCTUnwrap(toggleTitle.localizedValue())
+        XCTAssertTrue(searchKeywords.contains(localizedActionTitle))
+        XCTAssertTrue(toggleTitle.values.values.contains(where: searchKeywords.contains))
         XCTAssertTrue(searchKeywords.contains("night-shift"))
     }
 

@@ -193,6 +193,7 @@ public enum CLIProtocolCodec {
 private struct CLIJSONDuplicateFieldScanner {
     private let bytes: [UInt8]
     private var index = 0
+    private var depth = 0
 
     init(data: Data) {
         bytes = Array(data)
@@ -206,6 +207,9 @@ private struct CLIJSONDuplicateFieldScanner {
     }
 
     private mutating func scanValue() throws {
+        guard depth < 64 else { throw CLIProtocolCodecError.invalidObject }
+        depth += 1
+        defer { depth -= 1 }
         skipWhitespace()
         guard index < bytes.count else { throw CLIProtocolCodecError.invalidObject }
         switch bytes[index] {

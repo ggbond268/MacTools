@@ -69,7 +69,7 @@ enum DeviceBatteryKind: Equatable, Sendable {
     case spatialComputer
     case bluetooth
     case magicAccessory
-    case rapooMouse
+    case vendorHIDMouse
     case airPodsPart
     case other
 
@@ -91,7 +91,7 @@ enum DeviceBatteryKind: Equatable, Sendable {
             return "dot.radiowaves.left.and.right"
         case .magicAccessory:
             return "keyboard"
-        case .rapooMouse:
+        case .vendorHIDMouse:
             return "computermouse.fill"
         case .airPodsPart:
             return "airpodspro"
@@ -118,8 +118,8 @@ enum DeviceBatteryKind: Equatable, Sendable {
             return localization.string("deviceKind.bluetooth", defaultValue: "蓝牙")
         case .magicAccessory:
             return localization.string("deviceKind.magicAccessory", defaultValue: "Apple 外设")
-        case .rapooMouse:
-            return localization.string("deviceKind.rapooMouse", defaultValue: "雷柏鼠标")
+        case .vendorHIDMouse:
+            return localization.string("deviceKind.vendorHIDMouse", defaultValue: "厂商鼠标")
         case .airPodsPart:
             return localization.string("deviceKind.airPodsPart", defaultValue: "耳机")
         case .other:
@@ -161,7 +161,7 @@ struct DeviceBatteryDeviceIdentity: Equatable, Hashable, Sendable {
         case bluetooth
         case batteryCenter
         case mobileDevice
-        case rapooHID
+        case vendorHID
         case source
     }
 
@@ -189,8 +189,12 @@ struct DeviceBatteryDeviceIdentity: Equatable, Hashable, Sendable {
         DeviceBatteryDeviceIdentity(namespace: .mobileDevice, value: identifier)
     }
 
-    static func rapooHID(_ identifier: String) -> DeviceBatteryDeviceIdentity {
-        DeviceBatteryDeviceIdentity(namespace: .rapooHID, value: identifier)
+    static func vendorHID(_ identifier: String) -> DeviceBatteryDeviceIdentity {
+        DeviceBatteryDeviceIdentity(namespace: .vendorHID, value: identifier)
+    }
+
+    static func vendorHID(_ vendor: VendorHIDVendor, _ identifier: String) -> DeviceBatteryDeviceIdentity {
+        DeviceBatteryDeviceIdentity(namespace: .vendorHID, value: "\(vendor)-\(identifier)")
     }
 
     static func source(_ identifier: String) -> DeviceBatteryDeviceIdentity {
@@ -495,7 +499,7 @@ extension DeviceBatteryKind {
         switch self {
         case .phone, .tablet, .mediaPlayer, .watch, .spatialComputer:
             return true
-        case .internalBattery, .bluetooth, .magicAccessory, .airPodsPart, .rapooMouse, .other:
+        case .internalBattery, .bluetooth, .magicAccessory, .airPodsPart, .vendorHIDMouse, .other:
             return false
         }
     }
@@ -523,13 +527,13 @@ struct DeviceBatterySnapshot: Equatable, Sendable {
     var accessState: DeviceBatteryAccessState
     var items: [DeviceBatteryItem]
     var lastUpdated: Date?
-    var rapooState: RapooBatteryAccessState
+    var vendorHIDState: VendorHIDBatteryAccessState
 
     static let idle = DeviceBatterySnapshot(
         accessState: .idle,
         items: [],
         lastUpdated: nil,
-        rapooState: .idle
+        vendorHIDState: .idle
     )
 
     var visibleItems: [DeviceBatteryItem] {
@@ -583,7 +587,7 @@ struct DeviceBatterySnapshot: Equatable, Sendable {
         case .permissionDenied:
             return localization.string(
                 "snapshot.error.permissionDenied",
-                defaultValue: "无法访问雷柏 HID 接口，请在系统设置中允许 MacTools 使用输入监控。"
+                defaultValue: "无法访问厂商 HID 鼠标接口，请在系统设置中允许 MacTools 使用输入监控。"
             )
         case let .failed(message):
             return message
@@ -616,7 +620,7 @@ struct DeviceBatterySnapshot: Equatable, Sendable {
             return 1
         case .phone, .tablet, .mediaPlayer, .watch, .spatialComputer:
             return 2
-        case .rapooMouse:
+        case .vendorHIDMouse:
             return 3
         case .magicAccessory:
             return 4

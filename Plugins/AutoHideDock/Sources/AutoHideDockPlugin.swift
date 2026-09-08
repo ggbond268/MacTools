@@ -1,4 +1,5 @@
 import AppKit
+import CoreFoundation
 import Foundation
 import OSLog
 import SwiftUI
@@ -29,7 +30,8 @@ struct ProcessDockCommandRunner: DockCommandRunning {
         appleScript?.executeAndReturnError(&error)
 
         if let error {
-            let message = (error[NSAppleScript.errorMessage] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let message = (error[NSAppleScript.errorMessage] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             throw NSError(
                 domain: "AutoHideDockPlugin",
                 code: (error[NSAppleScript.errorNumber] as? Int) ?? 1,
@@ -39,7 +41,7 @@ struct ProcessDockCommandRunner: DockCommandRunning {
                         : localization.string(
                             "error.toggleFailed",
                             defaultValue: "切换 Dock 自动隐藏失败"
-                        )
+                        ),
                 ]
             )
         }
@@ -299,7 +301,9 @@ final class AutoHideDockPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginAction
     }
 
     private nonisolated static func readDockAutohideState() -> Bool {
-        let defaults = UserDefaults(suiteName: "com.apple.dock")
-        return defaults?.object(forKey: "autohide") as? Bool ?? false
+        let domain = "com.apple.dock" as CFString
+        _ = CFPreferencesAppSynchronize(domain)
+        return (CFPreferencesCopyAppValue("autohide" as CFString, domain) as? NSNumber)?
+            .boolValue ?? false
     }
 }

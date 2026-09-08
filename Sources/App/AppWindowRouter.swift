@@ -90,6 +90,38 @@ enum MacToolsLocalKeyboardCommand: Equatable {
 @MainActor
 final class MacToolsCommandWindow: NSWindow {
     var onLocalKeyboardCommand: ((MacToolsLocalKeyboardCommand) -> Bool)?
+    weak var sidebarListView: NSTableView?
+    var isSidebarInteractionEnabled: () -> Bool = { true }
+
+    override func sendEvent(_ event: NSEvent) {
+        restoreSidebarFocusIfNeeded(for: event)
+        super.sendEvent(event)
+    }
+
+    func restoreSidebarFocusIfNeeded(for event: NSEvent) {
+        guard
+            event.type == .leftMouseDown,
+            isSidebarInteractionEnabled(),
+            let sidebarListView,
+            sidebarListView.window === self,
+            let contentView
+        else {
+            return
+        }
+
+        let location = sidebarListView.convert(event.locationInWindow, from: nil)
+        guard sidebarListView.row(at: location) >= 0 else { return }
+
+        // Hit testing takes a point in the receiver's superview coordinates.
+        let hitLocation = contentView.superview?.convert(event.locationInWindow, from: nil)
+            ?? event.locationInWindow
+        guard let hitView = contentView.hitTest(hitLocation),
+              hitView === sidebarListView || hitView.isDescendant(of: sidebarListView) else {
+            return
+        }
+
+        makeFirstResponder(sidebarListView)
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard
@@ -201,7 +233,6 @@ enum AppDockVisibilityController {
 @MainActor
 final class StandaloneCommandPaletteState: ObservableObject {
     @Published private(set) var presentationOrigin: UnifiedSearchPresentationOrigin?
-    @Published private(set) var shortcutHint: String?
     @Published private(set) var focusRequestID: UInt = 0
     @Published private(set) var resetRequestID: UInt = 0
     @Published private(set) var quickSelectionRequest: UnifiedSearchQuickSelectionRequest?
@@ -212,7 +243,6 @@ final class StandaloneCommandPaletteState: ObservableObject {
 
     func prepareForPresentation(shortcutLabel: String) {
         presentationOrigin = .globalShortcut(shortcutLabel)
-        shortcutHint = shortcutLabel
         quickSelectionRequest = nil
         resetRequestID &+= 1
         focusRequestID &+= 1
@@ -296,7 +326,6 @@ struct StandaloneCommandPaletteRootView: View {
                 recentStore: commandPaletteRecentStore,
                 availableSize: geometry.size,
                 presentationOrigin: state.presentationOrigin,
-                shortcutHint: state.shortcutHint,
                 focusRequestID: state.focusRequestID,
                 resetRequestID: state.resetRequestID,
                 quickSelectionRequest: state.quickSelectionRequest,
@@ -420,16 +449,15 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     var focusedWindowLayoutTarget: NSWindow? {
-        guard let settingsWindow,
-              Self.isEligibleFocusedWindowLayoutTarget(
-                  isKeyWindow: settingsWindow.isKeyWindow,
-                  isVisible: settingsWindow.isVisible,
-                  isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
-              )
-        else {
-            return nil
+        if let settingsWindow,
+           Self.isEligibleFocusedWindowLayoutTarget(
+               isKeyWindow: settingsWindow.isKeyWindow,
+               isVisible: settingsWindow.isVisible,
+               isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
+           ) {
+            return settingsWindow
         }
-        return settingsWindow
+        return pluginHost.focusedPluginWindowLayoutTarget()
     }
 
     static func isEligibleFocusedWindowLayoutTarget(
@@ -631,7 +659,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     private func configureSettingsInitialResponder(
-        in window: NSWindow,
+        in window: MacToolsCommandWindow,
         hostingView: NSView
     ) {
         window.layoutIfNeeded()
@@ -656,6 +684,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
 
         if sidebarList?.acceptsFirstResponder == true {
             window.initialFirstResponder = sidebarList
+            window.sidebarListView = sidebarList
         }
     }
 
@@ -715,6 +744,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.onLocalKeyboardCommand = { [weak self] command in
             self?.handleLocalKeyboardCommand(command) ?? false
+        }
+        window.isSidebarInteractionEnabled = { [weak navigationCoordinator] in
+            navigationCoordinator?.isUnifiedSearchPresented == false
         }
         window.center()
         settingsNavigationCoordinator = navigationCoordinator
@@ -821,6 +853,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         case .general:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .general)
+        case .permissions:
+            pendingAppUpdateVersion = nil
+            settingsNavigationCoordinator?.navigate(to: .permissions)
         case .about:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .about)
@@ -830,6 +865,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         case .pluginMarketplace:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .plugins(.marketplace))
+        case let .pluginMarketplaceDetail(target):
+            pendingAppUpdateVersion = nil
+            settingsNavigationCoordinator?.navigate(to: .marketplaceDetail(target))
         case let .pluginConfiguration(pluginID):
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .plugins(.configuration(pluginID)))
@@ -882,7 +920,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 return true
             }
 
-            return settingsNavigationCoordinator.selectSidebarDestination(number: number)
+            return settingsNavigationCoordinator.performSidebarNumberShortcut(number: number)
         case .goBack:
             guard
                 let settingsNavigationCoordinator,

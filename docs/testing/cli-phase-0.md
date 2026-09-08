@@ -39,9 +39,28 @@ For a convenient local command, create a symlink outside the app bundle:
 
 ```bash
 mkdir -p "$HOME/.local/bin"
-ln -sfn "/absolute/path/to/MacTools/build/DerivedData/Build/Products/Debug/mactools" "$HOME/.local/bin/mactools"
-"$HOME/.local/bin/mactools" doctor --json
+CLI_SOURCE="/absolute/path/to/MacTools/build/DerivedData/Build/Products/Debug/mactools"
+CLI_DEST="$HOME/.local/bin/mactools-dev"
+if [[ -e "$CLI_DEST" || -L "$CLI_DEST" ]]; then
+  echo "mactools-dev already exists; choose another local command name" >&2
+  exit 1
+fi
+if ! /usr/bin/python3 - "$CLI_SOURCE" "$CLI_DEST" <<'PY'
+import os
+import sys
+
+try:
+    os.symlink(sys.argv[1], sys.argv[2])
+except OSError as error:
+    raise SystemExit(f"refusing to replace CLI destination: {error}")
+PY
+then
+  exit 1
+fi
+"$CLI_DEST" doctor --json
 ```
+
+The channel-specific name preserves an existing `mactools` command. The direct `symlink` system call also fails atomically if any entry—including a directory or dangling symlink—appears at `mactools-dev`.
 
 ## First-use flow
 

@@ -2375,67 +2375,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مدعوم (CH0I)"
+            "value": "مدعوم (SMC)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unterstützt (CH0I)"
+            "value": "Unterstützt (SMC)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Supported (CH0I)"
+            "value": "Supported (SMC)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compatible (CH0I)"
+            "value": "Compatible (SMC)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Supporté (CH0I)"
+            "value": "Supporté (SMC)"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "サポート (CH0I)"
+            "value": "サポート (SMC)"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "지원됨(CH0I)"
+            "value": "지원됨(SMC)"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compatível (CH0I)"
+            "value": "Compatível (SMC)"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Поддерживается (CH0I)"
+            "value": "Поддерживается (SMC)"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "支持（CH0I）"
+            "value": "支持（SMC）"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "支持（CH0I）"
+            "value": "支持（SMC）"
           }
         }
       }

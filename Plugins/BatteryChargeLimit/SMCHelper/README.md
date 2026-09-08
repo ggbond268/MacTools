@@ -10,5 +10,5 @@ The helper exposes these subcommands:
   probe              Output which charge-control SMC keys are writable
   inhibit [<pct>]    Stop charging (prefers BCLM soft ceiling; falls back to CHTE or CH0B+CH0C)
   resume             Clear inhibit keys and stop force-discharge
-  discharge on|off   Toggle CH0I (force-discharge while plugged in)
+  discharge on|off   Toggle the available adapter-isolation key (CHIE, CH0J, or CH0I)
   read <KEY>         Print the current value of a 1-byte SMC key

@@ -11,8 +11,13 @@ struct PluginSettingsPageItem: Identifiable {
     let installedAt: Date?
     let page: PluginSettingsPage?
     let permissionCards: [PluginPermissionCard]
+    let missingPermissionCardIDs: Set<String>
     let shortcutItems: [ShortcutSettingsItem]
     let actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration?
+    let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
+    let shortcutDefinitionFirstSettingsGroupIDs: Set<String>
+    let collapsibleShortcutSettingsGroupIDs: Set<String>
+    let collapsibleActionSettingsGroupIDs: Set<String>
 
     var layout: PluginSettingsLayout {
         page?.body.layout ?? .form
@@ -29,6 +34,10 @@ struct PluginSettingsPageItem: Identifiable {
         page != nil
     }
 
+    var missingPermissionCards: [PluginPermissionCard] {
+        permissionCards.filter { missingPermissionCardIDs.contains($0.id) }
+    }
+
     var workspaceScrolling: PluginSettingsWorkspaceScrolling {
         guard case let .workspace(workspace) = page?.body else {
             return .selfManaged
@@ -40,8 +49,18 @@ struct PluginSettingsPageItem: Identifiable {
         page?.body.integratedShortcutGroupIDs ?? []
     }
 
+    var standaloneShortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] {
+        shortcutSettingsGroups.filter { !integratedShortcutGroupIDs.contains($0.id) }
+    }
+
     var remainingShortcutItems: [ShortcutSettingsItem] {
-        shortcutItems.filter { item in
+        let configuredItemIDs = shortcutSettingsGroups.reduce(into: Set<String>()) { result, group in
+            result.formUnion(group.shortcutDefinitionIDs.map { "\(pluginID).shortcut.\($0)" })
+        }
+        return shortcutItems.filter { item in
+            if configuredItemIDs.contains(item.id) {
+                return false
+            }
             guard let groupID = item.settingsGroupID else {
                 return true
             }

@@ -1014,6 +1014,7 @@ struct MenuBarUnifiedPanelContent: View {
             ComponentPanelContent(
                 pluginHost: pluginHost,
                 contentBodyHeight: contentBodyHeight,
+                isPanelVisible: model.isPanelVisible && model.selectedTab == .components,
                 onDismiss: onDismiss
             )
             .opacity(model.selectedTab == .components ? 1 : 0)

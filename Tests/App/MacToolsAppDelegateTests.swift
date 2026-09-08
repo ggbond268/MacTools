@@ -4,6 +4,17 @@ import XCTest
 
 @MainActor
 final class MacToolsAppDelegateTests: XCTestCase {
+    func testXCTestLaunchNeverStartsLivePluginRuntime() {
+        let delegate = MacToolsAppDelegate(acceptedURLSchemes: ["mactools"])
+        delegate.applicationWillFinishLaunching(
+            Notification(name: NSApplication.willFinishLaunchingNotification)
+        )
+        delegate.applicationDidFinishLaunching(
+            Notification(name: NSApplication.didFinishLaunchingNotification)
+        )
+        XCTAssertFalse(delegate.hasStartedRuntimeForTesting)
+    }
+
     func testBackgroundExecutionSuppressesSettingsInEitherEventOrder() {
         var showSettingsCount = 0
         let scheduler = SettingsRecoveryScheduler(delay: .seconds(60)) {

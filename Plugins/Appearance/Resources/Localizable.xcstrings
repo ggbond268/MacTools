@@ -1,6 +1,69 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "error.modeUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This macOS version cannot set automatic appearance directly." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前 macOS 无法直接设置自动外观。" } }
+      }
+    },
+    "error.modeVerificationRestored": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Appearance verification failed. The original mode was restored." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "外观验证失败，已恢复原模式。" } }
+      }
+    },
+    "error.modeVerificationUnrestored": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Appearance verification failed. The original mode could not be fully restored." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "外观验证失败，恢复原模式未完成。" } }
+      }
+    },
+    "parameter.mode.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Appearance" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "外观" } }
+      }
+    },
+    "action.setMode.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Set System Appearance" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "设置系统外观" } }
+      }
+    },
+    "action.setMode.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Choose automatic, light, or dark system appearance." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择自动、浅色或深色系统外观。" } }
+      }
+    },
+    "action.mode.auto": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "System Appearance: Auto" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统外观：自动" } }
+      }
+    },
+    "action.mode.light": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "System Appearance: Light" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统外观：浅色" } }
+      }
+    },
+    "action.mode.dark": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "System Appearance: Dark" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统外观：深色" } }
+      }
+    },
     "error.toggleFailed": {
       "extractionState": "manual",
       "localizations": {

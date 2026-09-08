@@ -333,6 +333,90 @@ final class WorkflowRunnerTests: XCTestCase {
         XCTAssertTrue(harness.provider.cancelledActionIDs.isEmpty)
     }
 
+    func testCLIWorkflowCancellationCancelsNonCancellableLeafAndSkipsRemainingSteps() async throws {
+        let harness = try makeHarness(
+            actionIDs: ["slow", "second"],
+            nonCancellableActionIDs: ["slow"]
+        )
+        harness.provider.nonCooperativeActionIDs.insert("slow")
+        let workflow = try saveWorkflow(
+            in: harness.store,
+            steps: [
+                WorkflowStep(reference: harness.reference("slow")),
+                WorkflowStep(reference: harness.reference("second")),
+            ]
+        )
+        let execution = try harness.runner.makeExecutionHandle(
+            workflowID: workflow.id,
+            source: .publishedAction(.cli),
+            mode: .background
+        ).get()
+        let resultTask = Task { @MainActor in await execution.actionHandle.result() }
+        await harness.provider.waitUntilNonCooperativeActionStarts()
+
+        execution.actionHandle.cancel()
+        let result = await resultTask.value
+        harness.provider.resumeNonCooperativeActions()
+        let run = try XCTUnwrap(harness.store.history(workflowID: workflow.id).first)
+
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(run.status, .cancelled)
+        XCTAssertEqual(run.stepResults.map(\.status), [.cancelled, .skipped])
+        XCTAssertEqual(harness.provider.invocations.map(\.reference.key.actionID), ["slow"])
+        XCTAssertTrue(harness.provider.cancelledActionIDs.contains("slow"))
+    }
+
+    func testCLIWorkflowTimeoutCancelsNonCancellableLeafAndSkipsRemainingSteps() async throws {
+        let harness = try makeHarness(
+            actionIDs: ["slow", "second"],
+            nonCancellableActionIDs: ["slow"]
+        )
+        harness.provider.nonCooperativeActionIDs.insert("slow")
+        let workflow = try saveWorkflow(
+            in: harness.store,
+            steps: [
+                WorkflowStep(reference: harness.reference("slow")),
+                WorkflowStep(reference: harness.reference("second")),
+            ]
+        )
+        let controller = AutomationController(
+            store: harness.store,
+            registry: harness.registry,
+            executor: harness.executor,
+            runner: harness.runner
+        )
+        harness.registry.synchronize([
+            harness.provider.registration(),
+            controller.actionRegistration(),
+        ])
+        let definition = try XCTUnwrap(harness.registry.definition(for: workflow.actionKey))
+
+        let outcome = await harness.executor.executeForCLI(
+            ActionInvocation(
+                reference: workflow.actionReference,
+                source: .cli,
+                mode: .background
+            ),
+            expectedDefinition: definition,
+            deadline: ContinuousClock.now.advanced(by: .seconds(1))
+        )
+        for _ in 0 ..< 1_000 {
+            let run = harness.store.history(workflowID: workflow.id).first
+            if harness.provider.cancelledActionIDs.contains("slow"), run?.status == .cancelled {
+                break
+            }
+            await Task.yield()
+        }
+        let run = try XCTUnwrap(harness.store.history(workflowID: workflow.id).first)
+        harness.provider.resumeNonCooperativeActions()
+
+        XCTAssertEqual(outcome, .rejected(.executionTimedOut))
+        XCTAssertEqual(run.status, .cancelled)
+        XCTAssertEqual(run.stepResults.map(\.status), [.cancelled, .skipped])
+        XCTAssertEqual(harness.provider.invocations.map(\.reference.key.actionID), ["slow"])
+        XCTAssertTrue(harness.provider.cancelledActionIDs.contains("slow"))
+    }
+
     func testCancellationDuringFailedStopTerminalPersistenceCancelsHistory() async throws {
         let checkpoint = WorkflowRunnerTerminalCheckpoint()
         let harness = try makeHarness(

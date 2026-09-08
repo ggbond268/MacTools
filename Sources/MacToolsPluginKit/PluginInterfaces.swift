@@ -38,6 +38,20 @@ public protocol PluginSettingsSearchFocusing: AnyObject {
     func focusSettingsSearch()
 }
 
+/// Optional metadata for a plugin settings page with contextual search.
+/// The host uses this to avoid routing Command-F to an unavailable field and to
+/// reveal lazily rendered search content before requesting focus.
+@MainActor
+public protocol PluginSettingsSearchFocusMetadataProviding: AnyObject {
+    var isSettingsSearchAvailable: Bool { get }
+    var settingsSearchFocusTarget: PluginSettingsSearchTarget? { get }
+}
+
+public extension PluginSettingsSearchFocusMetadataProviding {
+    var isSettingsSearchAvailable: Bool { true }
+    var settingsSearchFocusTarget: PluginSettingsSearchTarget? { nil }
+}
+
 public enum PluginShortcutEventPhase: Sendable {
     case pressed
     case released
@@ -46,6 +60,16 @@ public enum PluginShortcutEventPhase: Sendable {
 @MainActor
 public protocol PluginShortcutEventHandling: AnyObject {
     func handleShortcutEvent(id: String, phase: PluginShortcutEventPhase)
+}
+
+/// Lets a plugin reject a shortcut binding whose modifiers have a feature-specific meaning.
+/// The host still performs its ordinary conflict and modifier validation after this check.
+@MainActor
+public protocol PluginShortcutBindingValidating: AnyObject {
+    func shortcutValidationMessage(
+        definitionID: String,
+        binding: ShortcutBinding
+    ) -> String?
 }
 
 public extension MacToolsPlugin {
@@ -181,6 +205,41 @@ public protocol PluginSettingsPresenting: AnyObject {
     var requestSettingsPresentation: (() -> Void)? { get set }
 }
 
+/// Optional protocol for plugins that need to open the host Dashboard from custom UI,
+/// such as an additional menu-bar status item.
+///
+/// This remains separate from `MacToolsPlugin` so older dynamic plugins do not gain a
+/// new witness-table requirement.
+@MainActor
+public protocol PluginDashboardPresenting: AnyObject {
+    var requestDashboardPresentation: (() -> Void)? { get set }
+}
+
+/// Content for a host-owned detail panel launched from a Dashboard component.
+public struct PluginComponentDetailContent {
+    public let id: String
+    public let title: String
+    public let content: AnyView
+
+    public init(id: String, title: String, content: AnyView) {
+        self.id = id
+        self.title = title
+        self.content = content
+    }
+}
+
+/// Optional protocol for Dashboard components that provide a pinned secondary detail surface.
+/// The host owns window placement and dismissal; the plugin owns the detail content.
+@MainActor
+public protocol PluginComponentDetailPresenting: AnyObject {
+    var requestComponentDetailPresentation: ((String) -> Void)? { get set }
+
+    func makeComponentDetailContent(
+        detailID: String,
+        dismiss: @escaping () -> Void
+    ) -> PluginComponentDetailContent?
+}
+
 /// An exact host-selected window target for commands that may outlive a temporary MacTools surface.
 /// `preferredWindowNumber` is required when the target belongs to MacTools so plugins can exclude
 /// transient search, grid, confirmation, and feedback panels.
@@ -202,6 +261,13 @@ public struct PluginFocusedWindowTarget {
 @MainActor
 public protocol PluginFocusedWindowTargetConsuming: AnyObject {
     var focusedWindowTargetProvider: (() -> PluginFocusedWindowTarget?)? { get set }
+}
+
+/// Optional window-layout target supplied by a plugin that owns a normal, user-positionable window.
+/// Transient command, confirmation, and feedback surfaces should not adopt this protocol.
+@MainActor
+public protocol PluginWindowLayoutTargetProviding: AnyObject {
+    var focusedWindowLayoutTarget: NSWindow? { get }
 }
 
 /// Optional hook for built-in plugins that cache localized descriptors or

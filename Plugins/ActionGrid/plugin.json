@@ -53,8 +53,8 @@
     "summary": "@summary"
   },
   "version": "1.0.0",
-  "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "minHostVersion": "1.3.0",
+  "pluginKitVersion": 6,
   "bundleRelativePath": "ActionGrid.bundle",
   "factoryClass": "ActionGridPlugin.ActionGridPluginFactory",
   "build": {
@@ -80,7 +80,7 @@
     "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
     "supportURL": "https://github.com/ggbond268/MacTools/issues",
     "publisher": "MacTools",
-    "license": "Apache-2.0"
+    "license": "GPL-3.0-only"
   },
   "discovery": {
     "keywords": [

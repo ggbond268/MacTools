@@ -130,7 +130,9 @@ class MacToolsE2ETests(unittest.TestCase):
             path = REPO_ROOT / raw.decode("utf-8", "surrogateescape")
             source_digest.update(raw)
             source_digest.update(b"\0")
-            if path.is_symlink():
+            if not path.exists() and not path.is_symlink():
+                source_digest.update(b"R\0")
+            elif path.is_symlink():
                 source_digest.update(b"L\0")
                 source_digest.update(os.readlink(path).encode("utf-8", "surrogateescape"))
             else:

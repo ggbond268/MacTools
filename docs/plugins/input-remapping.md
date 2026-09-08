@@ -4,14 +4,23 @@
 
 - User-facing name: Custom Shortcuts.
 - Inputs: keyboard, mouse, scroll, precise Trackpad Gestures catalog.
-- Outputs: shortcuts, mouse navigation, common macOS actions.
+- Outputs: shortcuts, side-aware single-key taps, mouse navigation, common macOS actions.
+
+Single-key taps are atomic press/release pairs. Left and right Command, Shift,
+Option, and Control remain distinct through their physical virtual key codes.
+Generated events carry the shared MacTools synthetic-input marker so another
+input plugin cannot remap them again, including when compatible plugin versions
+are updated independently. Caps Lock is excluded because it requires persistent
+toggle semantics rather than a momentary press/release pair. Media keys remain
+separate system actions because macOS delivers them as system-defined events.
 
 ## Manifest
 
 - ID: `input-remapping`.
 - Settings layout: `workspace`.
 - Permissions: Accessibility, Input Monitoring.
-- `pluginKitVersion`: `5`.
+- `pluginKitVersion`: `6`.
+- Minimum host: MacTools `1.3.0`.
 
 ## Shared trackpad gestures
 

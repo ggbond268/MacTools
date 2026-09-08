@@ -67,7 +67,7 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
             context: context,
             viewModel: DeviceBatteryViewModel(
                 sampler: DeviceBatterySampler(localization: localization),
-                rapooMonitor: RapooHIDBatteryMonitor(localization: localization),
+                vendorHIDMonitor: VendorHIDBatteryMonitor(localization: localization),
                 powerSourceObserver: SystemDeviceBatteryPowerSourceObserver(),
                 bluetoothConnectionObserver: SystemDeviceBatteryBluetoothConnectionObserver(),
                 localization: localization
@@ -188,7 +188,7 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
                                 includeInternalBattery: store.showInternalBattery,
                                 includeBluetoothDevices: store.showBluetoothDevices,
                                 includeAppleMobileDevices: store.showAppleMobileDevices,
-                                includeRapooDevices: store.showRapooDevices
+                                includeVendorHIDDevices: store.showVendorHIDDevices
                             )
                             self?.onStateChange?()
                         },
@@ -228,7 +228,7 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
             includeInternalBattery: store.showInternalBattery,
             includeBluetoothDevices: store.showBluetoothDevices,
             includeAppleMobileDevices: store.showAppleMobileDevices,
-            includeRapooDevices: store.showRapooDevices
+            includeVendorHIDDevices: store.showVendorHIDDevices
         )
         onStateChange?()
     }
@@ -243,7 +243,7 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
             includeInternalBattery: store.showInternalBattery,
             includeBluetoothDevices: store.showBluetoothDevices,
             includeAppleMobileDevices: store.showAppleMobileDevices,
-            includeRapooDevices: store.showRapooDevices
+            includeVendorHIDDevices: store.showVendorHIDDevices
         )
         onStateChange?()
     }
@@ -317,7 +317,7 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
 
     private var inputMonitoringPermissionState: PluginPermissionState {
         let authorizationStatus = inputMonitoringAuthorizationStatus()
-        if viewModel.snapshot.rapooState == .permissionDenied,
+        if viewModel.snapshot.vendorHIDState == .permissionDenied,
            authorizationStatus != .granted {
             return PluginPermissionState(
                 isGranted: false,
@@ -343,7 +343,7 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
     }
 
     private var inputMonitoringGrantedFootnote: String {
-        switch viewModel.snapshot.rapooState {
+        switch viewModel.snapshot.vendorHIDState {
         case .connected:
             return localization.string(
                 "permission.inputMonitoring.granted.connected",
@@ -364,7 +364,7 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
     }
 
     private var inputMonitoringUnauthorizedFootnote: String {
-        switch viewModel.snapshot.rapooState {
+        switch viewModel.snapshot.vendorHIDState {
         case .permissionDenied:
             return localization.string(
                 "permission.inputMonitoring.openSettingsFootnote",

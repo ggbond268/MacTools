@@ -4,4 +4,4 @@ type: added
 area: Right Click
 ---
 
-Right Click can now create empty CSV, YAML, XML, HTML, CSS, JavaScript, TypeScript, Shell, and Python files alongside its existing text, Markdown, and JSON options.
+Right Click can now create CSV, YAML, XML, HTML, CSS, JavaScript, TypeScript, Shell, and Python files.

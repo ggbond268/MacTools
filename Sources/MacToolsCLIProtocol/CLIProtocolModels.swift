@@ -2,7 +2,7 @@ import Foundation
 
 public enum CLIProtocolVersion {
     public static let minimum = 1
-    public static let current = 1
+    public static let current = 3
     public static let maximumRequestBytes = 64 * 1_024
     public static let maximumResponseBytes = 4 * 1_024 * 1_024
     public static let maximumInFlightRequestsPerClient = 8
@@ -35,12 +35,28 @@ public enum CLIProtocolNegotiator {
 
 public enum CLIOperation: String, Codable, CaseIterable, Sendable {
     case doctor
+    case actionsList = "actions.list"
+    case actionsDescribe = "actions.describe"
+    case actionsAvailability = "actions.availability"
+    case actionsRun = "actions.run"
+
+    public var minimumProtocolVersion: Int {
+        switch self {
+        case .doctor: 1
+        case .actionsList, .actionsDescribe, .actionsAvailability: 2
+        case .actionsRun: 3
+        }
+    }
 }
 
 public enum CLIOutcome: String, Codable, Sendable {
     case completed
     case cancelled
     case invalidInput
+    case unknownTarget
+    case unavailable
+    case actionFailed
+    case timedOut
     case hostUnavailable
     case protocolIncompatible
 }
@@ -48,6 +64,10 @@ public enum CLIOutcome: String, Codable, Sendable {
 public enum CLIExitCode: Int32, Codable, Sendable {
     case success = 0
     case invalidInput = 2
+    case unknownTarget = 3
+    case unavailable = 4
+    case actionFailure = 6
+    case timeout = 7
     case cancellation = 8
     case transportFailure = 9
     case protocolIncompatible = 10
@@ -269,6 +289,8 @@ public enum CLIProtocolSemanticValidator {
         matching request: CLIRequestEnvelope
     ) throws {
         guard response.schemaVersion == 1,
+              (response.outcome == .protocolIncompatible
+                || request.protocolVersion >= request.operation.minimumProtocolVersion),
               response.protocolVersion == request.protocolVersion,
               response.requestID == request.requestID,
               response.operation == request.operation,
@@ -280,12 +302,59 @@ public enum CLIProtocolSemanticValidator {
                   response.rejection == nil,
                   response.message == nil
             else { throw CLIProtocolSemanticError.invalidResponse }
-        case .cancelled, .invalidInput, .hostUnavailable, .protocolIncompatible:
+        case .cancelled, .invalidInput, .unknownTarget, .unavailable, .actionFailed,
+             .timedOut, .hostUnavailable, .protocolIncompatible:
             guard response.payload == nil,
                   let rejection = response.rejection,
                   !rejection.category.isEmpty,
-                  rejection.message == response.message
+                  rejection.message == response.message,
+                  validFailure(
+                    outcome: response.outcome,
+                    category: rejection.category,
+                    operation: request.operation
+                  )
             else { throw CLIProtocolSemanticError.invalidResponse }
+        }
+    }
+
+    private static func validFailure(
+        outcome: CLIOutcome,
+        category: String,
+        operation: CLIOperation
+    ) -> Bool {
+        switch outcome {
+        case .completed:
+            return false
+        case .cancelled:
+            return category == "cancelled"
+        case .invalidInput:
+            switch operation {
+            case .doctor:
+                return category == "invalidRequest"
+            case .actionsList:
+                return ["invalidRequest", "staleCursor"].contains(category)
+            case .actionsDescribe, .actionsAvailability:
+                return category == "invalidRequest"
+            case .actionsRun:
+                return ["invalidRequest", "executionUnsupported", "eligibilityChanged"]
+                    .contains(category)
+            }
+        case .unknownTarget:
+            return operation != .doctor && operation != .actionsList
+                && category == "unknownAction"
+        case .unavailable:
+            return operation == .actionsRun
+                && ["actionUnavailable", "actionBusy"].contains(category)
+        case .actionFailed:
+            return operation == .actionsRun && category == "actionFailed"
+        case .timedOut:
+            return operation == .actionsRun && category == "executionTimedOut"
+        case .hostUnavailable:
+            if category == "hostTransportFailure" { return true }
+            return operation != .doctor
+                && ["registryNotReady", "catalogLimitExceeded"].contains(category)
+        case .protocolIncompatible:
+            return category == "protocolIncompatible"
         }
     }
 

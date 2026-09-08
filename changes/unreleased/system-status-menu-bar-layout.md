@@ -4,4 +4,5 @@ type: added
 area: System Status
 ---
 
-Added horizontal and vertical layouts for all System Status menu-bar metrics, with consistent spacing, compact fixed-width slots, and secondary memory, disk activity, and battery power readings in both layouts.
+- System Status now offers a menu-bar overview with detail charts, pinned readings, selectable time ranges, and an optional global shortcut.
+- System Status menu-bar metrics now support per-metric display styles, configurable values, layout choices, and drag reordering.

@@ -1,6 +1,12 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "action.singleKey": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"مفتاح واحد"}},"de":{"stringUnit":{"state":"translated","value":"Einzeltaste"}},"en":{"stringUnit":{"state":"translated","value":"Single Key"}},"es":{"stringUnit":{"state":"translated","value":"Tecla única"}},"fr":{"stringUnit":{"state":"translated","value":"Touche unique"}},"ja":{"stringUnit":{"state":"translated","value":"単一キー"}},"ko":{"stringUnit":{"state":"translated","value":"단일 키"}},"pt":{"stringUnit":{"state":"translated","value":"Tecla única"}},"ru":{"stringUnit":{"state":"translated","value":"Одна клавиша"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"单键"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"單鍵"}}}},
+    "action.singleKey.format": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"مفتاح واحد %@"}},"de":{"stringUnit":{"state":"translated","value":"Einzeltaste %@"}},"en":{"stringUnit":{"state":"translated","value":"Single key %@"}},"es":{"stringUnit":{"state":"translated","value":"Tecla única %@"}},"fr":{"stringUnit":{"state":"translated","value":"Touche unique %@"}},"ja":{"stringUnit":{"state":"translated","value":"単一キー %@"}},"ko":{"stringUnit":{"state":"translated","value":"단일 키 %@"}},"pt":{"stringUnit":{"state":"translated","value":"Tecla única %@"}},"ru":{"stringUnit":{"state":"translated","value":"Одна клавиша %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"单键 %@"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"單鍵 %@"}}}},
+    "settings.singleKey.preparing": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"جارٍ تحضير تسجيل المفتاح…"}},"de":{"stringUnit":{"state":"translated","value":"Tastenaufnahme wird vorbereitet …"}},"en":{"stringUnit":{"state":"translated","value":"Preparing key recording…"}},"es":{"stringUnit":{"state":"translated","value":"Preparando la grabación de tecla…"}},"fr":{"stringUnit":{"state":"translated","value":"Préparation de l’enregistrement…"}},"ja":{"stringUnit":{"state":"translated","value":"キー記録を準備中…"}},"ko":{"stringUnit":{"state":"translated","value":"키 기록 준비 중…"}},"pt":{"stringUnit":{"state":"translated","value":"A preparar gravação da tecla…"}},"ru":{"stringUnit":{"state":"translated","value":"Подготовка записи клавиши…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"正在准备按键录制…"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"正在準備按鍵錄製…"}}}},
+    "settings.singleKey.preparing.detail": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"حرّر زر تسجيل المفتاح؛ سيبدأ الاستماع بعد ذلك."}},"de":{"stringUnit":{"state":"translated","value":"Lass die Taste „Taste aufnehmen“ los; danach beginnt die Aufnahme."}},"en":{"stringUnit":{"state":"translated","value":"Release the Record Key button; listening starts next."}},"es":{"stringUnit":{"state":"translated","value":"Suelta el botón Grabar tecla; la escucha comenzará después."}},"fr":{"stringUnit":{"state":"translated","value":"Relâchez le bouton Enregistrer la touche ; l’écoute commencera ensuite."}},"ja":{"stringUnit":{"state":"translated","value":"「キーを記録」ボタンを離すと、待機が始まります。"}},"ko":{"stringUnit":{"state":"translated","value":"키 기록 버튼에서 손을 떼면 감지가 시작됩니다."}},"pt":{"stringUnit":{"state":"translated","value":"Solte o botão Gravar tecla; a escuta começa a seguir."}},"ru":{"stringUnit":{"state":"translated","value":"Отпустите кнопку записи — затем начнётся ожидание клавиши."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"松开“录制按键”按钮后开始监听。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"放開「錄製按鍵」按鈕後開始聆聽。"}}}},
+    "settings.singleKey.record": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"تسجيل مفتاح"}},"de":{"stringUnit":{"state":"translated","value":"Taste aufnehmen"}},"en":{"stringUnit":{"state":"translated","value":"Record Key"}},"es":{"stringUnit":{"state":"translated","value":"Grabar tecla"}},"fr":{"stringUnit":{"state":"translated","value":"Enregistrer la touche"}},"ja":{"stringUnit":{"state":"translated","value":"キーを記録"}},"ko":{"stringUnit":{"state":"translated","value":"키 기록"}},"pt":{"stringUnit":{"state":"translated","value":"Gravar tecla"}},"ru":{"stringUnit":{"state":"translated","value":"Записать клавишу"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"录制按键"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"錄製按鍵"}}}},
+    "settings.singleKey.recording": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"اضغط مفتاحًا واحدًا"}},"de":{"stringUnit":{"state":"translated","value":"Eine Taste drücken"}},"en":{"stringUnit":{"state":"translated","value":"Press one key"}},"es":{"stringUnit":{"state":"translated","value":"Pulsa una tecla"}},"fr":{"stringUnit":{"state":"translated","value":"Appuyez sur une touche"}},"ja":{"stringUnit":{"state":"translated","value":"キーを1つ押す"}},"ko":{"stringUnit":{"state":"translated","value":"키 하나 누르기"}},"pt":{"stringUnit":{"state":"translated","value":"Prima uma tecla"}},"ru":{"stringUnit":{"state":"translated","value":"Нажмите одну клавишу"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"按下一个按键"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"按下一個按鍵"}}}},
     "action.mediaPlayPause": {
       "localizations": {
         "en": {
@@ -2848,7 +2854,7 @@
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 입력"
+            "value": "입력 캡처"
           }
         },
         "pt": {
@@ -3472,13 +3478,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "録音ショートカット"
+            "value": "入力キャプチャ"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 바로가기"
+            "value": "입력 캡처 바로가기"
           }
         },
         "pt": {
@@ -4662,13 +4668,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "録音を準備しています…"
+            "value": "入力キャプチャを準備中…"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 준비 중…"
+            "value": "입력 캡처 준비 중…"
           }
         },
         "pt": {
@@ -4732,13 +4738,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "録音入力ボタンを放します。次にリスニングが始まります。"
+            "value": "入力キャプチャボタンを離すと、待機が始まります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 입력 버튼을 놓습니다. 듣기는 다음부터 시작됩니다."
+            "value": "입력 캡처 버튼에서 손을 떼면 감지가 시작됩니다."
           }
         },
         "pt": {
@@ -4942,13 +4948,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "録音ショートカット ボタンを放します。次にリスニングが始まります。"
+            "value": "ショートカットキャプチャボタンを離すと、待機が始まります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "녹음 바로가기 버튼을 놓습니다. 듣기는 다음부터 시작됩니다."
+            "value": "바로가기 캡처 버튼에서 손을 떼면 감지가 시작됩니다."
           }
         },
         "pt": {
@@ -5949,6 +5955,66 @@
             "value": "五指雙擊"
           }
         }
+      }
+    },
+    "settings.recording.error": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Recording could not start." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法开始录制。" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذر بدء التسجيل." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die Aufnahme konnte nicht gestartet werden." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo iniciar la grabación." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible de démarrer l’enregistrement." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "入力キャプチャを開始できませんでした。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "입력 캡처를 시작할 수 없습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não foi possível iniciar a gravação." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось начать запись." } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法開始記錄。" } }
+      }
+    },
+    "settings.recording.unavailable": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Input capture is unavailable right now. Try again." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "输入捕获暂时不可用，请重试。" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذر التقاط الإدخال الآن. حاول مرة أخرى." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die Eingabeerfassung ist derzeit nicht verfügbar. Erneut versuchen." } },
+        "es": { "stringUnit": { "state": "translated", "value": "La captura de entrada no está disponible ahora. Inténtalo de nuevo." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "La capture des entrées est momentanément indisponible. Réessayez." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "入力キャプチャを現在利用できません。再試行してください。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "입력 캡처를 지금 사용할 수 없습니다. 다시 시도하세요." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "A captura de entrada não está disponível agora. Tente novamente." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Захват ввода сейчас недоступен. Повторите попытку." } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "輸入擷取目前無法使用，請重試。" } }
+      }
+    },
+    "settings.recording.openFormat": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Open %@" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开%@" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "فتح %@" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ öffnen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Abrir %@" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@を開く" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "%@ 열기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Abrir %@" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Открыть: %@" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開%@" } }
+      }
+    },
+    "settings.recording.retry": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Try again" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "重试" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "حاول مرة أخرى" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Erneut versuchen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Intentar de nuevo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réessayer" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再試行" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "다시 시도" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Tentar novamente" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Повторить" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "重試" } }
       }
     }
   },

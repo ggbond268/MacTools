@@ -6,16 +6,22 @@ import MacToolsPluginKit
 /// subpage. Instances are scoped to a single Settings window.
 enum SettingsNavigationDestination: Hashable {
     case general
+    case permissions
     case about
     case plugins(FeatureSettingsPane)
+    case marketplaceDetail(MarketplacePluginDetailTarget)
 
     var settingsDestination: SettingsDestination {
         switch self {
         case .general:
             .general
+        case .permissions:
+            // Keep the PluginKit destination enum ABI-stable. Permissions is
+            // a host-owned Settings page within the broader plugin domain.
+            .pluginConfiguration
         case .about:
             .about
-        case .plugins:
+        case .plugins, .marketplaceDetail:
             .pluginConfiguration
         }
     }
@@ -30,25 +36,47 @@ enum SettingsNavigationDestination: Hashable {
 
 }
 
+/// A catalog-backed Marketplace destination. A provider/action pair is only
+/// a presentation hint; it never represents an executable action request.
+struct MarketplacePluginDetailTarget: Hashable {
+    let pluginID: String
+    let providerID: String?
+    let actionID: String?
+
+    init(pluginID: String, providerID: String? = nil, actionID: String? = nil) {
+        self.pluginID = pluginID
+        self.providerID = providerID
+        self.actionID = actionID
+    }
+
+    var actionHighlight: MarketplacePluginActionHighlight? {
+        guard let providerID, let actionID else { return nil }
+        return MarketplacePluginActionHighlight(providerID: providerID, actionID: actionID)
+    }
+}
+
+struct MarketplacePluginActionHighlight: Hashable {
+    let providerID: String
+    let actionID: String
+}
+
 extension SettingsNavigationDestination {
     static func settingsSidebarOrder(
         configurationIDs: some Sequence<String>
     ) -> [SettingsNavigationDestination] {
-        let pluginPanes = FeatureSettingsPane.settingsSidebarOrder(
-            configurationIDs: configurationIDs
-        )
-
         return [
             .general,
-            .plugins(.automation),
+            .permissions,
             .about
-        ] + pluginPanes
-            .filter { $0 != .automation }
-            .map(SettingsNavigationDestination.plugins)
+        ] + FeatureSettingsPane.settingsSidebarOrder(
+            configurationIDs: configurationIDs
+        ).map(SettingsNavigationDestination.plugins)
     }
+
 }
 
 enum SettingsSearchField: Equatable {
+    case actionsAndShortcuts
     case pluginMarketplace
     case pluginSettings(String)
 }
@@ -153,6 +181,73 @@ struct UnifiedSearchQuickSelectionRequest: Equatable {
     let number: Int
 }
 
+enum SettingsSidebarSection: String, Hashable {
+    case app
+    case customize
+    case pluginSettings
+}
+
+enum SettingsSidebarNumberTarget: Hashable {
+    case destination(SettingsNavigationDestination)
+    case collapsedSection(SettingsSidebarSection)
+}
+
+enum SettingsSidebarNumberingPolicy {
+    static let maximumShortcutCount = 9
+
+    static func targets(
+        appDestinations: [SettingsNavigationDestination],
+        customizeDestinations: [SettingsNavigationDestination],
+        pluginDestinations: [SettingsNavigationDestination],
+        appExpanded: Bool,
+        customizeExpanded: Bool,
+        pluginSettingsExpanded: Bool,
+        limit: Int? = maximumShortcutCount
+    ) -> [SettingsSidebarNumberTarget] {
+        var targets: [SettingsSidebarNumberTarget] = []
+        targets += appExpanded
+            ? appDestinations.map(SettingsSidebarNumberTarget.destination)
+            : [.collapsedSection(.app)]
+        targets += customizeExpanded
+            ? customizeDestinations.map(SettingsSidebarNumberTarget.destination)
+            : [.collapsedSection(.customize)]
+        targets += pluginSettingsExpanded
+            ? pluginDestinations.map(SettingsSidebarNumberTarget.destination)
+            : [.collapsedSection(.pluginSettings)]
+        return limit.map { Array(targets.prefix($0)) } ?? targets
+    }
+
+    static func movedTarget(
+        from currentTarget: SettingsSidebarNumberTarget?,
+        direction: SettingsSidebarMoveDirection,
+        in targets: [SettingsSidebarNumberTarget]
+    ) -> SettingsSidebarNumberTarget? {
+        guard !targets.isEmpty else { return nil }
+        guard let currentTarget, let currentIndex = targets.firstIndex(of: currentTarget) else {
+            return direction == .next ? targets.first : targets.last
+        }
+        let nextIndex = currentIndex + (direction == .next ? 1 : -1)
+        guard targets.indices.contains(nextIndex) else { return nil }
+        return targets[nextIndex]
+    }
+}
+
+enum SettingsSidebarHeaderAccessibility {
+    static func isSelected(containsSelection: Bool) -> Bool {
+        containsSelection
+    }
+}
+
+struct SidebarNumberShortcutRequest: Equatable {
+    let id: UInt
+    let number: Int
+}
+
+struct SidebarMoveShortcutRequest: Equatable {
+    let id: UInt
+    let direction: SettingsSidebarMoveDirection
+}
+
 @MainActor
 final class SettingsNavigationCoordinator: ObservableObject {
     private static let maximumHistoryCount = 128
@@ -163,6 +258,10 @@ final class SettingsNavigationCoordinator: ObservableObject {
     @Published private(set) var isUnifiedSearchPresented = false
     @Published private(set) var unifiedSearchPresentationOrigin: UnifiedSearchPresentationOrigin?
     @Published private(set) var unifiedSearchFocusRequestID: UInt = 0
+    @Published private(set) var sidebarSelectionRevealRequestID: UInt = 0
+    @Published private(set) var sidebarFocusRequestID: UInt = 0
+    @Published private(set) var sidebarNumberShortcutRequest: SidebarNumberShortcutRequest?
+    @Published private(set) var sidebarMoveShortcutRequest: SidebarMoveShortcutRequest?
     @Published private(set) var unifiedSearchQuickSelectionRequest: UnifiedSearchQuickSelectionRequest?
     @Published private(set) var searchRevealRequest: SettingsSearchRevealRequest?
 
@@ -175,8 +274,10 @@ final class SettingsNavigationCoordinator: ObservableObject {
     private let isPluginConfigurationAvailable: (String) -> Bool
     private let hasPluginSettingsSearchField: (String) -> Bool
     private let focusPluginSettingsSearch: (String) -> Bool
+    private let pluginSettingsSearchFocusTarget: (String) -> PluginSettingsSearchTarget?
     private let isPluginSettingsSearchTargetAvailable: (PluginSettingsSearchTarget) -> Bool
     private let isPluginManagementAvailable: (String) -> Bool
+    private let isMarketplaceDetailAvailable: (MarketplacePluginDetailTarget) -> Bool
     private let isPluginSurfaceAvailable: (SurfaceSettingsSearchTarget) -> Bool
     private let isAutomationWorkflowAvailable: (UUID) -> Bool
     private let selectPluginSettingsPane: (FeatureSettingsPane) -> Bool
@@ -184,6 +285,8 @@ final class SettingsNavigationCoordinator: ObservableObject {
     private var nextAboutUpdateActionRequestID: UInt = 0
     private var nextSearchRevealRequestID: UInt = 0
     private var nextUnifiedSearchQuickSelectionRequestID: UInt = 0
+    private var nextSidebarNumberShortcutRequestID: UInt = 0
+    private var nextSidebarMoveShortcutRequestID: UInt = 0
 
     convenience init(
         pluginHost: PluginHost,
@@ -209,6 +312,9 @@ final class SettingsNavigationCoordinator: ObservableObject {
             isPluginConfigurationAvailable: { pluginHost.hasPluginSettings(pluginID: $0) },
             hasPluginSettingsSearchField: { pluginHost.hasPluginSettingsSearchField(pluginID: $0) },
             focusPluginSettingsSearch: { pluginHost.focusPluginSettingsSearch(pluginID: $0) },
+            pluginSettingsSearchFocusTarget: {
+                pluginHost.pluginSettingsSearchFocusTarget(pluginID: $0)
+            },
             isPluginSettingsSearchTargetAvailable: {
                 pluginHost.hasPluginSettingsSearchTarget($0)
             },
@@ -217,6 +323,9 @@ final class SettingsNavigationCoordinator: ObservableObject {
                     pluginID: pluginID,
                     in: pluginHost.pluginManagementItems
                 )
+            },
+            isMarketplaceDetailAvailable: { target in
+                pluginHost.hasMarketplaceDetail(target: target)
             },
             isPluginSurfaceAvailable: { target in
                 let items = switch target.surface {
@@ -241,8 +350,10 @@ final class SettingsNavigationCoordinator: ObservableObject {
         isPluginConfigurationAvailable: @escaping (String) -> Bool = { _ in true },
         hasPluginSettingsSearchField: @escaping (String) -> Bool = { _ in false },
         focusPluginSettingsSearch: @escaping (String) -> Bool = { _ in false },
+        pluginSettingsSearchFocusTarget: @escaping (String) -> PluginSettingsSearchTarget? = { _ in nil },
         isPluginSettingsSearchTargetAvailable: @escaping (PluginSettingsSearchTarget) -> Bool = { _ in true },
         isPluginManagementAvailable: @escaping (String) -> Bool = { _ in true },
+        isMarketplaceDetailAvailable: @escaping (MarketplacePluginDetailTarget) -> Bool = { _ in true },
         isPluginSurfaceAvailable: @escaping (SurfaceSettingsSearchTarget) -> Bool = { _ in true },
         isAutomationWorkflowAvailable: @escaping (UUID) -> Bool = { _ in true },
         selectPluginSettingsPane: @escaping (FeatureSettingsPane) -> Bool = { _ in true }
@@ -255,8 +366,10 @@ final class SettingsNavigationCoordinator: ObservableObject {
         self.isPluginConfigurationAvailable = isPluginConfigurationAvailable
         self.hasPluginSettingsSearchField = hasPluginSettingsSearchField
         self.focusPluginSettingsSearch = focusPluginSettingsSearch
+        self.pluginSettingsSearchFocusTarget = pluginSettingsSearchFocusTarget
         self.isPluginSettingsSearchTargetAvailable = isPluginSettingsSearchTargetAvailable
         self.isPluginManagementAvailable = isPluginManagementAvailable
+        self.isMarketplaceDetailAvailable = isMarketplaceDetailAvailable
         self.isPluginSurfaceAvailable = isPluginSurfaceAvailable
         self.isAutomationWorkflowAvailable = isAutomationWorkflowAvailable
         self.selectPluginSettingsPane = selectPluginSettingsPane
@@ -307,8 +420,9 @@ final class SettingsNavigationCoordinator: ObservableObject {
         _ direction: SettingsSidebarMoveDirection,
         in orderedDestinations: [SettingsNavigationDestination]
     ) -> Bool {
+        let sidebarDestination = destination.sidebarDestination
         guard
-            let currentIndex = orderedDestinations.firstIndex(of: destination)
+            let currentIndex = orderedDestinations.firstIndex(of: sidebarDestination)
         else {
             return false
         }
@@ -334,17 +448,24 @@ final class SettingsNavigationCoordinator: ObservableObject {
 
     @discardableResult
     func moveSidebarSelection(_ direction: SettingsSidebarMoveDirection) -> Bool {
-        moveSidebarSelection(direction, in: sidebarOrder())
+        nextSidebarMoveShortcutRequestID &+= 1
+        sidebarMoveShortcutRequest = SidebarMoveShortcutRequest(
+            id: nextSidebarMoveShortcutRequestID,
+            direction: direction
+        )
+        return true
     }
 
     @discardableResult
-    func selectSidebarDestination(number: Int) -> Bool {
-        guard (1...9).contains(number) else { return false }
-        let availableDestinations = sidebarOrder().filter(isAvailable)
-        let index = number - 1
-        guard availableDestinations.indices.contains(index) else { return false }
-
-        navigate(to: availableDestinations[index])
+    func performSidebarNumberShortcut(number: Int) -> Bool {
+        guard (1...SettingsSidebarNumberingPolicy.maximumShortcutCount).contains(number) else {
+            return false
+        }
+        nextSidebarNumberShortcutRequestID &+= 1
+        sidebarNumberShortcutRequest = SidebarNumberShortcutRequest(
+            id: nextSidebarNumberShortcutRequestID,
+            number: number
+        )
         return true
     }
 
@@ -409,6 +530,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
 
         guard let target else {
             searchRevealRequest = nil
+            sidebarFocusRequestID &+= 1
             return true
         }
 
@@ -482,7 +604,17 @@ final class SettingsNavigationCoordinator: ObservableObject {
         }
 
         if case let .pluginSettings(pluginID) = field {
-            return focusPluginSettingsSearch(pluginID)
+            guard focusPluginSettingsSearch(pluginID) else {
+                return false
+            }
+            if let target = pluginSettingsSearchFocusTarget(pluginID) {
+                nextSearchRevealRequestID &+= 1
+                searchRevealRequest = SettingsSearchRevealRequest(
+                    id: nextSearchRevealRequestID,
+                    target: .plugin(target)
+                )
+            }
+            return true
         }
 
         nextSearchFocusRequestID &+= 1
@@ -499,15 +631,11 @@ final class SettingsNavigationCoordinator: ObservableObject {
             return false
         }
 
-        if let searchField = searchField(for: destination) {
-            if focusedSearchField == searchField {
-                return true
-            }
-            return requestSearchFocus()
+        guard let searchField = searchField(for: destination) else { return false }
+        if focusedSearchField == searchField {
+            return true
         }
-
-        presentUnifiedSearch(origin: .keyboard)
-        return true
+        return requestSearchFocus()
     }
 
     func setSearchField(_ field: SettingsSearchField, focused: Bool) {
@@ -520,6 +648,8 @@ final class SettingsNavigationCoordinator: ObservableObject {
 
     private func searchField(for destination: SettingsNavigationDestination) -> SettingsSearchField? {
         switch destination {
+        case .plugins(.actionsAndShortcuts):
+            .actionsAndShortcuts
         case .plugins(.marketplace):
             .pluginMarketplace
         case let .plugins(.configuration(pluginID)) where hasPluginSettingsSearchField(pluginID):
@@ -555,11 +685,14 @@ final class SettingsNavigationCoordinator: ObservableObject {
     }
 
     private func isAvailable(_ destination: SettingsNavigationDestination) -> Bool {
-        guard case let .plugins(.configuration(pluginID)) = destination else {
-            return true
+        switch destination {
+        case let .plugins(.configuration(pluginID)):
+            isPluginConfigurationAvailable(pluginID)
+        case let .marketplaceDetail(target):
+            isMarketplaceDetailAvailable(target)
+        default:
+            true
         }
-
-        return isPluginConfigurationAvailable(pluginID)
     }
 
     private func isAvailable(_ target: SettingsSearchRevealTarget) -> Bool {
@@ -603,10 +736,21 @@ final class SettingsNavigationCoordinator: ObservableObject {
     }
 
     private func activate(_ destination: SettingsNavigationDestination) {
-        if let pane = destination.featureSettingsPane {
+        if case .marketplaceDetail = destination {
+            _ = selectPluginSettingsPane(.marketplace)
+        } else if let pane = destination.featureSettingsPane {
             _ = selectPluginSettingsPane(pane)
         }
 
         self.destination = destination
+    }
+}
+
+extension SettingsNavigationDestination {
+    var sidebarDestination: SettingsNavigationDestination {
+        if case .marketplaceDetail = self {
+            return .plugins(.marketplace)
+        }
+        return self
     }
 }

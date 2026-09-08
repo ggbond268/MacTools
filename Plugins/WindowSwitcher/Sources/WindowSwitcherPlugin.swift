@@ -48,12 +48,21 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     private let appCatalog: WindowSwitcherAppCatalog
     private let overlayController: WindowSwitcherOverlayController
     private let shortcutTap: WindowSwitcherShortcutTap
+    private let sessionEntriesProvider: (@MainActor () async -> [WindowSwitcherAppEntry])?
     private let accessibilityTrusted: @MainActor () -> Bool
     private let requestAccessibilityTrust: @MainActor (Bool) -> Bool
 
     private var isAccessibilityGranted: Bool
     private var lastErrorMessage: String?
     private var session: Session?
+    private var isPreparingSession = false
+    private var pendingDirectRelease = false
+    private var pendingDirectAdvance = 0
+    private var pendingDirectReversed = false
+    private var sessionPreparationGeneration: UInt64 = 0
+    private var sessionPreparationTask: Task<Void, Never>?
+    private var activationGeneration: UInt64 = 0
+    private var activationTask: Task<Void, Never>?
 
     init(
         context: PluginRuntimeContext = PluginRuntimeContext(pluginID: WindowSwitcherConstants.pluginID),
@@ -61,6 +70,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         appCatalog: WindowSwitcherAppCatalog = WindowSwitcherAppCatalog(),
         overlayController: WindowSwitcherOverlayController = WindowSwitcherOverlayController(),
         shortcutTap: WindowSwitcherShortcutTap = WindowSwitcherShortcutTap(),
+        sessionEntriesProvider: (@MainActor () async -> [WindowSwitcherAppEntry])? = nil,
         accessibilityTrusted: @escaping @MainActor () -> Bool = WindowSwitcherAccessibilityCheck.isTrusted,
         requestAccessibilityTrust: @escaping @MainActor (Bool) -> Bool = WindowSwitcherAccessibilityCheck.requestTrust(prompt:)
     ) {
@@ -69,6 +79,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         self.appCatalog = appCatalog
         self.overlayController = overlayController
         self.shortcutTap = shortcutTap
+        self.sessionEntriesProvider = sessionEntriesProvider
         self.accessibilityTrusted = accessibilityTrusted
         self.requestAccessibilityTrust = requestAccessibilityTrust
         self.isAccessibilityGranted = accessibilityTrusted()
@@ -104,6 +115,9 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         }
         self.shortcutTap.onShortcutReleased = { [weak self] in
             self?.handleShortcutReleased()
+        }
+        self.shortcutTap.onAccessibilityRevoked = { [weak self] in
+            self?.refreshAccessibilityPermission()
         }
         self.shortcutTap.onEscape = { [weak self] in
             self?.cancelSession()
@@ -204,17 +218,15 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         }
         // Canonical actions have no key-up phase. Always open the interactive
         // chooser instead of starting a direct-cycle session that could never commit.
-        beginKeyWindowSession()
-        let succeeded: Bool
-        if case .keyWindow? = session {
-            succeeded = true
-        } else {
-            succeeded = false
-        }
-        return ActionExecutionHandle {
-            succeeded
-                ? .succeeded()
-                : .failed(message: PluginKitLocalization.actionUnavailable)
+        return ActionExecutionHandle { @MainActor [weak self] in
+            guard let self,
+                  let generation = self.beginSessionPreparation(),
+                  await self.beginKeyWindowSession(generation: generation)
+            else {
+                return .failed(message: PluginKitLocalization.actionUnavailable)
+            }
+
+            return .succeeded()
         }
     }
 
@@ -290,8 +302,8 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     }
 
     func activate(context: PluginRuntimeContext) {
-        appCatalog.start()
         refreshAccessibilityPermission()
+        syncCatalogDiscovery()
         syncShortcutTap()
     }
 
@@ -300,10 +312,13 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         appCatalog.stop()
         overlayController.hide()
         session = nil
+        invalidateSessionPreparation()
+        invalidateActivation()
     }
 
     func refresh() {
         refreshAccessibilityPermission()
+        syncCatalogDiscovery()
         syncShortcutTap()
         onStateChange?()
     }
@@ -385,8 +400,11 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
 
         if previous && !isAccessibilityGranted {
             shortcutTap.stop()
+            appCatalog.stop()
             overlayController.hide()
             session = nil
+            invalidateSessionPreparation()
+            invalidateActivation()
             if store.configuration.isEnabled {
                 lastErrorMessage = localization.string(
                     "error.accessibilityRevoked",
@@ -395,6 +413,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             }
         } else if !previous && isAccessibilityGranted {
             lastErrorMessage = nil
+            syncCatalogDiscovery()
             syncShortcutTap()
         }
 
@@ -436,16 +455,33 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     private func configurationDidChange() {
         overlayController.hide()
         session = nil
+        invalidateSessionPreparation()
+        invalidateActivation()
         if !store.configuration.isEnabled {
             lastErrorMessage = nil
         }
+        syncCatalogDiscovery()
         syncShortcutTap()
         onStateChange?()
     }
 
-    private func handleShortcutPressed(reversed: Bool, isRepeat: Bool) {
+    func handleShortcutPressed(reversed: Bool, isRepeat: Bool) {
         guard store.configuration.isEnabled else {
             return
+        }
+
+        var startsNewGesture = false
+        if !isRepeat, session == nil {
+            if isPreparingSession, pendingDirectRelease {
+                pendingDirectRelease = false
+                pendingDirectAdvance = 0
+                pendingDirectReversed = reversed
+                startsNewGesture = true
+            } else if !isPreparingSession {
+                pendingDirectRelease = false
+                pendingDirectAdvance = 0
+                pendingDirectReversed = false
+            }
         }
 
         guard ensureAccessibilityForInvocation() else {
@@ -454,12 +490,16 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
 
         switch store.configuration.mode {
         case .keyWindow:
-            beginKeyWindowSession()
+            requestKeyWindowSession()
         case .directCycle:
             if case .direct = session {
                 advanceDirectSession(by: reversed ? -1 : 1)
+            } else if isPreparingSession {
+                if !startsNewGesture {
+                    pendingDirectAdvance = pendingDirectAdvance &+ (reversed ? -1 : 1)
+                }
             } else {
-                beginDirectSession(reversed: reversed)
+                requestDirectSession(reversed: reversed)
             }
         }
     }
@@ -469,20 +509,69 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             return
         }
 
+        refreshAccessibilityPermission()
+        guard isAccessibilityGranted else {
+            cancelSession()
+            return
+        }
+
         guard case .direct = session else {
+            if store.configuration.mode == .directCycle, isPreparingSession {
+                pendingDirectRelease = true
+            }
             return
         }
 
         commitDirectSession()
     }
 
-    private func beginDirectSession(reversed: Bool) {
-        let entries = appCatalog.entries(sortMode: store.configuration.sortMode)
-        guard !entries.isEmpty else {
+    private func requestDirectSession(reversed: Bool) {
+        guard let generation = beginSessionPreparation() else {
+            return
+        }
+        pendingDirectReversed = reversed
+
+        sessionPreparationTask = Task { @MainActor [weak self] in
+            await self?.beginDirectSession(generation: generation)
+        }
+    }
+
+    private func beginDirectSession(generation: UInt64) async {
+        guard generation == sessionPreparationGeneration,
+              isPreparingSession
+        else {
             return
         }
 
-        let selectedIndex = initialDirectSelectionIndex(in: entries, reversed: reversed)
+        defer {
+            if generation == sessionPreparationGeneration {
+                isPreparingSession = false
+                sessionPreparationTask = nil
+                pendingDirectAdvance = 0
+                pendingDirectReversed = false
+            }
+        }
+        let entries = await sessionEntries()
+        refreshAccessibilityPermission()
+        guard generation == sessionPreparationGeneration,
+              !Task.isCancelled,
+              store.configuration.isEnabled,
+              isAccessibilityGranted,
+              !entries.isEmpty
+        else {
+            return
+        }
+
+        let initialIndex = initialDirectSelectionIndex(
+            in: entries,
+            reversed: pendingDirectReversed
+        )
+        let selectedIndex = Self.directSelectionIndex(
+            startingAt: initialIndex,
+            advancingBy: pendingDirectAdvance,
+            count: entries.count
+        )
+        pendingDirectAdvance = 0
 
         session = .direct(entries: entries, selectedIndex: selectedIndex)
         overlayController.showDirect(
@@ -490,6 +579,11 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             selectedID: entries[selectedIndex].id,
             shortcutText: currentShortcutText
         )
+
+        if pendingDirectRelease {
+            pendingDirectRelease = false
+            commitDirectSession()
+        }
     }
 
     private func advanceDirectSession(by delta: Int) {
@@ -499,7 +593,11 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             return
         }
 
-        let nextIndex = (selectedIndex + delta + entries.count) % entries.count
+        let nextIndex = Self.directSelectionIndex(
+            startingAt: selectedIndex,
+            advancingBy: delta,
+            count: entries.count
+        )
         session = .direct(entries: entries, selectedIndex: nextIndex)
         overlayController.updateDirectSelection(selectedID: entries[nextIndex].id)
     }
@@ -515,23 +613,52 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         let entry = entries[selectedIndex]
         overlayController.hide()
         session = nil
-        appCatalog.activate(entry)
+        requestActivation(for: entry)
     }
 
-    private func beginKeyWindowSession() {
-        guard ensureAccessibilityForInvocation() else {
+    private func requestKeyWindowSession() {
+        guard let generation = beginSessionPreparation() else {
             return
+        }
+
+        sessionPreparationTask = Task { @MainActor [weak self] in
+            _ = await self?.beginKeyWindowSession(generation: generation)
+        }
+    }
+
+    private func beginKeyWindowSession(generation: UInt64) async -> Bool {
+        guard generation == sessionPreparationGeneration,
+              isPreparingSession
+        else {
+            return false
+        }
+
+        defer {
+            if generation == sessionPreparationGeneration {
+                isPreparingSession = false
+                sessionPreparationTask = nil
+            }
+        }
+
+        guard ensureAccessibilityForInvocation() else {
+            return false
         }
 
         if case .keyWindow(_) = session, overlayController.isVisible {
-            return
+            return true
         }
 
         let entries = store.assignShortcuts(
-            to: appCatalog.entries(sortMode: store.configuration.sortMode)
+            to: await appCatalog.entries(sortMode: store.configuration.sortMode)
         )
-        guard !entries.isEmpty else {
-            return
+        refreshAccessibilityPermission()
+        guard generation == sessionPreparationGeneration,
+              !Task.isCancelled,
+              store.configuration.isEnabled,
+              isAccessibilityGranted,
+              !entries.isEmpty
+        else {
+            return false
         }
 
         session = .keyWindow(entries: entries)
@@ -539,6 +666,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             entries: entries,
             shortcutText: currentShortcutText
         )
+        return true
     }
 
     private func initialDirectSelectionIndex(in entries: [WindowSwitcherAppEntry], reversed: Bool) -> Int {
@@ -550,12 +678,40 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             entries.firstIndex { $0.appIdentifier == appID }
         } ?? 0
         let delta = reversed ? -1 : 1
-        return (anchorIndex + delta + entries.count) % entries.count
+        return Self.directSelectionIndex(
+            startingAt: anchorIndex,
+            advancingBy: delta,
+            count: entries.count
+        )
+    }
+
+    static func directSelectionIndex(startingAt index: Int, advancingBy delta: Int, count: Int) -> Int {
+        guard count > 0 else {
+            return 0
+        }
+
+        let normalizedDelta = delta % count
+        return (index + normalizedDelta + count) % count
+    }
+
+    private func sessionEntries() async -> [WindowSwitcherAppEntry] {
+        if let sessionEntriesProvider {
+            return await sessionEntriesProvider()
+        }
+
+        return await appCatalog.entries(sortMode: store.configuration.sortMode)
     }
 
     private func select(_ entry: WindowSwitcherAppEntry) {
+        refreshAccessibilityPermission()
+        guard store.configuration.isEnabled,
+              isAccessibilityGranted
+        else {
+            return
+        }
+
         session = nil
-        appCatalog.activate(entry)
+        requestActivation(for: entry)
     }
 
     private func quit(_ entry: WindowSwitcherAppEntry) {
@@ -582,6 +738,34 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     private func cancelSession() {
         overlayController.hide()
         session = nil
+        invalidateSessionPreparation()
+        invalidateActivation()
+    }
+
+    private func requestActivation(for entry: WindowSwitcherAppEntry) {
+        activationGeneration &+= 1
+        let generation = activationGeneration
+        activationTask?.cancel()
+        activationTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            await self.appCatalog.activate(entry)
+            guard !Task.isCancelled,
+                  self.activationGeneration == generation
+            else {
+                return
+            }
+
+            self.activationTask = nil
+        }
+    }
+
+    private func invalidateActivation() {
+        activationGeneration &+= 1
+        activationTask?.cancel()
+        activationTask = nil
     }
 
     private func removeEntries(forAppIdentifier appIdentifier: String) {
@@ -639,6 +823,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         isAccessibilityGranted = requestAccessibilityTrust(true)
         if isAccessibilityGranted {
             lastErrorMessage = nil
+            syncCatalogDiscovery()
             syncShortcutTap()
         } else {
             lastErrorMessage = localization.string(
@@ -656,6 +841,35 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         } else {
             shortcutTap.stop()
         }
+    }
+
+    private func syncCatalogDiscovery() {
+        if store.configuration.isEnabled && isAccessibilityGranted {
+            appCatalog.start()
+        } else {
+            appCatalog.stop()
+        }
+    }
+
+    private func beginSessionPreparation() -> UInt64? {
+        guard !isPreparingSession else {
+            return nil
+        }
+
+        invalidateActivation()
+        isPreparingSession = true
+        pendingDirectAdvance = 0
+        return sessionPreparationGeneration
+    }
+
+    private func invalidateSessionPreparation() {
+        sessionPreparationGeneration &+= 1
+        sessionPreparationTask?.cancel()
+        sessionPreparationTask = nil
+        isPreparingSession = false
+        pendingDirectRelease = false
+        pendingDirectAdvance = 0
+        pendingDirectReversed = false
     }
 
     private var currentShortcutText: String {

@@ -85,7 +85,9 @@ final class PluginCatalogTests: XCTestCase {
 
     func testReleasedVersionKeepsSchema2CompatibilityCatalogURL() throws {
         XCTAssertEqual(
-            PluginCatalogProviderConfiguration.productionCatalogURL(forHostVersion: "1.2.0"),
+            PluginCatalogProviderConfiguration.productionCatalogURL(
+                forHostVersion: "1.2.0", pluginKitVersion: 5
+            ),
             URL(string: "https://mactools.ggbond.app/plugins/v5/catalog.json")
         )
     }
@@ -102,7 +104,9 @@ final class PluginCatalogTests: XCTestCase {
 
     func testSchema3HostUsesSchema3CompatibilityCatalogURL() throws {
         XCTAssertEqual(
-            PluginCatalogProviderConfiguration.productionCatalogURL(forHostVersion: "1.2.1"),
+            PluginCatalogProviderConfiguration.productionCatalogURL(
+                forHostVersion: "1.2.1", pluginKitVersion: 5
+            ),
             URL(string: "https://mactools.ggbond.app/plugins/v5/schema3/catalog.json")
         )
     }
@@ -121,11 +125,10 @@ final class PluginCatalogTests: XCTestCase {
         )
     }
 
-    func testFuturePluginKitUsesItsOwnVersionedCatalogURL() throws {
+    func testCurrentPluginKitUsesItsOwnVersionedCatalogURL() throws {
         XCTAssertEqual(
             PluginCatalogProviderConfiguration.productionCatalogURL(
-                forHostVersion: "1.3.0",
-                pluginKitVersion: 6
+                forHostVersion: "1.3.0"
             ),
             URL(string: "https://mactools.ggbond.app/plugins/v6/catalog.json")
         )
@@ -150,6 +153,15 @@ final class PluginCatalogTests: XCTestCase {
             try verifier.verify(catalog, sourceKind: .localDevelopment)
         ) { error in
             XCTAssertEqual(error as? PluginCatalogVerifierError, .unsupportedPluginKitVersion(2))
+        }
+    }
+
+    func testCurrentVerifierRejectsReleasedPluginKit5Catalog() throws {
+        let catalog = makeCatalog(pluginKitVersion: 5)
+        let verifier = PluginCatalogVerifier.localDevelopment(hostVersion: "1.3.0")
+
+        XCTAssertThrowsError(try verifier.verify(catalog, sourceKind: .localDevelopment)) { error in
+            XCTAssertEqual(error as? PluginCatalogVerifierError, .unsupportedPluginKitVersion(5))
         }
     }
 

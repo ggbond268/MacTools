@@ -13,6 +13,7 @@ import AutoHideMenuBarPlugin
 import AutoInputPlugin
 import BatteryChargeLimitPlugin
 import ClipboardClearPlugin
+import ClipboardHistoryPlugin
 import CloudflareR2Plugin
 import DiskCleanPlugin
 import DisplayBrightnessPlugin
@@ -31,6 +32,8 @@ import KeepAwakePlugin
 import LaunchControlPlugin
 import LaunchpadPlugin
 import LockScreenPlugin
+import MacSettingsPlugin
+import MenuBarHiddenPlugin
 import MicrophoneMutePlugin
 import MiddleClickPlugin
 import NightShiftPlugin
@@ -40,6 +43,7 @@ import SavedScriptsPlugin
 import SidecarPlugin
 import StageManagerPlugin
 import SystemMutePlugin
+import SystemPowerPlugin
 import SystemSoftRestartPlugin
 import TranslatorPlugin
 import WindowLayoutsPlugin
@@ -296,6 +300,7 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
         .init(pluginID: "auto-input", makeProvider: AutoInputPluginFactory.makeProvider),
         .init(pluginID: "battery-charge-limit", makeProvider: BatteryChargeLimitPluginFactory.makeProvider),
         .init(pluginID: "clipboard-clear", makeProvider: ClipboardClearPluginFactory.makeProvider),
+        .init(pluginID: "clipboard", makeProvider: ClipboardHistoryPluginFactory.makeProvider),
         .init(pluginID: "cloudflare-r2", makeProvider: CloudflareR2PluginFactory.makeProvider),
         .init(pluginID: "disk-clean", makeProvider: DiskCleanPluginFactory.makeProvider),
         .init(pluginID: "display-brightness", makeProvider: DisplayBrightnessPluginFactory.makeProvider),
@@ -314,6 +319,8 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
         .init(pluginID: "launch-control", makeProvider: LaunchControlPluginFactory.makeProvider),
         .init(pluginID: "launchpad", makeProvider: LaunchpadPluginFactory.makeProvider),
         .init(pluginID: "lock-screen", makeProvider: LockScreenPluginFactory.makeProvider),
+        .init(pluginID: "mac-settings", makeProvider: MacSettingsPluginFactory.makeProvider),
+        .init(pluginID: "menu-bar-hidden", makeProvider: MenuBarHiddenPluginFactory.makeProvider),
         .init(pluginID: "microphone-mute", makeProvider: MicrophoneMutePluginFactory.makeProvider),
         .init(pluginID: "middle-click", makeProvider: MiddleClickPluginFactory.makeProvider),
         .init(pluginID: "night-shift", makeProvider: NightShiftPluginFactory.makeProvider),
@@ -323,6 +330,7 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
         .init(pluginID: "sidecar", makeProvider: SidecarPluginFactory.makeProvider),
         .init(pluginID: "stage-manager", makeProvider: StageManagerPluginFactory.makeProvider),
         .init(pluginID: "system-mute", makeProvider: SystemMutePluginFactory.makeProvider),
+        .init(pluginID: "system-power", makeProvider: SystemPowerPluginFactory.makeProvider),
         .init(pluginID: "system-soft-restart", makeProvider: SystemSoftRestartPluginFactory.makeProvider),
         .init(pluginID: "translator", makeProvider: TranslatorPluginFactory.makeProvider),
         .init(pluginID: "window-layouts", makeProvider: WindowLayoutsPluginFactory.makeProvider),

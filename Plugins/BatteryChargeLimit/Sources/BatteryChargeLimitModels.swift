@@ -16,7 +16,7 @@ enum BatteryChargeMode: String, Codable, Equatable {
     /// User explicitly resumed charging. The plugin will auto-transition back
     /// to `.holdAtLimit` once the battery reaches the configured limit.
     case charging
-    /// Force-discharge via CH0I. The plugin will auto-transition back to
+    /// Force-discharge via an SMC adapter-isolation key. The plugin will auto-transition back to
     /// `.holdAtLimit` once the battery falls to (or below) the configured limit.
     case discharging
 }
@@ -37,11 +37,13 @@ struct BatterySMCCapabilities: Equatable {
     var hasCH0BC: Bool
     var hasBCLM: Bool
     var hasCH0I: Bool
+    var hasCHIE: Bool = false
+    var hasCH0J: Bool = false
 
     /// True when we have at least one writable charge-inhibit key family.
     var canInhibit: Bool { hasCHTE || hasCH0BC || hasBCLM }
-    /// True when force-discharge (CH0I) is available on this hardware.
-    var canForceDischarge: Bool { hasCH0I }
+    /// True when any supported adapter-isolation key is available on this hardware.
+    var canForceDischarge: Bool { hasCHIE || hasCH0J || hasCH0I }
     /// True when the only inhibit path is Intel's BCLM (soft ceiling that
     /// auto-resumes once battery drops below limit). The plugin surfaces a
     /// caveat in the UI in this case.

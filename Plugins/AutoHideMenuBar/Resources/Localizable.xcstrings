@@ -1,6 +1,69 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "action.setMode.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Choose when macOS automatically hides the menu bar." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择 macOS 何时自动隐藏菜单栏。" } }
+      }
+    },
+    "action.setMode.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Set Menu Bar Visibility" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "设置菜单栏显示方式" } }
+      }
+    },
+    "error.modeVerificationRestored": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Could not verify the menu bar setting. The original mode was restored." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法验证菜单栏设置，已恢复原来的模式。" } }
+      }
+    },
+    "error.modeVerificationUnrestored": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Could not verify the menu bar setting, and the original mode could not be fully restored." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法验证菜单栏设置，也无法完整恢复原来的模式。" } }
+      }
+    },
+    "mode.always": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Always" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "始终" } }
+      }
+    },
+    "mode.desktopOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "On Desktop Only" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "仅在桌面上" } }
+      }
+    },
+    "mode.fullScreenOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "In Full Screen Only" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "仅在全屏幕显示时" } }
+      }
+    },
+    "mode.never": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Never" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "永不" } }
+      }
+    },
+    "parameter.mode.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Visibility" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "显示方式" } }
+      }
+    },
     "action.hide.title": {
       "extractionState": "manual",
       "localizations": {

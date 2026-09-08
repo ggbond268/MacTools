@@ -55,6 +55,7 @@ const iconByPlugin: Record<string, string> = {
   "keep-awake": "lamp.floor.png",
   "launch-control": "power.png",
   launchpad: "square.grid.3x3.fill.png",
+  "menu-bar-hidden": "menubar.arrow.up.rectangle.png",
   "middle-click": "cursorarrow.click.2.png",
   "mouse-enhancer": "computermouse.png",
   "right-click": "contextualmenu.and.cursorarrow.png",
@@ -778,7 +779,7 @@ void iconByPlugin;
 void settingsModels;
 
 const catalog = await loadPluginCatalog();
-const plugins = catalog.plugins.filter((plugin) => plugin.id !== "menu-bar-hidden").sort((a, b) =>
+const plugins = [...catalog.plugins].sort((a, b) =>
   localizedPluginText(a).zh.displayName.localeCompare(localizedPluginText(b).zh.displayName, "zh-CN")
 );
 const settingsPlugins = plugins.filter(hasPluginSettings);

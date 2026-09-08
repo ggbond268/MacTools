@@ -1,6 +1,7 @@
 ---
 release: plugin
 type: changed
+area: Cloudflare R2 Upload
 ---
 
-Localized every Cloudflare R2 Upload screen, status, and error across all supported app languages.
+Cloudflare R2 Upload now follows the selected app language across setup, uploads, status, and errors.
