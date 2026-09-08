@@ -4,4 +4,4 @@ type: added
 area: Storage Explorer
 ---
 
-Added Storage Explorer with stable scan progress, occupied-space and file-size views, a larger smoothly zoomable treemap, direct multi-item review, reliable change detection, clear folder navigation, refresh caching, and revalidated Trash removal.
+Added Storage Explorer with stable scan progress, logical and occupied sizes, a smoothly zoomable treemap, multi-item review, reliable change detection, clear navigation, refresh caching, and safe Trash removal.
