@@ -4,4 +4,4 @@ type: added
 area: Window Layouts
 ---
 
-Window Layouts now provides a pointer-adjacent HUD with complete instructions confirming when Modifier Drag is armed, active, or cannot find a movable window, with an optional toggle in settings. Busy apps no longer end the drag when an intermediate window-frame update is temporarily unavailable.
+Window Layouts now shows a pointer-adjacent Modifier Drag HUD with clear armed, active, and failure states. Busy apps no longer end a drag when an intermediate frame update is temporarily unavailable.
