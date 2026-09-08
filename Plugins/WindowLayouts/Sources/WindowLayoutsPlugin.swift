@@ -117,10 +117,16 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
             WindowModifierDragSession(
                 hudPresenter: WindowModifierDragHUDController(
                     movePointerTitleProvider: {
-                        localization.string("settings.modifierDrag.hud.movePointer", defaultValue: "Move pointer")
+                        localization.string(
+                            "settings.modifierDrag.hud.movePointer",
+                            defaultValue: "Move the pointer to reposition the window"
+                        )
                     },
                     movingWindowTitleProvider: {
-                        localization.string("settings.modifierDrag.hud.movingWindow", defaultValue: "Moving window")
+                        localization.string(
+                            "settings.modifierDrag.hud.movingWindow",
+                            defaultValue: "Release the keys to finish"
+                        )
                     }
                 ),
                 localizedErrorMessage: { error in

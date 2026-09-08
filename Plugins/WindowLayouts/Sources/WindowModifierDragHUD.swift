@@ -39,6 +39,8 @@ struct WindowModifierDragHUDView: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                 Text(movePointerTitle)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             case let .active(modifiers, _):
                 Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                     .font(.system(size: 12, weight: .semibold))
@@ -46,6 +48,8 @@ struct WindowModifierDragHUDView: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                 Text(movingWindowTitle)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             case let .failure(message, _):
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 12, weight: .semibold))
@@ -55,6 +59,7 @@ struct WindowModifierDragHUDView: View {
                     .lineLimit(1)
             }
         }
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .foregroundStyle(foregroundColor)
@@ -132,8 +137,8 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
         displayFramesProvider: @escaping () -> [CGRect] = {
             NSScreen.screens.map(\.frame)
         },
-        movePointerTitleProvider: @escaping () -> String = { "Move pointer" },
-        movingWindowTitleProvider: @escaping () -> String = { "Moving window" },
+        movePointerTitleProvider: @escaping () -> String = { "Move the pointer to reposition the window" },
+        movingWindowTitleProvider: @escaping () -> String = { "Release the keys to finish" },
         announceAccessibility: @escaping (String) -> Void = { message in
             NSAccessibility.post(
                 element: NSApplication.shared,
@@ -171,9 +176,11 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
         let hosting: NSHostingView<WindowModifierDragHUDView>
         if let existing = hostingView {
             existing.rootView = hudView
+            existing.invalidateIntrinsicContentSize()
             hosting = existing
         } else {
             let newHosting = NSHostingView(rootView: hudView)
+            newHosting.sizingOptions = [.intrinsicContentSize]
             panel.contentView = newHosting
             self.hostingView = newHosting
             hosting = newHosting

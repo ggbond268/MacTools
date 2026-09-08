@@ -612,6 +612,22 @@ final class WindowModifierDragHUDControllerTests: XCTestCase {
         hud.present(.failure(message: "No movable window under pointer", pointer: .zero))
         XCTAssertEqual(announcement, "No movable window under pointer")
     }
+
+    func testHUDResizesWhenActiveInstructionIsWider() throws {
+        let hud = WindowModifierDragHUDController(
+            movePointerTitleProvider: { "Move" },
+            movingWindowTitleProvider: { "Release the modifier keys to finish moving the window" }
+        )
+        defer { hud.dismiss() }
+
+        hud.present(.armed(modifiers: [.control, .option], pointer: .zero))
+        let armedWidth = try XCTUnwrap(hud.presentedPanelForTests).frame.width
+
+        hud.present(.active(modifiers: [.control, .option], pointer: .zero))
+        let activeWidth = try XCTUnwrap(hud.presentedPanelForTests).frame.width
+
+        XCTAssertGreaterThan(activeWidth, armedWidth)
+    }
 }
 
 @MainActor
