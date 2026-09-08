@@ -24,7 +24,6 @@ public final class StorageExplorerController: ObservableObject {
     @Published public private(set) var lastErrorMessage: String?
     @Published public private(set) var lastSuccessMessage: String?
     @Published public private(set) var isExecutingTrash = false
-    @Published public private(set) var isStale = false
     @Published public private(set) var rows: [StorageExplorerRow] = []
     @Published public private(set) var chartRows: [StorageExplorerRow] = []
     @Published public private(set) var matchingCount = 0
@@ -42,7 +41,6 @@ public final class StorageExplorerController: ObservableObject {
     private var sort: StorageExplorerSort = .size
     private var ascending = false
     private var observer: StorageExplorerFileObserver?
-    private var observerGeneration = UUID()
     private let observeChanges: Bool
 
     public init(scanner: any StorageExplorerScanning = StorageExplorerScanner(),
@@ -77,7 +75,6 @@ public final class StorageExplorerController: ObservableObject {
         isConfirmingTrash = false
         lastErrorMessage = nil
         lastSuccessMessage = nil
-        isStale = false
         if force || !sameRoot || (observeChanges && observer == nil) { scanner.clearCache() }
         if !sameRoot {
             observer = nil
@@ -89,7 +86,7 @@ public final class StorageExplorerController: ObservableObject {
             searchQuery = ""
         }
         if observeChanges && observer == nil {
-            installObserver(for: url, scanner: scanner)
+            installObserver(for: url)
         }
         status.progress = StorageExplorerScanProgress(currentPath: url.path)
         scanState = .scanning(status.progress)
@@ -98,7 +95,6 @@ public final class StorageExplorerController: ObservableObject {
                 // Drain events from earlier writes before admitting any cached directory listing.
                 if let observer = self?.observer { await observer.flush() }
                 guard self?.generation == id, !Task.isCancelled else { return }
-                self?.isStale = false
                 let result = try await scanner.scanSnapshot(rootURL: url) { [weak self] update in
                     Task { @MainActor [weak self] in
                         guard let self, self.generation == id, self.isScanning else { return }
@@ -113,9 +109,8 @@ public final class StorageExplorerController: ObservableObject {
                 self.currentPath = preferredPath.flatMap { result.items[$0] == nil ? nil : $0 } ?? result.rootPath
                 // Discard events queued while the non-atomic scan was assembling its result.
                 // A fresh observer makes the completed scan the baseline while preserving
-                // warnings and cache invalidation for every later filesystem change.
-                self.installObserver(for: url, scanner: scanner)
-                self.isStale = false
+                // cache invalidation for every later filesystem change.
+                self.installObserver(for: url)
                 self.scanState = .completed
                 self.rebuildNavigation()
                 self.refreshPresentation()
@@ -130,22 +125,17 @@ public final class StorageExplorerController: ObservableObject {
         }
     }
 
-    private func installObserver(for url: URL, scanner: any StorageExplorerScanning) {
+    private func installObserver(for url: URL) {
         guard observeChanges else { return }
-        observerGeneration = UUID()
-        let observerID = observerGeneration
-        observer = StorageExplorerFileObserver(path: url.path) { [weak self, scanner] paths in
-            if let paths { scanner.invalidate(paths: paths) } else { scanner.clearCache() }
+        observer = StorageExplorerFileObserver(path: url.path) { [weak self] paths in
             MainActor.assumeIsolated {
-                guard let self, self.observerGeneration == observerID else { return }
-                // A scan is not an atomic filesystem snapshot. Treat its completion as
-                // the new baseline instead of warning about normal writes observed while
-                // the scanner is still assembling that baseline.
-                if !self.isScanning {
-                    self.isStale = true
-                }
+                self?.handleObservedChanges(paths)
             }
         }
+    }
+
+    func handleObservedChanges(_ paths: [String]?) {
+        if let paths { scanner.invalidate(paths: paths) } else { scanner.clearCache() }
     }
 
     private func receive(_ update: StorageExplorerScanUpdate) {
@@ -254,7 +244,7 @@ public final class StorageExplorerController: ObservableObject {
     public func confirmTrash() {
         let items = selectedItemsForReview
         guard !items.isEmpty, items.allSatisfy(canStage) else { return }
-        guard !isStale || items.allSatisfy(itemStillMatchesSnapshot) else {
+        guard items.allSatisfy(itemStillMatchesSnapshot) else {
             lastErrorMessage = "所选项目已在磁盘上发生更改。请刷新后重新选择。"
             return
         }
@@ -263,7 +253,7 @@ public final class StorageExplorerController: ObservableObject {
     }
     public func executeTrash() async {
         guard !reviewItems.isEmpty, reviewItems.allSatisfy(canStage) else { isConfirmingTrash = false; return }
-        guard !isStale || reviewItems.allSatisfy(itemStillMatchesSnapshot) else {
+        guard reviewItems.allSatisfy(itemStillMatchesSnapshot) else {
             isConfirmingTrash = false
             lastErrorMessage = "所选项目已在磁盘上发生更改。请刷新后重新选择。"
             return
@@ -281,7 +271,6 @@ public final class StorageExplorerController: ObservableObject {
         } catch {
             isExecutingTrash = false
             isConfirmingTrash = false
-            isStale = true
             scanner.clearCache()
             lastErrorMessage = error.localizedDescription
         }

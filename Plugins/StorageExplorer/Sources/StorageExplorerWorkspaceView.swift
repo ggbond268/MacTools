@@ -57,10 +57,6 @@ public struct StorageExplorerWorkspaceView: View {
                 ContentUnavailableView(text("emptyStateTitle", "选择要分析的文件夹"), systemImage: "internaldrive",
                     description: Text(text("exploreDescription", "查看空间分布、查找大文件，审阅后移至废纸篓。")))
             }
-            if controller.isStale && !controller.isScanning {
-                Label(text("changedOnDisk", "文件已更改。刷新可更新大小；仍可浏览，移至废纸篓前会重新验证所选项目。"), systemImage: "arrow.triangle.2.circlepath")
-                    .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.orange)
-            }
             if let error = controller.lastErrorMessage {
                 Text(error).font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.red).textSelection(.enabled)
             }
@@ -90,8 +86,6 @@ public struct StorageExplorerWorkspaceView: View {
                 emptyLabel: text("noSizedItems", "尚无可显示的大小"),
                 addReviewLabel: text("addToReview", "加入审阅"),
                 removeReviewLabel: text("removeFromReview", "移出审阅"),
-                resetZoomLabel: text("resetZoom", "还原缩放"),
-                zoomHelpLabel: text("zoomHelp", "滚动或捏合以缩放；放大后拖移视图。"),
                 open: { controller.drillDown(to: $0.item) },
                 toggleReview: { controller.toggleSelection(path: $0.item.path) }
             )
