@@ -116,8 +116,11 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         self.makeModifierDragSession = makeModifierDragSession ?? {
             WindowModifierDragSession(
                 hudPresenter: WindowModifierDragHUDController(
-                    moveTitleProvider: {
-                        localization.string("settings.modifierDrag.hud.move", defaultValue: "Move")
+                    movePointerTitleProvider: {
+                        localization.string("settings.modifierDrag.hud.movePointer", defaultValue: "Move pointer")
+                    },
+                    movingWindowTitleProvider: {
+                        localization.string("settings.modifierDrag.hud.movingWindow", defaultValue: "Moving window")
                     }
                 ),
                 localizedErrorMessage: { error in

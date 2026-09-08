@@ -22,7 +22,8 @@ final class WindowModifierDragHUDPanel: NSPanel {
 
 struct WindowModifierDragHUDView: View {
     let state: WindowModifierDragHUDState
-    let moveTitle: String
+    let movePointerTitle: String
+    let movingWindowTitle: String
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,14 +33,18 @@ struct WindowModifierDragHUDView: View {
         HStack(spacing: 6) {
             switch state {
             case let .armed(modifiers, _):
+                Image(systemName: "cursorarrow")
+                    .font(.system(size: 12, weight: .semibold))
                 Text(modifiers.symbolString)
                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                Text(moveTitle)
+                Text(movePointerTitle)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
             case let .active(modifiers, _):
+                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                    .font(.system(size: 12, weight: .semibold))
                 Text(modifiers.symbolString)
                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                Text(moveTitle)
+                Text(movingWindowTitle)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
             case let .failure(message, _):
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -114,7 +119,8 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
 
     private let visibleFramesProvider: () -> [CGRect]
     private let displayFramesProvider: () -> [CGRect]
-    private let moveTitleProvider: () -> String
+    private let movePointerTitleProvider: () -> String
+    private let movingWindowTitleProvider: () -> String
     private let announceAccessibility: (String) -> Void
 
     var presentedPanelForTests: WindowModifierDragHUDPanel? { panel }
@@ -126,7 +132,8 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
         displayFramesProvider: @escaping () -> [CGRect] = {
             NSScreen.screens.map(\.frame)
         },
-        moveTitleProvider: @escaping () -> String = { "Move" },
+        movePointerTitleProvider: @escaping () -> String = { "Move pointer" },
+        movingWindowTitleProvider: @escaping () -> String = { "Moving window" },
         announceAccessibility: @escaping (String) -> Void = { message in
             NSAccessibility.post(
                 element: NSApplication.shared,
@@ -140,7 +147,8 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
     ) {
         self.visibleFramesProvider = visibleFramesProvider
         self.displayFramesProvider = displayFramesProvider
-        self.moveTitleProvider = moveTitleProvider
+        self.movePointerTitleProvider = movePointerTitleProvider
+        self.movingWindowTitleProvider = movingWindowTitleProvider
         self.announceAccessibility = announceAccessibility
     }
 
@@ -154,8 +162,11 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
         let panel = panel ?? makePanel()
         self.panel = panel
 
-        let moveTitle = moveTitleProvider()
-        let hudView = WindowModifierDragHUDView(state: state, moveTitle: moveTitle)
+        let hudView = WindowModifierDragHUDView(
+            state: state,
+            movePointerTitle: movePointerTitleProvider(),
+            movingWindowTitle: movingWindowTitleProvider()
+        )
 
         let hosting: NSHostingView<WindowModifierDragHUDView>
         if let existing = hostingView {
@@ -260,16 +271,16 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
 
         let minY = visibleFrame.minY + 8
         let maxY = visibleFrame.maxY - panelSize.height - 8
-        let belowY = pointerLocation.y - panelSize.height - offset.y
         let aboveY = pointerLocation.y + offset.y
+        let belowY = pointerLocation.y - panelSize.height - offset.y
 
         let preferredY: CGFloat
-        if belowY >= minY {
-            preferredY = belowY
-        } else if aboveY <= maxY {
+        if aboveY <= maxY {
             preferredY = aboveY
-        } else {
+        } else if belowY >= minY {
             preferredY = belowY
+        } else {
+            preferredY = aboveY
         }
 
         let clampedY: CGFloat

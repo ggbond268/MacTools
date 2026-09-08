@@ -563,7 +563,7 @@ final class WindowModifierDragHUDControllerTests: XCTestCase {
             offset: CGPoint(x: 14, y: 12)
         )
         XCTAssertEqual(normalFrame.origin.x, 114)
-        XCTAssertEqual(normalFrame.origin.y, 500 - 28 - 12) // 460
+        XCTAssertEqual(normalFrame.origin.y, 500 + 12) // Prefer above the pointer.
         XCTAssertEqual(normalFrame.size, panelSize)
 
         // 2. Right edge clamp on main screen
@@ -576,16 +576,16 @@ final class WindowModifierDragHUDControllerTests: XCTestCase {
         )
         XCTAssertEqual(rightEdgeFrame.maxX, 1920 - 8)
 
-        // 3. Bottom edge flip on main screen (pointer near bottom)
-        let bottomEdgeFrame = WindowModifierDragHUDController.panelFrame(
-            at: CGPoint(x: 100, y: 10),
+        // 3. Top edge flip on main screen (pointer near top)
+        let topEdgeFrame = WindowModifierDragHUDController.panelFrame(
+            at: CGPoint(x: 100, y: 1045),
             panelSize: panelSize,
             displayFrames: displayFrames,
             visibleFrames: visibleFrames,
             offset: CGPoint(x: 14, y: 12)
         )
-        // belowY = 10 - 28 - 12 = -30 < 0 (minY). So flips to above: 10 + 12 = 22
-        XCTAssertEqual(bottomEdgeFrame.origin.y, 22)
+        // aboveY = 1057 > maxY. Fall back below: 1045 - 28 - 12 = 1005.
+        XCTAssertEqual(topEdgeFrame.origin.y, 1005)
 
         // 4. Secondary display with negative origin
         let secondaryFrame = WindowModifierDragHUDController.panelFrame(
@@ -596,7 +596,7 @@ final class WindowModifierDragHUDControllerTests: XCTestCase {
             offset: CGPoint(x: 14, y: 12)
         )
         XCTAssertEqual(secondaryFrame.origin.x, -500 + 14)
-        XCTAssertEqual(secondaryFrame.origin.y, 460)
+        XCTAssertEqual(secondaryFrame.origin.y, 512)
         XCTAssertTrue(secondaryFrame.minX >= -1920 + 8)
         XCTAssertTrue(secondaryFrame.maxX <= -8)
     }
