@@ -54,4 +54,31 @@ final class StorageExplorerPresentationTests: XCTestCase {
         XCTAssertEqual(result.chart.last?.id, "group:other")
         XCTAssertEqual(result.rows.count, 250)
     }
+
+    func testTreemapViewportKeepsZoomAnchorStable() {
+        let size = CGSize(width: 800, height: 500)
+        let anchor = CGPoint(x: 300, y: 180)
+        var viewport = StorageExplorerTreemapViewport()
+
+        let contentBefore = viewport.contentPoint(for: anchor)
+        viewport.zoom(to: 3, around: anchor, in: size)
+        let contentAfter = viewport.contentPoint(for: anchor)
+
+        XCTAssertEqual(contentAfter.x, contentBefore.x, accuracy: 0.001)
+        XCTAssertEqual(contentAfter.y, contentBefore.y, accuracy: 0.001)
+        XCTAssertEqual(viewport.scale, 3)
+    }
+
+    func testTreemapViewportClampsPanAndReset() {
+        let size = CGSize(width: 800, height: 500)
+        var viewport = StorageExplorerTreemapViewport()
+        viewport.zoom(to: 2, around: CGPoint(x: 400, y: 250), in: size)
+        viewport.pan(by: CGSize(width: 2_000, height: -2_000), in: size)
+
+        XCTAssertEqual(viewport.offset.width, 0)
+        XCTAssertEqual(viewport.offset.height, -500)
+
+        viewport.reset()
+        XCTAssertEqual(viewport, StorageExplorerTreemapViewport())
+    }
 }

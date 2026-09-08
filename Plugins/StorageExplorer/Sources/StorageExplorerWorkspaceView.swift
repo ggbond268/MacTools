@@ -20,41 +20,37 @@ public struct StorageExplorerWorkspaceView: View {
 
     public var body: some View {
         GeometryReader { geometry in
-            if geometry.size.height < 520 {
-                ScrollView { workspace(width: geometry.size.width, height: 520).frame(height: 520) }
-            } else {
-                workspace(width: geometry.size.width, height: geometry.size.height)
-            }
+            workspace(width: geometry.size.width)
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
     }
 
-    private func workspace(width: CGFloat, height: CGFloat) -> some View {
+    private func workspace(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
             controls
             if controller.isScanning {
-                StorageExplorerProgressView(
+                StorageExplorerScanningView(
                     status: controller.status,
-                    scanning: true,
                     metric: controller.metric,
-                    localization: localization
+                    scanningTitle: text("scanning", "正在扫描…"),
+                    filesScannedFormat: text("filesScannedFormat", "已扫描 %d 个项目"),
+                    skippedCountFormat: text("skippedCount", "跳过 %d 项")
                 )
-                scanningState
             } else if controller.rootItem != nil {
                 StorageExplorerProgressView(
                     status: controller.status,
-                    scanning: false,
                     metric: controller.metric,
                     localization: localization
                 )
                 navigation(compact: width < 780)
                 if width >= 780 {
                     HSplitView {
-                        explorer(height: height).frame(minWidth: 400)
+                        explorer.frame(minWidth: 400)
                         inspector.frame(minWidth: 190, idealWidth: 220, maxWidth: 280,
                                         maxHeight: .infinity, alignment: .topLeading)
                     }
                 } else {
-                    explorer(height: height)
+                    explorer
                 }
                 reviewBar
             } else {
@@ -73,6 +69,7 @@ public struct StorageExplorerWorkspaceView: View {
             }
         }
         .padding(PluginSettingsTheme.Spacing.section)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
         .sheet(isPresented: $controller.isConfirmingTrash) { confirmation }
         .onChange(of: sortOrder) { _, order in
             guard let first = order.first else { return }
@@ -83,7 +80,7 @@ public struct StorageExplorerWorkspaceView: View {
         }
     }
 
-    private func explorer(height: CGFloat) -> some View {
+    private var explorer: some View {
         VSplitView {
             StorageExplorerTreemapView(
                 rows: controller.chartRows,
@@ -93,41 +90,27 @@ public struct StorageExplorerWorkspaceView: View {
                 emptyLabel: text("noSizedItems", "尚无可显示的大小"),
                 addReviewLabel: text("addToReview", "加入审阅"),
                 removeReviewLabel: text("removeFromReview", "移出审阅"),
+                resetZoomLabel: text("resetZoom", "还原缩放"),
+                zoomHelpLabel: text("zoomHelp", "滚动或捏合以缩放；放大后拖移视图。"),
                 open: { controller.drillDown(to: $0.item) },
-                navigateUp: controller.navigateUp,
                 toggleReview: { controller.toggleSelection(path: $0.item.path) }
             )
-            .frame(minHeight: 300, idealHeight: max(360, height * 0.58), maxHeight: .infinity)
+            .frame(minHeight: 240, maxHeight: .infinity)
             .layoutPriority(1)
+            .clipped()
 
             VStack(spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-                fileTable.frame(minHeight: 130, idealHeight: 190, maxHeight: 280)
+                fileTable.frame(minHeight: 120)
                 if controller.matchingCount > controller.rows.count {
                     Text(String(format: text("limitedRows", "显示前 %d 项，共 %d 项；搜索可缩小范围。"),
                                 controller.rows.count, controller.matchingCount))
                         .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
                 }
             }
-            .frame(minHeight: 140, idealHeight: 210, maxHeight: 300)
+            .frame(minHeight: 140, maxHeight: 280)
         }
-    }
-
-    private var scanningState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            ProgressView().controlSize(.large)
-            Text(text("scanning", "正在扫描…"))
-                .font(PluginSettingsTheme.Typography.sectionTitle)
-            Text(controller.status.progress.currentPath)
-                .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .frame(maxWidth: 520)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .pluginSettingsCardBackground(.recessed)
+        .frame(minHeight: 400, maxHeight: .infinity)
+        .clipped()
     }
 
     private var controls: some View {
@@ -321,12 +304,10 @@ public struct StorageExplorerWorkspaceView: View {
 
 private struct StorageExplorerProgressView: View {
     @ObservedObject var status: StorageExplorerScanStatus
-    let scanning: Bool
     let metric: StorageExplorerMetric
     let localization: PluginLocalization
     var body: some View {
         HStack(spacing: 16) {
-            if scanning { ProgressView().controlSize(.small) }
             Text(ByteCountFormatter.string(
                 fromByteCount: metric == .logical
                     ? status.progress.bytesScanned
@@ -341,9 +322,49 @@ private struct StorageExplorerProgressView: View {
                       systemImage: "exclamationmark.circle").foregroundStyle(.orange)
             }
             Spacer()
-            if scanning { Text(status.progress.currentPath).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary) }
         }
         .font(PluginSettingsTheme.Typography.rowDescription)
         .padding(12).pluginSettingsCardBackground(.standard)
+    }
+}
+
+private struct StorageExplorerScanningView: View {
+    @ObservedObject var status: StorageExplorerScanStatus
+    let metric: StorageExplorerMetric
+    let scanningTitle: String
+    let filesScannedFormat: String
+    let skippedCountFormat: String
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            ProgressView()
+                .controlSize(.large)
+            Text(scanningTitle)
+                .font(PluginSettingsTheme.Typography.sectionTitle)
+            HStack(spacing: 18) {
+                Text(ByteCountFormatter.string(
+                    fromByteCount: metric == .logical
+                        ? status.progress.bytesScanned
+                        : status.progress.allocatedBytesScanned,
+                    countStyle: .file
+                ))
+                .frame(width: 110, alignment: .trailing)
+                Text(String(format: filesScannedFormat, status.progress.filesScanned))
+                    .frame(width: 170, alignment: .leading)
+                Text(String(format: "%.1f s", status.progress.elapsed))
+                    .frame(width: 64, alignment: .trailing)
+            }
+            .font(PluginSettingsTheme.Typography.rowDescription)
+            .monospacedDigit()
+            if status.progress.skippedCount > 0 {
+                Label(String(format: skippedCountFormat, status.progress.skippedCount),
+                      systemImage: "exclamationmark.circle")
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.orange)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

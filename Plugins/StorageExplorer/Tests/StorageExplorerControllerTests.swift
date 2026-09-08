@@ -49,15 +49,16 @@ final class StorageExplorerControllerTests: XCTestCase {
         XCTAssertTrue(controller.isConfirmingTrash)
     }
 
-    func testPartialResultsCanBeExploredButNotStaged() async throws {
+    func testPartialResultsUpdateProgressWithoutReplacingVisibleSnapshot() async throws {
         let scanner = ControlledStorageScanner()
         let controller = StorageExplorerController(scanner: scanner, observeChanges: false)
         let path = "/tmp/storage-partial"
         controller.startScan(at: URL(fileURLWithPath: path))
         try await waitUntil { scanner.hasRequest(path) }
         scanner.emit(path: path, size: 100)
-        try await waitUntil { controller.rootItem != nil }
+        try await waitUntil { controller.status.progress.bytesScanned == 100 }
         XCTAssertTrue(controller.isScanning)
+        XCTAssertNil(controller.rootItem)
         controller.toggleSelection(path: path)
         XCTAssertTrue(controller.basket.isEmpty)
         controller.cancelScan()
@@ -83,16 +84,21 @@ final class StorageExplorerControllerTests: XCTestCase {
         try await waitUntil { !controller.isScanning }
     }
 
-    func testNavigationDuringProgressSurvivesCompletion() async throws {
+    func testExistingNavigationSurvivesAtomicRefreshCompletion() async throws {
         let scanner = ControlledStorageScanner()
         let controller = StorageExplorerController(scanner: scanner, observeChanges: false)
         let path = "/tmp/storage-navigation"
         let snapshot = Self.fixture(root: path)
         controller.startScan(at: URL(fileURLWithPath: path))
         try await waitUntil { scanner.hasRequest(path) }
-        scanner.emitSnapshot(path: path, snapshot: snapshot)
-        try await waitUntil { controller.rootItem != nil }
+        scanner.finish(path: path, snapshot: snapshot)
+        try await waitUntil { !controller.isScanning }
         controller.drillDown(to: try XCTUnwrap(snapshot.items[path + "/b"]))
+
+        controller.startScan(at: URL(fileURLWithPath: path))
+        try await waitUntil { scanner.hasRequest(path) }
+        scanner.emitSnapshot(path: path, snapshot: snapshot)
+        XCTAssertEqual(controller.currentPath, path + "/b")
         scanner.finish(path: path, snapshot: snapshot)
         try await waitUntil { !controller.isScanning }
         XCTAssertEqual(controller.currentPath, path + "/b")

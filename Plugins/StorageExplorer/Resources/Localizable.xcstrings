@@ -498,6 +498,38 @@
         }
       }
     },
+    "storageExplorer.resetZoom": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إعادة ضبط التكبير" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zoom zurücksetzen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Reset Zoom" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Restablecer zoom" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réinitialiser le zoom" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ズームをリセット" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "확대/축소 재설정" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Redefinir zoom" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Сбросить масштаб" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "还原缩放" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "還原縮放" } }
+      }
+    },
+    "storageExplorer.zoomHelp": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مرّر أو قرّب للتكبير؛ اسحب للتحريك بعد التكبير." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zum Zoomen scrollen oder aufziehen; vergrößerte Ansicht durch Ziehen bewegen." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Scroll or pinch to zoom; drag to pan when zoomed." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Desplázate o pellizca para ampliar; arrastra para moverte al ampliar." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Faites défiler ou pincez pour zoomer, puis faites glisser pour vous déplacer." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "スクロールまたはピンチでズームし、拡大時はドラッグして移動します。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "스크롤하거나 오므려 확대/축소하고, 확대 시 드래그하여 이동합니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Role ou faça o gesto de pinça para ampliar; arraste para mover." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Прокручивайте или сводите пальцы для масштаба; перетаскивайте для перемещения." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "滚动或捏合以缩放；放大后拖移视图。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "捲動或捏合以縮放；放大後拖移視圖。" } }
+      }
+    },
     "storageExplorer.scanning": {
       "extractionState": "manual",
       "localizations": {

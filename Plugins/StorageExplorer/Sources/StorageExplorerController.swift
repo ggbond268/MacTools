@@ -37,7 +37,6 @@ public final class StorageExplorerController: ObservableObject {
     private var activeScanTask: Task<Void, Never>?
     private var presentationTask: Task<Void, Never>?
     private var generation = UUID()
-    private var receivedGeneration: UUID?
     private var presentationRevision = 0
     private var navigationRevision = 0
     private var sort: StorageExplorerSort = .size
@@ -103,8 +102,7 @@ public final class StorageExplorerController: ObservableObject {
                 let result = try await scanner.scanSnapshot(rootURL: url) { [weak self] update in
                     Task { @MainActor [weak self] in
                         guard let self, self.generation == id, self.isScanning else { return }
-                        self.receive(update, replacing: self.receivedGeneration != id)
-                        self.receivedGeneration = id
+                        self.receive(update)
                     }
                 }
                 guard let self, self.generation == id, !Task.isCancelled else { return }
@@ -150,17 +148,11 @@ public final class StorageExplorerController: ObservableObject {
         }
     }
 
-    private func receive(_ update: StorageExplorerScanUpdate, replacing: Bool) {
-        if replacing {
-            let root = update.items.first { $0.parentPath == nil }?.path ?? scanRootURL?.path ?? ""
-            snapshot = StorageExplorerSnapshot(rootPath: root)
-            currentPath = root
-            scanRootURL = URL(fileURLWithPath: root)
-        }
-        snapshot.apply(update.items)
+    private func receive(_ update: StorageExplorerScanUpdate) {
+        // Keep the visible result snapshot atomic. Progressive item updates are useful to the
+        // scanner, but applying and re-presenting them on the main actor makes the workspace
+        // jump while the user is waiting. The completed scan replaces the snapshot once.
         status.progress = update.progress
-        rebuildNavigation()
-        refreshPresentation()
     }
 
     public func cancelScan() {
