@@ -256,6 +256,12 @@ final class WindowModifierDragController {
     func update(generation: UInt64, pointer: CGPoint) {
         guard self.generation == generation else { return }
         pendingPointer = pointer
+        if showsIndicator, isHUDPresented {
+            let state: WindowModifierDragHUDState = window == nil
+                ? .armed(modifiers: requiredModifiers, pointer: pointerLocation())
+                : .active(modifiers: requiredModifiers, pointer: pointerLocation())
+            hudPresenter?.present(state)
+        }
         flush(generation: generation)
     }
 
@@ -288,12 +294,6 @@ final class WindowModifierDragController {
             do {
                 try await frameWriter.setFrame(targetFrame, of: window, resize: false)
                 guard !Task.isCancelled, self.generation == generation else { return }
-                if self.showsIndicator, self.isHUDPresented {
-                    self.hudPresenter?.present(.active(
-                        modifiers: self.requiredModifiers,
-                        pointer: pointer
-                    ))
-                }
                 self.onSuccess()
                 self.writeTask = nil
                 if self.pendingPointer != pointer {

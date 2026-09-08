@@ -425,6 +425,7 @@ final class WindowModifierDragControllerTests: XCTestCase {
         let resolver = StubWindowUnderPointerResolver(window: handle)
         let frameIO = RecordingWindowFrameIO(frame: CGRect(x: 100, y: 100, width: 200, height: 200))
         let hud = SpyWindowModifierDragHUDPresenter()
+        var appKitPointer = CGPoint(x: 55, y: 55)
         let activeExpectation = expectation(description: "HUD active")
         let movedExpectation = expectation(description: "HUD followed pointer")
         var observedInitialPresentation = false
@@ -434,7 +435,7 @@ final class WindowModifierDragControllerTests: XCTestCase {
                 observedInitialPresentation = true
                 activeExpectation.fulfill()
             }
-            if case .present(.active(_, CGPoint(x: 80, y: 90))) = hud.actions.last {
+            if case .present(.active(_, CGPoint(x: 300, y: 400))) = hud.actions.last {
                 movedExpectation.fulfill()
             }
         }
@@ -443,7 +444,7 @@ final class WindowModifierDragControllerTests: XCTestCase {
             frameReader: frameIO,
             frameWriter: frameIO,
             hudPresenter: hud,
-            pointerLocation: { CGPoint(x: 55, y: 55) },
+            pointerLocation: { appKitPointer },
             armDelay: 0.05,
             showsIndicator: true,
             requiredModifiers: [.control, .option]
@@ -452,7 +453,11 @@ final class WindowModifierDragControllerTests: XCTestCase {
         controller.begin(generation: 1, origin: CGPoint(x: 50, y: 50), pointer: CGPoint(x: 55, y: 55))
         await fulfillment(of: [activeExpectation], timeout: 1)
 
-        controller.update(generation: 1, pointer: CGPoint(x: 80, y: 90))
+        appKitPointer = CGPoint(x: 300, y: 400)
+        controller.update(
+            generation: 1,
+            pointer: CGPoint(x: 80, y: 90) // Quartz coordinates drive the window, not the HUD.
+        )
         await fulfillment(of: [movedExpectation], timeout: 1)
         try? await Task.sleep(nanoseconds: 100_000_000)
         XCTAssertFalse(hud.actions.contains(.dismiss))
