@@ -30,6 +30,16 @@ struct PanelLayoutEditor: View {
         surface == .dashboard ? ComponentGridPlacementEngine.placements(for: pluginHost.componentItems) : []
     }
 
+    private var previewIDs: [String] {
+        session.previewIDs(currentIDs: ids)
+    }
+
+    private var previewPlacements: [ComponentGridPlacement] {
+        guard surface == .dashboard else { return [] }
+        let lookup = Dictionary(uniqueKeysWithValues: pluginHost.componentItems.map { ($0.id, $0) })
+        return ComponentGridPlacementEngine.placements(for: previewIDs.compactMap { lookup[$0] })
+    }
+
     var body: some View {
         VStack(spacing: PanelLayoutDestination.footerSpacing) {
             editor
@@ -97,22 +107,26 @@ struct PanelLayoutEditor: View {
     }
 
     private var featureList: some View {
-        VStack(spacing: PanelLayoutDestination.rowSpacing) {
-            ForEach(Array(pluginHost.panelItems.enumerated()), id: \.element.id) { index, item in
-                reorderItem(id: item.id, title: item.title, icon: item.iconName, index: index) {
-                    HStack(spacing: 10) {
-                        Image(systemName: PluginSystemImage.resolvedName(item.iconName))
-                            .foregroundStyle(item.iconTint)
-                            .frame(width: 20)
-                        Text(item.title).font(.body).lineLimit(1)
-                        Spacer(minLength: 64)
+        let lookup = Dictionary(uniqueKeysWithValues: pluginHost.panelItems.map { ($0.id, $0) })
+        return VStack(spacing: PanelLayoutDestination.rowSpacing) {
+            ForEach(Array(previewIDs.enumerated()), id: \.element) { index, id in
+                if let item = lookup[id] {
+                    reorderItem(id: item.id, title: item.title, icon: item.iconName, index: index) {
+                        HStack(spacing: 10) {
+                            Image(systemName: PluginSystemImage.resolvedName(item.iconName))
+                                .foregroundStyle(item.iconTint)
+                                .frame(width: 20)
+                            Text(item.title).font(.body).lineLimit(1)
+                            Spacer(minLength: 64)
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(height: PanelLayoutDestination.rowHeight)
+                        .background(theme.surfaces.card, in: RoundedRectangle(cornerRadius: 10))
                     }
-                    .padding(.horizontal, 12)
-                    .frame(height: PanelLayoutDestination.rowHeight)
-                    .background(theme.surfaces.card, in: RoundedRectangle(cornerRadius: 10))
                 }
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: previewIDs)
         .overlay(alignment: .top) {
             if let destination = session.destination {
                 Rectangle()
@@ -128,8 +142,8 @@ struct PanelLayoutEditor: View {
     private var dashboard: some View {
         let lookup = Dictionary(uniqueKeysWithValues: pluginHost.componentItems.map { ($0.id, $0) })
         return ZStack(alignment: .topLeading) {
-            ForEach(placements) { placement in
-                if let item = lookup[placement.id], let index = ids.firstIndex(of: item.id) {
+            ForEach(previewPlacements) { placement in
+                if let item = lookup[placement.id], let index = previewIDs.firstIndex(of: item.id) {
                     reorderItem(id: item.id, title: item.title, icon: item.iconName, index: index) {
                         pluginHost.componentViewItem(for: item.id, dismiss: onDismiss).content
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,9 +161,9 @@ struct PanelLayoutEditor: View {
                 }
             }
         }
-        // Cards and hit regions remain stationary until the drop commits.
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: previewPlacements)
         .frame(width: ComponentPanelLayout.gridWidth,
-               height: ComponentPanelLayout.gridContentHeight(for: placements), alignment: .topLeading)
+               height: ComponentPanelLayout.gridContentHeight(for: previewPlacements), alignment: .topLeading)
         .overlay(alignment: .topLeading) {
             if let destination = session.destination,
                let marker = PanelLayoutDestination.gridInsertionFrame(
@@ -278,7 +292,8 @@ private struct PanelLayoutReorderItem<Content: View>: View {
             content()
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 .clipped()
-                .opacity(isDragging ? 0.45 : 1)
+                .opacity(isDragging ? 0.32 : 1)
+                .scaleEffect(isDragging ? 0.985 : 1)
                 .accessibilityHidden(true)
             HStack(spacing: 2) {
                 Image(systemName: "line.3.horizontal")
