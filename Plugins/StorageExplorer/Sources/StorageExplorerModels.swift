@@ -119,14 +119,21 @@ public struct StorageItem: Identifiable, Sendable, Equatable {
 public struct StorageExplorerScanProgress: Sendable, Equatable {
     public var filesScanned: Int
     public var bytesScanned: Int64
+    public var allocatedBytesScanned: Int64
     public var currentPath: String
     public var elapsed: TimeInterval = 0
     public var skippedCount: Int = 0
     public var cachedDirectories: Int = 0
 
-    public init(filesScanned: Int = 0, bytesScanned: Int64 = 0, currentPath: String = "") {
+    public init(
+        filesScanned: Int = 0,
+        bytesScanned: Int64 = 0,
+        allocatedBytesScanned: Int64 = 0,
+        currentPath: String = ""
+    ) {
         self.filesScanned = filesScanned
         self.bytesScanned = bytesScanned
+        self.allocatedBytesScanned = allocatedBytesScanned
         self.currentPath = currentPath
     }
 }

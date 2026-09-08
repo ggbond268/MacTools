@@ -32,7 +32,12 @@ public struct StorageExplorerWorkspaceView: View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
             controls
             if controller.rootItem != nil || controller.isScanning {
-                StorageExplorerProgressView(status: controller.status, scanning: controller.isScanning, localization: localization)
+                StorageExplorerProgressView(
+                    status: controller.status,
+                    scanning: controller.isScanning,
+                    metric: controller.metric,
+                    localization: localization
+                )
                 navigation(compact: width < 780)
                 if width >= 780 {
                     HSplitView {
@@ -49,7 +54,7 @@ public struct StorageExplorerWorkspaceView: View {
                     description: Text(text("exploreDescription", "查看空间分布、查找大文件，审阅后移至废纸篓。")))
             }
             if controller.isStale {
-                Label(text("changedOnDisk", "文件已更改，刷新后可继续审阅。"), systemImage: "arrow.triangle.2.circlepath")
+                Label(text("changedOnDisk", "文件已更改。刷新可更新大小；仍可浏览，移至废纸篓前会重新验证所选项目。"), systemImage: "arrow.triangle.2.circlepath")
                     .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.orange)
             }
             if let error = controller.lastErrorMessage {
@@ -72,11 +77,19 @@ public struct StorageExplorerWorkspaceView: View {
 
     private func explorer(height: CGFloat) -> some View {
         VStack(spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            StorageExplorerTreemapView(rows: controller.chartRows, selection: $controller.selectedPath,
-                otherLabel: text("other", "其他"), emptyLabel: text("noSizedItems", "尚无可显示的大小")) { row in
-                controller.drillDown(to: row.item)
-            }
-            .frame(minHeight: 90, idealHeight: min(height * 0.28, 230), maxHeight: min(height * 0.38, 290))
+            StorageExplorerTreemapView(
+                rows: controller.chartRows,
+                selection: $controller.selectedPath,
+                basket: controller.basket,
+                otherLabel: text("other", "其他"),
+                emptyLabel: text("noSizedItems", "尚无可显示的大小"),
+                addReviewLabel: text("addToReview", "加入审阅"),
+                removeReviewLabel: text("removeFromReview", "移出审阅"),
+                open: { controller.drillDown(to: $0.item) },
+                navigateUp: controller.navigateUp,
+                toggleReview: { controller.toggleSelection(path: $0.item.path) }
+            )
+            .frame(minHeight: 180, idealHeight: min(height * 0.38, 340), maxHeight: min(height * 0.5, 440))
             fileTable.frame(minHeight: 110, maxHeight: .infinity)
             if controller.matchingCount > controller.rows.count {
                 Text(String(format: text("limitedRows", "显示前 %d 项，共 %d 项；搜索可缩小范围。"),
@@ -144,6 +157,18 @@ public struct StorageExplorerWorkspaceView: View {
 
     private var fileTable: some View {
         Table(controller.rows, selection: $controller.selectedPath, sortOrder: $sortOrder) {
+            TableColumn("") { row in
+                Button {
+                    controller.toggleSelection(path: row.item.path)
+                } label: {
+                    Image(systemName: controller.basket.contains(row.id) ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(controller.basket.contains(row.id) ? Color.accentColor : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(!controller.canStage(row.item))
+                .help(controller.basket.contains(row.id) ? text("removeFromReview", "移出审阅") : text("addToReview", "加入审阅"))
+            }
+            .width(24)
             TableColumn(text("nameColumn", "名称"), value: \.name) { row in
                 HStack(spacing: 6) {
                     Image(systemName: row.item.iconSystemName).foregroundStyle(.secondary)
@@ -227,7 +252,7 @@ public struct StorageExplorerWorkspaceView: View {
     private var reviewBar: some View {
         HStack {
             Button(text("selectVisible", "选择列表项目")) { controller.selectAllVisible(items: controller.rows.map(\.item)) }
-                .disabled(controller.isScanning || controller.isStale || controller.mode == .fileTypes)
+                .disabled(controller.isScanning || controller.mode == .fileTypes)
             Spacer()
             Text(String(format: text("selectedItemsFormat", "已选 %d 个项目（共 %@）"), controller.basket.count,
                 ByteCountFormatter.string(fromByteCount: controller.totalSelectedBytes, countStyle: .file)))
@@ -235,7 +260,7 @@ public struct StorageExplorerWorkspaceView: View {
             Button(text("clearSelection", "取消选择")) { controller.clearSelection() }.disabled(controller.basket.isEmpty)
             Button(text("review", "审阅…")) { controller.confirmTrash() }
                 .buttonStyle(.borderedProminent)
-                .disabled(controller.basket.isEmpty || controller.isScanning || controller.isStale)
+                .disabled(controller.basket.isEmpty || controller.isScanning)
         }.buttonStyle(.bordered).controlSize(.small)
     }
 
@@ -256,7 +281,7 @@ public struct StorageExplorerWorkspaceView: View {
                 Spacer()
                 Button(text("cancel", "取消"), role: .cancel) { controller.isConfirmingTrash = false }
                 Button(text("moveToTrash", "移至废纸篓…"), role: .destructive) { Task { await controller.executeTrash() } }
-                    .disabled(controller.isStale || controller.isExecutingTrash)
+                    .disabled(controller.isExecutingTrash)
             }
         }.padding(24).frame(width: 540)
             .interactiveDismissDisabled(controller.isExecutingTrash)
@@ -266,11 +291,17 @@ public struct StorageExplorerWorkspaceView: View {
 private struct StorageExplorerProgressView: View {
     @ObservedObject var status: StorageExplorerScanStatus
     let scanning: Bool
+    let metric: StorageExplorerMetric
     let localization: PluginLocalization
     var body: some View {
         HStack(spacing: 16) {
             if scanning { ProgressView().controlSize(.small) }
-            Text(ByteCountFormatter.string(fromByteCount: status.progress.bytesScanned, countStyle: .file))
+            Text(ByteCountFormatter.string(
+                fromByteCount: metric == .logical
+                    ? status.progress.bytesScanned
+                    : status.progress.allocatedBytesScanned,
+                countStyle: .file
+            ))
                 .font(PluginSettingsTheme.Typography.emphasizedRowTitle).monospacedDigit()
             Text(String(format: localization.string("storageExplorer.filesScannedFormat", defaultValue: "已扫描 %d 个项目"), status.progress.filesScanned))
             Text(String(format: "%.1f s", status.progress.elapsed)).monospacedDigit()

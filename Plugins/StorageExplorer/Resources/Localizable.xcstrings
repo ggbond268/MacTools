@@ -1356,67 +1356,67 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "文件已更改，刷新后可继续审阅。"
+            "value": "文件已更改。刷新可更新大小；移至废纸篓前会重新验证所选项目。"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Files have changed. Refresh before reviewing items."
+            "value": "Files changed. Refresh to update sizes; selected items are rechecked before moving to Trash."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "檔案已更改，重新整理後可繼續審閱。"
+            "value": "檔案已更改。重新整理可更新大小；移至垃圾桶前會重新驗證所選項目。"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dateien wurden geändert. Vor der Prüfung aktualisieren."
+            "value": "Dateien wurden geändert. Aktualisieren Sie die Größen; ausgewählte Objekte werden vor dem Papierkorb erneut geprüft."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los archivos han cambiado. Actualiza antes de revisarlos."
+            "value": "Los archivos cambiaron. Actualiza los tamaños; los elementos seleccionados se comprueban antes de moverlos a la Papelera."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les fichiers ont changé. Actualisez avant de les examiner."
+            "value": "Les fichiers ont changé. Actualisez les tailles ; les éléments sélectionnés sont revérifiés avant la Corbeille."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ファイルが変更されました。確認する前に更新してください。"
+            "value": "ファイルが変更されました。更新するとサイズを再取得し、ゴミ箱へ移動する前に選択項目を再確認します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "파일이 변경되었습니다. 검토하기 전에 새로 고치세요."
+            "value": "파일이 변경되었습니다. 새로 고치면 크기가 갱신되며, 휴지통으로 이동하기 전에 선택 항목을 다시 확인합니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os ficheiros foram alterados. Atualize antes de os rever."
+            "value": "Os ficheiros mudaram. Atualize os tamanhos; os itens selecionados são verificados antes de irem para o Lixo."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Файлы изменились. Обновите результаты перед проверкой."
+            "value": "Файлы изменились. Обновите размеры; выбранные объекты будут проверены перед перемещением в Корзину."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تغيّرت الملفات. حدّث النتائج قبل مراجعتها."
+            "value": "تغيّرت الملفات. حدّث الأحجام؛ ستتم إعادة التحقق من العناصر المحددة قبل نقلها إلى سلة المهملات."
           }
         }
       }

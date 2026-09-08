@@ -17,7 +17,7 @@ public final class StorageExplorerController: ObservableObject {
     @Published public private(set) var basket: Set<String> = []
     @Published public var searchQuery = "" { didSet { refreshPresentation() } }
     @Published public var mode: StorageExplorerMode = .folders { didSet { selectedPath = nil; refreshPresentation() } }
-    @Published public var metric: StorageExplorerMetric = .logical { didSet { refreshPresentation() } }
+    @Published public var metric: StorageExplorerMetric = .allocated { didSet { refreshPresentation() } }
     @Published public var selectedPath: String?
     @Published public var isConfirmingTrash = false
     @Published public private(set) var reviewItems: [StorageItem] = []
@@ -223,7 +223,7 @@ public final class StorageExplorerController: ObservableObject {
     }
 
     public func canStage(_ item: StorageItem) -> Bool {
-        !isScanning && !isExecutingTrash && !isStale && !item.isIncomplete
+        !isScanning && !isExecutingTrash && !item.isIncomplete
             && snapshot.items[item.path] != nil
             && safetyPolicy.validatePathForRemoval(item.path, withinRoot: snapshot.rootPath).isAllowed
     }
@@ -247,11 +247,20 @@ public final class StorageExplorerController: ObservableObject {
     public func confirmTrash() {
         let items = selectedItemsForReview
         guard !items.isEmpty, items.allSatisfy(canStage) else { return }
+        guard !isStale || items.allSatisfy(itemStillMatchesSnapshot) else {
+            lastErrorMessage = "所选项目已在磁盘上发生更改。请刷新后重新选择。"
+            return
+        }
         reviewItems = items
         isConfirmingTrash = true
     }
     public func executeTrash() async {
         guard !reviewItems.isEmpty, reviewItems.allSatisfy(canStage) else { isConfirmingTrash = false; return }
+        guard !isStale || reviewItems.allSatisfy(itemStillMatchesSnapshot) else {
+            isConfirmingTrash = false
+            lastErrorMessage = "所选项目已在磁盘上发生更改。请刷新后重新选择。"
+            return
+        }
         let paths = reviewItems.map(\.path)
         let root = snapshot.rootPath
         isExecutingTrash = true
@@ -269,5 +278,26 @@ public final class StorageExplorerController: ObservableObject {
             scanner.clearCache()
             lastErrorMessage = error.localizedDescription
         }
+    }
+
+    private func itemStillMatchesSnapshot(_ item: StorageItem) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: item.path),
+              let type = attributes[.type] as? FileAttributeType
+        else {
+            return false
+        }
+        let isDirectory = type == .typeDirectory
+        guard isDirectory == item.isDirectory else { return false }
+        if !item.isDirectory,
+           let currentSize = (attributes[.size] as? NSNumber)?.int64Value,
+           currentSize != item.size {
+            return false
+        }
+        if let snapshotDate = item.modificationDate,
+           let currentDate = attributes[.modificationDate] as? Date,
+           abs(currentDate.timeIntervalSince(snapshotDate)) > 0.001 {
+            return false
+        }
+        return true
     }
 }

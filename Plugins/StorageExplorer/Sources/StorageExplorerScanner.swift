@@ -228,6 +228,7 @@ private final class ScanWork: @unchecked Sendable {
         addTotals(to: owner, bytes: bytes, allocated: allocated, count: entries.count, skipped: skipped)
         progress.filesScanned += entries.count
         progress.bytesScanned += bytes
+        progress.allocatedBytesScanned += allocated
         progress.skippedCount += skipped
         progress.currentPath = job.path
         progress.cachedDirectories += cached ? 1 : 0

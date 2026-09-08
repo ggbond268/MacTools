@@ -37,11 +37,11 @@ final class StorageExplorerControllerTests: XCTestCase {
         controller.toggleSelection(path: root.path + "/a/one")
         controller.drillDown(to: try XCTUnwrap(snapshot.items[root.path + "/b"]))
         controller.toggleSelection(path: root.path + "/b/two")
-        XCTAssertEqual(controller.totalSelectedBytes, 300)
+        XCTAssertEqual(controller.totalSelectedBytes, 600)
         XCTAssertEqual(controller.selectedItemsForReview.count, 2)
         controller.toggleSelection(path: root.path + "/a")
         XCTAssertFalse(controller.basket.contains(root.path + "/a/one"))
-        XCTAssertEqual(controller.totalSelectedBytes, 300)
+        XCTAssertEqual(controller.totalSelectedBytes, 600)
         controller.toggleSelection(path: root.path + "/a/one")
         XCTAssertEqual(controller.basket.count, 2)
         controller.confirmTrash()
@@ -113,6 +113,65 @@ final class StorageExplorerControllerTests: XCTestCase {
         controller.startScan(at: try XCTUnwrap(controller.scanRootURL))
         try await waitUntil { !controller.isScanning }
         XCTAssertEqual(controller.rootItem?.size, 400)
+    }
+
+    func testAllocatedSpaceIsTheDefaultMetricAndProgressTracksIt() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data(repeating: 1, count: 16_384).write(to: root.appendingPathComponent("payload.bin"))
+        let controller = StorageExplorerController(observeChanges: false)
+
+        controller.startScan(at: root)
+        try await waitUntil { !controller.isScanning }
+
+        XCTAssertEqual(controller.metric, .allocated)
+        XCTAssertGreaterThan(controller.status.progress.allocatedBytesScanned, 0)
+    }
+
+    func testUnrelatedFilesystemChangeDoesNotBlockReviewOfUnchangedSelection() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let selected = root.appendingPathComponent("selected.bin")
+        let unrelated = root.appendingPathComponent("unrelated.bin")
+        try Data(repeating: 1, count: 10).write(to: selected)
+        try Data(repeating: 2, count: 10).write(to: unrelated)
+        let controller = StorageExplorerController()
+        controller.startScan(at: root)
+        try await waitUntil { !controller.isScanning }
+        try await waitUntil { controller.rows.contains(where: { $0.name == selected.lastPathComponent }) }
+        let selectedPath = try XCTUnwrap(controller.rows.first(where: { $0.name == selected.lastPathComponent })?.item.path)
+        controller.toggleSelection(path: selectedPath)
+
+        try Data(repeating: 3, count: 20).write(to: unrelated)
+        try await waitUntil { controller.isStale }
+        controller.confirmTrash()
+
+        XCTAssertTrue(controller.isConfirmingTrash)
+        XCTAssertEqual(controller.reviewItems.map(\.path), [selectedPath])
+    }
+
+    func testChangedSelectedItemMustBeRefreshedBeforeReview() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let selected = root.appendingPathComponent("selected.bin")
+        try Data(repeating: 1, count: 10).write(to: selected)
+        let controller = StorageExplorerController()
+        controller.startScan(at: root)
+        try await waitUntil { !controller.isScanning }
+        try await waitUntil { controller.rows.contains(where: { $0.name == selected.lastPathComponent }) }
+        let selectedPath = try XCTUnwrap(controller.rows.first(where: { $0.name == selected.lastPathComponent })?.item.path)
+        controller.toggleSelection(path: selectedPath)
+
+        try Data(repeating: 2, count: 100).write(to: selected)
+        try await waitUntil { controller.isStale }
+        controller.confirmTrash()
+
+        XCTAssertFalse(controller.isConfirmingTrash)
+        XCTAssertTrue(controller.reviewItems.isEmpty)
+        XCTAssertNotNil(controller.lastErrorMessage)
     }
 
     static func fixture(root: String) -> StorageExplorerSnapshot {
