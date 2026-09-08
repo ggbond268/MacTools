@@ -31,10 +31,18 @@ public struct StorageExplorerWorkspaceView: View {
     private func workspace(width: CGFloat, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
             controls
-            if controller.rootItem != nil || controller.isScanning {
+            if controller.isScanning {
                 StorageExplorerProgressView(
                     status: controller.status,
-                    scanning: controller.isScanning,
+                    scanning: true,
+                    metric: controller.metric,
+                    localization: localization
+                )
+                scanningState
+            } else if controller.rootItem != nil {
+                StorageExplorerProgressView(
+                    status: controller.status,
+                    scanning: false,
                     metric: controller.metric,
                     localization: localization
                 )
@@ -53,7 +61,7 @@ public struct StorageExplorerWorkspaceView: View {
                 ContentUnavailableView(text("emptyStateTitle", "选择要分析的文件夹"), systemImage: "internaldrive",
                     description: Text(text("exploreDescription", "查看空间分布、查找大文件，审阅后移至废纸篓。")))
             }
-            if controller.isStale {
+            if controller.isStale && !controller.isScanning {
                 Label(text("changedOnDisk", "文件已更改。刷新可更新大小；仍可浏览，移至废纸篓前会重新验证所选项目。"), systemImage: "arrow.triangle.2.circlepath")
                     .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.orange)
             }
@@ -76,7 +84,7 @@ public struct StorageExplorerWorkspaceView: View {
     }
 
     private func explorer(height: CGFloat) -> some View {
-        VStack(spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+        VSplitView {
             StorageExplorerTreemapView(
                 rows: controller.chartRows,
                 selection: $controller.selectedPath,
@@ -89,14 +97,37 @@ public struct StorageExplorerWorkspaceView: View {
                 navigateUp: controller.navigateUp,
                 toggleReview: { controller.toggleSelection(path: $0.item.path) }
             )
-            .frame(minHeight: 180, idealHeight: min(height * 0.38, 340), maxHeight: min(height * 0.5, 440))
-            fileTable.frame(minHeight: 110, maxHeight: .infinity)
-            if controller.matchingCount > controller.rows.count {
-                Text(String(format: text("limitedRows", "显示前 %d 项，共 %d 项；搜索可缩小范围。"),
-                            controller.rows.count, controller.matchingCount))
-                    .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
+            .frame(minHeight: 300, idealHeight: max(360, height * 0.58), maxHeight: .infinity)
+            .layoutPriority(1)
+
+            VStack(spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+                fileTable.frame(minHeight: 130, idealHeight: 190, maxHeight: 280)
+                if controller.matchingCount > controller.rows.count {
+                    Text(String(format: text("limitedRows", "显示前 %d 项，共 %d 项；搜索可缩小范围。"),
+                                controller.rows.count, controller.matchingCount))
+                        .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
+                }
             }
+            .frame(minHeight: 140, idealHeight: 210, maxHeight: 300)
         }
+    }
+
+    private var scanningState: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            ProgressView().controlSize(.large)
+            Text(text("scanning", "正在扫描…"))
+                .font(PluginSettingsTheme.Typography.sectionTitle)
+            Text(controller.status.progress.currentPath)
+                .font(PluginSettingsTheme.Typography.rowDescription)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .frame(maxWidth: 520)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .pluginSettingsCardBackground(.recessed)
     }
 
     private var controls: some View {

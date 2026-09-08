@@ -115,6 +115,29 @@ final class StorageExplorerControllerTests: XCTestCase {
         XCTAssertEqual(controller.rootItem?.size, 400)
     }
 
+    func testFilesystemChangesDoNotMarkAnActiveScanStale() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let scanner = ControlledStorageScanner()
+        let controller = StorageExplorerController(scanner: scanner)
+        controller.startScan(at: root)
+        try await waitUntil { scanner.hasRequest(root.path) }
+
+        try Data(repeating: 1, count: 32).write(to: root.appendingPathComponent("during-scan.bin"))
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertTrue(controller.isScanning)
+        XCTAssertFalse(controller.isStale)
+
+        scanner.finish(path: root.path)
+        try await waitUntil { !controller.isScanning }
+        XCTAssertFalse(controller.isStale)
+
+        try Data(repeating: 2, count: 64).write(to: root.appendingPathComponent("after-scan.bin"))
+        try await waitUntil { controller.isStale }
+    }
+
     func testAllocatedSpaceIsTheDefaultMetricAndProgressTracksIt() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -96,7 +96,12 @@ public final class StorageExplorerController: ObservableObject {
                 if let paths { scanner.invalidate(paths: paths) } else { scanner.clearCache() }
                 MainActor.assumeIsolated {
                     guard let self, self.observerGeneration == observerID else { return }
-                    self.isStale = true
+                    // A scan is not an atomic filesystem snapshot. Treat its completion as
+                    // the new baseline instead of warning about normal writes observed while
+                    // the scanner is still assembling that baseline.
+                    if !self.isScanning {
+                        self.isStale = true
+                    }
                 }
             }
         }
@@ -121,6 +126,7 @@ public final class StorageExplorerController: ObservableObject {
                 self.scanRootURL = URL(fileURLWithPath: result.rootPath)
                 let preferredPath = self.navigationRevision == previousNavigationRevision ? previousPath : self.currentPath
                 self.currentPath = preferredPath.flatMap { result.items[$0] == nil ? nil : $0 } ?? result.rootPath
+                self.isStale = false
                 self.scanState = .completed
                 self.rebuildNavigation()
                 self.refreshPresentation()
