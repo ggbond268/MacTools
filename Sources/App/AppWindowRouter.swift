@@ -7,7 +7,6 @@ import MacToolsPluginKit
 enum MacToolsLocalKeyboardCommand: Equatable {
     case showSettings
     case focusSearch
-    case focusPluginSettingsSearch
     case showUnifiedSearch
     case selectNumber(Int)
     case goBack
@@ -31,11 +30,6 @@ enum MacToolsLocalKeyboardCommand: Equatable {
             default:
                 return nil
             }
-        }
-
-        if modifiers == [.command, .shift],
-           event.charactersIgnoringModifiers?.lowercased() == "f" {
-            return .focusPluginSettingsSearch
         }
 
         guard modifiers == .command else {
@@ -96,6 +90,38 @@ enum MacToolsLocalKeyboardCommand: Equatable {
 @MainActor
 final class MacToolsCommandWindow: NSWindow {
     var onLocalKeyboardCommand: ((MacToolsLocalKeyboardCommand) -> Bool)?
+    weak var sidebarListView: NSTableView?
+    var isSidebarInteractionEnabled: () -> Bool = { true }
+
+    override func sendEvent(_ event: NSEvent) {
+        restoreSidebarFocusIfNeeded(for: event)
+        super.sendEvent(event)
+    }
+
+    func restoreSidebarFocusIfNeeded(for event: NSEvent) {
+        guard
+            event.type == .leftMouseDown,
+            isSidebarInteractionEnabled(),
+            let sidebarListView,
+            sidebarListView.window === self,
+            let contentView
+        else {
+            return
+        }
+
+        let location = sidebarListView.convert(event.locationInWindow, from: nil)
+        guard sidebarListView.row(at: location) >= 0 else { return }
+
+        // Hit testing takes a point in the receiver's superview coordinates.
+        let hitLocation = contentView.superview?.convert(event.locationInWindow, from: nil)
+            ?? event.locationInWindow
+        guard let hitView = contentView.hitTest(hitLocation),
+              hitView === sidebarListView || hitView.isDescendant(of: sidebarListView) else {
+            return
+        }
+
+        makeFirstResponder(sidebarListView)
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard
@@ -633,7 +659,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     private func configureSettingsInitialResponder(
-        in window: NSWindow,
+        in window: MacToolsCommandWindow,
         hostingView: NSView
     ) {
         window.layoutIfNeeded()
@@ -658,6 +684,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
 
         if sidebarList?.acceptsFirstResponder == true {
             window.initialFirstResponder = sidebarList
+            window.sidebarListView = sidebarList
         }
     }
 
@@ -717,6 +744,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.onLocalKeyboardCommand = { [weak self] command in
             self?.handleLocalKeyboardCommand(command) ?? false
+        }
+        window.isSidebarInteractionEnabled = { [weak navigationCoordinator] in
+            navigationCoordinator?.isUnifiedSearchPresented == false
         }
         window.center()
         settingsNavigationCoordinator = navigationCoordinator
@@ -878,8 +908,6 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             return true
         case .focusSearch:
             return settingsNavigationCoordinator?.requestSearch() ?? false
-        case .focusPluginSettingsSearch:
-            return settingsNavigationCoordinator?.requestPluginSidebarSearch() ?? false
         case .showUnifiedSearch:
             showUnifiedSearch()
             return true

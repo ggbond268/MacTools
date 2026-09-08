@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 REPO_ROOT="${SCRIPT_DIR:h:h}"
-FIXTURE_DIR="$REPO_ROOT/scripts/fixtures/plugin-kit-v5"
+FIXTURE_DIR="$REPO_ROOT/scripts/fixtures/plugin-kit-v6"
 PRODUCTS_DIR="${1:-$REPO_ROOT/build/DerivedData/Build/Products/Debug}"
 FRAMEWORK_PATH="$PRODUCTS_DIR/MacToolsPluginKit.framework"
 
@@ -12,12 +12,12 @@ FRAMEWORK_PATH="$PRODUCTS_DIR/MacToolsPluginKit.framework"
     exit 1
 }
 
-TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mactools-plugin-kit-v5.XXXXXX")"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mactools-plugin-kit-v6.XXXXXX")"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 TARGET="$(uname -m)-apple-macos14.0"
 MODULE_PATH="$TEMP_DIR/MacToolsPluginKit.swiftmodule"
-CLIENT_PATH="$TEMP_DIR/plugin-kit-v5-client"
+CLIENT_PATH="$TEMP_DIR/plugin-kit-v6-client"
 
 xcrun swiftc \
     -parse-as-library \
@@ -37,4 +37,4 @@ xcrun swiftc \
     -o "$CLIENT_PATH"
 
 DYLD_FRAMEWORK_PATH="$PRODUCTS_DIR" "$CLIENT_PATH"
-print -r -- "PluginKit v5 binary compatibility client passed."
+print -r -- "PluginKit v6 binary compatibility client passed."

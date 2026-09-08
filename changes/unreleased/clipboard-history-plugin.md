@@ -1,7 +1,8 @@
 ---
 release: plugin
 type: added
-area: Productivity
+area: Clipboard
 ---
 
-Added a privacy-first Clipboard workspace with encrypted History, Saved clips, snippets, OCR, rich or plain-text paste, export, sharing, ordered multi-selection, paste queues, app exclusions, and Private Copy.
+- Added Clipboard with encrypted local history, saved clips, reusable snippets, OCR, and rich-text or plain-text paste.
+- Clipboard supports paste queues, app exclusions, Private Copy, and export or sharing of saved items.

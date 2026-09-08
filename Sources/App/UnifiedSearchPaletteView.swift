@@ -78,13 +78,13 @@ enum UnifiedSearchSelectionPolicy {
 
 @MainActor
 final class UnifiedSearchPaletteModel: ObservableObject {
+    @Published private(set) var query = ""
     @Published private(set) var results: [MacToolsSearchResult]
     @Published private(set) var sections: [MacToolsSearchSection]
 
     private let commandContext: AppHostCommandContext
     private let recentStore: CommandPaletteRecentStore
     private var index: MacToolsSearchIndex
-    private var query = ""
     private var stateCancellables: Set<AnyCancellable> = []
     private var rebuildTask: Task<Void, Never>?
 
@@ -120,6 +120,22 @@ final class UnifiedSearchPaletteModel: ObservableObject {
 
         self.query = query
         updateResults()
+    }
+
+    func queryBinding(
+        onChange: @escaping (_ oldQuery: String, _ newQuery: String) -> Void = { _, _ in }
+    ) -> Binding<String> {
+        Binding(
+            get: { [weak self] in
+                self?.query ?? ""
+            },
+            set: { [weak self] newQuery in
+                guard let self, query != newQuery else { return }
+                let oldQuery = query
+                updateQuery(newQuery)
+                onChange(oldQuery, newQuery)
+            }
+        )
     }
 
     func refresh() {
@@ -350,7 +366,6 @@ struct UnifiedSearchPaletteView: View {
     let actions: UnifiedSearchPaletteActions
     @Environment(\.accessibilityReduceTransparency) private var accessibilityReduceTransparency
     @StateObject private var model: UnifiedSearchPaletteModel
-    @State private var query = ""
     @State private var selectedResultID: String?
     @State private var pendingAlert: PendingAlert?
     @State private var executionFeedback: String?
@@ -429,16 +444,6 @@ struct UnifiedSearchPaletteView: View {
             syncSelection()
             handleQuickSelectionRequest(quickSelectionRequest)
         }
-        .onChange(of: query) { oldQuery, newQuery in
-            executionFeedback = nil
-            model.updateQuery(newQuery)
-            syncSelection(
-                resetToFirst: UnifiedSearchSelectionPolicy.shouldResetForQueryChange(
-                    from: oldQuery,
-                    to: newQuery
-                )
-            )
-        }
         .onChange(of: resultIDs) {
             syncSelection()
         }
@@ -501,7 +506,15 @@ struct UnifiedSearchPaletteView: View {
 
     private var searchField: some View {
         PluginPaletteSearchToolbar(
-            text: $query,
+            text: model.queryBinding { oldQuery, newQuery in
+                executionFeedback = nil
+                syncSelection(
+                    resetToFirst: UnifiedSearchSelectionPolicy.shouldResetForQueryChange(
+                        from: oldQuery,
+                        to: newQuery
+                    )
+                )
+            },
             placeholder: AppL10n.search(
                 "search.prompt",
                 defaultValue: "搜索插件、设置和命令"
@@ -541,7 +554,7 @@ struct UnifiedSearchPaletteView: View {
             }
             .accessibilityElement(children: .combine)
 
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 recentActionsMenu
             }
         }
@@ -1244,7 +1257,6 @@ struct UnifiedSearchPaletteView: View {
 
     private func resetTransientState() {
         invalidateExecution()
-        query = ""
         pendingAlert = nil
         executionFeedback = nil
         model.updateQuery("")

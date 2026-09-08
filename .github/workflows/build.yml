@@ -72,8 +72,8 @@ jobs:
       - name: Verify native panel layout interactions
         run: make panel-layout-ui-tests
 
-      - name: Verify PluginKit v5 binary compatibility
-        run: ./scripts/plugins/verify-plugin-kit-v5-binary-compatibility.sh
+      - name: Verify PluginKit v6 binary compatibility
+        run: ./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh
 
       - name: Build and verify unsigned Nightly configuration
         run: |

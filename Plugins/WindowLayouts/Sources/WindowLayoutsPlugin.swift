@@ -1127,6 +1127,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         case .windowUnavailable: localizedKey("error.windowUnavailable", "当前窗口已不可用。")
         case .windowCannotMove: localizedKey("error.windowCannotMove", "此窗口无法移动。")
         case .windowCannotResize: localizedKey("error.windowCannotResize", "此窗口无法调整大小。")
+        case .windowCannotResizeFurther: localizedKey("error.windowCannotResizeFurther", "窗口无法进一步调整大小。")
         case .windowSizeConstrained: localizedKey(
             "error.windowSizeConstrained",
             "此应用限制了窗口可调整到的大小。"
@@ -1204,6 +1205,10 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
             descriptor(.bottomLeftSixth, "左下六分之一", "填充左下六分之一。", "rectangle.split.3x3"),
             descriptor(.bottomCenterSixth, "中下六分之一", "填充中下六分之一。", "rectangle.split.3x3"),
             descriptor(.bottomRightSixth, "右下六分之一", "填充右下六分之一。", "rectangle.split.3x3"),
+            descriptor(.increaseWidth, "增加窗口宽度", "将当前窗口宽度增加 50 点。", "arrow.left.and.line.vertical.and.arrow.right"),
+            descriptor(.decreaseWidth, "减少窗口宽度", "将当前窗口宽度减少 50 点。", "arrow.right.and.line.vertical.and.arrow.left"),
+            descriptor(.increaseHeight, "增加窗口高度", "将当前窗口高度增加 50 点。", "arrow.up.and.line.horizontal.and.arrow.down"),
+            descriptor(.decreaseHeight, "减少窗口高度", "将当前窗口高度减少 50 点。", "arrow.down.and.line.horizontal.and.arrow.up"),
             descriptor(.moveToNextDisplay, "移到下一台显示器", "保留相对位置和大小并移到下一台显示器。", "arrow.right.square"),
             descriptor(.moveToPreviousDisplay, "移到上一台显示器", "保留相对位置和大小并移到上一台显示器。", "arrow.left.square"),
             descriptor(.restorePreviousFrame, "恢复上一个窗口位置", "恢复最近一次保存的位置和大小。", "arrow.uturn.backward.square")

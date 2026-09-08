@@ -669,6 +669,13 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     /// the persistence barrier, but must not dim every control while it commits.
     var isClearingHistory: Bool { itemMutation == .content }
 
+    var isClearingHistoryPublisher: AnyPublisher<Bool, Never> {
+        $itemMutation
+            .map { $0 == .content }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
     private var isMutatingItems: Bool { itemMutation != nil }
 
     var onChange: (() -> Void)?

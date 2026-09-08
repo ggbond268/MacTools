@@ -236,13 +236,15 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
         self.assertIn("if (( PLUGIN_KIT_VERSION < 5 )); then", workflow)
         self.assertIn('case " 1 2 3 4 " in', makefile)
 
-    def test_every_current_plugin_targets_plugin_kit5_and_a_released_host_line(self) -> None:
+    def test_every_current_plugin_targets_plugin_kit6_and_host_1_3(self) -> None:
+        compatibility = (REPO_ROOT / "Sources/MacToolsPluginKit/PluginKitCompatibility.swift").read_text()
+        self.assertIn("currentVersion = 6", compatibility)
         incompatible = []
         for manifest_path in sorted(PLUGINS_ROOT.glob("*/plugin.json")):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             if (
-                manifest["pluginKitVersion"] != 5
-                or version_tuple(manifest["minHostVersion"]) < version_tuple("1.2.0")
+                manifest["pluginKitVersion"] != 6
+                or version_tuple(manifest["minHostVersion"]) < version_tuple("1.3.0")
                 or version_tuple(manifest["minHostVersion"])
                 > version_tuple(declared_app_version())
             ):

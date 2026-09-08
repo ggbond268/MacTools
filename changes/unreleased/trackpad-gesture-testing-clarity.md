@@ -1,7 +1,7 @@
 ---
 release: plugin
 type: changed
-area: Input
+area: Trackpad Gestures
 ---
 
-Trackpad Gestures adds a full-width practice picker, finger roles, persistent recognition feedback, and separate TipTap contact/click status. Qualified TipTap works with unrelated pointer services installed.
+Trackpad Gestures now provides clearer practice feedback, including finger roles and separate TipTap contact and click status.

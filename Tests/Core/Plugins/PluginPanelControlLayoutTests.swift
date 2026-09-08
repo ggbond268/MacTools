@@ -3,9 +3,9 @@ import AppKit
 import MacToolsPluginKit
 import SwiftUI
 
-/// Frozen source-level replica of the PluginKit v5 public value layout used by
-/// previously released plugin binaries. Keep this independent of the production type.
-private struct PluginShortcutRecorderV5Layout {
+/// Frozen source-level replica of the PluginKit v6 public value layout used by
+/// plugins built for MacTools 1.3.0. Keep this independent of the production type.
+private struct PluginShortcutRecorderV6Layout {
     let title: String
     let displayText: String
     let placeholder: String
@@ -17,7 +17,7 @@ private struct PluginShortcutRecorderV5Layout {
     @State private var isHovered = false
 }
 
-private struct PluginSettingsContextV5Layout {
+private struct PluginSettingsContextV6Layout {
     let pluginID: String
     let shortcutItems: [ShortcutSettingsItem]
     let recordShortcutHandler: (String, ShortcutBinding) -> String?
@@ -78,7 +78,7 @@ final class PluginPanelControlLayoutTests: XCTestCase {
         )
     }
 
-    func testShortcutRecorderStoredPropertyLayoutMatchesPluginKitV5ABI() {
+    func testShortcutRecorderStoredPropertyLayoutMatchesPluginKitV6ABI() {
         let recorder = PluginShortcutRecorder(
             title: "Shortcut",
             displayText: "",
@@ -105,19 +105,19 @@ final class PluginPanelControlLayoutTests: XCTestCase {
         )
         XCTAssertEqual(
             MemoryLayout<PluginShortcutRecorder>.size,
-            MemoryLayout<PluginShortcutRecorderV5Layout>.size
+            MemoryLayout<PluginShortcutRecorderV6Layout>.size
         )
         XCTAssertEqual(
             MemoryLayout<PluginShortcutRecorder>.stride,
-            MemoryLayout<PluginShortcutRecorderV5Layout>.stride
+            MemoryLayout<PluginShortcutRecorderV6Layout>.stride
         )
         XCTAssertEqual(
             MemoryLayout<PluginShortcutRecorder>.alignment,
-            MemoryLayout<PluginShortcutRecorderV5Layout>.alignment
+            MemoryLayout<PluginShortcutRecorderV6Layout>.alignment
         )
     }
 
-    func testSettingsContextStoredPropertyLayoutMatchesPluginKitV5ABI() {
+    func testSettingsContextStoredPropertyLayoutMatchesPluginKitV6ABI() {
         let context = PluginSettingsContext(pluginID: "test")
         XCTAssertEqual(
             Mirror(reflecting: context).children.compactMap(\.label),
@@ -132,11 +132,11 @@ final class PluginPanelControlLayoutTests: XCTestCase {
         )
         XCTAssertEqual(
             MemoryLayout<PluginSettingsContext>.size,
-            MemoryLayout<PluginSettingsContextV5Layout>.size
+            MemoryLayout<PluginSettingsContextV6Layout>.size
         )
     }
 
-    func testSettingsContextKeepsV5ShortcutsSeparateFromCanonicalActions() {
+    func testSettingsContextKeepsV6ShortcutsSeparateFromCanonicalActions() {
         let ordinary = ShortcutSettingsItem(
             id: "test.shortcut.open",
             pluginID: "test",
