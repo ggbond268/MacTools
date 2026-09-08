@@ -131,7 +131,6 @@ final class WindowModifierDragController {
     private let pointerLocation: () -> CGPoint
     private let localizedErrorMessage: (WindowLayoutError) -> String
     private let armDelay: TimeInterval
-    private let activeDuration: TimeInterval
     private let failureDuration: TimeInterval
 
     var showsIndicator: Bool
@@ -145,7 +144,6 @@ final class WindowModifierDragController {
     private var resolutionTask: Task<Void, Never>?
     private var writeTask: Task<Void, Never>?
     private var armTask: Task<Void, Never>?
-    private var activeDismissTask: Task<Void, Never>?
     private var failureDismissTask: Task<Void, Never>?
     private var isHUDPresented = false
 
@@ -172,7 +170,6 @@ final class WindowModifierDragController {
             }
         },
         armDelay: TimeInterval = 0.18,
-        activeDuration: TimeInterval = 0.6,
         failureDuration: TimeInterval = 1.2,
         showsIndicator: Bool = true,
         requiredModifiers: ShortcutModifiers = WindowLayoutsStore.defaultModifierDragModifiers
@@ -184,7 +181,6 @@ final class WindowModifierDragController {
         self.pointerLocation = pointerLocation
         self.localizedErrorMessage = localizedErrorMessage
         self.armDelay = armDelay
-        self.activeDuration = activeDuration
         self.failureDuration = failureDuration
         self.showsIndicator = showsIndicator
         self.requiredModifiers = requiredModifiers
@@ -199,7 +195,6 @@ final class WindowModifierDragController {
         pendingPointer = pointer
 
         armTask?.cancel()
-        activeDismissTask?.cancel()
         failureDismissTask?.cancel()
         if isHUDPresented {
             isHUDPresented = false
@@ -225,7 +220,6 @@ final class WindowModifierDragController {
     func begin(generation: UInt64, origin: CGPoint, pointer: CGPoint) {
         armTask?.cancel()
         armTask = nil
-        activeDismissTask?.cancel()
         failureDismissTask?.cancel()
 
         if self.generation != generation {
@@ -248,7 +242,6 @@ final class WindowModifierDragController {
                     self.isHUDPresented = true
                     let location = self.pointerLocation()
                     self.hudPresenter?.present(.active(modifiers: self.requiredModifiers, pointer: location))
-                    self.scheduleActiveDismiss(generation: generation)
                 }
                 self.flush(generation: generation)
             } catch is CancellationError {
@@ -295,6 +288,12 @@ final class WindowModifierDragController {
             do {
                 try await frameWriter.setFrame(targetFrame, of: window, resize: false)
                 guard !Task.isCancelled, self.generation == generation else { return }
+                if self.showsIndicator, self.isHUDPresented {
+                    self.hudPresenter?.present(.active(
+                        modifiers: self.requiredModifiers,
+                        pointer: pointer
+                    ))
+                }
                 self.onSuccess()
                 self.writeTask = nil
                 if self.pendingPointer != pointer {
@@ -321,23 +320,6 @@ final class WindowModifierDragController {
         onFailure(error)
     }
 
-    private func scheduleActiveDismiss(generation: UInt64) {
-        activeDismissTask?.cancel()
-        activeDismissTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await Task.sleep(nanoseconds: UInt64(self.activeDuration * 1_000_000_000))
-                guard !Task.isCancelled, self.generation == generation else { return }
-                if self.isHUDPresented {
-                    self.isHUDPresented = false
-                    self.hudPresenter?.dismiss()
-                }
-            } catch {
-                return
-            }
-        }
-    }
-
     private func scheduleFailureDismiss() {
         failureDismissTask?.cancel()
         failureDismissTask = Task { [weak self] in
@@ -357,7 +339,6 @@ final class WindowModifierDragController {
 
     private func cancelAll(dismissHUD: Bool = true) {
         armTask?.cancel()
-        activeDismissTask?.cancel()
         if dismissHUD {
             failureDismissTask?.cancel()
             failureDismissTask = nil
@@ -369,7 +350,6 @@ final class WindowModifierDragController {
         resolutionTask?.cancel()
         writeTask?.cancel()
         armTask = nil
-        activeDismissTask = nil
         resolutionTask = nil
         writeTask = nil
         generation = nil
@@ -457,7 +437,6 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
         pointerLocation: (() -> CGPoint)? = nil,
         localizedErrorMessage: ((WindowLayoutError) -> String)? = nil,
         armDelay: TimeInterval = 0.18,
-        activeDuration: TimeInterval = 0.6,
         failureDuration: TimeInterval = 1.2
     ) {
         let adapter = frameAdapter ?? AccessibilityWindowFrameAdapter()
@@ -485,7 +464,6 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
                 }
             },
             armDelay: armDelay,
-            activeDuration: activeDuration,
             failureDuration: failureDuration,
             showsIndicator: showsIndicator,
             requiredModifiers: modifiers

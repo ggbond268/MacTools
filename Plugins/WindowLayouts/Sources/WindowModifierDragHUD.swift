@@ -138,7 +138,7 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
             NSScreen.screens.map(\.frame)
         },
         movePointerTitleProvider: @escaping () -> String = { "Move the pointer to reposition the window" },
-        movingWindowTitleProvider: @escaping () -> String = { "Release the keys to finish" },
+        movingWindowTitleProvider: @escaping () -> String = { "Moving window — release the keys to finish" },
         announceAccessibility: @escaping (String) -> Void = { message in
             NSAccessibility.post(
                 element: NSApplication.shared,
@@ -158,6 +158,7 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
     }
 
     func present(_ state: WindowModifierDragHUDState) {
+        let previousState = currentState
         currentState = state
 
         if case let .failure(message, _) = state {
@@ -166,6 +167,22 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
 
         let panel = panel ?? makePanel()
         self.panel = panel
+
+        if let hostingView,
+           Self.hasSameContent(previousState, state) {
+            let targetFrame = Self.panelFrame(
+                at: Self.pointerLocation(from: state),
+                panelSize: panel.frame.size,
+                displayFrames: displayFramesProvider(),
+                visibleFrames: visibleFramesProvider()
+            )
+            panel.setFrameOrigin(targetFrame.origin)
+            if !panel.isVisible {
+                panel.orderFrontRegardless()
+            }
+            hostingView.displayIfNeeded()
+            return
+        }
 
         let hudView = WindowModifierDragHUDView(
             state: state,
@@ -208,6 +225,21 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
         )
         panel.orderFrontRegardless()
         textEditingRestoration?.restore()
+    }
+
+    private static func hasSameContent(
+        _ lhs: WindowModifierDragHUDState?,
+        _ rhs: WindowModifierDragHUDState
+    ) -> Bool {
+        switch (lhs, rhs) {
+        case let (.armed(lhsModifiers, _), .armed(rhsModifiers, _)),
+             let (.active(lhsModifiers, _), .active(rhsModifiers, _)):
+            return lhsModifiers == rhsModifiers
+        case let (.failure(lhsMessage, _), .failure(rhsMessage, _)):
+            return lhsMessage == rhsMessage
+        default:
+            return false
+        }
     }
 
     func dismiss() {

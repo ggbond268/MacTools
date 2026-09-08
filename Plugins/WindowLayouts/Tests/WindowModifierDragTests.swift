@@ -416,7 +416,7 @@ final class WindowModifierDragControllerTests: XCTestCase {
         }))
     }
 
-    func testActiveTransitionPresentsActiveAndSchedulesDismiss() async throws {
+    func testActiveHUDFollowsPointerAndStaysVisibleUntilCancel() async throws {
         let handle = AccessibilityWindowHandle(
             identity: WindowIdentity(processIdentifier: 42, token: "win"),
             canMove: true,
@@ -426,12 +426,16 @@ final class WindowModifierDragControllerTests: XCTestCase {
         let frameIO = RecordingWindowFrameIO(frame: CGRect(x: 100, y: 100, width: 200, height: 200))
         let hud = SpyWindowModifierDragHUDPresenter()
         let activeExpectation = expectation(description: "HUD active")
-        let dismissExpectation = expectation(description: "HUD dismissed")
+        let movedExpectation = expectation(description: "HUD followed pointer")
+        var observedInitialPresentation = false
         hud.onAction = {
-            if case .present(.active) = hud.actions.last {
+            if case .present(.active) = hud.actions.last,
+               !observedInitialPresentation {
+                observedInitialPresentation = true
                 activeExpectation.fulfill()
-            } else if case .dismiss = hud.actions.last {
-                dismissExpectation.fulfill()
+            }
+            if case .present(.active(_, CGPoint(x: 80, y: 90))) = hud.actions.last {
+                movedExpectation.fulfill()
             }
         }
         let controller = WindowModifierDragController(
@@ -441,17 +445,20 @@ final class WindowModifierDragControllerTests: XCTestCase {
             hudPresenter: hud,
             pointerLocation: { CGPoint(x: 55, y: 55) },
             armDelay: 0.05,
-            activeDuration: 0.05,
             showsIndicator: true,
             requiredModifiers: [.control, .option]
         )
 
         controller.begin(generation: 1, origin: CGPoint(x: 50, y: 50), pointer: CGPoint(x: 55, y: 55))
-        await fulfillment(of: [activeExpectation, dismissExpectation], timeout: 1)
-        XCTAssertEqual(hud.actions, [
-            .present(.active(modifiers: [.control, .option], pointer: CGPoint(x: 55, y: 55))),
-            .dismiss
-        ])
+        await fulfillment(of: [activeExpectation], timeout: 1)
+
+        controller.update(generation: 1, pointer: CGPoint(x: 80, y: 90))
+        await fulfillment(of: [movedExpectation], timeout: 1)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(hud.actions.contains(.dismiss))
+
+        controller.cancel(generation: 1)
+        XCTAssertEqual(hud.actions.last, .dismiss)
     }
 
     func testFailsWithHUDWhenWindowCannotBeResolved() async throws {
@@ -627,6 +634,25 @@ final class WindowModifierDragHUDControllerTests: XCTestCase {
         let activeWidth = try XCTUnwrap(hud.presentedPanelForTests).frame.width
 
         XCTAssertGreaterThan(activeWidth, armedWidth)
+    }
+
+    func testActiveHUDRepositionsWithoutChangingItsSize() throws {
+        let displayFrame = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1000, height: 780)
+        let hud = WindowModifierDragHUDController(
+            visibleFramesProvider: { [visibleFrame] },
+            displayFramesProvider: { [displayFrame] }
+        )
+        defer { hud.dismiss() }
+
+        hud.present(.active(modifiers: [.control, .option], pointer: CGPoint(x: 100, y: 100)))
+        let initialFrame = try XCTUnwrap(hud.presentedPanelForTests).frame
+
+        hud.present(.active(modifiers: [.control, .option], pointer: CGPoint(x: 300, y: 250)))
+        let movedFrame = try XCTUnwrap(hud.presentedPanelForTests).frame
+
+        XCTAssertEqual(movedFrame.size, initialFrame.size)
+        XCTAssertNotEqual(movedFrame.origin, initialFrame.origin)
     }
 }
 

@@ -125,7 +125,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
                     movingWindowTitleProvider: {
                         localization.string(
                             "settings.modifierDrag.hud.movingWindow",
-                            defaultValue: "Release the keys to finish"
+                            defaultValue: "Moving window — release the keys to finish"
                         )
                     }
                 ),
