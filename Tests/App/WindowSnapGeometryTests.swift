@@ -312,3 +312,46 @@ final class WindowSnapOverlayControllerTests: XCTestCase {
         XCTAssertFalse(overlay.isVisible)
     }
 }
+
+@MainActor
+final class WindowSnapCoordinatorTests: XCTestCase {
+    func testGuidesRemainUntilPhysicalMouseButtonRelease() async throws {
+        let screen = try XCTUnwrap(NSScreen.screens.first)
+        let window = NSPanel(
+            contentRect: CGRect(x: screen.frame.midX, y: screen.frame.midY, width: 320, height: 240),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        var pressedButtons = 1
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "WindowSnapCoordinatorTests.\(UUID().uuidString)"))
+        let controller = WindowSnapOverlayController()
+        let coordinator = WindowSnapCoordinator(
+            role: .commandPalette,
+            positionStore: WindowPositionStore(userDefaults: defaults),
+            overlayController: controller,
+            pressedMouseButtonsProvider: { pressedButtons },
+            dragReleasePollInterval: .milliseconds(5)
+        )
+        coordinator.attach(to: window)
+        defer {
+            coordinator.finishDragging()
+            controller.hide()
+        }
+
+        coordinator.startDragging()
+        try await Task.sleep(for: .milliseconds(25))
+
+        XCTAssertTrue(coordinator.isDragging)
+        XCTAssertEqual(controller.presentedPanelsForTests.count, 3)
+        XCTAssertTrue(controller.presentedPanelsForTests.allSatisfy(\.isVisible))
+
+        pressedButtons = 0
+        for _ in 0..<20 where coordinator.isDragging {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        XCTAssertFalse(coordinator.isDragging)
+        XCTAssertTrue(controller.presentedPanelsForTests.isEmpty)
+    }
+}

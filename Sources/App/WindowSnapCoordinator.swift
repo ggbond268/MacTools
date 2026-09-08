@@ -12,21 +12,29 @@ final class WindowSnapCoordinator {
     private var isSnappingY = false
     private var lastResult: WindowSnapResult?
     private var moveObserver: (any NSObjectProtocol)?
+    private var dragReleaseTask: Task<Void, Never>?
+    private let pressedMouseButtonsProvider: () -> Int
+    private let dragReleasePollInterval: Duration
 
     init(
         role: WindowRole,
         positionStore: WindowPositionStore = .shared,
-        overlayController: WindowSnapOverlayController = WindowSnapOverlayController()
+        overlayController: WindowSnapOverlayController = WindowSnapOverlayController(),
+        pressedMouseButtonsProvider: @escaping () -> Int = { NSEvent.pressedMouseButtons },
+        dragReleasePollInterval: Duration = .milliseconds(16)
     ) {
         self.role = role
         self.positionStore = positionStore
         self.overlayController = overlayController
+        self.pressedMouseButtonsProvider = pressedMouseButtonsProvider
+        self.dragReleasePollInterval = dragReleasePollInterval
     }
 
     isolated deinit {
         if let moveObserver {
             NotificationCenter.default.removeObserver(moveObserver)
         }
+        dragReleaseTask?.cancel()
     }
 
     func attach(to window: NSWindow) {
@@ -52,6 +60,7 @@ final class WindowSnapCoordinator {
         isSnappingY = false
         lastResult = nil
         updateGuides(for: window)
+        monitorDragRelease()
     }
 
     func handleWindowMoved() {
@@ -62,6 +71,8 @@ final class WindowSnapCoordinator {
     func finishDragging() {
         guard isDragging, let window else { return }
         isDragging = false
+        dragReleaseTask?.cancel()
+        dragReleaseTask = nil
         overlayController.hide()
 
         guard let screen = activeScreen(for: window) else { return }
@@ -122,6 +133,25 @@ final class WindowSnapCoordinator {
             on: screen,
             relativeTo: window
         )
+    }
+
+    private func monitorDragRelease() {
+        dragReleaseTask?.cancel()
+        dragReleaseTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: dragReleasePollInterval)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled, isDragging else { return }
+                if pressedMouseButtonsProvider() & 1 == 0 {
+                    finishDragging()
+                    return
+                }
+            }
+        }
     }
 
     private func activeScreen(for window: NSWindow) -> NSScreen? {

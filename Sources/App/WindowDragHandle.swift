@@ -3,7 +3,6 @@ import SwiftUI
 
 final class WindowDragHandleNSView: NSView {
     var onDragBegan: (() -> Void)?
-    var onDragEnded: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -22,24 +21,20 @@ final class WindowDragHandleNSView: NSView {
         guard let window else { return }
         onDragBegan?()
         window.performDrag(with: event)
-        onDragEnded?()
     }
 }
 
 struct WindowDragHandleView: NSViewRepresentable {
     let onDragBegan: () -> Void
-    let onDragEnded: () -> Void
 
     func makeNSView(context: Context) -> WindowDragHandleNSView {
         let view = WindowDragHandleNSView()
         view.onDragBegan = onDragBegan
-        view.onDragEnded = onDragEnded
         return view
     }
 
     func updateNSView(_ nsView: WindowDragHandleNSView, context: Context) {
         nsView.onDragBegan = onDragBegan
-        nsView.onDragEnded = onDragEnded
     }
 }
 
@@ -52,9 +47,6 @@ struct WindowDragHandleBar: View {
                 WindowDragHandleView(
                     onDragBegan: { [weak coordinator] in
                         coordinator?.startDragging()
-                    },
-                    onDragEnded: { [weak coordinator] in
-                        coordinator?.finishDragging()
                     }
                 )
                 .frame(width: 88, height: 18)
