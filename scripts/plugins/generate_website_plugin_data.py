@@ -132,9 +132,6 @@ def generate(repo_root: Path, output_dir: Path, assets_dir: Path, check: bool) -
     outputs = {
         "plugins.json": {"generatorVersion": GENERATOR_VERSION, "plugins": data["plugins"]},
         "actions.json": {"generatorVersion": GENERATOR_VERSION, "actions": data["actions"]},
-        "search-index.json": {"generatorVersion": GENERATOR_VERSION, "entries": data["search"]},
-        "routes.json": {"generatorVersion": GENERATOR_VERSION, "routes": data["routes"]},
-        "assets.json": {"generatorVersion": GENERATOR_VERSION, "assets": [{k: v for k, v in asset.items() if k != "source"} for asset in data["assets"]]},
     }
     is_current = all(write_or_check(output_dir / name, canonical_json(value), check) for name, value in outputs.items())
     expected_asset_names = {Path(asset["outputPath"]).name for asset in data["assets"]}

@@ -10,4 +10,7 @@ npm run check:generated-plugins
 npm run build
 ```
 
-The generated JSON in `src/generated/` and checksum-named assets in `public/generated/plugin-assets/` are committed. CI rejects stale output.
+The website consumes the committed `src/generated/plugins.json` and
+`src/generated/actions.json` files. Checksum-named assets in
+`public/generated/plugin-assets/` are committed alongside them. CI rejects
+stale output.

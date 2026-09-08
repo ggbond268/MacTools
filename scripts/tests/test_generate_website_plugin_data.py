@@ -74,6 +74,10 @@ class GenerateWebsitePluginDataTests(unittest.TestCase):
 
             self.assertTrue(generate(REPO_ROOT, output, assets, check=False))
             self.assertTrue(generate(REPO_ROOT, output, assets, check=True))
+            self.assertEqual(
+                {path.name for path in output.iterdir()},
+                {"actions.json", "plugins.json"},
+            )
 
             plugins_path = output / "plugins.json"
             plugins = json.loads(plugins_path.read_text(encoding="utf-8"))
