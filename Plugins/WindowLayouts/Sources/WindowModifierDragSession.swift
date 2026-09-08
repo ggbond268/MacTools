@@ -132,6 +132,7 @@ final class WindowModifierDragController {
     private let localizedErrorMessage: (WindowLayoutError) -> String
     private let armDelay: TimeInterval
     private let failureDuration: TimeInterval
+    private let busyRetryDelay: Duration
 
     var showsIndicator: Bool
     var requiredModifiers: ShortcutModifiers
@@ -171,6 +172,7 @@ final class WindowModifierDragController {
         },
         armDelay: TimeInterval = 0.18,
         failureDuration: TimeInterval = 1.2,
+        busyRetryDelay: Duration = .milliseconds(8),
         showsIndicator: Bool = true,
         requiredModifiers: ShortcutModifiers = WindowLayoutsStore.defaultModifierDragModifiers
     ) {
@@ -182,6 +184,7 @@ final class WindowModifierDragController {
         self.localizedErrorMessage = localizedErrorMessage
         self.armDelay = armDelay
         self.failureDuration = failureDuration
+        self.busyRetryDelay = busyRetryDelay
         self.showsIndicator = showsIndicator
         self.requiredModifiers = requiredModifiers
     }
@@ -292,8 +295,19 @@ final class WindowModifierDragController {
         writeTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await frameWriter.setFrame(targetFrame, of: window, resize: false)
+                let wasApplied = try await frameWriter.setFrameInteractively(
+                    targetFrame,
+                    of: window,
+                    resize: false
+                )
                 guard !Task.isCancelled, self.generation == generation else { return }
+                if !wasApplied {
+                    try await Task.sleep(for: self.busyRetryDelay)
+                    guard !Task.isCancelled, self.generation == generation else { return }
+                    self.writeTask = nil
+                    self.flush(generation: generation)
+                    return
+                }
                 self.onSuccess()
                 self.writeTask = nil
                 if self.pendingPointer != pointer {

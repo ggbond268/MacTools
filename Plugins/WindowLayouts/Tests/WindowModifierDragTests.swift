@@ -317,6 +317,37 @@ final class WindowAccessibilityCancellationTests: XCTestCase {
 
 @MainActor
 final class WindowModifierDragControllerTests: XCTestCase {
+    func testRetriesTransientBusyInteractiveWriteWithoutFailingGesture() async throws {
+        let handle = AccessibilityWindowHandle(
+            identity: WindowIdentity(processIdentifier: 42, token: "window-number:7"),
+            windowNumber: 7,
+            canMove: true,
+            canResize: true
+        )
+        let resolver = StubWindowUnderPointerResolver(window: handle)
+        let frameIO = TemporarilyBusyWindowFrameIO(
+            frame: CGRect(x: 100, y: 200, width: 800, height: 600)
+        )
+        let successExpectation = expectation(description: "move eventually succeeded")
+        let controller = WindowModifierDragController(
+            resolver: resolver,
+            frameReader: frameIO,
+            frameWriter: frameIO,
+            busyRetryDelay: .milliseconds(1)
+        )
+        controller.onSuccess = { successExpectation.fulfill() }
+
+        controller.begin(
+            generation: 1,
+            origin: CGPoint(x: 25, y: 40),
+            pointer: CGPoint(x: 35, y: 55)
+        )
+        await fulfillment(of: [successExpectation], timeout: 1)
+
+        XCTAssertEqual(frameIO.interactiveWriteAttempts, 2)
+        XCTAssertEqual(frameIO.appliedFrames, [CGRect(x: 110, y: 215, width: 800, height: 600)])
+    }
+
     func testMovesCapturedWindowByPointerDeltaWithoutResizing() async throws {
         let handle = AccessibilityWindowHandle(
             identity: WindowIdentity(processIdentifier: 42, token: "window-number:7"),
@@ -775,6 +806,44 @@ private final class RecordingWindowFrameIO: WindowFrameReading, WindowFrameWriti
     ) async throws {
         writes.append(Write(frame: frame, window: window, resize: resize))
         onWrite()
+    }
+}
+
+@MainActor
+private final class TemporarilyBusyWindowFrameIO: WindowFrameReading, WindowFrameWriting {
+    let frame: CGRect
+    private(set) var interactiveWriteAttempts = 0
+    private(set) var appliedFrames: [CGRect] = []
+
+    init(frame: CGRect) {
+        self.frame = frame
+    }
+
+    func frame(of window: AccessibilityWindowHandle) async throws -> CGRect {
+        frame
+    }
+
+    func isValid(_ window: AccessibilityWindowHandle) async -> Bool {
+        true
+    }
+
+    func setFrame(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws {
+        appliedFrames.append(frame)
+    }
+
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws -> Bool {
+        interactiveWriteAttempts += 1
+        guard interactiveWriteAttempts > 1 else { return false }
+        appliedFrames.append(frame)
+        return true
     }
 }
 
