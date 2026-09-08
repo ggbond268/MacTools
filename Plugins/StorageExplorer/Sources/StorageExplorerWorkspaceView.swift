@@ -133,15 +133,25 @@ public struct StorageExplorerWorkspaceView: View {
 
     private func navigation(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Array(controller.navigationStack.enumerated()), id: \.element.path) { index, item in
-                        if index > 0 { Image(systemName: "chevron.right").foregroundStyle(.tertiary) }
-                        Button(item.name.isEmpty ? "/" : item.name) { controller.navigateToBreadcrumb(at: index) }
-                            .buttonStyle(.plain)
-                    }
+            HStack(spacing: 8) {
+                Button { controller.navigateUp() } label: {
+                    Label(text("goUp", "返回上一级"), systemImage: "arrow.up")
                 }
-                .font(PluginSettingsTheme.Typography.rowTitle)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(controller.navigationStack.count <= 1)
+                .help(text("goUp", "返回上一级"))
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(controller.navigationStack.enumerated()), id: \.element.path) { index, item in
+                            if index > 0 { Image(systemName: "chevron.right").foregroundStyle(.tertiary) }
+                            Button(item.name.isEmpty ? "/" : item.name) { controller.navigateToBreadcrumb(at: index) }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+                }
             }
             HStack {
                 Picker(text("viewMode", "视图"), selection: $controller.mode) {

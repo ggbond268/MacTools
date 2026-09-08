@@ -214,6 +214,22 @@
         }
       }
     },
+    "storageExplorer.goUp": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مستوى واحد لأعلى" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Eine Ebene nach oben" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Up One Level" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Subir un nivel" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Niveau supérieur" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "1つ上の階層へ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "한 단계 위로" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Subir um nível" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "На уровень выше" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "返回上一级" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "返回上一層" } }
+      }
+    },
     "storageExplorer.homeFolder": {
       "extractionState": "manual",
       "localizations": {

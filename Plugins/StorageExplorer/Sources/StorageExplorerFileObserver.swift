@@ -5,6 +5,12 @@ import Foundation
 // The stream is immutable after initialization. An in-flight flush retains the observer,
 // so teardown cannot race it; callbacks are always delivered on the main queue.
 final class StorageExplorerFileObserver: @unchecked Sendable {
+    enum EventDisposition: Equatable {
+        case ignore
+        case invalidateAll
+        case changedPaths([String])
+    }
+
     private var stream: FSEventStreamRef?
     private let changed: @Sendable ([String]?) -> Void
 
@@ -16,10 +22,17 @@ final class StorageExplorerFileObserver: @unchecked Sendable {
             guard let info else { return }
             let observer = Unmanaged<StorageExplorerFileObserver>.fromOpaque(info).takeUnretainedValue()
             let paths = unsafeBitCast(rawPaths, to: NSArray.self) as? [String] ?? []
-            let resetFlags = UInt32(kFSEventStreamEventFlagMustScanSubDirs | kFSEventStreamEventFlagUserDropped
-                | kFSEventStreamEventFlagKernelDropped | kFSEventStreamEventFlagRootChanged)
-            if (0..<count).contains(where: { flags[$0] & resetFlags != 0 }) { observer.changed(nil) }
-            else { observer.changed(paths) }
+            switch StorageExplorerFileObserver.disposition(
+                paths: paths,
+                flags: Array(UnsafeBufferPointer(start: flags, count: count))
+            ) {
+            case .ignore:
+                break
+            case .invalidateAll:
+                observer.changed(nil)
+            case let .changedPaths(paths):
+                observer.changed(paths)
+            }
         }
         stream = FSEventStreamCreate(nil, callback, &context, [path] as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.3,
@@ -50,5 +63,35 @@ final class StorageExplorerFileObserver: @unchecked Sendable {
             FSEventStreamInvalidate(stream)
             FSEventStreamRelease(stream)
         }
+    }
+
+    static func disposition(paths: [String], flags: [FSEventStreamEventFlags]) -> EventDisposition {
+        let resetFlags = FSEventStreamEventFlags(
+            kFSEventStreamEventFlagMustScanSubDirs
+                | kFSEventStreamEventFlagUserDropped
+                | kFSEventStreamEventFlagKernelDropped
+                | kFSEventStreamEventFlagEventIdsWrapped
+                | kFSEventStreamEventFlagRootChanged
+        )
+        let itemChangeFlags = FSEventStreamEventFlags(
+            kFSEventStreamEventFlagItemCreated
+                | kFSEventStreamEventFlagItemRemoved
+                | kFSEventStreamEventFlagItemInodeMetaMod
+                | kFSEventStreamEventFlagItemRenamed
+                | kFSEventStreamEventFlagItemModified
+                | kFSEventStreamEventFlagItemFinderInfoMod
+                | kFSEventStreamEventFlagItemChangeOwner
+                | kFSEventStreamEventFlagItemXattrMod
+                | kFSEventStreamEventFlagItemCloned
+        )
+
+        if flags.contains(where: { $0 & resetFlags != 0 }) {
+            return .invalidateAll
+        }
+
+        let changedPaths = zip(paths, flags).compactMap { path, flag in
+            flag & itemChangeFlags != 0 ? path : nil
+        }
+        return changedPaths.isEmpty ? .ignore : .changedPaths(changedPaths)
     }
 }
