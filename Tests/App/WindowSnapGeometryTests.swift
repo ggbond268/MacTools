@@ -290,19 +290,25 @@ final class WindowSnapOverlayControllerTests: XCTestCase {
         )
         controller.showGuides([guide], on: screen, relativeTo: relativeWindow)
 
-        let overlay = try XCTUnwrap(controller.presentedPanelForTests)
+        let overlay = try XCTUnwrap(controller.presentedPanelsForTests.first)
         XCTAssertTrue(overlay.isVisible)
         XCTAssertGreaterThan(overlay.windowNumber, 0)
         XCTAssertTrue(overlay.ignoresMouseEvents)
         XCTAssertFalse(overlay.canBecomeKey)
         XCTAssertGreaterThan(overlay.level.rawValue, relativeWindow.level.rawValue)
-        XCTAssertEqual(controller.renderedLayerCountForTests, 2)
+        XCTAssertEqual(controller.presentedPanelsForTests.count, 1)
+        XCTAssertLessThanOrEqual(overlay.frame.width, 6)
+        XCTAssertEqual(overlay.frame.height, screen.frame.height, accuracy: 0.001)
+        XCTAssertEqual(overlay.frame.midX, screen.frame.midX, accuracy: 0.5)
 
         let renderedGuide = try XCTUnwrap(controller.renderedGuidesForTests.first)
         XCTAssertEqual(renderedGuide.id, guide.id)
-        XCTAssertEqual(renderedGuide.start.x, screen.frame.width / 2, accuracy: 0.001)
-        XCTAssertEqual(renderedGuide.start.y, 0, accuracy: 0.001)
-        XCTAssertEqual(renderedGuide.end.x, screen.frame.width / 2, accuracy: 0.001)
-        XCTAssertEqual(renderedGuide.end.y, screen.frame.height, accuracy: 0.001)
+        XCTAssertEqual(renderedGuide.start.x, screen.frame.midX, accuracy: 0.001)
+        XCTAssertEqual(renderedGuide.start.y, screen.frame.minY, accuracy: 0.001)
+        XCTAssertEqual(renderedGuide.end.x, screen.frame.midX, accuracy: 0.001)
+        XCTAssertEqual(renderedGuide.end.y, screen.frame.maxY, accuracy: 0.001)
+
+        controller.hide()
+        XCTAssertFalse(overlay.isVisible)
     }
 }

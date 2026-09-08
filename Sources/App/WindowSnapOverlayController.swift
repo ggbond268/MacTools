@@ -113,42 +113,78 @@ final class WindowSnapOverlayPanel: NSPanel {
 
 @MainActor
 final class WindowSnapOverlayController {
-    private var overlayPanel: WindowSnapOverlayPanel?
-    private var overlayView: WindowSnapOverlayView?
+    private var panelsByGuideID: [String: WindowSnapOverlayPanel] = [:]
+    private(set) var renderedGuidesForTests: [WindowSnapGuide] = []
 
-    var presentedPanelForTests: WindowSnapOverlayPanel? { overlayPanel }
-    var renderedGuidesForTests: [WindowSnapGuide] { overlayView?.renderedGuides ?? [] }
-    var renderedLayerCountForTests: Int { overlayView?.renderedLayerCount ?? 0 }
+    var presentedPanelsForTests: [WindowSnapOverlayPanel] {
+        renderedGuidesForTests.compactMap { panelsByGuideID[$0.id] }
+    }
 
     func showGuides(
         _ guides: [WindowSnapGuide],
         on screen: NSScreen,
         relativeTo window: NSWindow?
     ) {
-        let panel = overlayPanel ?? makeOverlayPanel()
-        overlayPanel = panel
+        renderedGuidesForTests = guides
+        let liveIDs = Set(guides.map(\.id))
 
-        if panel.frame != screen.frame {
-            panel.setFrame(screen.frame, display: false)
+        for id in Array(panelsByGuideID.keys) where !liveIDs.contains(id) {
+            panelsByGuideID[id]?.orderOut(nil)
+            panelsByGuideID[id] = nil
         }
-        overlayView?.frame = panel.contentView?.bounds ?? .zero
-        panel.contentView?.layoutSubtreeIfNeeded()
-        overlayView?.render(guides, screenFrame: screen.frame)
 
-        // Relative ordering below a borderless floating panel is not guaranteed to bring an
-        // unowned auxiliary window on screen. Keep this mouse-transparent, nonactivating overlay
-        // in front for the short drag session so the guides are always visible.
-        let restoration = PluginPresentationSafety.prepareForWindowOrdering(
-            panel,
-            restoringTextEditingIn: window
-        )
-        panel.orderFrontRegardless()
-        restoration?.restore()
+        for guide in guides {
+            let panel = panelsByGuideID[guide.id] ?? makeOverlayPanel()
+            panelsByGuideID[guide.id] = panel
+            let frame = panelFrame(for: guide, on: screen)
+            panel.setFrame(frame, display: true)
+            let overlayView = panel.contentView as? WindowSnapOverlayView
+            overlayView?.frame = panel.contentView?.bounds ?? .zero
+            overlayView?.render([guide], screenFrame: frame)
+
+            // A small dedicated window avoids the compositing and coordinate-space failures
+            // seen with a transparent full-screen overlay during AppKit's tracking loop.
+            let restoration = PluginPresentationSafety.prepareForWindowOrdering(
+                panel,
+                restoringTextEditingIn: window
+            )
+            panel.orderFrontRegardless()
+            restoration?.restore()
+        }
     }
 
     func hide() {
-        overlayPanel?.orderOut(nil)
-        overlayView?.clear()
+        panelsByGuideID.values.forEach {
+            $0.orderOut(nil)
+            ($0.contentView as? WindowSnapOverlayView)?.clear()
+        }
+        renderedGuidesForTests = []
+    }
+
+    private func panelFrame(for guide: WindowSnapGuide, on screen: NSScreen) -> CGRect {
+        let haloThickness: CGFloat = guide.isHighlighted ? 6 : 5
+        let start = guide.start
+        let end = guide.end
+
+        let frame: CGRect
+        switch guide.orientation {
+        case .vertical:
+            frame = CGRect(
+                x: start.x - haloThickness / 2,
+                y: min(start.y, end.y),
+                width: haloThickness,
+                height: max(1, abs(end.y - start.y))
+            )
+        case .horizontal:
+            frame = CGRect(
+                x: min(start.x, end.x),
+                y: start.y - haloThickness / 2,
+                width: max(1, abs(end.x - start.x)),
+                height: haloThickness
+            )
+        }
+
+        return frame.intersection(screen.frame)
     }
 
     private func makeOverlayPanel() -> WindowSnapOverlayPanel {
@@ -170,12 +206,10 @@ final class WindowSnapOverlayController {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
 
         let view = WindowSnapOverlayView(frame: panel.contentView?.bounds ?? .zero)
         panel.contentView = view
-        overlayView = view
-
         return panel
     }
 }
