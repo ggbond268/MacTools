@@ -56,7 +56,8 @@ enum ClipboardBackupArchive {
 
     static func derive(password: String, salt: Data, rounds: UInt32) throws -> SymmetricKey {
         guard (600_000...2_000_000).contains(rounds) else { throw ClipboardBackupError.limitExceeded }
-        let passwordBytes = Array(password.utf8)
+        var passwordBytes = Array(password.utf8)
+        defer { _ = passwordBytes.withUnsafeMutableBytes { $0.initializeMemory(as: UInt8.self, repeating: 0) } }
         guard !passwordBytes.isEmpty else { throw ClipboardBackupError.invalidPassword }
         guard passwordBytes.count <= 1_024 else { throw ClipboardBackupError.passwordTooLong }
         try Task.checkCancellation()
@@ -161,9 +162,10 @@ enum ClipboardBackupArchive {
         let rounds = UInt32(number(header.subdata(in: 12..<16)))
         let wrappingKey = try derive(password: password, salt: header.subdata(in: 16..<48), rounds: rounds)
         let wrapped = try read(handle, count: 60)
-        let keyData: Data
+        var keyData: Data
         do { keyData = try AES.GCM.open(AES.GCM.SealedBox(combined: wrapped), using: wrappingKey, authenticating: header) }
         catch { throw ClipboardBackupError.invalidArchive }
+        defer { keyData.resetBytes(in: keyData.startIndex..<keyData.endIndex) }
         guard keyData.count == 32 else { throw ClipboardBackupError.invalidArchive }
         let key = SymmetricKey(data: keyData)
         let context = Data(SHA256.hash(data: header + wrapped))
@@ -174,11 +176,12 @@ enum ClipboardBackupArchive {
                 let length = number(try read(handle, count: 4))
                 guard length >= 29, length <= min(maximumFrameBytes, maximumItemBytes * 2 + 3 * 1_024 * 1_024) else { throw ClipboardBackupError.limitExceeded }
                 let combined = try read(handle, count: Int(length))
-                let plain: Data
+                var plain: Data
                 do {
                     plain = try AES.GCM.open(AES.GCM.SealedBox(combined: combined), using: key,
                                              authenticating: context + integer(UInt64(sequence)))
                 } catch { throw ClipboardBackupError.invalidArchive }
+                defer { plain.resetBytes(in: plain.startIndex..<plain.endIndex) }
                 switch plain.first {
                 case 1:
                     guard sequence < maximumRecords else { throw ClipboardBackupError.limitExceeded }
