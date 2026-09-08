@@ -286,6 +286,44 @@ final class MacToolsSearchTests: XCTestCase {
         })
     }
 
+    func testModelQueryBindingKeepsCanonicalQueryAndResultsInSync() {
+        let suiteName = "MacToolsSearchQueryBindingTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let model = UnifiedSearchPaletteModel(
+            commandContext: AppHostCommandContext(
+                pluginHost: makePluginHostForTests(plugins: [SearchableTestPlugin()]),
+                launchAtLoginController: LaunchAtLoginController(
+                    service: SearchTestLaunchAtLoginService()
+                ),
+                appearanceUserDefaults: defaults
+            ),
+            recentStore: CommandPaletteRecentStore(userDefaults: defaults)
+        )
+        var transitions: [(String, String)] = []
+        let binding = model.queryBinding { oldQuery, newQuery in
+            transitions.append((oldQuery, newQuery))
+        }
+
+        binding.wrappedValue = "快捷键目标"
+
+        XCTAssertEqual(model.query, "快捷键目标")
+        XCTAssertEqual(model.sections.map(\.kind), [.results])
+        XCTAssertEqual(model.results.map(\.title), ["快捷键目标"])
+        XCTAssertEqual(transitions.count, 1)
+        XCTAssertEqual(transitions.first?.0, "")
+        XCTAssertEqual(transitions.first?.1, "快捷键目标")
+
+        binding.wrappedValue = "快捷键目标"
+        XCTAssertEqual(transitions.count, 1)
+
+        binding.wrappedValue = ""
+        XCTAssertEqual(model.query, "")
+        XCTAssertFalse(model.sections.contains { $0.kind == .results })
+        XCTAssertEqual(transitions.count, 2)
+    }
+
     func testModelAutomaticallyRebuildsAfterLaunchAtLoginChanges() async {
         let suiteName = "MacToolsSearchLaunchModelTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

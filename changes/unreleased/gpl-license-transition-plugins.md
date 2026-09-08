@@ -1,7 +1,7 @@
 ---
 release: plugin
 type: changed
-area: Packaging
+area: Licensing
 ---
 
-Official plugin release archives now declare GPL-3.0-only and include the applicable license and third-party notices.
+Official plugin archives now declare GPL-3.0-only and include their license and applicable third-party notices.

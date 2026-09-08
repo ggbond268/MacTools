@@ -4,4 +4,4 @@ type: fixed
 area: System Status
 ---
 
-Fixed battery temperature and time-remaining reporting, reduced power-profiler work, and made interactive charts faster with instant range switching, clearer time labels, and complete selected timelines.
+Corrected System Status battery temperature, time estimates, and chart statistics, with faster charts and stable pinned readings.

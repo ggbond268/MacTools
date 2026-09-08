@@ -4,4 +4,4 @@ type: added
 area: Preferences
 ---
 
-Added automatic local preference backups with deduplication, safety snapshots, readable filenames, bounded storage, detailed status, separate controls, and triggers limited to saved portable-setting changes.
+Added automatic local backups of portable app and plugin settings, with storage limits, backup status, and a safety snapshot before imports.

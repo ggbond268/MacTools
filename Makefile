@@ -101,7 +101,7 @@ ci: generate
 		CODE_SIGN_IDENTITY= \
 		test \
 		-quiet
-	@./scripts/plugins/verify-plugin-kit-v5-binary-compatibility.sh
+	@./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh
 
 sync-debug-plugins: build
 	@if [ -n "$(PLUGIN)" ]; then \

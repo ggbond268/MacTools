@@ -700,15 +700,179 @@ final class WindowLayoutServiceTests: XCTestCase {
         XCTAssertTrue(fullScreenWriter.values.isEmpty)
     }
 
+    func testIncrementalResizeExecutesAndUpdatesFrameSequentially() async {
+        let window = makeWindow()
+        let initialFrame = CGRect(x: 300, y: 200, width: 400, height: 300)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: initialFrame)
+        let history = InMemoryWindowFrameHistory()
+        let service = makeService(window: window, frameAdapter: frameAdapter, history: history)
+
+        assertSuccess(await service.execute(.increaseWidth, options: options()))
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 275, y: 200, width: 450, height: 300)
+        )
+
+        assertSuccess(await service.execute(.increaseHeight, options: options()))
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 275, y: 175, width: 450, height: 350)
+        )
+
+        assertSuccess(await service.execute(.decreaseWidth, options: options()))
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 300, y: 175, width: 400, height: 350)
+        )
+
+        assertSuccess(await service.execute(.decreaseHeight, options: options()))
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 300, y: 200, width: 400, height: 300)
+        )
+    }
+
+    func testIncrementalResizeRestorePreviousFrameReversesLatestChange() async {
+        let window = makeWindow()
+        let initialFrame = CGRect(x: 300, y: 200, width: 400, height: 300)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: initialFrame)
+        let history = InMemoryWindowFrameHistory()
+        let service = makeService(window: window, frameAdapter: frameAdapter, history: history)
+
+        assertSuccess(await service.execute(.increaseWidth, options: options()))
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 275, y: 200, width: 450, height: 300)
+        )
+
+        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
+        XCTAssertEqual(frameAdapter.frames[window.identity], initialFrame)
+
+        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 275, y: 200, width: 450, height: 300)
+        )
+    }
+
+    func testIncrementalResizeReportsAtLimitFailure() async {
+        let window = makeWindow()
+        let fullWidthFrame = CGRect(x: 0, y: 24, width: 1440, height: 400)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: fullWidthFrame)
+        let service = makeService(window: window, frameAdapter: frameAdapter)
+
+        let validationError = await service.validationError(for: .increaseWidth, options: options())
+        XCTAssertEqual(validationError, .windowCannotResizeFurther)
+
+        assertFailure(
+            await service.execute(.increaseWidth, options: options()),
+            equals: .windowCannotResizeFurther
+        )
+        XCTAssertEqual(frameAdapter.frames[window.identity], fullWidthFrame)
+
+        frameAdapter.frames[window.identity] = CGRect(x: 200, y: 200, width: 100, height: 400)
+        let shrinkValidationError = await service.validationError(for: .decreaseWidth, options: options())
+        XCTAssertEqual(shrinkValidationError, .windowCannotResizeFurther)
+
+        assertFailure(
+            await service.execute(.decreaseWidth, options: options()),
+            equals: .windowCannotResizeFurther
+        )
+    }
+
+    func testIncrementalResizeNonResizableWindowFailsWithCannotResize() async {
+        let window = makeWindow(canResize: false)
+        let frame = CGRect(x: 300, y: 200, width: 400, height: 300)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: frame)
+        let service = makeService(window: window, frameAdapter: frameAdapter)
+
+        let validationError = await service.validationError(for: .increaseWidth, options: options())
+        XCTAssertEqual(validationError, .windowCannotResize)
+
+        assertFailure(
+            await service.execute(.increaseWidth, options: options()),
+            equals: .windowCannotResize
+        )
+    }
+
+    func testIncrementalResizeNonMovableWindowFailsWithCannotMove() async {
+        let window = makeWindow(canMove: false)
+        let frame = CGRect(x: 300, y: 200, width: 400, height: 300)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: frame)
+        let service = makeService(window: window, frameAdapter: frameAdapter)
+
+        let validationError = await service.validationError(for: .increaseWidth, options: options())
+        XCTAssertEqual(validationError, .windowCannotMove)
+
+        assertFailure(
+            await service.execute(.increaseWidth, options: options()),
+            equals: .windowCannotMove
+        )
+    }
+
+    func testIncrementalResizeAppConstrainedSizeFailsWithSizeConstrained() async {
+        let window = makeWindow()
+        let frame = CGRect(x: 300, y: 200, width: 400, height: 300)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: frame, appliesWrites: false)
+        let service = makeService(window: window, frameAdapter: frameAdapter)
+
+        assertFailure(
+            await service.execute(.increaseWidth, options: options()),
+            equals: .windowSizeConstrained
+        )
+    }
+
+    func testIncrementalResizeRespectsStageManagerSafeArea() async {
+        let window = makeWindow()
+        let frameAdapter = MockWindowFrameAdapter(
+            window: window,
+            frame: CGRect(x: 150, y: 200, width: 400, height: 300)
+        )
+        let stageManagerSafeFrame = CGRect(x: 150, y: 24, width: 1290, height: 876)
+        let service = makeService(
+            window: window,
+            frameAdapter: frameAdapter,
+            stageManagerSafeAreaProvider: FixedStageManagerSafeAreaProvider(safeFrame: stageManagerSafeFrame)
+        )
+
+        assertSuccess(await service.execute(.increaseWidth, options: options(respectsStageManager: true)))
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 150, y: 200, width: 450, height: 300)
+        )
+    }
+
+    func testIncrementalResizeSequentialCallsQueueAndPreserveIntermediateChanges() async {
+        let window = makeWindow()
+        let initialFrame = CGRect(x: 300, y: 200, width: 400, height: 300)
+        let frameAdapter = MockWindowFrameAdapter(window: window, frame: initialFrame)
+        let service = makeService(window: window, frameAdapter: frameAdapter)
+
+        async let first = service.execute(.increaseWidth, options: options())
+        async let second = service.execute(.increaseWidth, options: options())
+        async let third = service.execute(.increaseWidth, options: options())
+
+        let results = await [first, second, third]
+        for result in results {
+            assertSuccess(result)
+        }
+
+        XCTAssertEqual(
+            frameAdapter.frames[window.identity],
+            CGRect(x: 225, y: 200, width: 550, height: 300)
+        )
+    }
+
     private func makeWindow(
         token: String = "window",
         windowNumber: UInt32? = nil,
-        canResize: Bool = true
+        canResize: Bool = true,
+        canMove: Bool = true
     ) -> AccessibilityWindowHandle {
         AccessibilityWindowHandle(
             identity: WindowIdentity(processIdentifier: 42, token: token),
             windowNumber: windowNumber,
-            canMove: true,
+            canMove: canMove,
             canResize: canResize
         )
     }

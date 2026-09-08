@@ -251,7 +251,11 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
             queue.async { [self] in
                 beforeFrameProcessing?()
                 guard isCurrent(deliveryToken) else { return }
-                let result = engine.process(frame, suppressRecognition: suppressRecognition)
+                let result = engine.process(
+                    frame,
+                    suppressRecognition: suppressRecognition,
+                    contactEpisodeID: contactEpisodeID
+                )
                 guard isCurrent(deliveryToken) else { return }
                 if let testingSnapshotRelay,
                    let testingToken = testingSnapshotRelay.currentToken() {
@@ -272,6 +276,7 @@ final class TrackpadGestureRecognitionWorker: @unchecked Sendable {
                 result.recognized.forEach {
                     let evidence = tipTapRecognitionIDs[$0]
                         .map(TrackpadGestureRecognitionEvidence.tipTapEpisode)
+                        ?? result.recognitionEvidence[$0]
                         ?? contactEpisodeID.map(TrackpadGestureRecognitionEvidence.contactEpisode)
                     onRecognized(
                         $0,

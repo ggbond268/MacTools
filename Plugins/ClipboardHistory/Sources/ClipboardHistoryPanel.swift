@@ -1165,14 +1165,17 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         historyController: ClipboardHistoryController,
         savedLibraryController: ClipboardSavedLibraryController
     ) {
-        let status = RuntimeStatus(
+        updateRuntimeStatus(RuntimeStatus(
             historyErrorMessage: historyController.errorMessage,
             isHistoryLoaded: historyController.isLoaded,
             isClearingHistory: historyController.isClearingHistory,
             savedErrorMessage: savedLibraryController.errorMessage,
             savedFatalErrorMessage: savedLibraryController.fatalErrorMessage,
             isSavedLibraryLoaded: savedLibraryController.isLoaded
-        )
+        ))
+    }
+
+    func updateRuntimeStatus(_ status: RuntimeStatus) {
         if runtimeStatus != status { runtimeStatus = status }
     }
 
@@ -2084,6 +2087,29 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         savedLibraryController.itemUpdates.sink { [weak self] update in
             self?.model.updateSavedItems(update.items, revision: update.revision)
         }.store(in: &itemSubscriptions)
+        let historyStatus = Publishers.CombineLatest3(
+            historyController.$errorMessage,
+            historyController.$isLoaded,
+            historyController.isClearingHistoryPublisher
+        )
+        let savedStatus = Publishers.CombineLatest3(
+            savedLibraryController.$errorMessage,
+            savedLibraryController.$fatalErrorMessage,
+            savedLibraryController.$isLoaded
+        )
+        historyStatus
+            .combineLatest(savedStatus)
+            .sink { [weak self] history, saved in
+                self?.model.updateRuntimeStatus(.init(
+                    historyErrorMessage: history.0,
+                    isHistoryLoaded: history.1,
+                    isClearingHistory: history.2,
+                    savedErrorMessage: saved.0,
+                    savedFatalErrorMessage: saved.1,
+                    isSavedLibraryLoaded: saved.2
+                ))
+            }
+            .store(in: &itemSubscriptions)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(applicationDidResignActive),
@@ -2158,6 +2184,10 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         let panel = panel ?? makePanel()
         self.panel = panel
         model.activatePreviewPresentation()
+        model.updateRuntimeStatus(
+            historyController: historyController,
+            savedLibraryController: savedLibraryController
+        )
         previousApplicationState.beginPresentation(
             frontmostApplication: NSWorkspace.shared.frontmostApplication,
             isExternal: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
@@ -3680,34 +3710,12 @@ private struct ClipboardHistoryPanelView: View {
             .allowsHitTesting(false)
         }
         .onAppear {
-            model.updateRuntimeStatus(
-                historyController: controller,
-                savedLibraryController: savedLibraryController
-            )
             model.updateItems(controller.items, revision: controller.presentationRevision)
             model.updateSavedItems(
                 savedLibraryController.items,
                 revision: savedLibraryController.presentationRevision
             )
             repairSelection()
-        }
-        .onReceive(controller.objectWillChange) { _ in
-            Task { @MainActor in
-                await Task.yield()
-                model.updateRuntimeStatus(
-                    historyController: controller,
-                    savedLibraryController: savedLibraryController
-                )
-            }
-        }
-        .onReceive(savedLibraryController.objectWillChange) { _ in
-            Task { @MainActor in
-                await Task.yield()
-                model.updateRuntimeStatus(
-                    historyController: controller,
-                    savedLibraryController: savedLibraryController
-                )
-            }
         }
         .onChange(of: model.selectionLimitReachedRevision) { _, _ in
             let message = localization.format(

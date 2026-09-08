@@ -103,14 +103,14 @@ final class PluginPackageManifestTests: XCTestCase {
         let expectations = [
             (
                 path: "Plugins/MouseEnhancer/plugin.json",
-                minimum: "1.2.0",
-                compatibleHost: "1.2.0",
-                incompatibleHost: "1.1.6" as String?
+                minimum: "1.3.0",
+                compatibleHost: "1.3.0",
+                incompatibleHost: "1.2.0" as String?
             ),
             (
                 path: "Plugins/TrackpadGestures/plugin.json",
-                minimum: "1.2.1",
-                compatibleHost: "1.2.1",
+                minimum: "1.3.0",
+                compatibleHost: "1.3.0",
                 incompatibleHost: "1.2.0"
             ),
         ]

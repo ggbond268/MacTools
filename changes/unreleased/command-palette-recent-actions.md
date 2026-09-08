@@ -1,6 +1,7 @@
 ---
 release: app
 type: changed
+area: Search
 ---
 
-Command Palette now reliably focuses search, keeps one clear selection, ranks typed results by relevance, and shows privacy-safe recent successful actions before suggested destinations when opened without a query.
+Command Palette now shows recent successful actions when search is empty and ranks typed results by relevance.

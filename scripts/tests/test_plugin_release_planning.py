@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -23,6 +25,55 @@ RELEASE_SPEC.loader.exec_module(release)
 
 
 class InteractiveReleasePlanningTests(unittest.TestCase):
+    def test_plugin_kit6_migration_leaves_package_bumps_to_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Plugins"
+            for plugin_id, version in (("existing", "1.0.0"), ("bumped", "1.1.0"), ("new", "1.0.0")):
+                plugin = source / plugin_id
+                plugin.mkdir(parents=True)
+                (plugin / "plugin.json").write_text(json.dumps({
+                    "id": plugin_id, "displayName": plugin_id, "version": version,
+                    "pluginKitVersion": 6, "minHostVersion": "1.3.0",
+                }))
+            baseline = root / "docs/plugins/v5/catalog.json"
+            baseline.parent.mkdir(parents=True)
+            baseline.write_text(json.dumps({
+                "pluginKitVersion": 5,
+                "plugins": [{"id": plugin_id, "version": "1.0.0", "pluginKitVersion": 5}
+                            for plugin_id in ("existing", "bumped")],
+            }))
+            before = {path: path.read_bytes() for path in source.glob("*/plugin.json")}
+            args = mock.Mock(
+                plugin_mode="auto", plugin=[], version="1.3.0", level="minor",
+                remote="origin", branch="main", dry_run=True, skip_check=False, yes=True,
+            )
+            with (
+                mock.patch.object(release, "ROOT_DIR", root),
+                mock.patch.object(release, "PLUGIN_SOURCE_DIR", source),
+                mock.patch.object(release, "latest_tag_version", return_value="1.2.0"),
+                mock.patch.object(release, "check_tag_available"),
+                mock.patch.object(release, "confirm"),
+                mock.patch.object(release, "sync_branch_after_confirm"),
+                mock.patch.object(release, "validate_changelog"),
+                mock.patch.object(release, "changelog_status_label", return_value="pending"),
+                mock.patch.object(release, "run_plugin_generate_check"),
+                mock.patch.object(release, "run_plugin_plan_check") as plan,
+                mock.patch.object(release, "prepare_changelog", return_value=[]),
+                mock.patch.object(release, "commit_if_needed"),
+                mock.patch.object(release, "push_branch_and_tag"),
+                mock.patch.object(release, "write_plugin_versions", wraps=release.write_plugin_versions) as bump,
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(release.previous_plugin_catalog_path(), baseline)
+                self.assertEqual(release.plugin_catalog_path(6), root / "docs/plugins/v6/catalog.json")
+                release.release_plugin(args)
+                plan.assert_called_once_with("all", [], False, True)
+                self.assertEqual([plugin.id for plugin in bump.call_args.args[0]], ["existing"])
+                self.assertEqual(bump.call_count, 1)
+                self.assertEqual(set(release.analyze_plugins("all", []).selected_ids), {"existing", "bumped", "new"})
+            self.assertEqual({path: path.read_bytes() for path in before}, before)
+
     def test_plugin_kit4_release_uses_versioned_catalog_path(self) -> None:
         self.assertEqual(
             release.plugin_catalog_path(4),

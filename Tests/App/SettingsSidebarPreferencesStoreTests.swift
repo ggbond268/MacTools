@@ -222,10 +222,6 @@ final class SettingsSidebarPreferencesStoreTests: XCTestCase {
         let keys = [
             "settings.sidebar.customizeSection",
             "settings.sidebar.shortcutAccessibilityHint",
-            "settings.sidebar.pluginSearch.prompt",
-            "settings.sidebar.pluginSearch.noResults",
-            "settings.sidebar.pluginSearch.clear",
-            "settings.sidebar.pluginSearch.resultCountFormat",
             "settings.sidebar.section.collapseFormat",
             "settings.sidebar.section.expandFormat",
             "settings.sidebar.pluginSortHelp",

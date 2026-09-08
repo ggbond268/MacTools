@@ -203,7 +203,8 @@ VALID_NETWORK_USE = {"none", "optional", "required"}
 VALID_TELEMETRY = {"none", "optional", "required"}
 VALID_RETENTION = {"none", "session", "until-disabled", "until-uninstalled", "user-controlled"}
 VALID_SETTINGS_CAPABILITIES = {"none", "form", "workspace"}
-CURRENT_SOURCE_PLUGIN_KIT_VERSION = 5
+# This is the metadata-format floor, not the current host ABI version.
+PRODUCT_METADATA_REQUIRED_PLUGIN_KIT_VERSION = 5
 MAX_ASSET_BYTES = 10 * 1024 * 1024
 MAX_ASSET_DIMENSION = 7680
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -352,7 +353,7 @@ def validate_runtime_envelope(
     is_sparse_legacy = (
         allow_sparse_legacy
         and type(plugin_kit_version) is int
-        and plugin_kit_version < CURRENT_SOURCE_PLUGIN_KIT_VERSION
+        and plugin_kit_version < PRODUCT_METADATA_REQUIRED_PLUGIN_KIT_VERSION
     )
     required = {
         "id",

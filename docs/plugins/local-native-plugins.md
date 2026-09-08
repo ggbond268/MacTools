@@ -26,7 +26,7 @@ Example.mactoolsplugin/
 
 `plugin.json` is read before loading executable code:
 
-Set `minHostVersion` to the first host that exports every PluginKit API used by the package. In PluginKit v5, `PluginDashboardPresenting`, `PluginComponentDetailPresenting`, and `PluginComponentDetailContent` require MacTools 1.2.1. System Status declares this floor so 1.2.0 hosts cannot install a package with unavailable symbols.
+PluginKit v6 first ships in MacTools 1.3.0. Every v6 package must declare `minHostVersion` of at least `1.3.0`; raise it again when using APIs introduced in a later host. Older ABI packages remain discoverable for updates but cannot load into the v6 host.
 
 ```json
 {
@@ -44,8 +44,8 @@ Set `minHostVersion` to the first host that exports every PluginKit API used by 
     }
   },
   "version": "1.0.0",
-  "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "minHostVersion": "1.3.0",
+  "pluginKitVersion": 6,
   "bundleRelativePath": "Example.bundle",
   "factoryClass": "Example.ExamplePluginFactory",
   "capabilities": {
@@ -140,7 +140,7 @@ When a change touches `Sources/MacToolsPluginKit/`, it is package-relevant for e
 
 ## Settings UI
 
-Plugin settings are hosted by MacTools. PluginKit 5 exposes one `settingsPage` entry point with two explicit layouts:
+Plugin settings are hosted by MacTools. PluginKit 6 exposes one `settingsPage` entry point with two explicit layouts:
 
 - `PluginSettingsPage.form` is the default. Describe standard controls with `PluginSettingsSection`, `PluginSettingsRow`, and `PluginSettingsControl`; the host renders the native grouped form, search entries, validation, permissions, and shortcuts.
 - Reserve segmented pickers for a few short labels; use `.menu` when options are longer or localization can make the row overflow. Declarative sliders should provide `valueFormat` for a live host-rendered readout. Custom settings use `PluginSettingsSlider` to keep stepped values without drawing dense tick marks.

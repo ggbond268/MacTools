@@ -4,4 +4,4 @@ type: fixed
 area: Window Switcher
 ---
 
-Window Switcher keyboard navigation now skips shortcut hints and focuses application windows directly.
+Window Switcher now includes eligible windows from all macOS Spaces, keeps each window separately selectable, and focuses windows directly during keyboard navigation.

@@ -1,7 +1,8 @@
 ---
 release: plugin
 type: added
-area: Productivity
+area: Window Layouts
 ---
 
-Added focused-window placement with grids, gaps, cycling, display movement, previewed custom commands with direct shortcuts, shortcut presets, and Run Links while leaving edge snapping to macOS.
+- Added Window Layouts with grid placement, adjustable gaps, layout cycling, incremental width and height controls, display movement, custom layouts, shortcut presets, and Run Links.
+- Window Layouts can move compatible windows beneath the pointer while a chosen modifier combination is held, without clicking or changing focus.

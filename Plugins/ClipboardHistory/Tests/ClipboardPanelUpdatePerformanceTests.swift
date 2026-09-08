@@ -4,6 +4,22 @@ import XCTest
 
 @MainActor
 final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
+    func testRuntimeStatusCanLeaveLoadingWithoutPanelAppearance() {
+        let model = ClipboardHistoryPanelModel()
+
+        model.updateRuntimeStatus(.init(
+            historyErrorMessage: nil,
+            isHistoryLoaded: true,
+            isClearingHistory: false,
+            savedErrorMessage: nil,
+            savedFatalErrorMessage: nil,
+            isSavedLibraryLoaded: true
+        ))
+
+        XCTAssertTrue(model.runtimeStatus.isHistoryLoaded)
+        XCTAssertTrue(model.runtimeStatus.isSavedLibraryLoaded)
+    }
+
     func testUsageAndBookmarkPatchVisibleRowWithoutSearchOrSelectionChanges() async {
         var items = makeItems(80)
         let model = ClipboardHistoryPanelModel()

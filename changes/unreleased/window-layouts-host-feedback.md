@@ -1,9 +1,7 @@
 ---
 release: app
 type: changed
-area: Productivity
+area: Windows
 ---
 
-Window actions now preserve the intended frontmost window across transient MacTools command surfaces and can show brief headless-action feedback without stealing focus.
-
-Headless Window Layouts failures remain visible even when their custom action was removed during execution.
+Window actions keep their intended target when opened from MacTools command surfaces and report failures without stealing focus.

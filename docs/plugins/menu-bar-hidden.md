@@ -1,6 +1,6 @@
 # Hide Menu Bar Icons
 
-`Plugins/MenuBarHidden/` restores the `menu-bar-hidden` plugin for PluginKit v5 under `GPL-3.0-only`. It hides menu-bar items to the left of a divider and provides visible, hidden, and always-hidden layout areas. The component panel can show captured hidden icons and forward clicks to their original menu-bar items.
+`Plugins/MenuBarHidden/` restores the `menu-bar-hidden` plugin for PluginKit v6 under `GPL-3.0-only`. It hides menu-bar items to the left of a divider and provides visible, hidden, and always-hidden layout areas. The component panel can show captured hidden icons and forward clicks to their original menu-bar items.
 
 The basic hiding switch works without Accessibility or Screen Recording permission. Dragging items and using captured icons require both permissions; the settings page explains missing grants. Icon captures remain in memory. The plugin stores its preferences and item layout locally and makes no network requests.
 

@@ -1,8 +1,12 @@
 import SwiftUI
 
-// Frozen client-facing declaration from plugins-1.2.0. This module is compiled
-// without an implementation and linked against the current framework so the
-// smoke test exercises the real cross-module value ABI.
+public enum PluginKitCompatibility {
+    public static let currentVersion = 6
+}
+
+// Frozen client-facing declarations for the PluginKit v6 / MacTools 1.3.0 ABI.
+// Compile only this module interface, then link the client against the real
+// framework. Keep this fixture independent of subsequent production changes.
 public enum ShortcutScope {
     case global
     case whilePluginActive
@@ -66,9 +70,10 @@ public enum PluginPermissionKind {
     case calendarFullAccess
     case automation
     case screenRecording
+    case finderExtension
 }
 
-public enum PluginStatusTone {
+public enum PluginStatusTone: Equatable, Sendable {
     case neutral
     case positive
     case caution
@@ -174,5 +179,161 @@ public struct PluginShortcutRecorder: View {
 
     public var body: some View {
         fatalError("The compatibility client must link this getter from the current framework")
+    }
+}
+
+public struct PluginSettingsRow: Identifiable {
+    public let id: String
+    public let title: String
+    public let description: String?
+    public let systemImage: String?
+    public let keywords: [String]
+    public let help: String?
+    public let helpItems: [String]
+    public let helpTone: PluginStatusTone
+    public let error: String?
+    public let isEnabled: Bool
+    public let isVisible: Bool
+    public let control: PluginSettingsControl
+
+    public init(
+        id: String,
+        title: String,
+        description: String? = nil,
+        systemImage: String? = nil,
+        keywords: [String] = [],
+        help: String? = nil,
+        helpItems: [String] = [],
+        helpTone: PluginStatusTone = .neutral,
+        error: String? = nil,
+        isEnabled: Bool = true,
+        isVisible: Bool = true,
+        control: PluginSettingsControl
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.systemImage = systemImage
+        self.keywords = keywords
+        self.help = help
+        self.helpItems = helpItems
+        self.helpTone = helpTone
+        self.error = error
+        self.isEnabled = isEnabled
+        self.isVisible = isVisible
+        self.control = control
+    }
+}
+
+public enum PluginSettingsControl {
+    case toggle(isOn: Bool)
+    case picker(
+        selectionID: String,
+        options: [PluginSettingsOption],
+        style: PluginSettingsPickerStyle
+    )
+    case choiceGroup(selectionID: String, options: [PluginSettingsOption])
+    case slider(
+        value: Double,
+        range: ClosedRange<Double>,
+        step: Double?,
+        valueFormat: PluginSettingsSliderValueFormat?
+    )
+    case textField(value: String, prompt: String?, isRequired: Bool)
+    case secureField(value: String, prompt: String?, isRequired: Bool)
+    case action(title: String, role: PluginSettingsActionRole)
+    case confirmationAction(
+        title: String,
+        role: PluginSettingsActionRole,
+        confirmation: PluginSettingsConfirmation
+    )
+    case status(
+        text: String,
+        systemImage: String,
+        tone: PluginStatusTone,
+        actionTitle: String?
+    )
+}
+
+public struct PluginSettingsOption: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let title: String
+    public let description: String?
+    public let descriptionTone: PluginStatusTone
+
+    public init(
+        id: String,
+        title: String,
+        description: String? = nil,
+        descriptionTone: PluginStatusTone = .neutral
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.descriptionTone = descriptionTone
+    }
+}
+
+public enum PluginSettingsPickerStyle: Sendable {
+    case automatic
+    case menu
+    case segmented
+}
+
+/// Describes a slider readout without freezing it to the page snapshot's value.
+/// The host formats its local interaction value so labels stay live while a
+/// plugin defers persistence and page rebuilding until the drag is committed.
+public struct PluginSettingsSliderValueFormat: Equatable, Sendable {
+    public static let percentage = PluginSettingsSliderValueFormat(suffix: "%")
+
+    public let prefix: String
+    public let suffix: String
+    public let fractionDigits: Int
+
+    public init(
+        prefix: String = "",
+        suffix: String = "",
+        fractionDigits: Int = 0
+    ) {
+        self.prefix = prefix
+        self.suffix = suffix
+        self.fractionDigits = fractionDigits
+    }
+
+    public func text(
+        for value: Double,
+        locale: Locale = .current
+    ) -> String {
+        let number = value.formatted(
+            .number
+                .locale(locale)
+                .precision(.fractionLength(fractionDigits))
+        )
+        return "\(prefix)\(number)\(suffix)"
+    }
+}
+
+public enum PluginSettingsActionRole: Equatable, Sendable {
+    case normal
+    case prominent
+    case destructive
+}
+
+public struct PluginSettingsConfirmation: Equatable, Sendable {
+    public let title: String
+    public let message: String
+    public let confirmButtonTitle: String
+    public let cancelButtonTitle: String
+
+    public init(
+        title: String,
+        message: String,
+        confirmButtonTitle: String,
+        cancelButtonTitle: String
+    ) {
+        self.title = title
+        self.message = message
+        self.confirmButtonTitle = confirmButtonTitle
+        self.cancelButtonTitle = cancelButtonTitle
     }
 }

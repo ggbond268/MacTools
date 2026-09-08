@@ -1,7 +1,8 @@
 ---
 release: plugin
 type: fixed
-area: Input
+area: Trackpad Gestures
 ---
 
-Trackpad Gestures now keeps click mappings working with idle external or virtual pointers, consumes native clicks behind tap actions, and handles double-tap middle clicks without leaking either original tap.
+- Trackpad Gestures now recognizes staggered multi-finger taps and repeated TipTaps more reliably, including with idle external or virtual pointers.
+- Fixed duplicate or leaked native clicks during trackpad tap actions, and restored normal dragging and recognition after failed gestures.
