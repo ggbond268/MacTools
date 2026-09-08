@@ -7,7 +7,7 @@ public enum StorageExplorerMetric: String, CaseIterable, Sendable {
 }
 public enum StorageExplorerSort: String, Sendable { case name, size, kind, modified }
 
-public struct StorageExplorerRow: Identifiable, Sendable {
+public struct StorageExplorerRow: Identifiable, Sendable, Equatable {
     public var id: String { item.path }
     public let item: StorageItem
     public let name: String
@@ -99,7 +99,7 @@ struct StorageExplorerPresentation: Sendable {
 
 /// A balanced area partition bounds layout work and preserves exact proportions without tiny view trees.
 struct StorageExplorerTreemapLayout {
-    struct Tile: Identifiable {
+    struct Tile: Identifiable, Equatable {
         let row: StorageExplorerRow
         let rect: CGRect
         var id: String { row.id }

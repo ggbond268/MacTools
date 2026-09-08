@@ -18,43 +18,27 @@ struct StorageExplorerTreemapView: View {
     var body: some View {
         GeometryReader { geometry in
             let layoutKey = StorageExplorerTreemapLayoutKey(rows: rows, size: geometry.size)
-            Canvas { context, _ in
-                for tile in tiles {
-                    let rect = tile.rect.insetBy(dx: 1, dy: 1)
-                    guard rect.width > 0, rect.height > 0 else { continue }
-                    let path = Path(roundedRect: rect, cornerRadius: 4)
-                    context.fill(path, with: .color(color(tile.row).opacity(0.88)))
-                    if selection == tile.id {
-                        context.stroke(path, with: .color(.primary), lineWidth: 3)
-                    }
-                    if basket.contains(tile.id) {
-                        context.stroke(path, with: .color(Color.accentColor), lineWidth: 4)
-                        if rect.width > 28 && rect.height > 28 {
-                            context.draw(
-                                Text(Image(systemName: "checkmark.circle.fill"))
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.white),
-                                at: CGPoint(x: rect.maxX - 14, y: rect.minY + 14)
-                            )
-                        }
-                    }
-                    if rect.width > 65 && rect.height > 35 {
-                        let name = tile.id == "group:other" ? otherLabel : tile.row.name
-                        let label = Text(name).font(.system(.caption, weight: .semibold)).foregroundStyle(.white)
-                        var resolved = context.resolve(label)
-                        resolved.shading = .color(.white)
-                        context.draw(resolved, in: CGRect(x: rect.minX + 8, y: rect.minY + 6, width: rect.width - 16, height: 18))
-                        if rect.height > 55 {
-                            context.draw(Text(tile.row.sizeLabel).font(.caption2).foregroundStyle(.white),
-                                in: CGRect(x: rect.minX + 8, y: rect.minY + 26, width: rect.width - 16, height: 16))
-                        }
-                    }
-                }
-            }
+            StorageExplorerTreemapCanvas(
+                tiles: tiles,
+                basket: basket,
+                otherLabel: otherLabel
+            )
+            .equatable()
             // The adjacent native table exposes the same rows with full accessibility actions.
             .accessibilityHidden(true)
             .overlay {
                 if tiles.isEmpty { Text(emptyLabel).foregroundStyle(.secondary) }
+            }
+            .overlay {
+                if let tile = selectedTile {
+                    let rect = tile.rect.insetBy(dx: 1.5, dy: 1.5)
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.primary, lineWidth: 3)
+                        .frame(width: max(0, rect.width), height: max(0, rect.height))
+                        .position(x: rect.midX, y: rect.midY)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
             }
             .overlay {
                 if let tile = hoveredTile {
@@ -64,8 +48,10 @@ struct StorageExplorerTreemapView: View {
                         .frame(width: max(0, rect.width), height: max(0, rect.height))
                         .position(x: rect.midX, y: rect.midY)
                         .allowsHitTesting(false)
+                        .transition(.opacity)
                 }
             }
+            .animation(.easeInOut(duration: 0.14), value: selection)
             .overlay(alignment: .topTrailing) {
                 if let row = hoveredTile?.row {
                     VStack(alignment: .leading, spacing: 3) {
@@ -80,8 +66,10 @@ struct StorageExplorerTreemapView: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                     .padding(8)
                     .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topTrailing)))
                 }
             }
+            .animation(.easeOut(duration: 0.1), value: interaction.hoveredID)
             .onContinuousHover { phase in
                 switch phase {
                 case .active(let point):
@@ -120,6 +108,11 @@ struct StorageExplorerTreemapView: View {
         return tiles.first { $0.id == hoveredID }
     }
 
+    private var selectedTile: StorageExplorerTreemapLayout.Tile? {
+        guard let selection else { return nil }
+        return tiles.first { $0.id == selection }
+    }
+
     private func tile(at point: CGPoint) -> StorageExplorerTreemapLayout.Tile? {
         tiles.first { $0.rect.contains(point) }
     }
@@ -130,6 +123,63 @@ struct StorageExplorerTreemapView: View {
             in: CGRect(origin: .zero, size: size)
         )
         interaction.clearHover()
+    }
+
+}
+
+private struct StorageExplorerTreemapCanvas: View, Equatable {
+    let tiles: [StorageExplorerTreemapLayout.Tile]
+    let basket: Set<String>
+    let otherLabel: String
+
+    var body: some View {
+        Canvas { context, _ in
+            for tile in tiles {
+                let rect = tile.rect.insetBy(dx: 1, dy: 1)
+                guard rect.width > 0, rect.height > 0 else { continue }
+                let path = Path(roundedRect: rect, cornerRadius: 4)
+                context.fill(path, with: .color(color(tile.row).opacity(0.88)))
+                if basket.contains(tile.id) {
+                    context.stroke(path, with: .color(Color.accentColor), lineWidth: 4)
+                    if rect.width > 28 && rect.height > 28 {
+                        context.draw(
+                            Text(Image(systemName: "checkmark.circle.fill"))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white),
+                            at: CGPoint(x: rect.maxX - 14, y: rect.minY + 14)
+                        )
+                    }
+                }
+                if rect.width > 65 && rect.height > 35 {
+                    let name = tile.id == "group:other" ? otherLabel : tile.row.name
+                    let label = Text(name)
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(.white)
+                    var resolved = context.resolve(label)
+                    resolved.shading = .color(.white)
+                    context.draw(
+                        resolved,
+                        in: CGRect(
+                            x: rect.minX + 8,
+                            y: rect.minY + 6,
+                            width: rect.width - 16,
+                            height: 18
+                        )
+                    )
+                    if rect.height > 55 {
+                        context.draw(
+                            Text(tile.row.sizeLabel).font(.caption2).foregroundStyle(.white),
+                            in: CGRect(
+                                x: rect.minX + 8,
+                                y: rect.minY + 26,
+                                width: rect.width - 16,
+                                height: 16
+                            )
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private func color(_ row: StorageExplorerRow) -> Color {
