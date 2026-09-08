@@ -178,7 +178,12 @@ final class WindowModifierDragHUDController: WindowModifierDragHUDPresenting {
             )
             panel.setFrameOrigin(targetFrame.origin)
             if !panel.isVisible {
+                let textEditingRestoration = PluginPresentationSafety.prepareForWindowOrdering(
+                    panel,
+                    restoringTextEditingIn: NSApp.isActive ? NSApp.keyWindow : nil
+                )
                 panel.orderFrontRegardless()
+                textEditingRestoration?.restore()
             }
             hostingView.displayIfNeeded()
             return
