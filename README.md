@@ -131,7 +131,7 @@ Activity Bar uses separate Nightly hook scripts and a separate socket, so instal
 
 ### Experimental command-line prototype
 
-Nightly releases provide a separately downloadable `mactools` prototype for testing; it is not embedded in the app. It provides `help`, `version`, `doctor`, read-only action discovery, and Phase 2 execution with `actions run <id>`. Execution is limited to actions described as execution-supported: safe, background, automatic, portable, truly parameterless actions that the host revalidates immediately before running. Commands support human-readable or `--json` output, bounded timeouts, and Ctrl-C cancellation. Typed parameters and saved presets remain unsupported. Follow the [Nightly download and installation guide](docs/testing/cli-nightly-distribution.md), or use the [Phase 2 source-build guide](docs/testing/cli-phase-2.md) when developing the CLI itself.
+Nightly releases provide a separately downloadable `mactools` prototype for testing; it is not embedded in the app. It provides `help`, `version`, `doctor`, read-only action discovery, and Phase 2 execution with `actions run <id>`. Execution is limited to actions described as execution-supported: safe, background, automatic, portable, truly parameterless actions that the host revalidates immediately before running. Commands support human-readable or `--json` output, bounded timeouts, and Ctrl-C cancellation. Typed parameters and saved presets remain unsupported. Follow the [Nightly download and installation guide](docs/testing/cli-nightly-distribution.md), use the [AI-agent usage guide](docs/cli/agent-usage.md) for bounded local agent experiments, or use the [Phase 2 source-build guide](docs/testing/cli-phase-2.md) when developing the CLI itself.
 
 ## Upgrade
 

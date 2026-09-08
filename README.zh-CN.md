@@ -105,6 +105,8 @@ brew install --cask mactools
 
 Nightly 发布会提供可单独下载的 `mactools` 测试原型，它不会打包进应用。当前支持 `help`、`version`、`doctor`、只读操作发现，以及通过 `actions run <id>` 执行安全、后台、自动、可移植且无参数的操作；同时支持 `--json`、超时与 Ctrl-C 取消。类型化参数和预设仍不受支持。请按 [Nightly CLI 下载与安装指南](docs/testing/cli-nightly-distribution.md)测试发布产物；开发 CLI 本身时可使用 [Phase 2 源码构建指南](docs/testing/cli-phase-2.md)。
 
+For local AI-agent experiments, follow the [AI-agent usage guide](docs/cli/agent-usage.md).
+
 ## 升级
 
 ```bash
