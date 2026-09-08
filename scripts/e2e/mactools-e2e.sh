@@ -1765,6 +1765,7 @@ verify_code_session() {
         -only-testing:MacToolsTests/AutoInputPluginPanelTests \
         -only-testing:MacToolsTests/BatteryChargeLimitPluginTests \
         -only-testing:MacToolsTests/ClipboardClearPluginTests \
+        -only-testing:MacToolsTests/ClipboardHistoryPluginTests \
         -only-testing:MacToolsTests/CloudflareR2PluginTests \
         -only-testing:MacToolsTests/DiskCleanPluginTests \
         -only-testing:MacToolsTests/DisplayBrightnessPluginTests \
@@ -1783,6 +1784,7 @@ verify_code_session() {
         -only-testing:MacToolsTests/LaunchControlCanonicalActionTests \
         -only-testing:MacToolsTests/LaunchpadPluginActionTests \
         -only-testing:MacToolsTests/LockScreenPluginTests \
+        -only-testing:MacToolsTests/MenuBarHiddenPluginTests \
         -only-testing:MacToolsTests/MicrophoneMutePluginTests \
         -only-testing:MacToolsTests/MiddleClickPluginTests \
         -only-testing:MacToolsTests/NightShiftPluginTests \

@@ -7,6 +7,9 @@ configs:
   Nightly: release
   Release: release
 packages:
+  PermissionFlow:
+    url: https://github.com/jaywcjlove/PermissionFlow.git
+    exactVersion: 2.11.2
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     exactVersion: 2.9.1
@@ -117,6 +120,10 @@ targets:
       link: false
       embed: false
     - package: Sparkle
+    - package: PermissionFlow
+      product: PermissionFlow
+    - package: PermissionFlow
+      product: SystemSettingsKit
     settings:
       base:
         PRODUCT_NAME: MacTools

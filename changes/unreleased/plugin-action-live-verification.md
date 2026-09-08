@@ -1,9 +1,7 @@
 ---
 release: app
 type: fixed
-area: Plugin actions
+area: Actions
 ---
 
-Composed settings such as True Tone verify against fresh provider state so successful changes are not reverted while the interface refresh is pending.
-
-Explicit provider navigation opens its MacTools settings or the plugin marketplace when it is unavailable.
+Mac Settings no longer reverts successful changes while live state is refreshing, and unavailable controls can open the relevant plugin or Marketplace.

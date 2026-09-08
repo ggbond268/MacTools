@@ -5,9 +5,9 @@
 - `Build`：在 `main` push、Pull Request 和手动触发时运行。执行 XcodeGen、Debug 测试，并为每次变更编译和核对 unsigned Nightly app；在非 PR 场景还会额外编译 unsigned Release app 做配置校验。它不上传不可分发的未签名产物。
 - `Prepare Release`：在 GitHub Actions 页面手动触发。输入发布类型、目标版本和是否继续发布；它会检查、bump、提交版本变更、创建 tag，并在需要时显式触发 `Release` 或 `Plugin Release`。
 - `Release`：在推送 `v*.*.*` 或 `v*.*.*-*` tag，或手动输入 tag 时运行。构建 Release 版本，使用 Developer ID 签名、公证、打包 DMG，创建或更新 GitHub Release；稳定版会明确标记为 GitHub Latest，并更新官网使用的 `docs/app-release.json`，预发布不会覆盖稳定版下载元数据。
-- `Nightly`：启用后每天 UTC 06:00 从 `main` 构建。它复用稳定发布已有的签名、公证、Sparkle 和插件 catalog Secrets，生成可与稳定版共存的 `MacTools Nightly.app`、同一提交的完整插件集、独立 appcast 和独立 PluginKit v5 catalog。每次运行使用唯一 `nightly-<run>-<attempt>` tag；先以 draft 上传并核对全部产物，再发布为 prerelease，绝不覆盖已有 tag 或资产。
+- `Nightly`: when enabled, builds `main` daily at 06:00 UTC using the existing stable signing, notarization, Sparkle, and catalog secrets. It publishes a separate `MacTools Nightly.app`, a standalone Apple silicon `mactools` CLI, same-commit plugins, appcast, and versioned PluginKit v6 catalog. A separate job verifies the CLI without secrets or repository write credentials; the publishing job downloads the same immutable workflow artifact. Each run uploads and verifies a unique `nightly-<run>-<attempt>` draft before publishing it as a prerelease; existing tags and assets are never overwritten.
 - `Homebrew Cask Update`：手动输入版本时运行；未输入版本则从稳定 `v*` App Release 中查找同时包含 `MacTools.dmg` 与 `MacTools.sha256` 的最新版，通过 `brew bump-cask-pr` 向官方 `Homebrew/homebrew-cask` 提交 cask bump PR。
-- `Plugin Release` runs for a pushed `plugins-*` tag or a manually selected plugin batch tag. Legacy PluginKit catalogs below v5 are immutable, and the schema-3 workflow rejects attempts to republish them. PluginKit v3 and later use versioned paths, the v4 catalog remains available to MacTools through 1.1.6, MacTools 1.2.0 keeps `docs/plugins/v5/catalog.json`, and hosts from 1.2.1 use `docs/plugins/v5/schema3/catalog.json`. The first release of a new ABI or schema compatibility line rebuilds and signs every plugin. Plugin batches use `--latest=false` and never replace the latest App release.
+- `Plugin Release` runs for a pushed `plugins-*` tag or a manually selected plugin batch tag. Legacy PluginKit catalogs below v5 are immutable, and the schema-3 workflow rejects attempts to republish them. PluginKit v3 and later use versioned paths, the v4 catalog remains available to MacTools through 1.1.6, MacTools 1.2.0 keeps `docs/plugins/v5/catalog.json`, and MacTools 1.3.0 and later use `docs/plugins/v6/catalog.json`. The first release of a new ABI or schema compatibility line rebuilds and signs every plugin. Plugin batches use `--latest=false` and never replace the latest App release.
 - `Deploy Pages`：在 `site/**`、`docs/app-release.json` 或 `docs/nightly/**` 合入 `main`，`Release` / `Plugin Release` / `Nightly` 成功完成，或手动触发时运行。它先构建 `site/` 下的 Astro 官网，再合并 `docs/` 中的 App 发布元数据、appcast、插件 catalog、图标库等静态发布资源并发布到 GitHub Pages；PR 不会触发这条流水线。
 
 ## 启用 Nightly（仓库维护者）
@@ -16,18 +16,20 @@ Nightly 不需要新的发布证书或私钥。合并实现后，维护者只需
 
 1. 确认稳定版使用的九项必需 Secrets 仍然可用：`APPLE_DEVELOPMENT_TEAM`、`BUNDLE_IDENTIFIER_PREFIX`、`DEVELOPER_ID_CERT_P12`、`DEVELOPER_ID_CERT_PASSWORD`、`ASC_API_KEY_P8_BASE64`、`ASC_API_KEY_ID`、`ASC_API_ISSUER_ID`、`SPARKLE_PRIVATE_KEY` 和 `PLUGIN_CATALOG_PRIVATE_KEY_BASE64`。
 2. 在 `Settings` → `Actions` → `General` 中保留 `Read and write permissions`；在 `Settings` → `Pages` 中保留 `GitHub Actions` 发布源。这两项也是现有发布流程的要求。
-3. 打开 `Actions` → `Nightly`，以 `main` 手动运行一次。检查签名、公证、GitHub prerelease、`docs/nightly/appcast.xml`、`docs/nightly/plugins/v5/catalog.json` 和 Pages 部署均成功；安装该 DMG，并从 Nightly catalog 安装至少一个插件。
+3. Run `Actions` → `Nightly` manually against `main`. Verify signing, notarization, the GitHub prerelease, `docs/nightly/appcast.xml`, `docs/nightly/plugins/v6/catalog.json`, and Pages deployment. Download the DMG, CLI ZIP, and both checksums from the same prerelease, then follow `docs/testing/cli-nightly-distribution.md` to check signatures, Gatekeeper, architecture, and versions. Install that DMG and at least one plugin from the Nightly catalog.
 4. 再以 `main` 手动运行一次，在已安装的 Nightly 中验证 N → N+1 Sparkle 更新及已安装插件的启动前自动同步。通过后，在 `Settings` → `Secrets and variables` → `Actions` → `Variables` 中创建 repository variable `ENABLE_NIGHTLY_RELEASES=true`，启用每日计划任务。删除该 variable 或改为其他值即可暂停计划任务；手动运行仍可用于验证。
 
-手动输入的 ref 必须已经属于 `origin/main`，工作流才会接触发布凭据。Nightly 使用独立 bundle ID、显示名称、`mactools-nightly://` URL Scheme、Application Support 目录、Sparkle feed 和插件 catalog；稳定版 appcast、下载元数据和插件 catalog 在发布前后都会受到路径检查。每个 Nightly 的完整插件集与 app 来自同一个 source commit，插件版本使用合法且单调递增的 `source-major.run.attempt` 格式以避免缓存复用。工作流保留最近 14 个匹配 `nightly-<run>-<attempt>` 的 prerelease，并始终额外保护当前已提交或已部署 appcast 引用的构建；稳定版和其他 prerelease 不在清理范围内。
+Manual refs must be ancestors of `origin/main` and support Nightly release interface v3 and the CLI testing guide before the workflow accesses release credentials. Interface v3 requires the CLI archive to include the unchanged repository GPL license; older rollback refs need that packaging update first. Nightly isolates its bundle ID, display name, `mactools-nightly://` URL scheme, Application Support directory, update feed, and plugin catalog. The app, CLI, and complete plugin set use the same source commit, with plugin versions generated as `source-major.run.attempt`. Retention keeps the latest 14 matching Nightly prereleases and protects builds referenced by the committed or deployed appcast; stable releases and other prereleases are excluded.
 
 Release assets are staged with their final public filenames before upload. A failed run deletes the draft release it created, while each successful run removes abandoned drafts in the workflow-owned `nightly-<run>-<attempt>` namespace. Published Nightly retention remains limited to matching prereleases and never selects stable releases or unrelated prereleases.
+
+If CLI verification or an upload fails before the prerelease is published, use **Re-run failed jobs** to reuse the successful build's immutable artifact ID and original build number. Retrying all jobs creates a new candidate and build number. If the prerelease is already public, or draft cleanup failed, use **Re-run all jobs**; existing releases and their assets are never overwritten.
 
 手动 `Build` workflow 产生的 Debug artifact 仍然只是 CI 调试输出，不会发布到 GitHub Releases、官网或任何 Sparkle feed，也不是第二个 Nightly 渠道。
 
 ### Nightly isolation and unchanged-run verification
 
-The Nightly job reads the deployed `https://mactools.ggbond.app/nightly/appcast.xml`, resolves that advertised GitHub prerelease's target source SHA, and compares its tree with the selected source before accessing release credentials. It ignores generated `docs/nightly/**` changes; all other tracked changes are conservatively considered relevant. An unchanged scheduled run reports `unchanged` and skips building, signing, notarizing, release/plugin uploads, and metadata commits. A manual run always reports `publish`, including same-commit N to N+1 and rollback tests. First publication, an unavailable or malformed feed, an unusable release source, or a failed comparison defaults to publication. The check stays within the existing single job and writes no repository tracking state.
+The Nightly build job reads the deployed `https://mactools.ggbond.app/nightly/appcast.xml`, resolves that advertised GitHub prerelease's target source SHA, and compares its tree with the selected source before accessing release credentials. It ignores generated `docs/nightly/**` changes; all other tracked changes are conservatively considered relevant. An unchanged scheduled run reports `unchanged` and skips building, signing, notarizing, verification, release/plugin uploads, and metadata commits. A manual run always reports `publish`, including same-commit N to N+1 and supported rollback tests. First publication, an unavailable or malformed feed, an unusable release source, or a failed comparison defaults to publication. Build/signing, credential-free CLI execution, and publication run in separate jobs connected by one immutable workflow artifact; checkout credentials are never persisted.
 
 Before enabling the schedule, include these coexistence checks in the two manual runs:
 
@@ -35,7 +37,7 @@ Before enabling the schedule, include these coexistence checks in the two manual
 2. Update Nightly and verify stable can still use its existing helpers without another installation prompt. Separate helpers do not isolate hardware state: test one app's fan or charging policy at a time.
 3. Use separate test credentials in stable and Nightly Translator and Cloudflare R2. Confirm Nightly starts without stable credentials and that saving, updating, or deleting Nightly credentials leaves stable credentials intact.
 4. Install Activity Bar hooks in both apps, in either order. Confirm both channels receive AI events. Remove Nightly's hooks and confirm stable hooks still work; reinstall Nightly's hooks, remove stable hooks, and confirm Nightly still works. Closing either app must leave the other app's listener available.
-5. If testing the experimental CLI, build the standalone tool with the same `Nightly` configuration as the app. Follow `docs/testing/cli-phase-0.md` using the Nightly app and product paths; enable its broker through Nightly's settings. Verify `doctor` connects only to Nightly, and that disabling Nightly's broker leaves stable's broker registration intact. The release workflow checks the broker's embedded identifier, LaunchAgent service, and signature; the standalone prototype remains outside the published app.
+5. Download the DMG, arm64 CLI ZIP, and matching checksum files from the same `nightly-*` prerelease. Follow `docs/testing/cli-nightly-distribution.md`; enable Command-Line Integration in Nightly, then run the downloaded CLI by absolute path for `version --json`, `doctor --json`, `actions list --json`, and the harmless `night-shift/toggle` action twice so the original state is restored. Install it on `PATH` only as `mactools-nightly`, confirm disabling Nightly integration does not affect stable broker registration, and remove only that Nightly-specific command afterward. The workflow statically verifies signing, notarization, dependencies, macOS 14 deployment metadata, and broker identity before a separate credential-free job executes the same archived CLI bytes.
 6. After enabling the schedule, confirm a run with only generated `docs/nightly/**` changes reports `unchanged` without a release or metadata commit. Manual dispatch of the same source must still publish.
 
 ## 需要配置的 Secrets
@@ -203,7 +205,7 @@ make release ARGS="--type plugin --version 1.1.0 --plugin-mode all --yes"
 
 应用内是否显示“可更新”只比较插件版本，不比较 batch tag 或 asset URL。因此只有实际变化的插件需要递增各自 `plugin.json.version`；未变化插件不会因为新批次 tag 而显示可更新或无效。
 
-`pluginKitVersion` is the plugin ABI boundary. Raising it requires rebuilding every plugin package and incrementing each plugin's own `plugin.json.version`. The release helper automatically switches an ABI or catalog-schema compatibility migration to `plugin_mode=all` and writes a complete catalog for the new line. PluginKit v5 schema 3 writes `docs/plugins/v5/schema3/catalog.json` and does not modify the schema-2 catalog used by MacTools 1.2.0 or the v4 catalog used by earlier hosts. Catalog validation rejects mixed PluginKit versions so the host never loads a binary from an incompatible ABI.
+`pluginKitVersion` is the plugin ABI boundary. Raising it requires rebuilding every plugin package and incrementing each plugin's own `plugin.json.version`. The release helper automatically switches an ABI or catalog-schema compatibility migration to `plugin_mode=all` and writes a complete catalog for the new line. PluginKit v6 schema 3 writes `docs/plugins/v6/catalog.json` and does not modify the schema-2 catalog used by MacTools 1.2.0 or the v4 catalog used by earlier hosts. Catalog validation rejects mixed PluginKit versions so the host never loads a binary from an incompatible ABI.
 
 推送插件批次 tag：
 
@@ -214,14 +216,14 @@ git push origin plugins-1.0.1
 
 `Plugin Release` 工作流会：
 
-1. Read the current PluginKit catalog from `origin/main`. For the first PluginKit v5 release, use the immutable `docs/plugins/v4/catalog.json` only as the version-comparison baseline.
+1. Read the current PluginKit catalog from `origin/main`. For the first PluginKit v6 release, use the immutable `docs/plugins/v5/catalog.json` only as the version-comparison baseline.
 2. 生成增量发布计划。`auto` 模式会选择新插件和 `plugin.json.version` 高于上一版 catalog 的插件。
 3. 如果插件自身源码、资源或 `pluginKitVersion` 有包相关变化，但插件版本没有递增，工作流会失败并提示需要 bump 对应 `plugin.json.version`。`MacToolsPluginKit` ABI 变化会自动切换到 `mode=all` 全量重发；展示或宿主侧改动如果也需要重发，可使用 `mode=all` 或传入特定 `--shared-path`。
 4. 只以 Release 配置构建计划中的插件 target。
 5. 用 Developer ID 重新签名这些插件 bundle，并打包为 `*.mactoolsplugin.zip`。
 6. 创建或更新对应的 `plugins-*` GitHub Release，并只上传本批变化插件的 zip。catalog-only 变化可以创建没有 zip asset 的插件 Release。
 7. 相同 ABI 内生成本批 delta catalog 并合并进该 ABI 的 catalog；ABI 首次升级则生成包含全部插件的完整 catalog。
-8. Sign the catalog with `PLUGIN_CATALOG_PRIVATE_KEY_BASE64` and write it to the selected compatibility path. PluginKit v5 schema 3 writes `docs/plugins/v5/schema3/catalog.json` and never overwrites the schema-2 or v4 compatibility baselines.
+8. Sign the catalog with `PLUGIN_CATALOG_PRIVATE_KEY_BASE64` and write it to the selected compatibility path. PluginKit v6 schema 3 writes `docs/plugins/v6/catalog.json` and never overwrites the schema-2 or v4 compatibility baselines.
 9. 将对应版本化 catalog 提交回 `main`，再由 `Deploy Pages` 发布到 GitHub Pages。
 
 如果 `auto` 模式没有发现插件包或 catalog 变化，工作流会成功结束，不创建或更新 GitHub Release。
@@ -311,7 +313,7 @@ Finder right-click menu items now stay hidden when the plugin is disabled.
 
 - PR 构建不读取发布 Secrets，只执行未签名构建和测试。
 - Release 工作流只使用 `contents: write` 创建或更新 GitHub Release，并把 `docs/appcast.xml` 与 `docs/app-release.json` 提交回 `main`；普通 Build 工作流只有 `contents: read`。
-- The Plugin Release workflow uses `contents: write` only to create or update a plugin batch release and commit the signed catalog to `main`. The v4 and PluginKit v5/schema-2 catalogs remain available to released hosts while schema-3 PluginKit v5 releases write `docs/plugins/v5/schema3/catalog.json`.
+- The Plugin Release workflow uses `contents: write` only to create or update a plugin batch release and commit the signed catalog to `main`. The v4 and PluginKit v5/schema-2 catalogs remain available to released hosts while schema-3 PluginKit v6 releases write `docs/plugins/v6/catalog.json`.
 - Deploy Pages 工作流在官网源码或 App 下载元数据合入 `main`、Release / Plugin Release 成功后发布站点，使用 `contents: read`、`pages: write` 和 `id-token: write`。
 - 签名证书导入临时 keychain，任务结束后清理。
 - App Store Connect `.p8`、Sparkle 私钥和插件 catalog 私钥只写入 runner 临时目录或进程环境，使用后删除。

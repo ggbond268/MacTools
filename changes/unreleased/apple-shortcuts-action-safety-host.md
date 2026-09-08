@@ -4,4 +4,4 @@ type: fixed
 area: Actions
 ---
 
-Applied plugin confirmation and Run Link policy changes immediately in the host action registry.
+Changes to plugin confirmation requirements and Run Link permissions now take effect immediately.

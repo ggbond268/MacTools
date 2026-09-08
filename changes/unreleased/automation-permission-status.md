@@ -1,6 +1,7 @@
 ---
 release: plugin
 type: fixed
+area: Permissions
 ---
 
-Automation-dependent plugins now show authorization as an on-demand macOS prompt instead of incorrectly reporting it as already granted.
+Plugins that require Automation access now indicate that macOS asks for permission on demand instead of showing access as already granted.

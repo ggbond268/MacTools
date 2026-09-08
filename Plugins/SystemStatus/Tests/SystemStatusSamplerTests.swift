@@ -3,6 +3,79 @@ import XCTest
 @testable import SystemStatusPlugin
 
 final class SystemStatusSamplerTests: XCTestCase {
+    func testCommandRunnerDrainsOutputLargerThanPipeBuffer() async throws {
+        let lineCount = 100_000
+        let commandResult = await SystemStatusCommandRunner.run(
+            path: "/usr/bin/jot",
+            arguments: ["-b", "x", String(lineCount)],
+            timeout: 2
+        )
+        let result = try XCTUnwrap(commandResult)
+
+        XCTAssertEqual(result.completion, .completed)
+        XCTAssertEqual(result.terminationStatus, 0)
+        XCTAssertEqual(result.standardOutput, String(repeating: "x\n", count: lineCount))
+        XCTAssertEqual(result.standardError, "")
+    }
+
+    func testCommandRunnerTerminatesTimedOutProcess() async throws {
+        let clock = ContinuousClock()
+        let start = clock.now
+        let commandResult = await SystemStatusCommandRunner.run(
+            path: "/bin/sleep",
+            arguments: ["5"],
+            timeout: 0.05
+        )
+        let result = try XCTUnwrap(commandResult)
+
+        XCTAssertEqual(result.completion, .timedOut)
+        XCTAssertLessThan(start.duration(to: clock.now), .seconds(1))
+    }
+
+    func testCommandRunnerHandlesConcurrentTimeoutsWithoutSerializing() async throws {
+        let clock = ContinuousClock()
+        let start = clock.now
+        let results = await withTaskGroup(
+            of: SystemStatusCommandResult?.self,
+            returning: [SystemStatusCommandResult?].self
+        ) { group in
+            for _ in 0 ..< 32 {
+                group.addTask {
+                    await SystemStatusCommandRunner.run(
+                        path: "/bin/sleep",
+                        arguments: ["5"],
+                        timeout: 0.05
+                    )
+                }
+            }
+            var results: [SystemStatusCommandResult?] = []
+            for await result in group {
+                results.append(result)
+            }
+            return results
+        }
+
+        XCTAssertEqual(results.count, 32)
+        XCTAssertTrue(results.allSatisfy { $0?.completion == .timedOut })
+        XCTAssertLessThan(start.duration(to: clock.now), .seconds(1))
+    }
+
+    func testCommandRunnerBoundsDrainWhenDescendantKeepsPipeOpen() async throws {
+        let clock = ContinuousClock()
+        let start = clock.now
+        let commandResult = await SystemStatusCommandRunner.run(
+            path: "/bin/sh",
+            arguments: ["-c", "(/bin/sleep 5) & printf parent"],
+            timeout: 1
+        )
+        let result = try XCTUnwrap(commandResult)
+
+        XCTAssertEqual(result.completion, .completed)
+        XCTAssertEqual(result.terminationStatus, 0)
+        XCTAssertEqual(result.standardOutput, "parent")
+        XCTAssertLessThan(start.duration(to: clock.now), .seconds(1))
+    }
+
     func testDetailStatisticsUseEveryVisibleReadingRegardlessOfDrawingBudget() {
         let history = (0..<600).map { index -> SystemStatusHistoryPoint in
             let cpu: Double = index == 1 ? 1 : 0

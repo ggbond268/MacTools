@@ -2,6 +2,10 @@ import CoreGraphics
 import Foundation
 
 struct WindowLayoutCalculator {
+    static let geometryTolerance: CGFloat = 2
+    static let incrementalResizeStep: CGFloat = 50
+    static let incrementalResizeFloor: CGFloat = 100
+
     func halfCycleFrames(
         for operation: WindowLayoutOperation,
         windowFrame: CGRect,
@@ -122,8 +126,131 @@ struct WindowLayoutCalculator {
             return gridFrame(column: 1, columnSpan: 1, columns: 3, row: 1, rowSpan: 1, rows: 2, in: visibleFrame, gap: gap)
         case .bottomRightSixth:
             return gridFrame(column: 2, columnSpan: 1, columns: 3, row: 1, rowSpan: 1, rows: 2, in: visibleFrame, gap: gap)
+        case .increaseWidth, .decreaseWidth, .increaseHeight, .decreaseHeight:
+            return try? incrementalFrame(for: operation, windowFrame: windowFrame, visibleFrame: visibleFrame, gap: gap)
         case .moveToNextDisplay, .moveToPreviousDisplay, .restorePreviousFrame:
             return nil
+        }
+    }
+
+    func incrementalFrame(
+        for operation: WindowLayoutOperation,
+        windowFrame: CGRect,
+        visibleFrame: CGRect,
+        gap: CGFloat
+    ) throws -> CGRect {
+        let bounds = insetFrame(visibleFrame.standardized, by: gap)
+        let tolerance = Self.geometryTolerance
+        let step = Self.incrementalResizeStep
+        let floor = Self.incrementalResizeFloor
+
+        switch operation {
+        case .increaseWidth:
+            let maxWidth = max(floor, bounds.width)
+            if windowFrame.width >= maxWidth - tolerance {
+                throw WindowLayoutError.windowCannotResizeFurther
+            }
+            let targetWidth = min(maxWidth, windowFrame.width + step)
+            if targetWidth - windowFrame.width <= tolerance {
+                throw WindowLayoutError.windowCannotResizeFurther
+            }
+
+            let leftAligned = abs(windowFrame.minX - bounds.minX) <= tolerance
+            let rightAligned = abs(windowFrame.maxX - bounds.maxX) <= tolerance
+
+            let targetX: CGFloat
+            if leftAligned && !rightAligned {
+                targetX = bounds.minX
+            } else if !leftAligned && rightAligned {
+                targetX = bounds.maxX - targetWidth
+            } else {
+                let midX = windowFrame.midX
+                var centeredX = midX - targetWidth / 2
+                if targetWidth <= bounds.width {
+                    centeredX = min(max(centeredX, bounds.minX), bounds.maxX - targetWidth)
+                }
+                targetX = centeredX
+            }
+            return CGRect(x: targetX, y: windowFrame.minY, width: targetWidth, height: windowFrame.height)
+
+        case .decreaseWidth:
+            let minWidth = min(floor, bounds.width)
+            if windowFrame.width <= minWidth + tolerance {
+                throw WindowLayoutError.windowCannotResizeFurther
+            }
+            let targetWidth = max(minWidth, windowFrame.width - step)
+            if windowFrame.width - targetWidth <= tolerance {
+                throw WindowLayoutError.windowCannotResizeFurther
+            }
+
+            let leftAligned = abs(windowFrame.minX - bounds.minX) <= tolerance
+            let rightAligned = abs(windowFrame.maxX - bounds.maxX) <= tolerance
+
+            let targetX: CGFloat
+            if leftAligned && !rightAligned {
+                targetX = bounds.minX
+            } else if !leftAligned && rightAligned {
+                targetX = bounds.maxX - targetWidth
+            } else {
+                let midX = windowFrame.midX
+                targetX = midX - targetWidth / 2
+            }
+            return CGRect(x: targetX, y: windowFrame.minY, width: targetWidth, height: windowFrame.height)
+
+        case .increaseHeight:
+            let maxHeight = max(floor, bounds.height)
+            if windowFrame.height >= maxHeight - tolerance {
+                throw WindowLayoutError.windowCannotResizeFurther
+            }
+            let targetHeight = min(maxHeight, windowFrame.height + step)
+            if targetHeight - windowFrame.height <= tolerance {
+                throw WindowLayoutError.windowCannotResizeFurther
+            }
+
+            let topAligned = abs(windowFrame.minY - bounds.minY) <= tolerance
+            let bottomAligned = abs(windowFrame.maxY - bounds.maxY) <= tolerance
+
+            let targetY: CGFloat
+            if topAligned && !bottomAligned {
+                targetY = bounds.minY
+            } else if !topAligned && bottomAligned {
+                targetY = bounds.maxY - targetHeight
+            } else {
+                let midY = windowFrame.midY
+                var centeredY = midY - targetHeight / 2
+                if targetHeight <= bounds.height {
+                    centeredY = min(max(centeredY, bounds.minY), bounds.maxY - targetHeight)
+                }
+                targetY = centeredY
+            }
+            return CGRect(x: windowFrame.minX, y: targetY, width: windowFrame.width, height: targetHeight)
+
+        case .decreaseHeight:
+            let minHeight = min(floor, bounds.height)
+            if windowFrame.height <= minHeight + tolerance {
+                throw WindowLayoutError.windowCannotResizeFurther
+            }
+            let targetHeight = max(minHeight, windowFrame.height - step)
+            if windowFrame.height - targetHeight <= tolerance {
+                throw WindowLayoutError.windowCannotResizeFurther
+            }
+
+            let topAligned = abs(windowFrame.minY - bounds.minY) <= tolerance
+            let bottomAligned = abs(windowFrame.maxY - bounds.maxY) <= tolerance
+
+            let targetY: CGFloat
+            if topAligned && !bottomAligned {
+                targetY = bounds.minY
+            } else if !topAligned && bottomAligned {
+                targetY = bounds.maxY - targetHeight
+            } else {
+                let midY = windowFrame.midY
+                targetY = midY - targetHeight / 2
+            }
+            return CGRect(x: windowFrame.minX, y: targetY, width: windowFrame.width, height: targetHeight)
+
+        default:
+            throw WindowLayoutError.frameWriteFailed
         }
     }
 

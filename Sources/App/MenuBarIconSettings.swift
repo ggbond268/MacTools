@@ -80,30 +80,40 @@ enum MenuBarIconProcessing {
     ].compactMap { $0 }
 
     static func renderedImage(from image: NSImage) -> NSImage? {
-        guard let source = cgImage(from: image) else {
-            return nil
-        }
-
-        return renderedImage(from: source, visibleBounds: nil)
+        prepareFrames(from: [image]).images.first
     }
 
     static func renderedImages(from images: [NSImage]) -> [NSImage] {
+        prepareFrames(from: images).images
+    }
+
+    struct PreparedFrames {
+        let images: [NSImage]
+        let supportsTemplateRendering: Bool
+    }
+
+    static func prepareFrames(from images: [NSImage]) -> PreparedFrames {
         let sources = images.compactMap { image -> CGImage? in
             cgImage(from: image)
         }
-        guard !sources.isEmpty else {
-            return []
-        }
-
-        let sharedVisibleBounds = sources
-            .compactMap { alphaBounds(in: $0) }
+        let analyses = sources.map { analyzeAlpha(in: $0) }
+        let sharedVisibleBounds = analyses
+            .compactMap { $0?.visibleBounds }
             .reduce(CGRect?.none) { partialBounds, bounds in
                 partialBounds?.union(bounds) ?? bounds
             }
 
-        return sources.compactMap { source in
+        let frames = sources.compactMap { source in
             renderedImage(from: source, visibleBounds: sharedVisibleBounds)
         }
+        // Inspect source pixels before normalization adds its own transparent padding.
+        // Blank animation frames are valid, but at least one frame must be visible.
+        let supportsTemplateRendering = !frames.isEmpty
+            && sources.count == images.count
+            && frames.count == sources.count
+            && analyses.allSatisfy { $0?.hasTransparency == true }
+            && analyses.contains { $0?.visibleBounds != nil }
+        return PreparedFrames(images: frames, supportsTemplateRendering: supportsTemplateRendering)
     }
 
     private static func renderedImage(from source: CGImage, visibleBounds: CGRect?) -> NSImage? {
@@ -120,7 +130,7 @@ enum MenuBarIconProcessing {
         // Normalize artwork bounds before fitting so transparent source padding does not change its visual size.
         let visibleSource: CGImage
         let sourceBounds = CGRect(x: 0, y: 0, width: source.width, height: source.height)
-        let cropBounds = (visibleBounds ?? alphaBounds(in: source))?.intersection(sourceBounds)
+        let cropBounds = visibleBounds?.intersection(sourceBounds)
         if let cropBounds, let cropped = source.cropping(to: cropBounds) {
             visibleSource = cropped
         } else {
@@ -176,7 +186,12 @@ enum MenuBarIconProcessing {
         return output
     }
 
-    private static func alphaBounds(in image: CGImage) -> CGRect? {
+    private struct AlphaAnalysis {
+        let visibleBounds: CGRect?
+        let hasTransparency: Bool
+    }
+
+    private static func analyzeAlpha(in image: CGImage) -> AlphaAnalysis? {
         let width = image.width
         let height = image.height
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -199,10 +214,12 @@ enum MenuBarIconProcessing {
         var maxX = 0
         var maxY = 0
         var hasVisiblePixel = false
+        var hasTransparency = false
 
         for y in 0..<height {
             for x in 0..<width {
                 let alpha = pixels[((y * width) + x) * 4 + 3]
+                hasTransparency = hasTransparency || alpha < 255
                 guard alpha > 8 else {
                     continue
                 }
@@ -215,15 +232,15 @@ enum MenuBarIconProcessing {
             }
         }
 
-        guard hasVisiblePixel else {
-            return nil
-        }
-
-        return CGRect(
+        let visibleBounds = hasVisiblePixel ? CGRect(
             x: minX,
             y: minY,
             width: maxX - minX,
             height: maxY - minY
+        ) : nil
+        return AlphaAnalysis(
+            visibleBounds: visibleBounds,
+            hasTransparency: hasTransparency
         )
     }
 
@@ -386,6 +403,7 @@ enum MenuBarIconImportError: Error {
     case cannotDecodeAnimation
     case notAnimated
     case unsupportedAnimation
+    case requiresTransparency
 
     var userMessage: String {
         switch self {
@@ -399,6 +417,8 @@ enum MenuBarIconImportError: Error {
             return AppL10n.settings("menuBarIcon.importError.notAnimated", defaultValue: "所选文件不是可循环播放的动画。")
         case .unsupportedAnimation:
             return AppL10n.settings("menuBarIcon.importError.unsupportedAnimation", defaultValue: "暂不支持这个动画格式，请选择 GIF 或 MP4。")
+        case .requiresTransparency:
+            return AppL10n.settings("menuBarIcon.importError.requiresTransparency", defaultValue: "请选择透明背景且包含可见图案的图标或动画。")
         }
     }
 }
@@ -491,7 +511,7 @@ final class MenuBarIconSettings: ObservableObject {
     private let remoteAssetStore: MenuBarIconRemoteAssetStore
     private let encoder = JSONEncoder()
     private var imagePayloadCache: [MenuBarIconAppearance: MenuBarIconImagePayload] = [:]
-    private var renderedFramesCache: [RenderedFramesCacheKey: [NSImage]] = [:]
+    private var renderedFramesCache: [RenderedFramesCacheKey: MenuBarIconProcessing.PreparedFrames] = [:]
     private var remoteFramesCache: [RemoteFramesCacheKey: [NSImage]] = [:]
 
     init(
@@ -535,6 +555,12 @@ final class MenuBarIconSettings: ObservableObject {
             return
         }
 
+        let preparedFrames = MenuBarIconProcessing.prepareFrames(from: [sourceImage])
+        guard preparedFrames.supportsTemplateRendering else {
+            lastErrorMessage = MenuBarIconImportError.requiresTransparency.userMessage
+            return
+        }
+
         let fileName = "icon-\(UUID().uuidString).png"
         let destinationURL = localIconsDirectory.appendingPathComponent(fileName)
 
@@ -543,15 +569,12 @@ final class MenuBarIconSettings: ObservableObject {
             return
         }
 
-        storedState.localIconSelection = MenuBarIconLocalSelection(
+        let selection = MenuBarIconLocalSelection(
             fileName: fileName,
             frameFileNames: [fileName],
             frameDuration: 1.0 / MenuBarIconProcessing.animationFramesPerSecond
         )
-        clearRemoteAssetSelection()
-        pruneUnusedLocalIconFiles()
-        invalidateAllIconCaches()
-        persist()
+        useLocalSelection(selection, preparedFrames: preparedFrames)
     }
 
     func importAnimation(from sourceURL: URL, for _: MenuBarIconAppearance) async {
@@ -572,6 +595,12 @@ final class MenuBarIconSettings: ObservableObject {
             return
         }
 
+        let preparedFrames = MenuBarIconProcessing.prepareFrames(from: sourceFrames)
+        guard preparedFrames.supportsTemplateRendering else {
+            lastErrorMessage = MenuBarIconImportError.requiresTransparency.userMessage
+            return
+        }
+
         let animationID = UUID().uuidString
         let fileNames = sourceFrames.indices.map { index in
             "animation-\(animationID)-frame-\(index).png"
@@ -582,14 +611,27 @@ final class MenuBarIconSettings: ObservableObject {
             return
         }
 
-        storedState.localIconSelection = MenuBarIconLocalSelection(
+        let selection = MenuBarIconLocalSelection(
             fileName: fileNames[0],
             frameFileNames: fileNames,
             frameDuration: 1.0 / MenuBarIconProcessing.animationFramesPerSecond
         )
+        useLocalSelection(selection, preparedFrames: preparedFrames)
+    }
+
+    private func useLocalSelection(
+        _ selection: MenuBarIconLocalSelection,
+        preparedFrames: MenuBarIconProcessing.PreparedFrames
+    ) {
+        storedState.localIconSelection = selection
         clearRemoteAssetSelection()
         pruneUnusedLocalIconFiles()
         invalidateAllIconCaches()
+        let cacheKey = RenderedFramesCacheKey(
+            fileName: selection.fileName,
+            frameFileNames: selection.frameFileNames
+        )
+        renderedFramesCache[cacheKey] = preparedFrames
         persist()
     }
 
@@ -642,13 +684,16 @@ final class MenuBarIconSettings: ObservableObject {
     }
 
     private func makeImagePayload(for _: MenuBarIconAppearance) -> MenuBarIconImagePayload {
-        if let selection = storedState.localIconSelection,
-           let payload = customImagePayload(
-               frames: renderedImages(for: selection),
-               frameDuration: selection.frameDuration,
-               renderingMode: .original
-           ) {
-            return payload
+        if let selection = storedState.localIconSelection {
+            let preparedFrames = renderedFrames(for: selection)
+            // Preserve existing opaque artwork instead of turning it into a solid block.
+            if let payload = customImagePayload(
+                frames: preparedFrames.images,
+                frameDuration: selection.frameDuration,
+                renderingMode: preparedFrames.supportsTemplateRendering ? .template : .original
+            ) {
+                return payload
+            }
         }
 
         if let selection = storedState.remoteAssetSelection,
@@ -737,7 +782,7 @@ final class MenuBarIconSettings: ObservableObject {
         settingsRevision += 1
     }
 
-    private func renderedImages(for selection: MenuBarIconLocalSelection) -> [NSImage] {
+    private func renderedFrames(for selection: MenuBarIconLocalSelection) -> MenuBarIconProcessing.PreparedFrames {
         let cacheKey = RenderedFramesCacheKey(
             fileName: selection.fileName,
             frameFileNames: selection.frameFileNames
@@ -750,11 +795,9 @@ final class MenuBarIconSettings: ObservableObject {
             let url = localIconsDirectory.appendingPathComponent(fileName)
             return NSImage(contentsOf: url)
         }
-        let images = selection.frameFileNames.count > 1
-            ? MenuBarIconProcessing.renderedImages(from: sourceImages)
-            : sourceImages.compactMap { MenuBarIconProcessing.renderedImage(from: $0) }
-        renderedFramesCache[cacheKey] = images
-        return images
+        let preparedFrames = MenuBarIconProcessing.prepareFrames(from: sourceImages)
+        renderedFramesCache[cacheKey] = preparedFrames
+        return preparedFrames
     }
 
     private func renderedImages(for selection: MenuBarIconRemoteAssetSelection) -> [NSImage] {

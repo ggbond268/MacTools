@@ -150,6 +150,12 @@ LOCALIZED_REQUIREMENT_NAMES = {
         ko="시스템 오디오 녹음 권한", pt="permissão de gravação de áudio do sistema",
         ru="доступ к записи системного аудио", zh_hans="系统音频录制权限", zh_hant="系統音訊錄製權限",
     ),
+    "full-disk-access": _localized_requirement(
+        "Full Disk Access", ar="الوصول الكامل إلى القرص", de="Festplattenvollzugriff",
+        es="acceso total al disco", fr="accès complet au disque", ja="フルディスクアクセス",
+        ko="전체 디스크 접근", pt="acesso total ao disco", ru="полный доступ к диску",
+        zh_hans="完全磁盘访问", zh_hant="完整磁碟存取",
+    ),
     "built-in battery": _localized_requirement(
         "built-in battery", ar="بطارية مدمجة", de="integrierter Akku", es="batería integrada",
         fr="batterie intégrée", ja="内蔵バッテリー", ko="내장 배터리", pt="bateria integrada",
@@ -180,7 +186,7 @@ VALID_CATEGORIES = {
 }
 VALID_PERMISSION_IDS = {
     "accessibility", "automation", "calendarFullAccess", "inputMonitoring",
-    "screen-recording", "system-audio-recording"
+    "screen-recording", "system-audio-recording", "full-disk-access"
 }
 VALID_SURFACES = {
     "unified-search", "global-shortcut", "run-link", "workflow", "automatic-rule",
@@ -197,7 +203,8 @@ VALID_NETWORK_USE = {"none", "optional", "required"}
 VALID_TELEMETRY = {"none", "optional", "required"}
 VALID_RETENTION = {"none", "session", "until-disabled", "until-uninstalled", "user-controlled"}
 VALID_SETTINGS_CAPABILITIES = {"none", "form", "workspace"}
-CURRENT_SOURCE_PLUGIN_KIT_VERSION = 5
+# This is the metadata-format floor, not the current host ABI version.
+PRODUCT_METADATA_REQUIRED_PLUGIN_KIT_VERSION = 5
 MAX_ASSET_BYTES = 10 * 1024 * 1024
 MAX_ASSET_DIMENSION = 7680
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -346,7 +353,7 @@ def validate_runtime_envelope(
     is_sparse_legacy = (
         allow_sparse_legacy
         and type(plugin_kit_version) is int
-        and plugin_kit_version < CURRENT_SOURCE_PLUGIN_KIT_VERSION
+        and plugin_kit_version < PRODUCT_METADATA_REQUIRED_PLUGIN_KIT_VERSION
     )
     required = {
         "id",

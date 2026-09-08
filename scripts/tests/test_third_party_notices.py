@@ -47,6 +47,8 @@ class ThirdPartyNoticeTests(unittest.TestCase):
             self.assertIn("Sparkle", notice)
             self.assertIn("MenuBarExtraAccess", notice)
             self.assertNotIn("activity-bar", notice)
+            self.assertNotIn("Upstream: https://github.com/thaw-app/Thaw", notice)
+            self.assertNotIn("Upstream: https://github.com/jordanbaird/Ice", notice)
 
     def test_plugin_notices_include_only_matching_components(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -71,6 +73,27 @@ class ThirdPartyNoticeTests(unittest.TestCase):
             self.run_generator("plugin:calendar", output)
 
             self.assertFalse(output.exists())
+
+    def test_menu_bar_hidden_retains_both_upstream_licenses_and_attribution(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output = pathlib.Path(temporary_directory) / "THIRD_PARTY_NOTICES.txt"
+            self.run_generator("plugin:menu-bar-hidden", output)
+
+            notice = output.read_text(encoding="utf-8")
+            for component_id in ("ice", "thaw"):
+                components = json.loads(MANIFEST.read_text(encoding="utf-8"))["components"]
+                component = next(item for item in components if item["id"] == component_id)
+                self.assertEqual(component["products"], ["plugin:menu-bar-hidden"])
+                self.assertEqual(component["relationship"], "adapted")
+                self.assertIn(f"Revision: {component['revision']}", notice)
+                self.assertIn(
+                    (REPO_ROOT / component["licenseFile"]).read_text(encoding="utf-8").rstrip(),
+                    notice,
+                )
+            self.assertIn("Copyright (C) 2024 Jordan Baird", notice)
+            self.assertIn("Copyright (C) 2026 Toni Förster", notice)
+            self.assertIn("License: GPL-3.0-or-later", notice)
+            self.assertNotIn("Upstream: https://github.com/sparkle-project/Sparkle", notice)
 
     def test_manifest_rejects_missing_license_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

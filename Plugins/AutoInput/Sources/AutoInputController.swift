@@ -312,6 +312,13 @@ final class AutoInputController: ObservableObject {
         onStateChange?()
     }
 
+    func refreshAccessibilityPermissionState() {
+        refreshAccessibilityPermission(prompt: false)
+        reconcilePermissionObservation()
+        reconcileActiveServices()
+        onStateChange?()
+    }
+
     func settingsVisibilityDidChange(_ isVisible: Bool) {
         guard isVisible else { return }
         sourceController.refresh()

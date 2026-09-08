@@ -513,9 +513,10 @@ final class CloudflareR2PluginTests: XCTestCase {
     }
 
     private func waitUntil(_ predicate: @escaping @MainActor () -> Bool) async {
-        for _ in 0..<200 {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while ContinuousClock.now < deadline {
             if predicate() { return }
-            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(1))
         }
         XCTFail("Condition did not become true")
     }

@@ -1,7 +1,7 @@
 ---
 release: app
 type: fixed
-area: Plugin Settings
+area: Settings
 ---
 
-Plugin settings keep unresolved permission guidance on the current page without automatic navigation. Explicit Automation permission buttons open System Settings.
+Permission guidance now opens the correct System Settings destination, preserves the current plugin page, and shows the draggable helper for Full Disk Access.

@@ -14,7 +14,10 @@ PLUGIN_RELEASE_WORKFLOW = REPO_ROOT / ".github/workflows/plugin-release.yml"
 MAKEFILE = REPO_ROOT / "Makefile"
 ACTION_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/ActionModels.swift"
 COMPONENT_THEME_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginComponentTheme.swift"
+PLUGIN_PALETTE_COMPONENTS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginPaletteComponents.swift"
 PLUGIN_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginModels.swift"
+PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swift"
+PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
     # Canonical action registry, execution, discovery, and surface bridges.
@@ -38,6 +41,9 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginActionProviding": "1.2.0",
     "PluginActionShortcutSettingsConfiguration": "1.2.0",
     "PluginActionShortcutSettingsProviding": "1.2.0",
+    "PluginShortcutSettingsGroupConfiguration": "1.3.0",
+    "PluginGroupedShortcutSettingsProviding": "1.3.0",
+    "PluginShortcutSettingsGroupPresentationProviding": "1.3.0",
     "PluginRetiredActionShortcutProviding": "1.2.0",
     "PluginActionShortcutPresetPreviewItem": "1.2.0",
     "PluginActionShortcutPresetPreview": "1.2.0",
@@ -77,6 +83,10 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginComponentDetailPresenting": "1.2.1",
     "PluginProcessGroupLease": "1.2.0",
     "PluginSystemImage": "1.2.0",
+    # Contextual plugin-settings search contracts introduced in host 1.2.1.
+    "PluginSettingsSearchFocusing": "1.2.1",
+    "PluginSettingsSearchFocusMetadataProviding": "1.2.1",
+    "PluginSettingsSearchTarget": "1.2.1",
     # Side-aware atomic keyboard output introduced in host 1.2.1.
     "KeyboardKeyTap": "1.2.1",
     "KeyboardKeyTapFormatter": "1.2.1",
@@ -98,6 +108,29 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginComponentTheme": "1.2.0",
     "PluginComponentCardBackground": "1.2.0",
     "PluginActionSafetyStateChangeProviding": "1.2.0",
+    # Shared palette, shortcut-recorder, and private-data APIs introduced after v1.2.0.
+    "PluginPaletteMetrics": "1.3.0",
+    "PluginPaletteSearchCommand": "1.3.0",
+    "PluginPaletteSearchField": "1.3.0",
+    "PluginPaletteSearchBar": "1.3.0",
+    "PluginPaletteSearchToolbar": "1.3.0",
+    "PluginPaletteSurface": "1.3.0",
+    "PluginPaletteSelectableRowModifier": "1.3.0",
+    "pluginPaletteSelectableRow": "1.3.0",
+    "PluginPaletteToolbarControlStyle": "1.3.0",
+    "PluginPaletteKeyboardHint": "1.3.0",
+    "PluginPaletteFooter": "1.3.0",
+    "PluginPrivateDataKeychainIdentity": "1.3.0",
+    "PluginSettingsActionShortcutItem": "1.3.0",
+    "PluginInlineShortcutSettingsContextConsuming": "1.3.0",
+    "PluginShortcutBindingValidating": "1.3.0",
+    "actionShortcutItem": "1.3.0",
+    "actionShortcutItems": "1.3.0",
+    "recordActionShortcut": "1.3.0",
+    "clearActionShortcut": "1.3.0",
+    "PluginSettingsShortcutRecorderControl": "1.3.0",
+    "PluginShortcutRecordingAnchor": "1.3.0",
+    "PluginWindowLayoutTargetProviding": "1.3.0",
     # Finder-extension permission presentation introduced after host 1.2.0.
     ".finderExtension": "1.2.1",
 }
@@ -114,6 +147,29 @@ def public_top_level_type_names(source: str) -> set[str]:
         source,
         flags=re.MULTILINE,
     ))
+
+
+def public_extension_function_names(source: str, extended_type: str) -> set[str]:
+    names: set[str] = set()
+    depth = 0
+    inside_extension = False
+    extension_pattern = re.compile(
+        rf"^public\s+extension\s+{re.escape(extended_type)}\s*\{{"
+    )
+    for line in source.splitlines():
+        if not inside_extension:
+            if extension_pattern.search(line):
+                inside_extension = True
+                depth = line.count("{") - line.count("}")
+            continue
+        if depth == 1:
+            match = re.match(r"^\s*func\s+([A-Za-z_][A-Za-z0-9_]*)", line)
+            if match is not None:
+                names.add(match.group(1))
+        depth += line.count("{") - line.count("}")
+        if depth == 0:
+            inside_extension = False
+    return names
 
 
 def minimum_host_violations(plugin_id: str, declared: str, source: str) -> list[str]:
@@ -180,13 +236,15 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
         self.assertIn("if (( PLUGIN_KIT_VERSION < 5 )); then", workflow)
         self.assertIn('case " 1 2 3 4 " in', makefile)
 
-    def test_every_current_plugin_targets_plugin_kit5_and_a_released_host_line(self) -> None:
+    def test_every_current_plugin_targets_plugin_kit6_and_host_1_3(self) -> None:
+        compatibility = (REPO_ROOT / "Sources/MacToolsPluginKit/PluginKitCompatibility.swift").read_text()
+        self.assertIn("currentVersion = 6", compatibility)
         incompatible = []
         for manifest_path in sorted(PLUGINS_ROOT.glob("*/plugin.json")):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             if (
-                manifest["pluginKitVersion"] != 5
-                or version_tuple(manifest["minHostVersion"]) < version_tuple("1.2.0")
+                manifest["pluginKitVersion"] != 6
+                or version_tuple(manifest["minHostVersion"]) < version_tuple("1.3.0")
                 or version_tuple(manifest["minHostVersion"])
                 > version_tuple(declared_app_version())
             ):
@@ -298,6 +356,40 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             "Public component-theme types used by plugins must declare their minimum host",
         )
 
+    def test_palette_inventory_covers_every_public_api_used_by_plugins(self) -> None:
+        source = PLUGIN_PALETTE_COMPONENTS.read_text(encoding="utf-8")
+        palette_symbols = public_top_level_type_names(source)
+        palette_symbols |= public_extension_function_names(source, "View")
+        plugin_source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(PLUGINS_ROOT.glob("*/Sources/**/*.swift"))
+        )
+        used_symbols = {
+            symbol
+            for symbol in palette_symbols
+            if source_uses_symbol(plugin_source, symbol)
+        }
+        self.assertEqual(
+            used_symbols - NEW_API_MINIMUM_HOSTS.keys(),
+            set(),
+            "Public palette APIs used by plugins must declare their minimum host",
+        )
+
+    def test_clipboard_shortcut_extension_apis_require_host_1_3(self) -> None:
+        interfaces = PLUGIN_INTERFACES.read_text(encoding="utf-8")
+        settings_models = PLUGIN_SETTINGS_MODELS.read_text(encoding="utf-8")
+        symbols_by_source = {
+            "PluginShortcutBindingValidating": interfaces,
+            "actionShortcutItem": settings_models,
+            "actionShortcutItems": settings_models,
+            "recordActionShortcut": settings_models,
+            "clearActionShortcut": settings_models,
+        }
+        for symbol, source in symbols_by_source.items():
+            with self.subTest(symbol=symbol):
+                self.assertTrue(source_uses_symbol(source, symbol))
+                self.assertEqual(NEW_API_MINIMUM_HOSTS.get(symbol), "1.3.0")
+                self.assertTrue(minimum_host_violations("legacy", "1.2.1", symbol))
     def test_symbol_matching_rejects_legacy_consumer_without_substring_false_positive(self) -> None:
         self.assertTrue(source_uses_symbol("let risk: ActionRisk = .safe", "ActionRisk"))
         self.assertFalse(source_uses_symbol("struct MyActionRiskWrapper {}", "ActionRisk"))
@@ -310,6 +402,21 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             [
                 "synthetic-legacy-plugin uses ActionRisk but declares "
                 "minHostVersion 1.1.6 (< 1.2.0)"
+            ],
+        )
+        self.assertEqual(
+            minimum_host_violations(
+                "synthetic-legacy-plugin",
+                "1.2.0",
+                "final class Plugin: PluginInlineShortcutSettingsContextConsuming {}\n"
+                "let anchor = PluginShortcutRecordingAnchor()",
+            ),
+            [
+                "synthetic-legacy-plugin uses "
+                "PluginInlineShortcutSettingsContextConsuming but declares "
+                "minHostVersion 1.2.0 (< 1.3.0)",
+                "synthetic-legacy-plugin uses PluginShortcutRecordingAnchor but declares "
+                "minHostVersion 1.2.0 (< 1.3.0)",
             ],
         )
 
