@@ -260,3 +260,40 @@ final class WindowSnapGeometryTests: XCTestCase {
         XCTAssertEqual(frame2, WindowSnapGeometry.defaultFrame(contentSize: contentSize, visibleFrame: display2))
     }
 }
+
+@MainActor
+final class WindowSnapOverlayControllerTests: XCTestCase {
+    func testShowGuidesMakesOverlayVisibleAboveRelativeWindow() throws {
+        let screen = try XCTUnwrap(NSScreen.screens.first)
+        let relativeWindow = NSPanel(
+            contentRect: CGRect(x: screen.frame.midX, y: screen.frame.midY, width: 320, height: 240),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        relativeWindow.level = .floating
+        relativeWindow.orderFrontRegardless()
+
+        let controller = WindowSnapOverlayController()
+        defer {
+            controller.hide()
+            relativeWindow.orderOut(nil)
+        }
+
+        let guide = WindowSnapGuide(
+            id: "guide.test",
+            role: .leftEdge,
+            orientation: .vertical,
+            start: CGPoint(x: screen.frame.midX, y: screen.frame.minY),
+            end: CGPoint(x: screen.frame.midX, y: screen.frame.maxY),
+            isHighlighted: false
+        )
+        controller.showGuides([guide], on: screen, relativeTo: relativeWindow)
+
+        let overlay = try XCTUnwrap(controller.presentedPanelForTests)
+        XCTAssertTrue(overlay.isVisible)
+        XCTAssertGreaterThan(overlay.windowNumber, 0)
+        XCTAssertTrue(overlay.ignoresMouseEvents)
+        XCTAssertFalse(overlay.canBecomeKey)
+    }
+}

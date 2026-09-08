@@ -44,6 +44,8 @@ final class WindowSnapOverlayController {
     private var overlayPanel: WindowSnapOverlayPanel?
     private var overlayView: WindowSnapOverlayView?
 
+    var presentedPanelForTests: WindowSnapOverlayPanel? { overlayPanel }
+
     func showGuides(
         _ guides: [WindowSnapGuide],
         on screen: NSScreen,
@@ -58,13 +60,16 @@ final class WindowSnapOverlayController {
 
         overlayView?.guides = guides
 
-        if let window {
-            panel.order(.below, relativeTo: window.windowNumber)
-        } else {
-            let restoration = PluginPresentationSafety.prepareForWindowOrdering(panel)
-            panel.orderFront(nil)
-            restoration?.restore()
-        }
+        // Relative ordering below a borderless floating panel is not guaranteed to bring an
+        // unowned auxiliary window on screen. Keep this mouse-transparent, nonactivating overlay
+        // in front for the short drag session so the guides are always visible.
+        let restoration = PluginPresentationSafety.prepareForWindowOrdering(
+            panel,
+            restoringTextEditingIn: window
+        )
+        panel.orderFrontRegardless()
+        panel.displayIfNeeded()
+        restoration?.restore()
     }
 
     func hide() {

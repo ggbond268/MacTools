@@ -57,13 +57,22 @@ struct WindowDragHandleBar: View {
                         coordinator?.finishDragging()
                     }
                 )
-                .frame(height: 14)
+                .frame(width: 88, height: 18)
 
                 Capsule(style: .continuous)
                     .fill(Color(nsColor: .tertiaryLabelColor).opacity(0.4))
-                    .frame(width: 36, height: 4)
+                    .frame(width: 42, height: 4)
                     .allowsHitTesting(false)
             }
+            .frame(maxWidth: .infinity)
+            .help(AppL10n.search(
+                "search.dragHandle.help",
+                defaultValue: "Drag to move and align"
+            ))
+            .accessibilityLabel(AppL10n.search(
+                "search.dragHandle.help",
+                defaultValue: "Drag to move and align"
+            ))
             .accessibilityIdentifier("mactools.command-palette.drag-handle")
         }
     }
