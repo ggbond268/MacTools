@@ -2378,6 +2378,58 @@
       "ru": { "stringUnit": { "state": "translated", "value": "Не удалось восстановить настройки «%@»." } },
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法恢复“%@”的插件设置。" } },
       "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法回復「%@」的外掛設定。" } }
+    } },
+    "preferencesBackup.import.pluginRestoreDeferred": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "تم تثبيت \"%@\". أعد تشغيل MacTools، ثم استورد هذه النسخة الاحتياطية مرة أخرى لاستعادة إعداداته." } },
+      "de": { "stringUnit": { "state": "translated", "value": "„%@“ wurde installiert. Starte MacTools neu und importiere dieses Backup erneut, um die Einstellungen wiederherzustellen." } },
+      "en": { "stringUnit": { "state": "translated", "value": "“%@” was installed. Restart MacTools, then import this backup again to restore its settings." } },
+      "es": { "stringUnit": { "state": "translated", "value": "Se instaló «%@». Reinicia MacTools y vuelve a importar esta copia de seguridad para restaurar sus ajustes." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "« %@ » a été installé. Redémarrez MacTools, puis importez à nouveau cette sauvegarde pour restaurer ses réglages." } },
+      "ja": { "stringUnit": { "state": "translated", "value": "「%@」をインストールしました。MacTools を再起動してから、このバックアップをもう一度読み込んで設定を復元してください。" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "‘%@’이(가) 설치되었습니다. MacTools를 다시 시작한 다음 이 백업을 다시 가져와 설정을 복원하십시오." } },
+      "pt": { "stringUnit": { "state": "translated", "value": "“%@” foi instalado. Reinicie o MacTools e importe este backup novamente para restaurar os ajustes." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Плагин «%@» установлен. Перезапустите MacTools, затем снова импортируйте эту резервную копию, чтобы восстановить его настройки." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "已安装“%@”。请重新启动 MacTools，然后再次导入此备份以恢复其设置。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "已安裝「%@」。請重新啟動 MacTools，然後再次匯入此備份以回復其設定。" } }
+    } },
+    "preferencesBackup.importProgress.preparing": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "جارٍ تحضير الاستيراد…" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Import wird vorbereitet…" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Preparing import…" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Preparando la importación…" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Préparation de l’importation…" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "読み込みを準備中…" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "가져오기를 준비 중…" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "A preparar a importação…" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Подготовка импорта…" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在准备导入…" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "正在準備輸入…" } }
+    } },
+    "preferencesBackup.importProgress.installing": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "جارٍ تثبيت %@ (%d/%d)…" } },
+      "de": { "stringUnit": { "state": "translated", "value": "%@ wird installiert (%d/%d)…" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Installing %@ (%d/%d)…" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Instalando %@ (%d/%d)…" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Installation de %@ (%d/%d)…" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "%@ をインストール中（%d/%d）…" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "%@ 설치 중(%d/%d)…" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "A instalar %@ (%d/%d)…" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Установка %@ (%d/%d)…" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在安装 %@（%d/%d）…" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "正在安裝 %@（%d/%d）…" } }
+    } },
+    "preferencesBackup.importProgress.restoring": { "extractionState": "manual", "localizations": {
+      "ar": { "stringUnit": { "state": "translated", "value": "جارٍ تطبيق التفضيلات…" } },
+      "de": { "stringUnit": { "state": "translated", "value": "Einstellungen werden angewendet…" } },
+      "en": { "stringUnit": { "state": "translated", "value": "Applying preferences…" } },
+      "es": { "stringUnit": { "state": "translated", "value": "Aplicando las preferencias…" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Application des préférences…" } },
+      "ja": { "stringUnit": { "state": "translated", "value": "環境設定を適用中…" } },
+      "ko": { "stringUnit": { "state": "translated", "value": "환경설정을 적용 중…" } },
+      "pt": { "stringUnit": { "state": "translated", "value": "A aplicar as preferências…" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Применение настроек…" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在应用偏好设置…" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "正在套用偏好設定…" } }
     } }
   },
   "version": "1.0"

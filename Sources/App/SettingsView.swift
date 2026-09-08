@@ -844,6 +844,7 @@ private struct PreferencesBackupSettingsRow: View {
     @State private var alertMessage: String?
     @State private var isPreparingImport = false
     @State private var isImporting = false
+    @State private var importProgress: PreferencesImportProgress?
     @State private var isBackingUp = false
     @State private var manualBackupFeedback: ManualBackupFeedback?
 
@@ -986,6 +987,7 @@ private struct PreferencesBackupSettingsRow: View {
                 },
                 pluginOptions: pluginOptions(for: Set(pending.backup.pluginPreferences.keys)),
                 isImporting: isImporting,
+                importProgress: importProgress,
                 onCancel: { pendingImport = nil },
                 onImport: { selectedPluginIDs, selection in
                     importPreferences(
@@ -1218,13 +1220,18 @@ private struct PreferencesBackupSettingsRow: View {
     ) {
         Task { @MainActor in
             isImporting = true
-            defer { isImporting = false }
+            importProgress = .preparing(pluginCount: pluginIDs.count)
+            defer {
+                isImporting = false
+                importProgress = nil
+            }
 
             do {
                 let result = try await pluginHost.importPreferences(
                     backup,
                     installingMissingPluginIDs: pluginIDs,
-                    selection: selection
+                    selection: selection,
+                    progress: { importProgress = $0 }
                 )
                 pendingImport = nil
                 let importedMessage = AppL10n.preferencesBackup(
@@ -1239,6 +1246,17 @@ private struct PreferencesBackupSettingsRow: View {
                             .title
                             ?? pluginID
                         return "\(title): \(message)"
+                    }
+                    + result.deferredPluginPreferenceIDs.map { pluginID in
+                        let title = pluginHost.pluginManagementItems
+                            .first(where: { $0.id == pluginID })?
+                            .title
+                            ?? pluginID
+                        return AppL10n.preferencesBackupFormat(
+                            "preferencesBackup.import.pluginRestoreDeferred",
+                            defaultValue: "已安装“%@”。请重新启动 MacTools，然后再次导入此备份以恢复其设置。",
+                            title
+                        )
                     }
                     + result.shortcutErrors
                         .values
@@ -1569,6 +1587,7 @@ struct PreferencesImportPreviewSheet: View {
     let previewProvider: (PreferencesBackupSelection) throws -> PreferencesImportPreview
     let pluginOptions: [PreferencesPluginOption]
     let isImporting: Bool
+    let importProgress: PreferencesImportProgress?
     let onCancel: () -> Void
     let onImport: (Set<String>, PreferencesBackupSelection) -> Void
     @State var selectionModel: PreferencesImportSelectionModel
@@ -1589,6 +1608,7 @@ struct PreferencesImportPreviewSheet: View {
         previewProvider: @escaping (PreferencesBackupSelection) throws -> PreferencesImportPreview,
         pluginOptions: [PreferencesPluginOption],
         isImporting: Bool,
+        importProgress: PreferencesImportProgress? = nil,
         onCancel: @escaping () -> Void,
         onImport: @escaping (Set<String>, PreferencesBackupSelection) -> Void
     ) {
@@ -1596,6 +1616,7 @@ struct PreferencesImportPreviewSheet: View {
         self.previewProvider = previewProvider
         self.pluginOptions = pluginOptions
         self.isImporting = isImporting
+        self.importProgress = importProgress
         self.onCancel = onCancel
         self.onImport = onImport
         var availableSelection = preview.selection
@@ -1623,14 +1644,15 @@ struct PreferencesImportPreviewSheet: View {
                     .padding(24)
             }
 
+            if isImporting, let importProgress {
+                importProgressView(importProgress)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+            }
+
             Divider()
 
             HStack(spacing: 12) {
-                if isImporting {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
                 Spacer()
                 Button(AppL10n.settings("common.cancel", defaultValue: "取消"), action: onCancel)
                     .buttonStyle(.bordered)
@@ -1647,6 +1669,55 @@ struct PreferencesImportPreviewSheet: View {
         .frame(width: 500, height: 640)
         .onChange(of: selection) { _, selection in
             refreshPreview(for: selection)
+        }
+    }
+
+    private func importProgressView(_ progress: PreferencesImportProgress) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+
+                Text(importProgressTitle(progress))
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                    .lineLimit(1)
+            }
+
+            ProgressView(
+                value: Double(progress.completedUnitCount),
+                total: Double(progress.totalUnitCount)
+            )
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private func importProgressTitle(_ progress: PreferencesImportProgress) -> String {
+        switch progress {
+        case .preparing:
+            return AppL10n.preferencesBackup(
+                "preferencesBackup.importProgress.preparing",
+                defaultValue: "正在准备导入…"
+            )
+        case let .installingPlugin(id, number, total):
+            let title = currentPreview.installablePlugins.first(where: { $0.id == id })?.title ?? id
+            return AppL10n.preferencesBackupFormat(
+                "preferencesBackup.importProgress.installing",
+                defaultValue: "正在安装 %@（%d/%d）…",
+                title,
+                number,
+                total
+            )
+        case .restoringPreferences:
+            return AppL10n.preferencesBackup(
+                "preferencesBackup.importProgress.restoring",
+                defaultValue: "正在应用偏好设置…"
+            )
         }
     }
 

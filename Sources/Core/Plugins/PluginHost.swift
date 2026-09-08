@@ -995,14 +995,22 @@ final class PluginHost: ObservableObject {
     func importPreferences(
         _ backup: PreferencesBackup,
         installingMissingPluginIDs requestedPluginIDs: Set<String>,
-        selection: PreferencesBackupSelection? = nil
+        selection: PreferencesBackupSelection? = nil,
+        progress: (PreferencesImportProgress) -> Void = { _ in }
     ) async throws -> PreferencesImportResult {
         let preview = try preferencesImportPreview(for: backup, selection: selection)
         let installablePluginIDs = Set(preview.installablePlugins.map(\.id))
+        let pluginIDs = requestedPluginIDs.intersection(installablePluginIDs).sorted()
         var installedPluginIDs: [String] = []
         var pluginInstallationFailures: [String: String] = [:]
 
-        for pluginID in requestedPluginIDs.intersection(installablePluginIDs).sorted() {
+        progress(.preparing(pluginCount: pluginIDs.count))
+        for (offset, pluginID) in pluginIDs.enumerated() {
+            progress(.installingPlugin(
+                id: pluginID,
+                number: offset + 1,
+                total: pluginIDs.count
+            ))
             do {
                 try await installPluginFromCatalog(pluginID: pluginID)
                 installedPluginIDs.append(pluginID)
@@ -1015,11 +1023,20 @@ final class PluginHost: ObservableObject {
             loadDynamicPluginsIfNeeded()
         }
 
-        var result = try importPreferences(backup, selection: selection)
-        result = PreferencesImportResult(
+        progress(.restoringPreferences(
+            completedPluginCount: pluginIDs.count,
+            totalPluginCount: pluginIDs.count
+        ))
+        let importedResult = try importPreferences(backup, selection: selection)
+        var shortcutErrors = importedResult.shortcutErrors
+        let deferredPluginPreferenceIDs = installedPluginIDs.filter { pluginID in
+            shortcutErrors.removeValue(forKey: "plugin-preferences.\(pluginID)") != nil
+        }
+        let result = PreferencesImportResult(
             installedPluginIDs: installedPluginIDs,
+            deferredPluginPreferenceIDs: deferredPluginPreferenceIDs,
             pluginInstallationFailures: pluginInstallationFailures,
-            shortcutErrors: result.shortcutErrors
+            shortcutErrors: shortcutErrors
         )
         return result
     }

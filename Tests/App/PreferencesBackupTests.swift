@@ -1754,17 +1754,92 @@ final class PreferencesBackupTests: XCTestCase {
         )
 
         await host.refreshPluginCatalog()
+        var progressUpdates: [PreferencesImportProgress] = []
         let result = try await host.importPreferences(
             backup,
-            installingMissingPluginIDs: ["installable"]
+            installingMissingPluginIDs: ["installable"],
+            progress: { progressUpdates.append($0) }
         )
 
         XCTAssertEqual(result.installedPluginIDs, ["installable"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
         XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertEqual(progressUpdates, [
+            .preparing(pluginCount: 1),
+            .installingPlugin(id: "installable", number: 1, total: 1),
+            .restoringPreferences(completedPluginCount: 1, totalPluginCount: 1),
+        ])
         XCTAssertEqual(host.featurePanelHiddenLayoutItems.map(\.id), ["installable"])
         XCTAssertFalse(host.panelItems.contains(where: { $0.id == "installable" }))
         XCTAssertEqual(dynamicManager.pluginManagementItems.first(where: { $0.id == "installable" })?.state, .installed)
         XCTAssertEqual(loader.receivedRecordIDBatches, [["installable"]])
+    }
+
+    func testImportReportsNewPluginPreferencesAsDeferredWhenRestartIsRequired() async throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PreferencesBackupDeferredTests-\(UUID().uuidString)", isDirectory: true)
+        let suiteName = "PreferencesBackupDeferredTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let packageURL = try makeDynamicPluginPackage(
+            at: temporaryRoot,
+            id: "restart-required",
+            version: "1.0.0"
+        )
+        let packageStore = PluginPackageStore(
+            rootDirectory: temporaryRoot.appending(path: "Installed", directoryHint: .isDirectory),
+            userDefaults: defaults,
+            hostVersion: "1.0.0"
+        )
+        let loader = BackupRestartRequiredPluginLoader()
+        let dynamicManager = DynamicPluginManager(packageStore: packageStore, pluginLoader: loader)
+        let catalogManager = PluginCatalogManager(
+            catalogProvider: BackupCatalogProvider(entries: [
+                makeCatalogEntry(id: "restart-required", version: "1.0.0")
+            ]),
+            packageResolver: BackupPackageResolver(packagesByID: ["restart-required": packageURL]),
+            dynamicPluginManager: dynamicManager,
+            source: .production(URL(string: "https://example.com/catalog.json")!)
+        )
+        let host = PluginHost(
+            plugins: [BackupTestPlugin(id: "built-in", order: 1, shortcutID: "toggle")],
+            dynamicPluginManager: dynamicManager,
+            pluginCatalogManager: catalogManager,
+            shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            globalShortcutManager: GlobalShortcutManager(),
+            loadDynamicPluginsOnInit: true
+        )
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(
+                orderedPluginIDs: ["restart-required", "built-in"],
+                hiddenPluginIDs: []
+            ),
+            shortcutCustomizations: [:],
+            pluginPreferences: ["restart-required": Data("restored-settings".utf8)]
+        )
+
+        await host.refreshPluginCatalog()
+        let result = try await host.importPreferences(
+            backup,
+            installingMissingPluginIDs: ["restart-required"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["restart-required"])
+        XCTAssertEqual(result.deferredPluginPreferenceIDs, ["restart-required"])
+        XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertNil(result.shortcutErrors["plugin-preferences.restart-required"])
+        XCTAssertEqual(
+            dynamicManager.pluginManagementItems.first(where: { $0.id == "restart-required" })?.state,
+            .installed
+        )
+        XCTAssertEqual(loader.receivedRecordIDBatches, [["restart-required"]])
     }
 
     func testDecodeRejectsUnsupportedFormatVersion() throws {
@@ -2301,6 +2376,18 @@ private final class BackupDynamicPluginLoader: DynamicPluginLoading {
                 plugins: [BackupTestPlugin(id: record.id, order: 10, shortcutID: "toggle")],
                 errorMessage: nil
             )
+        }
+    }
+}
+
+@MainActor
+private final class BackupRestartRequiredPluginLoader: DynamicPluginLoading {
+    private(set) var receivedRecordIDBatches: [[String]] = []
+
+    func loadInstalledPlugins(from records: [PluginPackageRecord]) -> [DynamicPluginLoadResult] {
+        receivedRecordIDBatches.append(records.map(\.id))
+        return records.map { record in
+            DynamicPluginLoadResult(record: record, plugins: [], errorMessage: nil)
         }
     }
 }
