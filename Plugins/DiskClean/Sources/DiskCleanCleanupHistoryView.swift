@@ -518,18 +518,27 @@ private struct DiskCleanRunHistoryRow: View {
 
                 if !run.itemEntries.isEmpty {
                     Button {
-                        isExpanded.toggle()
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isExpanded.toggle()
+                        }
                     } label: {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(PluginSettingsTheme.Typography.rowIcon)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.borderless)
+                    .help(
+                        isExpanded
+                            ? localization.string("detail.history.collapse", defaultValue: "收起清理记录")
+                            : localization.string("detail.history.expand", defaultValue: "展开清理记录")
+                    )
                 }
             }
             .pluginSettingsListRowPadding()
 
             if isExpanded && !run.itemEntries.isEmpty {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     PluginSettingsListDivider()
                     ForEach(run.itemEntries) { entry in
                         DiskCleanCleanupHistoryRow(entry: entry, localization: localization)

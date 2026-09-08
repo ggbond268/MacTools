@@ -110,32 +110,40 @@ private struct DiskCleanCategoryCard: View {
             )
             .disabled(!isInteractionEnabled || !state.isSelectable)
 
-            Image(systemName: group.category.symbolName)
-                .pluginSettingsRowIconStyle()
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    onToggleExpanded()
+                }
+            } label: {
+                HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    Image(systemName: group.category.symbolName)
+                        .pluginSettingsRowIconStyle()
 
-            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                Text(group.category.title(localization: localization))
-                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-                Text(group.category.consequence(localization: localization))
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(countSummary)
-                    .font(PluginSettingsTheme.Typography.statusBadge)
-                    .foregroundStyle(.secondary)
-            }
+                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                        Text(group.category.title(localization: localization))
+                            .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                        Text(group.category.consequence(localization: localization))
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(countSummary)
+                            .font(PluginSettingsTheme.Typography.statusBadge)
+                            .foregroundStyle(.secondary)
+                    }
 
-            Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+                    Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
-            Text(DiskCleanFormat.approximateBytes(group.selectedEstimatedBytes, localization: localization))
-                .font(PluginSettingsTheme.Typography.monospacedValue)
-                .frame(width: DiskCleanFormat.byteColumnWidth, alignment: .trailing)
+                    Text(DiskCleanFormat.approximateBytes(group.selectedEstimatedBytes, localization: localization))
+                        .font(PluginSettingsTheme.Typography.monospacedValue)
+                        .frame(width: DiskCleanFormat.byteColumnWidth, alignment: .trailing)
 
-            Button(action: onToggleExpanded) {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(PluginSettingsTheme.Typography.rowIcon)
+                    .frame(width: 28, height: 28)
+                }
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .help(
                 isExpanded
                     ? localization.string("detail.category.collapse", defaultValue: "收起项目")
@@ -146,7 +154,7 @@ private struct DiskCleanCategoryCard: View {
     }
 
     private var candidateRows: some View {
-        VStack(spacing: 0) {
+        LazyVStack(spacing: 0) {
             ForEach(group.candidates) { candidate in
                 DiskCleanCandidateRow(
                     candidate: candidate,
