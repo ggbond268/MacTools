@@ -125,10 +125,7 @@ final class CloudPreferencesSyncCoordinator {
         if enabled {
             startObservingDirectory()
             updateStatus()
-            scheduleExport()
-            Task { [weak self] in
-                await self?.checkForIncomingSnapshots()
-            }
+            reconcileIncomingThenScheduleExport()
         } else {
             stopObservingDirectory()
             pendingExportTask?.cancel()
@@ -155,10 +152,7 @@ final class CloudPreferencesSyncCoordinator {
         if isEnabled, url != nil {
             startObservingDirectory()
             updateStatus()
-            scheduleExport()
-            Task { [weak self] in
-                await self?.checkForIncomingSnapshots()
-            }
+            reconcileIncomingThenScheduleExport()
         } else {
             updateStatus()
         }
@@ -186,6 +180,18 @@ final class CloudPreferencesSyncCoordinator {
             } catch {
                 self.handleError(error)
             }
+        }
+    }
+
+    private func reconcileIncomingThenScheduleExport() {
+        let session = syncSession
+        Task { [weak self] in
+            guard let self else { return }
+            await self.checkForIncomingSnapshots()
+            guard self.isEnabled, self.syncDirectoryURL != nil, self.syncSession == session else {
+                return
+            }
+            self.scheduleExport()
         }
     }
 

@@ -72,6 +72,14 @@
         }
       }
     },
+    "general.section.cloudPreferencesSync": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cloud Sync" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "云同步" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "雲端同步" } }
+      }
+    },
     "preferencesBackup.automatic.noBackups": {
       "extractionState": "manual",
       "localizations": {
@@ -2249,9 +2257,9 @@
     "preferencesBackup.cloudSync.description": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Automatically sync preferences across multiple Macs using iCloud Drive or a shared folder." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "通过 iCloud 云盘或共享文件夹在多台 Mac 之间自动同步偏好设置。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "透過 iCloud 雲端硬碟或共享資料夾在多台 Mac 之間自動同步偏好設定。" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Sync portable app and plugin settings through the selected cloud or shared folder. Permissions, caches, credentials, and other private data are excluded." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "通过所选的云盘或共享文件夹同步可移植的应用与插件设置；不会同步权限、缓存、凭证或其他私密数据。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "透過所選的雲端硬碟或共享資料夾同步可攜式 App 與外掛設定；不會同步權限、快取、憑證或其他私密資料。" } }
       }
     },
     "preferencesBackup.cloudSync.enabled": {

@@ -446,6 +446,18 @@ struct GeneralSettingsView: View {
                         layoutWidth: widths.readableContent
                     )
                 }
+                Section {
+                    CloudPreferencesSyncSettingsRow(pluginHost: pluginHost)
+                        .settingsGroupedFormRowWidth(widths.sectionLayout)
+                } header: {
+                    SettingsGroupedFormSectionHeader(
+                        title: AppL10n.preferencesBackup(
+                            "general.section.cloudPreferencesSync",
+                            defaultValue: "云同步"
+                        ),
+                        layoutWidth: widths.readableContent
+                    )
+                }
             }
             .onAppear {
                 applySearchRevealRequest(
@@ -846,7 +858,6 @@ private struct PreferencesBackupSettingsRow: View {
     @State private var isImporting = false
     @State private var isBackingUp = false
     @State private var manualBackupFeedback: ManualBackupFeedback?
-    @State private var isSyncingManually = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -975,148 +986,6 @@ private struct PreferencesBackupSettingsRow: View {
             .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
             .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
 
-            backupRowDivider
-
-            // MARK: - Cloud Preferences Sync
-            HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: GeneralSettingsCardLayout.iconCornerRadius, style: .continuous)
-                        .fill(Color.blue.opacity(0.12))
-
-                    Image(systemName: "arrow.triangle.2.circlepath.icloud")
-                        .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
-                        .foregroundStyle(Color.blue)
-                }
-                .frame(width: GeneralSettingsCardLayout.iconSize, height: GeneralSettingsCardLayout.iconSize)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.title", defaultValue: "云同步偏好设置"))
-                        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-
-                    Text(AppL10n.preferencesBackup(
-                        "preferencesBackup.cloudSync.description",
-                        defaultValue: "通过 iCloud 云盘或共享文件夹在多台 Mac 之间自动同步偏好设置。"
-                    ))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
-            .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
-
-            backupRowDivider
-
-            Toggle(
-                isOn: Binding(
-                    get: { pluginHost.cloudPreferencesSyncEnabled },
-                    set: { enabled in
-                        pluginHost.setCloudPreferencesSyncEnabled(enabled)
-                    }
-                )
-            ) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(
-                        AppL10n.preferencesBackup(
-                            "preferencesBackup.cloudSync.enabled",
-                            defaultValue: "启用云同步偏好设置"
-                        )
-                    )
-                    .font(PluginSettingsTheme.Typography.rowTitle)
-
-                    cloudSyncStatusSubtitleView
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
-            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
-
-            backupRowDivider
-
-            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(AppL10n.preferencesBackup(
-                        "preferencesBackup.cloudSync.folder",
-                        defaultValue: "同步文件夹"
-                    ))
-                    .font(PluginSettingsTheme.Typography.rowTitle)
-
-                    if let folderURL = pluginHost.cloudPreferencesSyncDirectoryURL {
-                        Text(folderURL.path)
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    } else {
-                        Text(AppL10n.preferencesBackup(
-                            "preferencesBackup.cloudSync.notConfigured",
-                            defaultValue: "未配置文件夹"
-                        ))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-
-                Button(
-                    pluginHost.cloudPreferencesSyncDirectoryURL == nil
-                        ? AppL10n.preferencesBackup("preferencesBackup.cloudSync.chooseFolder", defaultValue: "选择文件夹…")
-                        : AppL10n.preferencesBackup("preferencesBackup.cloudSync.changeFolder", defaultValue: "更改…"),
-                    action: chooseSyncFolder
-                )
-                .buttonStyle(.bordered)
-
-                if pluginHost.cloudPreferencesSyncDirectoryURL != nil {
-                    Button(
-                        AppL10n.preferencesBackup("preferencesBackup.cloudSync.openFolder", defaultValue: "打开文件夹"),
-                        action: { pluginHost.openCloudPreferencesSyncFolder() }
-                    )
-                    .buttonStyle(.bordered)
-                }
-            }
-            .controlSize(.small)
-            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
-            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
-
-            backupRowDivider
-
-            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        cloudSyncStatusIcon
-                        Text(cloudSyncStatusText)
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                    }
-
-                    if let subtitle = cloudSyncStatusDetailText {
-                        Text(subtitle)
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-
-                Button(
-                    AppL10n.preferencesBackup(
-                        "preferencesBackup.cloudSync.syncNow",
-                        defaultValue: "立即同步"
-                    ),
-                    action: syncNow
-                )
-                .buttonStyle(.bordered)
-                .disabled(!pluginHost.cloudPreferencesSyncEnabled || pluginHost.cloudPreferencesSyncDirectoryURL == nil || isSyncingManually || pluginHost.cloudPreferencesSyncStatus.isSyncing)
-            }
-            .controlSize(.small)
-            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
-            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
         }
         .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
         .sheet(item: $pendingImport) { pending in
@@ -1326,156 +1195,6 @@ private struct PreferencesBackupSettingsRow: View {
         }
     }
 
-    private func cloudSyncRelativeDate(
-        _ date: Date,
-        relativeTo referenceDate: Date
-    ) -> String {
-        let locale = PluginRuntimeLocalization.locale
-        return PreferencesBackupStatusFormatter.relativeDate(
-            date,
-            relativeTo: referenceDate,
-            locale: locale,
-            justNow: AppL10n.preferencesBackup(
-                "preferencesBackup.automatic.justNow",
-                defaultValue: "刚刚"
-            )
-        )
-    }
-
-    private func chooseSyncFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = AppL10n.settings("common.choose", defaultValue: "选择")
-        panel.message = AppL10n.preferencesBackup(
-            "preferencesBackup.cloudSync.folderPrompt",
-            defaultValue: "选择用于同步 MacTools 偏好设置的文件夹（如 iCloud 云盘或 Dropbox）。"
-        )
-
-        PluginPresentationSafety.prepareForWindowOrdering()
-        guard panel.runModal() == .OK, let url = panel.url else {
-            return
-        }
-
-        pluginHost.setCloudPreferencesSyncDirectoryURL(url)
-    }
-
-    private func syncNow() {
-        Task { @MainActor in
-            isSyncingManually = true
-            defer { isSyncingManually = false }
-            do {
-                try await pluginHost.triggerCloudPreferencesSync()
-            } catch {
-                alertMessage = preferencesBackupErrorMessage(error)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var cloudSyncStatusSubtitleView: some View {
-        switch pluginHost.cloudPreferencesSyncStatus {
-        case .offline(let reason):
-            switch reason {
-            case .disabled:
-                Text(AppL10n.preferencesBackup(
-                    "preferencesBackup.cloudSync.status.disabled",
-                    defaultValue: "云同步未启用"
-                ))
-            case .folderNotConfigured:
-                Text(AppL10n.preferencesBackup(
-                    "preferencesBackup.cloudSync.notConfigured",
-                    defaultValue: "未配置文件夹"
-                ))
-            case .folderNotFound:
-                Text(AppL10n.preferencesBackup(
-                    "preferencesBackup.cloudSync.status.folderMissing",
-                    defaultValue: "配置的同步文件夹不存在"
-                ))
-            }
-        case .syncing:
-            Text(AppL10n.preferencesBackup(
-                "preferencesBackup.cloudSync.status.syncing",
-                defaultValue: "同步中…"
-            ))
-        case .synced(let date):
-            if let date {
-                TimelineView(.periodic(from: .now, by: 60)) { context in
-                    Text(AppL10n.preferencesBackupFormat(
-                        "preferencesBackup.cloudSync.status.lastSynced",
-                        defaultValue: "上次同步：%@",
-                        cloudSyncRelativeDate(date, relativeTo: context.date)
-                    ))
-                }
-            } else {
-                Text(AppL10n.preferencesBackup(
-                    "preferencesBackup.cloudSync.status.synced",
-                    defaultValue: "已同步"
-                ))
-            }
-        case .error(let message):
-            Text(message)
-        }
-    }
-
-    @ViewBuilder
-    private var cloudSyncStatusIcon: some View {
-        switch pluginHost.cloudPreferencesSyncStatus {
-        case .offline:
-            Image(systemName: "icloud.slash")
-                .foregroundStyle(.secondary)
-        case .syncing:
-            ProgressView()
-                .controlSize(.mini)
-        case .synced:
-            Image(systemName: "checkmark.icloud")
-                .foregroundStyle(.green)
-        case .error:
-            Image(systemName: "exclamationmark.icloud")
-                .foregroundStyle(.red)
-        }
-    }
-
-    private var cloudSyncStatusText: String {
-        switch pluginHost.cloudPreferencesSyncStatus {
-        case .offline:
-            return AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.offline", defaultValue: "离线")
-        case .syncing:
-            return AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.syncing", defaultValue: "同步中…")
-        case .synced:
-            return AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.synced", defaultValue: "已同步")
-        case .error:
-            return AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.error", defaultValue: "错误")
-        }
-    }
-
-    private var cloudSyncStatusDetailText: String? {
-        switch pluginHost.cloudPreferencesSyncStatus {
-        case .offline(let reason):
-            switch reason {
-            case .disabled:
-                return AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.disabled", defaultValue: "云同步未启用")
-            case .folderNotConfigured:
-                return AppL10n.preferencesBackup("preferencesBackup.cloudSync.notConfigured", defaultValue: "未配置文件夹")
-            case .folderNotFound:
-                return AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.folderMissing", defaultValue: "配置的同步文件夹不存在")
-            }
-        case .syncing:
-            return nil
-        case .synced(let date):
-            guard let date else { return nil }
-            return AppL10n.preferencesBackupFormat(
-                "preferencesBackup.cloudSync.status.lastSynced",
-                defaultValue: "上次同步：%@",
-                cloudSyncRelativeDate(date, relativeTo: .now)
-            )
-        case .error(let message):
-            return message
-        }
-    }
-
     private func choosePreferencesImport() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
@@ -1579,6 +1298,328 @@ private struct PreferencesBackupSettingsRow: View {
             )
         case nil:
             return error.localizedDescription
+        }
+    }
+}
+
+private struct CloudPreferencesSyncSettingsRow: View {
+    @ObservedObject var pluginHost: PluginHost
+    @State private var isSyncingManually = false
+    @State private var alertMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: GeneralSettingsCardLayout.iconCornerRadius, style: .continuous)
+                        .fill(Color.blue.opacity(0.12))
+
+                    Image(systemName: "arrow.triangle.2.circlepath.icloud")
+                        .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
+                        .foregroundStyle(Color.blue)
+                }
+                .frame(width: GeneralSettingsCardLayout.iconSize, height: GeneralSettingsCardLayout.iconSize)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(AppL10n.preferencesBackup(
+                        "preferencesBackup.cloudSync.title",
+                        defaultValue: "云同步偏好设置"
+                    ))
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                    Text(AppL10n.preferencesBackup(
+                        "preferencesBackup.cloudSync.description",
+                        defaultValue: "通过所选的云盘或共享文件夹同步可移植的应用与插件设置；不会同步权限、缓存、凭证或其他私密数据。"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+            .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+
+            rowDivider
+
+            Toggle(
+                isOn: Binding(
+                    get: { pluginHost.cloudPreferencesSyncEnabled },
+                    set: { pluginHost.setCloudPreferencesSyncEnabled($0) }
+                )
+            ) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(AppL10n.preferencesBackup(
+                        "preferencesBackup.cloudSync.enabled",
+                        defaultValue: "启用云同步偏好设置"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+
+                    cloudSyncStatusSubtitleView
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
+
+            rowDivider
+
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(AppL10n.preferencesBackup(
+                        "preferencesBackup.cloudSync.folder",
+                        defaultValue: "同步文件夹"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+
+                    if let folderURL = pluginHost.cloudPreferencesSyncDirectoryURL {
+                        Text(folderURL.path)
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    } else {
+                        Text(AppL10n.preferencesBackup(
+                            "preferencesBackup.cloudSync.notConfigured",
+                            defaultValue: "未配置文件夹"
+                        ))
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+                Button(
+                    pluginHost.cloudPreferencesSyncDirectoryURL == nil
+                        ? AppL10n.preferencesBackup("preferencesBackup.cloudSync.chooseFolder", defaultValue: "选择文件夹…")
+                        : AppL10n.preferencesBackup("preferencesBackup.cloudSync.changeFolder", defaultValue: "更改…"),
+                    action: chooseSyncFolder
+                )
+                .buttonStyle(.bordered)
+
+                if pluginHost.cloudPreferencesSyncDirectoryURL != nil {
+                    Button(
+                        AppL10n.preferencesBackup("preferencesBackup.cloudSync.openFolder", defaultValue: "打开文件夹"),
+                        action: { pluginHost.openCloudPreferencesSyncFolder() }
+                    )
+                    .buttonStyle(.bordered)
+                }
+            }
+            .controlSize(.small)
+            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
+
+            rowDivider
+
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        cloudSyncStatusIcon
+                        Text(cloudSyncStatusText)
+                            .font(PluginSettingsTheme.Typography.rowTitle)
+                    }
+
+                    if let subtitle = cloudSyncStatusDetailText {
+                        Text(subtitle)
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+                Button(
+                    AppL10n.preferencesBackup(
+                        "preferencesBackup.cloudSync.syncNow",
+                        defaultValue: "立即同步"
+                    ),
+                    action: syncNow
+                )
+                .buttonStyle(.bordered)
+                .disabled(
+                    !pluginHost.cloudPreferencesSyncEnabled
+                        || pluginHost.cloudPreferencesSyncDirectoryURL == nil
+                        || isSyncingManually
+                        || pluginHost.cloudPreferencesSyncStatus.isSyncing
+                )
+            }
+            .controlSize(.small)
+            .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+            .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
+        }
+        .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
+        .alert(
+            AppL10n.preferencesBackup("preferencesBackup.cloudSync.title", defaultValue: "云同步偏好设置"),
+            isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { if !$0 { alertMessage = nil } }
+            )
+        ) {
+            Button(AppL10n.settings("common.ok", defaultValue: "好"), role: .cancel) {}
+        } message: {
+            Text(alertMessage ?? "")
+        }
+    }
+
+    private var rowDivider: some View {
+        PluginSettingsListDivider(
+            leadingInset: GeneralSettingsCardLayout.horizontalPadding,
+            trailingInset: GeneralSettingsCardLayout.horizontalPadding
+        )
+    }
+
+    private func chooseSyncFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = AppL10n.settings("common.choose", defaultValue: "选择")
+        panel.message = AppL10n.preferencesBackup(
+            "preferencesBackup.cloudSync.folderPrompt",
+            defaultValue: "选择用于同步 MacTools 偏好设置的文件夹（如 iCloud 云盘或 Dropbox）。"
+        )
+
+        PluginPresentationSafety.prepareForWindowOrdering()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        pluginHost.setCloudPreferencesSyncDirectoryURL(url)
+    }
+
+    private func syncNow() {
+        Task { @MainActor in
+            isSyncingManually = true
+            defer { isSyncingManually = false }
+            do {
+                try await pluginHost.triggerCloudPreferencesSync()
+            } catch {
+                alertMessage = preferencesBackupErrorMessage(error)
+            }
+        }
+    }
+
+    private func cloudSyncRelativeDate(_ date: Date, relativeTo referenceDate: Date) -> String {
+        PreferencesBackupStatusFormatter.relativeDate(
+            date,
+            relativeTo: referenceDate,
+            locale: PluginRuntimeLocalization.locale,
+            justNow: AppL10n.preferencesBackup(
+                "preferencesBackup.automatic.justNow",
+                defaultValue: "刚刚"
+            )
+        )
+    }
+
+    @ViewBuilder
+    private var cloudSyncStatusSubtitleView: some View {
+        switch pluginHost.cloudPreferencesSyncStatus {
+        case .offline(let reason):
+            switch reason {
+            case .disabled:
+                Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.disabled", defaultValue: "云同步未启用"))
+            case .folderNotConfigured:
+                Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.notConfigured", defaultValue: "未配置文件夹"))
+            case .folderNotFound:
+                Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.folderMissing", defaultValue: "配置的同步文件夹不存在"))
+            }
+        case .syncing:
+            Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.syncing", defaultValue: "同步中…"))
+        case .synced(let date):
+            if let date {
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    Text(AppL10n.preferencesBackupFormat(
+                        "preferencesBackup.cloudSync.status.lastSynced",
+                        defaultValue: "上次同步：%@",
+                        cloudSyncRelativeDate(date, relativeTo: context.date)
+                    ))
+                }
+            } else {
+                Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.synced", defaultValue: "已同步"))
+            }
+        case .error(let message):
+            Text(message)
+        }
+    }
+
+    @ViewBuilder
+    private var cloudSyncStatusIcon: some View {
+        switch pluginHost.cloudPreferencesSyncStatus {
+        case .offline:
+            Image(systemName: "icloud.slash").foregroundStyle(.secondary)
+        case .syncing:
+            ProgressView().controlSize(.mini)
+        case .synced:
+            Image(systemName: "checkmark.icloud").foregroundStyle(.green)
+        case .error:
+            Image(systemName: "exclamationmark.icloud").foregroundStyle(.red)
+        }
+    }
+
+    private var cloudSyncStatusText: String {
+        switch pluginHost.cloudPreferencesSyncStatus {
+        case .offline:
+            AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.offline", defaultValue: "离线")
+        case .syncing:
+            AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.syncing", defaultValue: "同步中…")
+        case .synced:
+            AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.synced", defaultValue: "已同步")
+        case .error:
+            AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.error", defaultValue: "错误")
+        }
+    }
+
+    private var cloudSyncStatusDetailText: String? {
+        switch pluginHost.cloudPreferencesSyncStatus {
+        case .offline(let reason):
+            switch reason {
+            case .disabled:
+                AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.disabled", defaultValue: "云同步未启用")
+            case .folderNotConfigured:
+                AppL10n.preferencesBackup("preferencesBackup.cloudSync.notConfigured", defaultValue: "未配置文件夹")
+            case .folderNotFound:
+                AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.folderMissing", defaultValue: "配置的同步文件夹不存在")
+            }
+        case .syncing:
+            nil
+        case .synced(let date):
+            date.map {
+                AppL10n.preferencesBackupFormat(
+                    "preferencesBackup.cloudSync.status.lastSynced",
+                    defaultValue: "上次同步：%@",
+                    cloudSyncRelativeDate($0, relativeTo: .now)
+                )
+            }
+        case .error(let message):
+            message
+        }
+    }
+
+    private func preferencesBackupErrorMessage(_ error: Error) -> String {
+        switch error as? PreferencesBackupError {
+        case let .unsupportedFormatVersion(version):
+            AppL10n.preferencesBackupFormat(
+                "preferencesBackup.error.unsupportedFormat",
+                defaultValue: "不支持的偏好设置备份版本（%d）。",
+                version
+            )
+        case .invalidApplicationPreferences:
+            AppL10n.preferencesBackup(
+                "preferencesBackup.error.invalidApplicationPreferences",
+                defaultValue: "备份中的应用偏好设置无效。"
+            )
+        case let .fileTooLarge(maximumBytes):
+            AppL10n.preferencesBackupFormat(
+                "preferencesBackup.error.fileTooLarge",
+                defaultValue: "偏好设置备份不能超过 %d MB。",
+                maximumBytes / (1024 * 1024)
+            )
+        case nil:
+            error.localizedDescription
         }
     }
 }

@@ -110,6 +110,54 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.status, .synced(lastSyncedAt: coordinator.lastSyncedAt))
     }
 
+    func testEnablingSyncReadsExistingRemoteSnapshotBeforeFirstExport() async throws {
+        let defaults = makeDefaults()
+        let directory = makeTemporaryDirectoryURL()
+        let gate = CloudSnapshotReadGate()
+        let remoteSnapshot = CloudPreferencesSnapshot(
+            generation: 9,
+            deviceID: "remote-device",
+            deviceName: "Other Mac",
+            backup: makeBackup(marker: "remote-preferences")
+        )
+        let syncFile = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        try remoteSnapshot.encodedJSON().write(to: syncFile, options: .atomic)
+
+        let coordinator = CloudPreferencesSyncCoordinator(
+            userDefaults: defaults,
+            debounceDelay: .zero,
+            readSnapshot: { url in
+                let data = try Data(contentsOf: url)
+                await gate.suspendIfArmed()
+                return data
+            }
+        )
+        var currentBackup = makeBackup(marker: "new-local-install")
+        let imported = expectation(description: "Existing remote preferences imported")
+        coordinator.snapshotProvider = { currentBackup }
+        coordinator.importHandler = {
+            currentBackup = $0
+            imported.fulfill()
+        }
+        coordinator.setSyncDirectoryURL(directory)
+        await gate.arm()
+        coordinator.setEnabled(true)
+        defer { coordinator.setEnabled(false) }
+        await gate.waitUntilSuspended()
+
+        let snapshotWhileReading = try readSnapshot(in: directory)
+        XCTAssertEqual(
+            snapshotWhileReading.backup.pluginDisplay.orderedPluginIDs,
+            ["remote-preferences"],
+            "The first local export must not overwrite the remote snapshot while it is being read"
+        )
+
+        await gate.resume()
+        await fulfillment(of: [imported], timeout: 5)
+        XCTAssertEqual(currentBackup.pluginDisplay.orderedPluginIDs, ["remote-preferences"])
+        XCTAssertEqual(coordinator.currentGeneration, 9)
+    }
+
     func testIncomingOlderSnapshotIsRejected() async throws {
         let defaults = makeDefaults()
         let directory = makeTemporaryDirectoryURL()
