@@ -4,4 +4,4 @@ type: changed
 area: Settings
 ---
 
-Remove the persistent Plugin Settings filter and its Command-Shift-F shortcut, while keeping sidebar navigation and selection focus stable across Command Palette and detail-pane interactions.
+Remove the persistent Plugin Settings filter and its Command-Shift-F shortcut. Keep sidebar navigation stable and preserve search focus when clicking inside the Command Palette.

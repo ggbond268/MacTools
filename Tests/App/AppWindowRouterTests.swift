@@ -214,11 +214,11 @@ final class AppWindowRouterTests: XCTestCase {
         }
 
         coordinator.presentUnifiedSearch(origin: .settingsSidebar)
-        await settleWindowLayout(window)
+        _ = try await focusUnifiedSearchField(in: window)
         XCTAssertFalse(window.firstResponder === sidebarListView)
         XCTAssertTrue(coordinator.navigateFromSearch(to: .about, target: nil))
-        for _ in 0..<3 {
-            await settleWindowLayout(window)
+        try await waitForWindowState(window, "Sidebar focus after search navigation") {
+            window.firstResponder === sidebarListView
         }
 
         XCTAssertTrue(settingsSidebarScrollView(in: hostingView) === sidebarScrollView)
@@ -253,55 +253,110 @@ final class AppWindowRouterTests: XCTestCase {
         window.close()
     }
 
-    func testClickingSelectedSidebarRowRestoresListFocus() async throws {
+    func testSidebarClicksRestoreFocusWithoutChangingSelection() async throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let router = makeRouter(defaults: defaults)
-
         router.showSettings()
 
-        let window = try XCTUnwrap(router.settingsWindow)
-        let hostingView = try XCTUnwrap(window.contentView as? NSHostingView<SettingsView>)
-        for _ in 0..<3 {
-            await settleWindowLayout(window)
+        let window = try XCTUnwrap(router.settingsWindow as? MacToolsCommandWindow)
+        defer { window.close() }
+        let sidebarListView = try XCTUnwrap(window.sidebarListView)
+        try await waitForWindowState(window, "Initial sidebar selection") {
+            sidebarListView.selectedRow >= 0
         }
-        let sidebarScrollView = try XCTUnwrap(settingsSidebarScrollView(in: hostingView))
-        let sidebarListView = try XCTUnwrap(sidebarScrollView.documentView as? NSTableView)
         let selectedRow = sidebarListView.selectedRow
-        XCTAssertGreaterThanOrEqual(selectedRow, 0)
         let differentRow = selectedRow + 1
         XCTAssertLessThan(differentRow, sidebarListView.numberOfRows)
 
-        XCTAssertTrue(window.makeFirstResponder(window))
-        await settleWindowLayout(window)
-        XCTAssertFalse(window.firstResponder === sidebarListView)
-        try clickRow(differentRow, in: sidebarListView, window: window)
-        for _ in 0..<3 {
-            await settleWindowLayout(window)
-        }
+        for row in [differentRow, selectedRow] {
+            XCTAssertTrue(window.makeFirstResponder(window))
+            let event = try sidebarMouseDown(row: row, in: sidebarListView, window: window)
 
-        XCTAssertEqual(sidebarListView.selectedRow, differentRow)
+            // Exercise our focus handling without entering AppKit's mouse-tracking loop.
+            window.restoreSidebarFocusIfNeeded(for: event)
+
+            XCTAssertTrue(window.firstResponder === sidebarListView)
+            XCTAssertEqual(
+                sidebarListView.selectedRow,
+                selectedRow,
+                "Focus restoration must leave row selection to native event handling"
+            )
+        }
+    }
+
+    func testSearchOverlayClickPreservesSearchFieldFocus() async throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let router = makeRouter(defaults: defaults)
+        router.showSettings()
+
+        let window = try XCTUnwrap(router.settingsWindow as? MacToolsCommandWindow)
+        defer { window.close() }
+        window.setContentSize(NSSize(width: 940, height: 740))
+        let sidebarListView = try XCTUnwrap(window.sidebarListView)
+        let coordinator = try XCTUnwrap(router.settingsNavigationCoordinator)
+        try await waitForWindowState(window, "Initial sidebar selection") {
+            sidebarListView.selectedRow >= 0
+        }
+        let sidebarEvent = try sidebarMouseDown(
+            row: sidebarListView.selectedRow,
+            in: sidebarListView,
+            window: window
+        )
+        XCTAssertTrue(window.makeFirstResponder(window))
+        coordinator.presentUnifiedSearch(origin: .settingsSidebar)
+        window.restoreSidebarFocusIfNeeded(for: sidebarEvent)
         XCTAssertTrue(
-            window.firstResponder === sidebarListView,
-            "Expected clicking a different sidebar row to restore list focus"
+            window.firstResponder === window,
+            "Presenting search must block sidebar focus even before the overlay is laid out"
         )
 
-        XCTAssertTrue(window.makeFirstResponder(window))
-        await settleWindowLayout(window)
-        XCTAssertFalse(window.firstResponder === sidebarListView)
-        try clickRow(differentRow, in: sidebarListView, window: window)
-        for _ in 0..<3 {
-            await settleWindowLayout(window)
-        }
-
-        XCTAssertEqual(sidebarListView.selectedRow, differentRow)
-        XCTAssertTrue(
-            window.firstResponder === sidebarListView,
-            "Expected clicking the selected sidebar row to restore list focus"
+        let field = try await focusUnifiedSearchField(in: window)
+        let editor = try XCTUnwrap(field.currentEditor())
+        let fieldFrame = field.convert(field.bounds, to: nil)
+        let location = NSPoint(x: fieldFrame.minX - 6, y: fieldFrame.midY)
+        XCTAssertGreaterThanOrEqual(
+            sidebarListView.row(at: sidebarListView.convert(location, from: nil)),
+            0,
+            "The palette padding must overlap a sidebar row to reproduce the regression"
         )
 
-        window.close()
+        window.restoreSidebarFocusIfNeeded(for: try mouseDown(at: location, in: window))
+
+        XCTAssertTrue(coordinator.isUnifiedSearchPresented)
+        XCTAssertTrue(window.firstResponder === editor)
+    }
+
+    func testCoveredSidebarRowDoesNotStealFocus() async throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let router = makeRouter(defaults: defaults)
+        router.showSettings()
+
+        let window = try XCTUnwrap(router.settingsWindow as? MacToolsCommandWindow)
+        defer { window.close() }
+        let sidebarListView = try XCTUnwrap(window.sidebarListView)
+        try await waitForWindowState(window, "Initial sidebar selection") {
+            sidebarListView.selectedRow >= 0
+        }
+        let event = try sidebarMouseDown(
+            row: sidebarListView.selectedRow,
+            in: sidebarListView,
+            window: window
+        )
+        let parentView = try XCTUnwrap(sidebarListView.superview)
+        let cover = NSView(frame: sidebarListView.frame)
+        parentView.addSubview(cover, positioned: .above, relativeTo: sidebarListView)
+        defer { cover.removeFromSuperview() }
+        XCTAssertTrue(window.makeFirstResponder(window))
+
+        window.restoreSidebarFocusIfNeeded(for: event)
+
+        XCTAssertTrue(window.firstResponder === window)
     }
 
     func testFeatureSettingsPresentationRoutesToRequestedPage() throws {
@@ -365,41 +420,70 @@ final class AppWindowRouterTests: XCTestCase {
             }
     }
 
-    private func clickRow(
-        _ row: Int,
+    private func sidebarMouseDown(
+        row: Int,
         in tableView: NSTableView,
         window: NSWindow
-    ) throws {
+    ) throws -> NSEvent {
         tableView.scrollRowToVisible(row)
+        window.layoutIfNeeded()
         let rowFrame = tableView.rect(ofRow: row)
         let location = tableView.convert(
             NSPoint(x: rowFrame.midX, y: rowFrame.midY),
             to: nil
         )
-        let mouseDown = try XCTUnwrap(NSEvent.mouseEvent(
+        return try mouseDown(at: location, in: window)
+    }
+
+    private func mouseDown(at location: NSPoint, in window: NSWindow) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(
             with: .leftMouseDown,
             location: location,
             modifierFlags: [],
-            timestamp: 0,
+            timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber,
             context: nil,
             eventNumber: 0,
             clickCount: 1,
             pressure: 1
         ))
-        let mouseUp = try XCTUnwrap(NSEvent.mouseEvent(
-            with: .leftMouseUp,
-            location: location,
-            modifierFlags: [],
-            timestamp: 0,
-            windowNumber: window.windowNumber,
-            context: nil,
-            eventNumber: 0,
-            clickCount: 1,
-            pressure: 0
-        ))
-        window.sendEvent(mouseDown)
-        window.sendEvent(mouseUp)
+    }
+
+    private func focusUnifiedSearchField(in window: NSWindow) async throws -> NSTextField {
+        let rootView = try XCTUnwrap(window.contentView)
+        func searchField() -> NSTextField? {
+            descendantViews(of: rootView)
+                .compactMap { $0 as? NSTextField }
+                .first { $0.accessibilityIdentifier() == "mactools.unified-search.field" }
+        }
+        try await waitForWindowState(window, "Unified search field") {
+            searchField() != nil
+        }
+        let field = try XCTUnwrap(searchField())
+        // Window tests can run without app activation; establish the starting focus explicitly.
+        XCTAssertTrue(window.makeFirstResponder(field))
+        XCTAssertNotNil(field.currentEditor())
+        return field
+    }
+
+    private func waitForWindowState(
+        _ window: NSWindow,
+        _ description: String,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        until condition: () -> Bool
+    ) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while true {
+            window.layoutIfNeeded()
+            if condition() { return }
+            guard clock.now < deadline else {
+                XCTFail("Timed out waiting for \(description)", file: file, line: line)
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     private func descendantViews(of view: NSView) -> [NSView] {

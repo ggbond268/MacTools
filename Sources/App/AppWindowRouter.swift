@@ -91,20 +91,36 @@ enum MacToolsLocalKeyboardCommand: Equatable {
 final class MacToolsCommandWindow: NSWindow {
     var onLocalKeyboardCommand: ((MacToolsLocalKeyboardCommand) -> Bool)?
     weak var sidebarListView: NSTableView?
+    var isSidebarInteractionEnabled: () -> Bool = { true }
 
     override func sendEvent(_ event: NSEvent) {
-        if
+        restoreSidebarFocusIfNeeded(for: event)
+        super.sendEvent(event)
+    }
+
+    func restoreSidebarFocusIfNeeded(for event: NSEvent) {
+        guard
             event.type == .leftMouseDown,
+            isSidebarInteractionEnabled(),
             let sidebarListView,
-            sidebarListView.window === self
-        {
-            let location = sidebarListView.convert(event.locationInWindow, from: nil)
-            if sidebarListView.row(at: location) >= 0 {
-                makeFirstResponder(sidebarListView)
-            }
+            sidebarListView.window === self,
+            let contentView
+        else {
+            return
         }
 
-        super.sendEvent(event)
+        let location = sidebarListView.convert(event.locationInWindow, from: nil)
+        guard sidebarListView.row(at: location) >= 0 else { return }
+
+        // Hit testing takes a point in the receiver's superview coordinates.
+        let hitLocation = contentView.superview?.convert(event.locationInWindow, from: nil)
+            ?? event.locationInWindow
+        guard let hitView = contentView.hitTest(hitLocation),
+              hitView === sidebarListView || hitView.isDescendant(of: sidebarListView) else {
+            return
+        }
+
+        makeFirstResponder(sidebarListView)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -728,6 +744,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.onLocalKeyboardCommand = { [weak self] command in
             self?.handleLocalKeyboardCommand(command) ?? false
+        }
+        window.isSidebarInteractionEnabled = { [weak navigationCoordinator] in
+            navigationCoordinator?.isUnifiedSearchPresented == false
         }
         window.center()
         settingsNavigationCoordinator = navigationCoordinator
