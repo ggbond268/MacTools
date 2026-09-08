@@ -15,19 +15,22 @@ final class WindowSnapCoordinator {
     private var dragReleaseTask: Task<Void, Never>?
     private let pressedMouseButtonsProvider: () -> Int
     private let dragReleasePollInterval: Duration
+    private let referenceInsets: NSEdgeInsets
 
     init(
         role: WindowRole,
         positionStore: WindowPositionStore = .shared,
         overlayController: WindowSnapOverlayController = WindowSnapOverlayController(),
         pressedMouseButtonsProvider: @escaping () -> Int = { NSEvent.pressedMouseButtons },
-        dragReleasePollInterval: Duration = .milliseconds(16)
+        dragReleasePollInterval: Duration = .milliseconds(16),
+        referenceInsets: NSEdgeInsets = NSEdgeInsets()
     ) {
         self.role = role
         self.positionStore = positionStore
         self.overlayController = overlayController
         self.pressedMouseButtonsProvider = pressedMouseButtonsProvider
         self.dragReleasePollInterval = dragReleasePollInterval
+        self.referenceInsets = referenceInsets
     }
 
     isolated deinit {
@@ -120,6 +123,7 @@ final class WindowSnapCoordinator {
             proposedFrame: window.frame,
             contentSize: window.frame.size,
             visibleFrame: screen.visibleFrame,
+            referenceInsets: referenceInsets,
             currentlySnappingX: isSnappingX,
             currentlySnappingY: isSnappingY
         )

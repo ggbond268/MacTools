@@ -145,6 +145,31 @@ final class WindowSnapGeometryTests: XCTestCase {
         XCTAssertEqual(fullySnapped.snappedFrame, defaultFrame)
     }
 
+    func testReferenceInsetsAlignGuidesWithoutChangingTheSnapFrame() throws {
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let result = WindowSnapGeometry.calculate(
+            proposedFrame: CGRect(x: 600, y: 185, width: 720, height: 710),
+            contentSize: contentSize,
+            visibleFrame: visibleFrame,
+            referenceInsets: NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
+        )
+
+        XCTAssertEqual(result.defaultFrame, CGRect(x: 600, y: 185, width: 720, height: 710))
+        XCTAssertEqual(result.snappedFrame, result.defaultFrame)
+        XCTAssertEqual(
+            try XCTUnwrap(result.guides.first { $0.role == .leftEdge }).start.x,
+            result.defaultFrame.minX + 24
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(result.guides.first { $0.role == .rightEdge }).start.x,
+            result.defaultFrame.maxX - 24
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(result.guides.first { $0.role == .topEdge }).start.y,
+            result.defaultFrame.maxY - 24
+        )
+    }
+
     func testClampingKeepsWindowFullyAccessible() {
         let visibleFrame = CGRect(x: 100, y: 50, width: 1200, height: 800)
 

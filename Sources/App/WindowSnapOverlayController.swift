@@ -137,19 +137,25 @@ final class WindowSnapOverlayController {
             let panel = panelsByGuideID[guide.id] ?? makeOverlayPanel()
             panelsByGuideID[guide.id] = panel
             let frame = panelFrame(for: guide, on: screen)
-            panel.setFrame(frame, display: true)
+            if panel.frame != frame {
+                panel.setFrame(frame, display: true)
+            }
             let overlayView = panel.contentView as? WindowSnapOverlayView
-            overlayView?.frame = panel.contentView?.bounds ?? .zero
-            overlayView?.render([guide], screenFrame: frame)
+            if overlayView?.renderedGuides != [guide] {
+                overlayView?.frame = panel.contentView?.bounds ?? .zero
+                overlayView?.render([guide], screenFrame: frame)
+            }
 
             // A small dedicated window avoids the compositing and coordinate-space failures
             // seen with a transparent full-screen overlay during AppKit's tracking loop.
-            let restoration = PluginPresentationSafety.prepareForWindowOrdering(
-                panel,
-                restoringTextEditingIn: window
-            )
-            panel.orderFrontRegardless()
-            restoration?.restore()
+            if !panel.isVisible {
+                let restoration = PluginPresentationSafety.prepareForWindowOrdering(
+                    panel,
+                    restoringTextEditingIn: window
+                )
+                panel.orderFrontRegardless()
+                restoration?.restore()
+            }
         }
     }
 

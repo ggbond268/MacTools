@@ -86,6 +86,7 @@ enum WindowSnapGeometry {
         proposedFrame: CGRect,
         contentSize: CGSize,
         visibleFrame: CGRect,
+        referenceInsets: NSEdgeInsets = NSEdgeInsets(),
         threshold: CGFloat = defaultThreshold,
         hysteresis: CGFloat = defaultHysteresis,
         currentlySnappingX: Bool = false,
@@ -115,28 +116,34 @@ enum WindowSnapGeometry {
         )
         let snappedFrame = clampedFrame(rawSnappedFrame, in: visibleFrame)
 
+        let referenceFrame = CGRect(
+            x: target.minX + referenceInsets.left,
+            y: target.minY + referenceInsets.bottom,
+            width: max(0, target.width - referenceInsets.left - referenceInsets.right),
+            height: max(0, target.height - referenceInsets.top - referenceInsets.bottom)
+        )
         let leftGuide = WindowSnapGuide(
             id: "guide.left",
             role: .leftEdge,
             orientation: .vertical,
-            start: CGPoint(x: target.minX, y: visibleFrame.minY),
-            end: CGPoint(x: target.minX, y: visibleFrame.maxY),
+            start: CGPoint(x: referenceFrame.minX, y: visibleFrame.minY),
+            end: CGPoint(x: referenceFrame.minX, y: visibleFrame.maxY),
             isHighlighted: isSnappingX
         )
         let rightGuide = WindowSnapGuide(
             id: "guide.right",
             role: .rightEdge,
             orientation: .vertical,
-            start: CGPoint(x: target.maxX, y: visibleFrame.minY),
-            end: CGPoint(x: target.maxX, y: visibleFrame.maxY),
+            start: CGPoint(x: referenceFrame.maxX, y: visibleFrame.minY),
+            end: CGPoint(x: referenceFrame.maxX, y: visibleFrame.maxY),
             isHighlighted: isSnappingX
         )
         let topGuide = WindowSnapGuide(
             id: "guide.top",
             role: .topEdge,
             orientation: .horizontal,
-            start: CGPoint(x: visibleFrame.minX, y: target.maxY),
-            end: CGPoint(x: visibleFrame.maxX, y: target.maxY),
+            start: CGPoint(x: visibleFrame.minX, y: referenceFrame.maxY),
+            end: CGPoint(x: visibleFrame.maxX, y: referenceFrame.maxY),
             isHighlighted: isSnappingY
         )
 

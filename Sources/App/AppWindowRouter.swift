@@ -735,7 +735,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         )
         let coordinator = WindowSnapCoordinator(
             role: .commandPalette,
-            positionStore: windowPositionStore
+            positionStore: windowPositionStore,
+            referenceInsets: NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
         )
         commandPaletteSnapCoordinator = coordinator
         coordinator.attach(to: panel)
