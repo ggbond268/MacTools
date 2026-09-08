@@ -14,12 +14,12 @@
     "check": "astro check"
   },
   "dependencies": {
-    "@types/node": "24.10.1",
     "@astrojs/check": "0.9.9",
-    "astro": "6.4.4",
+    "@types/node": "24.10.1",
+    "astro": "7.3.2",
     "typescript": "6.0.3"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   }
 }
