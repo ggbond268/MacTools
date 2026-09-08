@@ -115,6 +115,13 @@ final class MacToolsCommandWindow: NSWindow {
 
 enum StandaloneCommandPaletteLayout {
     static let contentSize = NSSize(width: 720, height: 710)
+    static let surfaceInset: CGFloat = 24
+    static let surfaceInsets = NSEdgeInsets(
+        top: surfaceInset,
+        left: surfaceInset,
+        bottom: surfaceInset,
+        right: surfaceInset
+    )
 
     static func frame(
         contentSize: NSSize = contentSize,
@@ -301,7 +308,7 @@ struct StandaloneCommandPaletteRootView: View {
                 actions: actions,
                 dragCoordinator: dragCoordinator
             )
-            .padding(24)
+            .padding(StandaloneCommandPaletteLayout.surfaceInset)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .id(state.localizationRevision)
@@ -736,7 +743,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         let coordinator = WindowSnapCoordinator(
             role: .commandPalette,
             positionStore: windowPositionStore,
-            referenceInsets: NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
+            referenceInsets: StandaloneCommandPaletteLayout.surfaceInsets
         )
         commandPaletteSnapCoordinator = coordinator
         coordinator.attach(to: panel)

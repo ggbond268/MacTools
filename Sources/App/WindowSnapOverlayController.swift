@@ -29,6 +29,9 @@ final class WindowSnapOverlayView: NSView {
     }
 
     func render(_ guides: [WindowSnapGuide], screenFrame: CGRect) {
+        let previousHighlightState = Dictionary(
+            uniqueKeysWithValues: renderedGuides.map { ($0.id, $0.isHighlighted) }
+        )
         renderedGuides = guides.map { guide in
             WindowSnapGuide(
                 id: guide.id,
@@ -49,10 +52,7 @@ final class WindowSnapOverlayView: NSView {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        defer {
-            CATransaction.commit()
-            CATransaction.flush()
-        }
+        defer { CATransaction.commit() }
 
         for guide in renderedGuides {
             let layers = guideLayers[guide.id] ?? makeGuideLayers(for: guide.id)
@@ -62,14 +62,33 @@ final class WindowSnapOverlayView: NSView {
 
             layers.halo.frame = bounds
             layers.halo.path = path
-            layers.halo.lineWidth = guide.isHighlighted ? 5 : 4
+            layers.halo.lineWidth = guide.isHighlighted ? 7 : 1
+            layers.halo.strokeColor = guide.isHighlighted
+                ? NSColor.controlAccentColor.withAlphaComponent(0.24).cgColor
+                : NSColor.clear.cgColor
+            layers.halo.lineDashPattern = guide.isHighlighted ? [3, 4] : nil
 
             layers.accent.frame = bounds
             layers.accent.path = path
-            layers.accent.lineWidth = guide.isHighlighted ? 2.5 : 2
-            layers.accent.strokeColor = NSColor.controlAccentColor
-                .withAlphaComponent(guide.isHighlighted ? 1 : 0.82)
-                .cgColor
+            layers.accent.lineWidth = guide.isHighlighted ? 2.5 : 1
+            layers.accent.lineDashPattern = guide.isHighlighted ? [3, 4] : [7, 6]
+            layers.accent.strokeColor = guide.isHighlighted
+                ? NSColor.controlAccentColor.withAlphaComponent(0.96).cgColor
+                : NSColor.separatorColor.withAlphaComponent(0.58).cgColor
+            layers.accent.shadowColor = guide.isHighlighted
+                ? NSColor.controlAccentColor.cgColor
+                : nil
+            layers.accent.shadowOpacity = guide.isHighlighted ? 0.5 : 0
+            layers.accent.shadowRadius = guide.isHighlighted ? 3 : 0
+            layers.accent.shadowOffset = .zero
+
+            if guide.isHighlighted, previousHighlightState[guide.id] != true {
+                let emphasis = CABasicAnimation(keyPath: "opacity")
+                emphasis.fromValue = 0.35
+                emphasis.toValue = 1
+                emphasis.duration = 0.14
+                layers.accent.add(emphasis, forKey: "snapEmphasis")
+            }
         }
     }
 
@@ -168,7 +187,7 @@ final class WindowSnapOverlayController {
     }
 
     private func panelFrame(for guide: WindowSnapGuide, on screen: NSScreen) -> CGRect {
-        let haloThickness: CGFloat = guide.isHighlighted ? 6 : 5
+        let haloThickness: CGFloat = guide.isHighlighted ? 9 : 5
         let start = guide.start
         let end = guide.end
 

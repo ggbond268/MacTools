@@ -170,6 +170,36 @@ final class WindowSnapGeometryTests: XCTestCase {
         )
     }
 
+    func testPaletteSurfaceInsetsMatchTheVisiblePalettePadding() throws {
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let result = WindowSnapGeometry.calculate(
+            proposedFrame: WindowSnapGeometry.defaultFrame(
+                contentSize: StandaloneCommandPaletteLayout.contentSize,
+                visibleFrame: visibleFrame
+            ),
+            contentSize: StandaloneCommandPaletteLayout.contentSize,
+            visibleFrame: visibleFrame,
+            referenceInsets: StandaloneCommandPaletteLayout.surfaceInsets
+        )
+
+        let expectedSurface = result.defaultFrame.insetBy(
+            dx: StandaloneCommandPaletteLayout.surfaceInset,
+            dy: StandaloneCommandPaletteLayout.surfaceInset
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(result.guides.first { $0.role == .leftEdge }).start.x,
+            expectedSurface.minX
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(result.guides.first { $0.role == .rightEdge }).start.x,
+            expectedSurface.maxX
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(result.guides.first { $0.role == .topEdge }).start.y,
+            expectedSurface.maxY
+        )
+    }
+
     func testClampingKeepsWindowFullyAccessible() {
         let visibleFrame = CGRect(x: 100, y: 50, width: 1200, height: 800)
 
