@@ -81,7 +81,6 @@ public final class StorageExplorerController: ObservableObject {
         isStale = false
         if force || !sameRoot || (observeChanges && observer == nil) { scanner.clearCache() }
         if !sameRoot {
-            observerGeneration = UUID()
             observer = nil
             snapshot = StorageExplorerSnapshot(rootPath: url.path)
             currentPath = nil
@@ -91,19 +90,7 @@ public final class StorageExplorerController: ObservableObject {
             searchQuery = ""
         }
         if observeChanges && observer == nil {
-            let observerID = observerGeneration
-            observer = StorageExplorerFileObserver(path: url.path) { [weak self, scanner] paths in
-                if let paths { scanner.invalidate(paths: paths) } else { scanner.clearCache() }
-                MainActor.assumeIsolated {
-                    guard let self, self.observerGeneration == observerID else { return }
-                    // A scan is not an atomic filesystem snapshot. Treat its completion as
-                    // the new baseline instead of warning about normal writes observed while
-                    // the scanner is still assembling that baseline.
-                    if !self.isScanning {
-                        self.isStale = true
-                    }
-                }
-            }
+            installObserver(for: url, scanner: scanner)
         }
         status.progress = StorageExplorerScanProgress(currentPath: url.path)
         scanState = .scanning(status.progress)
@@ -126,6 +113,10 @@ public final class StorageExplorerController: ObservableObject {
                 self.scanRootURL = URL(fileURLWithPath: result.rootPath)
                 let preferredPath = self.navigationRevision == previousNavigationRevision ? previousPath : self.currentPath
                 self.currentPath = preferredPath.flatMap { result.items[$0] == nil ? nil : $0 } ?? result.rootPath
+                // Discard events queued while the non-atomic scan was assembling its result.
+                // A fresh observer makes the completed scan the baseline while preserving
+                // warnings and cache invalidation for every later filesystem change.
+                self.installObserver(for: url, scanner: scanner)
                 self.isStale = false
                 self.scanState = .completed
                 self.rebuildNavigation()
@@ -136,6 +127,24 @@ public final class StorageExplorerController: ObservableObject {
                 else {
                     self.scanState = .failed(error.localizedDescription)
                     self.lastErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func installObserver(for url: URL, scanner: any StorageExplorerScanning) {
+        guard observeChanges else { return }
+        observerGeneration = UUID()
+        let observerID = observerGeneration
+        observer = StorageExplorerFileObserver(path: url.path) { [weak self, scanner] paths in
+            if let paths { scanner.invalidate(paths: paths) } else { scanner.clearCache() }
+            MainActor.assumeIsolated {
+                guard let self, self.observerGeneration == observerID else { return }
+                // A scan is not an atomic filesystem snapshot. Treat its completion as
+                // the new baseline instead of warning about normal writes observed while
+                // the scanner is still assembling that baseline.
+                if !self.isScanning {
+                    self.isStale = true
                 }
             }
         }
