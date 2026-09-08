@@ -213,7 +213,9 @@ private struct PanelLayoutInteractionFixture {
             }
         }
         let watchdog = Timer(timeInterval: 12, repeats: false) { _ in
-            MainActor.assumeIsolated { fail("Native interaction timed out") }
+            Task { @MainActor in
+                fail("Native interaction timed out")
+            }
         }
         RunLoop.main.add(watchdog, forMode: .common)
         application.run()
