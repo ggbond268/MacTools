@@ -295,5 +295,6 @@ final class WindowSnapOverlayControllerTests: XCTestCase {
         XCTAssertGreaterThan(overlay.windowNumber, 0)
         XCTAssertTrue(overlay.ignoresMouseEvents)
         XCTAssertFalse(overlay.canBecomeKey)
+        XCTAssertGreaterThan(overlay.level.rawValue, relativeWindow.level.rawValue)
     }
 }

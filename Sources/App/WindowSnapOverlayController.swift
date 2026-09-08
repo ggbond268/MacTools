@@ -20,15 +20,16 @@ final class WindowSnapOverlayView: NSView {
             path.move(to: startInWindow)
             path.line(to: endInWindow)
 
-            if guide.isHighlighted {
-                path.lineWidth = 1.5
-                NSColor.controlAccentColor.withAlphaComponent(0.9).setStroke()
-            } else {
-                path.lineWidth = 1.0
-                NSColor.secondaryLabelColor.withAlphaComponent(0.35).setStroke()
-                let pattern: [CGFloat] = [4, 4]
-                path.setLineDash(pattern, count: 2, phase: 0)
-            }
+            // Draw a dark halo first so the guide remains legible over both light and
+            // dark window content, then draw the semantic accent line on top.
+            path.lineWidth = guide.isHighlighted ? 5 : 4
+            NSColor.black.withAlphaComponent(0.32).setStroke()
+            path.stroke()
+
+            path.lineWidth = guide.isHighlighted ? 2.5 : 2
+            NSColor.controlAccentColor
+                .withAlphaComponent(guide.isHighlighted ? 1 : 0.82)
+                .setStroke()
             path.stroke()
         }
     }
@@ -88,8 +89,11 @@ final class WindowSnapOverlayController {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
-        panel.level = .floating
         panel.isFloatingPanel = true
+        // Setting isFloatingPanel can reset the level to .floating, so assign the higher
+        // level afterward. The dragged command palette can otherwise cover this overlay
+        // when AppKit raises it again during performDrag.
+        panel.level = .statusBar
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
