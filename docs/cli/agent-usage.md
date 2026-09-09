@@ -46,7 +46,7 @@ Require `schemaVersion == 1` and `outcome == "completed"` before using a respons
 mactools-nightly actions list --page-size 100 --json
 ```
 
-Read each action ID from `data.actions[].id`; `data.actions` is an array of summary objects, not an array of strings. If `data.nextCursor` is not `null`, request the next page with the cursor exactly as returned:
+Read each action ID from `data.actions[].id`; `data.actions` is an array of summary objects, not an array of strings. Request the next page only when `data.nextCursor` is present and contains a cursor string; pass it exactly as returned:
 
 ```bash
 mactools-nightly actions list \
@@ -55,7 +55,7 @@ mactools-nightly actions list \
   --json
 ```
 
-Continue until `data.nextCursor` is `null`. Cursors are bound to one catalog generation and can become stale when MacTools restarts or its plugins and actions change. If a cursor is rejected, discard the partial result and restart discovery from the first page.
+Stop when `data.nextCursor` is absent or `null`. The current CLI omits this field on the final page. Cursors are bound to one catalog generation and can become stale when MacTools restarts or its plugins and actions change. If a cursor is rejected, discard the partial result and restart discovery from the first page.
 
 Never guess, shorten, normalize, or reconstruct an action ID. Parameterized references may contain an opaque `@...` suffix; copy the complete current ID even though this prototype will describe them as not executable.
 
@@ -156,7 +156,7 @@ Choose recovery from both `outcome` and `rejection.category`, not from the exit 
 | `executionTimedOut`, `cancelled` | Do not replay automatically; execution may have started. Verify real system state first. |
 | `registryNotReady` | Allow one bounded wait for MacTools to finish starting, then rediscover. Do not loop indefinitely. |
 | `catalogLimitExceeded` | Stop and report the host-side catalog safety limit; changing page size does not make the full catalog valid. |
-| `hostUnavailable` | The CLI did not establish a usable request path. Run `doctor` once and confirm that Nightly Command-Line Integration and its background item are enabled; do not loop. |
+| `hostUnavailable` | Setup may have failed, or the connection may have failed or timed out after submission; execution may have started. Do not replay automatically. Run `doctor` once, check Nightly integration and background-item approval if needed, and verify real system state before considering another run. |
 | `hostTransportFailure` | A submitted request may have reached another component, so the result can be ambiguous. Do not replay it automatically; run `doctor` once and verify real system state before considering another run. |
 | `protocolIncompatible` | Install the app and CLI artifacts from the same Nightly release, then repeat compatibility checks before discovery. |
 | `invalidPeerResponse` | Stop and report the malformed authenticated response with its `requestID`; do not treat it as an ordinary version mismatch or bypass validation. |
