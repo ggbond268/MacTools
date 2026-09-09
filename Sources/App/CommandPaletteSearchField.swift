@@ -70,10 +70,19 @@ struct CommandPaletteSearchField: NSViewRepresentable {
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.parent = self
         configure(field)
-        if (field.currentEditor() as? NSTextView)?.hasMarkedText() != true, field.stringValue != text {
+        Self.synchronizeText(text, in: field)
+        context.coordinator.focus(field, for: focusRequestID)
+    }
+
+    static func synchronizeText(_ text: String, in field: NSTextField) {
+        if let editor = field.currentEditor() as? NSTextView {
+            // The cell's value can lag behind its field editor. Reassigning an already
+            // current editor resets its selection, so compare the visible text first.
+            guard !editor.hasMarkedText(), editor.string != text else { return }
+            field.stringValue = text
+        } else if field.stringValue != text {
             field.stringValue = text
         }
-        context.coordinator.focus(field, for: focusRequestID)
     }
 
     static func dismantleNSView(_ field: NSTextField, coordinator: Coordinator) {
@@ -330,10 +339,11 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         private static func claimFocus(_ field: NSTextField) -> Bool {
             guard let window = field.window,
                   window.isVisible,
-                  window.isKeyWindow,
-                  window.makeFirstResponder(field) else {
+                  window.isKeyWindow else {
                 return false
             }
+            if let editor = field.currentEditor(), window.firstResponder === editor { return true }
+            guard window.makeFirstResponder(field) else { return false }
             return field.currentEditor() != nil
         }
     }

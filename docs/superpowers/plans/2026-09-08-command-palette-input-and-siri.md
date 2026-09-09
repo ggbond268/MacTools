@@ -372,3 +372,8 @@ The installed Debug host-to-plugin acceptance gap remains: native palette tests 
 
 - Live validation caught an overly broad traversal boundary that hid the composer, plus readiness gaps on Siri's empty-selection and already-empty chat screens. The fixtures now reflect the native container hierarchy. Empty-selection requires a readable empty selection and enabled New Chat; an already-empty chat requires a readable empty draft and transcript, writable input, and stable destination identity. Failed reads still cannot authorize a mutation.
 - Final validation passed: 245 repository script tests, 4,417 Xcode tests with zero failures or skips, and the frozen PluginKit v6 binary compatibility client. Current production-adapter live runs on macOS 27.0 (26A5425a) passed from both a fresh empty chat and an existing conversation; each entered exact text, submitted once, and verified the visible user message plus cleared input. Native host-composer interaction and Siri adapter checks remain separate from installed packaged-host acceptance.
+
+## Hosted IME regression (2026-09-09)
+
+- Hosted macOS 26 testing exposed the query being replaced by the committed IME character. CI now prints XCTest failure summaries so assertion details are retained.
+- Search-field synchronization compares the active editor with the bound text instead of rewriting it from a potentially stale cell value. Pending focus requests leave an already active editor alone. New stale-cell regressions fail with the previous behavior and cover preserved insertion, external clearing, and marked-text protection. Native input tests retain exact-text and no-premature-send checks and wait for asynchronous submission within a bounded deadline.

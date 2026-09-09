@@ -13,6 +13,8 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         try fixture.type("ask fixture Hello ", into: field)
         await fixture.settle()
         let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: "ask fixture Hello ".utf16.count, length: 0),
+                       "Publishing typed text must preserve the insertion point")
         // Keep the synthetic IME transaction synchronous. Yielding with marked text lets
         // other parallel test windows end editing before the command is checked.
         editor.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0), replacementRange: editor.selectedRange())
@@ -24,12 +26,9 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         XCTAssertFalse(editor.hasMarkedText())
         await fixture.settle()
         XCTAssertTrue(fixture.provider.messages.isEmpty, "Committing IME input must not submit the action")
-        XCTAssertEqual(field.stringValue, "ask fixture Hello 你")
+        XCTAssertEqual(editor.string, "ask fixture Hello 你")
         try fixture.pressReturn(in: field)
-        let deadline = ContinuousClock.now + .seconds(3)
-        while fixture.provider.messages.isEmpty, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(20))
-        }
+        try await fixture.waitForSubmission()
         XCTAssertEqual(fixture.provider.messages, ["Hello 你"])
     }
 
@@ -94,7 +93,7 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         editor.insertText("From the panel", replacementRange: NSRange(location: 0, length: 0))
         await fixture.settle()
         editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
-        await fixture.settle()
+        try await fixture.waitForSubmission()
         XCTAssertEqual(fixture.provider.messages, ["From the panel"])
     }
 
@@ -289,6 +288,12 @@ private final class PaletteFixture {
         defaults.removePersistentDomain(forName: suite)
     }
     func settle() async { try? await Task.sleep(for: .milliseconds(150)) }
+    func waitForSubmission() async throws {
+        let deadline = ContinuousClock.now + .seconds(3)
+        while provider.messages.isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
     func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
     var views: [NSView] { window.contentView.map(descendants) ?? [] }
     var messageEditor: NSTextView? {

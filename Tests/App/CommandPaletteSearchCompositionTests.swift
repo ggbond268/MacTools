@@ -5,6 +5,70 @@ import XCTest
 
 @MainActor
 final class CommandPaletteSearchCompositionTests: XCTestCase {
+    func testPendingFocusDoesNotRefocusAnAlreadyActiveEditor() async throws {
+        let fixture = SearchCompositionFixture()
+        defer { fixture.close() }
+        let field = try await fixture.searchField()
+        fixture.window.makeFirstResponder(field)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.insertText("query", replacementRange: NSRange(location: 0, length: 0))
+        await fixture.settle()
+        let selection = NSRange(location: 2, length: 0)
+        editor.setSelectedRange(selection)
+        fixture.window.reportsKeyWindow = true
+        XCTAssertTrue(fixture.window.firstResponder === editor)
+        fixture.window.fieldFocusRequests = 0
+        let coordinator = try XCTUnwrap(field.delegate as? CommandPaletteSearchField.Coordinator)
+
+        coordinator.focus(field, for: 999)
+        await fixture.settle()
+
+        XCTAssertEqual(fixture.window.fieldFocusRequests, 0)
+        XCTAssertTrue(fixture.window.firstResponder === editor)
+        XCTAssertEqual(editor.selectedRange(), selection)
+    }
+
+    func testCurrentEditorPreservesCaretWhenCellValueIsStale() {
+        let field = LaggingCellTextField()
+        let prefix = "ask fixture Hello "
+        field.editor.string = prefix
+        let insertion = NSRange(location: prefix.utf16.count, length: 0)
+        field.editor.setSelectedRange(insertion)
+        XCTAssertNotEqual(field.stringValue, field.editor.string)
+
+        CommandPaletteSearchField.synchronizeText(prefix, in: field)
+
+        XCTAssertEqual(field.assignments, 0)
+        XCTAssertEqual(field.editor.selectedRange(), insertion)
+        field.editor.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0),
+                                   replacementRange: field.editor.selectedRange())
+        field.editor.insertText("你", replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertEqual(field.editor.string, prefix + "你")
+    }
+
+    func testExternalClearUpdatesEditorEvenWhenCellAlreadyMatches() {
+        let field = LaggingCellTextField()
+        field.editor.string = "ask fixture Hello"
+        XCTAssertEqual(field.stringValue, "")
+
+        CommandPaletteSearchField.synchronizeText("", in: field)
+
+        XCTAssertEqual(field.assignments, 1)
+        XCTAssertEqual(field.editor.string, "")
+    }
+
+    func testExternalUpdateDoesNotReplaceMarkedText() {
+        let field = LaggingCellTextField()
+        field.editor.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0),
+                                   replacementRange: NSRange(location: 0, length: 0))
+
+        CommandPaletteSearchField.synchronizeText("replacement", in: field)
+
+        XCTAssertEqual(field.assignments, 0)
+        XCTAssertTrue(field.editor.hasMarkedText())
+        XCTAssertEqual(field.editor.string, "ni")
+    }
+
     func testNativeMouseSendIsBlockedDuringCompositionAndUsesCommittedText() async throws {
         let fixture = SearchCompositionFixture()
         defer { fixture.close() }
@@ -43,6 +107,27 @@ final class CommandPaletteSearchCompositionTests: XCTestCase {
     }
 }
 
+/// Models a cell that has not committed its editor's latest value yet. Like AppKit,
+/// assigning stringValue while editing replaces the text and selection.
+@MainActor
+private final class LaggingCellTextField: NSTextField {
+    let editor = NSTextView(frame: .zero)
+    private var committedText = ""
+    var assignments = 0
+
+    override func currentEditor() -> NSText? { editor }
+
+    override var stringValue: String {
+        get { committedText }
+        set {
+            assignments += 1
+            committedText = newValue
+            editor.string = newValue
+            editor.selectAll(nil)
+        }
+    }
+}
+
 @MainActor
 private final class SearchCompositionState: ObservableObject {
     @Published var text = ""
@@ -75,7 +160,7 @@ private struct SearchCompositionView: View {
 @MainActor
 private final class SearchCompositionFixture {
     let state = SearchCompositionState()
-    let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 450, height: 300),
+    let window = FocusTrackingWindow(contentRect: NSRect(x: 100, y: 100, width: 450, height: 300),
                           styleMask: [.titled], backing: .buffered, defer: false)
 
     init() {
@@ -114,5 +199,18 @@ private final class SearchCompositionFixture {
     func close() {
         window.contentView = nil
         window.close()
+    }
+}
+
+@MainActor
+private final class FocusTrackingWindow: NSWindow {
+    var fieldFocusRequests = 0
+    var reportsKeyWindow = false
+
+    override var isKeyWindow: Bool { reportsKeyWindow || super.isKeyWindow }
+
+    override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
+        if responder is NSTextField { fieldFocusRequests += 1 }
+        return super.makeFirstResponder(responder)
     }
 }
