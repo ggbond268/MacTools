@@ -241,3 +241,11 @@ func deactivate(reason: PluginDeactivationReason)
 `deactivate` is called before updating, uninstalling, and host shutdown. It can also be called when the host isolates a plugin after a runtime failure or when an installed package is no longer loadable. Plugins should cancel tasks, timers, observers, event taps, windows, and other retained system resources there.
 
 Native bundle code is treated as loaded for the lifetime of the current app process. If a loaded plugin is updated or uninstalled, its contributions are removed from MacTools immediately and `deactivate` is called, but the executable code is considered fully released only after the app restarts. Updating a loaded plugin replaces the package files on disk and activates the new code on the next launch.
+
+## Palette text input (MacTools 1.3.0)
+
+A provider can additionally adopt `PluginActionInputProviding` to expose one required string input through host-owned composition and optional explicit aliases. Declare an existing canonical action with a sensitive, local-only string parameter, then publish an `ActionInputDescriptor`. The host keeps these incomplete descriptors separate from executable catalog references. After preparation and validation, it assembles the complete reference and uses the normal action executor.
+
+Preparation returns an ephemeral `ActionInputSession`; it must not send input or create a conversation. The host releases unsubmitted sessions when composition ends and transfers accepted sessions to execution completion. Other surfaces do not implicitly gain input forms or expose aliases. Use the first host version exporting these new types as the plugin's minimum host version.
+
+Aliases must be unambiguous at a space boundary. `ask siri <message>` is the first implementation. An alias recognizes an action; it never executes merely because text was entered. Plugins do not parse the raw query themselves.

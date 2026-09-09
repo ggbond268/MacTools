@@ -421,6 +421,7 @@ final class PluginHost: ObservableObject {
     private let pluginStateChangeRebuildDelay: Duration
     let dynamicPluginManager: DynamicPluginManager?
     private let pluginCatalogManager: PluginCatalogManager?
+    let actionInputRegistry = ActionInputRegistry()
     let actionRegistry: ActionRegistry
     let actionExecutor: ActionExecutor
     let actionConfirmationService: ActionConfirmationRouter
@@ -3984,6 +3985,11 @@ final class PluginHost: ObservableObject {
         )
 
         let issues = actionRegistry.synchronize(registrations)
+        actionInputRegistry.synchronize(activePlugins, readDescriptors: { plugin in
+            guard let provider = plugin as? any PluginActionInputProviding else { return [] }
+            return self.guardedValue(for: plugin, operation: "read action input descriptors",
+                                     provider.actionInputDescriptors) ?? []
+        }, definitionLookup: { self.actionRegistry.definition(for: $0) })
         actionRegistryIssues = issues
         if issues.isEmpty {
             AppLog.pluginHost.info(

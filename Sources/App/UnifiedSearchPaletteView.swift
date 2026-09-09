@@ -113,12 +113,15 @@ final class UnifiedSearchPaletteModel: ObservableObject {
         observeStateChanges()
     }
 
-    func updateQuery(_ query: String) {
-        guard self.query != query else {
+    private var searchSuppressed = false
+
+    func updateQuery(_ query: String, suppressSearch: Bool = false) {
+        guard self.query != query || searchSuppressed != suppressSearch else {
             return
         }
 
         self.query = query
+        searchSuppressed = suppressSearch
         updateResults()
     }
 
@@ -245,12 +248,12 @@ final class UnifiedSearchPaletteModel: ObservableObject {
             registry: commandContext.pluginHost.actionRegistry
         )
         let matchingResults = index.results(
-            matching: query,
+            matching: searchSuppressed ? "" : query,
             recentReferences: recentReferences
         )
         let recentResults = recentReferences.compactMap { index.result(for: $0) }
         sections = MacToolsSearchPresentation.sections(
-            query: query,
+            query: searchSuppressed ? "" : query,
             results: matchingResults,
             recentResults: recentResults
         )
@@ -366,6 +369,11 @@ struct UnifiedSearchPaletteView: View {
     let actions: UnifiedSearchPaletteActions
     @Environment(\.accessibilityReduceTransparency) private var accessibilityReduceTransparency
     @StateObject private var model: UnifiedSearchPaletteModel
+    @StateObject private var inputModel = CommandPaletteInputModel()
+    @State private var inlineMatch: CommandPaletteAliasMatch?
+    @State private var isComposingInput = false
+    @State private var inputDraft: (item: ActionInputItem, message: String)?
+    @State private var searchHasMarkedText = false
     @State private var selectedResultID: String?
     @State private var pendingAlert: PendingAlert?
     @State private var executionFeedback: String?
@@ -407,9 +415,13 @@ struct UnifiedSearchPaletteView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginPaletteMetrics.contentSpacing) {
-            searchField
+            if isComposingInput {
+                inputComposer
+            } else {
+                searchField
+            }
 
-            metadataRow
+            if !isComposingInput { metadataRow }
 
             if let executionFeedback {
                 Label(executionFeedback, systemImage: "exclamationmark.triangle.fill")
@@ -419,9 +431,10 @@ struct UnifiedSearchPaletteView: View {
                     .accessibilityIdentifier("mactools.unified-search.execution-feedback")
             }
 
-            resultList
-
-            footer
+            if !isComposingInput {
+                if let match = inlineMatch { inlineInput(match) } else { resultList }
+                if inlineMatch == nil { footer }
+            }
         }
         .padding(PluginPaletteMetrics.contentPadding)
         .frame(width: UnifiedSearchPaletteLayout.width(for: availableSize.width))
@@ -455,9 +468,21 @@ struct UnifiedSearchPaletteView: View {
         }
         .onDisappear {
             invalidateExecution()
+            inputModel.reset()
+            inputDraft = nil
+            updateInputQuery("")
+            inlineMatch = nil
         }
-        .onExitCommand {
-            actions.dismiss()
+        .onExitCommand { leaveInputOrDismiss() }
+        .alert(inputModel.item?.definition.confirmation?.title ?? "", isPresented: $inputModel.confirmationRequested) {
+            Button(FeatureL10n.string("取消"), role: .cancel) {}
+            Button(inputModel.item?.definition.confirmation?.confirmButtonTitle ?? FeatureL10n.string("执行")) {
+                guard let item = inputModel.item else { return }
+                inputModel.submit(item, message: inputModel.message, host: pluginHost, approved: true,
+                                  onStarted: { actions.dismissAfterSuccessfulExecution() })
+            }
+        } message: {
+            Text(inputModel.item?.definition.confirmation?.message ?? "")
         }
         .alert(item: $pendingAlert) { pendingAlert in
             switch pendingAlert {
@@ -504,44 +529,136 @@ struct UnifiedSearchPaletteView: View {
         .accessibilityIdentifier("mactools.unified-search.palette")
     }
 
-    private var searchField: some View {
-        PluginPaletteSearchToolbar(
-            text: model.queryBinding { oldQuery, newQuery in
-                executionFeedback = nil
-                syncSelection(
-                    resetToFirst: UnifiedSearchSelectionPolicy.shouldResetForQueryChange(
-                        from: oldQuery,
-                        to: newQuery
-                    )
-                )
-            },
-            placeholder: AppL10n.search(
-                "search.prompt",
-                defaultValue: "搜索插件、设置和命令"
-            ),
-            accessibilityLabel: AppL10n.search(
-                "search.title",
-                defaultValue: "搜索 MacTools"
-            ),
-            accessibilityIdentifier: "mactools.unified-search.field",
-            clearAccessibilityLabel: AppL10n.search(
-                "search.clear",
-                defaultValue: "清除搜索"
-            ),
-            focusRequestID: focusRequestID,
-            alternateSubmitModifier: .command,
-            onCommand: handleSearchFieldCommand
-        ) {
-            Button {
-                actions.dismiss()
-            } label: {
-                Image(systemName: "xmark")
+    private func composeInput(_ item: ActionInputItem, message: String) {
+        isComposingInput = true
+        let draft = message.isEmpty && inputDraft?.item == item ? inputDraft?.message ?? message : message
+        inputModel.compose(item, message: draft, registry: pluginHost.actionInputRegistry)
+    }
+
+    private func leaveInputOrDismiss() {
+        if isComposingInput {
+            if let item = inputModel.item { inputDraft = (item, inputModel.message) }
+            if let match = inlineMatch, let suffix = match.message {
+                updateInputQuery(String(model.query.dropLast(suffix.count)) + inputModel.message)
             }
-            .buttonStyle(PluginPaletteToolbarControlStyle())
-            .help(AppL10n.search("search.close", defaultValue: "关闭搜索"))
-            .accessibilityLabel(
-                AppL10n.search("search.close", defaultValue: "关闭搜索")
-            )
+            inputModel.reset()
+            isComposingInput = false
+        } else if inlineMatch != nil {
+            inlineMatch = nil
+            inputModel.reset()
+            model.updateQuery(model.query)
+        } else { actions.dismiss() }
+    }
+
+    private func submitInline(_ match: CommandPaletteAliasMatch) {
+        guard !searchHasMarkedText, !match.isAmbiguous,
+              pluginHost.actionInputRegistry.contains(match.item), let message = match.message else { return }
+        inputModel.submit(match.item, message: message, host: pluginHost,
+                          onStarted: { actions.dismissAfterSuccessfulExecution() })
+    }
+
+    private func inlineInput(_ match: CommandPaletteAliasMatch) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(match.item.definition.title, systemImage: match.item.definition.systemImage)
+                .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+            Text(match.item.descriptor.destination).foregroundStyle(.secondary)
+            Text(match.message ?? match.item.descriptor.placeholder)
+                .lineLimit(4).frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("mactools.action-input.preview")
+            if (match.message?.utf8.count ?? 0) > match.item.descriptor.maximumUTF8Bytes {
+                Text(FeatureL10n.string("消息过长，请缩短后重试。")).foregroundStyle(.orange)
+            }
+            if match.isAmbiguous || !pluginHost.actionInputRegistry.contains(match.item) {
+                Text(FeatureL10n.string("操作不可用，请返回后重试。")).foregroundStyle(.orange)
+            }
+            inputFeedback
+            HStack {
+                Button(FeatureL10n.string("编辑消息")) { composeInput(match.item, message: match.message ?? "") }
+                    .disabled(match.isAmbiguous || inputModel.isBusy)
+                Spacer()
+                Button(match.item.descriptor.submitTitle) { submitInline(match) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(match.isAmbiguous || inputModel.isBusy || searchHasMarkedText
+                              || !pluginHost.actionInputRegistry.contains(match.item)
+                              || !ActionInputRegistry.accepts(match.message ?? "", descriptor: match.item.descriptor))
+            }.controlSize(.small)
+        }.padding(12)
+        .accessibilityIdentifier("mactools.action-input.inline")
+    }
+
+    private var inputComposer: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Button(FeatureL10n.string("返回")) { leaveInputOrDismiss() }
+                Text(inputModel.item?.definition.title ?? "").font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+            }.controlSize(.small)
+            Text(inputModel.destination).foregroundStyle(.secondary)
+            CommandPaletteMessageEditor(text: $inputModel.message, onSubmit: submitComposedInput, onBack: leaveInputOrDismiss)
+                .frame(height: 160)
+                .disabled(inputModel.isBusy)
+            inputFeedback
+            HStack {
+                Text(FeatureL10n.string("Shift-Return 换行")).font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button(inputModel.item?.descriptor.submitTitle ?? FeatureL10n.string("发送"), action: submitComposedInput)
+                    .buttonStyle(.borderedProminent).controlSize(.small).disabled(!inputModel.canSubmit)
+            }
+        }
+    }
+
+    @ViewBuilder private var inputFeedback: some View {
+        if inputModel.isBusy { ProgressView().controlSize(.small) }
+        if let feedback = inputModel.feedback { Text(feedback).foregroundStyle(.orange) }
+        if let item = inputModel.item, inputModel.message.utf8.count > item.descriptor.maximumUTF8Bytes {
+            Text(FeatureL10n.string("消息过长，请缩短后重试。")).foregroundStyle(.orange)
+        }
+    }
+
+    private func submitComposedInput() {
+        guard let item = inputModel.item else { return }
+        inputModel.submit(item, message: inputModel.message, host: pluginHost,
+                          onStarted: { actions.dismissAfterSuccessfulExecution() })
+    }
+
+    private func updateInputQuery(_ newQuery: String) {
+        let oldQuery = model.query
+        executionFeedback = nil
+        inputModel.reset()
+        inlineMatch = searchHasMarkedText ? nil
+            : CommandPaletteAliasResolver(items: pluginHost.actionInputRegistry.items).resolve(newQuery)
+        model.updateQuery(newQuery, suppressSearch: inlineMatch != nil)
+        syncSelection(resetToFirst: UnifiedSearchSelectionPolicy.shouldResetForQueryChange(from: oldQuery, to: newQuery))
+    }
+
+    private var searchField: some View {
+        HStack(spacing: PluginPaletteMetrics.searchToolbarSpacing) {
+            HStack(spacing: PluginPaletteMetrics.searchContentSpacing) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                CommandPaletteSearchField(
+                    text: Binding(get: { model.query }, set: updateInputQuery),
+                    placeholder: AppL10n.search("search.prompt", defaultValue: "搜索插件、设置和命令"),
+                    accessibilityLabel: AppL10n.search("search.title", defaultValue: "搜索 MacTools"),
+                    accessibilityIdentifier: "mactools.unified-search.field", focusRequestID: focusRequestID,
+                    alternateSubmitModifier: .command, onCommand: handleSearchFieldCommand,
+                    preservesText: { CommandPaletteAliasResolver(items: pluginHost.actionInputRegistry.items).resolve($0) != nil },
+                    onMarkedTextChange: { marked in searchHasMarkedText = marked }
+                ).frame(maxWidth: .infinity)
+                if !model.query.isEmpty {
+                    Button { updateInputQuery("") } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }.buttonStyle(.plain)
+                        .accessibilityLabel(AppL10n.search("search.clear", defaultValue: "清除搜索"))
+                }
+            }
+            .padding(.horizontal, PluginPaletteMetrics.searchHorizontalPadding)
+            .frame(height: PluginPaletteMetrics.toolbarControlSize.height)
+            .background(RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius)
+                .fill(PluginSettingsTheme.Palette.fieldBackground))
+            .overlay(RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius)
+                .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1))
+            Button { actions.dismiss() } label: { Image(systemName: "xmark") }
+                .buttonStyle(PluginPaletteToolbarControlStyle())
+                .accessibilityLabel(AppL10n.search("search.close", defaultValue: "关闭搜索"))
         }
     }
 
@@ -1074,11 +1191,19 @@ struct UnifiedSearchPaletteView: View {
         case let .moveSelection(offset):
             moveSelection(by: offset)
         case .submit:
-            activateSelectedResult()
+            if let match = inlineMatch {
+                guard !match.isAmbiguous else { return }
+                if match.message == nil { composeInput(match.item, message: "") }
+                else { submitInline(match) }
+            } else { activateSelectedResult() }
         case .alternateSubmit:
-            openSelectedResultOwner()
+            if let match = inlineMatch {
+                guard !match.isAmbiguous else { return }
+                composeInput(match.item, message: match.message ?? "")
+            }
+            else { openSelectedResultOwner() }
         case .cancel:
-            actions.dismiss()
+            leaveInputOrDismiss()
         }
     }
 
@@ -1104,7 +1229,8 @@ struct UnifiedSearchPaletteView: View {
             return
         }
 
-        guard results.indices.contains(request.number - 1) else {
+        guard !isComposingInput, inlineMatch == nil,
+              results.indices.contains(request.number - 1) else {
             return
         }
 
@@ -1125,6 +1251,8 @@ struct UnifiedSearchPaletteView: View {
 
     private func execute(_ result: MacToolsSearchResult) {
         switch result.action {
+        case let .collectActionInput(item):
+            composeInput(item, message: "")
         case let .navigate(destination, target):
             if !actions.navigate(destination, target) {
                 model.refresh()
@@ -1256,6 +1384,10 @@ struct UnifiedSearchPaletteView: View {
     }
 
     private func resetTransientState() {
+        inputModel.reset()
+        inputDraft = nil
+        inlineMatch = nil
+        isComposingInput = false
         invalidateExecution()
         pendingAlert = nil
         executionFeedback = nil

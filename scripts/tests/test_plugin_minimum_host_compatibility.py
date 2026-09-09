@@ -20,6 +20,9 @@ PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swif
 PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
+    "ActionInputDescriptor": "1.3.0",
+    "ActionInputSession": "1.3.0",
+    "PluginActionInputProviding": "1.3.0",
     # Canonical action registry, execution, discovery, and surface bridges.
     "ActionKey": "1.2.0",
     "ActionParameterSet": "1.2.0",
@@ -297,6 +300,7 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
     def test_action_model_inventory_covers_every_public_type_used_by_plugins(self) -> None:
         action_model_symbols = public_top_level_type_names(
             ACTION_MODELS.read_text(encoding="utf-8")
+            + "\n" + ACTION_MODELS.with_name("ActionInputModels.swift").read_text(encoding="utf-8")
         )
         plugin_source = "\n".join(
             path.read_text(encoding="utf-8")

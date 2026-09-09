@@ -109,6 +109,10 @@ Clipboard save, unsave, and item edits commit in order without interrupting new 
 
 Clipboard reopening reuses an unchanged initial page, and metadata-only updates patch affected results without resetting selection or rerunning unrelated searches. Image/PDF previews use a bounded, window-scoped thumbnail cache; selecting an already-visible row no longer centers it unnecessarily. Synthetic model and preview benchmarks are available under `scripts/benchmarks/` without reading the system clipboard or the user's database.
 
+### Send a message to Siri
+
+With the Siri plugin on macOS 27, open the command palette, type `ask siri <message>`, and press Return once to send it into a new Siri conversation. You can also select the Siri action and use the message editor. MacTools handles opening Siri and preserves existing drafts. Accessibility permission is required; answers remain in Siri. See [Siri usage and limitations](docs/plugins/siri.md).
+
 ## Supported Languages
 
 Mac Settings follows the app language across its catalog, controls, profiles, and error guidance. Its workspace includes English and Simplified Chinese, with English fallback for other locales; English and Chinese setting names remain searchable.

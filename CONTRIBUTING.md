@@ -106,3 +106,7 @@ Nightly isolation also covers Activity Bar sockets/hook registrations and CLI/br
 - GitHub Actions build and release configuration is documented in `docs/github-actions.md`; plugin catalog, package structure, and batch release flows are documented in `docs/plugins/plugin-catalog.md`.
 
 For the PluginKit v6 migration, source manifests declare `pluginKitVersion: 6` and `minHostVersion: "1.3.0"`. Leave plugin package versions, `Configs/AppVersion.xcconfig`, signed catalogs, and compiled release notes to `make release`; do not pre-bump them in the ABI migration change. Run `make release` for plugins first (auto selects all plugins), wait for the v6 catalog commit and Pages deployment, then run the app release. CI and `make ci` check the frozen v6 client, including settings row, option, and control layouts.
+
+### Actions that accept palette text
+
+Input actions use the optional `PluginActionInputProviding` contract in MacTools 1.3.0. Keep incomplete input descriptors separate from canonical executable references, mark user text sensitive and local-only, and preserve the existing 4 KiB per-string limit. Add alias/input-session tests, minimum-host inventory entries, and real interaction evidence for app automation. The [Siri plugin documentation](docs/plugins/siri.md) describes the first integration and its current compatibility boundary.

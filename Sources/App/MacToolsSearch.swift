@@ -35,6 +35,7 @@ enum MacToolsSearchAction: Hashable {
         target: SettingsSearchRevealTarget?
     )
     case executeAction(ActionReference)
+    case collectActionInput(ActionInputItem)
     case pluginCommand(
         pluginID: String,
         expectedDefinition: PluginCommandDefinition
@@ -642,6 +643,16 @@ enum MacToolsSearchIndexBuilder {
             pluginHost.pluginManagementItems.map { ($0.id, $0.title) },
             uniquingKeysWith: { first, _ in first }
         )
+        items += pluginHost.actionInputRegistry.items.map { item in
+            MacToolsSearchResult(
+                id: "action.input.\(item.id.id)", kind: .command,
+                title: item.definition.title, subtitle: item.descriptor.destination,
+                detail: item.definition.description,
+                keywords: item.definition.keywords + item.descriptor.aliases,
+                systemImage: item.definition.systemImage, action: .collectActionInput(item),
+                confirmation: nil, suggestionPriority: nil
+            )
+        }
         items += pluginHost.actionCatalogEntries.enumerated().compactMap { index, entry in
             if entry.reference.key.providerID == "mactools",
                let appAction = AppShortcutAction(
