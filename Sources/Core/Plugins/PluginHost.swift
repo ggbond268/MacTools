@@ -1027,10 +1027,15 @@ final class PluginHost: ObservableObject {
             completedPluginCount: pluginIDs.count,
             totalPluginCount: pluginIDs.count
         ))
+        let pluginIDsAwaitingRestart = Set(pluginManagementItems
+            .filter { $0.state == .restartRequired }
+            .map(\.id))
+            .subtracting(activePlugins.map { $0.metadata.id })
         let importedResult = try importPreferences(backup, selection: selection)
         var shortcutErrors = importedResult.shortcutErrors
         let deferredPluginPreferenceIDs = installedPluginIDs.filter { pluginID in
-            shortcutErrors.removeValue(forKey: "plugin-preferences.\(pluginID)") != nil
+            guard pluginIDsAwaitingRestart.contains(pluginID) else { return false }
+            return shortcutErrors.removeValue(forKey: "plugin-preferences.\(pluginID)") != nil
         }
         let result = PreferencesImportResult(
             installedPluginIDs: installedPluginIDs,

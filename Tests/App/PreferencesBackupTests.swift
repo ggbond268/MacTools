@@ -1776,70 +1776,93 @@ final class PreferencesBackupTests: XCTestCase {
     }
 
     func testImportReportsNewPluginPreferencesAsDeferredWhenRestartIsRequired() async throws {
-        let temporaryRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent("PreferencesBackupDeferredTests-\(UUID().uuidString)", isDirectory: true)
-        let suiteName = "PreferencesBackupDeferredTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer {
-            try? FileManager.default.removeItem(at: temporaryRoot)
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        let packageURL = try makeDynamicPluginPackage(
-            at: temporaryRoot,
-            id: "restart-required",
-            version: "1.0.0"
-        )
-        let packageStore = PluginPackageStore(
-            rootDirectory: temporaryRoot.appending(path: "Installed", directoryHint: .isDirectory),
-            userDefaults: defaults,
-            hostVersion: "1.0.0"
-        )
-        let loader = BackupRestartRequiredPluginLoader()
-        let dynamicManager = DynamicPluginManager(packageStore: packageStore, pluginLoader: loader)
-        let catalogManager = PluginCatalogManager(
-            catalogProvider: BackupCatalogProvider(entries: [
-                makeCatalogEntry(id: "restart-required", version: "1.0.0")
-            ]),
-            packageResolver: BackupPackageResolver(packagesByID: ["restart-required": packageURL]),
-            dynamicPluginManager: dynamicManager,
-            source: .production(URL(string: "https://example.com/catalog.json")!)
-        )
-        let host = PluginHost(
-            plugins: [BackupTestPlugin(id: "built-in", order: 1, shortcutID: "toggle")],
-            dynamicPluginManager: dynamicManager,
-            pluginCatalogManager: catalogManager,
-            shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
-            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
-            globalShortcutManager: GlobalShortcutManager(),
-            loadDynamicPluginsOnInit: true
-        )
-        let backup = PreferencesBackup(
-            application: validApplicationPreferences,
-            pluginDisplay: PluginDisplayPreferencesBackup(
-                orderedPluginIDs: ["restart-required", "built-in"],
-                hiddenPluginIDs: []
-            ),
-            shortcutCustomizations: [:],
-            pluginPreferences: ["restart-required": Data("restored-settings".utf8)]
+        let loader = BackupPreferencesPluginLoader(plugins: [BackupActionProviderPlugin()])
+        let (host, manager) = try await makePluginImportHost(
+            loader: loader,
+            reinstallAfterLoading: true
         )
 
-        await host.refreshPluginCatalog()
         let result = try await host.importPreferences(
-            backup,
-            installingMissingPluginIDs: ["restart-required"]
+            makePluginImportBackup(payload: Data("provider-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
         )
 
-        XCTAssertEqual(result.installedPluginIDs, ["restart-required"])
-        XCTAssertEqual(result.deferredPluginPreferenceIDs, ["restart-required"])
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertEqual(result.deferredPluginPreferenceIDs, ["backup-actions"])
         XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
-        XCTAssertNil(result.shortcutErrors["plugin-preferences.restart-required"])
-        XCTAssertEqual(
-            dynamicManager.pluginManagementItems.first(where: { $0.id == "restart-required" })?.state,
-            .installed
+        XCTAssertNil(result.shortcutErrors["plugin-preferences.backup-actions"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .restartRequired)
+        XCTAssertFalse(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
+        // Reinstallation must defer loading code that already ran in this process.
+        XCTAssertEqual(loader.receivedRecordIDBatches, [["backup-actions"]])
+    }
+
+    func testImportPreservesNewlyInstalledActivePluginRestoreFailure() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [BackupActionProviderPlugin()])
+        let (host, manager) = try await makePluginImportHost(loader: loader)
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("invalid-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
         )
-        XCTAssertEqual(loader.receivedRecordIDBatches, [["restart-required"]])
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
+        XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertNotNil(result.shortcutErrors["plugin-preferences.backup-actions"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .installed)
+        XCTAssertTrue(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
+        XCTAssertEqual(loader.receivedRecordIDBatches, [["backup-actions"]])
+    }
+
+    func testImportRestoresNewlyInstalledActivePluginPreferences() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [BackupActionProviderPlugin()])
+        let (host, manager) = try await makePluginImportHost(loader: loader)
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("provider-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
+        XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertTrue(result.shortcutErrors.isEmpty)
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .installed)
+        XCTAssertTrue(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
+    }
+
+    func testImportPreservesNewPluginLoadFailure() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [], errorMessage: "Plugin bundle failed to load.")
+        let (host, manager) = try await makePluginImportHost(loader: loader)
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("provider-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
+        XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertNotNil(result.shortcutErrors["plugin-preferences.backup-actions"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .failed("Plugin bundle failed to load."))
+        XCTAssertFalse(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
+    }
+
+    func testImportDoesNotInferRestartFromMissingPluginInstance() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [])
+        let (host, manager) = try await makePluginImportHost(loader: loader)
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("provider-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
+        XCTAssertNotNil(result.shortcutErrors["plugin-preferences.backup-actions"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .installed)
+        XCTAssertFalse(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
     }
 
     func testDecodeRejectsUnsupportedFormatVersion() throws {
@@ -2119,6 +2142,59 @@ final class PreferencesBackupTests: XCTestCase {
         )
     }
 
+    private func makePluginImportHost(
+        loader: BackupPreferencesPluginLoader,
+        reinstallAfterLoading: Bool = false
+    ) async throws -> (PluginHost, DynamicPluginManager) {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PreferencesBackupImportTests-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: temporaryRoot) }
+        let defaults = makeDefaults(suiteName: "PreferencesBackupImportTests-\(UUID().uuidString)")
+        let packageURL = try makeDynamicPluginPackage(at: temporaryRoot, id: "backup-actions", version: "1.0.0")
+        let packageStore = PluginPackageStore(
+            rootDirectory: temporaryRoot.appending(path: "Installed", directoryHint: .isDirectory),
+            userDefaults: defaults,
+            hostVersion: "1.0.0"
+        )
+        let manager = DynamicPluginManager(packageStore: packageStore, pluginLoader: loader)
+        if reinstallAfterLoading {
+            try manager.installPluginPackage(from: packageURL)
+            try manager.uninstallPlugin(pluginID: "backup-actions")
+        }
+        let catalogManager = PluginCatalogManager(
+            catalogProvider: BackupCatalogProvider(entries: [
+                makeCatalogEntry(id: "backup-actions", version: "1.0.0")
+            ]),
+            packageResolver: BackupPackageResolver(packagesByID: ["backup-actions": packageURL]),
+            dynamicPluginManager: manager,
+            source: .production(URL(string: "https://example.com/catalog.json")!)
+        )
+        let host = PluginHost(
+            plugins: [BackupTestPlugin(id: "built-in", order: 1, shortcutID: "toggle")],
+            dynamicPluginManager: manager,
+            pluginCatalogManager: catalogManager,
+            shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            globalShortcutManager: GlobalShortcutManager(),
+            loadDynamicPluginsOnInit: true
+        )
+        await host.refreshPluginCatalog()
+        return (host, manager)
+    }
+
+    private func makePluginImportBackup(payload: Data) -> PreferencesBackup {
+        PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(
+                orderedPluginIDs: ["backup-actions", "built-in"],
+                hiddenPluginIDs: []
+            ),
+            shortcutCustomizations: [:],
+            pluginPreferences: ["backup-actions": payload]
+        )
+    }
+
     private func makeDynamicPluginPackage(at root: URL, id: String, version: String) throws -> URL {
         let packageURL = root
             .appending(path: "Source/\(id)-\(UUID().uuidString).mactoolsplugin", directoryHint: .isDirectory)
@@ -2381,13 +2457,20 @@ private final class BackupDynamicPluginLoader: DynamicPluginLoading {
 }
 
 @MainActor
-private final class BackupRestartRequiredPluginLoader: DynamicPluginLoading {
+private final class BackupPreferencesPluginLoader: DynamicPluginLoading {
     private(set) var receivedRecordIDBatches: [[String]] = []
+    private let plugins: [any MacToolsPlugin]
+    private let errorMessage: String?
+
+    init(plugins: [any MacToolsPlugin], errorMessage: String? = nil) {
+        self.plugins = plugins
+        self.errorMessage = errorMessage
+    }
 
     func loadInstalledPlugins(from records: [PluginPackageRecord]) -> [DynamicPluginLoadResult] {
         receivedRecordIDBatches.append(records.map(\.id))
         return records.map { record in
-            DynamicPluginLoadResult(record: record, plugins: [], errorMessage: nil)
+            DynamicPluginLoadResult(record: record, plugins: plugins, errorMessage: errorMessage)
         }
     }
 }
