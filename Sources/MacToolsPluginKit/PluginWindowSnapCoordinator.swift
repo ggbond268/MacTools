@@ -8,8 +8,11 @@ public final class PluginWindowSnapCoordinator {
     private let pressedMouseButtonsProvider: () -> Int
     private let dragReleasePollInterval: Duration
     private let referenceInsets: NSEdgeInsets
+    private let dragReleaseGracePeriod: Duration = .milliseconds(120)
+    private let requiredReleasedPollCount = 2
 
     private weak var window: NSWindow?
+    private var moveStartObserver: (any NSObjectProtocol)?
     private var moveObserver: (any NSObjectProtocol)?
     private var resizeObserver: (any NSObjectProtocol)?
     private var dragReleaseTask: Task<Void, Never>?
@@ -21,7 +24,9 @@ public final class PluginWindowSnapCoordinator {
 
     public init(
         overlayController: WindowSnapOverlayController = WindowSnapOverlayController(),
-        pressedMouseButtonsProvider: @escaping () -> Int = { NSEvent.pressedMouseButtons },
+        pressedMouseButtonsProvider: @escaping () -> Int = {
+            CGEventSource.buttonState(.combinedSessionState, button: .left) ? 1 : 0
+        },
         dragReleasePollInterval: Duration = .milliseconds(16),
         referenceInsets: NSEdgeInsets = NSEdgeInsets()
     ) {
@@ -32,6 +37,9 @@ public final class PluginWindowSnapCoordinator {
     }
 
     isolated deinit {
+        if let moveStartObserver {
+            NotificationCenter.default.removeObserver(moveStartObserver)
+        }
         if let moveObserver {
             NotificationCenter.default.removeObserver(moveObserver)
         }
@@ -44,6 +52,7 @@ public final class PluginWindowSnapCoordinator {
     public func attach(to window: NSWindow) {
         detach()
         self.window = window
+        moveStartObserver = observeMoveStart(for: window)
         moveObserver = observe(NSWindow.didMoveNotification, for: window)
         resizeObserver = observe(NSWindow.didResizeNotification, for: window)
     }
@@ -87,6 +96,10 @@ public final class PluginWindowSnapCoordinator {
 
     private func detach() {
         cancelDragging()
+        if let moveStartObserver {
+            NotificationCenter.default.removeObserver(moveStartObserver)
+            self.moveStartObserver = nil
+        }
         if let moveObserver {
             NotificationCenter.default.removeObserver(moveObserver)
             self.moveObserver = nil
@@ -96,6 +109,22 @@ public final class PluginWindowSnapCoordinator {
             self.resizeObserver = nil
         }
         window = nil
+    }
+
+    private func observeMoveStart(for window: NSWindow) -> any NSObjectProtocol {
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willMoveNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self,
+                      !self.isDragging,
+                      self.pressedMouseButtonsProvider() & 1 != 0
+                else { return }
+                self.startDragging()
+            }
+        }
     }
 
     private func observe(_ name: Notification.Name, for window: NSWindow) -> any NSObjectProtocol {
@@ -131,6 +160,8 @@ public final class PluginWindowSnapCoordinator {
         dragReleaseTask?.cancel()
         dragReleaseTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            let startedAt = ContinuousClock.now
+            var releasedPollCount = 0
             while !Task.isCancelled {
                 do {
                     try await Task.sleep(for: dragReleasePollInterval)
@@ -138,7 +169,20 @@ public final class PluginWindowSnapCoordinator {
                     return
                 }
                 guard !Task.isCancelled, isDragging else { return }
-                if pressedMouseButtonsProvider() & 1 == 0 {
+                if pressedMouseButtonsProvider() & 1 != 0 {
+                    releasedPollCount = 0
+                    continue
+                }
+
+                // AppKit hands performDrag off to the Window Server immediately. During
+                // that handoff, pressedMouseButtons can briefly report no button even
+                // though the physical drag is still beginning. Keep the guides alive
+                // through that gap and require a stable release before finishing.
+                guard ContinuousClock.now - startedAt >= dragReleaseGracePeriod else {
+                    continue
+                }
+                releasedPollCount += 1
+                if releasedPollCount >= requiredReleasedPollCount {
                     finishDragging()
                     return
                 }

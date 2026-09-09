@@ -400,11 +400,6 @@ struct UnifiedSearchPaletteView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginPaletteMetrics.contentSpacing) {
-            if dragCoordinator != nil {
-                WindowDragHandleBar(coordinator: dragCoordinator)
-                    .padding(.top, -6)
-                    .padding(.bottom, -4)
-            }
             searchField
 
             metadataRow
@@ -436,6 +431,12 @@ struct UnifiedSearchPaletteView: View {
             )
                 .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
                 .allowsHitTesting(false)
+        }
+        .overlay(alignment: .top) {
+            if dragCoordinator != nil {
+                WindowDragHandleBar(coordinator: dragCoordinator)
+                    .frame(width: 72, height: 15)
+            }
         }
         .modifier(UnifiedSearchPaletteShadowModifier(isEnabled: showsCustomShadow))
         .onAppear {

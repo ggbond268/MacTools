@@ -17,6 +17,8 @@ final class WindowSnapCoordinator {
     private let pressedMouseButtonsProvider: () -> Int
     private let dragReleasePollInterval: Duration
     private let referenceInsets: NSEdgeInsets
+    private let dragReleaseGracePeriod: Duration = .milliseconds(120)
+    private let requiredReleasedPollCount = 2
 
     init(
         role: WindowRole,
@@ -144,6 +146,8 @@ final class WindowSnapCoordinator {
         dragReleaseTask?.cancel()
         dragReleaseTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            let startedAt = ContinuousClock.now
+            var releasedPollCount = 0
             while !Task.isCancelled {
                 do {
                     try await Task.sleep(for: dragReleasePollInterval)
@@ -151,7 +155,19 @@ final class WindowSnapCoordinator {
                     return
                 }
                 guard !Task.isCancelled, isDragging else { return }
-                if pressedMouseButtonsProvider() & 1 == 0 {
+                if pressedMouseButtonsProvider() & 1 != 0 {
+                    releasedPollCount = 0
+                    continue
+                }
+
+                // performDrag returns immediately and may not deliver mouseUp. Ignore
+                // transient button-state gaps during the Window Server handoff, then
+                // require a stable release before hiding guides and applying the snap.
+                guard ContinuousClock.now - startedAt >= dragReleaseGracePeriod else {
+                    continue
+                }
+                releasedPollCount += 1
+                if releasedPollCount >= requiredReleasedPollCount {
                     finishDragging()
                     return
                 }

@@ -403,7 +403,7 @@ final class WindowSnapCoordinatorTests: XCTestCase {
         XCTAssertTrue(controller.presentedPanelsForTests.allSatisfy(\.isVisible))
 
         pressedButtons = 0
-        for _ in 0..<20 where coordinator.isDragging {
+        for _ in 0..<40 where coordinator.isDragging {
             try await Task.sleep(for: .milliseconds(5))
         }
 
@@ -455,5 +455,99 @@ final class WindowSnapCoordinatorTests: XCTestCase {
         XCTAssertNotEqual(resizedLeftX, originalLeftX)
         XCTAssertEqual(resizedLeftX, resizedTarget.minX, accuracy: 0.001)
         XCTAssertEqual(resizedRightX, resizedTarget.maxX, accuracy: 0.001)
+    }
+
+    func testPluginWindowGuidesSurviveTransientReleasedStateAtDragStart() async throws {
+        let screen = try XCTUnwrap(NSScreen.screens.first)
+        let window = NSPanel(
+            contentRect: CGRect(x: screen.frame.midX, y: screen.frame.midY, width: 420, height: 300),
+            styleMask: [.titled, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        let overlayController = WindowSnapOverlayController()
+        var pressedButtons = 0
+        let coordinator = PluginWindowSnapCoordinator(
+            overlayController: overlayController,
+            pressedMouseButtonsProvider: { pressedButtons },
+            dragReleasePollInterval: .milliseconds(5)
+        )
+        coordinator.attach(to: window)
+        defer {
+            coordinator.cancelDragging()
+            window.orderOut(nil)
+        }
+
+        coordinator.startDragging()
+        try await Task.sleep(for: .milliseconds(30))
+
+        XCTAssertTrue(coordinator.isDragging)
+        XCTAssertEqual(overlayController.presentedPanelsForTests.count, 3)
+        XCTAssertTrue(overlayController.presentedPanelsForTests.allSatisfy(\.isVisible))
+
+        pressedButtons = 1
+        try await Task.sleep(for: .milliseconds(120))
+
+        XCTAssertTrue(coordinator.isDragging)
+        XCTAssertEqual(overlayController.presentedPanelsForTests.count, 3)
+
+        pressedButtons = 0
+        for _ in 0..<20 where coordinator.isDragging {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        XCTAssertFalse(coordinator.isDragging)
+        XCTAssertTrue(overlayController.presentedPanelsForTests.isEmpty)
+    }
+
+    func testPluginWindowNativeTitleBarMoveStartsGuides() throws {
+        let screen = try XCTUnwrap(NSScreen.screens.first)
+        let window = NSPanel(
+            contentRect: CGRect(x: screen.frame.midX, y: screen.frame.midY, width: 420, height: 300),
+            styleMask: [.titled, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        let overlayController = WindowSnapOverlayController()
+        let coordinator = PluginWindowSnapCoordinator(
+            overlayController: overlayController,
+            pressedMouseButtonsProvider: { 1 }
+        )
+        coordinator.attach(to: window)
+        defer {
+            coordinator.cancelDragging()
+            window.orderOut(nil)
+        }
+
+        NotificationCenter.default.post(name: NSWindow.willMoveNotification, object: window)
+
+        XCTAssertTrue(coordinator.isDragging)
+        XCTAssertEqual(overlayController.presentedPanelsForTests.count, 3)
+        XCTAssertTrue(overlayController.presentedPanelsForTests.allSatisfy(\.isVisible))
+    }
+
+    func testPluginWindowProgrammaticMoveDoesNotStartGuides() throws {
+        let screen = try XCTUnwrap(NSScreen.screens.first)
+        let window = NSPanel(
+            contentRect: CGRect(x: screen.frame.midX, y: screen.frame.midY, width: 420, height: 300),
+            styleMask: [.titled, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        let overlayController = WindowSnapOverlayController()
+        let coordinator = PluginWindowSnapCoordinator(
+            overlayController: overlayController,
+            pressedMouseButtonsProvider: { 0 }
+        )
+        coordinator.attach(to: window)
+        defer {
+            coordinator.cancelDragging()
+            window.orderOut(nil)
+        }
+
+        NotificationCenter.default.post(name: NSWindow.willMoveNotification, object: window)
+
+        XCTAssertFalse(coordinator.isDragging)
+        XCTAssertTrue(overlayController.presentedPanelsForTests.isEmpty)
     }
 }

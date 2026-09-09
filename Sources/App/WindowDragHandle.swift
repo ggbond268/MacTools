@@ -52,7 +52,7 @@ struct WindowDragHandleBar: View {
                 .frame(width: 72, height: 15)
 
                 Capsule(style: .continuous)
-                    .fill(Color.secondary.opacity(0.35))
+                    .fill(Color(nsColor: .separatorColor))
                     .frame(width: 28, height: 3)
                     .allowsHitTesting(false)
             }

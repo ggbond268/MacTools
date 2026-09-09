@@ -1276,6 +1276,22 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertFalse(ClipboardHistoryPanelController.shouldCenterPanel(hasExistingPanel: true))
     }
 
+    func testHistoryPanelDefaultPlacementMatchesItsSnapReferenceFrame() {
+        let contentSize = CGSize(width: 900, height: 620)
+        let visibleFrame = CGRect(x: -1_920, y: 48, width: 1_920, height: 1_032)
+
+        XCTAssertEqual(
+            ClipboardHistoryPanelController.defaultPanelFrame(
+                contentSize: contentSize,
+                visibleFrame: visibleFrame
+            ),
+            WindowSnapGeometry.defaultFrame(
+                contentSize: contentSize,
+                visibleFrame: visibleFrame
+            )
+        )
+    }
+
     func testActionPalettePrefersTheRightSideAndStaysInsideTheDisplay() {
         let display = NSRect(x: 0, y: 0, width: 1_440, height: 900)
         let size = NSSize(width: 430, height: 520)

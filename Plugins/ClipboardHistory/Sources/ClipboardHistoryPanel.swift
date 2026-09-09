@@ -2127,6 +2127,13 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         !hasExistingPanel
     }
 
+    static func defaultPanelFrame(contentSize: CGSize, visibleFrame: CGRect) -> CGRect {
+        WindowSnapGeometry.defaultFrame(
+            contentSize: contentSize,
+            visibleFrame: visibleFrame
+        )
+    }
+
     func handleGlobalShortcut() {
         if actionPaletteController.isVisible {
             close()
@@ -2173,10 +2180,26 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         installKeyMonitor()
         PluginPresentationSafety.prepareForWindowOrdering(panel)
         NSApp.activate(ignoringOtherApps: true)
-        if shouldCenterPanel {
-            panel.center()
+        if shouldCenterPanel,
+           let screen = activeScreen(for: panel) {
+            panel.setFrame(
+                Self.defaultPanelFrame(
+                    contentSize: panel.frame.size,
+                    visibleFrame: screen.visibleFrame
+                ),
+                display: false
+            )
         }
         panel.makeKeyAndOrderFront(nil)
+    }
+
+    private func activeScreen(for panel: NSWindow) -> NSScreen? {
+        let pointer = NSEvent.mouseLocation
+        let screens = NSScreen.screens
+        return screens.first { $0.frame.contains(pointer) }
+            ?? panel.screen
+            ?? NSScreen.main
+            ?? screens.first
     }
 
     func showSnippets() {
@@ -3679,7 +3702,7 @@ private struct ClipboardHistoryPanelView: View {
                 .frame(width: 72, height: 15)
                 .overlay {
                     Capsule()
-                        .fill(Color.secondary.opacity(0.35))
+                        .fill(Color(nsColor: .separatorColor))
                         .frame(width: 28, height: 3)
                         .allowsHitTesting(false)
                 }
