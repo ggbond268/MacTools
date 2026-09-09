@@ -1754,17 +1754,115 @@ final class PreferencesBackupTests: XCTestCase {
         )
 
         await host.refreshPluginCatalog()
+        var progressUpdates: [PreferencesImportProgress] = []
         let result = try await host.importPreferences(
             backup,
-            installingMissingPluginIDs: ["installable"]
+            installingMissingPluginIDs: ["installable"],
+            progress: { progressUpdates.append($0) }
         )
 
         XCTAssertEqual(result.installedPluginIDs, ["installable"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
         XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertEqual(progressUpdates, [
+            .preparing(pluginCount: 1),
+            .installingPlugin(id: "installable", number: 1, total: 1),
+            .restoringPreferences(completedPluginCount: 1, totalPluginCount: 1),
+        ])
         XCTAssertEqual(host.featurePanelHiddenLayoutItems.map(\.id), ["installable"])
         XCTAssertFalse(host.panelItems.contains(where: { $0.id == "installable" }))
         XCTAssertEqual(dynamicManager.pluginManagementItems.first(where: { $0.id == "installable" })?.state, .installed)
         XCTAssertEqual(loader.receivedRecordIDBatches, [["installable"]])
+    }
+
+    func testImportReportsNewPluginPreferencesAsDeferredWhenRestartIsRequired() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [BackupActionProviderPlugin()])
+        let (host, manager) = try await makePluginImportHost(
+            loader: loader,
+            reinstallAfterLoading: true
+        )
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("provider-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertEqual(result.deferredPluginPreferenceIDs, ["backup-actions"])
+        XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertNil(result.shortcutErrors["plugin-preferences.backup-actions"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .restartRequired)
+        XCTAssertFalse(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
+        // Reinstallation must defer loading code that already ran in this process.
+        XCTAssertEqual(loader.receivedRecordIDBatches, [["backup-actions"]])
+    }
+
+    func testImportPreservesNewlyInstalledActivePluginRestoreFailure() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [BackupActionProviderPlugin()])
+        let (host, manager) = try await makePluginImportHost(loader: loader)
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("invalid-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
+        XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertNotNil(result.shortcutErrors["plugin-preferences.backup-actions"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .installed)
+        XCTAssertTrue(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
+        XCTAssertEqual(loader.receivedRecordIDBatches, [["backup-actions"]])
+    }
+
+    func testImportRestoresNewlyInstalledActivePluginPreferences() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [BackupActionProviderPlugin()])
+        let (host, manager) = try await makePluginImportHost(loader: loader)
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("provider-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
+        XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertTrue(result.shortcutErrors.isEmpty)
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .installed)
+        XCTAssertTrue(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
+    }
+
+    func testImportPreservesNewPluginLoadFailure() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [], errorMessage: "Plugin bundle failed to load.")
+        let (host, manager) = try await makePluginImportHost(loader: loader)
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("provider-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
+        XCTAssertTrue(result.pluginInstallationFailures.isEmpty)
+        XCTAssertNotNil(result.shortcutErrors["plugin-preferences.backup-actions"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .failed("Plugin bundle failed to load."))
+        XCTAssertFalse(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
+    }
+
+    func testImportDoesNotInferRestartFromMissingPluginInstance() async throws {
+        let loader = BackupPreferencesPluginLoader(plugins: [])
+        let (host, manager) = try await makePluginImportHost(loader: loader)
+
+        let result = try await host.importPreferences(
+            makePluginImportBackup(payload: Data("provider-settings".utf8)),
+            installingMissingPluginIDs: ["backup-actions"]
+        )
+
+        XCTAssertEqual(result.installedPluginIDs, ["backup-actions"])
+        XCTAssertTrue(result.deferredPluginPreferenceIDs.isEmpty)
+        XCTAssertNotNil(result.shortcutErrors["plugin-preferences.backup-actions"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .installed)
+        XCTAssertFalse(host.actionCatalogEntries.contains { $0.reference.key.providerID == "backup-actions" })
     }
 
     func testDecodeRejectsUnsupportedFormatVersion() throws {
@@ -2044,6 +2142,59 @@ final class PreferencesBackupTests: XCTestCase {
         )
     }
 
+    private func makePluginImportHost(
+        loader: BackupPreferencesPluginLoader,
+        reinstallAfterLoading: Bool = false
+    ) async throws -> (PluginHost, DynamicPluginManager) {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PreferencesBackupImportTests-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: temporaryRoot) }
+        let defaults = makeDefaults(suiteName: "PreferencesBackupImportTests-\(UUID().uuidString)")
+        let packageURL = try makeDynamicPluginPackage(at: temporaryRoot, id: "backup-actions", version: "1.0.0")
+        let packageStore = PluginPackageStore(
+            rootDirectory: temporaryRoot.appending(path: "Installed", directoryHint: .isDirectory),
+            userDefaults: defaults,
+            hostVersion: "1.0.0"
+        )
+        let manager = DynamicPluginManager(packageStore: packageStore, pluginLoader: loader)
+        if reinstallAfterLoading {
+            try manager.installPluginPackage(from: packageURL)
+            try manager.uninstallPlugin(pluginID: "backup-actions")
+        }
+        let catalogManager = PluginCatalogManager(
+            catalogProvider: BackupCatalogProvider(entries: [
+                makeCatalogEntry(id: "backup-actions", version: "1.0.0")
+            ]),
+            packageResolver: BackupPackageResolver(packagesByID: ["backup-actions": packageURL]),
+            dynamicPluginManager: manager,
+            source: .production(URL(string: "https://example.com/catalog.json")!)
+        )
+        let host = PluginHost(
+            plugins: [BackupTestPlugin(id: "built-in", order: 1, shortcutID: "toggle")],
+            dynamicPluginManager: manager,
+            pluginCatalogManager: catalogManager,
+            shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            globalShortcutManager: GlobalShortcutManager(),
+            loadDynamicPluginsOnInit: true
+        )
+        await host.refreshPluginCatalog()
+        return (host, manager)
+    }
+
+    private func makePluginImportBackup(payload: Data) -> PreferencesBackup {
+        PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(
+                orderedPluginIDs: ["backup-actions", "built-in"],
+                hiddenPluginIDs: []
+            ),
+            shortcutCustomizations: [:],
+            pluginPreferences: ["backup-actions": payload]
+        )
+    }
+
     private func makeDynamicPluginPackage(at root: URL, id: String, version: String) throws -> URL {
         let packageURL = root
             .appending(path: "Source/\(id)-\(UUID().uuidString).mactoolsplugin", directoryHint: .isDirectory)
@@ -2077,6 +2228,183 @@ final class PreferencesBackupTests: XCTestCase {
                 size: 42
             )
         )
+    }
+
+    func testPreviewInstallableMissingPluginIDsCalculatesAvailableMissingPlugins() throws {
+        let installableA = PreferencesImportInstallablePlugin(
+            id: "plugin-a",
+            title: "Plugin A",
+            summary: "Summary A",
+            version: "1.0.0"
+        )
+        let installableB = PreferencesImportInstallablePlugin(
+            id: "plugin-b",
+            title: "Plugin B",
+            summary: "Summary B",
+            version: "2.0.0"
+        )
+        let preview = PreferencesImportPreview(
+            pluginCount: 0,
+            unavailablePluginIDs: [],
+            shortcutCount: 0,
+            unavailableShortcutIDs: [],
+            unavailableActionReferences: [],
+            retainedUnavailableActionReferences: [],
+            installablePlugins: [installableA, installableB],
+            selection: PreferencesBackupSelection(
+                includesApplicationPreferences: true,
+                includesPluginLayout: true,
+                includesShortcuts: true,
+                includesAutomation: true,
+                includesRunLinks: true,
+                pluginPreferenceIDs: ["plugin-a", "plugin-b"]
+            )
+        )
+
+        XCTAssertEqual(preview.installableMissingPluginIDs, ["plugin-a", "plugin-b"])
+    }
+
+    func testPreferencesImportPreviewSheetDefaultsToSelectingAllInstallableMissingPlugins() throws {
+        let installableA = PreferencesImportInstallablePlugin(
+            id: "plugin-a",
+            title: "Plugin A",
+            summary: "Summary A",
+            version: "1.0.0"
+        )
+        let installableB = PreferencesImportInstallablePlugin(
+            id: "plugin-b",
+            title: "Plugin B",
+            summary: "Summary B",
+            version: "2.0.0"
+        )
+        let preview = PreferencesImportPreview(
+            pluginCount: 0,
+            unavailablePluginIDs: [],
+            shortcutCount: 0,
+            unavailableShortcutIDs: [],
+            unavailableActionReferences: [],
+            retainedUnavailableActionReferences: [],
+            installablePlugins: [installableA, installableB],
+            selection: PreferencesBackupSelection(
+                includesApplicationPreferences: true,
+                includesPluginLayout: true,
+                includesShortcuts: true,
+                includesAutomation: true,
+                includesRunLinks: true,
+                pluginPreferenceIDs: ["plugin-a", "plugin-b"]
+            )
+        )
+
+        let sheet = PreferencesImportPreviewSheet(
+            preview: preview,
+            previewProvider: { _ in preview },
+            pluginOptions: [
+                PreferencesPluginOption(id: "plugin-a", title: "Plugin A"),
+                PreferencesPluginOption(id: "plugin-b", title: "Plugin B")
+            ],
+            isImporting: false,
+            onCancel: {},
+            onImport: { _, _ in }
+        )
+
+        XCTAssertEqual(sheet.selectedInstallablePluginIDs, ["plugin-a", "plugin-b"])
+        XCTAssertEqual(sheet.userDeselectedPluginIDs, [])
+    }
+
+    func testPreferencesImportSelectionModelBulkSelectionAndIndividualOptOut() throws {
+        let eligibleIDs: Set<String> = ["plugin-a", "plugin-b"]
+        var model = PreferencesImportSelectionModel(eligiblePluginIDs: eligibleIDs)
+
+        // Default: all selected
+        XCTAssertEqual(model.selectedInstallablePluginIDs, eligibleIDs)
+        XCTAssertTrue(model.userDeselectedPluginIDs.isEmpty)
+
+        // Deselect all
+        model.deselectAll(eligiblePluginIDs: eligibleIDs)
+        XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
+        XCTAssertEqual(model.userDeselectedPluginIDs, eligibleIDs)
+
+        // Select all
+        model.selectAll(eligiblePluginIDs: eligibleIDs)
+        XCTAssertEqual(model.selectedInstallablePluginIDs, eligibleIDs)
+        XCTAssertTrue(model.userDeselectedPluginIDs.isEmpty)
+
+        // Opt-out individual plugin
+        model.setPluginSelected("plugin-a", isSelected: false)
+        XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-b"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+
+        // Re-select individual plugin
+        model.setPluginSelected("plugin-a", isSelected: true)
+        XCTAssertEqual(model.selectedInstallablePluginIDs, eligibleIDs)
+        XCTAssertTrue(model.userDeselectedPluginIDs.isEmpty)
+    }
+
+    func testPreferencesImportSelectionModelCategoryChangesPreserveOptOutsAcrossTemporaryIneligibility() throws {
+        let initialEligible: Set<String> = ["plugin-a", "plugin-b"]
+        var model = PreferencesImportSelectionModel(eligiblePluginIDs: initialEligible)
+
+        // User explicitly unchecks plugin-a
+        model.setPluginSelected("plugin-a", isSelected: false)
+        XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-b"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+
+        // The category that made plugin-a eligible is temporarily deselected.
+        model.updateEligiblePlugins([])
+        XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+
+        // Re-enabling the category must not undo the explicit opt-out.
+        model.updateEligiblePlugins(["plugin-a", "plugin-b", "plugin-c"])
+        XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-b", "plugin-c"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a"])
+    }
+
+    func testPreferencesImportSelectionModelBulkSelectionPreservesTemporarilyIneligibleOptOuts() throws {
+        var model = PreferencesImportSelectionModel(eligiblePluginIDs: ["plugin-a", "plugin-b"])
+
+        model.deselectAll(eligiblePluginIDs: ["plugin-a", "plugin-b"])
+        XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a", "plugin-b"])
+
+        model.updateEligiblePlugins(["plugin-c"])
+        XCTAssertEqual(model.selectedInstallablePluginIDs, ["plugin-c"])
+
+        // Selecting current items must not change opt-outs for hidden items.
+        model.selectAll(eligiblePluginIDs: ["plugin-c"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a", "plugin-b"])
+
+        // Deselecting current items adds to the persistent opt-out set.
+        model.deselectAll(eligiblePluginIDs: ["plugin-c"])
+        XCTAssertEqual(model.userDeselectedPluginIDs, ["plugin-a", "plugin-b", "plugin-c"])
+
+        model.updateEligiblePlugins(["plugin-a", "plugin-b", "plugin-c"])
+        XCTAssertTrue(model.selectedInstallablePluginIDs.isEmpty)
+    }
+
+    func testPreferencesImportPreviewSheetTitlesAndSummariesReflectSelectedCount() throws {
+        // Confirm title
+        XCTAssertEqual(
+            PreferencesImportPreviewSheet.confirmTitle(selectedCount: 0),
+            AppL10n.preferencesBackup("preferencesBackup.preview.confirm", defaultValue: "导入")
+        )
+        let singleConfirm = PreferencesImportPreviewSheet.confirmTitle(selectedCount: 1)
+        XCTAssertTrue(singleConfirm.contains("1"))
+        let multiConfirm = PreferencesImportPreviewSheet.confirmTitle(selectedCount: 5)
+        XCTAssertTrue(multiConfirm.contains("5"))
+
+        // Preview description
+        let emptyDesc = PreferencesImportPreviewSheet.previewDescription(selectedCount: 0)
+        XCTAssertEqual(
+            emptyDesc,
+            AppL10n.preferencesBackup("preferencesBackup.preview.description", defaultValue: "")
+        )
+        let installDesc = PreferencesImportPreviewSheet.previewDescription(selectedCount: 3)
+        XCTAssertTrue(installDesc.contains("3"))
+
+        // Plugins count summary
+        let summary = PreferencesImportPreviewSheet.pluginsSelectedCountSummary(selectedCount: 2, totalCount: 5)
+        XCTAssertTrue(summary.contains("2") && summary.contains("5"))
     }
 }
 
@@ -2124,6 +2452,25 @@ private final class BackupDynamicPluginLoader: DynamicPluginLoading {
                 plugins: [BackupTestPlugin(id: record.id, order: 10, shortcutID: "toggle")],
                 errorMessage: nil
             )
+        }
+    }
+}
+
+@MainActor
+private final class BackupPreferencesPluginLoader: DynamicPluginLoading {
+    private(set) var receivedRecordIDBatches: [[String]] = []
+    private let plugins: [any MacToolsPlugin]
+    private let errorMessage: String?
+
+    init(plugins: [any MacToolsPlugin], errorMessage: String? = nil) {
+        self.plugins = plugins
+        self.errorMessage = errorMessage
+    }
+
+    func loadInstalledPlugins(from records: [PluginPackageRecord]) -> [DynamicPluginLoadResult] {
+        receivedRecordIDBatches.append(records.map(\.id))
+        return records.map { record in
+            DynamicPluginLoadResult(record: record, plugins: plugins, errorMessage: errorMessage)
         }
     }
 }

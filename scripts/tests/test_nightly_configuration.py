@@ -548,6 +548,21 @@ class NightlyConfigurationTests(unittest.TestCase):
         self.assertNotIn("ln -sf", phase_zero_guide)
         self.assertNotIn('$HOME/.local/bin/mactools"', phase_zero_guide)
 
+    def test_nightly_cli_guide_assesses_gatekeeper_on_the_app_bundle(self) -> None:
+        guide = (REPO_ROOT / "docs/testing/cli-nightly-distribution.md").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertNotIn(
+            'spctl --assess --type execute --verbose=2 "$CLI_PATH"',
+            guide,
+        )
+        self.assertIn(
+            'spctl --assess --type execute --verbose=2 "/Applications/MacTools Nightly.app"',
+            guide,
+        )
+        self.assertIn("tickets cannot currently be stapled to standalone binaries", guide)
+
     def test_pages_deploy_waits_for_successful_nightly_workflow(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
 

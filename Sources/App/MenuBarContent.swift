@@ -1905,23 +1905,8 @@ private struct PluginPanelDetailView: View {
     private func panelControl(_ control: PluginPanelControl) -> some View {
         switch control.kind {
         case .segmented:
-            Picker(
-                String(),
-                selection: Binding(
-                    get: { control.selectedOptionID ?? "" },
-                    set: { newValue in
-                        onSelectionChange(control.id, newValue)
-                    }
-                )
-            ) {
-                ForEach(control.options) { option in
-                    Text(option.title).tag(option.id)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
+            PluginPanelSegmentedControl(control: control, onSelectionChange: onSelectionChange)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .disabled(!control.isEnabled)
         case .datePicker:
             switch control.datePickerStyle ?? .compact {
             case .compact:
@@ -1991,6 +1976,71 @@ private struct PluginPanelDetailView: View {
                     onActionInvoke(control.id, control.actionBehavior)
                 }
             )
+        }
+    }
+}
+
+private struct PluginPanelSegmentedControl: NSViewRepresentable {
+    let control: PluginPanelControl
+    let onSelectionChange: (String, String) -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let view = NSSegmentedControl(
+            labels: control.options.map(\.title),
+            trackingMode: .selectOne,
+            target: context.coordinator,
+            action: #selector(Coordinator.selectionChanged(_:))
+        )
+        view.segmentDistribution = .fillProportionally
+        return view
+    }
+
+    func updateNSView(_ nsView: NSSegmentedControl, context: Context) {
+        context.coordinator.parent = self
+        if nsView.segmentCount != control.options.count {
+            nsView.segmentCount = control.options.count
+        }
+        for (index, option) in control.options.enumerated() {
+            if nsView.label(forSegment: index) != option.title {
+                nsView.setLabel(option.title, forSegment: index)
+            }
+            nsView.setToolTip(option.title, forSegment: index)
+        }
+        let selectedIndex = control.options.firstIndex { $0.id == control.selectedOptionID } ?? -1
+        if nsView.selectedSegment != selectedIndex {
+            nsView.selectedSegment = selectedIndex
+        }
+        nsView.isEnabled = control.isEnabled
+        nsView.selectedSegmentBezelColor = NSColor(theme.accent)
+        nsView.userInterfaceLayoutDirection = context.environment.layoutDirection == .rightToLeft
+            ? .rightToLeft : .leftToRight
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSegmentedControl, context: Context) -> CGSize? {
+        // SwiftUI's segmented Picker can insist on a wider intrinsic size on macOS 27.
+        // Size the native control itself to the row, so both drawing and hit testing fit.
+        let intrinsicWidth = nsView.intrinsicContentSize.width
+        let proposedWidth = proposal.width ?? intrinsicWidth
+        return CGSize(width: proposedWidth.isFinite ? max(0, proposedWidth) : intrinsicWidth, height: 24)
+    }
+
+    final class Coordinator: NSObject {
+        var parent: PluginPanelSegmentedControl
+
+        init(parent: PluginPanelSegmentedControl) {
+            self.parent = parent
+        }
+
+        @objc func selectionChanged(_ sender: NSSegmentedControl) {
+            guard sender.isEnabled, parent.control.options.indices.contains(sender.selectedSegment) else {
+                return
+            }
+            parent.onSelectionChange(parent.control.id, parent.control.options[sender.selectedSegment].id)
         }
     }
 }

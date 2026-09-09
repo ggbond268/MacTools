@@ -27,10 +27,11 @@ codesign --verify --strict --verbose=2 "$CLI_PATH"
 codesign --display --verbose=4 "$CLI_PATH" 2>&1 \
   | grep -E '^(Identifier|Authority|TeamIdentifier)='
 lipo -archs "$CLI_PATH"
-spctl --assess --type execute --verbose=2 "$CLI_PATH"
 ```
 
 The architecture output must contain exactly `arm64`. The signing identifier must end in `.mactools.nightly.cli`, the authority must be the MacTools Developer ID Application certificate, and the Team ID must match the Nightly app.
+
+Do not use `spctl --assess --type execute` against the extracted `mactools` file as a notarization assertion. On macOS 26, `spctl` can reject a correctly signed standalone executable with `code is valid but does not seem to be an app`; that result describes the raw file shape, not whether the published ZIP passed notarization. Apple also documents that notarization tickets cannot currently be stapled to standalone binaries. The Nightly release workflow requires an `Accepted` notarization result for the exact CLI ZIP before publication, while this checklist independently verifies the downloaded checksum, Developer ID signature, identity, architecture, and actual execution. See [Apple's custom notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow#Staple-the-ticket-to-your-distribution).
 
 Do not remove quarantine attributes or re-sign the executable if validation fails. Confirm that all files came from the same GitHub release, verify their checksums again, and report the release tag and validation output.
 
@@ -39,6 +40,14 @@ Keep the same terminal session open for the remaining snippets; they reuse the u
 ## Try the CLI without installing it
 
 Install `MacTools Nightly.app` from the DMG and launch it once. In **Settings > Plugins > Marketplace**, install **Night Shift** from the Nightly catalog and wait until it is shown as installed. If `night-shift/toggle` does not appear after installation, relaunch MacTools Nightly once so the plugin can activate. Then, in **Settings > General > Command Line**, enable Command-Line Integration. Allow the MacTools Nightly background item in **System Settings > General > Login Items** if macOS requests approval.
+
+Verify Gatekeeper acceptance against the installed app bundle:
+
+```bash
+spctl --assess --type execute --verbose=2 "/Applications/MacTools Nightly.app"
+```
+
+The result should be `accepted` with source `Notarized Developer ID`. Do not remove quarantine attributes or bypass Gatekeeper if this app assessment fails.
 
 Use the extracted executable by absolute path first:
 
