@@ -457,6 +457,7 @@ final class PluginHost: ObservableObject {
     private var isolatedPluginFailures: [String: String] = [:]
     private var isHandlingPluginAction = false
     private var didLoadDynamicPlugins = false
+    private var areCloudPreferencesReady = false
     private var displayTopologyRefreshTask: Task<Void, Never>?
     private var pluginStateChangeRebuildTask: Task<Void, Never>?
     private var runtimeLocaleCancellable: AnyCancellable?
@@ -800,6 +801,9 @@ final class PluginHost: ObservableObject {
         }
 
         if let cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncCoordinator.isReadyToSync = { [weak self] in
+                self?.areCloudPreferencesReady ?? false
+            }
             cloudPreferencesSyncEnabled = cloudPreferencesSyncCoordinator.isEnabled
             cloudPreferencesSyncStatus = cloudPreferencesSyncCoordinator.status
             cloudPreferencesSyncDirectoryURL = cloudPreferencesSyncCoordinator.syncDirectoryURL
@@ -808,7 +812,17 @@ final class PluginHost: ObservableObject {
             }
             cloudPreferencesSyncCoordinator.importHandler = { [weak self] backup in
                 guard let self else { return }
-                _ = try self.importPreferences(backup)
+                let result = try self.importPreferences(backup)
+                guard result.shortcutErrors.isEmpty else {
+                    throw NSError(
+                        domain: "MacTools.CloudPreferencesSync",
+                        code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: result.shortcutErrors
+                            .sorted { $0.key < $1.key }
+                            .map(\.value)
+                            .joined(separator: "\n")]
+                    )
+                }
             }
             cloudPreferencesSyncCoordinator.statusHandler = { [weak self] status in
                 self?.cloudPreferencesSyncStatus = status
@@ -816,10 +830,10 @@ final class PluginHost: ObservableObject {
             cloudPreferencesSyncCoordinator.directoryURLHandler = { [weak self] url in
                 self?.cloudPreferencesSyncDirectoryURL = url
             }
-            cloudPreferencesSyncCoordinator.start()
         }
 
         refreshAll()
+        startCloudPreferencesSyncIfReady()
     }
 
     isolated deinit {
@@ -2591,6 +2605,12 @@ final class PluginHost: ObservableObject {
         syncPluginManagementState()
     }
 
+    private func startCloudPreferencesSyncIfReady() {
+        guard dynamicPluginManager == nil || didLoadDynamicPlugins else { return }
+        areCloudPreferencesReady = true
+        cloudPreferencesSyncCoordinator?.start()
+    }
+
     func loadDynamicPluginsIfNeeded() {
         guard !didLoadDynamicPlugins, let dynamicPluginManager else {
             return
@@ -2601,6 +2621,7 @@ final class PluginHost: ObservableObject {
         configureCallbacks(for: dynamicPlugins)
         syncPluginManagementState()
         refreshAll()
+        startCloudPreferencesSyncIfReady()
     }
 
     var hasInstalledDynamicPlugins: Bool {

@@ -746,6 +746,43 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
 
     // MARK: - Helpers
 
+    func testFailedImportDoesNotOverwriteOrConsumeSnapshotAndCanRetry() async throws {
+        for isManual in [false, true] {
+            let directory = makeTemporaryDirectoryURL()
+            let backup = makeBackup(marker: "remote")
+            let snapshot = isManual
+                ? PreferencesArchiveDocument(scope: .full, backup: backup)
+                : CloudPreferencesSnapshot(
+                    generation: 15, deviceID: "remote", deviceName: "Remote Mac", backup: backup
+                )
+            let snapshotURL = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+            let originalData = try snapshot.encodedJSON()
+            try originalData.write(to: snapshotURL)
+            let defaults = makeDefaults()
+            defaults.set(true, forKey: CloudPreferencesSyncCoordinator.enabledUserDefaultsKey)
+            defaults.set(directory.path, forKey: CloudPreferencesSyncCoordinator.directoryPathUserDefaultsKey)
+            let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+            defer { coordinator.setEnabled(false) }
+            coordinator.snapshotProvider = { self.makeBackup(marker: "local") }
+            coordinator.importHandler = { _ in throw CocoaError(.fileWriteUnknown) }
+
+            do {
+                try await coordinator.syncNow()
+                XCTFail("An unsuccessful import must fail synchronization.")
+            } catch {}
+            XCTAssertNotNil(coordinator.status.errorMessage)
+            XCTAssertEqual(coordinator.currentGeneration, 0)
+            XCTAssertEqual(try Data(contentsOf: snapshotURL), originalData)
+            coordinator.flushPendingExportBeforeTermination()
+            XCTAssertEqual(try Data(contentsOf: snapshotURL), originalData)
+
+            var imported: PreferencesBackup?
+            coordinator.importHandler = { imported = $0 }
+            await coordinator.checkForIncomingSnapshots()
+            XCTAssertEqual(imported?.pluginDisplay.orderedPluginIDs, ["remote"])
+        }
+    }
+
     private func makeConfiguredCoordinator(
         directory: URL,
         debounceDelay: Duration = .seconds(60),

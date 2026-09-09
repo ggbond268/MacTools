@@ -32,6 +32,8 @@ final class CloudPreferencesSyncCoordinator {
     var statusHandler: ((CloudPreferencesSyncStatus) -> Void)?
     var directoryURLHandler: ((URL?) -> Void)?
     var failureHandler: ((Error) -> Void)?
+    // The host may finish loading dynamic plugins after this coordinator is configured.
+    var isReadyToSync: () -> Bool = { true }
 
     private var pendingExportTask: Task<Void, Never>?
     private var pendingCheckTask: Task<Void, Never>?
@@ -43,6 +45,7 @@ final class CloudPreferencesSyncCoordinator {
     private var syncSession = UUID()
     private var exportTask: Task<Void, Error>?
     private var lastMeaningfulBackup: PreferencesBackup?
+    private var incomingSnapshotError: Error?
     private var directorySource: DispatchSourceFileSystemObject?
     private var fileDescriptor: Int32 = -1
     private var filePresenter: SyncFolderPresenter?
@@ -114,6 +117,7 @@ final class CloudPreferencesSyncCoordinator {
     }
 
     func start() {
+        guard isReadyToSync() else { return }
         if isEnabled, syncDirectoryURL != nil {
             startObservingDirectory()
             Task { [weak self] in
@@ -148,6 +152,7 @@ final class CloudPreferencesSyncCoordinator {
 
         syncSession = UUID()
         syncDirectoryURL = url
+        incomingSnapshotError = nil
         if let url {
             userDefaults.set(url.path, forKey: Self.directoryPathUserDefaultsKey)
         } else {
@@ -165,6 +170,7 @@ final class CloudPreferencesSyncCoordinator {
     }
 
     func committedPreferencesDidChange() {
+        guard isReadyToSync() else { return }
         guard isEnabled, !isApplyingExternalSnapshot, syncDirectoryURL != nil else { return }
         localRevision &+= 1
         hasPendingLocalChanges = true
@@ -194,7 +200,8 @@ final class CloudPreferencesSyncCoordinator {
         Task { [weak self] in
             guard let self else { return }
             await self.checkForIncomingSnapshots()
-            guard self.isEnabled, self.syncDirectoryURL != nil, self.syncSession == session else {
+            guard self.isReadyToSync(), self.incomingSnapshotError == nil,
+                  self.isEnabled, self.syncDirectoryURL != nil, self.syncSession == session else {
                 return
             }
             self.scheduleExport()
@@ -221,6 +228,7 @@ final class CloudPreferencesSyncCoordinator {
     }
 
     func flushPendingExportBeforeTermination() {
+        guard isReadyToSync(), incomingSnapshotError == nil else { return }
         guard isEnabled, !isApplyingExternalSnapshot, let url = syncDirectoryURL else { return }
         pendingExportTask?.cancel()
         pendingExportTask = nil
@@ -267,6 +275,8 @@ final class CloudPreferencesSyncCoordinator {
     // MARK: - Export Logic
 
     private func performExport() async throws {
+        guard isReadyToSync() else { return }
+        if let incomingSnapshotError { throw incomingSnapshotError }
         // Debounce cancellation must not start a second writer while an atomic write is in flight.
         if let exportTask {
             try await exportTask.value
@@ -292,6 +302,8 @@ final class CloudPreferencesSyncCoordinator {
     }
 
     private func exportSnapshot() async throws {
+        guard isReadyToSync() else { return }
+        if let incomingSnapshotError { throw incomingSnapshotError }
         guard isEnabled, let url = syncDirectoryURL else {
             updateStatus()
             return
@@ -361,6 +373,7 @@ final class CloudPreferencesSyncCoordinator {
     // MARK: - Incoming Snapshot Check
 
     func checkForIncomingSnapshots() async {
+        guard isReadyToSync() else { return }
         guard isEnabled, let url = syncDirectoryURL else {
             updateStatus()
             return
@@ -394,14 +407,10 @@ final class CloudPreferencesSyncCoordinator {
             }
 
             if !snapshot.isCloudSnapshot {
-                guard consumedManualDocumentIDs.insert(snapshot.documentID).inserted else {
+                guard !consumedManualDocumentIDs.contains(snapshot.documentID) else {
                     updateStatus()
                     return
                 }
-                userDefaults.set(
-                    Array(consumedManualDocumentIDs.suffix(32)),
-                    forKey: Self.consumedManualDocumentIDsUserDefaultsKey
-                )
 
                 updateStatus(to: .syncing)
                 let sanitized = Self.filterMachineSpecificPreferences(snapshot.backup)
@@ -409,6 +418,12 @@ final class CloudPreferencesSyncCoordinator {
                 defer { isApplyingExternalSnapshot = false }
                 try importHandler?(sanitized)
 
+                incomingSnapshotError = nil
+                consumedManualDocumentIDs.insert(snapshot.documentID)
+                userDefaults.set(
+                    Array(consumedManualDocumentIDs.suffix(32)),
+                    forKey: Self.consumedManualDocumentIDsUserDefaultsKey
+                )
                 lastSyncedAt = snapshot.timestamp
                 userDefaults.set(snapshot.timestamp.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
                 lastMeaningfulBackup = sanitized
@@ -419,6 +434,7 @@ final class CloudPreferencesSyncCoordinator {
             }
 
             if snapshot.deviceID == localDeviceID {
+                incomingSnapshotError = nil
                 if snapshot.generation > currentGeneration {
                     currentGeneration = snapshot.generation
                     userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
@@ -435,6 +451,7 @@ final class CloudPreferencesSyncCoordinator {
                 // Keep them and publish above the observed generation instead of importing a conflict.
                 if hadPendingLocalChanges || localRevision != revision
                     || hasPendingLocalChanges || exportTask != nil {
+                    incomingSnapshotError = nil
                     currentGeneration = max(currentGeneration, snapshot.generation)
                     userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
                     hasPendingLocalChanges = true
@@ -449,6 +466,7 @@ final class CloudPreferencesSyncCoordinator {
 
                 try importHandler?(sanitized)
 
+                incomingSnapshotError = nil
                 currentGeneration = max(currentGeneration, snapshot.generation)
                 userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
                 lastSyncedAt = snapshot.timestamp
@@ -457,10 +475,12 @@ final class CloudPreferencesSyncCoordinator {
 
                 updateStatus(to: .synced(lastSyncedAt: lastSyncedAt))
             } else {
+                incomingSnapshotError = nil
                 updateStatus()
             }
         } catch {
             guard !Task.isCancelled, isEnabled, syncSession == session else { return }
+            incomingSnapshotError = error
             handleError(error)
         }
     }
@@ -599,7 +619,11 @@ final class CloudPreferencesSyncCoordinator {
             return
         }
 
-        status = .synced(lastSyncedAt: lastSyncedAt)
+        if let incomingSnapshotError {
+            status = .error(message: incomingSnapshotError.localizedDescription)
+        } else {
+            status = .synced(lastSyncedAt: lastSyncedAt)
+        }
         statusHandler?(status)
     }
 

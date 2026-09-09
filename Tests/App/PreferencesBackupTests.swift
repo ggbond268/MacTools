@@ -2129,6 +2129,91 @@ final class PreferencesBackupTests: XCTestCase {
             .appendingPathComponent("PreferencesBackupTests-\(UUID().uuidString).json")
     }
 
+    func testCloudSyncWaitsForDynamicPluginPreferencesBeforeConsumingSnapshot() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CloudPluginStartup-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let defaults = makeDefaults()
+        let plugin = BackupTestPlugin(id: "trackpad-gestures", order: 1, shortcutID: "toggle")
+        let manager = DynamicPluginManager(
+            packageStore: PluginPackageStore(
+                rootDirectory: directory.appendingPathComponent("Installed"),
+                userDefaults: defaults,
+                hostVersion: "1.0.0"
+            ),
+            pluginLoader: BackupPreferencesPluginLoader(plugins: [plugin])
+        )
+        try manager.installPluginPackage(from: makeDynamicPluginPackage(
+            at: directory, id: plugin.metadata.id, version: "1.0.0"
+        ))
+        let payload = Data("synthetic-trackpad-settings".utf8)
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [plugin.metadata.id], hiddenPluginIDs: []),
+            shortcutCustomizations: [:],
+            pluginPreferences: [plugin.metadata.id: payload]
+        )
+        let snapshot = CloudPreferencesSnapshot(
+            generation: 9, deviceID: "remote-mac", deviceName: "Remote Mac", backup: backup
+        )
+        let snapshotURL = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        let originalData = try snapshot.encodedJSON()
+        try originalData.write(to: snapshotURL)
+        defaults.set(true, forKey: CloudPreferencesSyncCoordinator.enabledUserDefaultsKey)
+        defaults.set(directory.path, forKey: CloudPreferencesSyncCoordinator.directoryPathUserDefaultsKey)
+        let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        defer { coordinator.setEnabled(false) }
+        let host = PluginHost(
+            plugins: [],
+            dynamicPluginManager: manager,
+            shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            cloudPreferencesSyncCoordinator: coordinator,
+            globalShortcutManager: GlobalShortcutManager(),
+            loadDynamicPluginsOnInit: false
+        )
+
+        await coordinator.checkForIncomingSnapshots()
+        try await coordinator.syncNow()
+        coordinator.flushPendingExportBeforeTermination()
+        XCTAssertEqual(coordinator.currentGeneration, 0)
+        XCTAssertNil(plugin.restoredPortablePreferences)
+        XCTAssertEqual(try Data(contentsOf: snapshotURL), originalData)
+
+        let importedAfterStartup = expectation(description: "Cloud settings apply automatically after plugin startup")
+        let originalStatusHandler = coordinator.statusHandler
+        coordinator.statusHandler = { status in
+            originalStatusHandler?(status)
+            if status.isSynced, plugin.restoredPortablePreferences == payload {
+                importedAfterStartup.fulfill()
+            }
+        }
+        host.loadDynamicPluginsIfNeeded()
+        await fulfillment(of: [importedAfterStartup], timeout: 5)
+        XCTAssertEqual(plugin.restoredPortablePreferences, payload)
+        XCTAssertEqual(coordinator.currentGeneration, 9)
+    }
+
+    func testCloudSyncReportsPluginPreferenceRestoreFailures() throws {
+        let defaults = makeDefaults()
+        let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults)
+        let host = PluginHost(
+            plugins: [BackupActionProviderPlugin()],
+            shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            cloudPreferencesSyncCoordinator: coordinator,
+            globalShortcutManager: GlobalShortcutManager()
+        )
+        try withExtendedLifetime(host) {
+            XCTAssertThrowsError(try coordinator.importHandler?(
+                makePluginImportBackup(payload: Data("invalid-settings".utf8))
+            ))
+        }
+    }
+
     private func makeHost(
         plugins: [any MacToolsPlugin],
         defaults: UserDefaults
