@@ -28,7 +28,7 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         XCTAssertTrue(fixture.provider.messages.isEmpty, "Committing IME input must not submit the action")
         XCTAssertEqual(editor.string, "ask fixture Hello 你")
         try fixture.pressReturn(in: field)
-        try await fixture.waitForSubmission()
+        try await fixture.waitForSubmissionCompletion()
         XCTAssertEqual(fixture.provider.messages, ["Hello 你"])
     }
 
@@ -93,7 +93,7 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         editor.insertText("From the panel", replacementRange: NSRange(location: 0, length: 0))
         await fixture.settle()
         editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
-        try await fixture.waitForSubmission()
+        try await fixture.waitForSubmissionCompletion(expectingPaletteDismissal: false)
         XCTAssertEqual(fixture.provider.messages, ["From the panel"])
     }
 
@@ -106,7 +106,7 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         XCTAssertTrue(fixture.provider.messages.isEmpty, "Recognizing an alias must not execute it")
         XCTAssertNil(fixture.messageEditor)
         try fixture.pressReturn(in: search)
-        await fixture.settle()
+        try await fixture.waitForSubmissionCompletion()
         XCTAssertEqual(fixture.provider.messages, ["  Hello 👋"])
         XCTAssertEqual(fixture.dismissals, 1)
         XCTAssertTrue(fixture.recents.references.isEmpty, "Prompt content must never become a recent action")
@@ -131,7 +131,7 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         editor.insertText("你好 👋", replacementRange: editor.selectedRange())
         await fixture.settle()
         try fixture.pressReturn(in: field)
-        await fixture.settle()
+        try await fixture.waitForSubmissionCompletion()
         XCTAssertEqual(fixture.provider.messages, ["你好 👋"])
     }
 
@@ -181,7 +181,7 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         try fixture.type("HEY FIXTURE  你好 👋", into: search)
         await fixture.settle()
         try fixture.pressReturn(in: search)
-        await fixture.settle()
+        try await fixture.waitForSubmissionCompletion()
         XCTAssertEqual(fixture.provider.messages, [" 你好 👋"])
         XCTAssertEqual(fixture.dismissals, 1)
         XCTAssertTrue(fixture.recents.references.isEmpty)
@@ -203,7 +203,7 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         await fixture.settle()
         XCTAssertEqual(editor.string, "Keep my draft")
         editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
-        await fixture.settle()
+        try await fixture.waitForSubmissionCompletion()
         XCTAssertEqual(fixture.provider.messages, ["Keep my draft"])
         XCTAssertEqual(fixture.provider.releases, 1)
     }
@@ -244,7 +244,7 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         editor.insertText("Hi\n第二行", replacementRange: NSRange(location: 0, length: 0))
         await fixture.settle()
         editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
-        await fixture.settle()
+        try await fixture.waitForSubmissionCompletion()
         XCTAssertEqual(fixture.provider.messages, ["Hi\n第二行"])
         XCTAssertEqual(fixture.dismissals, 1)
         XCTAssertEqual(fixture.provider.releases, 1)
@@ -288,11 +288,18 @@ private final class PaletteFixture {
         defaults.removePersistentDomain(forName: suite)
     }
     func settle() async { try? await Task.sleep(for: .milliseconds(150)) }
-    func waitForSubmission() async throws {
+    func waitForSubmissionCompletion(
+        expectingPaletteDismissal: Bool = true, file: StaticString = #filePath, line: UInt = #line
+    ) async throws {
+        func completed() -> Bool {
+            !provider.messages.isEmpty && provider.releases > 0
+                && (!expectingPaletteDismissal || dismissals > 0)
+        }
         let deadline = ContinuousClock.now + .seconds(3)
-        while provider.messages.isEmpty, ContinuousClock.now < deadline {
+        while !completed(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }
+        XCTAssertTrue(completed(), "Timed out waiting for submission, session release, and palette dismissal", file: file, line: line)
     }
     func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
     var views: [NSView] { window.contentView.map(descendants) ?? [] }
