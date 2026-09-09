@@ -34,7 +34,78 @@ struct MouseScrollProcessingResult: Equatable, Sendable {
     var shouldReverse: Bool
     var reverseHorizontal: Bool
     var reverseVertical: Bool
+    var isTuned: Bool
     var deltas: MouseScrollDeltas
+}
+
+/// Scroll feel adjustments applied per event, following Mos's model: a minimum
+/// step that lifts tiny wheel ticks up to a floor, and a gain multiplier on the
+/// reported scroll distance.
+struct MouseScrollTuning: Equatable, Sendable {
+    var step: Double
+    var gain: Double
+
+    static let passthrough = MouseScrollTuning(step: 0, gain: 1)
+
+    var isActive: Bool {
+        step > 0 || gain != 1
+    }
+
+    func apply(_ deltas: MouseScrollDeltas) -> MouseScrollDeltas {
+        var next = deltas
+
+        (next.deltaAxis1, next.pointDeltaAxis1, next.fixedPointDeltaAxis1) = tunedAxis(
+            line: deltas.deltaAxis1,
+            point: deltas.pointDeltaAxis1,
+            fixed: deltas.fixedPointDeltaAxis1
+        )
+        (next.deltaAxis2, next.pointDeltaAxis2, next.fixedPointDeltaAxis2) = tunedAxis(
+            line: deltas.deltaAxis2,
+            point: deltas.pointDeltaAxis2,
+            fixed: deltas.fixedPointDeltaAxis2
+        )
+        return next
+    }
+
+    private func tunedAxis(
+        line: Int64,
+        point: Int64,
+        fixed: Double
+    ) -> (line: Int64, point: Int64, fixed: Double) {
+        var nextLine = Double(line)
+        var nextPoint = Double(point)
+        var nextFixed = fixed
+
+        if gain != 1 {
+            nextLine = scaled(nextLine * gain, fallbackSignOf: line)
+            nextPoint = scaled(nextPoint * gain, fallbackSignOf: point)
+            nextFixed *= gain
+        }
+
+        // The step floor is defined in pixels, so it is anchored on the pixel
+        // delta and the line/fixed-point fields are scaled proportionally to
+        // keep the three representations consistent. Pixel-less axes carry no
+        // pixel magnitude to floor against and stay untouched.
+        if step > 0, nextPoint != 0, abs(nextPoint) < step {
+            let scale = step / abs(nextPoint)
+            nextPoint = nextPoint < 0 ? -step : step
+            nextFixed *= scale
+            nextLine = scaled(nextLine * scale, fallbackSignOf: Int64(nextLine))
+        }
+
+        return (Int64(nextLine), Int64(nextPoint), nextFixed)
+    }
+
+    /// Rounds a scaled delta while keeping nonzero sources nonzero, so coarse
+    /// integer deltas do not collapse to zero under a gain below one.
+    private func scaled(_ value: Double, fallbackSignOf original: Int64) -> Double {
+        let rounded = value.rounded()
+        if rounded == 0, original != 0 {
+            return original < 0 ? -1 : 1
+        }
+
+        return rounded
+    }
 }
 
 final class MouseScrollEventProcessor: @unchecked Sendable {
@@ -126,28 +197,43 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
     ) -> MouseScrollProcessingResult {
         let source = classify(snapshot: snapshot, timestamp: timestamp)
         let shouldReverse = configuration.shouldReverse(device: source)
-        guard shouldReverse else {
+        let tuning = MouseScrollTuning(
+            step: configuration.scrollStep(for: source),
+            gain: configuration.scrollGain(for: source)
+        )
+
+        guard shouldReverse || tuning.isActive else {
             return MouseScrollProcessingResult(
                 source: source,
                 shouldReverse: false,
                 reverseHorizontal: false,
                 reverseVertical: false,
+                isTuned: false,
                 deltas: deltas
             )
         }
 
         let reverseHorizontal = configuration.shouldReverseHorizontal(device: source)
         let reverseVertical = configuration.shouldReverseVertical(device: source)
-        return MouseScrollProcessingResult(
-            source: source,
-            shouldReverse: true,
-            reverseHorizontal: reverseHorizontal,
-            reverseVertical: reverseVertical,
-            deltas: Self.reversed(
+        var tunedDeltas = shouldReverse
+            ? Self.reversed(
                 deltas: deltas,
                 reverseHorizontal: reverseHorizontal,
                 reverseVertical: reverseVertical
             )
+            : deltas
+        if tuning.isActive {
+            // Tuning runs after reversing so the step floor applies to the
+            // final per-event distance the system will scroll.
+            tunedDeltas = tuning.apply(tunedDeltas)
+        }
+        return MouseScrollProcessingResult(
+            source: source,
+            shouldReverse: shouldReverse,
+            reverseHorizontal: reverseHorizontal,
+            reverseVertical: reverseVertical,
+            isTuned: true,
+            deltas: tunedDeltas
         )
     }
 
@@ -157,14 +243,14 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
         let deltas = MouseScrollDeltas(event: event)
         let result = process(snapshot: snapshot, deltas: deltas)
 
-        guard result.shouldReverse else {
+        guard result.shouldReverse || result.isTuned else {
             return result
         }
 
         event.applyScrollDeltas(
             result.deltas,
-            reverseHorizontal: result.reverseHorizontal,
-            reverseVertical: result.reverseVertical
+            applyVertical: result.reverseVertical || result.isTuned,
+            applyHorizontal: result.reverseHorizontal || result.isTuned
         )
         return result
     }
@@ -223,18 +309,18 @@ private extension MouseScrollDeltas {
 private extension CGEvent {
     func applyScrollDeltas(
         _ deltas: MouseScrollDeltas,
-        reverseHorizontal: Bool,
-        reverseVertical: Bool
+        applyVertical: Bool,
+        applyHorizontal: Bool
     ) {
         // Set line deltas first. macOS may derive point/fixed deltas from them,
         // so point and fixed values are restored afterwards to preserve smooth scrolling.
-        if reverseVertical {
+        if applyVertical {
             setIntegerValueField(.scrollWheelEventDeltaAxis1, value: deltas.deltaAxis1)
             setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: deltas.fixedPointDeltaAxis1)
             setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: deltas.pointDeltaAxis1)
         }
 
-        if reverseHorizontal {
+        if applyHorizontal {
             setIntegerValueField(.scrollWheelEventDeltaAxis2, value: deltas.deltaAxis2)
             setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: deltas.fixedPointDeltaAxis2)
             setIntegerValueField(.scrollWheelEventPointDeltaAxis2, value: deltas.pointDeltaAxis2)

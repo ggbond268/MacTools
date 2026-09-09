@@ -2081,6 +2081,142 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "觸控板" } }
       }
     }
+,
+    "settings.mouse.scrollStep.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "خطوة التمرير" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Scrollschrittweite" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Paso de desplazamiento" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Pas de défilement" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "スクロールステップ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "스크롤 단계" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Passo de rolagem" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Шаг прокрутки" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Scroll Step" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "滚动步长" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "滾動步長" } }
+      }
+    },
+    "settings.mouse.scrollStep.description": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "أقصر مسافة لكل نقرة عجلة الفأرة؛ يتم رفع التمريرات الصغيرة جداً إلى هذه الخطوة. 0 يعني عدم التعديل." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Kürzester Abstand pro Mausrad-Rasterung; kleinere Schritte werden auf diesen Wert angehoben. 0 belässt das Standardverhalten." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Distancia mínima por pulsación de la rueda del ratón; los desplazamientos demasiado pequeños se aumentan a este paso. 0 mantiene el comportamiento predeterminado." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Distance minimale par crément de molette ; les créments trop petits sont ramenés à ce pas. 0 conserve le comportement par défaut." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "マウスの1目盛りの最小スクロール距離。小さすぎるスクロールはこのステップまで引き上げられます。0で調整しません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "마우스 휠 한 칸의 최소 스크롤 거리입니다. 너무 작은 스크롤은 이 단계까지 올려집니다. 0이면 조정하지 않습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Distância mínima por clique da roda do mouse; rolagens muito pequenas são elevadas a este passo. 0 mantém o comportamento padrão." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Минимальное расстояние за один шаг колеса мыши; слишком малые прокрутки увеличиваются до этого шага. 0 — не изменять." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Shortest distance per mouse wheel tick; smaller ticks are raised to this step. 0 keeps the default behavior." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "鼠标每格滚动的最短距离，过小的滚动会被补足到该步长，0 为不调整。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "滑鼠每格滾動的最短距離，過小的滾動會被補足到該步長，0 為不調整。" } }
+      }
+    },
+    "settings.mouse.scrollGain.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "سرعة التمرير" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Scrollgeschwindigkeit" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Velocidad de desplazamiento" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Vitesse de défilement" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "スクロール速度" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "스크롤 속도" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Velocidade de rolagem" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скорость прокрутки" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Scroll Speed" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "滚动速度" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "滾動速度" } }
+      }
+    },
+    "settings.mouse.scrollGain.description": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مُعامل يُطبَّق على مسافة تمرير الفأرة. 1.0× يعني عدم التعديل." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Multiplikator für die Maus-Scrollstrecke. 1.0× belässt das Standardverhalten." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Multiplicador aplicado a la distancia de desplazamiento del ratón. 1.0× mantiene el comportamiento predeterminado." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Multiplicateur appliqué à la distance de défilement de la souris. 1.0× conserve le comportement par défaut." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "マウスのスクロール距離に掛かる倍率です。1.0×で調整しません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "마우스 스크롤 거리에 적용되는 배율입니다. 1.0×이면 조정하지 않습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Multiplicador aplicado à distância de rolagem do mouse. 1.0× mantém o comportamento padrão." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Множитель расстояния прокрутки мыши. 1.0× — не изменять." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Multiplier applied to mouse scroll distance. 1.0× keeps the default behavior." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "鼠标滚动距离的增益倍数，1.0× 为不调整。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "滑鼠滾動距離的增益倍數，1.0× 為不調整。" } }
+      }
+    },
+    "settings.trackpad.scrollStep.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "خطوة التمرير" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Scrollschrittweite" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Paso de desplazamiento" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Pas de défilement" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "スクロールステップ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "스크롤 단계" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Passo de rolagem" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Шаг прокрутки" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Scroll Step" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "滚动步长" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "滾動步長" } }
+      }
+    },
+    "settings.trackpad.scrollStep.description": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "أقصر مسافة لكل تمريرة على لوحة اللمس؛ يتم رفع التمريرات الصغيرة جداً إلى هذه الخطوة. 0 يعني عدم التعديل." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Kürzester Abstand pro Trackpad-Bildlauf; kleinere Schritte werden auf diesen Wert angehoben. 0 belässt das Standardverhalten." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Distancia mínima por pulsación de desplazamiento del trackpad; los desplazamientos demasiado pequeños se aumentan a este paso. 0 mantiene el comportamiento predeterminado." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Distance minimale par crément de défilement du trackpad ; les créments trop petits sont ramenés à ce pas. 0 conserve le comportement par défaut." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "トラックパッドの1回の最小スクロール距離。小さすぎるスクロールはこのステップまで引き上げられます。0で調整しません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "트랙패드 스크롤 한 번의 최소 거리입니다. 너무 작은 스크롤은 이 단계까지 올려집니다. 0이면 조정하지 않습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Distância mínima por toque de rolagem do trackpad; rolagens muito pequenas são elevadas a este passo. 0 mantém o comportamento padrão." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Минимальное расстояние за один шаг прокрутки на трекпаде; слишком малые прокрутки увеличиваются до этого шага. 0 — не изменять." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Shortest distance per trackpad scroll tick; smaller ticks are raised to this step. 0 keeps the default behavior." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "触控板每次滚动的最短距离，过小的滚动会被补足到该步长，0 为不调整。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "觸控板每次滾動的最短距離，過小的滾動會被補足到該步長，0 為不調整。" } }
+      }
+    },
+    "settings.trackpad.scrollGain.title": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "سرعة التمرير" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Scrollgeschwindigkeit" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Velocidad de desplazamiento" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Vitesse de défilement" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "スクロール速度" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "스크롤 속도" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Velocidade de rolagem" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скорость прокрутки" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Scroll Speed" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "滚动速度" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "滾動速度" } }
+      }
+    },
+    "settings.trackpad.scrollGain.description": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "مُعامل يُطبَّق على مسافة التمرير على لوحة اللمس. 1.0× يعني عدم التعديل." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Multiplikator für die Trackpad-Scrollstrecke. 1.0× belässt das Standardverhalten." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Multiplicador aplicado a la distancia de desplazamiento del trackpad. 1.0× mantiene el comportamiento predeterminado." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Multiplicateur appliqué à la distance de défilement du trackpad. 1.0× conserve le comportement par défaut." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "トラックパッドのスクロール距離に掛かる倍率です。1.0×で調整しません。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "트랙패드 스크롤 거리에 적용되는 배율입니다. 1.0×이면 조정하지 않습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Multiplicador aplicado à distância de rolagem do trackpad. 1.0× mantém o comportamento padrão." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Множитель расстояния прокрутки на трекпаде. 1.0× — не изменять." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Multiplier applied to trackpad scroll distance. 1.0× keeps the default behavior." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "触控板滚动距离的增益倍数，1.0× 为不调整。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "觸控板滾動距離的增益倍數，1.0× 為不調整。" } }
+      }
+    },
+    "summary.axis.tuning": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "ضبط التمرير" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Scrollanpassung" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Ajuste de desplazamiento" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réglage du défilement" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "スクロール調整" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "스크롤 조절" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Ajuste de rolagem" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Настройка прокрутки" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Scroll tuning" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "滚动调节" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "滾動調節" } }
+      }
+    }
   },
   "version": "1.0"
 }
