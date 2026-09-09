@@ -241,6 +241,16 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
     }
 
     static func decodeJSON(_ data: Data) throws -> PreferencesBackup {
+        do {
+            return try PreferencesArchiveDocument.decodeJSON(data).backup
+        } catch let validationError as PreferencesBackupError {
+            throw validationError
+        } catch {
+            return try decodePayloadJSON(data)
+        }
+    }
+
+    static func decodePayloadJSON(_ data: Data) throws -> PreferencesBackup {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let backup = try decoder.decode(PreferencesBackup.self, from: data)

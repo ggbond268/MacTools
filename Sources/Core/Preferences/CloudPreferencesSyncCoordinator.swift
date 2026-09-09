@@ -8,6 +8,7 @@ final class CloudPreferencesSyncCoordinator {
     static let deviceIDUserDefaultsKey = "preferencesSync.cloud.deviceID"
     static let generationUserDefaultsKey = "preferencesSync.cloud.generation"
     static let lastSyncedAtUserDefaultsKey = "preferencesSync.cloud.lastSyncedAt"
+    static let consumedManualDocumentIDsUserDefaultsKey = "preferencesSync.cloud.consumedManualDocumentIDs"
 
     private let userDefaults: UserDefaults
     private let fileManager: FileManager
@@ -37,6 +38,7 @@ final class CloudPreferencesSyncCoordinator {
     private var isApplyingExternalSnapshot = false
     private var hasPendingLocalChanges = false
     private var mustRepublish = false
+    private var consumedManualDocumentIDs: Set<String> = []
     private var localRevision: UInt64 = 0
     private var syncSession = UUID()
     private var exportTask: Task<Void, Error>?
@@ -88,6 +90,10 @@ final class CloudPreferencesSyncCoordinator {
         } else {
             self.lastSyncedAt = nil
         }
+
+        consumedManualDocumentIDs = Set(
+            userDefaults.stringArray(forKey: Self.consumedManualDocumentIDsUserDefaultsKey) ?? []
+        )
 
         self.isEnabled = userDefaults.bool(forKey: Self.enabledUserDefaultsKey)
 
@@ -363,17 +369,54 @@ final class CloudPreferencesSyncCoordinator {
         let session = syncSession
         let revision = localRevision
         let hadPendingLocalChanges = hasPendingLocalChanges || exportTask != nil
-        let fileURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
-        guard fileManager.fileExists(atPath: fileURL.path) else {
+        guard let fileURL = newestCompatibleSnapshotURL(in: url) else {
             updateStatus()
             return
         }
 
         do {
-            let data = try await readSnapshot(fileURL)
+            var data = try await readSnapshot(fileURL)
             guard !Task.isCancelled, isEnabled, syncSession == session else { return }
 
-            let snapshot = try CloudPreferencesSnapshot.decodeJSON(data)
+            var snapshot = try CloudPreferencesSnapshot.decodeCompatibleJSON(data)
+
+            if !snapshot.isCloudSnapshot,
+               consumedManualDocumentIDs.contains(snapshot.documentID) {
+                let canonicalURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+                guard canonicalURL != fileURL,
+                      fileManager.fileExists(atPath: canonicalURL.path) else {
+                    updateStatus()
+                    return
+                }
+                data = try await readSnapshot(canonicalURL)
+                guard !Task.isCancelled, isEnabled, syncSession == session else { return }
+                snapshot = try CloudPreferencesSnapshot.decodeCompatibleJSON(data)
+            }
+
+            if !snapshot.isCloudSnapshot {
+                guard consumedManualDocumentIDs.insert(snapshot.documentID).inserted else {
+                    updateStatus()
+                    return
+                }
+                userDefaults.set(
+                    Array(consumedManualDocumentIDs.suffix(32)),
+                    forKey: Self.consumedManualDocumentIDsUserDefaultsKey
+                )
+
+                updateStatus(to: .syncing)
+                let sanitized = Self.filterMachineSpecificPreferences(snapshot.backup)
+                isApplyingExternalSnapshot = true
+                defer { isApplyingExternalSnapshot = false }
+                try importHandler?(sanitized)
+
+                lastSyncedAt = snapshot.timestamp
+                userDefaults.set(snapshot.timestamp.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
+                lastMeaningfulBackup = sanitized
+                hasPendingLocalChanges = true
+                mustRepublish = true
+                scheduleExport()
+                return
+            }
 
             if snapshot.deviceID == localDeviceID {
                 if snapshot.generation > currentGeneration {
@@ -435,6 +478,44 @@ final class CloudPreferencesSyncCoordinator {
                 return
             }
         }
+    }
+
+    private func newestCompatibleSnapshotURL(in directoryURL: URL) -> URL? {
+        let keys: Set<URLResourceKey> = [
+            .addedToDirectoryDateKey,
+            .contentModificationDateKey,
+            .isRegularFileKey,
+        ]
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        return urls.compactMap { url -> (url: URL, date: Date, canonical: Bool)? in
+            let isCanonical = url.lastPathComponent == CloudPreferencesSnapshot.defaultFileName
+            let isManualExport = url.lastPathComponent.hasPrefix("MacTools Preferences ")
+                && url.pathExtension.lowercased() == "json"
+            guard isCanonical || isManualExport,
+                  let values = try? url.resourceValues(forKeys: keys),
+                  values.isRegularFile == true else {
+                return nil
+            }
+            return (
+                url,
+                values.addedToDirectoryDate ?? values.contentModificationDate ?? .distantPast,
+                isCanonical
+            )
+        }
+        .max { lhs, rhs in
+            if lhs.date == rhs.date {
+                return !lhs.canonical && rhs.canonical
+            }
+            return lhs.date < rhs.date
+        }?
+        .url
     }
 
     // MARK: - Directory Observation

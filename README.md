@@ -83,7 +83,7 @@
 
 > **Window Switcher:** The catalog includes eligible windows from inactive macOS Spaces, so switching does not depend on the current Space.
 
-> **Preferences sync:** Sync portable preferences through iCloud Drive or a custom shared folder. Workflow icons, enabled states, and timestamps are preserved. Pending local edits take precedence over incoming conflicts and are exported above the observed remote generation.
+> **Preferences sync:** Sync portable preferences through iCloud Drive or a custom shared folder. Manual exports and sync documents are interchangeable; cloud sync removes machine-specific bindings before applying or republishing them. Pending local edits take precedence over incoming cloud conflicts.
 
 > **Shortcut settings:** Plugin and app shortcut rows keep the action icon/name beside the recorder field, wrapping groups between rows without splitting an individual shortcut control.
 

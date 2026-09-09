@@ -1170,7 +1170,10 @@ private struct PreferencesBackupSettingsRow: View {
     private func savePreferences(selection: PreferencesBackupSelection) {
         let data: Data
         do {
-            data = try pluginHost.makePreferencesBackup(selection: selection).encodedJSON()
+            data = try PreferencesArchiveDocument(
+                scope: .full,
+                backup: pluginHost.makePreferencesBackup(selection: selection)
+            ).encodedJSON()
         } catch {
             alertMessage = preferencesBackupErrorMessage(error)
             return

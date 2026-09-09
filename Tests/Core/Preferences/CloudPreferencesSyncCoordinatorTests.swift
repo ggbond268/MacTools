@@ -73,6 +73,111 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.status, .synced(lastSyncedAt: coordinator.lastSyncedAt))
     }
 
+    func testManualAndCloudArchivesUseOneInterchangeableEnvelope() throws {
+        let backup = makeBackup(marker: "shared-archive")
+        let manual = PreferencesArchiveDocument(
+            scope: .full,
+            documentID: "manual-document",
+            timestamp: Date(timeIntervalSince1970: 100),
+            backup: backup
+        )
+        let cloud = CloudPreferencesSnapshot(
+            generation: 7,
+            timestamp: Date(timeIntervalSince1970: 200),
+            deviceID: "remote-device",
+            deviceName: "Remote Mac",
+            backup: backup
+        )
+
+        let decodedManual = try PreferencesArchiveDocument.decodeJSON(manual.encodedJSON())
+        let decodedCloud = try PreferencesArchiveDocument.decodeJSON(cloud.encodedJSON())
+
+        XCTAssertEqual(decodedManual.scope, .full)
+        XCTAssertFalse(decodedManual.isCloudSnapshot)
+        XCTAssertEqual(decodedCloud.scope, .portable)
+        XCTAssertTrue(decodedCloud.isCloudSnapshot)
+        XCTAssertTrue(
+            try PreferencesBackup.decodeJSON(manual.encodedJSON()).hasSameMeaningfulContent(as: backup)
+        )
+        XCTAssertTrue(
+            try PreferencesBackup.decodeJSON(cloud.encodedJSON()).hasSameMeaningfulContent(as: backup)
+        )
+    }
+
+    func testManualArchiveSeedsSyncFolderAndBecomesCanonicalCloudDocument() async throws {
+        let defaults = makeDefaults()
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = CloudPreferencesSyncCoordinator(
+            userDefaults: defaults,
+            debounceDelay: .zero
+        )
+        var currentBackup = makeBackup(marker: "local-before-seed")
+        coordinator.snapshotProvider = { currentBackup }
+        coordinator.importHandler = { currentBackup = $0 }
+
+        let manualBackup = makeBackup(marker: "manual-seed")
+        let manualDocument = PreferencesArchiveDocument(
+            scope: .full,
+            documentID: "manual-sync-seed",
+            backup: manualBackup
+        )
+        let manualURL = directory.appendingPathComponent("MacTools Preferences 2026-09-08_19-00-00.json")
+        try manualDocument.encodedJSON().write(to: manualURL, options: .atomic)
+
+        coordinator.setSyncDirectoryURL(directory)
+        coordinator.setEnabled(true)
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+
+        XCTAssertEqual(currentBackup.pluginDisplay.orderedPluginIDs, ["manual-seed"])
+        let canonicalURL = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        let canonical = try CloudPreferencesSnapshot.decodeJSON(Data(contentsOf: canonicalURL))
+        XCTAssertTrue(canonical.isCloudSnapshot)
+        XCTAssertEqual(canonical.scope, .portable)
+        XCTAssertEqual(canonical.backup.pluginDisplay.orderedPluginIDs, ["manual-seed"])
+
+        coordinator.setEnabled(false)
+        var reopenedImportCount = 0
+        let reopened = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .zero)
+        reopened.snapshotProvider = { currentBackup }
+        reopened.importHandler = { _ in reopenedImportCount += 1 }
+        reopened.setSyncDirectoryURL(directory)
+        reopened.setEnabled(true)
+        defer { reopened.setEnabled(false) }
+        await reopened.checkForIncomingSnapshots()
+        XCTAssertEqual(reopenedImportCount, 0, "A consumed manual seed must not be applied again after relaunch")
+    }
+
+    func testLegacyBareManualBackupRemainsImportable() throws {
+        let backup = makeBackup(marker: "legacy-manual")
+        let decoded = try PreferencesBackup.decodeJSON(backup.encodedJSON())
+        XCTAssertTrue(decoded.hasSameMeaningfulContent(as: backup))
+    }
+
+    func testLegacyCloudSnapshotWithRootMetadataRemainsImportable() throws {
+        let backup = makeBackup(marker: "legacy-cloud")
+        let backupObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: backup.encodedJSON()) as? [String: Any]
+        )
+        let legacyObject: [String: Any] = [
+            "version": 1,
+            "generation": 12,
+            "timestamp": "2026-09-08T19:00:00Z",
+            "deviceID": "legacy-device",
+            "deviceName": "Legacy Mac",
+            "backup": backupObject,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: legacyObject)
+
+        let decoded = try CloudPreferencesSnapshot.decodeJSON(data)
+
+        XCTAssertEqual(decoded.scope, .portable)
+        XCTAssertEqual(decoded.generation, 12)
+        XCTAssertEqual(decoded.deviceID, "legacy-device")
+        XCTAssertEqual(decoded.deviceName, "Legacy Mac")
+        XCTAssertTrue(decoded.backup.hasSameMeaningfulContent(as: backup))
+    }
+
     func testIncomingExternalSnapshotIsImportedAndAdvancesGeneration() async throws {
         let defaults = makeDefaults()
         let directory = makeTemporaryDirectoryURL()

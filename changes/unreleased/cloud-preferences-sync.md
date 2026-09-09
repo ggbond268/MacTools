@@ -4,4 +4,4 @@ type: added
 area: Preferences
 ---
 
-Added preference sync through iCloud Drive or custom folders, preserving workflow metadata and protecting pending local edits from incoming conflicts.
+Added preference sync through iCloud Drive or custom folders. Manual exports and sync documents are interchangeable, while cloud use filters machine-specific bindings and protects pending local edits.
