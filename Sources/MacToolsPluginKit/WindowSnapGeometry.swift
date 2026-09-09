@@ -1,45 +1,61 @@
 import AppKit
 import Foundation
 
-enum WindowSnapGuideRole: String, CaseIterable, Sendable, Equatable {
+public enum WindowSnapGuideRole: String, CaseIterable, Sendable, Equatable {
     case leftEdge
     case rightEdge
     case topEdge
 }
 
-enum WindowSnapGuideOrientation: Sendable, Equatable {
+public enum WindowSnapGuideOrientation: Sendable, Equatable {
     case vertical
     case horizontal
 }
 
-struct WindowSnapGuide: Identifiable, Equatable, Sendable {
-    let id: String
-    let role: WindowSnapGuideRole
-    let orientation: WindowSnapGuideOrientation
-    let start: CGPoint
-    let end: CGPoint
-    let isHighlighted: Bool
+public struct WindowSnapGuide: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let role: WindowSnapGuideRole
+    public let orientation: WindowSnapGuideOrientation
+    public let start: CGPoint
+    public let end: CGPoint
+    public let isHighlighted: Bool
+
+    public init(
+        id: String,
+        role: WindowSnapGuideRole,
+        orientation: WindowSnapGuideOrientation,
+        start: CGPoint,
+        end: CGPoint,
+        isHighlighted: Bool
+    ) {
+        self.id = id
+        self.role = role
+        self.orientation = orientation
+        self.start = start
+        self.end = end
+        self.isHighlighted = isHighlighted
+    }
 }
 
-struct WindowSnapResult: Equatable, Sendable {
-    let defaultFrame: CGRect
-    let snappedFrame: CGRect
-    let isSnappingX: Bool
-    let isSnappingY: Bool
-    let guides: [WindowSnapGuide]
+public struct WindowSnapResult: Equatable, Sendable {
+    public let defaultFrame: CGRect
+    public let snappedFrame: CGRect
+    public let isSnappingX: Bool
+    public let isSnappingY: Bool
+    public let guides: [WindowSnapGuide]
 
-    var isFullySnapped: Bool {
+    public var isFullySnapped: Bool {
         isSnappingX && isSnappingY
     }
 }
 
-enum WindowSnapGeometry {
-    static let defaultThreshold: CGFloat = 20
-    static let defaultHysteresis: CGFloat = 4
+public enum WindowSnapGeometry {
+    public static let defaultThreshold: CGFloat = 20
+    public static let defaultHysteresis: CGFloat = 4
 
     /// Calculates the default window frame centered horizontally and vertically within `visibleFrame`.
     /// Matches `StandaloneCommandPaletteLayout.frame`.
-    static func defaultFrame(
+    public static func defaultFrame(
         contentSize: CGSize,
         visibleFrame: CGRect
     ) -> CGRect {
@@ -59,7 +75,7 @@ enum WindowSnapGeometry {
     }
 
     /// Clamps a frame completely inside `visibleFrame` so it is never offscreen or inaccessible.
-    static func clampedFrame(_ frame: CGRect, in visibleFrame: CGRect) -> CGRect {
+    public static func clampedFrame(_ frame: CGRect, in visibleFrame: CGRect) -> CGRect {
         let size = CGSize(
             width: min(frame.width, visibleFrame.width),
             height: min(frame.height, visibleFrame.height)
@@ -82,7 +98,7 @@ enum WindowSnapGeometry {
     }
 
     /// Calculates snap state, highlighted guides, and snapped frame given a proposed frame.
-    static func calculate(
+    public static func calculate(
         proposedFrame: CGRect,
         contentSize: CGSize,
         visibleFrame: CGRect,
@@ -157,7 +173,7 @@ enum WindowSnapGeometry {
     }
 
     /// Converts a window frame within `visibleFrame` into a normalized point in `0.0...1.0`.
-    static func normalizedPoint(for frame: CGRect, in visibleFrame: CGRect) -> CGPoint {
+    public static func normalizedPoint(for frame: CGRect, in visibleFrame: CGRect) -> CGPoint {
         let travelX = max(0, visibleFrame.width - frame.width)
         let travelY = max(0, visibleFrame.height - frame.height)
 
@@ -170,33 +186,4 @@ enum WindowSnapGeometry {
         )
     }
 
-    /// Computes window frame for a given position (`.defaultAnchor` or `.custom(normalizedPoint)`) within `visibleFrame`.
-    static func frame(
-        for position: WindowPosition,
-        contentSize: CGSize,
-        visibleFrame: CGRect
-    ) -> CGRect {
-        switch position {
-        case .defaultAnchor:
-            return defaultFrame(contentSize: contentSize, visibleFrame: visibleFrame)
-        case let .custom(normalizedPoint):
-            let size = CGSize(
-                width: min(contentSize.width, visibleFrame.width),
-                height: min(contentSize.height, visibleFrame.height)
-            )
-            let travelX = max(0, visibleFrame.width - size.width)
-            let travelY = max(0, visibleFrame.height - size.height)
-
-            let clampedX = min(max(normalizedPoint.x, 0), 1)
-            let clampedY = min(max(normalizedPoint.y, 0), 1)
-
-            let originX = visibleFrame.minX + travelX * clampedX
-            let originY = visibleFrame.minY + travelY * clampedY
-
-            return clampedFrame(
-                CGRect(origin: CGPoint(x: originX, y: originY), size: size),
-                in: visibleFrame
-            )
-        }
-    }
 }

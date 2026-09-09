@@ -1,5 +1,4 @@
 import AppKit
-import MacToolsPluginKit
 import QuartzCore
 
 final class WindowSnapOverlayView: NSView {
@@ -131,7 +130,7 @@ final class WindowSnapOverlayPanel: NSPanel {
 }
 
 @MainActor
-final class WindowSnapOverlayController {
+public final class WindowSnapOverlayController {
     private var panelsByGuideID: [String: WindowSnapOverlayPanel] = [:]
     private(set) var renderedGuidesForTests: [WindowSnapGuide] = []
 
@@ -139,7 +138,9 @@ final class WindowSnapOverlayController {
         renderedGuidesForTests.compactMap { panelsByGuideID[$0.id] }
     }
 
-    func showGuides(
+    public init() {}
+
+    public func showGuides(
         _ guides: [WindowSnapGuide],
         on screen: NSScreen,
         relativeTo window: NSWindow?
@@ -178,7 +179,7 @@ final class WindowSnapOverlayController {
         }
     }
 
-    func hide() {
+    public func hide() {
         panelsByGuideID.values.forEach {
             $0.orderOut(nil)
             ($0.contentView as? WindowSnapOverlayView)?.clear()

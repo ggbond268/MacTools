@@ -1,6 +1,7 @@
 import AppKit
 import XCTest
 @testable import MacTools
+@testable import MacToolsPluginKit
 
 final class WindowSnapGeometryTests: XCTestCase {
     private let contentSize = CGSize(width: 720, height: 710)
@@ -408,5 +409,51 @@ final class WindowSnapCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(coordinator.isDragging)
         XCTAssertTrue(controller.presentedPanelsForTests.isEmpty)
+    }
+
+    func testPluginWindowGuidesFollowTheCurrentResizedFrame() throws {
+        let screen = try XCTUnwrap(NSScreen.screens.first)
+        let window = NSPanel(
+            contentRect: CGRect(x: screen.frame.midX, y: screen.frame.midY, width: 420, height: 300),
+            styleMask: [.titled, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        let overlayController = WindowSnapOverlayController()
+        let coordinator = PluginWindowSnapCoordinator(
+            overlayController: overlayController,
+            pressedMouseButtonsProvider: { 1 }
+        )
+        coordinator.attach(to: window)
+        defer {
+            coordinator.cancelDragging()
+            window.orderOut(nil)
+        }
+
+        coordinator.startDragging()
+        let originalLeftX = try XCTUnwrap(
+            overlayController.renderedGuidesForTests.first { $0.role == .leftEdge }
+        ).start.x
+
+        window.setFrame(
+            CGRect(origin: window.frame.origin, size: CGSize(width: 680, height: 500)),
+            display: false
+        )
+        NotificationCenter.default.post(name: NSWindow.didResizeNotification, object: window)
+
+        let resizedTarget = WindowSnapGeometry.defaultFrame(
+            contentSize: window.frame.size,
+            visibleFrame: screen.visibleFrame
+        )
+        let resizedLeftX = try XCTUnwrap(
+            overlayController.renderedGuidesForTests.first { $0.role == .leftEdge }
+        ).start.x
+        let resizedRightX = try XCTUnwrap(
+            overlayController.renderedGuidesForTests.first { $0.role == .rightEdge }
+        ).start.x
+
+        XCTAssertNotEqual(resizedLeftX, originalLeftX)
+        XCTAssertEqual(resizedLeftX, resizedTarget.minX, accuracy: 0.001)
+        XCTAssertEqual(resizedRightX, resizedTarget.maxX, accuracy: 0.001)
     }
 }

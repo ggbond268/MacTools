@@ -83,7 +83,7 @@
 | Menu Bar Icon Customization | Import one icon or lightweight animation with a transparent background and let it adapt to the menu bar appearance, or choose static and animated icons from the online gallery. Opaque imports show guidance; previously saved opaque artwork keeps its original colors. All sources share the default icon height and content inset, and the default icon can be restored at any time. General settings places the preview beside Restore Default in the first row, with compact spacing and right-aligned guidance below the source buttons. |
 | Localization | Follow the system language by default, or choose a fixed app language in Settings > General > Appearance; the picker shows each language in the system language and its native spelling, while menu-bar action buttons and the Actions, Run Links, Automation, and Action Grid surfaces adapt their copy, accessibility labels, and layout to the selected language. |
 
-> **Command Palette positioning:** The standalone palette provides a dedicated drag handle above the search field, guide-assisted dragging, magnetic snapping to its default screen anchor, and a searchable command that resets its position.
+> **Window positioning:** The standalone Command Palette and resizable Clipboard History window provide dedicated drag handles, guide-assisted dragging, and magnetic snapping to their current-size default screen anchors. The palette also provides a searchable command that resets its saved position.
 
 > **Window Switcher:** The catalog includes eligible windows from inactive macOS Spaces, so switching does not depend on the current Space.
 
