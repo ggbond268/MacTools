@@ -7,6 +7,46 @@ All notable changes to this project are documented here. The format follows
 Pending release notes live in `changes/unreleased/*.md` and are compiled during
 the app and plugin release processes.
 
+## [v1.3.0] - 2026-09-09
+
+### Added
+
+- Added “Run MacTools Action” to Shortcuts, Siri, and Spotlight so supported actions can run without opening Settings.
+- Added automatic local backups of portable app and plugin settings, with storage limits, backup status, and a safety snapshot before imports.
+- Preferences restore preselects available missing plugins, preserves choices, and adds bulk selection and installation progress. It flags plugins needing a restart and another import to restore settings.
+- Added Marketplace detail pages with localized features, actions, requirements, privacy disclosures, and setup guidance available before installation.
+- Added a separate Nightly channel with isolated settings, matching app and plugin builds, and an optional signed and notarized CLI download.
+- Added a Permissions page that groups shared macOS access, lists affected plugins, and refreshes status after returning from System Settings.
+
+### Changed
+
+- Removed the redundant Enable caption beside the command-line switch; the title and status description identify its purpose.
+- Command Palette now shows recent successful actions when search is empty and ranks typed results by relevance.
+- MacTools now uses GPL-3.0-only. App and Nightly CLI downloads include the license, with applicable third-party notices included in the app.
+- Imported icons and animations with transparent backgrounds now adapt to the menu bar appearance. Opaque imports show guidance, while existing opaque artwork retains its colors.
+- MacTools 1.3 uses PluginKit v6 and checks for compatible updates before loading installed plugins. Older packages remain disabled until updated.
+- Settings now remembers collapsed sidebar sections, assigns Command-1 through Command-9 to visible rows, and uses Command-F for the current page's search.
+- Dashboard detail panels now offer more space, Escape-key dismissal, reliable metric switching, and lower CPU usage.
+- Window actions keep their intended target when opened from MacTools command surfaces and report failures without stealing focus.
+
+### Removed
+
+- Removed the persistent plugin sidebar filter and its Command-Shift-F shortcut.
+
+### Fixed
+
+- Changes to plugin confirmation requirements and Run Link permissions now take effect immediately.
+- Fixed stale Command Palette queries and inconsistent search focus after reopening.
+- Enabling Keep Awake no longer stretches feature-panel content or clips its duration options.
+- Mac Settings no longer reverts successful changes while live state is refreshing, and unavailable controls can open the relevant plugin or Marketplace.
+- Fixed preference export crashes involving saved action shortcuts or Run Links, and kept import controls accessible when many plugins are missing.
+- The built-in display is now restored after wake when the external display was disconnected during sleep.
+- Permission guidance now opens the correct System Settings destination, preserves the current plugin page, and shows the draggable helper for Full Disk Access.
+
+### Security
+
+- Removing plugin private data now shows a dedicated warning and blocks reinstallation until cleanup finishes, protecting newly installed data.
+
 ## [plugins-1.3.0] - 2026-09-09
 
 ### Added
