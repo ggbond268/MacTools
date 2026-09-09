@@ -242,7 +242,7 @@ func deactivate(reason: PluginDeactivationReason)
 
 Native bundle code is treated as loaded for the lifetime of the current app process. If a loaded plugin is updated or uninstalled, its contributions are removed from MacTools immediately and `deactivate` is called, but the executable code is considered fully released only after the app restarts. Updating a loaded plugin replaces the package files on disk and activates the new code on the next launch.
 
-## Palette text input (MacTools 1.3.0)
+## Palette text input (MacTools 1.3.1)
 
 A provider can additionally adopt `PluginActionInputProviding` to expose one required string input through host-owned composition and optional explicit aliases. Declare an existing canonical action with a sensitive, local-only string parameter, then publish an `ActionInputDescriptor`. The host keeps these incomplete descriptors separate from executable catalog references. After preparation and validation, it assembles the complete reference and uses the normal action executor.
 
