@@ -88,6 +88,7 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
     private static weak var activeSession: MouseEnhancerSession?
 
     private let processor: MouseScrollEventProcessor
+    private let smoother: MouseScrollSmoother
 
     private var scrollTap: CFMachPort?
     private var scrollRunLoopSource: CFRunLoopSource?
@@ -115,6 +116,13 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
 
     init(configuration: MouseEnhancerConfiguration = .default) {
         self.processor = MouseScrollEventProcessor(configuration: configuration)
+        self.smoother = MouseScrollSmoother(
+            defaultDuration: configuration.mouseScrollDuration
+        )
+        smoother.updateConfiguration(
+            isEnabled: configuration.smoothScrollingEnabled,
+            duration: configuration.mouseScrollDuration
+        )
     }
 
     @discardableResult
@@ -123,6 +131,10 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
         Self.activeSession = self
         isActivated = true
         processor.configuration = configuration
+        smoother.updateConfiguration(
+            isEnabled: configuration.smoothScrollingEnabled,
+            duration: configuration.mouseScrollDuration
+        )
         start()
         if scrollTap == nil {
             isActivated = false
@@ -142,6 +154,10 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
 
     func update(configuration: MouseEnhancerConfiguration) {
         processor.configuration = configuration
+        smoother.updateConfiguration(
+            isEnabled: configuration.smoothScrollingEnabled,
+            duration: configuration.mouseScrollDuration
+        )
     }
 
     func deactivate() {
@@ -174,6 +190,7 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
 
     private func stop() {
         cancelPendingRestart()
+        smoother.reset()
         stopScrollTap()
         stopGestureTap()
         logger.info("scroll reverser session stopped")
@@ -286,6 +303,7 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
     }
 
     private func restartTaps() {
+        smoother.reset()
         stopScrollTap()
         stopGestureTap()
         processor.resetClassificationState()
@@ -310,6 +328,7 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
     func inputActivityDidBecomeUnavailable() {
         recoveryState.setInputAvailable(false)
         cancelPendingRestart()
+        smoother.reset()
         processor.resetClassificationState()
         recoveryState.request(.applicationActivity)
     }
@@ -379,7 +398,11 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
         }
 
         if type == .scrollWheel {
-            _ = context.withOwner { $0.processor.process(event: event) }
+            let passthrough: CGEvent? = context.withOwner { $0.handleScrollEvent(event) } ?? nil
+            if let passthrough {
+                return Unmanaged.passUnretained(passthrough)
+            }
+            return nil
         }
 
         return Unmanaged.passUnretained(event)
@@ -390,6 +413,43 @@ final class MouseEnhancerSession: MouseEnhancerSessionManaging, @unchecked Senda
     ) -> CallbackContext? {
         guard let pointer else { return nil }
         return Unmanaged<CallbackContext>.fromOpaque(pointer).takeUnretainedValue()
+    }
+
+    /// Scroll-wheel tap processing on the main run loop. Returns nil when the
+    /// smooth scrolling engine absorbs the event for re-emission.
+    private func handleScrollEvent(_ event: CGEvent) -> CGEvent? {
+        guard event.getIntegerValueField(.eventSourceUserData) != MouseScrollSmoother.syntheticEventMarker else {
+            return event
+        }
+
+        let snapshot = MouseScrollEventSnapshot(event: event)
+        let deltas = MouseScrollDeltas(event: event)
+        let result = processor.process(snapshot: snapshot, deltas: deltas)
+
+        let configuration = processor.configuration
+        if configuration.smoothScrollingEnabled,
+           result.source == .mouse,
+           !processor.isRemoteSmoothed(snapshot: snapshot) {
+            let absorbed = smoother.ingest(
+                event: event,
+                tickY: Double(result.deltas.pointDeltaAxis1),
+                tickX: Double(result.deltas.pointDeltaAxis2)
+            )
+            if absorbed {
+                return nil
+            }
+        }
+
+        guard result.shouldReverse || result.isTuned else {
+            return event
+        }
+
+        event.applyScrollDeltas(
+            result.deltas,
+            applyVertical: result.reverseVertical || result.isTuned,
+            applyHorizontal: result.reverseHorizontal || result.isTuned
+        )
+        return event
     }
 
     private func releaseCallbackPointer(_ pointer: inout UnsafeMutableRawPointer?) {

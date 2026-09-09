@@ -6,6 +6,7 @@ struct MouseScrollEventSnapshot: Equatable, Sendable {
     var isContinuous: Bool
     var scrollPhase: Int64
     var momentumPhase: Int64
+    var sourceProcessID: Int64
 
     static let discreteWheel = MouseScrollEventSnapshot(
         isContinuous: false,
@@ -18,6 +19,18 @@ struct MouseScrollEventSnapshot: Equatable, Sendable {
         scrollPhase: 0,
         momentumPhase: 0
     )
+
+    init(
+        isContinuous: Bool,
+        scrollPhase: Int64,
+        momentumPhase: Int64,
+        sourceProcessID: Int64 = 0
+    ) {
+        self.isContinuous = isContinuous
+        self.scrollPhase = scrollPhase
+        self.momentumPhase = momentumPhase
+        self.sourceProcessID = sourceProcessID
+    }
 }
 
 struct MouseScrollDeltas: Equatable, Sendable {
@@ -34,7 +47,117 @@ struct MouseScrollProcessingResult: Equatable, Sendable {
     var shouldReverse: Bool
     var reverseHorizontal: Bool
     var reverseVertical: Bool
+    var isTuned: Bool
     var deltas: MouseScrollDeltas
+}
+
+/// Scroll feel adjustments applied per event, following Mos's model: a minimum
+/// step that lifts tiny wheel ticks up to a floor, and a gain multiplier on the
+/// reported scroll distance.
+struct MouseScrollTuning: Equatable, Sendable {
+    var step: Double
+    var gain: Double
+
+    static let passthrough = MouseScrollTuning(step: 0, gain: 1)
+
+    var isActive: Bool {
+        step > 0 || gain != 1
+    }
+
+    func apply(_ deltas: MouseScrollDeltas) -> MouseScrollDeltas {
+        var next = deltas
+
+        (next.deltaAxis1, next.pointDeltaAxis1, next.fixedPointDeltaAxis1) = tunedAxis(
+            line: deltas.deltaAxis1,
+            point: deltas.pointDeltaAxis1,
+            fixed: deltas.fixedPointDeltaAxis1
+        )
+        (next.deltaAxis2, next.pointDeltaAxis2, next.fixedPointDeltaAxis2) = tunedAxis(
+            line: deltas.deltaAxis2,
+            point: deltas.pointDeltaAxis2,
+            fixed: deltas.fixedPointDeltaAxis2
+        )
+        return next
+    }
+
+    private func tunedAxis(
+        line: Int64,
+        point: Int64,
+        fixed: Double
+    ) -> (line: Int64, point: Int64, fixed: Double) {
+        var nextLine = Double(line)
+        var nextPoint = Double(point)
+        var nextFixed = fixed
+
+        if gain != 1 {
+            nextLine = scaled(nextLine * gain, fallbackSignOf: line)
+            nextPoint = scaled(nextPoint * gain, fallbackSignOf: point)
+            nextFixed *= gain
+        }
+
+        // The step floor is defined in pixels, so it is anchored on the pixel
+        // delta and the line/fixed-point fields are scaled proportionally to
+        // keep the three representations consistent. Pixel-less axes carry no
+        // pixel magnitude to floor against and stay untouched.
+        if step > 0, nextPoint != 0, abs(nextPoint) < step {
+            let scale = step / abs(nextPoint)
+            nextPoint = nextPoint < 0 ? -step : step
+            nextFixed *= scale
+            nextLine = scaled(nextLine * scale, fallbackSignOf: Int64(nextLine))
+        }
+
+        return (Int64(nextLine), Int64(nextPoint), nextFixed)
+    }
+
+    /// Rounds a scaled delta while keeping nonzero sources nonzero, so coarse
+    /// integer deltas do not collapse to zero under a gain below one.
+    private func scaled(_ value: Double, fallbackSignOf original: Int64) -> Double {
+        let rounded = value.rounded()
+        if rounded == 0, original != 0 {
+            return original < 0 ? -1 : 1
+        }
+
+        return rounded
+    }
+}
+
+/// Remote-control software (screen sharing, VNC, remote desktop clients) injects
+/// scroll events that the controlling side already smoothed and scaled. Running
+/// reversal and tuning on them double-processes the stream, so those events pass
+/// through untouched. Source list modeled on Mos's remote-desktop detection.
+private enum MouseScrollRemoteSource {
+    static let executableKeywords = [
+        "screensharingd",
+        "ScreensharingAgent",
+        "ARDAgent",
+    ]
+
+    static let bundleIdentifiers: Set<String> = [
+        "com.teamviewer.TeamViewer",
+        "com.teamviewer.TeamViewerHost",
+        "com.anydesk.anydesk",
+        "com.parsec.www",
+        "com.rustdesk.RustDesk",
+        "com.microsoft.rdc.macos",
+        "com.realvnc.vncviewer",
+        "com.tigervnc.vncviewer",
+        "com.netease.uuremote",
+    ]
+
+    static func isRemoteSource(_ processID: Int64) -> Bool {
+        guard let app = NSRunningApplication(processIdentifier: pid_t(processID)) else {
+            return false
+        }
+
+        if let path = app.executableURL?.path,
+           executableKeywords.contains(where: path.contains) {
+            return true
+        }
+        if let bundleID = app.bundleIdentifier, bundleIdentifiers.contains(bundleID) {
+            return true
+        }
+        return false
+    }
 }
 
 final class MouseScrollEventProcessor: @unchecked Sendable {
@@ -49,9 +172,15 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
     nonisolated(unsafe) private var lastSource: MouseEnhancerDevice = .mouse
     nonisolated(unsafe) private var hasSeenTrackpadTouch = false
     nonisolated(unsafe) private var gestureMonitoringAvailable = false
+    nonisolated(unsafe) private var remoteSourceCache: [Int64: Bool] = [:]
+    private let remoteSourceEvaluator: (Int64) -> Bool
 
-    init(configuration: MouseEnhancerConfiguration) {
+    init(
+        configuration: MouseEnhancerConfiguration,
+        remoteSourceEvaluator: ((Int64) -> Bool)? = nil
+    ) {
         self.configuration = configuration
+        self.remoteSourceEvaluator = remoteSourceEvaluator ?? MouseScrollRemoteSource.isRemoteSource
     }
 
     func resetClassificationState() {
@@ -59,6 +188,23 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
         lastTouchTime = 0
         lastSource = .mouse
         hasSeenTrackpadTouch = false
+        remoteSourceCache = [:]
+    }
+
+    /// Remote-control sessions deliver already-smoothed continuous events; leave
+    /// them alone so reversal and tuning never double-process the stream.
+    func isRemoteSmoothed(snapshot: MouseScrollEventSnapshot) -> Bool {
+        guard snapshot.isContinuous, snapshot.sourceProcessID != 0 else {
+            return false
+        }
+
+        if let cached = remoteSourceCache[snapshot.sourceProcessID] {
+            return cached
+        }
+
+        let isRemote = remoteSourceEvaluator(snapshot.sourceProcessID)
+        remoteSourceCache[snapshot.sourceProcessID] = isRemote
+        return isRemote
     }
 
     func recordGestureTouchingCount(_ count: Int, timestamp: UInt64 = DispatchTime.now().uptimeNanoseconds) {
@@ -124,49 +270,57 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
         deltas: MouseScrollDeltas,
         timestamp: UInt64 = DispatchTime.now().uptimeNanoseconds
     ) -> MouseScrollProcessingResult {
+        if isRemoteSmoothed(snapshot: snapshot) {
+            return MouseScrollProcessingResult(
+                source: .mouse,
+                shouldReverse: false,
+                reverseHorizontal: false,
+                reverseVertical: false,
+                isTuned: false,
+                deltas: deltas
+            )
+        }
+
         let source = classify(snapshot: snapshot, timestamp: timestamp)
         let shouldReverse = configuration.shouldReverse(device: source)
-        guard shouldReverse else {
+        let tuning = MouseScrollTuning(
+            step: configuration.scrollStep(for: source),
+            gain: configuration.scrollGain(for: source)
+        )
+
+        guard shouldReverse || tuning.isActive else {
             return MouseScrollProcessingResult(
                 source: source,
                 shouldReverse: false,
                 reverseHorizontal: false,
                 reverseVertical: false,
+                isTuned: false,
                 deltas: deltas
             )
         }
 
         let reverseHorizontal = configuration.shouldReverseHorizontal(device: source)
         let reverseVertical = configuration.shouldReverseVertical(device: source)
-        return MouseScrollProcessingResult(
-            source: source,
-            shouldReverse: true,
-            reverseHorizontal: reverseHorizontal,
-            reverseVertical: reverseVertical,
-            deltas: Self.reversed(
+        var tunedDeltas = shouldReverse
+            ? Self.reversed(
                 deltas: deltas,
                 reverseHorizontal: reverseHorizontal,
                 reverseVertical: reverseVertical
             )
-        )
-    }
-
-    @discardableResult
-    func process(event: CGEvent) -> MouseScrollProcessingResult {
-        let snapshot = MouseScrollEventSnapshot(event: event)
-        let deltas = MouseScrollDeltas(event: event)
-        let result = process(snapshot: snapshot, deltas: deltas)
-
-        guard result.shouldReverse else {
-            return result
+            : deltas
+        if tuning.isActive {
+            // Tuning runs after reversing so the step floor applies to the
+            // final per-event distance the system will scroll.
+            tunedDeltas = tuning.apply(tunedDeltas)
         }
-
-        event.applyScrollDeltas(
-            result.deltas,
-            reverseHorizontal: result.reverseHorizontal,
-            reverseVertical: result.reverseVertical
+        return MouseScrollProcessingResult(
+            source: source,
+            shouldReverse: shouldReverse,
+            reverseHorizontal: reverseHorizontal,
+            reverseVertical: reverseVertical,
+            isTuned: true,
+            deltas: tunedDeltas
         )
-        return result
     }
 
     private static func reversed(
@@ -189,12 +343,13 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
     }
 }
 
-private extension MouseScrollEventSnapshot {
+extension MouseScrollEventSnapshot {
     init(event: CGEvent) {
         self.init(
             isContinuous: event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0,
             scrollPhase: event.getIntegerValueField(.scrollWheelEventScrollPhase),
-            momentumPhase: event.getIntegerValueField(.scrollWheelEventMomentumPhase)
+            momentumPhase: event.getIntegerValueField(.scrollWheelEventMomentumPhase),
+            sourceProcessID: event.getIntegerValueField(.eventSourceUnixProcessID)
         )
     }
 
@@ -207,7 +362,7 @@ private extension MouseScrollEventSnapshot {
     }
 }
 
-private extension MouseScrollDeltas {
+extension MouseScrollDeltas {
     init(event: CGEvent) {
         self.init(
             deltaAxis1: event.getIntegerValueField(.scrollWheelEventDeltaAxis1),
@@ -220,21 +375,21 @@ private extension MouseScrollDeltas {
     }
 }
 
-private extension CGEvent {
+extension CGEvent {
     func applyScrollDeltas(
         _ deltas: MouseScrollDeltas,
-        reverseHorizontal: Bool,
-        reverseVertical: Bool
+        applyVertical: Bool,
+        applyHorizontal: Bool
     ) {
         // Set line deltas first. macOS may derive point/fixed deltas from them,
         // so point and fixed values are restored afterwards to preserve smooth scrolling.
-        if reverseVertical {
+        if applyVertical {
             setIntegerValueField(.scrollWheelEventDeltaAxis1, value: deltas.deltaAxis1)
             setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: deltas.fixedPointDeltaAxis1)
             setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: deltas.pointDeltaAxis1)
         }
 
-        if reverseHorizontal {
+        if applyHorizontal {
             setIntegerValueField(.scrollWheelEventDeltaAxis2, value: deltas.deltaAxis2)
             setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: deltas.fixedPointDeltaAxis2)
             setIntegerValueField(.scrollWheelEventPointDeltaAxis2, value: deltas.pointDeltaAxis2)
