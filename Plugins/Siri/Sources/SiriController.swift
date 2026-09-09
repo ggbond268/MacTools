@@ -21,7 +21,7 @@ final class SiriController {
         onChange?()
         let task = Task { @MainActor [self] in await run(message) }
         operation = task
-        return ActionExecutionHandle(operation: { await task.value }, cancel: { [weak self] in self?.cancel() })
+        return ActionExecutionHandle(operation: { await task.value }, cancel: { task.cancel() })
     }
 
     func cancel() { operation?.cancel() }

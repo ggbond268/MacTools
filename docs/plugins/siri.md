@@ -2,13 +2,13 @@
 
 Requires MacTools 1.3.0, macOS 27 with the Siri AI app, and Accessibility permission for the MacTools app being run.
 
-Open the command palette and type `ask siri <message>`, then press Return once. The palette identifies **Ask Siri — New Conversation** before sending. Alternatively search for Siri, select the action, and compose a message. Return sends; Shift-Return inserts a newline in the composer. IME composition must finish before Return can send.
+Open the command palette and type `ask siri <message>`, then press Return once. The palette identifies **Ask Siri — New Conversation** before sending. Alternatively search for Siri, select the action, and compose a message. Return sends; Shift-Return inserts a newline in the composer. IME composition must finish before Return or the Send button can send.
 
 `ask siri` is an explicit, case-insensitive alias. The alias and its first separator space are removed; the remaining text is preserved. Messages are limited to 4,096 UTF-8 bytes by the existing action parameter contract. Empty messages cannot be sent.
 
 MacTools opens Siri explicitly, starts a new conversation, fills its message field, and submits through native Accessibility controls. It does not use the clipboard, AppleScript, private Siri frameworks, or guessed URL parameters. The answer stays in Siri. The plugin's panel and settings show progress and the last attempt's status without retaining message content.
 
-Existing drafts are preserved. Only one Siri operation runs at a time. If Siri's controls, window, or conversation change, MacTools stops rather than selecting an arbitrary field. If delivery cannot be confirmed after submission, check Siri before trying again: the message may already have been sent. Cancellation cannot retract a submitted message and may leave the draft in Siri.
+Existing drafts are preserved, including when their contents cannot be read. Only one Siri operation runs at a time, and cancellation applies to that operation. If Siri's controls, window, or conversation change, MacTools stops rather than selecting an arbitrary field. If delivery cannot be confirmed after submission, check Siri before trying again: the message may already have been sent. Cancellation cannot retract a submitted message and may leave the draft in Siri.
 
 The first implementation exposes only new conversations. Continuing a selected conversation is withheld until a durable destination identity can be validated across window and selection changes. Siri's accessibility interface is not a documented app automation API and needs revalidation after macOS updates.
 

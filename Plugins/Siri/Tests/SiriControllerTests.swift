@@ -27,6 +27,24 @@ final class SiriControllerTests: XCTestCase {
         XCTAssertEqual(calls, ["prepare", "finish"])
     }
 
+    func testCompletedHandleCannotCancelANewerOperation() async throws {
+        let client = FakeSiriClient()
+        let controller = SiriController(client: client)
+        let first = try XCTUnwrap(controller.start("first"))
+        let firstResult = await first.result()
+        XCTAssertEqual(firstResult, .succeeded())
+
+        let second = try XCTUnwrap(controller.start("second"))
+        first.cancel()
+        let secondResult = await second.result()
+
+        XCTAssertEqual(secondResult, .succeeded())
+        XCTAssertEqual(controller.phase, .sent)
+        XCTAssertFalse(controller.isBusy)
+        let calls = await client.calls
+        XCTAssertEqual(calls, Array(repeating: ["prepare", "enter", "submit", "verify", "finish"], count: 2).flatMap { $0 })
+    }
+
     func testAmbiguousDeliveryNeverRetriesSubmit() async throws {
         let client = FakeSiriClient(failure: .timedOut, failingStep: "verify")
         let controller = SiriController(client: client)
@@ -48,8 +66,6 @@ final class SiriControllerTests: XCTestCase {
         let calls = await client.calls
         XCTAssertFalse(calls.contains("submit"))
     }
-
-
 }
 
 private actor FakeSiriClient: SiriClient {

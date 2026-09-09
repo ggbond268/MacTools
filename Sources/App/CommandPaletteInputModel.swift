@@ -10,13 +10,14 @@ final class CommandPaletteInputModel: ObservableObject {
     @Published private(set) var feedback: String?
     @Published private(set) var isBusy = false
     @Published var confirmationRequested = false
+    @Published var isComposingText = false
     private var prepared: PreparedActionInput?
     private var task: Task<Void, Never>?
     private var generation = UUID()
 
     var canSubmit: Bool {
         guard let item else { return false }
-        return !isBusy && ActionInputRegistry.accepts(message, descriptor: item.descriptor)
+        return !isBusy && !isComposingText && ActionInputRegistry.accepts(message, descriptor: item.descriptor)
     }
 
     func compose(_ item: ActionInputItem, message: String, registry: ActionInputRegistry) {
@@ -45,7 +46,12 @@ final class CommandPaletteInputModel: ObservableObject {
         _ item: ActionInputItem, message: String, host: PluginHost,
         approved: Bool = false, onStarted: @escaping @MainActor () -> Void
     ) {
-        guard !isBusy, ActionInputRegistry.accepts(message, descriptor: item.descriptor) else { return }
+        guard !isBusy, !isComposingText, ActionInputRegistry.accepts(message, descriptor: item.descriptor) else { return }
+        if self.item != item {
+            prepared?.release()
+            prepared = nil
+            destination = item.descriptor.destination
+        }
         self.item = item
         self.message = message
         if item.definition.risk == .confirmationRequired && !approved {
@@ -55,6 +61,7 @@ final class CommandPaletteInputModel: ObservableObject {
         isBusy = true
         feedback = nil
         let generation = generation
+        let expectedDestination = destination
         task = Task { @MainActor in
             var owned = prepared
             prepared = nil
@@ -62,7 +69,7 @@ final class CommandPaletteInputModel: ObservableObject {
                 if owned == nil { owned = try await host.actionInputRegistry.prepare(item) }
                 guard let session = owned else { throw ActionInputError.invalidSession }
                 guard generation == self.generation, !Task.isCancelled else { session.release(); return }
-                guard session.session.destination == destination || destination.isEmpty else {
+                guard !expectedDestination.isEmpty, session.session.destination == expectedDestination else {
                     throw ActionInputError.invalidSession
                 }
                 let reference = try host.actionInputRegistry.reference(session, message: message)
@@ -119,5 +126,6 @@ final class CommandPaletteInputModel: ObservableObject {
         feedback = nil
         isBusy = false
         confirmationRequested = false
+        isComposingText = false
     }
 }

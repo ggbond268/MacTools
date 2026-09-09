@@ -593,7 +593,10 @@ struct UnifiedSearchPaletteView: View {
                 Text(inputModel.item?.definition.title ?? "").font(PluginSettingsTheme.Typography.emphasizedRowTitle)
             }.controlSize(.small)
             Text(inputModel.destination).foregroundStyle(.secondary)
-            CommandPaletteMessageEditor(text: $inputModel.message, onSubmit: submitComposedInput, onBack: leaveInputOrDismiss)
+            CommandPaletteMessageEditor(
+                text: $inputModel.message, onSubmit: submitComposedInput, onBack: leaveInputOrDismiss,
+                onCompositionChange: { inputModel.isComposingText = $0 }
+            )
                 .frame(height: 160)
                 .disabled(inputModel.isBusy)
             inputFeedback
@@ -602,6 +605,7 @@ struct UnifiedSearchPaletteView: View {
                 Spacer()
                 Button(inputModel.item?.descriptor.submitTitle ?? FeatureL10n.string("发送"), action: submitComposedInput)
                     .buttonStyle(.borderedProminent).controlSize(.small).disabled(!inputModel.canSubmit)
+                    .accessibilityIdentifier("mactools.action-input.send")
             }
         }
     }
@@ -635,7 +639,7 @@ struct UnifiedSearchPaletteView: View {
             HStack(spacing: PluginPaletteMetrics.searchContentSpacing) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 CommandPaletteSearchField(
-                    text: Binding(get: { model.query }, set: updateInputQuery),
+                    text: Binding(get: { model.query }, set: { updateInputQuery($0) }),
                     placeholder: AppL10n.search("search.prompt", defaultValue: "搜索插件、设置和命令"),
                     accessibilityLabel: AppL10n.search("search.title", defaultValue: "搜索 MacTools"),
                     accessibilityIdentifier: "mactools.unified-search.field", focusRequestID: focusRequestID,

@@ -324,6 +324,21 @@ The four feasibility replies from this conversation are not substitutes for this
 - Registry tests cover preparation timeout and late-session cleanup, provider replacement, invalid parameters, empty/oversized input, and composer dismissal. Siri controller tests cover concurrent requests, draft protection, cancellation before entry, and uncertain delivery without retry.
 - The updated upstream base already fixes the locale-dependent manifest assertion observed during initial validation; its fix is preserved.
 - The packaged Debug-app interaction check could not run because no configured local signing settings were available. The previous Debug app was reopened after the attempted check. Native palette integration and the live Siri adapter were verified separately; the installed host-to-plugin path still needs manual acceptance.
-- The broader manual matrix below remains a release checklist, particularly IME input, multiple windows, changed selection, permission revocation, cancellation around submission, and future macOS beta updates. No continuation action is exposed.
+- The broader manual matrix above remains a release checklist, particularly system IME input, multiple windows, changed selection, permission revocation, cancellation around submission, and future macOS beta updates. No continuation action is exposed.
 
 The upstream rebase also preserves the single query owner and palette styling introduced in the recent palette fix. A host-specific native field reuses shared search command handling and retains ordinary search normalization, bypassing normalization only for explicitly recognized action input so message whitespace remains exact. Existing public v6 palette type layouts remain unchanged.
+
+
+## Review validation and fixes (2026-09-09)
+
+The five review findings were validated against PR head `397e46f7`: failed AX reads could masquerade as an empty draft; inline preparation could select a destination different from its preview; mouse submission could bypass marked-text handling; child AX objects did not inherit the application timeout; and an old execution handle could cancel a later request.
+
+- Required AX values and container children now reject failed or malformed reads. Each AX operation configures the exact object's timeout using the remaining deadline. Tests cover preserved drafts, read failures, equal wrappers, cancellation, and expired operations.
+- Inline execution requires the prepared destination to match its preview. The composer can use a resolved destination after displaying it. The inline mismatch regression failed before the fix and passes afterward.
+- Native marked-text callbacks block both submission paths until committed text is current. A native editor/button probe reproduced the original mouse bypass and verified that the fixed button sends only the complete committed text. Automated native tests cover marked text, unmarking, commit ordering, Return, and multiline Unicode.
+- Each execution handle cancels its captured operation. A completed-handle regression reproduces the old cancellation bug and verifies that a later request succeeds.
+- Live validation of the stricter reader identified legitimate childless scrollbar controls and transient stale response elements. Known leaf controls permit missing children; container failures remain errors. Post-submit verification retries only read-only evidence checks within its deadline and never resubmits. The final production adapter harness prepared a new conversation, entered exact text, submitted once, and verified the visible user message plus empty input on macOS 27.0 (26A5425a).
+- Final local `make ci` passed: 245 repository script tests, 4,378 Xcode tests, and the frozen PluginKit v6 binary compatibility client.
+- GitHub's Xcode 26.6 compiler crashed while generating a string setter closure in the palette. The binding now uses an explicit closure instead of a method reference; hosted CI must verify this workaround because the local compiler is newer.
+
+The installed Debug host-to-plugin acceptance gap remains: native palette tests and the live Siri adapter were verified separately. No release or packaged-app acceptance is claimed.
