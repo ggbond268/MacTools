@@ -38,6 +38,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         static let respectsStageManager = "respects-stage-manager"
         static let showsCommandFeedback = "shows-command-feedback"
         static let modifierDragEnabled = "modifier-drag.enabled"
+        static let modifierDragShowsIndicator = "modifier-drag.shows-indicator"
         static let reset = "reset"
         static let addCustom = "add-custom"
     }
@@ -102,9 +103,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     init(
         context: PluginRuntimeContext = PluginRuntimeContext(pluginID: "window-layouts"),
         executor: WindowLayoutExecuting? = nil,
-        makeModifierDragSession: @escaping @MainActor () -> any WindowModifierDragSessionManaging = {
-            WindowModifierDragSession()
-        },
+        makeModifierDragSession: (@MainActor () -> any WindowModifierDragSessionManaging)? = nil,
         accessibilityTrusted: @escaping @MainActor @Sendable () -> Bool = AXIsProcessTrusted,
         requestAccessibilityTrust: @escaping @MainActor @Sendable (Bool) -> Bool = WindowLayoutsAccessibilityCheck.requestTrust
     ) {
@@ -114,7 +113,48 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         self.store = store
         self.accessibilityTrusted = accessibilityTrusted
         self.requestAccessibilityTrust = requestAccessibilityTrust
-        self.makeModifierDragSession = makeModifierDragSession
+        self.makeModifierDragSession = makeModifierDragSession ?? {
+            WindowModifierDragSession(
+                hudPresenter: WindowModifierDragHUDController(
+                    movePointerTitleProvider: {
+                        localization.string(
+                            "settings.modifierDrag.hud.movePointer",
+                            defaultValue: "Move the pointer to reposition the window"
+                        )
+                    },
+                    movingWindowTitleProvider: {
+                        localization.string(
+                            "settings.modifierDrag.hud.movingWindow",
+                            defaultValue: "Moving window — release the keys to finish"
+                        )
+                    }
+                ),
+                localizedErrorMessage: { error in
+                    switch error {
+                    case .noWindowUnderPointer:
+                        return localization.string(
+                            "error.noWindowUnderPointer",
+                            defaultValue: "No movable window under pointer"
+                        )
+                    case .windowCannotMove:
+                        return localization.string(
+                            "error.windowCannotMove",
+                            defaultValue: "Window cannot move"
+                        )
+                    case .accessibilityRequired:
+                        return localization.string(
+                            "error.accessibilityRequired",
+                            defaultValue: "Accessibility required"
+                        )
+                    default:
+                        return localization.string(
+                            "error.frameWriteFailed",
+                            defaultValue: "Unable to move window"
+                        )
+                    }
+                }
+            )
+        }
         self.isAccessibilityGranted = accessibilityTrusted()
         let applicationTarget = WindowLayoutsApplicationTarget()
         self.applicationTarget = applicationTarget
@@ -375,6 +415,8 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
                 store.setShowsCommandFeedback(value)
             } else if controlID == SettingsID.modifierDragEnabled {
                 setModifierDragEnabled(value)
+            } else if controlID == SettingsID.modifierDragShowsIndicator {
+                setShowsModifierDragIndicator(value)
             } else {
                 updateBoolean(controlID: controlID, value: value)
             }
@@ -466,6 +508,12 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
 
     var isModifierDragEnabled: Bool { store.modifierDragEnabled }
     var modifierDragModifiers: ShortcutModifiers { store.modifierDragModifiers }
+    var showsModifierDragIndicator: Bool { store.modifierDragShowsIndicator }
+
+    func setShowsModifierDragIndicator(_ enabled: Bool) {
+        store.setModifierDragShowsIndicator(enabled)
+        applyModifierDragConfiguration()
+    }
 
     func setModifierDragModifiers(_ modifiers: ShortcutModifiers) {
         modifierDragError = nil
@@ -531,7 +579,10 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
             modifierDragSession = newSession
             session = newSession
         }
-        session.configure(modifiers: store.modifierDragModifiers)
+        session.configure(
+            modifiers: store.modifierDragModifiers,
+            showsIndicator: store.modifierDragShowsIndicator
+        )
         switch session.start() {
         case .success:
             modifierDragMonitorStartFailed = false
@@ -1127,6 +1178,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         case .windowUnavailable: localizedKey("error.windowUnavailable", "当前窗口已不可用。")
         case .windowCannotMove: localizedKey("error.windowCannotMove", "此窗口无法移动。")
         case .windowCannotResize: localizedKey("error.windowCannotResize", "此窗口无法调整大小。")
+        case .windowCannotResizeFurther: localizedKey("error.windowCannotResizeFurther", "窗口无法进一步调整大小。")
         case .windowSizeConstrained: localizedKey(
             "error.windowSizeConstrained",
             "此应用限制了窗口可调整到的大小。"
@@ -1204,6 +1256,10 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
             descriptor(.bottomLeftSixth, "左下六分之一", "填充左下六分之一。", "rectangle.split.3x3"),
             descriptor(.bottomCenterSixth, "中下六分之一", "填充中下六分之一。", "rectangle.split.3x3"),
             descriptor(.bottomRightSixth, "右下六分之一", "填充右下六分之一。", "rectangle.split.3x3"),
+            descriptor(.increaseWidth, "增加窗口宽度", "将当前窗口宽度增加 50 点。", "arrow.left.and.line.vertical.and.arrow.right"),
+            descriptor(.decreaseWidth, "减少窗口宽度", "将当前窗口宽度减少 50 点。", "arrow.right.and.line.vertical.and.arrow.left"),
+            descriptor(.increaseHeight, "增加窗口高度", "将当前窗口高度增加 50 点。", "arrow.up.and.line.horizontal.and.arrow.down"),
+            descriptor(.decreaseHeight, "减少窗口高度", "将当前窗口高度减少 50 点。", "arrow.down.and.line.horizontal.and.arrow.up"),
             descriptor(.moveToNextDisplay, "移到下一台显示器", "保留相对位置和大小并移到下一台显示器。", "arrow.right.square"),
             descriptor(.moveToPreviousDisplay, "移到上一台显示器", "保留相对位置和大小并移到上一台显示器。", "arrow.left.square"),
             descriptor(.restorePreviousFrame, "恢复上一个窗口位置", "恢复最近一次保存的位置和大小。", "arrow.uturn.backward.square")

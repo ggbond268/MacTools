@@ -126,6 +126,7 @@ class PluginSourceManifestTests(unittest.TestCase):
             "EmptyTrash": ["automation"],
             "RightClick": [],
             "DeviceBattery": ["inputMonitoring"],
+            "DiskClean": ["full-disk-access"],
             "ZshConfig": ["automation"],
         }
         for directory, permissions in expected_permissions.items():
@@ -407,6 +408,10 @@ class PluginSourceManifestTests(unittest.TestCase):
         )
         self.assertEqual(schema["properties"]["releaseChannel"]["type"], "string")
         self.assertEqual(schema["properties"]["releaseNotesURL"]["pattern"], "^https://")
+        self.assertEqual(
+            schema["properties"]["uninstallDataPolicy"]["enum"],
+            ["preserve", "removePrivateData"],
+        )
         capabilities = definitions["capabilities"]
         self.assertEqual(
             set(capabilities["required"]),

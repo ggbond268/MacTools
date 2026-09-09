@@ -2,6 +2,67 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "id": "plugins-1.3.0",
+      "kind": "plugin",
+      "version": "1.3.0",
+      "date": "2026-09-09",
+      "sections": [
+        {
+          "kind": "added",
+          "entries": [
+            "Added Apple Shortcuts to browse and run the system shortcut library, view folders, stop running shortcuts, and control confirmation and Run Link access.",
+            "Added Clipboard with encrypted local history, saved clips, reusable snippets, OCR, and rich-text or plain-text paste.",
+            "Clipboard supports paste queues, app exclusions, Private Copy, and export or sharing of saved items.",
+            "Device Battery now supports battery readings from compatible MCHOSE mice, including the A7 V3 Ultra+.",
+            "Added Hide Active App on Dock Click to hide the frontmost app by clicking its Dock icon while preserving other Dock interactions.",
+            "Added Mac Settings with searchable macOS controls, pinned favorites, and a Zen profile to hide the Dock, menu bar, desktop items, and widgets.",
+            "Mac Settings profiles support selective application, portable import and export, change history, Undo, and recovery of incomplete changes.",
+            "Restored Hide Menu Bar Icons with draggable icon layouts and a panel for hidden icons.",
+            "Right Click can now create CSV, YAML, XML, HTML, CSS, JavaScript, TypeScript, Shell, and Python files.",
+            "Trackpad Gestures and Custom Shortcuts can now send individual keys and distinguish left and right modifier keys.",
+            "Added Power Actions to sleep the Mac or open macOS confirmation dialogs for log out, restart, and shut down.",
+            "Added System Soft Restart to restart macOS user services, preserve the Dock layout, and reopen supported apps.",
+            "System Status now offers a menu-bar overview with detail charts, pinned readings, selectable time ranges, and an optional global shortcut.",
+            "System Status menu-bar metrics now support per-metric display styles, configurable values, layout choices, and drag reordering.",
+            "Added Window Layouts with grid placement, adjustable gaps, layout cycling, incremental width and height controls, display movement, custom layouts, shortcut presets, and Run Links.",
+            "Optional modifier-key dragging moves windows beneath the pointer without clicking or changing focus, with a configurable status indicator and smoother movement when apps are busy."
+          ]
+        },
+        {
+          "kind": "changed",
+          "entries": [
+            "Auto Input can now show its HUD near the pointer and offer adaptive reminders. Editable fields in Google Docs, Raycast, and MacTools are recognized more reliably.",
+            "Official plugins now provide localized Marketplace descriptions, actions, requirements, privacy disclosures, and setup instructions.",
+            "Cloudflare R2 Upload now follows the selected app language across setup, uploads, status, and errors.",
+            "Disk Cleanup now explains its optional Full Disk Access requirement and continues to skip protected locations when access is unavailable.",
+            "Dock Lock can now be toggled directly from its settings page.",
+            "Official plugin archives now declare GPL-3.0-only and include their license and applicable third-party notices.",
+            "New plugin packages use PluginKit v6 and require MacTools 1.3.0 or later. Catalogs for older app versions remain unchanged.",
+            "System Status settings now support preferences export, import, and automatic backups.",
+            "Trackpad Gestures now provides clearer practice feedback, including finger roles and separate TipTap contact and click status."
+          ]
+        },
+        {
+          "kind": "fixed",
+          "entries": [
+            "Plugins that require Automation access now indicate that macOS asks for permission on demand instead of showing access as already granted.",
+            "Fixed Battery Charge Limit failing to switch compatible Macs to battery power while connected to a power adapter.",
+            "Device Battery now reports AirPods and other Apple headphone battery levels and charging states more reliably, with fewer duplicate or stale readings.",
+            "Custom Shortcuts now explains recorder startup failures, preserves the previous mapping, and offers permission guidance or a retry.",
+            "Middle Click no longer navigates the current page when opening a link in a new tab.",
+            "Night Shift now reports toggle failures safely when the required macOS controls are unavailable or incompatible.",
+            "Nightly plugins now keep privileged helpers, saved credentials, and Activity Bar AI hooks separate from stable MacTools.",
+            "Corrected System Status battery temperature, time estimates, and chart statistics, with faster charts and stable pinned readings.",
+            "Fixed System Status process monitoring getting stuck on “Collecting” when many processes are running.",
+            "Trackpad Gestures now recognizes staggered multi-finger taps and repeated TipTaps more reliably, including with idle external or virtual pointers.",
+            "Fixed duplicate or leaked native clicks during trackpad tap actions, and restored normal dragging and recognition after failed gestures.",
+            "Window Switcher now includes eligible windows from all macOS Spaces, keeps each window separately selectable, and focuses windows directly during keyboard navigation.",
+            "Improved inline editing stability for large zsh configuration files."
+          ]
+        }
+      ]
+    },
+    {
       "id": "v1.2.0",
       "kind": "app",
       "version": "1.2.0",

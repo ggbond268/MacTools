@@ -6,6 +6,7 @@ enum AppDeepLink: Equatable {
     enum SettingsDestination: Equatable {
         case root
         case general
+        case permissions
         case about
         case actionsAndShortcuts
         case automation
@@ -29,6 +30,8 @@ enum AppDeepLink: Equatable {
             return .settings(.settings)
         case .settings(.general):
             return .settings(.general)
+        case .settings(.permissions):
+            return .settings(.permissions)
         case .settings(.about):
             return .settings(.about)
         case .settings(.actionsAndShortcuts):
@@ -205,6 +208,8 @@ enum AppDeepLinkParser {
             return .success(.navigation(.settings(.root)))
         case ["settings", "general"]:
             return .success(.navigation(.settings(.general)))
+        case ["settings", "permissions"]:
+            return .success(.navigation(.settings(.permissions)))
         case ["settings", "about"]:
             return .success(.navigation(.settings(.about)))
         case ["settings", "features", "actions-and-shortcuts"]:

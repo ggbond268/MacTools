@@ -154,9 +154,9 @@
       "zh-Hant": "啟用輔助使用權限和視窗切換快速鍵。"
     }
   },
-  "version": "1.1.0",
-  "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "version": "1.2.0",
+  "minHostVersion": "1.3.0",
+  "pluginKitVersion": 6,
   "bundleRelativePath": "WindowSwitcher.bundle",
   "factoryClass": "WindowSwitcherPlugin.WindowSwitcherPluginFactory",
   "build": {

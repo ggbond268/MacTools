@@ -579,6 +579,58 @@ public protocol PluginActionShortcutSettingsProviding: AnyObject {
     var actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration { get }
 }
 
+/// Describes one host-rendered shortcut group that may combine canonical actions with
+/// plugin-private shortcuts. Persistence, conflict handling, and registration remain host-owned.
+public struct PluginShortcutSettingsGroupConfiguration: Sendable, Identifiable {
+    public let id: String
+    public let title: String
+    public let description: String?
+    public let systemImage: String
+    public let actionIDs: Set<String>
+    public let shortcutDefinitionIDs: Set<String>
+    public let placementAfterSectionID: String?
+
+    public init(
+        id: String,
+        title: String,
+        description: String? = nil,
+        systemImage: String = "command",
+        actionIDs: Set<String> = [],
+        shortcutDefinitionIDs: Set<String> = [],
+        placementAfterSectionID: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.systemImage = systemImage
+        self.actionIDs = actionIDs
+        self.shortcutDefinitionIDs = shortcutDefinitionIDs
+        self.placementAfterSectionID = placementAfterSectionID
+    }
+}
+
+/// Optional companion contract for settings pages that need more than one shortcut group or need
+/// to place a plugin-private shortcut beside a canonical action without changing either model.
+@MainActor
+public protocol PluginGroupedShortcutSettingsProviding: AnyObject {
+    var shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] { get }
+}
+
+/// Optional presentation hints for host-rendered shortcut groups. These hints do not change the
+/// shortcut model or persistence and therefore remain safe for older plugin packages.
+@MainActor
+public protocol PluginShortcutSettingsGroupPresentationProviding: AnyObject {
+    var shortcutDefinitionFirstSettingsGroupIDs: Set<String> { get }
+    var collapsibleShortcutSettingsGroupIDs: Set<String> { get }
+    var collapsibleActionSettingsGroupIDs: Set<String> { get }
+}
+
+public extension PluginShortcutSettingsGroupPresentationProviding {
+    var shortcutDefinitionFirstSettingsGroupIDs: Set<String> { [] }
+    var collapsibleShortcutSettingsGroupIDs: Set<String> { [] }
+    var collapsibleActionSettingsGroupIDs: Set<String> { [] }
+}
+
 /// Declares action IDs that this plugin intentionally removed. The host discards only matching
 /// shortcut assignments while retaining assignments for actions that are merely unavailable.
 @MainActor

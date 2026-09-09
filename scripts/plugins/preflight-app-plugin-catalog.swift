@@ -120,7 +120,7 @@ private func catalogRequirement(pluginKitVersion: Int) -> CatalogRequirement {
         relativePath = "v\(pluginKitVersion)/catalog.json"
     }
     return CatalogRequirement(
-        minimumAppVersion: "1.2.1",
+        minimumAppVersion: pluginKitVersion >= 6 ? "1.3.0" : "1.2.1",
         url: URL(string: "https://mactools.ggbond.app/plugins/\(relativePath)")!,
         expectedCatalogPath: "docs/plugins/\(relativePath)"
     )

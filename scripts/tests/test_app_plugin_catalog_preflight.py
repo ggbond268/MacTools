@@ -60,6 +60,28 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
         self.assertIn("cannot be released as MacTools 1.2.0", result.stderr)
         self.assertIn("Raise the app version to 1.2.1", result.stderr)
 
+    def test_plugin_kit6_requires_host_1_3_before_checking_catalog(self) -> None:
+        result = self.run_preflight(
+            "--required-plugin-kit-version", "6", "--app-version", "1.2.1"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Raise the app version to 1.3.0", result.stderr)
+
+    def test_current_source_requires_plugin_kit6_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plugin = root / "Plugins/Demo"
+            plugin.mkdir(parents=True)
+            source = next((ROOT_DIR / "Plugins").glob("*/plugin.json"))
+            (plugin / "plugin.json").write_bytes(source.read_bytes())
+            result = subprocess.run(
+                [str(self.executable), "--app-version", "1.3.0",
+                 "--public-key-base64", TEST_PUBLIC_KEY_BASE64],
+                cwd=root, text=True, capture_output=True,
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("docs/plugins/v6/catalog.json", result.stderr)
+
     def test_matching_committed_and_deployed_signed_catalog_passes(self) -> None:
         result = self.run_preflight(
             "--app-version",
@@ -85,11 +107,11 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
                     "catalogID": "com.ggbond.mactools.plugins",
                     "generatedAt": "2026-08-28T00:00:00Z",
                     "minimumHostVersion": "1.2.1",
-                    "pluginKitVersion": 5,
+                    "pluginKitVersion": 6,
                     "plugins": [
                         {
                             "id": "example",
-                            "pluginKitVersion": 5,
+                            "pluginKitVersion": 6,
                             "package": {
                                 "url": "https://example.invalid/example.mactoolsplugin.zip",
                                 "sha256": "0" * 64,
@@ -147,11 +169,11 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
 
         result = self.run_preflight(
             "--required-plugin-kit-version",
-            "5",
+            "6",
             "--required-schema-version",
             "3",
             "--app-version",
-            "1.2.1",
+            "1.3.0",
             "--expected-catalog",
             str(signed_catalog),
             "--deployed-catalog",
@@ -163,7 +185,7 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Verified signed PluginKit 5 catalog", result.stdout)
+        self.assertIn("Verified signed PluginKit 6 catalog", result.stdout)
 
     def test_schema3_hosts_derive_the_current_plugin_kit_compatibility_line(self) -> None:
         source = SCRIPT_PATH.read_text(encoding="utf-8")

@@ -4,4 +4,4 @@ type: added
 area: Plugins
 ---
 
-Marketplace plugins now open native detail pages with catalog-backed actions, requirements, privacy, setup, and publisher information before installation.
+Added Marketplace detail pages with localized features, actions, requirements, privacy disclosures, and setup guidance available before installation.

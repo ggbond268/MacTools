@@ -899,6 +899,34 @@ final class TrackpadGestureRecognizerTests: XCTestCase {
         )
     }
 
+    func testRecognitionWorkerDeliversExactDoubleTapPairAfterInvalidEpisode() {
+        let delivered = expectation(description: "Double tap carries only its two valid episodes")
+        let first = TrackpadContactEpisodeID(deviceID: 1, sequence: 3)
+        let second = TrackpadContactEpisodeID(deviceID: 1, sequence: 4)
+        let worker = TrackpadGestureRecognitionWorker(
+            generation: TrackpadGestureRecognitionGeneration(),
+            onRecognized: { gesture, _, _, evidence, _ in
+                XCTAssertEqual(gesture, .threeFingerDoubleTap)
+                XCTAssertEqual(evidence, .doubleTapEpisodes(first: first, second: second))
+                delivered.fulfill()
+            }
+        )
+        worker.configure(gestures: [.threeFingerDoubleTap], reset: true)
+        let three = [(1, 0.3, 0.5), (2, 0.5, 0.5), (3, 0.7, 0.5)]
+        worker.process(frame(time: 0, contacts: []))
+        for (index, start) in [0.01, 0.08, 0.16, 0.24].enumerated() {
+            let episode = TrackpadContactEpisodeID(deviceID: 1, sequence: UInt64(index + 1))
+            worker.process(frame(time: start, contacts: three), contactEpisodeID: episode)
+            if index == 1 {
+                worker.process(frame(time: start + 0.01, contacts: three + [(4, 0.9, 0.5)]),
+                               contactEpisodeID: episode)
+            }
+            worker.process(frame(time: start + 0.03, contacts: []), contactEpisodeID: episode)
+        }
+        worker.waitUntilIdleForTests()
+        wait(for: [delivered], timeout: 1)
+    }
+
     func testRecognitionWorkerDeliversEveryRepeatedTipTap() {
         let recognized = TrackpadGestureRecorder()
         let worker = TrackpadGestureRecognitionWorker(

@@ -28,7 +28,10 @@ final class WindowModifierDragGestureTests: XCTestCase {
         )
 
         XCTAssertNil(gesture.modifiersChanged([.control], pointer: .zero))
-        XCTAssertNil(gesture.modifiersChanged([.control, .option], pointer: .zero))
+        XCTAssertEqual(
+            gesture.modifiersChanged([.control, .option], pointer: .zero),
+            .arm(generation: 1, pointer: .zero)
+        )
         XCTAssertNil(gesture.pointerMoved(
             to: CGPoint(x: 3, y: 0),
             modifiers: [.control, .option]
@@ -68,10 +71,13 @@ final class WindowModifierDragGestureTests: XCTestCase {
         ))
 
         XCTAssertNil(gesture.modifiersChanged([], pointer: CGPoint(x: 20, y: 0)))
-        XCTAssertNil(gesture.modifiersChanged(
-            [.control, .option],
-            pointer: CGPoint(x: 20, y: 0)
-        ))
+        XCTAssertEqual(
+            gesture.modifiersChanged(
+                [.control, .option],
+                pointer: CGPoint(x: 20, y: 0)
+            ),
+            .arm(generation: 2, pointer: CGPoint(x: 20, y: 0))
+        )
         XCTAssertEqual(
             gesture.pointerMoved(
                 to: CGPoint(x: 25, y: 0),
@@ -82,6 +88,24 @@ final class WindowModifierDragGestureTests: XCTestCase {
                 origin: CGPoint(x: 20, y: 0),
                 pointer: CGPoint(x: 25, y: 0)
             )
+        )
+    }
+
+    func testKeyPressedCancelsAndBlocksGesture() {
+        var gesture = WindowModifierDragGesture(requiredModifiers: [.control, .option])
+        XCTAssertEqual(
+            gesture.modifiersChanged([.control, .option], pointer: .zero),
+            .arm(generation: 1, pointer: .zero)
+        )
+        XCTAssertEqual(gesture.keyPressed(), .cancel(generation: 1))
+        XCTAssertNil(gesture.pointerMoved(
+            to: CGPoint(x: 20, y: 0),
+            modifiers: [.control, .option]
+        ))
+        XCTAssertNil(gesture.modifiersChanged([], pointer: .zero))
+        XCTAssertEqual(
+            gesture.modifiersChanged([.control, .option], pointer: .zero),
+            .arm(generation: 2, pointer: .zero)
         )
     }
 
@@ -293,6 +317,37 @@ final class WindowAccessibilityCancellationTests: XCTestCase {
 
 @MainActor
 final class WindowModifierDragControllerTests: XCTestCase {
+    func testRetriesTransientBusyInteractiveWriteWithoutFailingGesture() async throws {
+        let handle = AccessibilityWindowHandle(
+            identity: WindowIdentity(processIdentifier: 42, token: "window-number:7"),
+            windowNumber: 7,
+            canMove: true,
+            canResize: true
+        )
+        let resolver = StubWindowUnderPointerResolver(window: handle)
+        let frameIO = TemporarilyBusyWindowFrameIO(
+            frame: CGRect(x: 100, y: 200, width: 800, height: 600)
+        )
+        let successExpectation = expectation(description: "move eventually succeeded")
+        let controller = WindowModifierDragController(
+            resolver: resolver,
+            frameReader: frameIO,
+            frameWriter: frameIO,
+            busyRetryDelay: .milliseconds(1)
+        )
+        controller.onSuccess = { successExpectation.fulfill() }
+
+        controller.begin(
+            generation: 1,
+            origin: CGPoint(x: 25, y: 40),
+            pointer: CGPoint(x: 35, y: 55)
+        )
+        await fulfillment(of: [successExpectation], timeout: 1)
+
+        XCTAssertEqual(frameIO.interactiveWriteAttempts, 2)
+        XCTAssertEqual(frameIO.appliedFrames, [CGRect(x: 110, y: 215, width: 800, height: 600)])
+    }
+
     func testMovesCapturedWindowByPointerDeltaWithoutResizing() async throws {
         let handle = AccessibilityWindowHandle(
             identity: WindowIdentity(processIdentifier: 42, token: "window-number:7"),
@@ -325,6 +380,365 @@ final class WindowModifierDragControllerTests: XCTestCase {
         XCTAssertEqual(write.frame, CGRect(x: 110, y: 215, width: 800, height: 600))
         XCTAssertFalse(write.resize)
         XCTAssertTrue(write.window === handle)
+    }
+
+    func testArmsHUDAfterDelay() async throws {
+        let handle = AccessibilityWindowHandle(
+            identity: WindowIdentity(processIdentifier: 42, token: "win"),
+            canMove: true,
+            canResize: true
+        )
+        let resolver = StubWindowUnderPointerResolver(window: handle)
+        let frameIO = RecordingWindowFrameIO(frame: CGRect(x: 100, y: 100, width: 200, height: 200))
+        let hud = SpyWindowModifierDragHUDPresenter()
+        let armExpectation = expectation(description: "HUD armed")
+        hud.onAction = {
+            if case .present(.armed) = hud.actions.last {
+                armExpectation.fulfill()
+            }
+        }
+        let controller = WindowModifierDragController(
+            resolver: resolver,
+            frameReader: frameIO,
+            frameWriter: frameIO,
+            hudPresenter: hud,
+            pointerLocation: { CGPoint(x: 50, y: 50) },
+            armDelay: 0.05,
+            showsIndicator: true,
+            requiredModifiers: [.control, .option]
+        )
+
+        controller.arm(generation: 1, pointer: CGPoint(x: 50, y: 50))
+        XCTAssertTrue(hud.actions.isEmpty, "HUD must not be presented immediately on arm")
+
+        await fulfillment(of: [armExpectation], timeout: 1)
+        XCTAssertEqual(hud.actions, [
+            .present(.armed(modifiers: [.control, .option], pointer: CGPoint(x: 50, y: 50)))
+        ])
+    }
+
+    func testCancelBeforeArmDelayPreventsHUD() async {
+        let handle = AccessibilityWindowHandle(
+            identity: WindowIdentity(processIdentifier: 42, token: "win"),
+            canMove: true,
+            canResize: true
+        )
+        let resolver = StubWindowUnderPointerResolver(window: handle)
+        let frameIO = RecordingWindowFrameIO(frame: CGRect(x: 100, y: 100, width: 200, height: 200))
+        let hud = SpyWindowModifierDragHUDPresenter()
+        let controller = WindowModifierDragController(
+            resolver: resolver,
+            frameReader: frameIO,
+            frameWriter: frameIO,
+            hudPresenter: hud,
+            pointerLocation: { CGPoint(x: 50, y: 50) },
+            armDelay: 0.05,
+            showsIndicator: true,
+            requiredModifiers: [.control, .option]
+        )
+
+        controller.arm(generation: 1, pointer: CGPoint(x: 50, y: 50))
+        controller.cancel(generation: 1)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(hud.actions.contains(where: {
+            if case .present = $0 { return true }
+            return false
+        }))
+    }
+
+    func testActiveHUDFollowsPointerAndStaysVisibleUntilCancel() async throws {
+        let handle = AccessibilityWindowHandle(
+            identity: WindowIdentity(processIdentifier: 42, token: "win"),
+            canMove: true,
+            canResize: true
+        )
+        let resolver = StubWindowUnderPointerResolver(window: handle)
+        let frameIO = RecordingWindowFrameIO(frame: CGRect(x: 100, y: 100, width: 200, height: 200))
+        let hud = SpyWindowModifierDragHUDPresenter()
+        var appKitPointer = CGPoint(x: 55, y: 55)
+        let activeExpectation = expectation(description: "HUD active")
+        let movedExpectation = expectation(description: "HUD followed pointer")
+        var observedInitialPresentation = false
+        hud.onAction = {
+            if case .present(.active) = hud.actions.last,
+               !observedInitialPresentation {
+                observedInitialPresentation = true
+                activeExpectation.fulfill()
+            }
+            if case .present(.active(_, CGPoint(x: 300, y: 400))) = hud.actions.last {
+                movedExpectation.fulfill()
+            }
+        }
+        let controller = WindowModifierDragController(
+            resolver: resolver,
+            frameReader: frameIO,
+            frameWriter: frameIO,
+            hudPresenter: hud,
+            pointerLocation: { appKitPointer },
+            armDelay: 0.05,
+            showsIndicator: true,
+            requiredModifiers: [.control, .option]
+        )
+
+        controller.begin(generation: 1, origin: CGPoint(x: 50, y: 50), pointer: CGPoint(x: 55, y: 55))
+        await fulfillment(of: [activeExpectation], timeout: 1)
+
+        appKitPointer = CGPoint(x: 300, y: 400)
+        controller.update(
+            generation: 1,
+            pointer: CGPoint(x: 80, y: 90) // Quartz coordinates drive the window, not the HUD.
+        )
+        await fulfillment(of: [movedExpectation], timeout: 1)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(hud.actions.contains(.dismiss))
+
+        controller.cancel(generation: 1)
+        XCTAssertEqual(hud.actions.last, .dismiss)
+    }
+
+    func testFailsWithHUDWhenWindowCannotBeResolved() async throws {
+        let resolver = FailingWindowUnderPointerResolver(error: .noWindowUnderPointer)
+        let frameIO = RecordingWindowFrameIO(frame: .zero)
+        let hud = SpyWindowModifierDragHUDPresenter()
+        let failureExpectation = expectation(description: "HUD failure")
+        hud.onAction = {
+            if case .present(.failure) = hud.actions.last {
+                failureExpectation.fulfill()
+            }
+        }
+        let controller = WindowModifierDragController(
+            resolver: resolver,
+            frameReader: frameIO,
+            frameWriter: frameIO,
+            hudPresenter: hud,
+            pointerLocation: { CGPoint(x: 50, y: 50) },
+            localizedErrorMessage: { _ in "No movable window under pointer" },
+            showsIndicator: true,
+            requiredModifiers: [.control, .option]
+        )
+
+        controller.begin(generation: 1, origin: CGPoint(x: 50, y: 50), pointer: CGPoint(x: 55, y: 55))
+        await fulfillment(of: [failureExpectation], timeout: 1)
+        XCTAssertEqual(hud.actions, [
+            .present(.failure(message: "No movable window under pointer", pointer: CGPoint(x: 50, y: 50)))
+        ])
+    }
+
+    func testShowsIndicatorFalseSuppressesAllHUD() async throws {
+        let handle = AccessibilityWindowHandle(
+            identity: WindowIdentity(processIdentifier: 42, token: "win"),
+            canMove: true,
+            canResize: true
+        )
+        let resolver = StubWindowUnderPointerResolver(window: handle)
+        let frameIO = RecordingWindowFrameIO(frame: CGRect(x: 100, y: 100, width: 200, height: 200))
+        let hud = SpyWindowModifierDragHUDPresenter()
+        let writeExpectation = expectation(description: "write occurred")
+        frameIO.onWrite = { writeExpectation.fulfill() }
+
+        let controller = WindowModifierDragController(
+            resolver: resolver,
+            frameReader: frameIO,
+            frameWriter: frameIO,
+            hudPresenter: hud,
+            armDelay: 0.01,
+            showsIndicator: false,
+            requiredModifiers: [.control, .option]
+        )
+
+        controller.arm(generation: 1, pointer: CGPoint(x: 50, y: 50))
+        controller.begin(generation: 1, origin: CGPoint(x: 50, y: 50), pointer: CGPoint(x: 55, y: 55))
+        await fulfillment(of: [writeExpectation], timeout: 1)
+
+        XCTAssertTrue(hud.actions.isEmpty)
+    }
+
+    func testStaleGenerationDiscarded() async throws {
+        let handle = AccessibilityWindowHandle(
+            identity: WindowIdentity(processIdentifier: 42, token: "win"),
+            canMove: true,
+            canResize: true
+        )
+        let resolver = DelayedWindowUnderPointerResolver(window: handle, delay: 0.05)
+        let frameIO = RecordingWindowFrameIO(frame: CGRect(x: 100, y: 100, width: 200, height: 200))
+        let hud = SpyWindowModifierDragHUDPresenter()
+        let controller = WindowModifierDragController(
+            resolver: resolver,
+            frameReader: frameIO,
+            frameWriter: frameIO,
+            hudPresenter: hud,
+            showsIndicator: true,
+            requiredModifiers: [.control, .option]
+        )
+
+        controller.begin(generation: 1, origin: CGPoint(x: 50, y: 50), pointer: CGPoint(x: 55, y: 55))
+        controller.cancel(generation: 1)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertTrue(frameIO.writes.isEmpty)
+        XCTAssertFalse(hud.actions.contains(where: {
+            if case .present(.active) = $0 { return true }
+            return false
+        }))
+    }
+}
+
+@MainActor
+final class WindowModifierDragHUDControllerTests: XCTestCase {
+    func testPanelFrameClampsWithinVisibleFrameAndHandlesMultiScreen() {
+        let displayFrames = [
+            CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            CGRect(x: -1920, y: 0, width: 1920, height: 1080)
+        ]
+        let visibleFrames = [
+            CGRect(x: 0, y: 0, width: 1920, height: 1055),
+            CGRect(x: -1920, y: 0, width: 1920, height: 1055)
+        ]
+        let panelSize = CGSize(width: 80, height: 28)
+
+        // 1. Normal location on main screen
+        let normalFrame = WindowModifierDragHUDController.panelFrame(
+            at: CGPoint(x: 100, y: 500),
+            panelSize: panelSize,
+            displayFrames: displayFrames,
+            visibleFrames: visibleFrames,
+            offset: CGPoint(x: 14, y: 12)
+        )
+        XCTAssertEqual(normalFrame.origin.x, 114)
+        XCTAssertEqual(normalFrame.origin.y, 500 + 12) // Prefer above the pointer.
+        XCTAssertEqual(normalFrame.size, panelSize)
+
+        // 2. Right edge clamp on main screen
+        let rightEdgeFrame = WindowModifierDragHUDController.panelFrame(
+            at: CGPoint(x: 1910, y: 500),
+            panelSize: panelSize,
+            displayFrames: displayFrames,
+            visibleFrames: visibleFrames,
+            offset: CGPoint(x: 14, y: 12)
+        )
+        XCTAssertEqual(rightEdgeFrame.maxX, 1920 - 8)
+
+        // 3. Top edge flip on main screen (pointer near top)
+        let topEdgeFrame = WindowModifierDragHUDController.panelFrame(
+            at: CGPoint(x: 100, y: 1045),
+            panelSize: panelSize,
+            displayFrames: displayFrames,
+            visibleFrames: visibleFrames,
+            offset: CGPoint(x: 14, y: 12)
+        )
+        // aboveY = 1057 > maxY. Fall back below: 1045 - 28 - 12 = 1005.
+        XCTAssertEqual(topEdgeFrame.origin.y, 1005)
+
+        // 4. Secondary display with negative origin
+        let secondaryFrame = WindowModifierDragHUDController.panelFrame(
+            at: CGPoint(x: -500, y: 500),
+            panelSize: panelSize,
+            displayFrames: displayFrames,
+            visibleFrames: visibleFrames,
+            offset: CGPoint(x: 14, y: 12)
+        )
+        XCTAssertEqual(secondaryFrame.origin.x, -500 + 14)
+        XCTAssertEqual(secondaryFrame.origin.y, 512)
+        XCTAssertTrue(secondaryFrame.minX >= -1920 + 8)
+        XCTAssertTrue(secondaryFrame.maxX <= -8)
+    }
+
+    func testAnnouncesAccessibilityOnFailure() {
+        var announcement: String?
+        let hud = WindowModifierDragHUDController(
+            announceAccessibility: { message in
+                announcement = message
+            }
+        )
+
+        hud.present(.failure(message: "No movable window under pointer", pointer: .zero))
+        XCTAssertEqual(announcement, "No movable window under pointer")
+    }
+
+    func testHUDResizesWhenActiveInstructionIsWider() throws {
+        let hud = WindowModifierDragHUDController(
+            movePointerTitleProvider: { "Move" },
+            movingWindowTitleProvider: { "Release the modifier keys to finish moving the window" }
+        )
+        defer { hud.dismiss() }
+
+        hud.present(.armed(modifiers: [.control, .option], pointer: .zero))
+        let armedWidth = try XCTUnwrap(hud.presentedPanelForTests).frame.width
+
+        hud.present(.active(modifiers: [.control, .option], pointer: .zero))
+        let activeWidth = try XCTUnwrap(hud.presentedPanelForTests).frame.width
+
+        XCTAssertGreaterThan(activeWidth, armedWidth)
+    }
+
+    func testActiveHUDRepositionsWithoutChangingItsSize() throws {
+        let displayFrame = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1000, height: 780)
+        let hud = WindowModifierDragHUDController(
+            visibleFramesProvider: { [visibleFrame] },
+            displayFramesProvider: { [displayFrame] }
+        )
+        defer { hud.dismiss() }
+
+        hud.present(.active(modifiers: [.control, .option], pointer: CGPoint(x: 100, y: 100)))
+        let initialFrame = try XCTUnwrap(hud.presentedPanelForTests).frame
+
+        hud.present(.active(modifiers: [.control, .option], pointer: CGPoint(x: 300, y: 250)))
+        let movedFrame = try XCTUnwrap(hud.presentedPanelForTests).frame
+
+        XCTAssertEqual(movedFrame.size, initialFrame.size)
+        XCTAssertNotEqual(movedFrame.origin, initialFrame.origin)
+    }
+}
+
+@MainActor
+private final class SpyWindowModifierDragHUDPresenter: WindowModifierDragHUDPresenting {
+    enum Action: Equatable {
+        case present(WindowModifierDragHUDState)
+        case dismiss
+    }
+
+    var actions: [Action] = []
+    var onAction: (() -> Void)?
+
+    func present(_ state: WindowModifierDragHUDState) {
+        actions.append(.present(state))
+        onAction?()
+    }
+
+    func dismiss() {
+        actions.append(.dismiss)
+        onAction?()
+    }
+}
+
+@MainActor
+private final class FailingWindowUnderPointerResolver: WindowUnderPointerResolving {
+    let error: WindowLayoutError
+
+    init(error: WindowLayoutError) {
+        self.error = error
+    }
+
+    func resolveWindow(at point: CGPoint) async throws -> AccessibilityWindowHandle {
+        throw error
+    }
+}
+
+@MainActor
+private final class DelayedWindowUnderPointerResolver: WindowUnderPointerResolving {
+    let window: AccessibilityWindowHandle
+    let delay: TimeInterval
+
+    init(window: AccessibilityWindowHandle, delay: TimeInterval) {
+        self.window = window
+        self.delay = delay
+    }
+
+    func resolveWindow(at point: CGPoint) async throws -> AccessibilityWindowHandle {
+        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        return window
     }
 }
 
@@ -392,6 +806,44 @@ private final class RecordingWindowFrameIO: WindowFrameReading, WindowFrameWriti
     ) async throws {
         writes.append(Write(frame: frame, window: window, resize: resize))
         onWrite()
+    }
+}
+
+@MainActor
+private final class TemporarilyBusyWindowFrameIO: WindowFrameReading, WindowFrameWriting {
+    let frame: CGRect
+    private(set) var interactiveWriteAttempts = 0
+    private(set) var appliedFrames: [CGRect] = []
+
+    init(frame: CGRect) {
+        self.frame = frame
+    }
+
+    func frame(of window: AccessibilityWindowHandle) async throws -> CGRect {
+        frame
+    }
+
+    func isValid(_ window: AccessibilityWindowHandle) async -> Bool {
+        true
+    }
+
+    func setFrame(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws {
+        appliedFrames.append(frame)
+    }
+
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws -> Bool {
+        interactiveWriteAttempts += 1
+        guard interactiveWriteAttempts > 1 else { return false }
+        appliedFrames.append(frame)
+        return true
     }
 }
 

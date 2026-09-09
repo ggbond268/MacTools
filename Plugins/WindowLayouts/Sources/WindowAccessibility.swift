@@ -58,6 +58,25 @@ protocol WindowFrameWriting {
         of window: AccessibilityWindowHandle,
         resize: Bool
     ) async throws
+
+    /// Writes a frame during a continuous pointer gesture. Returning `false` means the
+    /// target application was temporarily busy and the caller should coalesce and retry.
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws -> Bool
+}
+
+extension WindowFrameWriting {
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws -> Bool {
+        try await setFrame(frame, of: window, resize: resize)
+        return true
+    }
 }
 
 @MainActor
@@ -240,6 +259,39 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
                 )
             }
         )
+    }
+
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) throws -> Bool {
+        try Task.checkCancellation()
+        let element = try externalElement(for: window)
+        guard window.canMove else {
+            throw WindowLayoutError.windowCannotMove
+        }
+        guard !resize else {
+            try setFrame(frame, of: window, resize: true)
+            return true
+        }
+
+        var point = frame.origin
+        guard let value = AXValueCreate(.cgPoint, &point) else {
+            throw WindowLayoutError.frameWriteFailed
+        }
+        let result = AXUIElementSetAttributeValue(
+            element,
+            kAXPositionAttribute as CFString,
+            value
+        )
+        if result == .cannotComplete {
+            return false
+        }
+        guard result == .success else {
+            throw mappedError(result, fallback: .windowCannotMove)
+        }
+        return true
     }
 
     func setFullScreen(
@@ -609,6 +661,38 @@ final class AccessibilityWindowFrameAdapter: WindowFrameReading, WindowFrameWrit
             return
         }
         try await worker.setFrame(frame, of: window, resize: resize)
+    }
+
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws -> Bool {
+        if let hostWindow = window.hostWindow {
+            guard isValidHostWindow(hostWindow, for: window) else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            guard window.canMove else {
+                throw WindowLayoutError.windowCannotMove
+            }
+            if resize, !window.canResize {
+                throw WindowLayoutError.windowCannotResize
+            }
+            guard let anchorMaximumY = WindowCoordinateSpace.anchorMaximumY(in: NSScreen.screens) else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            let appKitFrame = WindowCoordinateSpace.appKitRect(
+                frame,
+                anchorMaximumY: anchorMaximumY
+            )
+            if resize {
+                hostWindow.setFrame(appKitFrame, display: true)
+            } else {
+                hostWindow.setFrameOrigin(appKitFrame.origin)
+            }
+            return true
+        }
+        return try await worker.setFrameInteractively(frame, of: window, resize: resize)
     }
 
     func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) async throws {

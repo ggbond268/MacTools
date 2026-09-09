@@ -2,7 +2,7 @@
 
 MacTools is distributed under `GPL-3.0-only`, except for files and components that are explicitly identified as third-party material.
 
-The GPL default covers the MacTools application, MacToolsPluginKit, the official plugins maintained in this repository, and project-authored build tooling, documentation, and website source. Each official plugin manifest carries `GPL-3.0-only` as machine-readable product metadata.
+The GPL default covers the MacTools application, the standalone CLI, MacToolsPluginKit, the official plugins maintained in this repository, and project-authored build tooling, documentation, and website source. Each official plugin manifest carries `GPL-3.0-only` as machine-readable product metadata.
 
 ## Historical Releases
 
@@ -27,3 +27,5 @@ Third-party plugins are not automatically relicensed by MacTools. Their manifest
 ## Corresponding Source
 
 Release binaries are published from versioned Git tags. The corresponding source, build scripts, declared dependency versions, and release instructions are available from the source archive for the matching tag on the MacTools release page.
+
+Standalone Nightly CLI archives include the repository GPL license beside the executable. Packaging and release verification require that license before publishing the archive.

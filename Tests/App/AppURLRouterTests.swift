@@ -29,6 +29,7 @@ final class AppURLRouterTests: XCTestCase {
         let routes: [(String, AppDeepLink)] = [
             ("settings", .settings(.root)),
             ("settings/general", .settings(.general)),
+            ("settings/permissions", .settings(.permissions)),
             ("settings/about", .settings(.about)),
             ("settings/features/actions-and-shortcuts", .settings(.actionsAndShortcuts)),
             ("settings/features/automation", .settings(.automation)),

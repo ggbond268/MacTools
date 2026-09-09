@@ -35,6 +35,10 @@ enum WindowLayoutOperation: String, CaseIterable, Sendable {
     case bottomLeftSixth = "bottom-left-sixth"
     case bottomCenterSixth = "bottom-center-sixth"
     case bottomRightSixth = "bottom-right-sixth"
+    case increaseWidth = "increase-width"
+    case decreaseWidth = "decrease-width"
+    case increaseHeight = "increase-height"
+    case decreaseHeight = "decrease-height"
     case moveToNextDisplay = "move-to-next-display"
     case moveToPreviousDisplay = "move-to-previous-display"
     case restorePreviousFrame = "restore-previous-frame"
@@ -75,10 +79,23 @@ enum WindowLayoutOperation: String, CaseIterable, Sendable {
              .bottomLeftSixth,
              .bottomCenterSixth,
              .bottomRightSixth,
+             .increaseWidth,
+             .decreaseWidth,
+             .increaseHeight,
+             .decreaseHeight,
              .moveToNextDisplay,
              .moveToPreviousDisplay,
              .restorePreviousFrame:
             true
+        }
+    }
+
+    var isIncrementalResize: Bool {
+        switch self {
+        case .increaseWidth, .decreaseWidth, .increaseHeight, .decreaseHeight:
+            true
+        default:
+            false
         }
     }
 
@@ -227,6 +244,7 @@ enum WindowLayoutError: Error, Equatable {
     case windowUnavailable
     case windowCannotMove
     case windowCannotResize
+    case windowCannotResizeFurther
     case windowSizeConstrained
     case fullScreenUnsupported
     case customCommandUnavailable
