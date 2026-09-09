@@ -9,6 +9,7 @@ final class WindowSnapOverlayView: NSView {
 
     private var guideLayers: [String: GuideLayers] = [:]
     private(set) var renderedGuides: [WindowSnapGuide] = []
+    private(set) var renderInvocationCount = 0
     var renderedLayerCount: Int { guideLayers.count * 2 }
 
     override init(frame frameRect: NSRect) {
@@ -28,19 +29,11 @@ final class WindowSnapOverlayView: NSView {
     }
 
     func render(_ guides: [WindowSnapGuide], screenFrame: CGRect) {
+        renderInvocationCount += 1
         let previousHighlightState = Dictionary(
             uniqueKeysWithValues: renderedGuides.map { ($0.id, $0.isHighlighted) }
         )
-        renderedGuides = guides.map { guide in
-            WindowSnapGuide(
-                id: guide.id,
-                role: guide.role,
-                orientation: guide.orientation,
-                start: localPoint(for: guide.start, screenFrame: screenFrame),
-                end: localPoint(for: guide.end, screenFrame: screenFrame),
-                isHighlighted: guide.isHighlighted
-            )
-        }
+        renderedGuides = localizedGuides(guides, screenFrame: screenFrame)
 
         let liveIDs = Set(renderedGuides.map(\.id))
         for id in Array(guideLayers.keys) where !liveIDs.contains(id) {
@@ -91,6 +84,26 @@ final class WindowSnapOverlayView: NSView {
         }
     }
 
+    func matches(_ guides: [WindowSnapGuide], screenFrame: CGRect) -> Bool {
+        renderedGuides == localizedGuides(guides, screenFrame: screenFrame)
+    }
+
+    private func localizedGuides(
+        _ guides: [WindowSnapGuide],
+        screenFrame: CGRect
+    ) -> [WindowSnapGuide] {
+        guides.map { guide in
+            WindowSnapGuide(
+                id: guide.id,
+                role: guide.role,
+                orientation: guide.orientation,
+                start: localPoint(for: guide.start, screenFrame: screenFrame),
+                end: localPoint(for: guide.end, screenFrame: screenFrame),
+                isHighlighted: guide.isHighlighted
+            )
+        }
+    }
+
     func clear() {
         renderedGuides = []
         guideLayers.values.forEach {
@@ -138,6 +151,12 @@ public final class WindowSnapOverlayController {
         renderedGuidesForTests.compactMap { panelsByGuideID[$0.id] }
     }
 
+    var renderInvocationCountForTests: Int {
+        panelsByGuideID.values.reduce(0) { count, panel in
+            count + ((panel.contentView as? WindowSnapOverlayView)?.renderInvocationCount ?? 0)
+        }
+    }
+
     public init() {}
 
     public func showGuides(
@@ -161,7 +180,7 @@ public final class WindowSnapOverlayController {
                 panel.setFrame(frame, display: true)
             }
             let overlayView = panel.contentView as? WindowSnapOverlayView
-            if overlayView?.renderedGuides != [guide] {
+            if overlayView?.matches([guide], screenFrame: frame) != true {
                 overlayView?.frame = panel.contentView?.bounds ?? .zero
                 overlayView?.render([guide], screenFrame: frame)
             }

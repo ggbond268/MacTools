@@ -367,6 +367,37 @@ final class WindowSnapOverlayControllerTests: XCTestCase {
         controller.hide()
         XCTAssertFalse(overlay.isVisible)
     }
+
+    func testShowingUnchangedGuidesDoesNotRerenderOverlayLayers() throws {
+        let screen = try XCTUnwrap(NSScreen.screens.first)
+        let controller = WindowSnapOverlayController()
+        defer { controller.hide() }
+        let guide = WindowSnapGuide(
+            id: "guide.cache",
+            role: .leftEdge,
+            orientation: .vertical,
+            start: CGPoint(x: screen.frame.midX, y: screen.frame.minY),
+            end: CGPoint(x: screen.frame.midX, y: screen.frame.maxY),
+            isHighlighted: false
+        )
+
+        controller.showGuides([guide], on: screen, relativeTo: nil)
+        XCTAssertEqual(controller.renderInvocationCountForTests, 1)
+
+        controller.showGuides([guide], on: screen, relativeTo: nil)
+        XCTAssertEqual(controller.renderInvocationCountForTests, 1)
+
+        let highlightedGuide = WindowSnapGuide(
+            id: guide.id,
+            role: guide.role,
+            orientation: guide.orientation,
+            start: guide.start,
+            end: guide.end,
+            isHighlighted: true
+        )
+        controller.showGuides([highlightedGuide], on: screen, relativeTo: nil)
+        XCTAssertEqual(controller.renderInvocationCountForTests, 2)
+    }
 }
 
 @MainActor
