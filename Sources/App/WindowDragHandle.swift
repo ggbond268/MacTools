@@ -49,11 +49,11 @@ struct WindowDragHandleBar: View {
                         coordinator?.startDragging()
                     }
                 )
-                .frame(width: 88, height: 18)
+                .frame(width: 72, height: 15)
 
                 Capsule(style: .continuous)
-                    .fill(Color(nsColor: .tertiaryLabelColor).opacity(0.4))
-                    .frame(width: 42, height: 4)
+                    .fill(Color.secondary.opacity(0.35))
+                    .frame(width: 28, height: 3)
                     .allowsHitTesting(false)
             }
             .frame(maxWidth: .infinity)
