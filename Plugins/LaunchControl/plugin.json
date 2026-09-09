@@ -53,11 +53,16 @@
     "summary": "@summary",
     "action.start-favorite.title": "@localizable.managedAction.start.title",
     "action.start-favorite.description": {
-      "ar": "ابدأ عنصر التشغيل المفضل المحدد.", "de": "Startet das ausgewählte favorisierte Startelement.",
-      "en": "Start the selected favorite launch item.", "es": "Inicia el elemento de inicio favorito seleccionado.",
-      "fr": "Démarre l’élément de lancement favori sélectionné.", "ja": "選択したお気に入りの起動項目を開始します。",
-      "ko": "선택한 즐겨찾기 시작 항목을 시작합니다.", "pt": "Inicia o item de inicialização favorito selecionado.",
-      "ru": "Запускает выбранный избранный элемент запуска.", "zh-Hans": "启动所选的收藏启动项。",
+      "ar": "ابدأ عنصر التشغيل المفضل المحدد.",
+      "de": "Startet das ausgewählte favorisierte Startelement.",
+      "en": "Start the selected favorite launch item.",
+      "es": "Inicia el elemento de inicio favorito seleccionado.",
+      "fr": "Démarre l’élément de lancement favori sélectionné.",
+      "ja": "選択したお気に入りの起動項目を開始します。",
+      "ko": "선택한 즐겨찾기 시작 항목을 시작합니다.",
+      "pt": "Inicia o item de inicialização favorito selecionado.",
+      "ru": "Запускает выбранный избранный элемент запуска.",
+      "zh-Hans": "启动所选的收藏启动项。",
       "zh-Hant": "啟動所選的收藏啟動項目。"
     },
     "action.start-favorite.parameter-summary": {
@@ -75,11 +80,16 @@
     },
     "action.stop-favorite.title": "@localizable.managedAction.stop.title",
     "action.stop-favorite.description": {
-      "ar": "أوقف عنصر التشغيل المفضل المحدد.", "de": "Stoppt das ausgewählte favorisierte Startelement.",
-      "en": "Stop the selected favorite launch item.", "es": "Detiene el elemento de inicio favorito seleccionado.",
-      "fr": "Arrête l’élément de lancement favori sélectionné.", "ja": "選択したお気に入りの起動項目を停止します。",
-      "ko": "선택한 즐겨찾기 시작 항목을 중지합니다.", "pt": "Interrompe o item de inicialização favorito selecionado.",
-      "ru": "Останавливает выбранный избранный элемент запуска.", "zh-Hans": "停止所选的收藏启动项。",
+      "ar": "أوقف عنصر التشغيل المفضل المحدد.",
+      "de": "Stoppt das ausgewählte favorisierte Startelement.",
+      "en": "Stop the selected favorite launch item.",
+      "es": "Detiene el elemento de inicio favorito seleccionado.",
+      "fr": "Arrête l’élément de lancement favori sélectionné.",
+      "ja": "選択したお気に入りの起動項目を停止します。",
+      "ko": "선택한 즐겨찾기 시작 항목을 중지합니다.",
+      "pt": "Interrompe o item de inicialização favorito selecionado.",
+      "ru": "Останавливает выбранный избранный элемент запуска.",
+      "zh-Hans": "停止所选的收藏启动项。",
       "zh-Hant": "停止所選的收藏啟動項目。"
     },
     "action.stop-favorite.parameter-summary": {
@@ -97,11 +107,16 @@
     },
     "action.restart-favorite.title": "@localizable.managedAction.restart.title",
     "action.restart-favorite.description": {
-      "ar": "أعد تشغيل عنصر التشغيل المفضل المحدد.", "de": "Startet das ausgewählte favorisierte Startelement neu.",
-      "en": "Restart the selected favorite launch item.", "es": "Reinicia el elemento de inicio favorito seleccionado.",
-      "fr": "Redémarre l’élément de lancement favori sélectionné.", "ja": "選択したお気に入りの起動項目を再起動します。",
-      "ko": "선택한 즐겨찾기 시작 항목을 다시 시작합니다.", "pt": "Reinicia o item de inicialização favorito selecionado.",
-      "ru": "Перезапускает выбранный избранный элемент запуска.", "zh-Hans": "重新启动所选的收藏启动项。",
+      "ar": "أعد تشغيل عنصر التشغيل المفضل المحدد.",
+      "de": "Startet das ausgewählte favorisierte Startelement neu.",
+      "en": "Restart the selected favorite launch item.",
+      "es": "Reinicia el elemento de inicio favorito seleccionado.",
+      "fr": "Redémarre l’élément de lancement favori sélectionné.",
+      "ja": "選択したお気に入りの起動項目を再起動します。",
+      "ko": "선택한 즐겨찾기 시작 항목을 다시 시작합니다.",
+      "pt": "Reinicia o item de inicialização favorito selecionado.",
+      "ru": "Перезапускает выбранный избранный элемент запуска.",
+      "zh-Hans": "重新启动所选的收藏启动项。",
       "zh-Hant": "重新啟動所選的收藏啟動項目。"
     },
     "action.restart-favorite.parameter-summary": {
@@ -118,7 +133,7 @@
       "zh-Hant": "選擇儲存在此 Mac 上、要重新啟動的收藏啟動項目。"
     }
   },
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minHostVersion": "1.3.0",
   "pluginKitVersion": 6,
   "bundleRelativePath": "LaunchControl.bundle",

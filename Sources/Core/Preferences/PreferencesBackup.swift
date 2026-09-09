@@ -1,6 +1,34 @@
 import Foundation
 import MacToolsPluginKit
 
+enum PreferencesImportProgress: Equatable, Sendable {
+    case preparing(pluginCount: Int)
+    case installingPlugin(id: String, number: Int, total: Int)
+    case restoringPreferences(completedPluginCount: Int, totalPluginCount: Int)
+
+    var completedUnitCount: Int {
+        switch self {
+        case .preparing:
+            return 0
+        case let .installingPlugin(_, number, _):
+            return max(0, number - 1)
+        case let .restoringPreferences(completedPluginCount, _):
+            return completedPluginCount
+        }
+    }
+
+    var totalUnitCount: Int {
+        switch self {
+        case let .preparing(pluginCount):
+            return pluginCount + 1
+        case let .installingPlugin(_, _, total):
+            return total + 1
+        case let .restoringPreferences(_, totalPluginCount):
+            return totalPluginCount + 1
+        }
+    }
+}
+
 struct PreferencesBackup: Codable, Equatable, Sendable {
     static let currentFormatVersion = 6
     static let maximumFileSize = 16 * 1024 * 1024
@@ -364,6 +392,10 @@ struct PreferencesImportPreview: Equatable {
     let installablePlugins: [PreferencesImportInstallablePlugin]
     let selection: PreferencesBackupSelection
 
+    var installableMissingPluginIDs: [String] {
+        installablePlugins.map(\.id)
+    }
+
     static func make(
         backup: PreferencesBackup,
         availablePluginIDs: Set<String>,
@@ -485,8 +517,21 @@ struct PreferencesImportInstallablePlugin: Identifiable, Equatable {
 
 struct PreferencesImportResult: Equatable {
     let installedPluginIDs: [String]
+    let deferredPluginPreferenceIDs: [String]
     let pluginInstallationFailures: [String: String]
     let shortcutErrors: [String: String]
+
+    init(
+        installedPluginIDs: [String],
+        deferredPluginPreferenceIDs: [String] = [],
+        pluginInstallationFailures: [String: String],
+        shortcutErrors: [String: String]
+    ) {
+        self.installedPluginIDs = installedPluginIDs
+        self.deferredPluginPreferenceIDs = deferredPluginPreferenceIDs
+        self.pluginInstallationFailures = pluginInstallationFailures
+        self.shortcutErrors = shortcutErrors
+    }
 }
 
 enum PreferencesBackupError: Error, Equatable {
