@@ -23,6 +23,7 @@ NEW_API_MINIMUM_HOSTS = {
     "ActionInputDescriptor": "1.3.0",
     "ActionInputSession": "1.3.0",
     "PluginActionInputProviding": "1.3.0",
+    "PluginActionInputPresentationRequesting": "1.3.0",
     # Canonical action registry, execution, discovery, and surface bridges.
     "ActionKey": "1.2.0",
     "ActionParameterSet": "1.2.0",

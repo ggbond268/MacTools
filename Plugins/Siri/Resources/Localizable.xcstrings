@@ -510,6 +510,40 @@
           }
         }
       }
+    },
+    "询问 Siri": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "询问 Siri"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask Siri"
+          }
+        }
+      }
+    },
+    "开始新的 Siri 对话": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始新的 Siri 对话"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a new Siri conversation"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

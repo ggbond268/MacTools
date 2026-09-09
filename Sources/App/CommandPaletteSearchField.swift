@@ -14,6 +14,7 @@ struct CommandPaletteSearchField: NSViewRepresentable {
     private let preservesText: (String) -> Bool
     private let onMarkedTextChange: (Bool) -> Void
     private let completion: () -> String?
+    private let inputState: CommandPaletteSearchInputState?
 
     init(
         text: Binding<String>,
@@ -25,7 +26,8 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         onCommand: @escaping (PluginPaletteSearchCommand) -> Void,
         preservesText: @escaping (String) -> Bool,
         onMarkedTextChange: @escaping (Bool) -> Void,
-        completion: @escaping () -> String? = { nil }
+        completion: @escaping () -> String? = { nil },
+        inputState: CommandPaletteSearchInputState? = nil
     ) {
         _text = text
         self.placeholder = placeholder
@@ -37,6 +39,7 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         self.preservesText = preservesText
         self.onMarkedTextChange = onMarkedTextChange
         self.completion = completion
+        self.inputState = inputState
     }
 
     func makeCoordinator() -> Coordinator {
@@ -45,6 +48,11 @@ struct CommandPaletteSearchField: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSTextField {
         let field = SearchTextField(frame: .zero)
+        field.inputEditor.onInputStateChange = { [weak field, weak coordinator = context.coordinator] editor in
+            guard let field else { return }
+            coordinator?.inputStateDidChange(field, editor: editor)
+        }
+        inputState?.editor = field.inputEditor
         field.onAlternateSubmit = { [weak coordinator = context.coordinator] in
             coordinator?.parent.onCommand(.alternateSubmit)
         }
@@ -70,6 +78,8 @@ struct CommandPaletteSearchField: NSViewRepresentable {
 
     static func dismantleNSView(_ field: NSTextField, coordinator: Coordinator) {
         coordinator.cancelPendingFocus()
+        (field as? SearchTextField)?.inputEditor.onInputStateChange = nil
+        field.delegate = nil
     }
 
     private func configure(_ field: NSTextField) {
@@ -117,17 +127,31 @@ struct CommandPaletteSearchField: NSViewRepresentable {
     }
 
     @MainActor
+    final class SearchCell: NSTextFieldCell {
+        let inputEditor = CommandPaletteMessageEditor.CompositionTextView(frame: .zero)
+
+        override func fieldEditor(for controlView: NSView) -> NSTextView? {
+            inputEditor.isFieldEditor = true
+            inputEditor.isRichText = false
+            return inputEditor
+        }
+    }
+
+    @MainActor
     final class SearchTextField: NSTextField {
         fileprivate var alternateSubmitModifier: NSEvent.ModifierFlags?
         fileprivate var onAlternateSubmit: (() -> Void)?
+        var inputEditor: CommandPaletteMessageEditor.CompositionTextView { (cell as! SearchCell).inputEditor }
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
+            cell = SearchCell(textCell: "")
             configureSingleLineEditing()
         }
 
         required init?(coder: NSCoder) {
             super.init(coder: coder)
+            cell = SearchCell(textCell: "")
             configureSingleLineEditing()
         }
 
@@ -140,6 +164,8 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         }
 
         private func configureSingleLineEditing() {
+            isEditable = true
+            isSelectable = true
             usesSingleLineMode = true
             maximumNumberOfLines = 1
             cell?.usesSingleLineMode = true
@@ -171,6 +197,7 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         private var pendingFocusRequestID: UInt?
         private var focusTask: Task<Void, Never>?
         private var isNormalizingText = false
+        private var hasMarkedText = false
         private let focusClaim: @MainActor (NSTextField) -> Bool
 
         init(
@@ -183,15 +210,22 @@ struct CommandPaletteSearchField: NSViewRepresentable {
 
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
+            guard let editor = field.currentEditor() as? NSTextView else { return }
+            guard (editor as? CommandPaletteMessageEditor.CompositionTextView)?.isPerformingInputOperation != true else { return }
+            inputStateDidChange(field, editor: editor)
+        }
+
+        func inputStateDidChange(_ field: NSTextField, editor: NSTextView) {
             guard !isNormalizingText else { return }
-            let originalText = field.stringValue
-            parent.onMarkedTextChange((field.currentEditor() as? NSTextView)?.hasMarkedText() ?? false)
+            let originalText = editor.string
+            let marked = editor.hasMarkedText()
+            if marked { updateComposition(true) }
+            defer { if !marked { updateComposition(false) } }
             if parent.preservesText(originalText) {
                 parent.text = originalText
                 return
             }
-            guard let editor = field.currentEditor() as? NSTextView,
-                  !editor.hasMarkedText() else {
+            guard !marked else {
                 parent.text = originalText
                 return
             }
@@ -211,6 +245,12 @@ struct CommandPaletteSearchField: NSViewRepresentable {
             editor.setSelectedRange(normalizedSelection)
             parent.text = normalizedText
             isNormalizingText = false
+        }
+
+        private func updateComposition(_ marked: Bool) {
+            guard hasMarkedText != marked else { return }
+            hasMarkedText = marked
+            parent.onMarkedTextChange(marked)
         }
 
         func control(
@@ -299,3 +339,9 @@ struct CommandPaletteSearchField: NSViewRepresentable {
     }
 }
 
+/// Submission checks native state as well as the published composition snapshot.
+@MainActor
+final class CommandPaletteSearchInputState: ObservableObject {
+    weak var editor: NSTextView?
+    var hasMarkedText: Bool { editor?.hasMarkedText() == true }
+}

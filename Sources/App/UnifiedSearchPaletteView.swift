@@ -339,6 +339,7 @@ private struct UnifiedSearchPaletteShadowModifier: ViewModifier {
 }
 
 struct UnifiedSearchPaletteView: View {
+    let initialInputItem: ActionInputItem?
     private enum PendingAlert: Identifiable {
         case execute(MacToolsSearchResult)
         case replaceShortcut(
@@ -374,6 +375,7 @@ struct UnifiedSearchPaletteView: View {
     @State private var isComposingInput = false
     @State private var inputDraft: (item: ActionInputItem, message: String)?
     @State private var searchHasMarkedText = false
+    @StateObject private var searchInputState = CommandPaletteSearchInputState()
     @State private var selectedResultID: String?
     @State private var pendingAlert: PendingAlert?
     @State private var executionFeedback: String?
@@ -391,8 +393,10 @@ struct UnifiedSearchPaletteView: View {
         resetRequestID: UInt?,
         quickSelectionRequest: UnifiedSearchQuickSelectionRequest?,
         showsCustomShadow: Bool,
-        actions: UnifiedSearchPaletteActions
+        actions: UnifiedSearchPaletteActions,
+        initialInputItem: ActionInputItem? = nil
     ) {
+        self.initialInputItem = initialInputItem
         self.pluginHost = pluginHost
         let commandContext = AppHostCommandContext(
             pluginHost: pluginHost,
@@ -455,11 +459,21 @@ struct UnifiedSearchPaletteView: View {
         .modifier(UnifiedSearchPaletteShadowModifier(isEnabled: showsCustomShadow))
         .onAppear {
             syncSelection()
+            presentRequestedInput()
             handleQuickSelectionRequest(quickSelectionRequest)
         }
         .onChange(of: pluginHost.actionInputAliases.overrides) {
             guard !isComposingInput else { return }
             updateInputQuery(model.query)
+        }
+        .onChange(of: pluginHost.actionInputRegistry.items) {
+            guard !isComposingInput, let previous = inlineMatch else { return }
+            // Preserve the displayed target when another provider takes or conflicts with its alias.
+            if let refreshed = pluginHost.commandPaletteAliasResolver.resolve(model.query), refreshed.item == previous.item {
+                inlineMatch = refreshed
+            } else {
+                inlineMatch = CommandPaletteAliasMatch(item: previous.item, message: previous.message, isAmbiguous: true)
+            }
         }
         .onChange(of: resultIDs) {
             syncSelection()
@@ -469,6 +483,7 @@ struct UnifiedSearchPaletteView: View {
         }
         .onChange(of: resetRequestID) {
             resetTransientState()
+            presentRequestedInput()
         }
         .onDisappear {
             invalidateExecution()
@@ -533,6 +548,11 @@ struct UnifiedSearchPaletteView: View {
         .accessibilityIdentifier("mactools.unified-search.palette")
     }
 
+    private func presentRequestedInput() {
+        guard let item = initialInputItem, pluginHost.actionInputRegistry.contains(item), !isComposingInput else { return }
+        composeInput(item, message: "")
+    }
+
     private func composeInput(_ item: ActionInputItem, message: String) {
         isComposingInput = true
         let draft = message.isEmpty && inputDraft?.item == item ? inputDraft?.message ?? message : message
@@ -555,10 +575,18 @@ struct UnifiedSearchPaletteView: View {
         } else { actions.dismiss() }
     }
 
+    private func isCurrentInlineMatch(_ match: CommandPaletteAliasMatch) -> Bool {
+        guard !match.isAmbiguous, let current = pluginHost.commandPaletteAliasResolver.resolve(model.query) else { return false }
+        return !current.isAmbiguous && current.item == match.item && current.message == match.message
+    }
+
     private func submitInline(_ match: CommandPaletteAliasMatch) {
-        guard !searchHasMarkedText, !match.isAmbiguous,
+        guard !searchHasMarkedText, !searchInputState.hasMarkedText, isCurrentInlineMatch(match),
               pluginHost.actionInputRegistry.contains(match.item), let message = match.message else { return }
-        inputModel.submit(match.item, message: message, host: pluginHost,
+        inputModel.submit(match.item, message: message, host: pluginHost, validate: {
+            guard let current = pluginHost.commandPaletteAliasResolver.resolve(model.query) else { return false }
+            return !current.isAmbiguous && current.item == match.item && current.message == match.message
+        },
                           onStarted: { actions.dismissAfterSuccessfulExecution() })
     }
 
@@ -578,12 +606,16 @@ struct UnifiedSearchPaletteView: View {
             }
             inputFeedback
             HStack {
-                Button(FeatureL10n.string("编辑消息")) { composeInput(match.item, message: match.message ?? "") }
-                    .disabled(match.isAmbiguous || inputModel.isBusy)
+                Button(FeatureL10n.string("编辑消息")) {
+                    guard isCurrentInlineMatch(match) else { return }
+                    composeInput(match.item, message: match.message ?? "")
+                }
+                    .disabled(!isCurrentInlineMatch(match) || inputModel.isBusy)
                 Spacer()
                 Button(match.item.descriptor.submitTitle) { submitInline(match) }
+                    .accessibilityIdentifier("mactools.action-input.inline-send")
                     .buttonStyle(.borderedProminent)
-                    .disabled(match.isAmbiguous || inputModel.isBusy || searchHasMarkedText
+                    .disabled(!isCurrentInlineMatch(match) || inputModel.isBusy || searchHasMarkedText
                               || !pluginHost.actionInputRegistry.contains(match.item)
                               || !ActionInputRegistry.accepts(match.message ?? "", descriptor: match.item.descriptor))
             }.controlSize(.small)
@@ -650,8 +682,11 @@ struct UnifiedSearchPaletteView: View {
                     accessibilityIdentifier: "mactools.unified-search.field", focusRequestID: focusRequestID,
                     alternateSubmitModifier: .command, onCommand: handleSearchFieldCommand,
                     preservesText: { pluginHost.commandPaletteAliasResolver.resolve($0) != nil },
-                    onMarkedTextChange: { marked in searchHasMarkedText = marked },
-                    completion: { selectedInputCompletion }
+                    onMarkedTextChange: { marked in
+                        searchHasMarkedText = marked
+                        if !marked { updateInputQuery(model.query) }
+                    },
+                    completion: { selectedInputCompletion }, inputState: searchInputState
                 ).frame(maxWidth: .infinity)
                 if !model.query.isEmpty {
                     Button { updateInputQuery("") } label: {
@@ -1219,13 +1254,13 @@ struct UnifiedSearchPaletteView: View {
             moveSelection(by: offset)
         case .submit:
             if let match = inlineMatch {
-                guard !match.isAmbiguous else { return }
+                guard isCurrentInlineMatch(match) else { return }
                 if match.message == nil { composeInput(match.item, message: "") }
                 else { submitInline(match) }
             } else { activateSelectedResult() }
         case .alternateSubmit:
             if let match = inlineMatch {
-                guard !match.isAmbiguous else { return }
+                guard isCurrentInlineMatch(match) else { return }
                 composeInput(match.item, message: match.message ?? "")
             }
             else { openSelectedResultOwner() }

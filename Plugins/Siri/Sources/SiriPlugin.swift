@@ -16,16 +16,21 @@ public final class SiriPluginFactory: NSObject, MacToolsPluginBundleFactory {
 
 @MainActor
 final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding,
-    PluginActionInputProviding, PluginActionExposureProviding, PluginActionPermissionProviding {
+    PluginActionInputProviding, PluginActionInputPresentationRequesting, PluginActionExposureProviding, PluginActionPermissionProviding {
     private enum ID {
         static let permission = "accessibility"
         static let ask = ActionKey(providerID: "siri", actionID: "ask-new-conversation")
     }
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    var primaryPanelDescriptor: PluginPrimaryPanelDescriptor {
+        let title = controller.isBusy ? text("取消") : text("询问 Siri")
+        return PluginPrimaryPanelDescriptor(controlStyle: .button, menuActionBehavior: .keepPresented,
+                                             buttonTitleProvider: { title })
+    }
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var requestActionInput: ((ActionKey) -> Void)?
     private let localization: PluginLocalization
     let controller: SiriController
     private var observers: [NSObjectProtocol] = []
@@ -36,8 +41,6 @@ final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProvidin
     init(context: PluginRuntimeContext = PluginRuntimeContext(pluginID: "siri"), client: (any SiriClient)? = nil) {
         let localization = PluginLocalization(bundle: context.resourceBundle)
         self.localization = localization
-        primaryPanelDescriptor = PluginPrimaryPanelDescriptor(controlStyle: .button, menuActionBehavior: .keepPresented,
-            buttonTitleProvider: { localization.string("取消", defaultValue: "取消") })
         metadata = PluginMetadata(id: "siri", title: "Siri", iconName: "sparkles", iconTint: .purple,
                                   order: 101, defaultDescription: localization.string("metadata.description", defaultValue: "从命令面板向 Siri 发送消息"))
         controller = SiriController(client: client ?? SiriAccessibilityClient())
@@ -117,10 +120,14 @@ final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProvidin
         return handle
     }
     var primaryPanelState: PluginPanelState {
-        .init(subtitle: status, isOn: controller.isBusy, isExpanded: false, isEnabled: controller.isBusy,
+        .init(subtitle: status, isOn: controller.isBusy, isExpanded: false, isEnabled: true,
               isVisible: true, detail: nil, errorMessage: controller.failure == nil ? nil : status)
     }
-    func handleAction(_ action: PluginPanelAction) { if controller.isBusy { controller.cancel() } }
+    func handleAction(_ action: PluginPanelAction) {
+        guard case let .invokeAction(controlID) = action, controlID == "execute" else { return }
+        if controller.isBusy { controller.cancel() }
+        else { requestActionInput?(ID.ask) }
+    }
     var settingsPage: PluginSettingsPage? {
         .form(description: metadata.defaultDescription, sections: [
             PluginSettingsSection(id: "status", title: text("Siri"), systemImage: "sparkles") { [self] _ in
@@ -151,7 +158,7 @@ final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProvidin
             return text(value)
         }
         let value = switch controller.phase {
-        case .idle: available ? "在命令面板输入触发短语和消息" : "需要 macOS 27 和 Siri AI"
+        case .idle: available ? "开始新的 Siri 对话" : "需要 macOS 27 和 Siri AI"
         case .opening: "正在打开 Siri…"
         case .preparing: "正在准备新对话…"
         case .entering: "正在输入消息…"

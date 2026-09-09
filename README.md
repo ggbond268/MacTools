@@ -111,7 +111,7 @@ Clipboard reopening reuses an unchanged initial page, and metadata-only updates 
 
 ### Send a message to Siri
 
-With the Siri plugin on macOS 27, open the command palette, type `ask siri <message>`, and press Return once to send it into a new Siri conversation. Type `ask`, select Ask Siri, and press Tab to complete the trigger and start inline input. Change the trigger phrase in Siri settings, or select the Siri action and use the message editor. Installation requires macOS 27 and the Siri AI app; unavailable requirements are shown in the plugin catalog. MacTools handles opening Siri and preserves existing drafts. Accessibility permission is required; answers remain in Siri. See [Siri usage and limitations](docs/plugins/siri.md).
+With the Siri plugin on macOS 27, open the command palette, type `ask siri <message>`, and press Return once to send it into a new Siri conversation. Type `ask`, select Ask Siri, and press Tab to complete the trigger and start inline input. The Siri feature-panel button opens the message editor directly and becomes Cancel while sending. Change the trigger phrase in Siri settings, or select the Siri action and use the message editor. Installation requires macOS 27 and the Siri AI app; unavailable requirements are shown in the plugin catalog. MacTools handles opening Siri and preserves existing drafts. Accessibility permission is required; answers remain in Siri. See [Siri usage and limitations](docs/plugins/siri.md).
 
 ## Supported Languages
 

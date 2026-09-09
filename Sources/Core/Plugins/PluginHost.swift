@@ -27,6 +27,7 @@ enum SettingsPresentationRequest: Equatable {
 }
 
 enum AppPresentationRequest: Equatable {
+    case composeActionInput(ActionInputItem)
     case settings(SettingsPresentationRequest)
     case toggleCommandPalette
     case toggleDashboard
@@ -3116,6 +3117,15 @@ final class PluginHost: ObservableObject {
         for plugin in plugins {
             let pluginID = plugin.metadata.id
 
+            if let inputRequester = plugin as? any PluginActionInputPresentationRequesting {
+                inputRequester.requestActionInput = { [weak self, weak plugin] key in
+                    guard let self, let plugin, key.providerID == pluginID,
+                          self.corePlugin(for: pluginID) === plugin,
+                          let item = self.actionInputRegistry.items.first(where: { $0.id == key }) else { return }
+                    self.appPresentationHandler?(.composeActionInput(item))
+                }
+            }
+
             plugin.onStateChange = { [weak self] in
                 self?.rebuildDerivedStateAfterPluginChange(pluginID: pluginID)
             }
@@ -4720,6 +4730,7 @@ final class PluginHost: ObservableObject {
         plugin.onStateChange = nil
         (plugin as? any PluginActionSafetyStateChangeProviding)?.onActionSafetyStateChange = nil
         plugin.requestPermissionGuidance = nil
+        (plugin as? any PluginActionInputPresentationRequesting)?.requestActionInput = nil
         plugin.shortcutBindingResolver = nil
         (plugin as? any PluginFocusedWindowTargetConsuming)?
             .focusedWindowTargetProvider = nil

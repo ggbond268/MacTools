@@ -48,3 +48,9 @@ public protocol PluginActionInputProviding: AnyObject {
     func prepareActionInput(_ descriptor: ActionInputDescriptor) async throws -> ActionInputSession
     func releaseActionInput(_ session: ActionInputSession)
 }
+
+/// Optional host routing for a plugin control that opens an input action without executing it.
+@MainActor
+public protocol PluginActionInputPresentationRequesting: AnyObject {
+    var requestActionInput: ((ActionKey) -> Void)? { get set }
+}

@@ -6,6 +6,8 @@ Open the command palette and type `ask siri <message>`, then press Return once. 
 
 In Settings → Siri, change **Trigger phrase** and choose Save, or use Restore Default to return to `ask siri`. The preview shows the phrase followed by your message. Changes apply immediately and persist across app launches. A custom phrase replaces the default; matching remains case-insensitive. Empty phrases, leading/trailing whitespace, control characters, phrases longer than 64 characters, and conflicting or overlapping aliases are rejected. If a newly installed plugin later introduces a conflict, the palette blocks the ambiguous action.
 
+The Siri feature-panel row offers **Ask Siri** when idle. Clicking it opens the existing command-palette composer directly; it does not open Siri, create a chat, or send a message until you submit. While sending, the row shows progress and **Cancel**. Failed or uncertain attempts keep their explanation visible, and **Ask Siri** opens a fresh composer without automatically retrying the previous message.
+
 `ask siri` is the default explicit, case-insensitive alias. The alias and its first separator space are removed; the remaining text is preserved. Messages are limited to 4,096 UTF-8 bytes by the existing action parameter contract. Empty messages cannot be sent.
 
 MacTools opens Siri explicitly, starts a new conversation, fills its message field, and submits through native Accessibility controls. It does not use the clipboard, AppleScript, private Siri frameworks, or guessed URL parameters. The answer stays in Siri. The plugin's panel and settings show progress and the last attempt's status without retaining message content.
@@ -15,3 +17,5 @@ Siri control discovery waits up to 15 seconds, and new-conversation readiness up
 The first implementation exposes only new conversations. Continuing a selected conversation is withheld until a durable destination identity can be validated across window and selection changes. Siri's accessibility interface is not a documented app automation API and needs revalidation after macOS updates.
 
 These actions are local palette actions. They do not expose Run Links, unattended rules, App Intents, or saved prompt presets. The plugin does not persist prompts, titles, responses, or conversation identifiers. Siri itself retains its conversations under its own settings and may use Apple's online services.
+
+Control discovery skips the transcript itself while keeping the composer accessible. Preparation supports Siri's empty-selection screen only with readable empty selection evidence. If Siri already shows a fresh empty chat with New Chat disabled, preparation requires an empty draft and transcript, writable input, and stable destination identity before using it. Unreadable state never authorizes entering text.

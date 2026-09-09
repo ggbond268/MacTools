@@ -6,6 +6,94 @@ import XCTest
 
 @MainActor
 final class CommandPaletteTextInputInteractionTests: XCTestCase {
+    func testNativeInlineCompositionBlocksReturnUntilCommittedTextIsCurrent() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let field = try await fixture.searchField()
+        try fixture.type("ask fixture Hello ", into: field)
+        await fixture.settle()
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0), replacementRange: editor.selectedRange())
+        await fixture.settle()
+        XCTAssertTrue(editor.hasMarkedText())
+        let coordinator = try XCTUnwrap(field.delegate as? CommandPaletteSearchField.Coordinator)
+        XCTAssertFalse(coordinator.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+        await fixture.settle()
+        XCTAssertTrue(fixture.provider.messages.isEmpty)
+        editor.insertText("你", replacementRange: NSRange(location: NSNotFound, length: 0))
+        await fixture.settle()
+        XCTAssertFalse(editor.hasMarkedText())
+        XCTAssertEqual(field.stringValue, "ask fixture Hello 你")
+        try fixture.pressReturn(in: field)
+        await fixture.settle()
+        XCTAssertEqual(fixture.provider.messages, ["Hello 你"])
+    }
+
+    func testNewAliasConflictBlocksAlreadyVisibleInlineAction() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let field = try await fixture.searchField()
+        try fixture.type("ask fixture Keep this", into: field)
+        await fixture.settle()
+        let conflicting = PaletteInputProvider(id: "conflicting-fixture")
+        fixture.host.actionInputRegistry.synchronize([fixture.provider, conflicting])
+        fixture.host.objectWillChange.send()
+        await fixture.settle()
+        try fixture.pressReturn(in: field)
+        await fixture.settle()
+        XCTAssertTrue(fixture.provider.messages.isEmpty)
+        XCTAssertTrue(conflicting.messages.isEmpty)
+        XCTAssertEqual(field.stringValue, "ask fixture Keep this")
+    }
+
+    func testNewAliasConflictAlsoBlocksBareAliasComposerEntry() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let field = try await fixture.searchField()
+        try fixture.type("ask fixture", into: field)
+        await fixture.settle()
+        let conflicting = PaletteInputProvider(id: "conflicting-fixture")
+        fixture.host.actionInputRegistry.synchronize([fixture.provider, conflicting])
+        fixture.host.objectWillChange.send()
+        await fixture.settle()
+        try fixture.pressReturn(in: field)
+        await fixture.settle()
+        XCTAssertNil(fixture.messageEditor)
+        XCTAssertEqual(fixture.provider.preparations, 0)
+        XCTAssertTrue(fixture.provider.messages.isEmpty)
+    }
+
+    func testPanelRequestRoutesToComposerWithoutSendingAndRejectsForeignAction() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let router = AppWindowRouter(pluginHost: fixture.host, appUpdater: AppUpdater(startingUpdater: false),
+                                     menuBarIconSettings: MenuBarIconSettings(userDefaults: fixture.defaults),
+                                     menuBarIconGallery: MenuBarIconGalleryLibrary(),
+                                     launchAtLoginController: LaunchAtLoginController(),
+                                     appearanceUserDefaults: fixture.defaults)
+        defer { router.dismissCommandPalette() }
+        var requests: [AppPresentationRequest] = []
+        fixture.host.appPresentationHandler = { request in
+            requests.append(request)
+            if case let .composeActionInput(item) = request { router.showCommandPalette(input: item) }
+        }
+        fixture.provider.requestActionInput?(ActionKey(providerID: "foreign", actionID: "ask"))
+        XCTAssertTrue(requests.isEmpty)
+        fixture.provider.requestActionInput?(fixture.provider.key)
+        await fixture.settle()
+        let content = try XCTUnwrap(router.commandPalettePanel?.contentView)
+        let editor = try XCTUnwrap(fixture.descendants(content).compactMap { $0 as? NSTextView }.first {
+            $0.accessibilityIdentifier() == "mactools.action-input.message"
+        })
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertTrue(fixture.provider.messages.isEmpty)
+        editor.insertText("From the panel", replacementRange: NSRange(location: 0, length: 0))
+        await fixture.settle()
+        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        await fixture.settle()
+        XCTAssertEqual(fixture.provider.messages, ["From the panel"])
+    }
+
     func testInlineReturnExecutesExactSuffixWithoutOpeningComposer() async throws {
         let fixture = try PaletteFixture()
         defer { fixture.close() }
@@ -227,12 +315,17 @@ private final class PaletteFixture {
 }
 
 @MainActor
-private final class PaletteInputProvider: MacToolsPlugin, PluginActionProviding, PluginActionInputProviding {
-    let metadata = PluginMetadata(id: "palette-fixture", title: "Fixture", iconName: "text.bubble", iconTint: .blue, order: 0, defaultDescription: "")
+private final class PaletteInputProvider: MacToolsPlugin, PluginActionProviding, PluginActionInputProviding, PluginActionInputPresentationRequesting {
+    let metadata: PluginMetadata
+    var requestActionInput: ((ActionKey) -> Void)?
+    init(id: String = "palette-fixture") {
+        metadata = PluginMetadata(id: id, title: "Fixture", iconName: "text.bubble", iconTint: .blue, order: 0, defaultDescription: "")
+        key = ActionKey(providerID: id, actionID: "ask")
+    }
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
-    let key = ActionKey(providerID: "palette-fixture", actionID: "ask")
+    let key: ActionKey
     var messages: [String] = []
     var releases = 0
     var preparations = 0

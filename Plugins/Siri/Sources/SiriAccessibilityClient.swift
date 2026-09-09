@@ -14,7 +14,7 @@ actor SiriAccessibilityClient: SiriClient {
         let selectedRows: [AXUIElement]
     }
     private var preparingApp: AXUIElement?
-    private var preparingWindow: (window: AXUIElement, button: AXUIElement)?
+    private var preparingWindow: (window: AXUIElement, preparation: SiriAXTraversal.NewConversationPreparation)?
     private var destination: Destination?
     private var deadline = ContinuousClock.now
     private var text: String?
@@ -31,33 +31,15 @@ actor SiriAccessibilityClient: SiriClient {
     private func string(_ element: AXUIElement, _ name: String) throws -> String {
         try ax.string(element, name, deadline: deadline)
     }
+    private var traversal: SiriAXTraversal { SiriAXTraversal(access: ax) }
     private func identifier(_ element: AXUIElement) throws -> String? {
-        let value = try ax.attribute(element, kAXIdentifierAttribute, deadline: deadline, allowsMissing: true)
-        guard let value else { return nil }
-        guard let identifier = value as? String else { throw SiriFailure.missingControls }
-        return identifier
+        try traversal.identifier(element, deadline: deadline)
     }
     private func elements(_ root: AXUIElement) throws -> [AXUIElement] {
-        var stack = [(root, 0)]
-        var result: [AXUIElement] = []
-        while let (element, depth) = stack.popLast() {
-            try checkDeadline()
-            guard result.count < 600, depth < 24 else { throw SiriFailure.missingControls }
-            result.append(element)
-            let id = try identifier(element)
-            let role = try string(element, kAXRoleAttribute)
-            if id == "chatListView" || role == "AXMenuBar" { continue }
-            let children = try ax.children(element, role: role, deadline: deadline)
-            stack.append(contentsOf: children.reversed().map { ($0, depth + 1) })
-        }
-        return result
+        try traversal.elements(root, scope: .windowControls, deadline: deadline)
     }
     private func unique(_ id: String, role: String? = nil, in root: AXUIElement) throws -> AXUIElement {
-        let matches = try elements(root).filter {
-            try identifier($0) == id && (role == nil || string($0, kAXRoleAttribute) == role)
-        }
-        guard matches.count == 1 else { throw SiriFailure.missingControls }
-        return matches[0]
+        try traversal.unique(id, role: role, in: root, deadline: deadline)
     }
     private func checkDeadline() throws {
         try Task.checkCancellation()
@@ -100,10 +82,7 @@ actor SiriAccessibilityClient: SiriClient {
         }
     }
     private func userMessages(_ chat: AXUIElement) throws -> [String] {
-        try elements(chat).filter { try identifier($0) == "userPrompt" }.map { prompt in
-            try elements(prompt).filter { try string($0,kAXRoleAttribute) == "AXStaticText" }
-                .map { try string($0,kAXValueAttribute) }.joined()
-        }
+        try traversal.userMessages(in: chat, deadline: deadline)
     }
 
     func prepareNewConversation() async throws {
@@ -130,16 +109,16 @@ actor SiriAccessibilityClient: SiriClient {
                 guard selected.count == 1 else { throw SiriFailure.ambiguousWindow }
                 window = selected[0]
             }
-            let input = try unique("promptViewTextField", role: "AXTextField", in: window)
-            let button = try unique("newChatButton", role: "AXButton", in: window)
-            guard try string(input, kAXValueAttribute).isEmpty else { throw SiriFailure.existingDraft }
-            preparingWindow = (window, button)
+            let preparation = try traversal.newConversationPreparation(in: window, deadline: deadline)
+            preparingWindow = (window, preparation)
             return true
         }
         guard let ready = preparingWindow else { throw SiriFailure.missingControls }
         // Mutations stay outside readiness polling: never create multiple chats on retry.
         deadline = operationDeadline
-        try ax.perform(kAXPressAction, on: ready.button, deadline: deadline, failure: .missingControls)
+        if case let .pressButton(button) = ready.preparation {
+            try ax.perform(kAXPressAction, on: button, deadline: deadline, failure: .missingControls)
+        }
         deadline = min(operationDeadline, .now.advanced(by: .seconds(10)))
         try await SiriReadiness.wait(deadline: deadline) {
             guard let ready = preparingWindow, let app = preparingApp else { throw SiriFailure.unavailable }
@@ -152,8 +131,14 @@ actor SiriAccessibilityClient: SiriClient {
                 throw SiriFailure.missingControls
             }
             try ax.requireWritableInput(input, deadline: deadline)
+            let selection = try selectedRows(ready.window)
+            if case let .reuseEmptyConversation(originalInput, originalChat, originalSelection) = ready.preparation {
+                guard CFEqual(input, originalInput), CFEqual(chat, originalChat), same(selection, originalSelection) else {
+                    throw SiriFailure.destinationChanged
+                }
+            }
             destination = Destination(pid: identity.0, launchDate: identity.1, app: app, window: ready.window,
-                                      input: input, chat: chat, selectedRows: try selectedRows(ready.window))
+                                      input: input, chat: chat, selectedRows: selection)
             return true
         }
     }

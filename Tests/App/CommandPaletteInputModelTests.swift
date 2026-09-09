@@ -5,6 +5,20 @@ import XCTest
 
 @MainActor
 final class CommandPaletteInputModelTests: XCTestCase {
+    func testAliasInvalidatedDuringPreparationDoesNotExecute() async throws {
+        let fixture = try InputModelFixture()
+        defer { fixture.close() }
+        var valid = true
+        fixture.provider.destination = "Account A"
+        fixture.provider.onPrepare = { valid = false }
+        let model = CommandPaletteInputModel()
+        model.submit(fixture.item, message: "Hello", host: fixture.host, validate: { valid }, onStarted: {})
+        try await finishPreparing(model)
+        XCTAssertTrue(fixture.provider.invocations.isEmpty)
+        XCTAssertEqual(fixture.provider.releases, 1)
+        XCTAssertNotNil(model.feedback)
+    }
+
     func testMarkedTextBlocksSubmissionUntilCompositionFinishes() async throws {
         let fixture = try InputModelFixture()
         defer { fixture.close() }
@@ -84,6 +98,8 @@ private final class InputModelProvider: MacToolsPlugin, PluginActionProviding, P
     let key = ActionKey(providerID: "input-fixture", actionID: "send")
     var invocations: [ActionInvocation] = []
     var releases = 0
+    var destination = "Account B"
+    var onPrepare: (() -> Void)?
     var actionDefinitions: [ActionDefinition] {
         [.init(key: key, title: "Send", description: "", systemImage: "text.bubble", parameters: [
             .init(id: "message", title: "Message", kind: .string, privacy: .sensitive, portability: .localOnly),
@@ -94,7 +110,8 @@ private final class InputModelProvider: MacToolsPlugin, PluginActionProviding, P
         [.init(key: key, parameterID: "message", placeholder: "Message", destination: "Account A", submitTitle: "Send")]
     }
     func prepareActionInput(_ descriptor: ActionInputDescriptor) async throws -> ActionInputSession {
-        .init(destination: "Account B", parameters: try ActionParameterSet(["account": .string("account-b")]))
+        onPrepare?()
+        return .init(destination: destination, parameters: try ActionParameterSet(["account": .string("account-b")]))
     }
     func releaseActionInput(_ session: ActionInputSession) { releases += 1 }
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {

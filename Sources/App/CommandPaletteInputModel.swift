@@ -14,6 +14,7 @@ final class CommandPaletteInputModel: ObservableObject {
     private var prepared: PreparedActionInput?
     private var task: Task<Void, Never>?
     private var generation = UUID()
+    private var validateSubmission: () -> Bool = { true }
 
     var canSubmit: Bool {
         guard let item else { return false }
@@ -44,7 +45,8 @@ final class CommandPaletteInputModel: ObservableObject {
 
     func submit(
         _ item: ActionInputItem, message: String, host: PluginHost,
-        approved: Bool = false, onStarted: @escaping @MainActor () -> Void
+        approved: Bool = false, validate: @escaping () -> Bool = { true },
+        onStarted: @escaping @MainActor () -> Void
     ) {
         guard !isBusy, !isComposingText, ActionInputRegistry.accepts(message, descriptor: item.descriptor) else { return }
         if self.item != item {
@@ -54,6 +56,8 @@ final class CommandPaletteInputModel: ObservableObject {
         }
         self.item = item
         self.message = message
+        if !approved { validateSubmission = validate }
+        guard validateSubmission() else { return }
         if item.definition.risk == .confirmationRequired && !approved {
             confirmationRequested = true
             return
@@ -69,6 +73,7 @@ final class CommandPaletteInputModel: ObservableObject {
                 if owned == nil { owned = try await host.actionInputRegistry.prepare(item) }
                 guard let session = owned else { throw ActionInputError.invalidSession }
                 guard generation == self.generation, !Task.isCancelled else { session.release(); return }
+                guard validateSubmission() else { throw ActionInputError.unavailable }
                 guard !expectedDestination.isEmpty, session.session.destination == expectedDestination else {
                     throw ActionInputError.invalidSession
                 }
@@ -126,6 +131,7 @@ final class CommandPaletteInputModel: ObservableObject {
         feedback = nil
         isBusy = false
         confirmationRequested = false
+        validateSubmission = { true }
         isComposingText = false
     }
 }
