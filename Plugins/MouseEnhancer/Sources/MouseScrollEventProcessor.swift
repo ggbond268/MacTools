@@ -6,6 +6,7 @@ struct MouseScrollEventSnapshot: Equatable, Sendable {
     var isContinuous: Bool
     var scrollPhase: Int64
     var momentumPhase: Int64
+    var sourceProcessID: Int64
 
     static let discreteWheel = MouseScrollEventSnapshot(
         isContinuous: false,
@@ -18,6 +19,18 @@ struct MouseScrollEventSnapshot: Equatable, Sendable {
         scrollPhase: 0,
         momentumPhase: 0
     )
+
+    init(
+        isContinuous: Bool,
+        scrollPhase: Int64,
+        momentumPhase: Int64,
+        sourceProcessID: Int64 = 0
+    ) {
+        self.isContinuous = isContinuous
+        self.scrollPhase = scrollPhase
+        self.momentumPhase = momentumPhase
+        self.sourceProcessID = sourceProcessID
+    }
 }
 
 struct MouseScrollDeltas: Equatable, Sendable {
@@ -108,6 +121,45 @@ struct MouseScrollTuning: Equatable, Sendable {
     }
 }
 
+/// Remote-control software (screen sharing, VNC, remote desktop clients) injects
+/// scroll events that the controlling side already smoothed and scaled. Running
+/// reversal and tuning on them double-processes the stream, so those events pass
+/// through untouched. Source list modeled on Mos's remote-desktop detection.
+private enum MouseScrollRemoteSource {
+    static let executableKeywords = [
+        "screensharingd",
+        "ScreensharingAgent",
+        "ARDAgent",
+    ]
+
+    static let bundleIdentifiers: Set<String> = [
+        "com.teamviewer.TeamViewer",
+        "com.teamviewer.TeamViewerHost",
+        "com.anydesk.anydesk",
+        "com.parsec.www",
+        "com.rustdesk.RustDesk",
+        "com.microsoft.rdc.macos",
+        "com.realvnc.vncviewer",
+        "com.tigervnc.vncviewer",
+        "com.netease.uuremote",
+    ]
+
+    static func isRemoteSource(_ processID: Int64) -> Bool {
+        guard let app = NSRunningApplication(processIdentifier: pid_t(processID)) else {
+            return false
+        }
+
+        if let path = app.executableURL?.path,
+           executableKeywords.contains(where: path.contains) {
+            return true
+        }
+        if let bundleID = app.bundleIdentifier, bundleIdentifiers.contains(bundleID) {
+            return true
+        }
+        return false
+    }
+}
+
 final class MouseScrollEventProcessor: @unchecked Sendable {
     private enum Timing {
         static let touchRecentThreshold: UInt64 = 222_000_000
@@ -120,9 +172,15 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
     nonisolated(unsafe) private var lastSource: MouseEnhancerDevice = .mouse
     nonisolated(unsafe) private var hasSeenTrackpadTouch = false
     nonisolated(unsafe) private var gestureMonitoringAvailable = false
+    nonisolated(unsafe) private var remoteSourceCache: [Int64: Bool] = [:]
+    private let remoteSourceEvaluator: (Int64) -> Bool
 
-    init(configuration: MouseEnhancerConfiguration) {
+    init(
+        configuration: MouseEnhancerConfiguration,
+        remoteSourceEvaluator: ((Int64) -> Bool)? = nil
+    ) {
         self.configuration = configuration
+        self.remoteSourceEvaluator = remoteSourceEvaluator ?? MouseScrollRemoteSource.isRemoteSource
     }
 
     func resetClassificationState() {
@@ -130,6 +188,23 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
         lastTouchTime = 0
         lastSource = .mouse
         hasSeenTrackpadTouch = false
+        remoteSourceCache = [:]
+    }
+
+    /// Remote-control sessions deliver already-smoothed continuous events; leave
+    /// them alone so reversal and tuning never double-process the stream.
+    func isRemoteSmoothed(snapshot: MouseScrollEventSnapshot) -> Bool {
+        guard snapshot.isContinuous, snapshot.sourceProcessID != 0 else {
+            return false
+        }
+
+        if let cached = remoteSourceCache[snapshot.sourceProcessID] {
+            return cached
+        }
+
+        let isRemote = remoteSourceEvaluator(snapshot.sourceProcessID)
+        remoteSourceCache[snapshot.sourceProcessID] = isRemote
+        return isRemote
     }
 
     func recordGestureTouchingCount(_ count: Int, timestamp: UInt64 = DispatchTime.now().uptimeNanoseconds) {
@@ -195,6 +270,17 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
         deltas: MouseScrollDeltas,
         timestamp: UInt64 = DispatchTime.now().uptimeNanoseconds
     ) -> MouseScrollProcessingResult {
+        if isRemoteSmoothed(snapshot: snapshot) {
+            return MouseScrollProcessingResult(
+                source: .mouse,
+                shouldReverse: false,
+                reverseHorizontal: false,
+                reverseVertical: false,
+                isTuned: false,
+                deltas: deltas
+            )
+        }
+
         let source = classify(snapshot: snapshot, timestamp: timestamp)
         let shouldReverse = configuration.shouldReverse(device: source)
         let tuning = MouseScrollTuning(
@@ -280,7 +366,8 @@ private extension MouseScrollEventSnapshot {
         self.init(
             isContinuous: event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0,
             scrollPhase: event.getIntegerValueField(.scrollWheelEventScrollPhase),
-            momentumPhase: event.getIntegerValueField(.scrollWheelEventMomentumPhase)
+            momentumPhase: event.getIntegerValueField(.scrollWheelEventMomentumPhase),
+            sourceProcessID: event.getIntegerValueField(.eventSourceUnixProcessID)
         )
     }
 

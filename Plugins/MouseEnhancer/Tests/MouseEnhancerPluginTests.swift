@@ -702,6 +702,75 @@ final class MouseEnhancerPluginTests: XCTestCase {
         XCTAssertEqual(result.deltas.deltaAxis1, -2)
     }
 
+    func testProcessorPassesThroughRemoteSmoothedEvents() {
+        let processor = MouseScrollEventProcessor(
+            configuration: MouseEnhancerConfiguration(
+                reverseMouseHorizontal: false,
+                reverseMouseVertical: true,
+                reverseTrackpadHorizontal: false,
+                reverseTrackpadVertical: false,
+                mouseScrollStep: 40,
+                mouseScrollGain: 2
+            ),
+            remoteSourceEvaluator: { $0 == 4242 }
+        )
+
+        let result = processor.process(
+            snapshot: MouseScrollEventSnapshot(
+                isContinuous: true,
+                scrollPhase: 1,
+                momentumPhase: 0,
+                sourceProcessID: 4242
+            ),
+            deltas: MouseScrollDeltas(
+                deltaAxis1: 3,
+                deltaAxis2: 0,
+                pointDeltaAxis1: 30,
+                pointDeltaAxis2: 0,
+                fixedPointDeltaAxis1: 3,
+                fixedPointDeltaAxis2: 0
+            )
+        )
+
+        XCTAssertFalse(result.shouldReverse)
+        XCTAssertFalse(result.isTuned)
+        XCTAssertEqual(result.deltas.deltaAxis1, 3)
+        XCTAssertEqual(result.deltas.pointDeltaAxis1, 30)
+    }
+
+    func testProcessorStillProcessesRemoteDiscreteEvents() {
+        let processor = MouseScrollEventProcessor(
+            configuration: MouseEnhancerConfiguration(
+                reverseMouseHorizontal: false,
+                reverseMouseVertical: true,
+                reverseTrackpadHorizontal: false,
+                reverseTrackpadVertical: false
+            ),
+            remoteSourceEvaluator: { $0 == 4242 }
+        )
+
+        let result = processor.process(
+            snapshot: MouseScrollEventSnapshot(
+                isContinuous: false,
+                scrollPhase: 0,
+                momentumPhase: 0,
+                sourceProcessID: 4242
+            ),
+            deltas: MouseScrollDeltas(
+                deltaAxis1: 3,
+                deltaAxis2: 0,
+                pointDeltaAxis1: 24,
+                pointDeltaAxis2: 0,
+                fixedPointDeltaAxis1: 3,
+                fixedPointDeltaAxis2: 0
+            )
+        )
+
+        XCTAssertEqual(result.source, .mouse)
+        XCTAssertTrue(result.shouldReverse)
+        XCTAssertEqual(result.deltas.deltaAxis1, -3)
+    }
+
     func testProcessorScrollTuningIsPerDevice() {
         let processor = MouseScrollEventProcessor(
             configuration: MouseEnhancerConfiguration(
