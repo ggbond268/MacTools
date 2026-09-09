@@ -2178,7 +2178,6 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         )
         needsFilterRefreshOnActivation = false
         installKeyMonitor()
-        PluginPresentationSafety.prepareForWindowOrdering(panel)
         NSApp.activate(ignoringOtherApps: true)
         if shouldCenterPanel,
            let screen = activeScreen(for: panel) {
@@ -2190,6 +2189,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                 display: false
             )
         }
+        PluginPresentationSafety.prepareForWindowOrdering(panel)
         panel.makeKeyAndOrderFront(nil)
     }
 
