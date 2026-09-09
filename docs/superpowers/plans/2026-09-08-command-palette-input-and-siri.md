@@ -352,3 +352,12 @@ The installed Debug host-to-plugin acceptance gap remains: native palette tests 
 - Native palette coverage verifies custom-trigger one-Return delivery and preservation of an open composer during settings changes. Store coverage checks persistence, reset, invalid values, overlap conflicts, and provider opt-out. The two lifecycle regressions failed before their fixes.
 
 - Final local `make ci` passed: 245 repository script tests, 4,387 Xcode tests, and PluginKit v6 binary compatibility. Native settings-field saving and Back-navigation regressions also passed.
+
+
+## Tab completion and installation requirements (2026-09-09)
+
+- With an input action selected in search, Tab inserts its current configured alias plus one space and keeps the caret in the search field. It does not prepare a session or launch an app. Native tests cover completion followed by exact one-Return delivery, IME composition, Shift-Tab, and preserving existing inline messages. Return selection still opens the composer.
+- The shared host checker evaluates declared minimum macOS and required application bundle IDs before catalog downloads, manual package installation, staged replacement, and loading. Incompatible plugins remain discoverable with a specific explanation. Check Again refreshes compatibility and activation. Permission requirements remain setup guidance.
+- Injected-environment tests cover unsupported OS versions, missing/reappearing apps, legacy manifests, catalog refusal before package resolution, and installed packages becoming ineligible/eligible for loading. Native Siri control readiness remains a separate runtime check.
+- Requirements list only mandatory apps. Xcode Cleanup can remove leftover data after Xcode is uninstalled, so its manifest no longer requires Xcode. A regression reproduced that false rejection before the correction. Staged-update coverage also verifies that a disappearing dependency leaves the installed version intact.
+- Final local `make ci` passed: 245 repository script tests, 4,397 Xcode tests, and the frozen PluginKit v6 binary compatibility client. Installed host-to-plugin acceptance remains a manual check.

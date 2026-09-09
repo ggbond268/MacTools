@@ -1,6 +1,57 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+  "plugin.requirement.macOS": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "需要 macOS %@ 或更高版本。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Requires macOS %@ or later."
+        }
+      }
+    }
+  },
+  "plugin.requirement.application": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "未找到所需应用：%@。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Required app not found: %@."
+        }
+      }
+    }
+  },
+  "plugin.requirement.recheck": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "重新检查"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Check Again"
+        }
+      }
+    }
+  },
     "plugin.management.hideFromDashboard": {
       "extractionState": "manual",
       "localizations": {

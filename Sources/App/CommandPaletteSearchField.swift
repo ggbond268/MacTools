@@ -13,6 +13,7 @@ struct CommandPaletteSearchField: NSViewRepresentable {
     private let onCommand: (PluginPaletteSearchCommand) -> Void
     private let preservesText: (String) -> Bool
     private let onMarkedTextChange: (Bool) -> Void
+    private let completion: () -> String?
 
     init(
         text: Binding<String>,
@@ -23,7 +24,8 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         alternateSubmitModifier: NSEvent.ModifierFlags? = nil,
         onCommand: @escaping (PluginPaletteSearchCommand) -> Void,
         preservesText: @escaping (String) -> Bool,
-        onMarkedTextChange: @escaping (Bool) -> Void
+        onMarkedTextChange: @escaping (Bool) -> Void,
+        completion: @escaping () -> String? = { nil }
     ) {
         _text = text
         self.placeholder = placeholder
@@ -34,6 +36,7 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         self.onCommand = onCommand
         self.preservesText = preservesText
         self.onMarkedTextChange = onMarkedTextChange
+        self.completion = completion
     }
 
     func makeCoordinator() -> Coordinator {
@@ -215,6 +218,16 @@ struct CommandPaletteSearchField: NSViewRepresentable {
             textView: NSTextView,
             doCommandBy selector: Selector
         ) -> Bool {
+            let modifiers = NSApp.currentEvent?.modifierFlags ?? []
+            if selector == #selector(NSResponder.insertTab(_:)), !textView.hasMarkedText(),
+               modifiers.intersection([.shift, .command, .control, .option]).isEmpty,
+               let completed = parent.completion(), let field = control as? NSTextField {
+                field.stringValue = completed
+                textView.string = completed
+                textView.setSelectedRange(NSRange(location: (completed as NSString).length, length: 0))
+                parent.text = completed
+                return true
+            }
             guard let command = PluginPaletteSearchField.command(
                 for: selector,
                 hasMarkedText: textView.hasMarkedText(),

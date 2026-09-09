@@ -21,6 +21,48 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         XCTAssertTrue(fixture.recents.references.isEmpty, "Prompt content must never become a recent action")
     }
 
+    func testTabCompletesSelectedActionUsingCustomTriggerWithoutPreparingOrSending() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let item = try XCTUnwrap(fixture.host.actionInputRegistry.items.first)
+        try fixture.host.setActionInputAlias("hey fixture", for: item)
+        let field = try await fixture.searchField()
+        try fixture.type("ask", into: field)
+        await fixture.settle()
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.doCommand(by: #selector(NSResponder.insertTab(_:)))
+        await fixture.settle()
+        XCTAssertEqual(field.stringValue, "hey fixture ")
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 12, length: 0))
+        XCTAssertEqual(fixture.provider.preparations, 0)
+        XCTAssertTrue(fixture.provider.messages.isEmpty)
+        XCTAssertNil(fixture.messageEditor)
+        editor.insertText("你好 👋", replacementRange: editor.selectedRange())
+        await fixture.settle()
+        try fixture.pressReturn(in: field)
+        await fixture.settle()
+        XCTAssertEqual(fixture.provider.messages, ["你好 👋"])
+    }
+
+    func testTabDoesNotCompleteMarkedTextOrReplaceAnInlineMessage() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let field = try await fixture.searchField()
+        try fixture.type("ask", into: field)
+        await fixture.settle()
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        let coordinator = try XCTUnwrap(field.delegate as? CommandPaletteSearchField.Coordinator)
+        editor.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0), replacementRange: editor.selectedRange())
+        XCTAssertFalse(coordinator.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertTab(_:))))
+        editor.unmarkText()
+        try fixture.type("ask fixture keep this", into: field)
+        await fixture.settle()
+        XCTAssertFalse(coordinator.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertTab(_:))))
+        XCTAssertEqual(field.stringValue, "ask fixture keep this")
+        XCTAssertFalse(coordinator.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertBacktab(_:))))
+        XCTAssertTrue(fixture.provider.messages.isEmpty)
+    }
+
     func testSettingsFieldCommitsCustomTriggerWithNativeReturn() async throws {
         let fixture = try PaletteFixture()
         defer { fixture.close() }
@@ -193,6 +235,7 @@ private final class PaletteInputProvider: MacToolsPlugin, PluginActionProviding,
     let key = ActionKey(providerID: "palette-fixture", actionID: "ask")
     var messages: [String] = []
     var releases = 0
+    var preparations = 0
     var actionDefinitions: [ActionDefinition] {
         [.init(key: key, title: "Ask Fixture", description: "", systemImage: "text.bubble", parameters: [
             .init(id: "message", title: "Message", kind: .string, privacy: .sensitive, portability: .localOnly),
@@ -201,7 +244,10 @@ private final class PaletteInputProvider: MacToolsPlugin, PluginActionProviding,
     var actionInputDescriptors: [ActionInputDescriptor] {
         [.init(key: key, parameterID: "message", placeholder: "Message", destination: "Fixture · New Conversation", submitTitle: "Send", aliases: ["ask fixture"])]
     }
-    func prepareActionInput(_ descriptor: ActionInputDescriptor) async throws -> ActionInputSession { .init(destination: descriptor.destination) }
+    func prepareActionInput(_ descriptor: ActionInputDescriptor) async throws -> ActionInputSession {
+        preparations += 1
+        return .init(destination: descriptor.destination)
+    }
     func releaseActionInput(_ session: ActionInputSession) { releases += 1 }
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
         if case let .string(message)? = invocation.reference.parameters["message"] { messages.append(message) }

@@ -37,6 +37,63 @@ final class PluginPackageStoreTests: XCTestCase {
         XCTAssertEqual(store.installedRecords().first?.state, .installed)
     }
 
+    func testMissingRequirementPreventsInstallationAndDisablesExistingPackage() throws {
+        var found = false
+        let checker = PluginRequirementChecker(macOSVersion: { "27.0" }, applicationInstalled: { _ in found })
+        let store = makeStore(requirementChecker: checker)
+        let source = try makePackage(id: "com.example.siri", requirements: PluginRequirementTestData.requirements())
+        XCTAssertThrowsError(try store.installPackage(from: source)) {
+            XCTAssertEqual($0 as? PluginRequirementChecker.Failure, .application("Siri AI"))
+        }
+        XCTAssertTrue(store.installedRecords().isEmpty)
+        found = true
+        XCTAssertEqual(try store.installPackage(from: source).state, .installed)
+        found = false
+        guard case .incompatible = try XCTUnwrap(store.installedRecords().first).state else {
+            return XCTFail("The installed plugin must not be eligible for loading")
+        }
+        let loader = RequirementRecordingLoader()
+        let manager = DynamicPluginManager(packageStore: store, pluginLoader: loader)
+        XCTAssertTrue(manager.loadInstalledPlugins().isEmpty)
+        XCTAssertTrue(loader.requestedIDs.isEmpty)
+        found = true
+        _ = manager.loadInstalledPlugins()
+        XCTAssertEqual(loader.requestedIDs, ["com.example.siri"])
+    }
+
+    func testRequirementDisappearingDuringStagingPreservesInstalledVersion() throws {
+        var lookups = 0
+        let checker = PluginRequirementChecker(macOSVersion: { "27.0" }, applicationInstalled: { _ in
+            lookups += 1
+            return lookups == 1
+        })
+        let store = makeStore(requirementChecker: checker)
+        let original = try makePackage(id: "com.example.siri")
+        _ = try store.installPackage(from: original)
+        let update = try makePackage(id: "com.example.siri", version: "2.0.0",
+                                     requirements: PluginRequirementTestData.requirements())
+
+        XCTAssertThrowsError(try store.updatePackage(from: update)) {
+            guard case let PluginPackageStoreError.installFailed(reason) = $0 else {
+                return XCTFail("Expected a staged installation failure, got \($0)")
+            }
+            XCTAssertEqual(reason, PluginRequirementChecker.Failure.application("Siri AI").localizedDescription)
+        }
+        XCTAssertEqual(lookups, 2)
+        let installed = try XCTUnwrap(store.installedRecords().first)
+        XCTAssertEqual(installed.manifest.version, "1.0.0")
+        XCTAssertEqual(installed.state, .installed)
+    }
+
+    func testUnsupportedOSRejectsManualPackageInstallation() throws {
+        let store = makeStore(requirementChecker: .init(macOSVersion: { "26.6" }, applicationInstalled: { _ in true }))
+        let source = try makePackage(id: "com.example.siri", requirements: PluginRequirementTestData.requirements())
+        XCTAssertThrowsError(try store.installPackage(from: source)) {
+            XCTAssertEqual($0 as? PluginRequirementChecker.Failure, .macOS("27.0"))
+        }
+        XCTAssertTrue(store.installedRecords().isEmpty)
+    }
+
     func testReadsLegacyHiddenMarkerUntilMigrationAcknowledgesIt() throws {
         let sourceURL = try makePackage(id: "com.example.demo")
         let store = makeStore()
@@ -571,7 +628,8 @@ final class PluginPackageStoreTests: XCTestCase {
         packageFileRemover: ((URL) throws -> Void)? = nil,
         privateDataDirectoryRemover: ((URL) throws -> Void)? = nil,
         privateDataKeyRemover: ((String) throws -> Void)? = nil,
-        now: @escaping () -> Date = { Date() }
+        now: @escaping () -> Date = { Date() },
+        requirementChecker: PluginRequirementChecker? = nil
     ) -> PluginPackageStore {
         PluginPackageStore(
             rootDirectory: temporaryRoot,
@@ -582,7 +640,7 @@ final class PluginPackageStoreTests: XCTestCase {
             privateDataDirectoryRemover: privateDataDirectoryRemover,
             privateDataKeyRemover: privateDataKeyRemover,
             now: now,
-            hostVersion: "1.0.0"
+            hostVersion: "1.0.0", requirementChecker: requirementChecker ?? PluginRequirementChecker()
         )
     }
 
@@ -595,7 +653,8 @@ final class PluginPackageStoreTests: XCTestCase {
         version: String = "1.0.0",
         bundleRelativePath: String = "Demo.bundle",
         pluginKitVersion: Int = PluginPackageManifestLoader.supportedPluginKitVersion,
-        uninstallDataPolicy: PluginPackageManifest.UninstallDataPolicy? = nil
+        uninstallDataPolicy: PluginPackageManifest.UninstallDataPolicy? = nil,
+        requirements: PluginProductMetadata.Requirements? = nil
     ) throws -> URL {
         let packageURL = temporaryRoot
             .appendingPathComponent("Source", isDirectory: true)
@@ -616,11 +675,20 @@ final class PluginPackageStoreTests: XCTestCase {
             minHostVersion: "0.1.0",
             pluginKitVersion: pluginKitVersion,
             bundleRelativePath: bundleRelativePath,
-            uninstallDataPolicy: uninstallDataPolicy
+            uninstallDataPolicy: uninstallDataPolicy, requirements: requirements
         )
         let data = try JSONEncoder().encode(manifest)
         try data.write(to: packageURL.appendingPathComponent("plugin.json"))
 
         return packageURL
+    }
+}
+
+@MainActor
+private final class RequirementRecordingLoader: DynamicPluginLoading {
+    var requestedIDs: [String] = []
+    func loadInstalledPlugins(from records: [PluginPackageRecord]) -> [DynamicPluginLoadResult] {
+        requestedIDs = records.map(\.id)
+        return records.map { .init(record: $0, plugins: [], errorMessage: nil) }
     }
 }

@@ -34,6 +34,7 @@ final class DynamicPluginLoader: DynamicPluginLoading {
             var plugins: [any MacToolsPlugin] = []
             var activationAttemptedCount = 0
             do {
+                try packageStore.requirementChecker.validate(record.manifest.requirements)
                 let provider = try PluginInvocationGuard
                     .value(operation: "load provider for \(record.id)") {
                         try loadProvider(for: record)

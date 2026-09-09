@@ -650,7 +650,8 @@ struct UnifiedSearchPaletteView: View {
                     accessibilityIdentifier: "mactools.unified-search.field", focusRequestID: focusRequestID,
                     alternateSubmitModifier: .command, onCommand: handleSearchFieldCommand,
                     preservesText: { pluginHost.commandPaletteAliasResolver.resolve($0) != nil },
-                    onMarkedTextChange: { marked in searchHasMarkedText = marked }
+                    onMarkedTextChange: { marked in searchHasMarkedText = marked },
+                    completion: { selectedInputCompletion }
                 ).frame(maxWidth: .infinity)
                 if !model.query.isEmpty {
                     Button { updateInputQuery("") } label: {
@@ -1059,15 +1060,21 @@ struct UnifiedSearchPaletteView: View {
                 key: "Return",
                 action: AppL10n.search("search.footer.open", defaultValue: "打开")
             )
+            if selectedInputCompletion != nil {
+                PluginPaletteKeyboardHint(
+                    key: "Tab", action: AppL10n.search("search.footer.complete", defaultValue: "补全")
+                )
+            }
             if includeSecondaryActions {
                 PluginPaletteKeyboardHint(
                     key: "⌘Return",
                     action: AppL10n.search("search.footer.settings", defaultValue: "设置")
                 )
-                PluginPaletteKeyboardHint(
-                    key: "Tab",
-                    action: AppL10n.search("search.footer.actions", defaultValue: "操作")
-                )
+                if selectedInputCompletion == nil {
+                    PluginPaletteKeyboardHint(
+                        key: "Tab", action: AppL10n.search("search.footer.actions", defaultValue: "操作")
+                    )
+                }
             }
             PluginPaletteKeyboardHint(
                 key: "⌘1–9",
@@ -1191,6 +1198,17 @@ struct UnifiedSearchPaletteView: View {
         }
 
         activate(selectedResult)
+    }
+
+    private var selectedInputCompletion: String? {
+        guard !isComposingInput, inlineMatch == nil, !searchHasMarkedText,
+              let result = selectedResult, case let .collectActionInput(item) = result.action,
+              pluginHost.actionInputRegistry.contains(item) else { return nil }
+        for alias in pluginHost.actionInputAliases.aliases(for: item) {
+            if let match = pluginHost.commandPaletteAliasResolver.resolve(alias),
+               match.item == item, !match.isAmbiguous { return alias + " " }
+        }
+        return nil
     }
 
     private func handleSearchFieldCommand(

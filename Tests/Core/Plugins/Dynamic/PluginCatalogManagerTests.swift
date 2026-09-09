@@ -107,6 +107,29 @@ final class PluginCatalogManagerTests: XCTestCase {
         }
     }
 
+    func testMissingApplicationBlocksCatalogInstallBeforeResolvingAndRecheckEnablesIt() async throws {
+        var found = false
+        let store = PluginPackageStore(rootDirectory: temporaryRoot, userDefaults: defaults, hostVersion: "1.0.0",
+                                       requirementChecker: .init(macOSVersion: { "27.0" }, applicationInstalled: { _ in found }))
+        let dynamic = DynamicPluginManager(packageStore: store, pluginLoader: StubDynamicPluginLoader { _ in [] })
+        let entry = makeCatalogEntry(id: "com.example.siri", version: "1.0.0", requirements: PluginRequirementTestData.requirements())
+        let snapshot = makeCatalogSnapshot(entries: [entry])
+        let manager = PluginCatalogManager(catalogProvider: StubPluginCatalogProvider(snapshot: snapshot),
+                                           packageResolver: StubPluginPackageResolver(packagesByID: [:]),
+                                           dynamicPluginManager: dynamic, source: .production(snapshot.sourceURL))
+        await manager.refreshCatalog()
+        let item = try XCTUnwrap(dynamic.pluginManagementItems.first)
+        XCTAssertFalse(item.canInstall)
+        XCTAssertTrue(item.detailText.contains("Siri AI"))
+        do {
+            try await manager.installPlugin(id: entry.id)
+            XCTFail("Should reject before requesting a package from the empty resolver")
+        } catch { XCTAssertEqual(error as? PluginRequirementChecker.Failure, .application("Siri AI")) }
+        found = true
+        dynamic.reloadInstalledPlugins()
+        XCTAssertEqual(dynamic.pluginManagementItems.first?.canInstall, true)
+    }
+
     func testAutomaticUpdateBeforeLoadingInstallsLatestPackageWithoutCallingLoader() async throws {
         let store = makeStore()
         _ = try store.installPackage(from: makePackage(id: "com.example.demo", version: "1.0.0"))
@@ -1863,7 +1886,8 @@ final class PluginCatalogManagerTests: XCTestCase {
     private func makeCatalogEntry(
         id: String,
         version: String,
-        minimumHostVersion: String = "0.1.0"
+        minimumHostVersion: String = "0.1.0",
+        requirements: PluginProductMetadata.Requirements? = nil
     ) -> PluginCatalogEntry {
         PluginCatalogEntry(
             id: id,
@@ -1875,7 +1899,7 @@ final class PluginCatalogManagerTests: XCTestCase {
                 url: URL(fileURLWithPath: "/tmp/\(id).mactoolsplugin"),
                 sha256: String(repeating: "a", count: 64),
                 size: 42
-            )
+            ), requirements: requirements
         )
     }
 

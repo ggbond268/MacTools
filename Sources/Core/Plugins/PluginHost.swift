@@ -2515,6 +2515,11 @@ final class PluginHost: ObservableObject {
         componentViewCache.removeAll()
     }
 
+    func recheckPluginRequirements() {
+        dynamicPluginManager?.reloadInstalledPlugins()
+        syncPluginManagementState()
+    }
+
     func refreshPluginCatalog() async {
         await pluginCatalogManager?.refreshCatalog()
         syncPluginManagementState()

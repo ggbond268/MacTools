@@ -90,6 +90,7 @@ final class PluginPackageStore {
     private let privateDataKeyRemover: (String) throws -> Void
     private let now: () -> Date
     let hostVersion: String
+    let requirementChecker: PluginRequirementChecker
     private var pendingRestartPluginIDs: Set<String> = []
 
     init(
@@ -102,7 +103,8 @@ final class PluginPackageStore {
         privateDataDirectoryRemover: ((URL) throws -> Void)? = nil,
         privateDataKeyRemover: ((String) throws -> Void)? = nil,
         now: @escaping () -> Date = { Date() },
-        hostVersion: String = AppMetadata.shortVersion ?? "0"
+        hostVersion: String = AppMetadata.shortVersion ?? "0",
+        requirementChecker: PluginRequirementChecker = PluginRequirementChecker()
     ) {
         self.fileManager = fileManager
         self.userDefaults = userDefaults
@@ -119,6 +121,7 @@ final class PluginPackageStore {
         self.privateDataKeyRemover = privateDataKeyRemover ?? Self.removePrivateDataKey
         self.now = now
         self.hostVersion = hostVersion
+        self.requirementChecker = requirementChecker
 
         let root = rootDirectory ?? Self.defaultRootDirectory(fileManager: fileManager)
         self.rootDirectory = root
@@ -195,6 +198,8 @@ final class PluginPackageStore {
                                 hostVersion
                             )
                         )
+                    } else if let failure = requirementChecker.failure(for: manifest.requirements) {
+                        state = .incompatible(failure.localizedDescription)
                     } else if fileManager.fileExists(atPath: bundleURL.path) {
                         state = .installed
                     } else {
@@ -322,6 +327,7 @@ final class PluginPackageStore {
         }
 
         let manifest = try PluginPackageManifestLoader.load(from: sourceURL, hostVersion: hostVersion)
+        try requirementChecker.validate(manifest.requirements)
         // Recovery is best effort. An unresolved staging intent still owns this plugin's
         // private data and must not be allowed to delete a newly installed generation later.
         // A cleanup-complete intent owns only obsolete package residue, so it is safe to keep.
@@ -358,6 +364,7 @@ final class PluginPackageStore {
                 from: stagingURL,
                 hostVersion: hostVersion
             )
+            try requirementChecker.validate(stagedManifest.requirements)
             let stagedBundleURL = stagingURL.appendingPathComponent(stagedManifest.bundleRelativePath)
 
             guard fileManager.fileExists(atPath: stagedBundleURL.path) else {
