@@ -13,19 +13,23 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         try fixture.type("ask fixture Hello ", into: field)
         await fixture.settle()
         let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        // Keep the synthetic IME transaction synchronous. Yielding with marked text lets
+        // other parallel test windows end editing before the command is checked.
         editor.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0), replacementRange: editor.selectedRange())
-        await fixture.settle()
         XCTAssertTrue(editor.hasMarkedText())
         let coordinator = try XCTUnwrap(field.delegate as? CommandPaletteSearchField.Coordinator)
         XCTAssertFalse(coordinator.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
-        await fixture.settle()
         XCTAssertTrue(fixture.provider.messages.isEmpty)
         editor.insertText("你", replacementRange: NSRange(location: NSNotFound, length: 0))
-        await fixture.settle()
         XCTAssertFalse(editor.hasMarkedText())
+        await fixture.settle()
+        XCTAssertTrue(fixture.provider.messages.isEmpty, "Committing IME input must not submit the action")
         XCTAssertEqual(field.stringValue, "ask fixture Hello 你")
         try fixture.pressReturn(in: field)
-        await fixture.settle()
+        let deadline = ContinuousClock.now + .seconds(3)
+        while fixture.provider.messages.isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         XCTAssertEqual(fixture.provider.messages, ["Hello 你"])
     }
 
