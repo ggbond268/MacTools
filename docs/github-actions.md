@@ -1,11 +1,12 @@
 # GitHub Actions 自动构建
 
-本仓库提供七条流水线：
+This repository provides eight workflows:
 
 - `Build`：在 `main` push、Pull Request 和手动触发时运行。执行 XcodeGen、Debug 测试，并为每次变更编译和核对 unsigned Nightly app；在非 PR 场景还会额外编译 unsigned Release app 做配置校验。它不上传不可分发的未签名产物。
 - `Prepare Release`：在 GitHub Actions 页面手动触发。输入发布类型、目标版本和是否继续发布；它会检查、bump、提交版本变更、创建 tag，并在需要时显式触发 `Release` 或 `Plugin Release`。
 - `Release`：在推送 `v*.*.*` 或 `v*.*.*-*` tag，或手动输入 tag 时运行。构建 Release 版本，使用 Developer ID 签名、公证、打包 DMG，创建或更新 GitHub Release；稳定版会明确标记为 GitHub Latest，并更新官网使用的 `docs/app-release.json`，预发布不会覆盖稳定版下载元数据。
 - `Nightly`: when enabled, builds `main` daily at 06:00 UTC using the existing stable signing, notarization, Sparkle, and catalog secrets. It publishes a separate `MacTools Nightly.app`, a standalone Apple silicon `mactools` CLI, same-commit plugins, appcast, and versioned PluginKit v6 catalog. A separate job verifies the CLI without secrets or repository write credentials; the publishing job downloads the same immutable workflow artifact. Each run uploads and verifies a unique `nightly-<run>-<attempt>` draft before publishing it as a prerelease; existing tags and assets are never overwritten.
+- `Gitee Release`: an independent workflow triggered after successful app or plugin publication, also available through manual dispatch for recovery. It mirrors the GitHub release tag name, title, original notes, prerelease flag, and verified assets to `ggbond2700/MacTools` using `GITEE_TOKEN`, with a notice linking the corresponding GitHub source. Gitee creates its own tags without synchronizing code or Git history. Failures affect only this workflow, leaving GitHub publication and Pages deployment independent. Retry failed jobs on the **Gitee Release** run or dispatch it with the published tag; see [Gitee release mirroring](plugins/gitee-release-mirror.md).
 - `Homebrew Cask Update`：手动输入版本时运行；未输入版本则从稳定 `v*` App Release 中查找同时包含 `MacTools.dmg` 与 `MacTools.sha256` 的最新版，通过 `brew bump-cask-pr` 向官方 `Homebrew/homebrew-cask` 提交 cask bump PR。
 - `Plugin Release` runs for a pushed `plugins-*` tag or a manually selected plugin batch tag. Legacy PluginKit catalogs below v5 are immutable, and the schema-3 workflow rejects attempts to republish them. PluginKit v3 and later use versioned paths, the v4 catalog remains available to MacTools through 1.1.6, MacTools 1.2.0 keeps `docs/plugins/v5/catalog.json`, and MacTools 1.3.0 and later use `docs/plugins/v6/catalog.json`. The first release of a new ABI or schema compatibility line rebuilds and signs every plugin. Plugin batches use `--latest=false` and never replace the latest App release.
 - `Deploy Pages`：在 `site/**`、`docs/app-release.json` 或 `docs/nightly/**` 合入 `main`，`Release` / `Plugin Release` / `Nightly` 成功完成，或手动触发时运行。它先构建 `site/` 下的 Astro 官网，再合并 `docs/` 中的 App 发布元数据、appcast、插件 catalog、图标库等静态发布资源并发布到 GitHub Pages；PR 不会触发这条流水线。
@@ -56,6 +57,7 @@ Before enabling the schedule, include these coexistence checks in the two manual
 | `SPARKLE_PRIVATE_KEY` | Sparkle EdDSA 私钥，必须与 `project.yml` 中的 `SPARKLE_PUBLIC_ED_KEY` 配对。 |
 | `PLUGIN_CATALOG_PRIVATE_KEY_BASE64` | 插件 catalog Ed25519 私钥的 Base64 内容，用于签名当前 PluginKit 版本的 catalog。 |
 | `HOMEBREW_GITHUB_API_TOKEN` | 可选。GitHub Personal Access Token，至少需要 `public_repo` 权限，仅供手动运行 `Homebrew Cask Update` workflow 时通过 `brew bump-cask-pr` 向官方 `Homebrew/homebrew-cask` 提交 cask bump PR。 |
+| `GITEE_TOKEN` | Gitee personal access token with repository permissions and write access to `ggbond2700/MacTools`, used only by the app/plugin release mirror job. |
 
 不要把 `LocalConfig.xcconfig`、`.p12`、`.p8`、Sparkle 私钥、证书密码或 Apple ID 写入仓库。
 

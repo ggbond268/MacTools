@@ -239,6 +239,15 @@ Plugin batch releases are published with `--latest=false`; only stable `v*` App 
 
 The GitHub Release body for each plugin batch is extracted from the matching `CHANGELOG.md` entry, such as `## [plugins-1.0.1]`.
 
+After successful publication, the independent `Gitee Release` workflow mirrors the same batch tag name, release
+notes, prerelease status, and exact package ZIPs to `ggbond2700/MacTools` on Gitee. It verifies
+public downloads with SHA-256 and can be retried without rebuilding or changing versions.
+Mirror failures do not block the original release or Pages deployment of the signed catalog.
+Gitee creates its own tags without synchronizing code or Git history; a mirror notice links
+to the corresponding GitHub source alongside the original release notes.
+Catalog entries continue to use their existing GitHub URLs. See [Gitee release mirroring](gitee-release-mirror.md)
+for the token setup, storage limits, and recovery procedure.
+
 An incremental release record contains only packages changed in that batch:
 
 ```text
