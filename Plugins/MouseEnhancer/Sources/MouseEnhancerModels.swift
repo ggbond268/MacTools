@@ -11,6 +11,8 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
     static let defaultScrollGain: Double = 1
     static let scrollStepRange: ClosedRange<Double> = 0...120
     static let scrollGainRange: ClosedRange<Double> = 0.1...5
+    static let defaultScrollDuration: Double = 1.5
+    static let scrollDurationRange: ClosedRange<Double> = 0.3...5
 
     var reverseMouseHorizontal: Bool
     var reverseMouseVertical: Bool
@@ -22,6 +24,8 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
     var mouseScrollGain: Double
     var trackpadScrollStep: Double
     var trackpadScrollGain: Double
+    var smoothScrollingEnabled: Bool
+    var mouseScrollDuration: Double
 
     init(
         reverseMouseHorizontal: Bool,
@@ -33,7 +37,9 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
         mouseScrollStep: Double = MouseEnhancerConfiguration.defaultScrollStep,
         mouseScrollGain: Double = MouseEnhancerConfiguration.defaultScrollGain,
         trackpadScrollStep: Double = MouseEnhancerConfiguration.defaultScrollStep,
-        trackpadScrollGain: Double = MouseEnhancerConfiguration.defaultScrollGain
+        trackpadScrollGain: Double = MouseEnhancerConfiguration.defaultScrollGain,
+        smoothScrollingEnabled: Bool = false,
+        mouseScrollDuration: Double = MouseEnhancerConfiguration.defaultScrollDuration
     ) {
         self.reverseMouseHorizontal = reverseMouseHorizontal
         self.reverseMouseVertical = reverseMouseVertical
@@ -45,6 +51,8 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
         self.mouseScrollGain = mouseScrollGain
         self.trackpadScrollStep = trackpadScrollStep
         self.trackpadScrollGain = trackpadScrollGain
+        self.smoothScrollingEnabled = smoothScrollingEnabled
+        self.mouseScrollDuration = mouseScrollDuration
     }
 
     static let `default` = MouseEnhancerConfiguration(
@@ -68,12 +76,16 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
         mouseScrollStep > Self.defaultScrollStep || mouseScrollGain != Self.defaultScrollGain
     }
 
+    var hasMouseSmoothScrolling: Bool {
+        smoothScrollingEnabled
+    }
+
     var hasTrackpadScrollTuning: Bool {
         trackpadScrollStep > Self.defaultScrollStep || trackpadScrollGain != Self.defaultScrollGain
     }
 
     var hasMouseEnhancement: Bool {
-        hasMouseReversing || hasMouseScrollTuning
+        hasMouseReversing || hasMouseScrollTuning || hasMouseSmoothScrolling
     }
 
     var hasTrackpadEnhancement: Bool {
@@ -102,6 +114,15 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
         }
 
         let clamped = min(max(value, scrollGainRange.lowerBound), scrollGainRange.upperBound)
+        return (clamped * 10).rounded() / 10
+    }
+
+    static func normalizedScrollDuration(_ value: Double) -> Double {
+        guard value.isFinite else {
+            return defaultScrollDuration
+        }
+
+        let clamped = min(max(value, scrollDurationRange.lowerBound), scrollDurationRange.upperBound)
         return (clamped * 10).rounded() / 10
     }
 
@@ -164,6 +185,8 @@ final class MouseEnhancerStore: ObservableObject {
         static let mouseScrollGain = "mouse-enhancer.scroll-tuning.mouse.gain"
         static let trackpadScrollStep = "mouse-enhancer.scroll-tuning.trackpad.step"
         static let trackpadScrollGain = "mouse-enhancer.scroll-tuning.trackpad.gain"
+        static let smoothScrollingEnabled = "mouse-enhancer.smooth-scrolling.enabled"
+        static let mouseScrollDuration = "mouse-enhancer.smooth-scrolling.duration"
     }
 
     @Published private(set) var configuration: MouseEnhancerConfiguration
@@ -221,6 +244,16 @@ final class MouseEnhancerStore: ObservableObject {
             trackpadScrollGain: Self.double(
                 forKey: StorageKey.trackpadScrollGain,
                 defaultValue: MouseEnhancerConfiguration.defaultScrollGain,
+                storage: storage
+            ),
+            smoothScrollingEnabled: Self.bool(
+                forKey: StorageKey.smoothScrollingEnabled,
+                defaultValue: false,
+                storage: storage
+            ),
+            mouseScrollDuration: Self.double(
+                forKey: StorageKey.mouseScrollDuration,
+                defaultValue: MouseEnhancerConfiguration.defaultScrollDuration,
                 storage: storage
             )
         )
@@ -288,6 +321,19 @@ final class MouseEnhancerStore: ObservableObject {
         let normalizedValue = MouseEnhancerConfiguration.normalizedScrollGain(value)
         update(StorageKey.trackpadScrollGain, value: normalizedValue) {
             $0.trackpadScrollGain = normalizedValue
+        }
+    }
+
+    func setSmoothScrollingEnabled(_ isEnabled: Bool) {
+        update(StorageKey.smoothScrollingEnabled, value: isEnabled) {
+            $0.smoothScrollingEnabled = isEnabled
+        }
+    }
+
+    func setMouseScrollDuration(_ value: Double) {
+        let normalizedValue = MouseEnhancerConfiguration.normalizedScrollDuration(value)
+        update(StorageKey.mouseScrollDuration, value: normalizedValue) {
+            $0.mouseScrollDuration = normalizedValue
         }
     }
 

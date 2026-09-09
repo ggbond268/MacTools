@@ -323,24 +323,6 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
         )
     }
 
-    @discardableResult
-    func process(event: CGEvent) -> MouseScrollProcessingResult {
-        let snapshot = MouseScrollEventSnapshot(event: event)
-        let deltas = MouseScrollDeltas(event: event)
-        let result = process(snapshot: snapshot, deltas: deltas)
-
-        guard result.shouldReverse || result.isTuned else {
-            return result
-        }
-
-        event.applyScrollDeltas(
-            result.deltas,
-            applyVertical: result.reverseVertical || result.isTuned,
-            applyHorizontal: result.reverseHorizontal || result.isTuned
-        )
-        return result
-    }
-
     private static func reversed(
         deltas: MouseScrollDeltas,
         reverseHorizontal: Bool,
@@ -361,7 +343,7 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
     }
 }
 
-private extension MouseScrollEventSnapshot {
+extension MouseScrollEventSnapshot {
     init(event: CGEvent) {
         self.init(
             isContinuous: event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0,
@@ -380,7 +362,7 @@ private extension MouseScrollEventSnapshot {
     }
 }
 
-private extension MouseScrollDeltas {
+extension MouseScrollDeltas {
     init(event: CGEvent) {
         self.init(
             deltaAxis1: event.getIntegerValueField(.scrollWheelEventDeltaAxis1),
@@ -393,7 +375,7 @@ private extension MouseScrollDeltas {
     }
 }
 
-private extension CGEvent {
+extension CGEvent {
     func applyScrollDeltas(
         _ deltas: MouseScrollDeltas,
         applyVertical: Bool,
