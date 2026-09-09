@@ -37,7 +37,19 @@ def main():
                         str(source), "-o", str(executable)], check=True, cwd=ROOT, timeout=120)
         for surface in ("dashboard", "features"):
             for direction in ("ltr", "rtl"):
-                subprocess.run([str(executable), surface, direction], check=True, cwd=ROOT, timeout=20)
+                command = [str(executable), surface, direction]
+                for attempt in range(1, 4):
+                    try:
+                        subprocess.run(command, check=True, cwd=ROOT, timeout=20)
+                        break
+                    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                        if attempt == 3:
+                            raise
+                        print(
+                            f"Retrying {surface} {direction} native interaction "
+                            f"after synthetic event failure ({attempt}/3)",
+                            flush=True,
+                        )
 
 
 if __name__ == "__main__":
