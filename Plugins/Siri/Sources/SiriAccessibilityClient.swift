@@ -13,6 +13,8 @@ actor SiriAccessibilityClient: SiriClient {
         let chat: AXUIElement
         let selectedRows: [AXUIElement]
     }
+    private var preparingApp: AXUIElement?
+    private var preparingWindow: (window: AXUIElement, button: AXUIElement)?
     private var destination: Destination?
     private var deadline = ContinuousClock.now
     private var text: String?
@@ -109,41 +111,51 @@ actor SiriAccessibilityClient: SiriClient {
         guard AXIsProcessTrusted() else { throw SiriFailure.permission }
         let identity = try await Self.openSiri()
         try checkDeadline()
-        let app = AXUIElementCreateApplication(identity.0)
-        var window: AXUIElement?
-        let windowDeadline = ContinuousClock.now.advanced(by: .seconds(15))
-        while window == nil {
-            try checkDeadline()
+        preparingApp = AXUIElementCreateApplication(identity.0)
+        preparingWindow = nil
+        defer { preparingApp = nil; preparingWindow = nil }
+        let operationDeadline = deadline
+        deadline = min(operationDeadline, .now.advanced(by: .seconds(15)))
+        defer { deadline = operationDeadline }
+        try await SiriReadiness.wait(deadline: deadline) {
+            guard let app = preparingApp else { throw SiriFailure.unavailable }
             guard let windows = try attribute(app, kAXWindowsAttribute) as? [AXUIElement] else {
                 throw SiriFailure.missingControls
             }
+            if windows.isEmpty { return false }
+            let window: AXUIElement
             if windows.count == 1 { window = windows[0] }
-            else if windows.count > 1 {
-                let selected = try windows.filter { (try attribute($0,kAXMainAttribute) as? Bool) == true }
+            else {
+                let selected = try windows.filter { (try attribute($0, kAXMainAttribute) as? Bool) == true }
                 guard selected.count == 1 else { throw SiriFailure.ambiguousWindow }
                 window = selected[0]
             }
-            if window == nil { try await pause(until: windowDeadline) }
+            let input = try unique("promptViewTextField", role: "AXTextField", in: window)
+            let button = try unique("newChatButton", role: "AXButton", in: window)
+            guard try string(input, kAXValueAttribute).isEmpty else { throw SiriFailure.existingDraft }
+            preparingWindow = (window, button)
+            return true
         }
-        guard let window else { throw SiriFailure.missingControls }
-        let input = try unique("promptViewTextField", role: "AXTextField", in: window)
-        guard try string(input,kAXValueAttribute).isEmpty else { throw SiriFailure.existingDraft }
-        let button = try unique("newChatButton", role: "AXButton", in: window)
-        try ax.perform(kAXPressAction, on: button, deadline: deadline, failure: .missingControls)
-        let conversationDeadline = ContinuousClock.now.advanced(by: .seconds(10))
-        while true {
-            if let chat = try? unique("innerChatSessionView", in: window),
-               let field = try? unique("promptViewTextField", role: "AXTextField", in: window),
-               try userMessages(chat).isEmpty && string(field,kAXValueAttribute).isEmpty { break }
-            try await pause(until: conversationDeadline)
+        guard let ready = preparingWindow else { throw SiriFailure.missingControls }
+        // Mutations stay outside readiness polling: never create multiple chats on retry.
+        deadline = operationDeadline
+        try ax.perform(kAXPressAction, on: ready.button, deadline: deadline, failure: .missingControls)
+        deadline = min(operationDeadline, .now.advanced(by: .seconds(10)))
+        try await SiriReadiness.wait(deadline: deadline) {
+            guard let ready = preparingWindow, let app = preparingApp else { throw SiriFailure.unavailable }
+            let chat = try unique("innerChatSessionView", in: ready.window)
+            let input = try unique("promptViewTextField", role: "AXTextField", in: ready.window)
+            guard try string(input, kAXValueAttribute).isEmpty else { throw SiriFailure.existingDraft }
+            guard try userMessages(chat).isEmpty else { return false }
+            let prompt = try unique("promptView", in: ready.window)
+            guard try elements(prompt).contains(where: { CFEqual($0, input) }) else {
+                throw SiriFailure.missingControls
+            }
+            try ax.requireWritableInput(input, deadline: deadline)
+            destination = Destination(pid: identity.0, launchDate: identity.1, app: app, window: ready.window,
+                                      input: input, chat: chat, selectedRows: try selectedRows(ready.window))
+            return true
         }
-        let currentInput = try unique("promptViewTextField", role: "AXTextField", in: window)
-        let prompt = try unique("promptView", in: window)
-        guard try elements(prompt).contains(where: { CFEqual($0,currentInput) }) else { throw SiriFailure.missingControls }
-        try ax.requireWritableInput(currentInput, deadline: deadline)
-        destination = Destination(pid: identity.0, launchDate: identity.1, app: app, window: window,
-                                  input: currentInput, chat: try unique("innerChatSessionView", in: window),
-                                  selectedRows: try selectedRows(window))
     }
 
     func enter(_ message: String) async throws {
@@ -167,7 +179,7 @@ actor SiriAccessibilityClient: SiriClient {
         guard let d = destination else { throw SiriFailure.submissionUncertain }
         let verificationDeadline = min(deadline, ContinuousClock.now.advanced(by: .seconds(15)))
         deadline = verificationDeadline
-        try await SiriSubmissionVerification.wait(deadline: verificationDeadline) {
+        try await SiriReadiness.wait(deadline: verificationDeadline) {
             try await checkDestination(d, beforeSubmit: false)
             return try string(d.input,kAXValueAttribute).isEmpty && userMessages(d.chat) == [message]
         }
@@ -208,9 +220,9 @@ actor SiriAccessibilityClient: SiriClient {
     }
 }
 
-/// Streaming responses can invalidate AX descendants between reads. Retry only the read-only
-/// evidence check; a failed snapshot is never delivery evidence and never triggers another send.
-enum SiriSubmissionVerification {
+/// Siri can replace controls while opening or updating a conversation. Retry only read-only
+/// readiness/evidence checks; a failed snapshot never authorizes a mutation or another send.
+enum SiriReadiness {
     static func wait(deadline: ContinuousClock.Instant,
                      isolation: isolated (any Actor)? = #isolation,
                      now: () -> ContinuousClock.Instant = { .now },

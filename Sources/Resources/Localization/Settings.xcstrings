@@ -1,6 +1,142 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+  "actionInput.alias.section": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "命令面板触发短语"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Command Palette Trigger Phrase"
+        }
+      }
+    }
+  },
+  "actionInput.alias.title": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "触发短语"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Trigger phrase"
+        }
+      }
+    }
+  },
+  "actionInput.alias.save": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "保存"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Save"
+        }
+      }
+    }
+  },
+  "actionInput.alias.reset": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "恢复默认"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Restore Default"
+        }
+      }
+    }
+  },
+  "actionInput.alias.preview": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "示例：%@ 你的消息 ↵"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Example: %@ your message ↵"
+        }
+      }
+    }
+  },
+  "actionInput.alias.invalid": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "请输入不含首尾空格或换行的短语，最多 64 个字符。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Enter a phrase without leading/trailing spaces or line breaks, up to 64 characters."
+        }
+      }
+    }
+  },
+  "actionInput.alias.unavailable": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "操作已更改，请重新打开设置。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "This action changed. Reopen settings."
+        }
+      }
+    }
+  },
+  "actionInput.alias.conflict": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "与“%@”的触发短语冲突。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Conflicts with the trigger phrase for “%@”."
+        }
+      }
+    }
+  },
     "tab.permissions": { "extractionState": "manual", "localizations": {
       "ar": { "stringUnit": { "state": "translated", "value": "الأذونات" } },
       "de": { "stringUnit": { "state": "translated", "value": "Berechtigungen" } },

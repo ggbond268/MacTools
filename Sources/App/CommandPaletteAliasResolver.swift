@@ -8,10 +8,11 @@ struct CommandPaletteAliasMatch {
 
 struct CommandPaletteAliasResolver {
     let items: [ActionInputItem]
+    var overrides: [String: String] = [:]
 
     func resolve(_ query: String) -> CommandPaletteAliasMatch? {
-        let bindings = items.flatMap { item in
-            item.descriptor.aliases.filter(Self.isValid).map { (alias: $0, item: item) }
+        let bindings = items.filter { !$0.descriptor.aliases.isEmpty }.flatMap { item in
+            (overrides[item.id.id].map { [$0] } ?? item.descriptor.aliases).filter(Self.isValid).map { (alias: $0, item: item) }
         }
         for binding in bindings {
             guard let range = query.range(of: binding.alias, options: [.anchored, .caseInsensitive]),
@@ -30,7 +31,7 @@ struct CommandPaletteAliasResolver {
             && !alias.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
     }
 
-    private static func overlaps(_ a: String, _ b: String) -> Bool {
+    static func overlaps(_ a: String, _ b: String) -> Bool {
         func prefix(_ a: String, _ b: String) -> Bool {
             guard let range = b.range(of: a, options: [.anchored, .caseInsensitive]) else { return false }
             return range.upperBound == b.endIndex || b[range.upperBound] == " "

@@ -139,7 +139,7 @@ final class SiriAccessibilityClientTests: XCTestCase {
         var reads = 0
         var pauses = 0
         let message = "exact message"
-        try await SiriSubmissionVerification.wait(deadline: instant + .seconds(1), now: { clock.now }, sleep: {
+        try await SiriReadiness.wait(deadline: instant + .seconds(1), now: { clock.now }, sleep: {
             pauses += 1
             clock.advance(by: $0)
         }) {
@@ -152,12 +152,25 @@ final class SiriAccessibilityClientTests: XCTestCase {
         XCTAssertEqual(pauses, 2)
     }
 
+    func testReadinessStopsWhenDraftAppearsAfterTransientFailure() async {
+        var reads = 0
+        do {
+            try await SiriReadiness.wait(deadline: .now + .seconds(1), sleep: { _ in }) {
+                reads += 1
+                if reads == 1 { throw SiriFailure.missingControls }
+                throw SiriFailure.existingDraft
+            }
+            XCTFail("A newly visible draft must stop preparation")
+        } catch { XCTAssertEqual(error as? SiriFailure, .existingDraft) }
+        XCTAssertEqual(reads, 2)
+    }
+
     func testPermanentVerificationReadFailureStopsAtDeadline() async {
         let instant = ContinuousClock.now
         let clock = SiriAXTestClock(instant)
         var reads = 0
         do {
-            try await SiriSubmissionVerification.wait(deadline: instant + .milliseconds(300), now: { clock.now },
+            try await SiriReadiness.wait(deadline: instant + .milliseconds(300), now: { clock.now },
                                                        sleep: { clock.advance(by: $0) }) {
                 reads += 1
                 throw SiriFailure.missingControls
@@ -172,12 +185,12 @@ final class SiriAccessibilityClientTests: XCTestCase {
 
     func testVerificationDoesNotRetryDestinationPermissionTimeoutOrCancellationErrors() async {
         let errors: [any Error] = [SiriFailure.destinationChanged, SiriFailure.permission,
-                                   SiriFailure.timedOut, CancellationError()]
+                                   SiriFailure.timedOut, SiriFailure.existingDraft, SiriFailure.ambiguousWindow, CancellationError()]
         for expected in errors {
             var reads = 0
             var pauses = 0
             do {
-                try await SiriSubmissionVerification.wait(deadline: .now + .seconds(5), sleep: { _ in pauses += 1 }) {
+                try await SiriReadiness.wait(deadline: .now + .seconds(5), sleep: { _ in pauses += 1 }) {
                     reads += 1
                     throw expected
                 }
@@ -195,7 +208,7 @@ final class SiriAccessibilityClientTests: XCTestCase {
         let instant = ContinuousClock.now
         let clock = SiriAXTestClock(instant)
         do {
-            try await SiriSubmissionVerification.wait(deadline: instant + .milliseconds(100), now: { clock.now }) {
+            try await SiriReadiness.wait(deadline: instant + .milliseconds(100), now: { clock.now }) {
                 clock.advance(by: .seconds(1))
                 return true
             }

@@ -239,19 +239,19 @@
         }
       }
     },
-    "在命令面板输入 ask siri 和消息，按 Return 发送。": {
+    "在命令面板输入触发短语和消息，按 Return 发送。": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在命令面板输入 ask siri 和消息，按 Return 发送。"
+            "value": "在命令面板输入触发短语和消息，按 Return 发送。"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Type ask siri followed by your message in the command palette, then press Return."
+            "value": "Type your trigger phrase followed by your message in the command palette, then press Return."
           }
         }
       }
@@ -375,19 +375,19 @@
         }
       }
     },
-    "在命令面板输入 ask siri 和消息": {
+    "在命令面板输入触发短语和消息": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在命令面板输入 ask siri 和消息"
+            "value": "在命令面板输入触发短语和消息"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Type ask siri followed by your message in the command palette"
+            "value": "Type your trigger phrase followed by your message in the command palette"
           }
         }
       }

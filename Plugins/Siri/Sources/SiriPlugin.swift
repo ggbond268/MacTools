@@ -126,7 +126,7 @@ final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProvidin
             PluginSettingsSection(id: "status", title: text("Siri"), systemImage: "sparkles") { [self] _ in
                 VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
                     Text(status).font(PluginSettingsTheme.Typography.rowTitle)
-                    Text(text("在命令面板输入 ask siri 和消息，按 Return 发送。"))
+                    Text(text("在命令面板输入触发短语和消息，按 Return 发送。"))
                         .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
                     if controller.isBusy {
                         Button(text("取消")) { self.controller.cancel() }.buttonStyle(.bordered).controlSize(.small)
@@ -151,7 +151,7 @@ final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProvidin
             return text(value)
         }
         let value = switch controller.phase {
-        case .idle: available ? "在命令面板输入 ask siri 和消息" : "需要 macOS 27 和 Siri AI"
+        case .idle: available ? "在命令面板输入触发短语和消息" : "需要 macOS 27 和 Siri AI"
         case .opening: "正在打开 Siri…"
         case .preparing: "正在准备新对话…"
         case .entering: "正在输入消息…"

@@ -422,6 +422,16 @@ final class PluginHost: ObservableObject {
     let dynamicPluginManager: DynamicPluginManager?
     private let pluginCatalogManager: PluginCatalogManager?
     let actionInputRegistry = ActionInputRegistry()
+    let actionInputAliases: CommandPaletteAliasStore
+
+    var commandPaletteAliasResolver: CommandPaletteAliasResolver {
+        CommandPaletteAliasResolver(items: actionInputRegistry.items, overrides: actionInputAliases.overrides)
+    }
+
+    func setActionInputAlias(_ alias: String?, for item: ActionInputItem) throws {
+        try actionInputAliases.set(alias, for: item, items: actionInputRegistry.items)
+        objectWillChange.send()
+    }
     let actionRegistry: ActionRegistry
     let actionExecutor: ActionExecutor
     let actionConfirmationService: ActionConfirmationRouter
@@ -626,6 +636,7 @@ final class PluginHost: ObservableObject {
 
             return $0.metadata.order < $1.metadata.order
         }
+        self.actionInputAliases = CommandPaletteAliasStore(defaults: shortcutStore.userDefaults)
         self.shortcutStore = shortcutStore
         self.pluginDisplayPreferencesStore = pluginDisplayPreferencesStore
         self.preferencesBackupStore = preferencesBackupStore

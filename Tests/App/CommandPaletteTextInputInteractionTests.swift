@@ -21,6 +21,83 @@ final class CommandPaletteTextInputInteractionTests: XCTestCase {
         XCTAssertTrue(fixture.recents.references.isEmpty, "Prompt content must never become a recent action")
     }
 
+    func testSettingsFieldCommitsCustomTriggerWithNativeReturn() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let item = try XCTUnwrap(fixture.host.actionInputRegistry.items.first)
+        fixture.window.contentView = NSHostingView(rootView:
+            CommandPaletteAliasSettingsRow(pluginHost: fixture.host, item: item).padding())
+        let field = try await fixture.searchField(identifier: "mactools.action-input.alias")
+        try fixture.type("hey fixture", into: field)
+        try fixture.pressReturn(in: field)
+        await fixture.settle()
+        XCTAssertEqual(fixture.host.actionInputAliases.aliases(for: item), ["hey fixture"])
+        XCTAssertEqual(CommandPaletteAliasStore(defaults: fixture.defaults).aliases(for: item), ["hey fixture"])
+        XCTAssertTrue(fixture.provider.messages.isEmpty)
+    }
+
+    func testCustomTriggerUpdatesOpenPaletteAndSendsExactSuffix() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let search = try await fixture.searchField()
+        try fixture.type("ask fixture old", into: search)
+        let item = try XCTUnwrap(fixture.host.actionInputRegistry.items.first)
+        try fixture.host.setActionInputAlias("hey fixture", for: item)
+        await fixture.settle()
+        XCTAssertNil(fixture.host.commandPaletteAliasResolver.resolve("ask fixture old"))
+        try fixture.type("HEY FIXTURE  你好 👋", into: search)
+        await fixture.settle()
+        try fixture.pressReturn(in: search)
+        await fixture.settle()
+        XCTAssertEqual(fixture.provider.messages, [" 你好 👋"])
+        XCTAssertEqual(fixture.dismissals, 1)
+        XCTAssertTrue(fixture.recents.references.isEmpty)
+    }
+
+    func testChangingTriggerPreservesOpenComposerAndItsDraft() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let search = try await fixture.searchField()
+        try fixture.type("ask fixture", into: search)
+        await fixture.settle()
+        try fixture.pressReturn(in: search)
+        await fixture.settle()
+        let editor = try XCTUnwrap(fixture.messageEditor)
+        editor.insertText("Keep my draft", replacementRange: NSRange(location: 0, length: 0))
+        await fixture.settle()
+        let item = try XCTUnwrap(fixture.host.actionInputRegistry.items.first)
+        try fixture.host.setActionInputAlias("new phrase", for: item)
+        await fixture.settle()
+        XCTAssertEqual(editor.string, "Keep my draft")
+        editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        await fixture.settle()
+        XCTAssertEqual(fixture.provider.messages, ["Keep my draft"])
+        XCTAssertEqual(fixture.provider.releases, 1)
+    }
+
+    func testBackAfterTriggerChangeDoesNotRetainRemovedInlineAlias() async throws {
+        let fixture = try PaletteFixture()
+        defer { fixture.close() }
+        let search = try await fixture.searchField()
+        try fixture.type("ask fixture", into: search)
+        await fixture.settle()
+        try fixture.pressReturn(in: search)
+        await fixture.settle()
+        let editor = try XCTUnwrap(fixture.messageEditor)
+        let item = try XCTUnwrap(fixture.host.actionInputRegistry.items.first)
+        try fixture.host.setActionInputAlias("new phrase", for: item)
+        await fixture.settle()
+        editor.doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        await fixture.settle()
+        XCTAssertNil(fixture.messageEditor)
+        let field = try await fixture.searchField()
+        fixture.window.makeFirstResponder(field)
+        let searchEditor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        searchEditor.doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        await fixture.settle()
+        XCTAssertEqual(fixture.dismissals, 1, "Escape should dismiss ordinary search instead of clearing a stale alias")
+    }
+
     func testBareAliasReturnOpensComposerAndSecondReturnSends() async throws {
         let fixture = try PaletteFixture()
         defer { fixture.close() }
@@ -48,13 +125,14 @@ private final class PaletteFixture {
     let suite = "CommandPaletteTextInputInteractionTests-\(UUID().uuidString)"
     let window = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 720, height: 620),
                           styleMask: [.titled], backing: .buffered, defer: false)
+    let host: PluginHost
     let recents: CommandPaletteRecentStore
     var dismissals = 0
 
     init() throws {
         defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         recents = CommandPaletteRecentStore(userDefaults: defaults)
-        let host = PluginHost(plugins: [provider], shortcutStore: ShortcutStore(userDefaults: defaults),
+        host = PluginHost(plugins: [provider], shortcutStore: ShortcutStore(userDefaults: defaults),
                               pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
                               preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
                               globalShortcutManager: GlobalShortcutManager())
@@ -63,7 +141,7 @@ private final class PaletteFixture {
             appearanceUserDefaults: defaults, recentStore: recents,
             availableSize: CGSize(width: 720, height: 620), presentationOrigin: nil,
             focusRequestID: 1, resetRequestID: nil, quickSelectionRequest: nil, showsCustomShadow: false,
-            actions: UnifiedSearchPaletteActions(dismiss: {}, dismissAfterSuccessfulExecution: { [weak self] in
+            actions: UnifiedSearchPaletteActions(dismiss: { [weak self] in self?.dismissals += 1 }, dismissAfterSuccessfulExecution: { [weak self] in
                 self?.dismissals += 1
             }, navigate: { _, _ in false }, consumeQuickSelection: { _ in false }, setPendingExecutionCancellation: { _ in })
         )
@@ -82,16 +160,16 @@ private final class PaletteFixture {
     var messageEditor: NSTextView? {
         views.compactMap { $0 as? NSTextView }.first { $0.accessibilityIdentifier() == "mactools.action-input.message" }
     }
-    func searchField() async throws -> NSTextField {
+    func searchField(identifier: String = "mactools.unified-search.field") async throws -> NSTextField {
         for _ in 0..<60 {
             window.contentView?.layoutSubtreeIfNeeded()
             if let field = views.compactMap({ $0 as? NSTextField }).first(where: {
-                $0.accessibilityIdentifier() == "mactools.unified-search.field"
+                $0.accessibilityIdentifier() == identifier || (identifier == "mactools.action-input.alias" && $0.isEditable)
             }) { return field }
             try await Task.sleep(for: .milliseconds(50))
         }
         return try XCTUnwrap(views.compactMap { $0 as? NSTextField }.first {
-            $0.accessibilityIdentifier() == "mactools.unified-search.field"
+            $0.accessibilityIdentifier() == identifier || (identifier == "mactools.action-input.alias" && $0.isEditable)
         })
     }
     func type(_ text: String, into field: NSTextField) throws {

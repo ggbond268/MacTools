@@ -457,6 +457,10 @@ struct UnifiedSearchPaletteView: View {
             syncSelection()
             handleQuickSelectionRequest(quickSelectionRequest)
         }
+        .onChange(of: pluginHost.actionInputAliases.overrides) {
+            guard !isComposingInput else { return }
+            updateInputQuery(model.query)
+        }
         .onChange(of: resultIDs) {
             syncSelection()
         }
@@ -538,11 +542,12 @@ struct UnifiedSearchPaletteView: View {
     private func leaveInputOrDismiss() {
         if isComposingInput {
             if let item = inputModel.item { inputDraft = (item, inputModel.message) }
+            var query = model.query
             if let match = inlineMatch, let suffix = match.message {
-                updateInputQuery(String(model.query.dropLast(suffix.count)) + inputModel.message)
+                query = String(model.query.dropLast(suffix.count)) + inputModel.message
             }
-            inputModel.reset()
             isComposingInput = false
+            updateInputQuery(query)
         } else if inlineMatch != nil {
             inlineMatch = nil
             inputModel.reset()
@@ -629,7 +634,7 @@ struct UnifiedSearchPaletteView: View {
         executionFeedback = nil
         inputModel.reset()
         inlineMatch = searchHasMarkedText ? nil
-            : CommandPaletteAliasResolver(items: pluginHost.actionInputRegistry.items).resolve(newQuery)
+            : pluginHost.commandPaletteAliasResolver.resolve(newQuery)
         model.updateQuery(newQuery, suppressSearch: inlineMatch != nil)
         syncSelection(resetToFirst: UnifiedSearchSelectionPolicy.shouldResetForQueryChange(from: oldQuery, to: newQuery))
     }
@@ -644,7 +649,7 @@ struct UnifiedSearchPaletteView: View {
                     accessibilityLabel: AppL10n.search("search.title", defaultValue: "搜索 MacTools"),
                     accessibilityIdentifier: "mactools.unified-search.field", focusRequestID: focusRequestID,
                     alternateSubmitModifier: .command, onCommand: handleSearchFieldCommand,
-                    preservesText: { CommandPaletteAliasResolver(items: pluginHost.actionInputRegistry.items).resolve($0) != nil },
+                    preservesText: { pluginHost.commandPaletteAliasResolver.resolve($0) != nil },
                     onMarkedTextChange: { marked in searchHasMarkedText = marked }
                 ).frame(maxWidth: .infinity)
                 if !model.query.isEmpty {

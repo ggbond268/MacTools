@@ -342,3 +342,13 @@ The five review findings were validated against PR head `397e46f7`: failed AX re
 - GitHub's Xcode 26.6 compiler crashed while generating a string setter closure in the palette. The binding now uses an explicit closure instead of a method reference; hosted CI must verify this workaround because the local compiler is newer.
 
 The installed Debug host-to-plugin acceptance gap remains: native palette tests and the live Siri adapter were verified separately. No release or packaged-app acceptance is claimed.
+
+
+## Readiness and configurable triggers (2026-09-09)
+
+- A single injected temporary draft-read failure reproduced the reported failed-first-attempt pattern on `85663270`; subsequent attempts succeeded without setup changes. Ordinary live retests did not reproduce the user's exact incident, so its historical cause remains unproven.
+- Preparation now waits for a complete readable snapshot before creating the new chat and again afterward. Both waits share the original overall deadline. Drafts, cancellation, and ambiguous destinations remain fatal, and mutations remain outside retries. The same injected-failure harness now passes all three attempts with one New Chat press per attempt and no text writes. A final production-adapter live run submitted the harmless test message once and confirmed delivery.
+- The host owns persisted per-action trigger overrides. Plugin settings expose a phrase field, preview, Save, and Restore Default, using the existing provider opt-in. Conflicting aliases are rejected, later conflicts block execution, and provider opt-out disables any stored override. Plugins still receive original descriptors when preparing sessions.
+- Native palette coverage verifies custom-trigger one-Return delivery and preservation of an open composer during settings changes. Store coverage checks persistence, reset, invalid values, overlap conflicts, and provider opt-out. The two lifecycle regressions failed before their fixes.
+
+- Final local `make ci` passed: 245 repository script tests, 4,387 Xcode tests, and PluginKit v6 binary compatibility. Native settings-field saving and Back-navigation regressions also passed.
