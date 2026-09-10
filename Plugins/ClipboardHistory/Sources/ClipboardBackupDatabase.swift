@@ -155,9 +155,84 @@ final class ClipboardBackupDatabase {
 
     func prepareKeywordIndex() throws {
         try execute("CREATE TABLE keywords (token BLOB NOT NULL, id TEXT NOT NULL, PRIMARY KEY(token, id))")
-        try forEach { record in
-            if record.table == .saved_items, let keyword = try record.snippet.keyword { try indexKeyword(keyword, id: record.id) }
+        try execute("CREATE INDEX keyword_ids ON keywords(id)")
+        try execute("CREATE TABLE keyword_order (position INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, original_id TEXT NOT NULL, is_local INTEGER NOT NULL)")
+        // Index only snippet metadata; history and snippet bodies need no extra decryption.
+        let statement = try statement("SELECT id, metadata FROM saved_items ORDER BY id")
+        defer { sqlite3_finalize(statement) }
+        var result = sqlite3_step(statement)
+        while result == SQLITE_ROW {
+            try Task.checkCancellation()
+            guard let text = sqlite3_column_text(statement, 0), let id = UUID(uuidString: String(cString: text)) else {
+                throw ClipboardBackupError.invalidArchive
+            }
+            try autoreleasepool {
+                let metadata = try JSONDecoder().decode(ClipboardBackupRecord.Snippet.self,
+                    from: decrypt(column(statement, 1), magic: "MTSM1", id: id))
+                if let keyword = metadata.keyword {
+                    try indexKeyword(keyword, id: id)
+                    try orderKeyword(id: id, originalID: id, isLocal: true)
+                }
+            }
+            result = sqlite3_step(statement)
         }
+        guard result == SQLITE_DONE else { throw ClipboardBackupError.storage }
+    }
+
+    func orderKeyword(id: UUID, originalID: UUID, isLocal: Bool = false) throws {
+        let statement = try statement("INSERT OR IGNORE INTO keyword_order(id,original_id,is_local) VALUES (?1,?2,?3)")
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, id.uuidString, -1, Self.transient)
+        sqlite3_bind_text(statement, 2, originalID.uuidString, -1, Self.transient)
+        sqlite3_bind_int(statement, 3, isLocal ? 1 : 0)
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw ClipboardBackupError.storage }
+    }
+
+    func enforceKeywordCapacity(
+        onDisabled: (UUID, UUID, ClipboardBackupRecord.Snippet) throws -> Void
+    ) throws {
+        // Local bindings were inserted first. Import order survives reassigned conflict IDs.
+        // The cursor reads stable index tables while only saved_items metadata is updated.
+        let statement = try statement("SELECT o.id,o.original_id,o.is_local FROM keyword_order o JOIN keywords k ON k.id=o.id ORDER BY o.position")
+        defer { sqlite3_finalize(statement) }
+        var remaining = ClipboardSavedItem.maximumKeywordExpansionCacheByteCount
+        var result = sqlite3_step(statement)
+        while result == SQLITE_ROW {
+            try Task.checkCancellation()
+            guard let text = sqlite3_column_text(statement, 0), let id = UUID(uuidString: String(cString: text)),
+                  let originalText = sqlite3_column_text(statement, 1), let originalID = UUID(uuidString: String(cString: originalText)) else {
+                throw ClipboardBackupError.invalidArchive
+            }
+            try autoreleasepool {
+                let metadata = try snippetMetadata(id: id)
+                guard metadata.keyword != nil else { return }
+                if metadata.payloadByteCount <= remaining {
+                    remaining -= metadata.payloadByteCount
+                } else {
+                    // An already-invalid local library cannot be repaired by silently dropping local bindings.
+                    guard sqlite3_column_int(statement, 2) == 0 else { throw ClipboardBackupError.limitExceeded }
+                    var disabled = metadata
+                    disabled.keyword = nil
+                    let update = try self.statement("UPDATE saved_items SET metadata=?1 WHERE id=?2")
+                    defer { sqlite3_finalize(update) }
+                    try bind(encrypt(JSONEncoder().encode(disabled), magic: "MTSM1", id: id), at: 1, to: update)
+                    sqlite3_bind_text(update, 2, id.uuidString, -1, Self.transient)
+                    guard sqlite3_step(update) == SQLITE_DONE else { throw ClipboardBackupError.storage }
+                    try onDisabled(id, originalID, metadata)
+                }
+            }
+            result = sqlite3_step(statement)
+        }
+        guard result == SQLITE_DONE else { throw ClipboardBackupError.storage }
+    }
+
+    private func snippetMetadata(id: UUID) throws -> ClipboardBackupRecord.Snippet {
+        let statement = try statement("SELECT metadata FROM saved_items WHERE id=?1")
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, id.uuidString, -1, Self.transient)
+        guard sqlite3_step(statement) == SQLITE_ROW else { throw ClipboardBackupError.storage }
+        return try JSONDecoder().decode(ClipboardBackupRecord.Snippet.self,
+            from: decrypt(column(statement, 0), magic: "MTSM1", id: id))
     }
 
     func indexKeyword(_ keyword: String, id: UUID) throws {

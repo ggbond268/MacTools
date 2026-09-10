@@ -201,6 +201,169 @@ final class ClipboardBackupServiceTests: XCTestCase {
         XCTAssertEqual(try destination.history.load().count, 2)
     }
 
+    private func capacitySnippet(_ index: Int, bytes: Int, keyword: Bool = true) -> ClipboardSavedItem {
+        let id = UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index))!
+        return snippet(id: id, title: "Snippet \(index)", keyword: keyword ? "key\(index)" : nil,
+                       text: String(repeating: "a", count: bytes))
+    }
+
+    @MainActor
+    func testCapacityMergeRequiresConsentAndAllRetainedKeywordsCanExpand() async throws {
+        let source = try Fixture(), destination = try Fixture()
+        let bytes = 5 * 1_024 * 1_024
+        for index in [100, 101] { try destination.snippets.save(capacitySnippet(index, bytes: bytes), payloadChanged: true) }
+        for index in [1, 2] { try source.snippets.save(capacitySnippet(index, bytes: bytes), payloadChanged: true) }
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let before = try destination.fingerprint()
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.summary.capacityDisabledKeywords, 1)
+        XCTAssertEqual(preview.summary.disabledKeywords, 1)
+        XCTAssertEqual(preview.summary.added, 2)
+        let notices = try destination.service.notices(preview, offset: 0)
+        XCTAssertEqual(notices.first?.kind, .keywordCapacity)
+        XCTAssertEqual(notices.first?.keyword, "key2")
+        XCTAssertEqual(try destination.fingerprint(), before)
+        XCTAssertThrowsError(try destination.service.commit(preview)) {
+            guard case ClipboardBackupError.keywordCapacityConfirmationRequired = $0 else {
+                return XCTFail("Expected explicit consent before removing keyword bindings")
+            }
+        }
+        XCTAssertEqual(try destination.fingerprint(), before)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.service.rollbackURL.path))
+        try destination.service.commit(preview, acceptingKeywordCapacityLoss: true)
+        let restored = try destination.snippets.load()
+        XCTAssertEqual(restored.count, 4)
+        XCTAssertEqual(Set(restored.compactMap(\.keyword)), ["key1", "key100", "key101"])
+        for item in restored { XCTAssertEqual(try item.loadPayload().plainText?.utf8.count, bytes) }
+
+        let controller = ClipboardSavedLibraryController(pasteboard: BackupCapacityPasteboardStub(), persistence: destination.snippets)
+        let loaded = expectation(description: "All retained keyword templates are ready")
+        controller.onChange = {
+            let keywords = controller.items.filter { $0.keyword != nil }
+            if keywords.count == 3 && keywords.allSatisfy({ controller.templateForKeywordExpansion(id: $0.id) != nil }) {
+                loaded.fulfill()
+            }
+        }
+        controller.start()
+        await fulfillment(of: [loaded], timeout: 10)
+        XCTAssertNil(controller.errorMessage)
+        controller.onChange = nil
+        controller.stop()
+    }
+
+    func testDiscardingCapacityConfirmationKeepsLocalDataAndDeletesPreview() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let bytes = 5 * 1_024 * 1_024
+        for index in [100, 101, 102] { try destination.snippets.save(capacitySnippet(index, bytes: bytes), payloadChanged: true) }
+        try source.snippets.save(capacitySnippet(1, bytes: bytes), payloadChanged: true)
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let before = try destination.fingerprint()
+        var preview: ClipboardBackupPreview? = try destination.service.preview(url: source.archive, password: password)
+        let directory = try XCTUnwrap(preview?.directory)
+        XCTAssertEqual(preview?.summary.capacityDisabledKeywords, 1)
+        preview = nil
+        XCTAssertEqual(try destination.fingerprint(), before)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.service.rollbackURL.path))
+    }
+
+    func testCapacityUsesUTF8BytesAndDoesNotDoubleCountMatchingIDs() throws {
+        let mebibyte = 1_024 * 1_024
+        for extraByte in [0, 1] {
+            let source = try Fixture(), destination = try Fixture()
+            let shared = capacitySnippet(100, bytes: 5 * mebibyte)
+            for item in [shared, capacitySnippet(101, bytes: 5 * mebibyte), capacitySnippet(102, bytes: 4 * mebibyte)] {
+                try destination.snippets.save(item, payloadChanged: true)
+            }
+            try source.snippets.save(shared, payloadChanged: true)
+            let incoming = snippet(title: "Unicode", keyword: "unicode",
+                text: String(repeating: "é", count: mebibyte) + String(repeating: "x", count: extraByte))
+            try source.snippets.save(incoming, payloadChanged: true)
+            // Snippets without keywords do not consume the keyword expansion budget.
+            try source.snippets.save(capacitySnippet(200, bytes: 5 * mebibyte, keyword: false), payloadChanged: true)
+            _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+            let preview = try destination.service.preview(url: source.archive, password: password)
+            XCTAssertEqual(preview.summary.capacityDisabledKeywords, extraByte)
+            try destination.service.commit(preview, acceptingKeywordCapacityLoss: extraByte == 1)
+            let restored = try destination.snippets.load()
+            XCTAssertEqual(restored.count, 5)
+            XCTAssertEqual(restored.first { $0.id == incoming.id }?.keyword, extraByte == 0 ? "unicode" : nil)
+            XCTAssertEqual(try restored.first { $0.id == incoming.id }?.loadPayload().plainText, try incoming.loadPayload().plainText)
+        }
+    }
+
+    func testCapacityAccountsForKeywordsRemovedByLaterMetadataMerges() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let bytes = 5 * 1_024 * 1_024
+        for index in [100, 101, 102] { try destination.snippets.save(capacitySnippet(index, bytes: bytes), payloadChanged: true) }
+        var updated = capacitySnippet(100, bytes: bytes)
+        updated.updateMetadata(title: updated.title, tags: updated.tags, keyword: nil,
+            templateText: updated.templateText, updatedAt: Date(timeIntervalSince1970: 500))
+        try source.snippets.save(updated, payloadChanged: true)
+        try source.snippets.save(capacitySnippet(1, bytes: bytes), payloadChanged: true)
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.summary.capacityDisabledKeywords, 0)
+        try destination.service.commit(preview)
+        XCTAssertEqual(Set(try destination.snippets.load().compactMap(\.keyword)), ["key1", "key101", "key102"])
+    }
+
+    func testCapacityReplacementReleasesRemovedLocalKeywords() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let bytes = 5 * 1_024 * 1_024
+        for index in [100, 101, 102] { try destination.snippets.save(capacitySnippet(index, bytes: bytes), payloadChanged: true) }
+        for index in [1, 2] { try source.snippets.save(capacitySnippet(index, bytes: bytes), payloadChanged: true) }
+        let history = clip()
+        try destination.history.save([history])
+        _ = try source.service.backUp(to: source.archive, password: password,
+            scope: ClipboardBackupScope(history: false, saved: false, snippets: true))
+        let preview = try destination.service.preview(url: source.archive, password: password, replacing: true)
+        XCTAssertEqual(preview.summary.capacityDisabledKeywords, 0)
+        try destination.service.commit(preview)
+        XCTAssertEqual(Set(try destination.snippets.load().compactMap(\.keyword)), ["key1", "key2"])
+        XCTAssertEqual(try destination.history.load().map(\.id), [history.id])
+        try destination.service.commit(destination.service.previewRollback())
+        XCTAssertEqual(Set(try destination.snippets.load().compactMap(\.keyword)), ["key100", "key101", "key102"])
+    }
+
+    func testCapacitySkipsOversizedCandidatesAndKeepsLaterSmallerOnes() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let mebibyte = 1_024 * 1_024
+        for (index, size) in [(100, 5), (101, 5), (102, 3)] {
+            try destination.snippets.save(capacitySnippet(index, bytes: size * mebibyte), payloadChanged: true)
+        }
+        try source.snippets.save(capacitySnippet(1, bytes: 4 * mebibyte), payloadChanged: true)
+        try source.snippets.save(capacitySnippet(2, bytes: 2 * mebibyte), payloadChanged: true)
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.summary.capacityDisabledKeywords, 1)
+        XCTAssertEqual(try destination.service.notices(preview, offset: 0).first?.keyword, "key1")
+        try destination.service.commit(preview, acceptingKeywordCapacityLoss: true)
+        let restored = try destination.snippets.load()
+        XCTAssertEqual(restored.count, 5)
+        XCTAssertEqual(Set(restored.compactMap(\.keyword)), ["key2", "key100", "key101", "key102"])
+    }
+
+    func testCapacityPreservesImportOrderAfterConflictIDsAreReassigned() throws {
+        let source = try Fixture(), destination = try Fixture()
+        let bytes = 5 * 1_024 * 1_024
+        let local = capacitySnippet(1, bytes: bytes)
+        try destination.snippets.save(local, payloadChanged: true)
+        try destination.snippets.save(capacitySnippet(100, bytes: bytes), payloadChanged: true)
+        try source.snippets.save(snippet(id: local.id, title: "First imported", keyword: "first",
+            text: String(repeating: "b", count: bytes)), payloadChanged: true)
+        try source.snippets.save(capacitySnippet(2, bytes: bytes), payloadChanged: true)
+        _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+        let preview = try destination.service.preview(url: source.archive, password: password)
+        XCTAssertEqual(preview.summary.conflicts, 1)
+        XCTAssertEqual(preview.summary.capacityDisabledKeywords, 1)
+        try destination.service.commit(preview, acceptingKeywordCapacityLoss: true)
+        let restored = try destination.snippets.load()
+        XCTAssertEqual(restored.count, 4)
+        XCTAssertEqual(Set(restored.compactMap(\.keyword)), ["key1", "key100", "first"])
+        XCTAssertNotEqual(restored.first { $0.keyword == "first" }?.id, local.id)
+    }
+
     func testDiscardingReplacementPreviewLeavesLocalDataAndRollbackUntouched() throws {
         let source = try Fixture(), destination = try Fixture()
         try source.history.save([clip(text: "incoming")])
@@ -544,6 +707,16 @@ final class ClipboardBackupServiceTests: XCTestCase {
         }
         return frames
     }
+}
+
+@MainActor
+private final class BackupCapacityPasteboardStub: ClipboardPasteboardAccess {
+    var changeCount: Int { 0 }
+    var typeNames: Set<String> { [] }
+    func readPlainText() -> String? { nil }
+    func readPayload(maximumByteCount: Int) -> ClipboardPasteboardReadResult { .empty }
+    func writePlainText(_ text: String) -> Bool { false }
+    func writePayload(_ payload: ClipboardHistoryPayload) -> Bool { false }
 }
 
 private func residentBytes() -> UInt64 {

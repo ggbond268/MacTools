@@ -24,6 +24,7 @@ struct ClipboardBackupManifest: Codable, Equatable, Sendable {
 
 enum ClipboardBackupError: Error, LocalizedError {
     case invalidArchive, unsupportedVersion, invalidPassword, passwordTooLong, limitExceeded, storage, changedSincePreview
+    case keywordCapacityConfirmationRequired
 
     var errorDescription: String? {
         switch self {
@@ -34,6 +35,7 @@ enum ClipboardBackupError: Error, LocalizedError {
         case .limitExceeded: "备份超过安全上限或当前单项大小限制。"
         case .storage: "无法读写备份。请检查可用磁盘空间和文件权限。"
         case .changedSincePreview: "本机剪贴板数据已更改。请重新预览备份。"
+        case .keywordCapacityConfirmationRequired: "请先确认是否移除超出容量的导入关键词绑定。"
         }
     }
 }

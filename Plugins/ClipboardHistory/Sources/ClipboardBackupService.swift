@@ -8,12 +8,13 @@ struct ClipboardBackupSummary: Equatable, Sendable {
     var conflicts = 0
     var skipped = 0
     var disabledKeywords = 0
+    var capacityDisabledKeywords = 0
     var missingFileReferences = 0
     var removed = 0
 }
 
 struct ClipboardBackupNotice: Codable, Sendable {
-    enum Kind: String, Codable, Sendable { case identifierConflict, disabledKeyword }
+    enum Kind: String, Codable, Sendable { case identifierConflict, disabledKeyword, keywordCapacity }
     let kind: Kind
     let id: UUID
     let originalID: UUID
@@ -34,6 +35,7 @@ final class ClipboardBackupPreview: @unchecked Sendable {
     let fingerprint: Data
     let replacement: Bool
     let stagedFingerprint: Data
+    var requiresKeywordCapacityConfirmation: Bool { summary.capacityDisabledKeywords > 0 }
 
     init(directory: URL, manifest: ClipboardBackupManifest, summary: ClipboardBackupSummary,
          fingerprint: Data, stagedFingerprint: Data, replacement: Bool) {
@@ -206,7 +208,7 @@ final class ClipboardBackupService: @unchecked Sendable {
             try notices.addMissingReferences([String(decoding: data, as: UTF8.self)])
         }
         var summary = ClipboardBackupSummary(missingFileReferences: missing)
-        try staged.transaction {
+        try notices.transaction { try staged.transaction {
             if replacing {
                 // Iterate a separate connection so deleting/updating rows cannot disturb the cursor.
                 let original = try ClipboardBackupDatabase(url: directory.appendingPathComponent("original.sqlite3"), key: key, create: true)
@@ -249,13 +251,23 @@ final class ClipboardBackupService: @unchecked Sendable {
                         summary.disabledKeywords += 1
                     }
                     try staged.execute("DELETE FROM keywords WHERE id=?1", text: record.id.uuidString)
-                    if let keyword = try record.snippet.keyword { try staged.indexKeyword(keyword, id: record.id) }
+                    if let keyword = try record.snippet.keyword {
+                        try staged.indexKeyword(keyword, id: record.id)
+                        try staged.orderKeyword(id: record.id, originalID: incomingRecord.id)
+                    }
                 }
                 try staged.put(record)
                 processed += 1
                 progress(.staging(processed, manifest.records))
             }
-        }
+            // Apply the budget to the final, deduplicated result after scoped removals and metadata merges.
+            try staged.enforceKeywordCapacity { id, originalID, metadata in
+                try report(ClipboardBackupNotice(kind: .keywordCapacity, id: id,
+                    originalID: originalID, title: metadata.title, keyword: metadata.keyword))
+                summary.disabledKeywords += 1
+                summary.capacityDisabledKeywords += 1
+            }
+        } }
         try Task.checkCancellation()
         return ClipboardBackupPreview(directory: directory, manifest: manifest, summary: summary,
                                       fingerprint: fingerprint, stagedFingerprint: try staged.fingerprint(), replacement: replacing)
@@ -273,7 +285,11 @@ final class ClipboardBackupService: @unchecked Sendable {
         }
     }
 
-    func commit(_ preview: ClipboardBackupPreview, progress: @Sendable (ClipboardBackupPhase) -> Void = { _ in }) throws {
+    func commit(_ preview: ClipboardBackupPreview, acceptingKeywordCapacityLoss: Bool = false,
+                progress: @Sendable (ClipboardBackupPhase) -> Void = { _ in }) throws {
+        guard !preview.requiresKeywordCapacityConfirmation || acceptingKeywordCapacityLoss else {
+            throw ClipboardBackupError.keywordCapacityConfirmationRequired
+        }
         let key = try key()
         try access.withActiveAccess {
             let hadRollback = FileManager.default.fileExists(atPath: rollbackURL.path)

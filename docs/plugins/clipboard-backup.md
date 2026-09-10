@@ -17,7 +17,7 @@ DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer xcodebuild \
 ```
 
 The tests cover encrypted round trips, destination keys, selective membership,
-merge conflicts, snippet keyword ownership, atomic replacement, SQLite-full
+merge conflicts, snippet keyword ownership and capacity confirmation, atomic replacement, SQLite-full
 failure, authentication failures, malformed framing, cancellation, rollback,
 missing file references, and a 128 MiB synthetic streaming memory regression.
 
@@ -62,3 +62,13 @@ New backup passwords require at least 12 user-perceived characters (Swift
 `String.count`). Key derivation retains the 1,024-byte resource limit and the
 original UTF-8 encoding. Restore does not apply the new character minimum, so
 existing archives with shorter multibyte passwords remain readable.
+
+Keyword capacity is checked against the final staged library after scoped removals
+and metadata merges. Existing local bindings have priority, followed by imported
+bindings in backup order; a candidate that does not fit loses only its keyword
+binding, and later smaller candidates can still fit. All snippet bodies remain
+intact. The preview reports the affected count and names before an explicit
+Continue Merge confirmation. Cancelling keeps the preview and local data intact.
+The commit API also requires explicit capacity-loss acceptance. Metadata-only
+planning, disk-backed ordering, and transactional report writes bound memory and
+avoid one disk synchronization per disabled keyword. The wire format is unchanged.

@@ -93,6 +93,7 @@ final class ClipboardBackupPresentation: ObservableObject {
         case .passwordTooLong: return localization.string("backup.error.passwordTooLong", defaultValue: "密码过长，请缩短后重试。")
         case .limitExceeded: return localization.string("backup.error.limit", defaultValue: "备份超过安全上限或当前单项大小限制。")
         case .changedSincePreview: return localization.string("backup.error.changed", defaultValue: "本机剪贴板数据已更改。请重新预览备份。")
+        case .keywordCapacityConfirmationRequired: return localization.string("backup.error.keywordCapacityConfirmation", defaultValue: "请先确认是否移除超出容量的导入关键词绑定。")
         default: return localization.string("backup.error.storage", defaultValue: "无法读写备份。请检查可用磁盘空间和文件权限。")
         }
     }
@@ -172,7 +173,7 @@ struct ClipboardBackupSheet: View {
     @State private var confirmation = ""
     @State private var sourceURL: URL?
     @State private var replacing = false
-    @State private var confirmsReplacement = false
+    @State private var confirmsRestore = false
     @State private var missingOffset = 0
     @State private var missingPaths: [String] = []
     @State private var noticeOffset = 0
@@ -234,11 +235,13 @@ struct ClipboardBackupSheet: View {
         .interactiveDismissDisabled(model.isBusy)
         .onAppear { model.localization = localization; suspend(); if action == .rollback { replacing = true } }
         .onDisappear { password = ""; confirmation = ""; model.close(resume: resume) }
-        .confirmationDialog(primaryTitle, isPresented: $confirmsReplacement, titleVisibility: .visible) {
-            Button(primaryTitle, role: .destructive) { commit() }
+        .confirmationDialog(confirmationTitle, isPresented: $confirmsRestore, titleVisibility: .visible) {
+            Button(confirmationActionTitle, role: model.preview?.replacement == true ? .destructive : nil) {
+                commit(acceptingKeywordCapacityLoss: true)
+            }
             Button(localization.string("common.cancel", defaultValue: "取消"), role: .cancel) {}
         } message: {
-            Text(localization.format("backup.removed", defaultValue: "将移除 %d 个本机项目的所选类别数据。提交前会创建本机加密回滚快照。", model.preview?.summary.removed ?? 0))
+            Text(restoreConfirmationMessage)
         }
     }
 
@@ -302,8 +305,12 @@ struct ClipboardBackupSheet: View {
                 ScrollView {
                     VStack(alignment: .leading) {
                         ForEach(Array(notices.enumerated()), id: \.offset) { _, notice in
-                            if notice.kind == .disabledKeyword {
+                            if notice.kind != .identifierConflict {
                                 Text("\(notice.title ?? notice.id.uuidString) · \(notice.keyword ?? "")")
+                                if notice.kind == .keywordCapacity {
+                                    Text(localization.string("backup.capacity.notice", defaultValue: "关键词绑定因容量不足而移除；片段内容已保留。"))
+                                        .foregroundStyle(.secondary)
+                                }
                             } else { Text("\(notice.originalID.uuidString) → \(notice.id.uuidString)") }
                         }
                     }.textSelection(.enabled)
@@ -444,6 +451,28 @@ struct ClipboardBackupSheet: View {
             : localization.string("backup.preview", defaultValue: "验证并预览")
     }
 
+    private var confirmationTitle: String {
+        model.preview?.replacement == true ? primaryTitle
+            : localization.string("backup.capacity.title", defaultValue: "关键词片段容量不足")
+    }
+
+    private var confirmationActionTitle: String {
+        model.preview?.replacement == true ? primaryTitle
+            : localization.string("backup.continueMerge", defaultValue: "继续合并")
+    }
+
+    private var restoreConfirmationMessage: String {
+        guard let preview = model.preview else { return "" }
+        var messages: [String] = []
+        if preview.replacement {
+            messages.append(localization.format("backup.removed", defaultValue: "将移除 %d 个本机项目的所选类别数据。提交前会创建本机加密回滚快照。", preview.summary.removed))
+        }
+        if preview.requiresKeywordCapacityConfirmation {
+            messages.append(localization.format("backup.capacity.message", defaultValue: "所有导入片段内容都会保留。优先保留本机已有关键词，再按备份顺序保留导入关键词；超出容量的 %d 个导入关键词绑定将被移除，对应片段仍可手动粘贴。", preview.summary.capacityDisabledKeywords))
+        }
+        return messages.joined(separator: "\n\n")
+    }
+
     private func categoryTitle(_ scope: ClipboardBackupScope) -> String {
         [scope.history ? localization.string("backup.history", defaultValue: "历史记录") : nil,
          scope.saved ? localization.string("backup.saved", defaultValue: "已存项目") : nil,
@@ -500,7 +529,8 @@ struct ClipboardBackupSheet: View {
     private func primaryAction() {
         guard !model.isBusy, !model.completed, canProceed else { return }
         if let preview = model.preview {
-            if preview.replacement { confirmsReplacement = true } else { commit() }
+            if preview.replacement || preview.requiresKeywordCapacityConfirmation { confirmsRestore = true }
+            else { commit() }
             return
         }
         let service = service
@@ -538,10 +568,13 @@ struct ClipboardBackupSheet: View {
         }
     }
 
-    private func commit() {
+    private func commit(acceptingKeywordCapacityLoss: Bool = false) {
         guard let preview = model.preview else { return }
         let service = service
-        model.run(operation: { progress in try service.commit(preview, progress: progress); return preview.summary }) {
+        model.run(operation: { progress in
+            try service.commit(preview, acceptingKeywordCapacityLoss: acceptingKeywordCapacityLoss, progress: progress)
+            return preview.summary
+        }) {
             password = ""; confirmation = ""; model.restored($0)
         }
     }
