@@ -104,12 +104,12 @@ class NightlyPublicationDecisionTests(unittest.TestCase):
 
 class NightlyReleaseTests(unittest.TestCase):
     def test_release_interface_version_is_explicit_and_queryable(self) -> None:
-        self.assertEqual(nightly_release.NIGHTLY_RELEASE_INTERFACE_VERSION, 3)
+        self.assertEqual(nightly_release.NIGHTLY_RELEASE_INTERFACE_VERSION, 4)
         result = subprocess.run(
             [str(SCRIPT_PATH), "release-interface-version"],
             check=True, capture_output=True, text=True,
         )
-        self.assertEqual(result.stdout, "3\n")
+        self.assertEqual(result.stdout, "4\n")
 
     def test_signed_helper_verifier_accepts_only_nightly_identifiers(self) -> None:
         signatures = [
@@ -181,7 +181,7 @@ class NightlyReleaseTests(unittest.TestCase):
             self.assertIn("github.com/example/MacTools/commit/", notes)
             self.assertIn("mactools-cli-1.2.1-512.1-macos-arm64.zip", notes)
             self.assertIn("separate, optional download", notes)
-            self.assertIn("supports Nightly release interface v3", notes)
+            self.assertIn("supports Nightly release interface v4", notes)
             self.assertIn(
                 "https://github.com/example/MacTools/blob/"
                 f"{'a' * 40}/docs/testing/cli-nightly-distribution.md",

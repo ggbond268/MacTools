@@ -4,6 +4,16 @@ MacTools Nightly publishes the experimental `mactools` CLI as a separate optiona
 
 The Nightly archive is a notarized ZIP named `mactools-cli-<version>-<build>-macos-arm64.zip`. It contains the signed `mactools` executable for Apple silicon Macs and the GPL-3.0-only `LICENSE`. Nightly CLI and stable CLI identities are intentionally separate; this prototype connects only to the Nightly app's broker.
 
+## Install from Settings
+
+On Apple silicon, a signed Nightly app that includes `cli-install.json` offers **Settings → General → Command Line → Install CLI…**. The confirmation shows the exact app-matching CLI version, download size, managed directory, and command path. Choose whether to enable integration. Installing the managed CLI includes automatic updates with MacTools; there is no separate update switch. The integration checkbox defaults on; macOS background-item approval is separate and links to System Settings. Turning integration off continues to deny action access while local CLI commands remain available.
+
+The installer creates `~/.local/bin/mactools-nightly` only when the destination is absent. Existing files, directories, dangling symlinks, Homebrew commands, manual installs, and other publisher-owned commands cause a collision warning. MacTools does not edit shell configuration. If needed, copy the displayed PATH guidance into your own shell configuration, or use **Copy CLI Path**.
+
+An owned installation offers **Update**, **Remove**, **Reveal in Finder**, **Copy CLI Path**, and a retained-version rollback when available. Managed installations, including those with the legacy update preference disabled, reconcile with the app's build on the next launch, including downgrades to an already retained matching build. Failed downloads or validation retain the previous version and show a retryable warning. An explicit rollback survives restarts of the same app release; the next app release or an explicit Update resumes the matching CLI. Rollback does not replay actions. A retained CLI with an incompatible protocol cannot execute actions; `version` remains local. The instructions below remain available for manual installation and older releases without the sealed manifest.
+
+For signed acceptance, use a disposable macOS user account on **both macOS 26 and macOS 27**. Test installation with one confirmation, pending background approval, disabled integration, automatic N-to-N+1 updates (including legacy opt-out state), an offline update, matching-app downgrade, rollback across restarts and the next app update, command collisions, removal, and actual quarantined execution. Run `version --json`, then `doctor --json` only after integration is enabled and macOS approval is granted. Build/tests alone do not establish these signed and system-approval behaviors.
+
 ## Download and verify
 
 Download these four assets from one Nightly release:
