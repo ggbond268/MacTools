@@ -472,6 +472,9 @@ function dmg_signing_identifier() {
 
 function sign_app_bundle() {
   local app_path="$1"
+  local cli_broker="$app_path/Contents/MacOS/MacToolsCLIBroker"
+
+  [[ -f "$cli_broker" ]] || fail "Release CLI broker is missing: $cli_broker"
 
   if [[ -d "$app_path/Contents" ]]; then
     while IFS= read -r binary; do
@@ -494,6 +497,7 @@ function sign_app_bundle() {
     sign_sparkle_framework "$app_path"
   fi
 
+  sign_path "$cli_broker"
   sign_app_path "$app_path"
   validate_finder_sync_extension "$app_path"
   /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
