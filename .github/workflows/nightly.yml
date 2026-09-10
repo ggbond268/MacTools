@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch, tag, or commit to publish; rollback refs must support Nightly release interface v3"
+        description: "Branch, tag, or commit to publish; rollback refs must support Nightly release interface v4"
         required: true
         default: main
         type: string
@@ -25,7 +25,7 @@ env:
   CONFIGURATION: Nightly
   DERIVED_DATA: build/DerivedDataNightly
   NIGHTLY_RETENTION_COUNT: 14
-  NIGHTLY_RELEASE_INTERFACE_VERSION: 3
+  NIGHTLY_RELEASE_INTERFACE_VERSION: 4
 
 jobs:
   build:
@@ -334,6 +334,12 @@ jobs:
           CLI_PATH="$DERIVED_DATA/Build/Products/Nightly/mactools"
           [[ -f "$CLI_PATH" ]] || { echo "Nightly CLI is missing" >&2; exit 1; }
           sign_path "$CLI_PATH"
+          scripts/nightly-release.py package-cli --cli "$CLI_PATH" --output "$CLI_ARCHIVE_PATH"
+          python3 scripts/cli-install-manifest.py \
+            --archive "$CLI_ARCHIVE_PATH" --app "$APP_PATH" \
+            --source-release "$PLUGIN_ASSET_BASE_URL" --source-commit "$SOURCE_SHA" \
+            --team "${{ secrets.APPLE_DEVELOPMENT_TEAM }}" \
+            --output "$ARTIFACT_ROOT/cli-install.json"
 
           [[ ! -d "$SPARKLE_FRAMEWORK" ]] || sign_path "$SPARKLE_FRAMEWORK"
           /usr/bin/codesign \
@@ -370,13 +376,6 @@ jobs:
             --bundle-identifier-prefix "${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}" \
             --version "$VERSION" --build-number "$BUILD_NUMBER" \
             --plugin-kit-version "$PLUGIN_KIT_VERSION"
-
-      - name: Package signed Nightly CLI
-        if: steps.nightly_gate.outputs.decision == 'publish'
-        run: |
-          scripts/nightly-release.py package-cli \
-            --cli "$DERIVED_DATA/Build/Products/Nightly/mactools" \
-            --output "$CLI_ARCHIVE_PATH"
 
       - name: Build and sign same-commit Nightly plugins
         if: steps.nightly_gate.outputs.decision == 'publish'
@@ -567,6 +566,7 @@ jobs:
             ${{ env.DMG_PATH }}
             ${{ env.SHA256_PATH }}
             ${{ env.CLI_ARCHIVE_PATH }}
+            ${{ env.ARTIFACT_ROOT }}/cli-install.json
             ${{ env.CLI_SHA256_PATH }}
             ${{ env.SIGNED_PLUGIN_CATALOG_PATH }}
             ${{ env.PLUGIN_ASSETS_DIR }}/*.mactoolsplugin.zip
@@ -707,6 +707,7 @@ jobs:
             "$SHA256_PATH"
             "$CLI_ARCHIVE_PATH"
             "$CLI_SHA256_PATH"
+            "$ARTIFACT_ROOT/cli-install.json"
             "$RELEASE_CATALOG_PATH"
           )
           while IFS= read -r asset; do
@@ -721,6 +722,7 @@ jobs:
             basename "$CLI_ARCHIVE_PATH"
             basename "$CLI_SHA256_PATH"
             echo "catalog.json"
+            echo "cli-install.json"
             find "$PLUGIN_ASSETS_DIR" -maxdepth 1 -name "*.mactoolsplugin.zip" -type f -exec basename {} \; | sort
           } | sort > "$EXPECTED_ASSETS_PATH"
           gh release view "$TAG" --json assets --jq '.assets[].name' | sort > "$RUNNER_TEMP/nightly-actual-assets.txt"

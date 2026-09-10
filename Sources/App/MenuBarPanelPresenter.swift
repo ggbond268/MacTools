@@ -1214,8 +1214,9 @@ struct MenuBarPanelToolbar: View {
                 )
 
                 MenuBarPanelIconButton(
-                    systemImage: "power",
+                    systemImage: "rectangle.portrait.and.arrow.right",
                     accessibilityTitle: AppL10n.settings("app.quit", defaultValue: "退出"),
+                    symbolOffsetX: -1,
                     action: onQuit
                 )
             }
@@ -1278,6 +1279,7 @@ private struct MenuBarPanelTabSwitcher: View {
 private struct MenuBarPanelIconButton: View {
     let systemImage: String
     let accessibilityTitle: String
+    var symbolOffsetX: CGFloat = 0
     var showsNotificationDot = false
     let action: () -> Void
     @State private var isHovered = false
@@ -1288,6 +1290,7 @@ private struct MenuBarPanelIconButton: View {
             Image(systemName: PluginSystemImage.resolvedName(systemImage))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(theme.text.secondary)
+                .offset(x: symbolOffsetX)
                 .overlay(alignment: .bottomTrailing) {
                     if showsNotificationDot {
                         Circle()

@@ -7,30 +7,30 @@ final class IncrementalEncryptedClipboardHistoryStore:
     ClipboardUnifiedDeletionPersisting,
     @unchecked Sendable
 {
-    private struct StoredMetadata: Codable {
-        let id: UUID
-        let text: String
-        let capturedAt: Date
-        let sourceApplication: ClipboardSourceApplication?
-        let kind: ClipboardHistoryContentKind
-        let payloadByteCount: Int
-        let filterContentKinds: [ClipboardHistoryContentKind]?
-        let fileURLs: [String]?
-        let fileReferenceCount: Int?
-        let linkURLs: [String]?
-        let representationTypeIdentifiers: [String]?
-        let payloadDigest: Data
+    struct StoredMetadata: Codable, Equatable, Sendable {
+        var id: UUID
+        var text: String
+        var capturedAt: Date
+        var sourceApplication: ClipboardSourceApplication?
+        var kind: ClipboardHistoryContentKind
+        var payloadByteCount: Int
+        var filterContentKinds: [ClipboardHistoryContentKind]?
+        var fileURLs: [String]?
+        var fileReferenceCount: Int?
+        var linkURLs: [String]?
+        var representationTypeIdentifiers: [String]?
+        var payloadDigest: Data
         // These summary fields were added while the incremental store was already in use by
         // development builds. Keep them optional so older encrypted rows remain decodable.
-        let allowsRichTextImport: Bool?
-        let textCharacterCount: Int?
-        let textLineCount: Int?
-        let isSearchTextTruncated: Bool?
-        let lastUsedAt: Date?
-        let imageSearchText: String?
-        let hasCompletedImageTextIndexing: Bool?
-        let isInHistory: Bool?
-        let savedMetadata: ClipboardHistorySavedMetadata?
+        var allowsRichTextImport: Bool?
+        var textCharacterCount: Int?
+        var textLineCount: Int?
+        var isSearchTextTruncated: Bool?
+        var lastUsedAt: Date?
+        var imageSearchText: String?
+        var hasCompletedImageTextIndexing: Bool?
+        var isInHistory: Bool?
+        var savedMetadata: ClipboardHistorySavedMetadata?
 
         init(item: ClipboardHistoryItem) {
             id = item.id
@@ -88,6 +88,11 @@ final class IncrementalEncryptedClipboardHistoryStore:
         self.fileManager = fileManager
         self.databaseAccess = databaseAccess
         self.postCommitMaintenance = postCommitMaintenance
+    }
+
+    func backupService(maximumItemBytes: Int) -> ClipboardBackupService {
+        ClipboardBackupService(databaseURL: databaseURL, keyStore: keyStore,
+                               access: databaseAccess, maximumItemBytes: maximumItemBytes)
     }
 
     func prepare() throws {

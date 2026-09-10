@@ -72,7 +72,7 @@ class NightlyConfigurationTests(unittest.TestCase):
         build = workflow.split("- name: Build unsigned Nightly app and plugins", 1)[1].split("\n      - name:", 1)[0]
         prepare_cli = workflow.split("- name: Prepare arm64 Nightly CLI", 1)[1].split("\n      - name:", 1)[0]
         certificate = workflow.split("- name: Import Developer ID certificate", 1)[1].split("\n      - name:", 1)[0]
-        package = workflow.split("- name: Package signed Nightly CLI", 1)[1].split("\n      - name:", 1)[0]
+        package = workflow.split("- name: Sign app bundle", 1)[1].split("\n      - name:", 1)[0]
         notarize = workflow.split("- name: Notarize Nightly app and CLI distributions", 1)[1].split("\n      - name:", 1)[0]
         keychain_cleanup = workflow.split("- name: Remove release signing keychain before appcast signing", 1)[1].split("\n      - name:", 1)[0]
         checksums = workflow.split("- name: Generate Nightly notes, checksums, and statically verify CLI", 1)[1].split("\n      - name:", 1)[0]
@@ -323,11 +323,11 @@ class NightlyConfigurationTests(unittest.TestCase):
             interface.chmod(0o755)
 
             scenarios = [
-                ("3", True, True),
+                ("4", True, True),
                 ("absent", True, False),
                 ("1", True, False),
                 ("2", True, False),
-                ("3", False, False),
+                ("4", False, False),
             ]
             for index, (reported_interface, has_guide, accepted) in enumerate(scenarios):
                 with self.subTest(interface=reported_interface, has_guide=has_guide):
@@ -356,7 +356,7 @@ class NightlyConfigurationTests(unittest.TestCase):
                         self.assertEqual(github_env.read_text(), f"SOURCE_SHA={'a' * 40}\n")
                         self.assertEqual(github_output.read_text(), f"source_sha={'a' * 40}\n")
                     else:
-                        self.assertIn("rollback refs must support release interface v3", result.stderr)
+                        self.assertIn("rollback refs must support release interface v4", result.stderr)
 
     def test_gate_reads_advertised_release_and_manual_runs_bypass_lookup(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")

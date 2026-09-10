@@ -1152,6 +1152,100 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         secondPlugin.deactivate(reason: .disabled)
     }
 
+    func testPrivateCopyLeaseSurvivesBackupSuspensionAndResume() async throws {
+        for restored in [false, true] {
+            let pasteboard = PluginTestClipboardPasteboard()
+            let persistence = RestartableClipboardHistoryPersistence()
+            let sender = FakeClipboardCopyCommandSender()
+            let plugin = makePlugin(
+                pasteboard: pasteboard,
+                persistence: persistence,
+                savedPersistence: InMemoryClipboardSavedLibraryPersistence(),
+                copyCommandSender: sender,
+                accessibilityTrusted: { true }
+            )
+            defer { plugin.deactivate(reason: .hostShutdown) }
+            plugin.controller.start()
+            let loaded = await waitUntil { plugin.controller.isLoaded }
+            XCTAssertTrue(loaded)
+            plugin.handleShortcutAction(id: "private-copy")
+            let armed = await waitUntil { sender.sendCount == 1 && plugin.controller.isIgnoringNextCopy }
+            XCTAssertTrue(armed)
+
+            plugin.suspendForClipboardBackup()
+            XCTAssertFalse(plugin.controller.isIgnoringNextCopy)
+            plugin.resumeAfterClipboardBackup(restored: restored)
+            let resumed = await waitUntil { plugin.controller.isLoaded }
+            XCTAssertTrue(resumed)
+            XCTAssertTrue(plugin.controller.isIgnoringNextCopy)
+
+            // The target publishes its private selection after the backup sheet has closed.
+            pasteboard.simulateCopy("delayed private selection")
+            plugin.controller.processPasteboardChange()
+            plugin.controller.stop()
+            XCTAssertEqual(pasteboard.plainTextReadCount, 0)
+            XCTAssertTrue(plugin.controller.items.isEmpty)
+            XCTAssertTrue(try persistence.load().isEmpty)
+        }
+    }
+
+    func testBackupSuspensionDismissesHUDAndPreservesQueueUntilResume() async throws {
+        let pasteboard = PluginTestClipboardPasteboard()
+        let sender = FakeClipboardPasteCommandSender()
+        let item = historyItem()
+        let persistence = BlockingClipboardHistoryPersistence(items: [item])
+        persistence.allowSaveToFinish()
+        let plugin = makePlugin(
+            pasteboard: pasteboard,
+            persistence: persistence,
+            savedPersistence: InMemoryClipboardSavedLibraryPersistence(),
+            pasteCommandSender: sender,
+            accessibilityTrusted: { true },
+            frontmostProcessIdentifier: { 42 },
+            sequentialPasteStabilizationDelay: .zero
+        )
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.controller.settings.sequentialHUDDismissal = .never
+        plugin.controller.start()
+        plugin.savedLibraryController.start()
+        let loaded = await waitUntil { plugin.controller.isLoaded && plugin.savedLibraryController.isLoaded }
+        XCTAssertTrue(loaded)
+        let created = await plugin.startSequentialQueueForTesting(itemIDs: [item.id])
+        XCTAssertTrue(created)
+        let original = try XCTUnwrap(plugin.sequentialPasteSessionForTesting)
+        let hud = plugin.sequentialPasteHUDForTesting
+        XCTAssertTrue(hud.isVisible)
+
+        // A callback queued just before suspension must recheck before changing the queue.
+        hud.onSkip?()
+        plugin.suspendForClipboardBackup()
+        XCTAssertFalse(hud.isVisible)
+        plugin.refresh()
+        hud.onPasteNext?()
+        hud.onPrevious?()
+        hud.onSkip?()
+        hud.onRestart?()
+        hud.onCancel?()
+        let rejectedCreation = await plugin.startSequentialQueueForTesting(itemIDs: [item.id])
+        XCTAssertFalse(rejectedCreation)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertFalse(plugin.controller.isLoaded)
+        XCTAssertFalse(plugin.savedLibraryController.isLoaded)
+        XCTAssertFalse(plugin.hasPendingSequentialPasteForTesting)
+        XCTAssertFalse(hud.isVisible)
+        XCTAssertEqual(sender.sendCount, 0)
+        XCTAssertEqual(plugin.sequentialPasteSessionForTesting, original)
+
+        plugin.resumeAfterClipboardBackup(restored: false)
+        let resumed = await waitUntil { plugin.controller.isLoaded && plugin.savedLibraryController.isLoaded }
+        XCTAssertTrue(resumed)
+        hud.onPasteNext?()
+        let pasted = await waitUntil { sender.sendCount == 1 && !plugin.hasPendingSequentialPasteForTesting }
+        XCTAssertTrue(pasted)
+        XCTAssertEqual(plugin.sequentialPasteSessionForTesting?.statuses, [.pasted])
+        XCTAssertEqual(pasteboard.text, item.text)
+    }
+
     func testRapidPrivateCopyRequestsDoNotOverlap() async {
         let sender = FakeClipboardCopyCommandSender()
         let plugin = makePlugin(
