@@ -71,6 +71,7 @@ enum DeviceBatteryKind: Equatable, Sendable {
     case magicAccessory
     case vendorHIDMouse
     case airPodsPart
+    case jblHeadphone
     case other
 
     var iconName: String {
@@ -95,6 +96,8 @@ enum DeviceBatteryKind: Equatable, Sendable {
             return "computermouse.fill"
         case .airPodsPart:
             return "airpodspro"
+        case .jblHeadphone:
+            return "headphones"
         case .other:
             return "battery.75percent"
         }
@@ -122,6 +125,8 @@ enum DeviceBatteryKind: Equatable, Sendable {
             return localization.string("deviceKind.vendorHIDMouse", defaultValue: "厂商鼠标")
         case .airPodsPart:
             return localization.string("deviceKind.airPodsPart", defaultValue: "耳机")
+        case .jblHeadphone:
+            return localization.string("deviceKind.jblHeadphone", defaultValue: "JBL 耳机")
         case .other:
             return localization.string("deviceKind.other", defaultValue: "设备")
         }
@@ -499,7 +504,7 @@ extension DeviceBatteryKind {
         switch self {
         case .phone, .tablet, .mediaPlayer, .watch, .spatialComputer:
             return true
-        case .internalBattery, .bluetooth, .magicAccessory, .airPodsPart, .vendorHIDMouse, .other:
+        case .internalBattery, .bluetooth, .magicAccessory, .airPodsPart, .jblHeadphone, .vendorHIDMouse, .other:
             return false
         }
     }
