@@ -3,6 +3,7 @@ import XCTest
 @testable import ClipboardHistoryPlugin
 
 final class ClipboardPasteboardReaderProcessTests: XCTestCase {
+    @MainActor
     func testHelperReturnsSourceHintsSeparatelyFromClipboardPayload() async throws {
         let helperURL = try XCTUnwrap(Self.helperURL)
         let pasteboard = NSPasteboard.withUniqueName()
@@ -18,16 +19,17 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
             pasteboard.clearContents()
             pasteboard.setString("Source-aware text", forType: .string)
             if let marker { pasteboard.setString(marker, forType: sourceType) }
-            let response = try await reader.read(request(for: pasteboard))
+            let response = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
             XCTAssertEqual(response.sourceHint, expected)
             XCTAssertEqual(plainText(in: response), "Source-aware text")
             XCTAssertFalse(response.items.flatMap(\.representations).contains { $0.typeIdentifier == sourceType.rawValue })
         }
         pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.remoteType))
-        let remote = try await reader.read(request(for: pasteboard))
+        let remote = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
         XCTAssertEqual(remote.sourceHint, .universalClipboard, "The empty remote marker must override any declared app")
     }
 
+    @MainActor
     func testConflictingDeclaredSourcesAreUnknownAndPrivateMarkersStillBlockCapture() async throws {
         let helperURL = try XCTUnwrap(Self.helperURL)
         let pasteboard = NSPasteboard.withUniqueName()
@@ -41,10 +43,12 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
             return item
         }
         XCTAssertTrue(pasteboard.writeObjects(items))
-        let conflict = try await reader.read(request(for: pasteboard))
+        let conflict = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
         XCTAssertEqual(conflict.sourceHint, .unknown)
         pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
-        let blocked = try await reader.read(request(for: pasteboard))
+        let blocked = try await readPublishedRevision(
+            request(for: pasteboard), from: pasteboard, using: reader, expectedStatus: .unsafe
+        )
         XCTAssertEqual(blocked.status, .unsafe)
         XCTAssertTrue(blocked.items.isEmpty)
     }
@@ -60,6 +64,7 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         pasteboard.setString("Remote text", forType: .string)
         pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.remoteType))
         let revision = pasteboard.changeCount
+        _ = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
         let capture = await access.readCaptureAsynchronously(maximumByteCount: 1_024, expectedChangeCount: revision)
         XCTAssertEqual(capture.sourceHint, .universalClipboard)
         XCTAssertEqual(capture.result, .payload(.plainText("Remote text")))
@@ -72,9 +77,11 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         XCTAssertEqual(stale.result, .changed)
     }
 
+    @MainActor
     func testHelperReadsMultipleClipboardRevisionsWithoutRelaunching() async throws {
         let helperURL = try XCTUnwrap(Self.helperURL)
         let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
         let reader = ClipboardPasteboardReaderProcess(
             helperURL: { helperURL },
             requestTimeout: .seconds(2)
@@ -83,13 +90,18 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
 
         pasteboard.clearContents()
         XCTAssertTrue(pasteboard.setString("first", forType: .string))
-        let first = try await reader.read(request(for: pasteboard))
+        let firstRequest = request(for: pasteboard)
+        let first = try await readPublishedRevision(firstRequest, from: pasteboard, using: reader)
         XCTAssertEqual(plainText(in: first), "first")
 
         pasteboard.clearContents()
         XCTAssertTrue(pasteboard.setString("second", forType: .string))
-        let second = try await reader.read(request(for: pasteboard))
+        let secondRequest = request(for: pasteboard)
+        XCTAssertGreaterThan(secondRequest.expectedChangeCount, firstRequest.expectedChangeCount)
+        let second = try await readPublishedRevision(secondRequest, from: pasteboard, using: reader)
         XCTAssertEqual(plainText(in: second), "second")
+        let stale = try await reader.read(firstRequest)
+        XCTAssertEqual(stale.status, .changed, "A published newer revision must reject the stale request")
         let launchCount = await reader.launchCountForTesting
         XCTAssertEqual(launchCount, 1)
     }
@@ -227,9 +239,11 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         XCTAssertEqual(plainText(in: recovered), "public")
     }
 
+    @MainActor
     func testPlainTextRequestEnforcesByteLimitAndReaderRecovers() async throws {
         let helperURL = try XCTUnwrap(Self.helperURL)
         let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
         let reader = ClipboardPasteboardReaderProcess(
             helperURL: { helperURL },
             requestTimeout: .seconds(2)
@@ -238,14 +252,17 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
 
         pasteboard.clearContents()
         XCTAssertTrue(pasteboard.setString("too long", forType: .string))
-        let oversized = try await reader.read(
-            request(for: pasteboard, kind: .plainText, maximumByteCount: 3)
+        let oversized = try await readPublishedRevision(
+            request(for: pasteboard, kind: .plainText, maximumByteCount: 3),
+            from: pasteboard, using: reader, expectedStatus: .oversized
         )
         XCTAssertEqual(oversized.status, .oversized)
 
         pasteboard.clearContents()
         XCTAssertTrue(pasteboard.setString("ok", forType: .string))
-        let recovered = try await reader.read(request(for: pasteboard, kind: .plainText))
+        let recovered = try await readPublishedRevision(
+            request(for: pasteboard, kind: .plainText), from: pasteboard, using: reader
+        )
         XCTAssertEqual(plainText(in: recovered), "ok")
     }
 
@@ -269,7 +286,8 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
 
         let reader = ClipboardPasteboardReaderProcess(
             helperURL: { helperURL },
-            requestTimeout: .milliseconds(75)
+            // Include cold process startup; the dedicated deadline test covers short timeouts.
+            requestTimeout: .seconds(2)
         )
         let access = GeneralClipboardPasteboard(
             pasteboard: pasteboard,
@@ -471,6 +489,30 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
 
         let recovered = try await reader.read(request(for: recoveryPasteboard))
         XCTAssertEqual(plainText(in: recovered), "recovered")
+    }
+
+    @MainActor
+    private func readPublishedRevision(
+        _ request: ClipboardPasteboardReaderRequest,
+        from pasteboard: NSPasteboard,
+        using reader: ClipboardPasteboardReaderProcess,
+        expectedStatus: ClipboardPasteboardReaderResponse.Status = .payload
+    ) async throws -> ClipboardPasteboardReaderResponse {
+        // A named pasteboard crosses processes. Wait only for publication of this
+        // exact revision; never replace the request with a newer change count.
+        let deadline = ContinuousClock.now + .seconds(2)
+        var response = try await reader.read(request)
+        while (response.status == .changed || response.status == .empty), ContinuousClock.now < deadline {
+            guard pasteboard.changeCount == request.expectedChangeCount else {
+                XCTFail("The test pasteboard changed while waiting for its published revision")
+                return response
+            }
+            try await Task.sleep(for: .milliseconds(10))
+            response = try await reader.read(request)
+        }
+        XCTAssertEqual(response.status, expectedStatus,
+                       "Expected the published revision, received \(response.status)")
+        return response
     }
 
     private func request(

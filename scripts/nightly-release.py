@@ -36,7 +36,7 @@ MAX_CLI_SIZE_BYTES = 64 * 1024 * 1024
 CLI_ARCHITECTURES = ("arm64",)
 CLI_DEPLOYMENT_TARGET = "14.0"
 CLI_LICENSE_PATH = pathlib.Path(__file__).resolve().parents[1] / "LICENSE"
-NIGHTLY_RELEASE_INTERFACE_VERSION = 3
+NIGHTLY_RELEASE_INTERFACE_VERSION = 4
 DEPENDENCY_LINE_PATTERN = re.compile(
     r"^[ \t]+(.+) \(compatibility version [0-9]+(?:\.[0-9]+){0,2}, "
     r"current version [0-9]+(?:\.[0-9]+){0,2}"

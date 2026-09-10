@@ -6,6 +6,43 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryControllerTests: XCTestCase {
+    func testBackupSuspensionBlocksUsageAndSettingsWritesUntilReload() async throws {
+        let original = item(text: "original", pinned: false)
+        let fixture = makeFixture(initialItems: [original])
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.controller.suspendForBackup()
+        fixture.controller.recordSuccessfulUse(id: original.id)
+        fixture.settings.maximumItemCount = 1
+        XCTAssertNil(fixture.controller.items.first?.lastUsedAt)
+        let deleted = await fixture.controller.deleteItem(id: original.id)
+        XCTAssertFalse(deleted)
+        let restored = item(text: "restored", pinned: false)
+        try fixture.persistence.save([restored])
+        fixture.controller.resumeAfterBackup(restored: true)
+        await waitUntilLoaded(fixture.controller)
+        XCTAssertEqual(fixture.controller.items.map(\.id), [restored.id])
+        fixture.controller.stop()
+    }
+
+    func testRestoredExpiredHistoryRemainsUntilNewCopy() async throws {
+        let expired = item(text: "restored old history", pinned: false, capturedAt: Date(timeIntervalSince1970: 1))
+        let fixture = makeFixture()
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.controller.suspendForBackup()
+        try fixture.persistence.save([expired])
+        fixture.controller.resumeAfterBackup(restored: true)
+        await waitUntilLoaded(fixture.controller)
+        fixture.controller.processRetentionExpiration()
+        XCTAssertEqual(fixture.controller.items.map(\.id), [expired.id])
+        fixture.pasteboard.simulateCopy("new capture")
+        fixture.controller.processPasteboardChange()
+        fixture.controller.processRetentionExpiration()
+        XCTAssertFalse(fixture.controller.items.contains { $0.id == expired.id })
+        fixture.controller.stop()
+    }
+
     func testCollectionSummaryTracksHistoryAndSavedMembership() async throws {
         let fixture = makeFixture()
         fixture.controller.start()

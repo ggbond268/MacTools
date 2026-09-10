@@ -76,6 +76,10 @@ final class MouseEnhancerPlugin:
         static let trackpadHorizontal = "trackpad-horizontal"
         static let middleClick = "middle-click"
         static let middleClickFingerCount = "middle-click-finger-count"
+        static let mouseScrollStep = "mouse-scroll-step"
+        static let mouseScrollGain = "mouse-scroll-gain"
+        static let trackpadScrollStep = "trackpad-scroll-step"
+        static let trackpadScrollGain = "trackpad-scroll-gain"
     }
 
     let metadata: PluginMetadata
@@ -243,6 +247,24 @@ final class MouseEnhancerPlugin:
                 description: localization.string("settings.trackpad.horizontal.description", defaultValue: "反转触控板和 Magic Mouse 左右滚动方向。"),
                 icon: "arrow.left.and.right",
                 isOn: store.configuration.reverseTrackpadHorizontal
+            ),
+            scrollStepRow(
+                id: SettingsID.trackpadScrollStep,
+                title: localization.string("settings.trackpad.scrollStep.title", defaultValue: "滚动步长"),
+                description: localization.string(
+                    "settings.trackpad.scrollStep.description",
+                    defaultValue: "触控板每次滚动的最短距离，过小的滚动会被补足到该步长，0 为不调整。"
+                ),
+                value: store.configuration.trackpadScrollStep
+            ),
+            scrollGainRow(
+                id: SettingsID.trackpadScrollGain,
+                title: localization.string("settings.trackpad.scrollGain.title", defaultValue: "滚动速度"),
+                description: localization.string(
+                    "settings.trackpad.scrollGain.description",
+                    defaultValue: "触控板滚动距离的增益倍数，1.0× 为不调整。"
+                ),
+                value: store.configuration.trackpadScrollGain
             )
         ]
         if ownsLegacyMiddleClick {
@@ -298,6 +320,24 @@ final class MouseEnhancerPlugin:
                             description: localization.string("settings.mouse.horizontal.description", defaultValue: "反转鼠标左右滚动方向。"),
                             icon: "arrow.left.and.right",
                             isOn: store.configuration.reverseMouseHorizontal
+                        ),
+                        scrollStepRow(
+                            id: SettingsID.mouseScrollStep,
+                            title: localization.string("settings.mouse.scrollStep.title", defaultValue: "滚动步长"),
+                            description: localization.string(
+                                "settings.mouse.scrollStep.description",
+                                defaultValue: "鼠标每格滚动的最短距离，过小的滚动会被补足到该步长，0 为不调整。"
+                            ),
+                            value: store.configuration.mouseScrollStep
+                        ),
+                        scrollGainRow(
+                            id: SettingsID.mouseScrollGain,
+                            title: localization.string("settings.mouse.scrollGain.title", defaultValue: "滚动速度"),
+                            description: localization.string(
+                                "settings.mouse.scrollGain.description",
+                                defaultValue: "鼠标滚动距离的增益倍数，1.0× 为不调整。"
+                            ),
+                            value: store.configuration.mouseScrollGain
                         )
                     ]
                 ),
@@ -375,6 +415,21 @@ final class MouseEnhancerPlugin:
             else { return }
             store.setMiddleClickFingerCount(count)
             configurationDidChange()
+        case let .setNumber(controlID, value, phase):
+            guard phase == .committed else { return }
+            switch controlID {
+            case SettingsID.mouseScrollStep:
+                store.setMouseScrollStep(value)
+            case SettingsID.mouseScrollGain:
+                store.setMouseScrollGain(value)
+            case SettingsID.trackpadScrollStep:
+                store.setTrackpadScrollStep(value)
+            case SettingsID.trackpadScrollGain:
+                store.setTrackpadScrollGain(value)
+            default:
+                return
+            }
+            configurationDidChange()
         default:
             return
         }
@@ -394,6 +449,46 @@ final class MouseEnhancerPlugin:
             description: description,
             systemImage: icon,
             control: .toggle(isOn: isOn)
+        )
+    }
+
+    private func scrollStepRow(
+        id: String,
+        title: String,
+        description: String,
+        value: Double
+    ) -> PluginSettingsRow {
+        PluginSettingsRow(
+            id: id,
+            title: title,
+            description: description,
+            systemImage: "ruler",
+            control: .slider(
+                value: value,
+                range: MouseEnhancerConfiguration.scrollStepRange,
+                step: 1,
+                valueFormat: PluginSettingsSliderValueFormat(suffix: " px")
+            )
+        )
+    }
+
+    private func scrollGainRow(
+        id: String,
+        title: String,
+        description: String,
+        value: Double
+    ) -> PluginSettingsRow {
+        PluginSettingsRow(
+            id: id,
+            title: title,
+            description: description,
+            systemImage: "speedometer",
+            control: .slider(
+                value: value,
+                range: MouseEnhancerConfiguration.scrollGainRange,
+                step: 0.1,
+                valueFormat: PluginSettingsSliderValueFormat(suffix: "×", fractionDigits: 1)
+            )
         )
     }
 
@@ -583,7 +678,7 @@ final class MouseEnhancerPlugin:
     }
 
     private func deviceSummary(_ configuration: MouseEnhancerConfiguration) -> String {
-        switch (configuration.hasMouseReversing, configuration.hasTrackpadReversing) {
+        switch (configuration.hasMouseEnhancement, configuration.hasTrackpadEnhancement) {
         case (true, true):
             return localization.string("summary.device.all", defaultValue: "鼠标和触控板")
         case (true, false):
@@ -607,7 +702,9 @@ final class MouseEnhancerPlugin:
         case (false, true):
             return localization.string("summary.axis.horizontal", defaultValue: "水平")
         case (false, false):
-            return localization.string("summary.axis.none", defaultValue: "未选方向")
+            return configuration.hasAnyScrollTuning
+                ? localization.string("summary.axis.tuning", defaultValue: "滚动调节")
+                : localization.string("summary.axis.none", defaultValue: "未选方向")
         }
     }
 

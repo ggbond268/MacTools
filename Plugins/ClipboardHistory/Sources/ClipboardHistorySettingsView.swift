@@ -112,6 +112,9 @@ struct ClipboardHistorySettingsView: View {
     private let settingsContext: PluginSettingsContext?
     private let contentSections: Set<ClipboardHistorySettingsContentSection>
     private let onManageSnippets: (() -> Void)?
+    private let backupService: (() -> ClipboardBackupService?)?
+    private let onBackupSuspend: () -> Void
+    private let onBackupResume: (Bool) -> Void
     @State private var clearRequest: ClipboardHistorySettingsClearRequest?
     @State private var setupDestination: ClipboardHistorySetupDestination?
     @State private var isHistoryAdvancedExpanded = false
@@ -133,7 +136,10 @@ struct ClipboardHistorySettingsView: View {
             .advanced,
             .data,
         ],
-        onManageSnippets: (() -> Void)? = nil
+        onManageSnippets: (() -> Void)? = nil,
+        backupService: (() -> ClipboardBackupService?)? = nil,
+        onBackupSuspend: @escaping () -> Void = {},
+        onBackupResume: @escaping (Bool) -> Void = { _ in }
     ) {
         self.controller = controller
         self.savedLibraryController = savedLibraryController
@@ -141,6 +147,9 @@ struct ClipboardHistorySettingsView: View {
         self.settingsContext = settingsContext
         self.contentSections = contentSections
         self.onManageSnippets = onManageSnippets
+        self.backupService = backupService
+        self.onBackupSuspend = onBackupSuspend
+        self.onBackupResume = onBackupResume
         _settings = ObservedObject(wrappedValue: controller.settings)
         _presentation = StateObject(wrappedValue: ClipboardHistorySettingsPresentationModel(
             controller: controller,
@@ -1059,6 +1068,16 @@ struct ClipboardHistorySettingsView: View {
                     && presentation.snapshot.savedFatalErrorMessage == nil)
                     || presentation.snapshot.savedErrorMessage != nil
             )
+            if let backupService {
+                PluginSettingsListDivider()
+                ClipboardBackupRegion(
+                    localization: localization,
+                    controller: controller,
+                    makeService: backupService,
+                    suspend: onBackupSuspend,
+                    resume: onBackupResume
+                )
+            }
             if let errorMessage = presentation.snapshot.historyErrorMessage {
                 PluginSettingsListDivider()
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -1098,7 +1117,6 @@ struct ClipboardHistorySettingsView: View {
                 }
                 .pluginSettingsListRowPadding(interactive: true)
             }
-
         }
     }
 

@@ -10,6 +10,7 @@ enum AppLog {
     static let appIntents = Logger(subsystem: subsystem, category: "AppIntents")
     static let applicationActivity = Logger(subsystem: subsystem, category: "ApplicationActivity")
     static let appURLRouter = Logger(subsystem: subsystem, category: "AppURLRouter")
+    static let cliInstallation = Logger(subsystem: subsystem, category: "CLIInstallation")
     static let instanceCoordination = Logger(subsystem: subsystem, category: "InstanceCoordination")
     static let displayConfigurationObserver = Logger(subsystem: subsystem, category: "DisplayConfigurationObserver")
     static let autoHideDockPlugin = Logger(subsystem: subsystem, category: "AutoHideDockPlugin")
