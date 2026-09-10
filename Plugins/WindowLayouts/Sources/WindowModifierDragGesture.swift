@@ -3,6 +3,7 @@ import Foundation
 import MacToolsPluginKit
 
 enum WindowModifierDragGestureAction: Equatable {
+    case arm(generation: UInt64, pointer: CGPoint)
     case begin(generation: UInt64, origin: CGPoint, pointer: CGPoint)
     case update(generation: UInt64, pointer: CGPoint)
     case cancel(generation: UInt64)
@@ -47,7 +48,7 @@ struct WindowModifierDragGesture {
             guard case .idle = state else { return nil }
             nextGeneration &+= 1
             state = .armed(generation: nextGeneration, origin: pointer)
-            return nil
+            return .arm(generation: nextGeneration, pointer: pointer)
         }
 
         let cancellation = cancelIfNeeded()
@@ -73,7 +74,7 @@ struct WindowModifierDragGesture {
         case .idle:
             nextGeneration &+= 1
             state = .armed(generation: nextGeneration, origin: pointer)
-            return nil
+            return .arm(generation: nextGeneration, pointer: pointer)
         case let .armed(generation, origin):
             guard hypot(pointer.x - origin.x, pointer.y - origin.y) >= activationDistance else {
                 return nil
@@ -85,6 +86,12 @@ struct WindowModifierDragGesture {
         case .blocked:
             return nil
         }
+    }
+
+    mutating func keyPressed() -> WindowModifierDragGestureAction? {
+        let cancellation = cancelIfNeeded()
+        state = .blocked
+        return cancellation
     }
 
     mutating func mouseButtonPressed() -> WindowModifierDragGestureAction? {

@@ -4,6 +4,16 @@ MacTools Nightly publishes the experimental `mactools` CLI as a separate optiona
 
 The Nightly archive is a notarized ZIP named `mactools-cli-<version>-<build>-macos-arm64.zip`. It contains the signed `mactools` executable for Apple silicon Macs and the GPL-3.0-only `LICENSE`. Nightly CLI and stable CLI identities are intentionally separate; this prototype connects only to the Nightly app's broker.
 
+## Install from Settings
+
+On Apple silicon, a signed Nightly app that includes `cli-install.json` offers **Settings → General → Command Line → Install CLI…**. The confirmation shows the exact app-matching CLI version, download size, managed directory, and command path. Choose whether to enable integration. Installing the managed CLI includes automatic updates with MacTools; there is no separate update switch. The integration checkbox defaults on; macOS background-item approval is separate and links to System Settings. Turning integration off continues to deny action access while local CLI commands remain available.
+
+The installer creates `~/.local/bin/mactools-nightly` only when the destination is absent. Existing files, directories, dangling symlinks, Homebrew commands, manual installs, and other publisher-owned commands cause a collision warning. MacTools does not edit shell configuration. If needed, copy the displayed PATH guidance into your own shell configuration, or use **Copy CLI Path**.
+
+An owned installation offers **Update**, **Remove**, **Reveal in Finder**, **Copy CLI Path**, and a retained-version rollback when available. Managed installations, including those with the legacy update preference disabled, reconcile with the app's build on the next launch, including downgrades to an already retained matching build. Failed downloads or validation retain the previous version and show a retryable warning. An explicit rollback survives restarts of the same app release; the next app release or an explicit Update resumes the matching CLI. Rollback does not replay actions. A retained CLI with an incompatible protocol cannot execute actions; `version` remains local. The instructions below remain available for manual installation and older releases without the sealed manifest.
+
+For signed acceptance, use a disposable macOS user account on **both macOS 26 and macOS 27**. Test installation with one confirmation, pending background approval, disabled integration, automatic N-to-N+1 updates (including legacy opt-out state), an offline update, matching-app downgrade, rollback across restarts and the next app update, command collisions, removal, and actual quarantined execution. Run `version --json`, then `doctor --json` only after integration is enabled and macOS approval is granted. Build/tests alone do not establish these signed and system-approval behaviors.
+
 ## Download and verify
 
 Download these four assets from one Nightly release:
@@ -27,10 +37,11 @@ codesign --verify --strict --verbose=2 "$CLI_PATH"
 codesign --display --verbose=4 "$CLI_PATH" 2>&1 \
   | grep -E '^(Identifier|Authority|TeamIdentifier)='
 lipo -archs "$CLI_PATH"
-spctl --assess --type execute --verbose=2 "$CLI_PATH"
 ```
 
 The architecture output must contain exactly `arm64`. The signing identifier must end in `.mactools.nightly.cli`, the authority must be the MacTools Developer ID Application certificate, and the Team ID must match the Nightly app.
+
+Do not use `spctl --assess --type execute` against the extracted `mactools` file as a notarization assertion. On macOS 26, `spctl` can reject a correctly signed standalone executable with `code is valid but does not seem to be an app`; that result describes the raw file shape, not whether the published ZIP passed notarization. Apple also documents that notarization tickets cannot currently be stapled to standalone binaries. The Nightly release workflow requires an `Accepted` notarization result for the exact CLI ZIP before publication, while this checklist independently verifies the downloaded checksum, Developer ID signature, identity, architecture, and actual execution. See [Apple's custom notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow#Staple-the-ticket-to-your-distribution).
 
 Do not remove quarantine attributes or re-sign the executable if validation fails. Confirm that all files came from the same GitHub release, verify their checksums again, and report the release tag and validation output.
 
@@ -39,6 +50,14 @@ Keep the same terminal session open for the remaining snippets; they reuse the u
 ## Try the CLI without installing it
 
 Install `MacTools Nightly.app` from the DMG and launch it once. In **Settings > Plugins > Marketplace**, install **Night Shift** from the Nightly catalog and wait until it is shown as installed. If `night-shift/toggle` does not appear after installation, relaunch MacTools Nightly once so the plugin can activate. Then, in **Settings > General > Command Line**, enable Command-Line Integration. Allow the MacTools Nightly background item in **System Settings > General > Login Items** if macOS requests approval.
+
+Verify Gatekeeper acceptance against the installed app bundle:
+
+```bash
+spctl --assess --type execute --verbose=2 "/Applications/MacTools Nightly.app"
+```
+
+The result should be `accepted` with source `Notarized Developer ID`. Do not remove quarantine attributes or bypass Gatekeeper if this app assessment fails.
 
 Use the extracted executable by absolute path first:
 

@@ -7,12 +7,21 @@ enum MouseEnhancerDevice: Equatable, Sendable {
 }
 
 struct MouseEnhancerConfiguration: Equatable, Sendable {
+    static let defaultScrollStep: Double = 0
+    static let defaultScrollGain: Double = 1
+    static let scrollStepRange: ClosedRange<Double> = 0...120
+    static let scrollGainRange: ClosedRange<Double> = 0.1...5
+
     var reverseMouseHorizontal: Bool
     var reverseMouseVertical: Bool
     var reverseTrackpadHorizontal: Bool
     var reverseTrackpadVertical: Bool
     var middleClickEnabled: Bool
     var middleClickFingerCount: Int
+    var mouseScrollStep: Double
+    var mouseScrollGain: Double
+    var trackpadScrollStep: Double
+    var trackpadScrollGain: Double
 
     init(
         reverseMouseHorizontal: Bool,
@@ -20,7 +29,11 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
         reverseTrackpadHorizontal: Bool,
         reverseTrackpadVertical: Bool,
         middleClickEnabled: Bool = false,
-        middleClickFingerCount: Int = 3
+        middleClickFingerCount: Int = 3,
+        mouseScrollStep: Double = MouseEnhancerConfiguration.defaultScrollStep,
+        mouseScrollGain: Double = MouseEnhancerConfiguration.defaultScrollGain,
+        trackpadScrollStep: Double = MouseEnhancerConfiguration.defaultScrollStep,
+        trackpadScrollGain: Double = MouseEnhancerConfiguration.defaultScrollGain
     ) {
         self.reverseMouseHorizontal = reverseMouseHorizontal
         self.reverseMouseVertical = reverseMouseVertical
@@ -28,6 +41,10 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
         self.reverseTrackpadVertical = reverseTrackpadVertical
         self.middleClickEnabled = middleClickEnabled
         self.middleClickFingerCount = middleClickFingerCount
+        self.mouseScrollStep = Self.normalizedScrollStep(mouseScrollStep)
+        self.mouseScrollGain = Self.normalizedScrollGain(mouseScrollGain)
+        self.trackpadScrollStep = Self.normalizedScrollStep(trackpadScrollStep)
+        self.trackpadScrollGain = Self.normalizedScrollGain(trackpadScrollGain)
     }
 
     static let `default` = MouseEnhancerConfiguration(
@@ -47,8 +64,45 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
         reverseTrackpadHorizontal || reverseTrackpadVertical
     }
 
+    var hasMouseScrollTuning: Bool {
+        mouseScrollStep > Self.defaultScrollStep || mouseScrollGain != Self.defaultScrollGain
+    }
+
+    var hasTrackpadScrollTuning: Bool {
+        trackpadScrollStep > Self.defaultScrollStep || trackpadScrollGain != Self.defaultScrollGain
+    }
+
+    var hasMouseEnhancement: Bool {
+        hasMouseReversing || hasMouseScrollTuning
+    }
+
+    var hasTrackpadEnhancement: Bool {
+        hasTrackpadReversing || hasTrackpadScrollTuning
+    }
+
+    var hasAnyScrollTuning: Bool {
+        hasMouseScrollTuning || hasTrackpadScrollTuning
+    }
+
     var shouldInstallEventTap: Bool {
-        hasMouseReversing || hasTrackpadReversing
+        hasMouseEnhancement || hasTrackpadEnhancement
+    }
+
+    static func normalizedScrollStep(_ value: Double) -> Double {
+        guard value.isFinite, value > 0 else {
+            return defaultScrollStep
+        }
+
+        return min(value.rounded(), scrollStepRange.upperBound)
+    }
+
+    static func normalizedScrollGain(_ value: Double) -> Double {
+        guard value.isFinite else {
+            return defaultScrollGain
+        }
+
+        let clamped = min(max(value, scrollGainRange.lowerBound), scrollGainRange.upperBound)
+        return (clamped * 10).rounded() / 10
     }
 
     func shouldReverse(device: MouseEnhancerDevice) -> Bool {
@@ -77,6 +131,24 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
             return reverseTrackpadHorizontal
         }
     }
+
+    func scrollStep(for device: MouseEnhancerDevice) -> Double {
+        switch device {
+        case .mouse:
+            return mouseScrollStep
+        case .trackpad:
+            return trackpadScrollStep
+        }
+    }
+
+    func scrollGain(for device: MouseEnhancerDevice) -> Double {
+        switch device {
+        case .mouse:
+            return mouseScrollGain
+        case .trackpad:
+            return trackpadScrollGain
+        }
+    }
 }
 
 @MainActor
@@ -88,6 +160,10 @@ final class MouseEnhancerStore: ObservableObject {
         static let reverseTrackpadVertical = "mouse-enhancer.scroll-reversing.trackpad.vertical"
         static let middleClickEnabled = "mouse-enhancer.middle-click.enabled"
         static let middleClickFingerCount = "mouse-enhancer.middle-click.finger-count"
+        static let mouseScrollStep = "mouse-enhancer.scroll-tuning.mouse.step"
+        static let mouseScrollGain = "mouse-enhancer.scroll-tuning.mouse.gain"
+        static let trackpadScrollStep = "mouse-enhancer.scroll-tuning.trackpad.step"
+        static let trackpadScrollGain = "mouse-enhancer.scroll-tuning.trackpad.gain"
     }
 
     @Published private(set) var configuration: MouseEnhancerConfiguration
@@ -125,6 +201,26 @@ final class MouseEnhancerStore: ObservableObject {
             middleClickFingerCount: Self.fingerCount(
                 forKey: StorageKey.middleClickFingerCount,
                 defaultValue: MouseEnhancerConfiguration.default.middleClickFingerCount,
+                storage: storage
+            ),
+            mouseScrollStep: Self.double(
+                forKey: StorageKey.mouseScrollStep,
+                defaultValue: MouseEnhancerConfiguration.defaultScrollStep,
+                storage: storage
+            ),
+            mouseScrollGain: Self.double(
+                forKey: StorageKey.mouseScrollGain,
+                defaultValue: MouseEnhancerConfiguration.defaultScrollGain,
+                storage: storage
+            ),
+            trackpadScrollStep: Self.double(
+                forKey: StorageKey.trackpadScrollStep,
+                defaultValue: MouseEnhancerConfiguration.defaultScrollStep,
+                storage: storage
+            ),
+            trackpadScrollGain: Self.double(
+                forKey: StorageKey.trackpadScrollGain,
+                defaultValue: MouseEnhancerConfiguration.defaultScrollGain,
                 storage: storage
             )
         )
@@ -167,6 +263,34 @@ final class MouseEnhancerStore: ObservableObject {
         }
     }
 
+    func setMouseScrollStep(_ value: Double) {
+        let normalizedValue = MouseEnhancerConfiguration.normalizedScrollStep(value)
+        update(StorageKey.mouseScrollStep, value: normalizedValue) {
+            $0.mouseScrollStep = normalizedValue
+        }
+    }
+
+    func setMouseScrollGain(_ value: Double) {
+        let normalizedValue = MouseEnhancerConfiguration.normalizedScrollGain(value)
+        update(StorageKey.mouseScrollGain, value: normalizedValue) {
+            $0.mouseScrollGain = normalizedValue
+        }
+    }
+
+    func setTrackpadScrollStep(_ value: Double) {
+        let normalizedValue = MouseEnhancerConfiguration.normalizedScrollStep(value)
+        update(StorageKey.trackpadScrollStep, value: normalizedValue) {
+            $0.trackpadScrollStep = normalizedValue
+        }
+    }
+
+    func setTrackpadScrollGain(_ value: Double) {
+        let normalizedValue = MouseEnhancerConfiguration.normalizedScrollGain(value)
+        update(StorageKey.trackpadScrollGain, value: normalizedValue) {
+            $0.trackpadScrollGain = normalizedValue
+        }
+    }
+
     private func update(
         _ key: String,
         value: Any,
@@ -204,6 +328,18 @@ final class MouseEnhancerStore: ObservableObject {
         }
 
         return normalizedFingerCount(storage.integer(forKey: key))
+    }
+
+    private static func double(
+        forKey key: String,
+        defaultValue: Double,
+        storage: any PluginStorage
+    ) -> Double {
+        guard let value = storage.object(forKey: key) as? Double else {
+            return defaultValue
+        }
+
+        return value
     }
 
     private static func normalizedFingerCount(_ count: Int) -> Int {

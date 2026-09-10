@@ -5,90 +5,102 @@
         <description>Latest release metadata for MacTools.</description>
         <language>en</language>
         <item>
-            <title>Version 1.2.0</title>
-            <link>https://github.com/ggbond268/MacTools/releases/tag/v1.2.0</link>
-            <sparkle:version>69</sparkle:version>
-            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <title>Version 1.3.0</title>
+            <link>https://github.com/ggbond268/MacTools/releases/tag/v1.3.0</link>
+            <sparkle:version>70</sparkle:version>
+            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
             <description sparkle:format="markdown"><![CDATA[## App Updates
 
 ### Added
 
-- Added a shared action system with global shortcuts, reusable workflows, automatic rules, secure Run Links, and selective portable backups.
-- Menu-bar panels now support independent Light and Dark themes, ten built-in palettes, live previews, System Default, and accessible iTerm2 or Base16/Base24 theme imports.
+- Added “Run MacTools Action” to Shortcuts, Siri, and Spotlight so supported actions can run without opening Settings.
+- Added automatic local backups of portable app and plugin settings, with storage limits, backup status, and a safety snapshot before imports.
+- Preferences restore preselects available missing plugins, preserves choices, and adds bulk selection and installation progress. It flags plugins needing a restart and another import to restore settings.
+- Added Marketplace detail pages with localized features, actions, requirements, privacy disclosures, and setup guidance available before installation.
+- Added a separate Nightly channel with isolated settings, matching app and plugin builds, and an optional signed and notarized CLI download.
+- Added a Permissions page that groups shared macOS access, lists affected plugins, and refreshes status after returning from System Settings.
 
 ### Changed
 
-- About now keeps app details and update controls visible above a scrollable offline history of the 10 most recent App and Plugin releases.
-- Actions and workflows now preview runs, simplify step editing, reject overlapping work by default, limit unattended concurrency, and enforce per-action deadlines. Step delays also state when each wait begins.
-- MacTools now appears in the Dock while its Settings window is open.
-- Menu-bar panels and their attachment arrows now use a consistent opaque background in Light and Dark appearance without reducing the content area.
-- Settings now uses one resizable sidebar for app, management, and plugin pages, with consistent search, headers, and keyboard navigation. Unified Search preserves the sidebar position while open.
-- Plugin pages can be ordered by localized name, installation date, or drag and drop. The saved order is included in backups without changing menu-bar layouts.
+- Removed the redundant Enable caption beside the command-line switch; the title and status description identify its purpose.
+- Command Palette now shows recent successful actions when search is empty and ranks typed results by relevance.
+- MacTools now uses GPL-3.0-only. App and Nightly CLI downloads include the license, with applicable third-party notices included in the app.
+- Imported icons and animations with transparent backgrounds now adapt to the menu bar appearance. Opaque imports show guidance, while existing opaque artwork retains its colors.
+- MacTools 1.3 uses PluginKit v6 and checks for compatible updates before loading installed plugins. Older packages remain disabled until updated.
+- Settings now remembers collapsed sidebar sections, assigns Command-1 through Command-9 to visible rows, and uses Command-F for the current page's search.
+- Dashboard detail panels now offer more space, Escape-key dismissal, reliable metric switching, and lower CPU usage.
+- Window actions keep their intended target when opened from MacTools command surfaces and report failures without stealing focus.
+
+### Removed
+
+- Removed the persistent plugin sidebar filter and its Command-Shift-F shortcut.
 
 ### Fixed
 
-- Actions and Run Links now reject duplicate, recursive, stale, or unsafe requests, preserve cancellation, and explain failures. Imports and backups reject corrupt data and roll back safely.
-- Automatic rules preserve unattended execution through nested or delayed steps and reject newly interactive actions instead of opening MacTools.
-- Long-running workflows launched from Action Grid, Unified Search, or Run Links now continue in Automation after the originating surface closes.
-- Actions & Shortcuts, Run Links, and Automation now follow the selected app language across controls, status messages, errors, and accessibility labels.
-- Automation keeps its resizable workflow list stable and readable, with reliable reordering and action replacement in narrow layouts.
-- Actions & Shortcuts filters remain stable, and Run Link copying is available from expanded action details.
-- Text completion, global shortcuts, and system callbacks no longer crash MacTools when actions open windows, rebuild menu-bar items, or change displays. Unified Search restores the previously active app when it closes.
-- Relaunching MacTools now brings Settings forward in the single running instance and preserves deep links received during startup.
-- Auto Input now activates or releases saved input-source shortcuts as sources are enabled or disabled, without requiring a relaunch.
-- Scheduled workflows now adjust to system clock and time-zone changes, and live-state listeners remain active while enabled rules depend on them.
-- Plugin settings controls and footers now align consistently, and descriptions update immediately when the app language changes.
+- Changes to plugin confirmation requirements and Run Link permissions now take effect immediately.
+- Fixed stale Command Palette queries and inconsistent search focus after reopening.
+- Enabling Keep Awake no longer stretches feature-panel content or clips its duration options.
+- Mac Settings no longer reverts successful changes while live state is refreshing, and unavailable controls can open the relevant plugin or Marketplace.
+- Fixed preference export crashes involving saved action shortcuts or Run Links, and kept import controls accessible when many plugins are missing.
+- The built-in display is now restored after wake when the external display was disconnected during sleep.
+- Permission guidance now opens the correct System Settings destination, preserves the current plugin page, and shows the draggable helper for Full Disk Access.
 
-### Maintenance
+### Security
 
-- Allowed release preparation to publish a predeclared app version while advancing its build number.
+- Removing plugin private data now shows a dedicated warning and blocks reinstallation until cleanup finishes, protecting newly installed data.
 
 ## Plugin Updates
 
 ### Added
 
-- Added Action Grid, an accessible 3×3 launcher with nested folders, drag-and-drop and keyboard editing, live action state, and multi-display placement. Foreground actions retain focus, and repeated opens reuse the grid.
-- Auto Input now offers per-source actions, global shortcuts, and a configurable HUD near the focused field or centered on the active display. The HUD stays visible while hovered and cycles on repeated clicks.
-- Added a Cloudflare R2 uploader with guided setup, secure credential storage, pre-upload renaming, conflict handling, cancellable progress, shortcuts, and optional public-link copying.
-- Added Dock Lock to prevent the Dock from moving between displays accidentally, with reusable actions for Action Grid, Automation, and guarded Run Links.
-- Added Custom Shortcuts for mapping keyboard, mouse, scroll, and precise trackpad input to shortcuts, mouse navigation, and common macOS actions, with guarded recording and conflict handling.
-- Middle Click returns with three-, four-, and five-finger trackpad taps and a live-state action for shortcuts, Action Grid, workflows, and search.
-- Added reusable actions across display, audio, system, cleanup, app, input, Homebrew, battery, and fan tools. Long operations retain progress, cancellation, and safety checks.
-- Added live-state toggle actions for appearance, mute, Night Shift, Stage Manager, auto-hide, True Tone, Hide Notch, and Auto Input.
-- Added Saved Scripts with explicit interpreters, timeouts, cancellation, bounded output, opt-in source backups, and actions for shortcuts, gestures, Action Grid, workflows, and confirmation-protected Run Links.
+- Added Apple Shortcuts to browse and run the system shortcut library, view folders, stop running shortcuts, and control confirmation and Run Link access.
+- Added Clipboard with encrypted local history, saved clips, reusable snippets, OCR, and rich-text or plain-text paste.
+- Clipboard supports paste queues, app exclusions, Private Copy, and export or sharing of saved items.
+- Device Battery now supports battery readings from compatible MCHOSE mice, including the A7 V3 Ultra+.
+- Added Hide Active App on Dock Click to hide the frontmost app by clicking its Dock icon while preserving other Dock interactions.
+- Added Mac Settings with searchable macOS controls, pinned favorites, and a Zen profile to hide the Dock, menu bar, desktop items, and widgets.
+- Mac Settings profiles support selective application, portable import and export, change history, Undo, and recovery of incomplete changes.
+- Restored Hide Menu Bar Icons with draggable icon layouts and a panel for hidden icons.
+- Right Click can now create CSV, YAML, XML, HTML, CSS, JavaScript, TypeScript, Shell, and Python files.
+- Trackpad Gestures and Custom Shortcuts can now send individual keys and distinguish left and right modifier keys.
+- Added Power Actions to sleep the Mac or open macOS confirmation dialogs for log out, restart, and shut down.
+- Added System Soft Restart to restart macOS user services, preserve the Dock layout, and reopen supported apps.
+- System Status now offers a menu-bar overview with detail charts, pinned readings, selectable time ranges, and an optional global shortcut.
+- System Status menu-bar metrics now support per-metric display styles, configurable values, layout choices, and drag reordering.
+- Added Window Layouts with grid placement, adjustable gaps, layout cycling, incremental width and height controls, display movement, custom layouts, shortcut presets, and Run Links.
+- Optional modifier-key dragging moves windows beneath the pointer without clicking or changing focus, with a configurable status indicator and smoother movement when apps are busy.
 
 ### Changed
 
-- Dashboard components now use shared, appearance-aware colors and surfaces for cards, charts, badges, controls, and progress, while preserving calendar event and AI tool brand colors.
-- IP Check now presents speed-test results in a more compact card layout.
-- Automatic workflows now run only plugin actions that explicitly support unattended execution. Overlapping runs are rejected by default, and every action uses a consistent deadline.
-
-### Removed
-
-- Hide Menu Bar Icons is no longer distributed by MacTools.
+- Auto Input can now show its HUD near the pointer and offer adaptive reminders. Editable fields in Google Docs, Raycast, and MacTools are recognized more reliably.
+- Official plugins now provide localized Marketplace descriptions, actions, requirements, privacy disclosures, and setup instructions.
+- Cloudflare R2 Upload now follows the selected app language across setup, uploads, status, and errors.
+- Disk Cleanup now explains its optional Full Disk Access requirement and continues to skip protected locations when access is unavailable.
+- Dock Lock can now be toggled directly from its settings page.
+- Official plugin archives now declare GPL-3.0-only and include their license and applicable third-party notices.
+- New plugin packages use PluginKit v6 and require MacTools 1.3.0 or later. Catalogs for older app versions remain unchanged.
+- System Status settings now support preferences export, import, and automatic backups.
+- Trackpad Gestures now provides clearer practice feedback, including finger roles and separate TipTap contact and click status.
 
 ### Fixed
 
-- Action Grid settings, availability messages, VoiceOver controls, and live-state actions are now localized in every supported language.
-- Activity Stats no longer reports impossible single-day AI coding durations when tracked sessions overlap, span midnight, or end without a final event.
-- The Calendar widget's localized Today button now remains readable within the month header.
-- Opening Dashboard no longer becomes unresponsive while Bluetooth battery monitoring starts.
-- Device Battery updates no longer install on MacTools versions that lack the required component appearance support.
-- Trackpad Gestures and Mouse Enhancer now recover reliably across display, device, sleep, wake, and plugin lifecycle changes, including external Magic Trackpads over USB or Bluetooth.
-- Middle Click and Trackpad Gestures now arbitrate overlapping gestures, and Middle Click resumes automatically after a conflict is resolved.
-- IP Check settings once again provide controls to hide IP addresses and refresh all checks.
-- Plugin actions now verify outcomes, roll back partial changes, and stop Homebrew processes when cancelled. Sidecar Run Links resolve aliases safely, and older hosts retain a compatible catalog.
-- Fan Control, Sidecar, and Trackpad settings now roll back incomplete imports or failed hardware updates.
-- The Quit Apps selection panel now closes automatically when focus moves elsewhere.
-- Sidecar and restored third-party actions now use visible fallback icons when their preferred system symbol is unavailable on the current macOS version.
-
-### Maintenance
-
-- Rebuilt the plugin line on PluginKit 5 for MacTools 1.2 while preserving the PluginKit 4 catalog for earlier app versions.
+- Plugins that require Automation access now indicate that macOS asks for permission on demand instead of showing access as already granted.
+- Fixed Battery Charge Limit failing to switch compatible Macs to battery power while connected to a power adapter.
+- Device Battery now reports AirPods and other Apple headphone battery levels and charging states more reliably, with fewer duplicate or stale readings.
+- Custom Shortcuts now explains recorder startup failures, preserves the previous mapping, and offers permission guidance or a retry.
+- Middle Click no longer navigates the current page when opening a link in a new tab.
+- Night Shift now reports toggle failures safely when the required macOS controls are unavailable or incompatible.
+- Nightly plugins now keep privileged helpers, saved credentials, and Activity Bar AI hooks separate from stable MacTools.
+- Corrected System Status battery temperature, time estimates, and chart statistics, with faster charts and stable pinned readings.
+- Fixed System Status process monitoring getting stuck on “Collecting” when many processes are running.
+- Trackpad Gestures now recognizes staggered multi-finger taps and repeated TipTaps more reliably, including with idle external or virtual pointers.
+- Fixed duplicate or leaked native clicks during trackpad tap actions, and restored normal dragging and recognition after failed gestures.
+- Window Switcher now includes eligible windows from all macOS Spaces, keeps each window separately selectable, and focuses windows directly during keyboard navigation.
+- Improved inline editing stability for large zsh configuration files.
 ]]></description>
             <sparkle:fullReleaseNotesLink>https://github.com/ggbond268/MacTools/releases</sparkle:fullReleaseNotesLink>
-            <pubDate>Mon, 17 Aug 2026 14:47:00 +0000</pubDate>
-            <enclosure url="https://github.com/ggbond268/MacTools/releases/download/v1.2.0/MacTools.dmg" length="8433546" type="application/octet-stream" sparkle:edSignature="ovkM42h8OhJShtqfShUCxdYnr74M5mOUtgpc2oiEIb6iGBof+V16b2ICZwdkqC29y/LFPT5pDqC35EZlum/aBw==" />
+            <pubDate>Wed, 09 Sep 2026 05:34:41 +0000</pubDate>
+            <enclosure url="https://github.com/ggbond268/MacTools/releases/download/v1.3.0/MacTools.dmg" length="11225151" type="application/octet-stream" sparkle:edSignature="Z54jrJBqR+s0QAQHkKoxvkR1mAW3KbZEpxuOKGRXAIDjF0BphVYodg/zWp36knHAn51KghqaH/6KRXg7LPyUDw==" />
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         </item>
     </channel>

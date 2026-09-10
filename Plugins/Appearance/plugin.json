@@ -180,7 +180,7 @@
       "zh-Hant": "是否開啟深色模式"
     }
   },
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minHostVersion": "1.3.0",
   "pluginKitVersion": 6,
   "bundleRelativePath": "Appearance.bundle",
@@ -385,12 +385,34 @@
             "id": "set-mode",
             "title": "@productStrings.action-appearance-set-mode-title",
             "description": "@productStrings.action-appearance-set-mode-description",
-            "keywords": ["appearance", "auto", "light", "dark"],
+            "keywords": [
+              "appearance",
+              "auto",
+              "light",
+              "dark"
+            ],
             "systemImage": "circle.lefthalf.filled",
-            "parameters": [{ "id": "mode", "kind": "string", "isRequired": true, "portability": "portable" }],
+            "parameters": [
+              {
+                "id": "mode",
+                "kind": "string",
+                "isRequired": true,
+                "portability": "portable"
+              }
+            ],
             "permissionIDs": [],
             "risk": "safe",
-            "surfaces": ["unified-search", "global-shortcut", "run-link", "workflow", "automatic-rule", "action-grid", "trackpad-gesture", "app-intent", "manual"],
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
             "automaticEligible": true,
             "externalInvocation": "allowed"
           }

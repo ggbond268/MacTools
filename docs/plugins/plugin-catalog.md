@@ -241,6 +241,8 @@ Recommended production flow is an incremental batch plugin release:
 The batch tag is stored per plugin entry through `package.url` and `releaseNotesURL`, so one catalog can point different plugins to different release tags without changing host code.
 Plugin batch releases are published with `--latest=false`; only stable `v*` App releases may become the repository's GitHub Latest release.
 
+An app signing failure does not require republishing an already verified plugin batch or catalog. For an inline workflow-only fix, keep the existing app tag and start a new `Release` run on `main` with that tag; see [App release recovery](../github-actions.md#app-release-recovery).
+
 The GitHub Release body for each plugin batch is extracted from the matching `CHANGELOG.md` entry, such as `## [plugins-1.0.1]`.
 
 An incremental release record contains only packages changed in that batch:

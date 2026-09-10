@@ -269,7 +269,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/action-grid/",
       "summary": "在指针附近打开用户配置的常用操作网格。",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "capabilities": {
@@ -624,7 +624,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/activity-bar/",
       "summary": "统计输入、前台应用使用时长和 AI 编程活动",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -917,7 +917,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/app-hotkey/",
       "summary": "为常用应用绑定全局快捷键，快速打开或切换到前台",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -1272,7 +1272,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/app-volume/",
       "summary": "分别调节正在播放音频的应用音量",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -1700,7 +1700,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/appearance/",
       "summary": "切换系统亮色与深色外观",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -2373,7 +2373,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/auto-hide-dock/",
       "summary": "自动隐藏程序坞，提供更干净的桌面环境",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -2803,7 +2803,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/auto-hide-menu-bar/",
       "summary": "自动隐藏菜单栏，提供更完整的屏幕显示空间",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -3255,7 +3255,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/auto-input/",
       "summary": "按应用记住并自动切换输入法",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -3837,7 +3837,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/battery-charge-limit/",
       "summary": "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -4077,7 +4077,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/calendar/",
       "summary": "查看日期、节假日和系统日程",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -5067,7 +5067,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/clipboard-clear/",
       "summary": "一键清空当前剪贴板内容",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -5582,7 +5582,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/device-battery/",
       "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏/迈从鼠标电量",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -5872,7 +5872,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/disk-clean/",
       "summary": "扫描系统缓存、开发产物与残留安装包，默认移到废纸篓，执行前校验路径安全",
-      "version": "2.1.0"
+      "version": "2.2.0"
     },
     {
       "capabilities": {
@@ -6331,7 +6331,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/display-brightness/",
       "summary": "快速调节每个显示器的亮度",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -6681,7 +6681,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/display-resolution/",
       "summary": "查看并切换每个显示器的分辨率",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -6949,7 +6949,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/display-sleep/",
       "summary": "一键让所有显示器立即进入休眠",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -7297,7 +7297,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/display-true-color/",
       "summary": "自动调节显示器颜色以适应环境光",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -8195,7 +8195,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/eject-disk/",
       "summary": "推出所有可移动磁盘",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -8466,7 +8466,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/empty-trash/",
       "summary": "清空废纸篓中的所有项目",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -8820,7 +8820,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/fan-control/",
       "summary": "管理风扇转速预设，支持自动、全速和自定义策略",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -9092,7 +9092,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/fix-damaged-app/",
       "summary": "移除隔离属性，解决「已损坏」或「不受信任」提示",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -9437,7 +9437,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/hide-notch/",
       "summary": "自动遮挡刘海屏顶部区域",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -9897,7 +9897,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/homebrew/",
       "summary": "管理 Homebrew 包、库仓库并执行系统诊断",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -10143,7 +10143,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/input-remapping/",
       "summary": "将输入映射为操作",
-      "version": "1.0.1"
+      "version": "1.1.0"
     },
     {
       "capabilities": {
@@ -10539,7 +10539,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/ip-overview/",
       "summary": "查看出口 IP、本地 IP、归属地与网络测速摘要",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -10961,7 +10961,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/keep-awake/",
       "summary": "保持 Mac 唤醒；可选保持屏幕常亮或让屏幕工具继续工作。MacBook 合盖运行要求连接电源",
-      "version": "1.3.0"
+      "version": "1.4.0"
     },
     {
       "capabilities": {
@@ -11394,7 +11394,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/launch-control/",
       "summary": "查看和管理 launchctl 启动项",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -11662,7 +11662,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/launchpad/",
       "summary": "用全局热键或菜单栏打开应用网格，搜索并启动。",
-      "version": "1.2.0"
+      "version": "1.3.0"
     },
     {
       "capabilities": {
@@ -11931,7 +11931,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/lock-screen/",
       "summary": "一键立即锁定屏幕，进入密码解锁界面",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -13347,7 +13347,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/microphone-mute/",
       "summary": "快速静音或恢复默认麦克风输入",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -13892,7 +13892,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/mouse-enhancer/",
       "summary": "分别调整鼠标与触控板的滚动方向",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -14235,7 +14235,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/night-shift/",
       "summary": "降低蓝光，使屏幕颜色更暖",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -14540,7 +14540,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/physical-clean-mode/",
       "summary": "屏幕全黑并临时禁用键盘输入",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -14806,7 +14806,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/quit-apps/",
       "summary": "选择并退出正在运行的应用，或一键退出全部",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -15044,7 +15044,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/right-click/",
       "summary": "为 Finder 右键菜单添加新建文件夹和路径复制",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -15333,7 +15333,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/saved-scripts/",
       "summary": "保存并运行 AppleScript 和 Shell 脚本。",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "capabilities": {
@@ -15753,7 +15753,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/sidecar/",
       "summary": "连接附近可用的 Sidecar 显示器作为扩展显示器",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -16098,7 +16098,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/stage-manager/",
       "summary": "开启台前调度，集中显示当前窗口并把其他窗口收纳到侧边",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -16441,7 +16441,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/system-mute/",
       "summary": "快速静音或恢复系统音频输出",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -17426,7 +17426,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/system-status/",
       "summary": "实时查看系统状态",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -17667,7 +17667,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/trackpad-gestures/",
       "summary": "将自定义触控板手势映射为 MacTools 操作、快捷键或中键点击",
-      "version": "1.0.2"
+      "version": "1.1.0"
     },
     {
       "capabilities": {
@@ -18030,7 +18030,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/translator/",
       "summary": "划词与截图快捷键翻译",
-      "version": "0.2.0"
+      "version": "0.3.0"
     },
     {
       "capabilities": {
@@ -20960,7 +20960,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/window-switcher/",
       "summary": "用可配置快捷键快速切换正在运行的窗口",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -21268,7 +21268,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/xcode-clean/",
       "summary": "分类清理 Xcode DerivedData、设备支持、归档与缓存",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "capabilities": {
@@ -21493,7 +21493,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/zsh-config/",
       "summary": "快速编辑 ~/.zshrc 等 zsh 配置文件，支持内联编辑和常用片段快速插入",
-      "version": "1.1.0"
+      "version": "1.2.0"
     }
   ]
 }

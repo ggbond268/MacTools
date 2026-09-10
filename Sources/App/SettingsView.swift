@@ -651,15 +651,6 @@ struct GeneralSettingsView: View {
                     )
                 }
                 Section {
-                    CLISettingsRow(service: cliService)
-                        .settingsGroupedFormRowWidth(widths.sectionLayout)
-                } header: {
-                    SettingsGroupedFormSectionHeader(
-                        title: AppL10n.settings("general.section.commandLine", defaultValue: "命令行"),
-                        layoutWidth: widths.readableContent
-                    )
-                }
-                Section {
                     AppearanceSettingsRow(
                         selectionRawValue: appearancePreferenceBinding
                     )
@@ -735,6 +726,20 @@ struct GeneralSettingsView: View {
                             "general.section.preferencesBackup",
                             defaultValue: "偏好设置备份"
                         ),
+                        layoutWidth: widths.readableContent
+                    )
+                }
+                Section {
+                    if CLIInstallController.isSupportedChannel {
+                        CLIInstallSettingsView()
+                            .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    } else {
+                        CLISettingsRow(service: cliService)
+                            .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    }
+                } header: {
+                    SettingsGroupedFormSectionHeader(
+                        title: AppL10n.settings("general.section.commandLine", defaultValue: "命令行"),
                         layoutWidth: widths.readableContent
                     )
                 }
@@ -869,7 +874,7 @@ private struct CLISettingsRow: View {
                 .controlSize(.small)
             }
             Toggle(
-                AppL10n.settings("commandLine.enable", defaultValue: "启用"),
+                AppL10n.settings("commandLine.title", defaultValue: "MacTools 命令行"),
                 isOn: Binding(
                     get: { service.isRegistered },
                     set: { enabled in
@@ -882,6 +887,7 @@ private struct CLISettingsRow: View {
                 )
             )
             .toggleStyle(.switch)
+            .labelsHidden()
             .controlSize(.small)
             .fixedSize()
         }
@@ -1136,6 +1142,7 @@ private struct PreferencesBackupSettingsRow: View {
     @State private var alertMessage: String?
     @State private var isPreparingImport = false
     @State private var isImporting = false
+    @State private var importProgress: PreferencesImportProgress?
     @State private var isBackingUp = false
     @State private var manualBackupFeedback: ManualBackupFeedback?
 
@@ -1278,6 +1285,7 @@ private struct PreferencesBackupSettingsRow: View {
                 },
                 pluginOptions: pluginOptions(for: Set(pending.backup.pluginPreferences.keys)),
                 isImporting: isImporting,
+                importProgress: importProgress,
                 onCancel: { pendingImport = nil },
                 onImport: { selectedPluginIDs, selection in
                     importPreferences(
@@ -1510,13 +1518,18 @@ private struct PreferencesBackupSettingsRow: View {
     ) {
         Task { @MainActor in
             isImporting = true
-            defer { isImporting = false }
+            importProgress = .preparing(pluginCount: pluginIDs.count)
+            defer {
+                isImporting = false
+                importProgress = nil
+            }
 
             do {
                 let result = try await pluginHost.importPreferences(
                     backup,
                     installingMissingPluginIDs: pluginIDs,
-                    selection: selection
+                    selection: selection,
+                    progress: { importProgress = $0 }
                 )
                 pendingImport = nil
                 let importedMessage = AppL10n.preferencesBackup(
@@ -1531,6 +1544,17 @@ private struct PreferencesBackupSettingsRow: View {
                             .title
                             ?? pluginID
                         return "\(title): \(message)"
+                    }
+                    + result.deferredPluginPreferenceIDs.map { pluginID in
+                        let title = pluginHost.pluginManagementItems
+                            .first(where: { $0.id == pluginID })?
+                            .title
+                            ?? pluginID
+                        return AppL10n.preferencesBackupFormat(
+                            "preferencesBackup.import.pluginRestoreDeferred",
+                            defaultValue: "已安装“%@”。请重新启动 MacTools，然后再次导入此备份以恢复其设置。",
+                            title
+                        )
                     }
                     + result.shortcutErrors
                         .values
@@ -1581,7 +1605,7 @@ private struct PreferencesBackupSettingsRow: View {
     }
 }
 
-private struct PreferencesPluginOption: Identifiable, Equatable {
+struct PreferencesPluginOption: Identifiable, Equatable {
     let id: String
     let title: String
 }
@@ -1822,23 +1846,67 @@ enum PreferencesBackupExportFileName {
     }
 }
 
-private struct PreferencesImportPreviewSheet: View {
+struct PreferencesImportSelectionModel: Equatable {
+    var selectedInstallablePluginIDs: Set<String>
+    var userDeselectedPluginIDs: Set<String>
+
+    init(eligiblePluginIDs: Set<String> = []) {
+        self.selectedInstallablePluginIDs = eligiblePluginIDs
+        self.userDeselectedPluginIDs = []
+    }
+
+    mutating func selectAll(eligiblePluginIDs: Set<String>) {
+        userDeselectedPluginIDs.subtract(eligiblePluginIDs)
+        selectedInstallablePluginIDs = eligiblePluginIDs
+    }
+
+    mutating func deselectAll(eligiblePluginIDs: Set<String>) {
+        userDeselectedPluginIDs.formUnion(eligiblePluginIDs)
+        selectedInstallablePluginIDs.removeAll()
+    }
+
+    mutating func setPluginSelected(_ pluginID: String, isSelected: Bool) {
+        if isSelected {
+            selectedInstallablePluginIDs.insert(pluginID)
+            userDeselectedPluginIDs.remove(pluginID)
+        } else {
+            selectedInstallablePluginIDs.remove(pluginID)
+            userDeselectedPluginIDs.insert(pluginID)
+        }
+    }
+
+    mutating func updateEligiblePlugins(_ eligiblePluginIDs: Set<String>) {
+        selectedInstallablePluginIDs = eligiblePluginIDs.subtracting(userDeselectedPluginIDs)
+    }
+}
+
+struct PreferencesImportPreviewSheet: View {
     let preview: PreferencesImportPreview
     let previewProvider: (PreferencesBackupSelection) throws -> PreferencesImportPreview
     let pluginOptions: [PreferencesPluginOption]
     let isImporting: Bool
+    let importProgress: PreferencesImportProgress?
     let onCancel: () -> Void
     let onImport: (Set<String>, PreferencesBackupSelection) -> Void
-    @State private var selectedInstallablePluginIDs: Set<String> = []
+    @State var selectionModel: PreferencesImportSelectionModel
     @State private var selection: PreferencesBackupSelection
     @State private var currentPreview: PreferencesImportPreview
     @State private var previewErrorMessage: String?
+
+    var selectedInstallablePluginIDs: Set<String> {
+        selectionModel.selectedInstallablePluginIDs
+    }
+
+    var userDeselectedPluginIDs: Set<String> {
+        selectionModel.userDeselectedPluginIDs
+    }
 
     init(
         preview: PreferencesImportPreview,
         previewProvider: @escaping (PreferencesBackupSelection) throws -> PreferencesImportPreview,
         pluginOptions: [PreferencesPluginOption],
         isImporting: Bool,
+        importProgress: PreferencesImportProgress? = nil,
         onCancel: @escaping () -> Void,
         onImport: @escaping (Set<String>, PreferencesBackupSelection) -> Void
     ) {
@@ -1846,18 +1914,25 @@ private struct PreferencesImportPreviewSheet: View {
         self.previewProvider = previewProvider
         self.pluginOptions = pluginOptions
         self.isImporting = isImporting
+        self.importProgress = importProgress
         self.onCancel = onCancel
         self.onImport = onImport
         var availableSelection = preview.selection
         availableSelection.pluginPreferenceIDs.formIntersection(pluginOptions.map(\.id))
         _selection = State(initialValue: availableSelection)
+        let initialPreview: PreferencesImportPreview
+        var errorMessage: String? = nil
         do {
-            _currentPreview = State(initialValue: try previewProvider(availableSelection))
-            _previewErrorMessage = State(initialValue: nil)
+            initialPreview = try previewProvider(availableSelection)
         } catch {
-            _currentPreview = State(initialValue: preview)
-            _previewErrorMessage = State(initialValue: error.localizedDescription)
+            initialPreview = preview
+            errorMessage = error.localizedDescription
         }
+        _currentPreview = State(initialValue: initialPreview)
+        _selectionModel = State(initialValue: PreferencesImportSelectionModel(
+            eligiblePluginIDs: Set(initialPreview.installableMissingPluginIDs)
+        ))
+        _previewErrorMessage = State(initialValue: errorMessage)
     }
 
     var body: some View {
@@ -1867,14 +1942,15 @@ private struct PreferencesImportPreviewSheet: View {
                     .padding(24)
             }
 
+            if isImporting, let importProgress {
+                importProgressView(importProgress)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+            }
+
             Divider()
 
             HStack(spacing: 12) {
-                if isImporting {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
                 Spacer()
                 Button(AppL10n.settings("common.cancel", defaultValue: "取消"), action: onCancel)
                     .buttonStyle(.bordered)
@@ -1891,6 +1967,55 @@ private struct PreferencesImportPreviewSheet: View {
         .frame(width: 500, height: 640)
         .onChange(of: selection) { _, selection in
             refreshPreview(for: selection)
+        }
+    }
+
+    private func importProgressView(_ progress: PreferencesImportProgress) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+
+                Text(importProgressTitle(progress))
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                    .lineLimit(1)
+            }
+
+            ProgressView(
+                value: Double(progress.completedUnitCount),
+                total: Double(progress.totalUnitCount)
+            )
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private func importProgressTitle(_ progress: PreferencesImportProgress) -> String {
+        switch progress {
+        case .preparing:
+            return AppL10n.preferencesBackup(
+                "preferencesBackup.importProgress.preparing",
+                defaultValue: "正在准备导入…"
+            )
+        case let .installingPlugin(id, number, total):
+            let title = currentPreview.installablePlugins.first(where: { $0.id == id })?.title ?? id
+            return AppL10n.preferencesBackupFormat(
+                "preferencesBackup.importProgress.installing",
+                defaultValue: "正在安装 %@（%d/%d）…",
+                title,
+                number,
+                total
+            )
+        case .restoringPreferences:
+            return AppL10n.preferencesBackup(
+                "preferencesBackup.importProgress.restoring",
+                defaultValue: "正在应用偏好设置…"
+            )
         }
     }
 
@@ -1926,11 +2051,19 @@ private struct PreferencesImportPreviewSheet: View {
 
             if !currentPreview.installablePlugins.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(AppL10n.preferencesBackup(
-                        "preferencesBackup.preview.installablePlugins",
-                        defaultValue: "可安装的缺失插件"
-                    ))
-                        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                    HStack {
+                        Text(AppL10n.preferencesBackup(
+                            "preferencesBackup.preview.installablePlugins",
+                            defaultValue: "可安装的缺失插件"
+                        ))
+                            .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                        Spacer()
+
+                        Text(pluginsSelectedCountSummary)
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                    }
 
                     Text(AppL10n.preferencesBackup(
                         "preferencesBackup.preview.installablePluginsDescription",
@@ -1939,6 +2072,28 @@ private struct PreferencesImportPreviewSheet: View {
                         .font(PluginSettingsTheme.Typography.rowDescription)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        Button(AppL10n.preferencesBackup(
+                            "preferencesBackup.preview.selectAllMissingPlugins",
+                            defaultValue: "全选缺失插件"
+                        )) {
+                            selectionModel.selectAll(eligiblePluginIDs: Set(currentPreview.installableMissingPluginIDs))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(isImporting || selectedInstallablePluginIDs.count == currentPreview.installablePlugins.count)
+
+                        Button(AppL10n.preferencesBackup(
+                            "preferencesBackup.preview.deselectAll",
+                            defaultValue: "全不选"
+                        )) {
+                            selectionModel.deselectAll(eligiblePluginIDs: Set(currentPreview.installableMissingPluginIDs))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(isImporting || selectedInstallablePluginIDs.isEmpty)
+                    }
 
                     ForEach(currentPreview.installablePlugins) { plugin in
                         Toggle(isOn: installationSelectionBinding(for: plugin.id)) {
@@ -1952,6 +2107,7 @@ private struct PreferencesImportPreviewSheet: View {
                             }
                         }
                         .toggleStyle(.checkbox)
+                        .disabled(isImporting)
                     }
                 }
             }
@@ -1983,40 +2139,62 @@ private struct PreferencesImportPreviewSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var confirmTitle: String {
-        if selectedInstallablePluginIDs.isEmpty {
-            return AppL10n.preferencesBackup("preferencesBackup.preview.confirm", defaultValue: "导入")
-        }
+    var confirmTitle: String {
+        Self.confirmTitle(selectedCount: selectedInstallablePluginIDs.count)
+    }
 
-        return AppL10n.preferencesBackup(
-            "preferencesBackup.preview.installAndImport",
-            defaultValue: "安装所选插件并导入"
+    var previewDescription: String {
+        Self.previewDescription(selectedCount: selectedInstallablePluginIDs.count)
+    }
+
+    var pluginsSelectedCountSummary: String {
+        Self.pluginsSelectedCountSummary(
+            selectedCount: selectedInstallablePluginIDs.count,
+            totalCount: currentPreview.installablePlugins.count
         )
     }
 
-    private var previewDescription: String {
-        if selectedInstallablePluginIDs.isEmpty {
+    static func confirmTitle(selectedCount: Int) -> String {
+        if selectedCount == 0 {
+            return AppL10n.preferencesBackup("preferencesBackup.preview.confirm", defaultValue: "导入")
+        }
+
+        return AppL10n.preferencesBackupPluralFormat(
+            "preferencesBackup.preview.installAndImportCount",
+            defaultValue: "安装 %d 个插件并导入",
+            count: selectedCount
+        )
+    }
+
+    static func previewDescription(selectedCount: Int) -> String {
+        if selectedCount == 0 {
             return AppL10n.preferencesBackup(
                 "preferencesBackup.preview.description",
                 defaultValue: "请确认以下更改。导入不会安装插件，也不会修改权限、缓存、Keychain 密钥或插件私有数据。"
             )
         }
 
-        return AppL10n.preferencesBackup(
-            "preferencesBackup.description",
-            defaultValue: "包含应用偏好、插件布局、快捷键、工作流、自动化规则、已保存的运行链接和支持导出的插件设置；不包含权限、缓存、凭证或运行历史。"
+        return AppL10n.preferencesBackupPluralFormat(
+            "preferencesBackup.preview.descriptionWithInstall",
+            defaultValue: "请确认以下更改。导入将自动安装 %d 个选中的缺失插件；不会修改权限、缓存、Keychain 密钥或插件私有数据。",
+            count: selectedCount
+        )
+    }
+
+    static func pluginsSelectedCountSummary(selectedCount: Int, totalCount: Int) -> String {
+        AppL10n.preferencesBackupFormat(
+            "preferencesBackup.preview.selectedPluginsSummary",
+            defaultValue: "已选 %d / %d 个插件",
+            selectedCount,
+            totalCount
         )
     }
 
     private func installationSelectionBinding(for pluginID: String) -> Binding<Bool> {
         Binding {
-            selectedInstallablePluginIDs.contains(pluginID)
+            selectionModel.selectedInstallablePluginIDs.contains(pluginID)
         } set: { isSelected in
-            if isSelected {
-                selectedInstallablePluginIDs.insert(pluginID)
-            } else {
-                selectedInstallablePluginIDs.remove(pluginID)
-            }
+            selectionModel.setPluginSelected(pluginID, isSelected: isSelected)
         }
     }
 
@@ -2024,17 +2202,14 @@ private struct PreferencesImportPreviewSheet: View {
         do {
             let refreshed = try previewProvider(selection)
             currentPreview = refreshed
-            selectedInstallablePluginIDs.formIntersection(
-                refreshed.installablePlugins.map(\.id)
-            )
+            selectionModel.updateEligiblePlugins(Set(refreshed.installableMissingPluginIDs))
             previewErrorMessage = nil
         } catch {
             previewErrorMessage = error.localizedDescription
-            selectedInstallablePluginIDs.removeAll()
+            selectionModel.deselectAll(eligiblePluginIDs: [])
         }
     }
 }
-
 private struct MenuBarClickBehaviorSettingsRow: View {
     @Binding var selectionRawValue: String
     @State private var isSwapped = false

@@ -16,10 +16,10 @@ Nightly 不需要新的发布证书或私钥。合并实现后，维护者只需
 
 1. 确认稳定版使用的九项必需 Secrets 仍然可用：`APPLE_DEVELOPMENT_TEAM`、`BUNDLE_IDENTIFIER_PREFIX`、`DEVELOPER_ID_CERT_P12`、`DEVELOPER_ID_CERT_PASSWORD`、`ASC_API_KEY_P8_BASE64`、`ASC_API_KEY_ID`、`ASC_API_ISSUER_ID`、`SPARKLE_PRIVATE_KEY` 和 `PLUGIN_CATALOG_PRIVATE_KEY_BASE64`。
 2. 在 `Settings` → `Actions` → `General` 中保留 `Read and write permissions`；在 `Settings` → `Pages` 中保留 `GitHub Actions` 发布源。这两项也是现有发布流程的要求。
-3. Run `Actions` → `Nightly` manually against `main`. Verify signing, notarization, the GitHub prerelease, `docs/nightly/appcast.xml`, `docs/nightly/plugins/v6/catalog.json`, and Pages deployment. Download the DMG, CLI ZIP, and both checksums from the same prerelease, then follow `docs/testing/cli-nightly-distribution.md` to check signatures, Gatekeeper, architecture, and versions. Install that DMG and at least one plugin from the Nightly catalog.
+3. Run `Actions` → `Nightly` manually against `main`. Verify signing, notarization, the GitHub prerelease, `docs/nightly/appcast.xml`, `docs/nightly/plugins/v6/catalog.json`, and Pages deployment. Download the DMG, CLI ZIP, and both checksums from the same prerelease, then follow `docs/testing/cli-nightly-distribution.md` to check the CLI signature, architecture, and version plus the installed app's Gatekeeper acceptance. Install that DMG and at least one plugin from the Nightly catalog.
 4. 再以 `main` 手动运行一次，在已安装的 Nightly 中验证 N → N+1 Sparkle 更新及已安装插件的启动前自动同步。通过后，在 `Settings` → `Secrets and variables` → `Actions` → `Variables` 中创建 repository variable `ENABLE_NIGHTLY_RELEASES=true`，启用每日计划任务。删除该 variable 或改为其他值即可暂停计划任务；手动运行仍可用于验证。
 
-Manual refs must be ancestors of `origin/main` and support Nightly release interface v3 and the CLI testing guide before the workflow accesses release credentials. Interface v3 requires the CLI archive to include the unchanged repository GPL license; older rollback refs need that packaging update first. Nightly isolates its bundle ID, display name, `mactools-nightly://` URL scheme, Application Support directory, update feed, and plugin catalog. The app, CLI, and complete plugin set use the same source commit, with plugin versions generated as `source-major.run.attempt`. Retention keeps the latest 14 matching Nightly prereleases and protects builds referenced by the committed or deployed appcast; stable releases and other prereleases are excluded.
+Manual refs must be ancestors of `origin/main` and support Nightly release interface v4 and the CLI testing guide before the workflow accesses release credentials. Interface v4 requires app-sealed CLI installation metadata as well as the unchanged repository GPL license in the CLI archive; older rollback refs need both packaging updates first. Nightly isolates its bundle ID, display name, `mactools-nightly://` URL scheme, Application Support directory, update feed, and plugin catalog. The app, CLI, and complete plugin set use the same source commit, with plugin versions generated as `source-major.run.attempt`. Retention keeps the latest 14 matching Nightly prereleases and protects builds referenced by the committed or deployed appcast; stable releases and other prereleases are excluded.
 
 Release assets are staged with their final public filenames before upload. A failed run deletes the draft release it created, while each successful run removes abandoned drafts in the workflow-owned `nightly-<run>-<attempt>` namespace. Published Nightly retention remains limited to matching prereleases and never selects stable releases or unrelated prereleases.
 
@@ -174,6 +174,18 @@ git push origin v0.9.3
 Release 工作流会校验 `v0.9.3` 与 `Configs/AppVersion.xcconfig` 的 `MARKETING_VERSION = 0.9.3` 一致，并使用 `CURRENT_PROJECT_VERSION` 作为 Sparkle appcast 和 App 包里的 build 号。版本不一致时会直接失败，避免产物、tag 和 appcast 不一致。
 
 也可以在 GitHub Actions 页面手动运行 `Release`，输入已存在的 tag，例如 `v0.9.3`；该 tag 指向的提交里仍必须已经更新 `Configs/AppVersion.xcconfig`。
+
+### App release recovery
+
+The app signing step signs the embedded `MacToolsCLIBroker` executable before signing the outer app. The broker is a plain executable and is not covered by the framework, bundle, or dynamic-library signing loops. The local release script follows the same order.
+
+If an app release fails because of an inline workflow bug and its tagged source is otherwise correct, push the workflow fix to `main`, then start a new `Actions` -> `Release` -> `Run workflow`. Select `main` as the workflow branch and enter the existing release tag. The workflow definition comes from `main`, while checkout still uses the requested tag for the app source, version, catalog, and release notes. For example:
+
+```bash
+gh workflow run release.yml --ref main -f tag=v1.3.0
+```
+
+The old run's `Re-run jobs` action reuses its original workflow revision and will not pick up the fix. Keep the existing tag and plugin release unchanged for this workflow-only recovery. Changes to app source or scripts loaded from the checkout require an updated release source; running the workflow from `main` does not replace those tagged files. A separate failed `Build` check is superseded by the new check triggered when the fix is pushed to `main`.
 
 ## 插件发布方式
 
