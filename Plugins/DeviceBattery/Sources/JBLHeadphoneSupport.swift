@@ -91,7 +91,8 @@ enum JBLHeadphoneCatalog {
         "JBL Xtreme",
         "JBL Pulse",
         "JBL Clip",
-        "JBL Go"
+        "JBL Go",
+        "JBL Sense Lite"
     ]
     
     static func isJBLHeadphone(name: String?, manufacturer: String?) -> Bool {
@@ -123,6 +124,7 @@ enum JBLHeadphoneCatalog {
             || lowercasedName.contains("live 770nc")
             || lowercasedName.contains("live 670nc")
             || lowercasedName.contains("quantum")
+            || lowercasedName.contains("sense lite")
     }
 }
 
