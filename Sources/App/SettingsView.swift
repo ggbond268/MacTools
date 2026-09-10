@@ -651,15 +651,6 @@ struct GeneralSettingsView: View {
                     )
                 }
                 Section {
-                    CLISettingsRow(service: cliService)
-                        .settingsGroupedFormRowWidth(widths.sectionLayout)
-                } header: {
-                    SettingsGroupedFormSectionHeader(
-                        title: AppL10n.settings("general.section.commandLine", defaultValue: "命令行"),
-                        layoutWidth: widths.readableContent
-                    )
-                }
-                Section {
                     AppearanceSettingsRow(
                         selectionRawValue: appearancePreferenceBinding
                     )
@@ -747,6 +738,20 @@ struct GeneralSettingsView: View {
                             "general.section.cloudPreferencesSync",
                             defaultValue: "云同步"
                         ),
+                        layoutWidth: widths.readableContent
+                    )
+                }
+                Section {
+                    if CLIInstallController.isSupportedChannel {
+                        CLIInstallSettingsView()
+                            .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    } else {
+                        CLISettingsRow(service: cliService)
+                            .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    }
+                } header: {
+                    SettingsGroupedFormSectionHeader(
+                        title: AppL10n.settings("general.section.commandLine", defaultValue: "命令行"),
                         layoutWidth: widths.readableContent
                     )
                 }

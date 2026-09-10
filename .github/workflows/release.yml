@@ -257,6 +257,11 @@ jobs:
             fi
           done < <(find "$APP_PATH/Contents" -depth -type d \( -name "*.framework" -o -name "*.app" -o -name "*.xpc" -o -name "*.appex" \) -print)
 
+          # The broker is a plain executable, so the bundle/dylib loops above do not sign it.
+          CLI_BROKER="$APP_PATH/Contents/MacOS/MacToolsCLIBroker"
+          [[ -f "$CLI_BROKER" ]] || { echo "Release CLI broker is missing" >&2; exit 1; }
+          sign_path "$CLI_BROKER"
+
           if [[ -d "$SPARKLE_FRAMEWORK" ]]; then
             sign_path "$SPARKLE_FRAMEWORK"
           fi
