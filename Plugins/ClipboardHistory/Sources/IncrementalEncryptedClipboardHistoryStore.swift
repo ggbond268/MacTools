@@ -12,6 +12,7 @@ final class IncrementalEncryptedClipboardHistoryStore:
         let text: String
         let capturedAt: Date
         let sourceApplication: ClipboardSourceApplication?
+        let source: ClipboardHistorySource?
         let kind: ClipboardHistoryContentKind
         let payloadByteCount: Int
         let filterContentKinds: [ClipboardHistoryContentKind]?
@@ -37,6 +38,7 @@ final class IncrementalEncryptedClipboardHistoryStore:
             text = item.text
             capturedAt = item.capturedAt
             sourceApplication = item.sourceApplication
+            source = item.source.storageOverride
             kind = item.kind
             payloadByteCount = item.payloadByteCount
             filterContentKinds = item.filterContentKinds.sorted { $0.rawValue < $1.rawValue }
@@ -463,6 +465,7 @@ final class IncrementalEncryptedClipboardHistoryStore:
             hasCompletedImageTextIndexing: metadata.hasCompletedImageTextIndexing ?? false,
             isInHistory: metadata.isInHistory ?? true,
             savedMetadata: metadata.savedMetadata,
+            source: metadata.source,
             payloadLoader: { [weak self] in
                 guard let self else {
                     throw ClipboardHistoryPayloadAccessError.unavailable

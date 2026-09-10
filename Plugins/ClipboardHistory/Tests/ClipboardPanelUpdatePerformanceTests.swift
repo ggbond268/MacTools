@@ -318,6 +318,33 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         )
     }
 
+    func testOpeningDuringBackgroundPreparationReusesTheSameScan() async throws {
+        let gate = ClipboardPreparationSuspensionGate()
+        defer { gate.resume() }
+        let checkpoints = ClipboardPreparationCheckpointCounter()
+        let items = makeItems(80)
+        let model = ClipboardHistoryPanelModel(presentationPreparationCheckpointForTesting: {
+            checkpoints.increment()
+            gate.pauseOnce()
+        })
+        model.prepareForPresentationAsynchronously(items: items, historyRevision: 1, savedRevision: 1)
+        try await waitUntilPaused(gate)
+        XCTAssertFalse(model.isPreviewPresentationActive)
+        model.activatePreviewPresentation()
+        model.prepareForPresentationAsynchronously(items: items, historyRevision: 1, savedRevision: 1)
+        gate.resume()
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(checkpoints.value, 2, "Opening must join the pending scan rather than restart it")
+        XCTAssertEqual(model.visibleItems.map(\.id), Array(items.prefix(50)).map(\.id))
+        model.cancelPresentationPreparation()
+        model.resetPreviewPresentation()
+        model.prepareForPresentationAsynchronously(items: items, historyRevision: 1, savedRevision: 1)
+        XCTAssertFalse(model.isPreparingPresentation)
+        XCTAssertFalse(model.isSearching)
+        XCTAssertEqual(checkpoints.value, 2)
+    }
+
     func testHistoryMutationInvalidatesSuspendedPresentationPreparation() async throws {
         let gate = ClipboardPreparationSuspensionGate()
         let staleItems = makeItems(2_000)

@@ -54,6 +54,8 @@ protocol ClipboardPasteboardAccess: AnyObject {
         expectedChangeCount: Int
     ) async -> ClipboardPasteboardReadResult
     func cancelAsynchronousPayloadRead()
+    func readCapture(maximumByteCount: Int, expectedChangeCount: Int) -> ClipboardPasteboardCaptureReadResult
+    func readCaptureAsynchronously(maximumByteCount: Int, expectedChangeCount: Int) async -> ClipboardPasteboardCaptureReadResult
     @discardableResult func writePlainText(_ text: String) -> Bool
     @discardableResult func writePayload(_ payload: ClipboardHistoryPayload) -> Bool
 }
@@ -70,6 +72,11 @@ enum ClipboardPasteboardTypeReadResult: Equatable, Sendable {
     case types(Set<String>)
     case tooManyObjects
     case changed
+}
+
+struct ClipboardPasteboardCaptureReadResult: Sendable {
+    let result: ClipboardPasteboardReadResult
+    var sourceHint: ClipboardPasteboardSourceHint? = nil
 }
 
 extension ClipboardPasteboardAccess {
@@ -125,6 +132,14 @@ extension ClipboardPasteboardAccess {
     }
 
     func cancelAsynchronousPayloadRead() {}
+
+    func readCapture(maximumByteCount: Int, expectedChangeCount: Int) -> ClipboardPasteboardCaptureReadResult {
+        .init(result: readPayload(maximumByteCount: maximumByteCount, expectedChangeCount: expectedChangeCount))
+    }
+
+    func readCaptureAsynchronously(maximumByteCount: Int, expectedChangeCount: Int) async -> ClipboardPasteboardCaptureReadResult {
+        .init(result: await readPayloadAsynchronously(maximumByteCount: maximumByteCount, expectedChangeCount: expectedChangeCount))
+    }
 }
 
 enum ClipboardPlainTextRewriteResult: Equatable, Sendable {
@@ -173,7 +188,8 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
               Self.captureComplexityIsWithinLimits(sourceItems) else {
             return []
         }
-        return Set(sourceItems.flatMap { $0.types.map(\.rawValue) })
+        return Set((pasteboard.types ?? []).map(\.rawValue))
+            .union(sourceItems.flatMap { $0.types.map(\.rawValue) })
     }
 
     func readTypeNames(expectedChangeCount: Int) -> ClipboardPasteboardTypeReadResult {
@@ -184,7 +200,9 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
         guard Self.captureComplexityIsWithinLimits(sourceItems) else {
             return pasteboard.changeCount == expectedChangeCount ? .tooManyObjects : .changed
         }
-        let names = Set(sourceItems.flatMap { $0.types.map(\.rawValue) })
+        let boardTypes = pasteboard.types ?? []
+        guard boardTypes.count <= Self.maximumTotalRepresentationCount else { return .tooManyObjects }
+        let names = Set(boardTypes.map(\.rawValue)).union(sourceItems.flatMap { $0.types.map(\.rawValue) })
         guard pasteboard.changeCount == expectedChangeCount else { return .changed }
         return .types(names)
     }
@@ -242,7 +260,23 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
         maximumByteCount: Int,
         expectedChangeCount: Int
     ) async -> ClipboardPasteboardReadResult {
-        guard !Task.isCancelled else { return .changed }
+        await readCaptureAsynchronously(maximumByteCount: maximumByteCount, expectedChangeCount: expectedChangeCount).result
+    }
+
+    func readCapture(maximumByteCount: Int, expectedChangeCount: Int) -> ClipboardPasteboardCaptureReadResult {
+        let response = ClipboardPasteboardReaderWire.read(.init(
+            pasteboardName: pasteboardName.rawValue,
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: expectedChangeCount
+        ))
+        return .init(result: Self.readResult(from: response), sourceHint: response.sourceHint)
+    }
+
+    nonisolated func readCaptureAsynchronously(
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async -> ClipboardPasteboardCaptureReadResult {
+        guard !Task.isCancelled else { return .init(result: .changed) }
         let request = ClipboardPasteboardReaderRequest(
             pasteboardName: pasteboardName.rawValue,
             maximumByteCount: maximumByteCount,
@@ -250,10 +284,10 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
         )
         do {
             let response = try await payloadReader.read(request)
-            guard !Task.isCancelled else { return .changed }
-            return Self.readResult(from: response)
+            guard !Task.isCancelled else { return .init(result: .changed) }
+            return .init(result: Self.readResult(from: response), sourceHint: response.sourceHint)
         } catch {
-            return .changed
+            return .init(result: .changed)
         }
     }
 
@@ -348,11 +382,15 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
 @MainActor
 protocol ClipboardSourceContextProviding: AnyObject {
     func frontmostApplication() -> ClipboardSourceApplication?
+    func application(forBundleIdentifier bundleIdentifier: String) -> ClipboardSourceApplication
     func takeRecentlyActivatedApplications() -> [ClipboardSourceApplication]
     func discardRecentlyActivatedApplications()
 }
 
 extension ClipboardSourceContextProviding {
+    func application(forBundleIdentifier bundleIdentifier: String) -> ClipboardSourceApplication {
+        ClipboardSourceApplication(bundleIdentifier: bundleIdentifier, name: bundleIdentifier)
+    }
     func takeRecentlyActivatedApplications() -> [ClipboardSourceApplication] { [] }
     func discardRecentlyActivatedApplications() {}
 }
@@ -360,6 +398,7 @@ extension ClipboardSourceContextProviding {
 @MainActor
 final class WorkspaceClipboardSourceContextProvider: NSObject, ClipboardSourceContextProviding {
     private var recentlyActivatedApplicationsByBundleID: [String: ClipboardSourceApplication] = [:]
+    private var declaredApplicationsByBundleID: [String: ClipboardSourceApplication] = [:]
 
     override init() {
         super.init()
@@ -377,6 +416,21 @@ final class WorkspaceClipboardSourceContextProvider: NSObject, ClipboardSourceCo
 
     func frontmostApplication() -> ClipboardSourceApplication? {
         Self.sourceApplication(from: NSWorkspace.shared.frontmostApplication)
+    }
+
+    func application(forBundleIdentifier bundleIdentifier: String) -> ClipboardSourceApplication {
+        if let cached = declaredApplicationsByBundleID[bundleIdentifier] { return cached }
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first
+        let url = running?.bundleURL ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+        let bundle = url.flatMap(Bundle.init(url:))
+        let name = running?.localizedName
+            ?? bundle?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? bundle?.object(forInfoDictionaryKey: "CFBundleName") as? String
+            ?? bundleIdentifier
+        let application = ClipboardSourceApplication(bundleIdentifier: bundleIdentifier, name: name)
+        if declaredApplicationsByBundleID.count >= 64 { declaredApplicationsByBundleID.removeAll() }
+        declaredApplicationsByBundleID[bundleIdentifier] = application
+        return application
     }
 
     func takeRecentlyActivatedApplications() -> [ClipboardSourceApplication] {
@@ -1043,16 +1097,18 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 maximumByteCount: currentSettings.maximumItemByteCount,
                 expectedChangeCount: currentChangeCount,
                 sourceApplication: sourceApplication,
+                sourceHint: ClipboardPasteboardSourceHint.marker(in: typeNames),
                 capturedAt: now
             )
             return
         }
         handlePasteboardPayloadReadResult(
-            pasteboard.readPayload(
+            pasteboard.readCapture(
                 maximumByteCount: currentSettings.maximumItemByteCount,
                 expectedChangeCount: currentChangeCount
             ),
             sourceApplication: sourceApplication,
+            sourceHint: ClipboardPasteboardSourceHint.marker(in: typeNames),
             changeCount: currentChangeCount,
             capturedAt: now
         )
@@ -1082,13 +1138,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         maximumByteCount: Int,
         expectedChangeCount: Int,
         sourceApplication: ClipboardSourceApplication?,
+        sourceHint: ClipboardPasteboardSourceHint?,
         capturedAt: Date
     ) {
         let pasteboard = pasteboard
         pasteboardPayloadReadGeneration &+= 1
         let generation = pasteboardPayloadReadGeneration
         pasteboardPayloadReadTask = Task { @MainActor [weak self] in
-            let result = await pasteboard.readPayloadAsynchronously(
+            let result = await pasteboard.readCaptureAsynchronously(
                 maximumByteCount: maximumByteCount,
                 expectedChangeCount: expectedChangeCount
             )
@@ -1102,6 +1159,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             self.handlePasteboardPayloadReadResult(
                 result,
                 sourceApplication: sourceApplication,
+                sourceHint: sourceHint,
                 changeCount: expectedChangeCount,
                 capturedAt: capturedAt
             )
@@ -1109,15 +1167,16 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     }
 
     private func handlePasteboardPayloadReadResult(
-        _ result: ClipboardPasteboardReadResult,
+        _ read: ClipboardPasteboardCaptureReadResult,
         sourceApplication: ClipboardSourceApplication?,
+        sourceHint: ClipboardPasteboardSourceHint?,
         changeCount currentChangeCount: Int,
         capturedAt: Date
     ) {
         guard !isMutatingItems, errorMessage == nil else { return }
         let currentSettings = settings.snapshot
         let payload: ClipboardHistoryPayload
-        switch result {
+        switch read.result {
         case let .payload(capturedPayload):
             payload = capturedPayload
         case .empty:
@@ -1132,9 +1191,13 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return
         }
 
-        guard ClipboardCapturePolicy.preflight(
+        let hint = sourceHint == .universalClipboard ? sourceHint : (read.sourceHint ?? sourceHint)
+        let source = resolvedSource(hint: hint, observedApplication: sourceApplication)
+        // Declared origins describe content; they must not bypass the foreground privacy gate.
+        guard !Self.isExcluded(sourceApplication, settings: currentSettings),
+              ClipboardCapturePolicy.preflight(
             types: Set(payload.representations.map(\.typeIdentifier)),
-            sourceApplication: sourceApplication,
+            sourceApplication: source.application,
             settings: currentSettings
         ) == nil else {
             return
@@ -1146,6 +1209,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             enqueueCaptureProcessing(
                 payload: payload,
                 sourceApplication: sourceApplication,
+                source: source,
                 changeCount: currentChangeCount,
                 capturedAt: capturedAt
             )
@@ -1153,16 +1217,33 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         }
         let decision = ClipboardCapturePolicy.evaluatePayload(
             payload,
-            sourceApplication: sourceApplication,
+            sourceApplication: source.application,
             settings: currentSettings,
             newestItem: items.first(where: { $0.isInHistory && !pendingDeletedItemIDs.contains($0.id) }),
-            now: capturedAt
+            now: capturedAt,
+            source: source
         )
         applyCaptureDecision(
             decision,
             settings: currentSettings,
             changeCount: currentChangeCount
         )
+    }
+
+    private func resolvedSource(
+        hint: ClipboardPasteboardSourceHint?,
+        observedApplication: ClipboardSourceApplication?
+    ) -> ClipboardHistorySource {
+        switch hint {
+        case .universalClipboard: return .universalClipboard
+        case .unknown: return .unknown
+        case let .application(identifier):
+            guard ClipboardPasteboardSourceHint.applicationIdentifier(from: Data(identifier.utf8)) == hint else {
+                return .unknown
+            }
+            return .application(sourceContext.application(forBundleIdentifier: identifier))
+        case nil: return ClipboardHistorySource(application: observedApplication)
+        }
     }
 
     private static func isExcluded(
@@ -1182,6 +1263,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private func enqueueCaptureProcessing(
         payload: ClipboardHistoryPayload,
         sourceApplication: ClipboardSourceApplication?,
+        source: ClipboardHistorySource,
         changeCount: Int,
         capturedAt: Date
     ) {
@@ -1212,9 +1294,10 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 }
                 let policyRevision = self.capturePolicyRevision
                 let settings = self.settings.snapshot
-                guard ClipboardCapturePolicy.preflight(
+                guard !Self.isExcluded(sourceApplication, settings: settings),
+                      ClipboardCapturePolicy.preflight(
                     types: Set(payload.representations.map(\.typeIdentifier)),
-                    sourceApplication: sourceApplication,
+                    sourceApplication: source.application,
                     settings: settings
                 ) == nil else { return }
                 let newestItem = self.items.first(where: {
@@ -1223,10 +1306,11 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
                 let worker = Task.detached(priority: .userInitiated) {
                     ClipboardCapturePolicy.evaluatePayload(
                         payload,
-                        sourceApplication: sourceApplication,
+                        sourceApplication: source.application,
                         settings: settings,
                         newestItem: newestItem,
-                        now: capturedAt
+                        now: capturedAt,
+                        source: source
                     )
                 }
                 let decision = await withTaskCancellationHandler {

@@ -3,6 +3,75 @@ import XCTest
 @testable import ClipboardHistoryPlugin
 
 final class ClipboardPasteboardReaderProcessTests: XCTestCase {
+    func testHelperReturnsSourceHintsSeparatelyFromClipboardPayload() async throws {
+        let helperURL = try XCTUnwrap(Self.helperURL)
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let reader = ClipboardPasteboardReaderProcess(helperURL: { helperURL })
+        defer { Task { await reader.stop() } }
+        let sourceType = NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.applicationType)
+        let cases: [(String?, ClipboardPasteboardSourceHint?)] = [
+            (nil, nil), ("com.example.Writer", .application("com.example.Writer")),
+            ("", .unknown), ("invalid\nsource", .unknown), (String(repeating: "x", count: 256), .unknown),
+        ]
+        for (marker, expected) in cases {
+            pasteboard.clearContents()
+            pasteboard.setString("Source-aware text", forType: .string)
+            if let marker { pasteboard.setString(marker, forType: sourceType) }
+            let response = try await reader.read(request(for: pasteboard))
+            XCTAssertEqual(response.sourceHint, expected)
+            XCTAssertEqual(plainText(in: response), "Source-aware text")
+            XCTAssertFalse(response.items.flatMap(\.representations).contains { $0.typeIdentifier == sourceType.rawValue })
+        }
+        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.remoteType))
+        let remote = try await reader.read(request(for: pasteboard))
+        XCTAssertEqual(remote.sourceHint, .universalClipboard, "The empty remote marker must override any declared app")
+    }
+
+    func testConflictingDeclaredSourcesAreUnknownAndPrivateMarkersStillBlockCapture() async throws {
+        let helperURL = try XCTUnwrap(Self.helperURL)
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let reader = ClipboardPasteboardReaderProcess(helperURL: { helperURL })
+        defer { Task { await reader.stop() } }
+        let items = ["com.example.First", "com.example.Second"].map { identifier in
+            let item = NSPasteboardItem()
+            item.setString(identifier, forType: NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.applicationType))
+            item.setString("Text", forType: .string)
+            return item
+        }
+        XCTAssertTrue(pasteboard.writeObjects(items))
+        let conflict = try await reader.read(request(for: pasteboard))
+        XCTAssertEqual(conflict.sourceHint, .unknown)
+        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+        let blocked = try await reader.read(request(for: pasteboard))
+        XCTAssertEqual(blocked.status, .unsafe)
+        XCTAssertTrue(blocked.items.isEmpty)
+    }
+
+    @MainActor
+    func testCaptureAdapterPreservesSourceMetadataWithoutChangingPlainPayloadReads() async throws {
+        let helperURL = try XCTUnwrap(Self.helperURL)
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let reader = ClipboardPasteboardReaderProcess(helperURL: { helperURL })
+        defer { Task { await reader.stop() } }
+        let access = GeneralClipboardPasteboard(pasteboard: pasteboard, payloadReader: reader)
+        pasteboard.setString("Remote text", forType: .string)
+        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.remoteType))
+        let revision = pasteboard.changeCount
+        let capture = await access.readCaptureAsynchronously(maximumByteCount: 1_024, expectedChangeCount: revision)
+        XCTAssertEqual(capture.sourceHint, .universalClipboard)
+        XCTAssertEqual(capture.result, .payload(.plainText("Remote text")))
+        let plainRead = await access.readPayloadAsynchronously(maximumByteCount: 1_024, expectedChangeCount: revision)
+        XCTAssertEqual(plainRead, capture.result)
+        pasteboard.clearContents()
+        pasteboard.setString("New copy", forType: .string)
+        XCTAssertNotEqual(pasteboard.changeCount, revision)
+        let stale = await access.readCaptureAsynchronously(maximumByteCount: 1_024, expectedChangeCount: revision)
+        XCTAssertEqual(stale.result, .changed)
+    }
+
     func testHelperReadsMultipleClipboardRevisionsWithoutRelaunching() async throws {
         let helperURL = try XCTUnwrap(Self.helperURL)
         let pasteboard = NSPasteboard.withUniqueName()
