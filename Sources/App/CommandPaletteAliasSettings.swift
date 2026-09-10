@@ -15,19 +15,16 @@ struct CommandPaletteAliasSettingsRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
             Text(item.definition.title).font(PluginSettingsTheme.Typography.rowTitle)
-            HStack {
-                TextField(label("title", "触发短语"), text: $draft)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 160, idealWidth: 240, maxWidth: 320)
-                    .accessibilityIdentifier("mactools.action-input.alias")
-                    .onSubmit { save(draft) }
-                Button(label("save", "保存")) { save(draft) }
-                    .disabled(draft == current)
-                    .accessibilityIdentifier("mactools.action-input.alias.save")
-                Button(label("reset", "恢复默认")) { save(nil) }
-                    .disabled(pluginHost.actionInputAliases.overrides[item.id.id] == nil && draft == current)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    triggerField
+                    buttons
+                }
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    triggerField
+                    buttons
+                }
             }
-            .buttonStyle(.bordered).controlSize(.small)
             Text(AppL10n.settingsFormat("actionInput.alias.preview", defaultValue: "示例：%@ 你的消息 ↵", draft))
                 .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -35,9 +32,33 @@ struct CommandPaletteAliasSettingsRow: View {
                 Text(error).font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.red)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { draft = current }
         .onChange(of: current) { _, value in draft = value }
         .onChange(of: draft) { error = nil }
+    }
+
+    private var triggerField: some View {
+        TextField(label("title", "触发短语"), text: $draft)
+            .labelsHidden()
+            .multilineTextAlignment(.leading)
+            .textFieldStyle(.roundedBorder)
+            .frame(minWidth: 160, idealWidth: 240, maxWidth: 320)
+            .accessibilityIdentifier("mactools.action-input.alias")
+            .onSubmit { save(draft) }
+    }
+
+    private var buttons: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            Button(label("save", "保存")) { save(draft) }
+                .disabled(draft == current)
+                .accessibilityIdentifier("mactools.action-input.alias.save")
+            Button(label("reset", "恢复默认")) { save(nil) }
+                .disabled(pluginHost.actionInputAliases.overrides[item.id.id] == nil && draft == current)
+        }
+        .fixedSize()
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     private func save(_ value: String?) {

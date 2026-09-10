@@ -139,6 +139,7 @@ final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProvidin
                         Button(text("取消")) { self.controller.cancel() }.buttonStyle(.bordered).controlSize(.small)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             },
         ])
     }
