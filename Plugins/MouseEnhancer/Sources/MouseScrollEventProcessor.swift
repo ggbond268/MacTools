@@ -85,39 +85,33 @@ struct MouseScrollTuning: Equatable, Sendable {
         point: Int64,
         fixed: Double
     ) -> (line: Int64, point: Int64, fixed: Double) {
-        var nextLine = Double(line)
-        var nextPoint = Double(point)
-        var nextFixed = fixed
-
-        if gain != 1 {
-            nextLine = scaled(nextLine * gain, fallbackSignOf: line)
-            nextPoint = scaled(nextPoint * gain, fallbackSignOf: point)
-            nextFixed *= gain
+        // Apply gain and the pixel floor with one scale from the original
+        // deltas. Rounding before this step would amplify coarse line deltas.
+        // Pixel-less axes receive gain only, without inventing pixel motion.
+        var scale = gain
+        if step > 0, point != 0 {
+            scale = max(scale, step / abs(Double(point)))
         }
 
-        // The step floor is defined in pixels, so it is anchored on the pixel
-        // delta and the line/fixed-point fields are scaled proportionally to
-        // keep the three representations consistent. Pixel-less axes carry no
-        // pixel magnitude to floor against and stay untouched.
-        if step > 0, nextPoint != 0, abs(nextPoint) < step {
-            let scale = step / abs(nextPoint)
-            nextPoint = nextPoint < 0 ? -step : step
-            nextFixed *= scale
-            nextLine = scaled(nextLine * scale, fallbackSignOf: Int64(nextLine))
+        guard scale != 1 else {
+            return (line, point, fixed)
         }
 
-        return (Int64(nextLine), Int64(nextPoint), nextFixed)
+        return (scaledInteger(line, by: scale), scaledInteger(point, by: scale), fixed * scale)
     }
 
     /// Rounds a scaled delta while keeping nonzero sources nonzero, so coarse
     /// integer deltas do not collapse to zero under a gain below one.
-    private func scaled(_ value: Double, fallbackSignOf original: Int64) -> Double {
-        let rounded = value.rounded()
+    private func scaledInteger(_ original: Int64, by scale: Double) -> Int64 {
+        let rounded = (Double(original) * scale).rounded()
+        // Double(Int64.max) rounds up beyond Int64's range; clamp before casting.
+        if rounded >= Double(Int64.max) { return .max }
+        if rounded <= Double(Int64.min) { return .min }
         if rounded == 0, original != 0 {
             return original < 0 ? -1 : 1
         }
 
-        return rounded
+        return Int64(rounded)
     }
 }
 

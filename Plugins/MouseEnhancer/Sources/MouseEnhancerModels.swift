@@ -41,10 +41,10 @@ struct MouseEnhancerConfiguration: Equatable, Sendable {
         self.reverseTrackpadVertical = reverseTrackpadVertical
         self.middleClickEnabled = middleClickEnabled
         self.middleClickFingerCount = middleClickFingerCount
-        self.mouseScrollStep = mouseScrollStep
-        self.mouseScrollGain = mouseScrollGain
-        self.trackpadScrollStep = trackpadScrollStep
-        self.trackpadScrollGain = trackpadScrollGain
+        self.mouseScrollStep = Self.normalizedScrollStep(mouseScrollStep)
+        self.mouseScrollGain = Self.normalizedScrollGain(mouseScrollGain)
+        self.trackpadScrollStep = Self.normalizedScrollStep(trackpadScrollStep)
+        self.trackpadScrollGain = Self.normalizedScrollGain(trackpadScrollGain)
     }
 
     static let `default` = MouseEnhancerConfiguration(
