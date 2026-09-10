@@ -21,6 +21,7 @@
 
 | Feature | Description |
 | ------- | ----------- |
+| Screenshot | Select a region or window, annotate with shapes, arrows, text, mosaic, or blur, recognize text and QR codes locally, pin images, and capture scrolling content. Quick Capture copies the selection immediately. Silent region recording is available on macOS 15 or later; screenshots support macOS 14 or later. Both actions require an explicit foreground interaction and Screen Recording permission; optional shortcuts start unassigned. See the [Screenshot guide](docs/plugins/screenshot.md) for privacy, output retention, and controls. |
 | Display Resolution | View connected displays and switch each display to an available resolution, with an adaptive list that remains usable near screen edges. |
 | Sidecar | View connected and nearby Sidecar-compatible displays, use direct connect, switch, or disconnect actions, prioritize devices for a first-available shortcut, and keep per-display connection policies and shortcuts, including wired-only connections that request a wired transport rather than a Wi-Fi fallback. |
 | Display Brightness | Quickly adjust built-in and DDC/CI external display brightness, with shortcuts that can follow the mouse or control all displays together, plus Gamma/Shade fallbacks. |
