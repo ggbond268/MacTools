@@ -14,6 +14,60 @@ final class PluginHostComponentSupportTests: XCTestCase {
         super.tearDown()
     }
 
+    func testDynamicPhaseShortcutDefaultCannotBypassExistingShortcutConflict() async {
+        let initial = ShortcutBinding(keyCode: 48, modifiers: [.option])
+        let occupied = ShortcutBinding(keyCode: 18, modifiers: [.command, .option])
+        let phase = PhaseShortcutTestPlugin(binding: initial)
+        let other = MockComponentPanelPlugin(id: "other", shortcutDefinitions: [
+            PluginShortcutDefinition(id: "occupied", title: "Occupied", description: "", actionID: "occupied",
+                                     scope: .global, defaultBinding: occupied, isRequired: false)
+        ])
+        let host = makeHost(plugins: [phase, other])
+        XCTAssertEqual(phase.shortcutBindingResolver?("cycle"), initial)
+        phase.binding = occupied
+        phase.onStateChange?()
+        await host.waitForScheduledPluginStateRebuildForTests()
+        XCTAssertNil(phase.shortcutBindingResolver?("cycle"))
+        XCTAssertNil(phase.latestBinding)
+        XCTAssertGreaterThan(phase.notifications, 0)
+        XCTAssertNotNil(host.shortcutItems.first { $0.id == "phase-test.shortcut.cycle" }?.errorMessage)
+        phase.binding = initial
+        phase.onStateChange?()
+        await host.waitForScheduledPluginStateRebuildForTests()
+        XCTAssertEqual(phase.latestBinding, initial)
+        XCTAssertNil(host.shortcutItems.first { $0.id == "phase-test.shortcut.cycle" }?.errorMessage)
+    }
+
+    func testWindowSwitcherReverseChordCannotShadowAnotherPlugin() async {
+        let base = ShortcutBinding(keyCode: 48, modifiers: [.option])
+        let reverse = ShortcutBinding(keyCode: 48, modifiers: [.option, .shift])
+        let switcher = PhaseShortcutTestPlugin(binding: base, id: "window-switcher")
+        let other = MockComponentPanelPlugin(id: "other", shortcutDefinitions: [
+            PluginShortcutDefinition(id: "occupied", title: "Occupied", description: "", actionID: "occupied",
+                                     scope: .global, defaultBinding: reverse, isRequired: false)
+        ])
+        let host = makeHost(plugins: [switcher, other])
+        XCTAssertNil(switcher.shortcutBindingResolver?("cycle"))
+        XCTAssertNotNil(host.shortcutItems.first { $0.id == "window-switcher.shortcut.cycle" }?.errorMessage)
+        host.clearShortcut(for: "other.shortcut.occupied")
+        await host.waitForScheduledPluginStateRebuildForTests()
+        XCTAssertEqual(switcher.shortcutBindingResolver?("cycle"), base)
+        XCTAssertNotNil(host.setShortcutBindingAndReturnError(reverse, for: "other.shortcut.occupied"))
+    }
+
+    func testWindowSwitcherReverseChordDetectsCanonicalActionAssignment() {
+        let base = ShortcutBinding(keyCode: 48, modifiers: [.option])
+        let reverse = ShortcutBinding(keyCode: 48, modifiers: [.option, .shift])
+        let switcher = PhaseShortcutTestPlugin(binding: base, id: "window-switcher")
+        let host = makeHost(plugins: [switcher])
+        XCTAssertEqual(switcher.shortcutBindingResolver?("cycle"), base)
+        XCTAssertNil(host.setAppShortcutBindingAndReturnError(reverse, for: .openSettings))
+        XCTAssertNil(switcher.shortcutBindingResolver?("cycle"))
+        XCTAssertNil(switcher.latestBinding)
+        host.clearAppShortcut(.openSettings)
+        XCTAssertEqual(switcher.shortcutBindingResolver?("cycle"), base)
+    }
+
     func testComponentPanelPluginOnlyAppearsInComponentItems() {
         let componentPanelPlugin = MockComponentPanelPlugin(id: "component")
         let host = makeHost(plugins: [componentPanelPlugin])
@@ -1252,5 +1306,29 @@ private final class MockSettingsOnlyPlugin: MacToolsPlugin {
 
     var settingsPage: PluginSettingsPage? {
         .workspace(description: "Settings only") { _ in Text("Settings") }
+    }
+}
+
+@MainActor
+private final class PhaseShortcutTestPlugin: MacToolsPlugin, PluginShortcutEventHandling, PluginShortcutBindingChangeHandling {
+    let metadata: PluginMetadata
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var binding: ShortcutBinding
+    var latestBinding: ShortcutBinding?
+    var notifications = 0
+    init(binding: ShortcutBinding, id: String = "phase-test") {
+        self.binding = binding
+        metadata = PluginMetadata(id: id, title: "Phase Test", iconName: "keyboard", iconTint: .blue,
+                                  order: 0, defaultDescription: "")
+    }
+    var shortcutDefinitions: [PluginShortcutDefinition] {
+        [PluginShortcutDefinition(id: "cycle", title: "Cycle", description: "", actionID: "cycle",
+                                  scope: .whilePluginActive, defaultBinding: binding, isRequired: false)]
+    }
+    func handleShortcutEvent(id: String, phase: PluginShortcutEventPhase) {}
+    func shortcutBindingDidChange(id: String, binding: ShortcutBinding?) {
+        latestBinding = binding; notifications += 1
     }
 }

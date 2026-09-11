@@ -1,846 +1,452 @@
 import AppKit
+import Carbon.HIToolbox
 import MacToolsPluginKit
-import SwiftUI
-
-private enum WindowSwitcherOverlayPresentation {
-    case direct
-    case keyWindow
-}
-
-enum WindowSwitcherOverlayMetrics {
-    static let cornerRadius: CGFloat = 22
-    static let iconSize: CGFloat = 60
-    static let iconLayoutSize: CGFloat = 80
-    static let iconHighlightPadding: CGFloat = 2
-    static let iconHighlightSize = iconSize + iconHighlightPadding * 2
-    static let iconHighlightCornerRadius: CGFloat = 14
-    static let quitButtonSize: CGFloat = 18
-    static let quitButtonGap: CGFloat = 1
-    static let horizontalSpacing: CGFloat = 14
-    static let verticalSpacing: CGFloat = 12
-    static let panelHorizontalPadding: CGFloat = 20
-    static let panelVerticalPadding: CGFloat = 18
-    static let directTopSpacing: CGFloat = 14
-    static let shortcutHeight: CGFloat = 22
-    static let shortcutContentSpacing: CGFloat = 7
-    static let iconLabelSpacing: CGFloat = 6
-    static let labelAreaHeight: CGFloat = 27
-    static let tileContentHeight = iconLayoutSize + iconLabelSpacing + labelAreaHeight
-    static let directTileWidth: CGFloat = 106
-    static let keyWindowTileWidth: CGFloat = 112
-    static let directTileHeight = directTopSpacing + tileContentHeight
-    static let keyWindowTileHeight = shortcutHeight + shortcutContentSpacing + tileContentHeight
-
-    static func quitButtonCenter(tileWidth: CGFloat, contentTopOffset: CGFloat) -> CGPoint {
-        let highlightTopInset = (iconLayoutSize - iconHighlightSize) / 2
-        let cornerCenter = CGPoint(
-            x: tileWidth / 2 + iconHighlightSize / 2 - iconHighlightCornerRadius,
-            y: contentTopOffset + highlightTopInset + iconHighlightCornerRadius
-        )
-        let diagonalOffset = (
-            iconHighlightCornerRadius + quitButtonSize / 2 + quitButtonGap
-        ) / sqrt(2)
-        return CGPoint(
-            x: cornerCenter.x + diagonalOffset,
-            y: cornerCenter.y - diagonalOffset
-        )
-    }
-
-    static func roundedMaskImage(
-        cornerRadius: CGFloat = WindowSwitcherOverlayMetrics.cornerRadius
-    ) -> NSImage {
-        let edge = cornerRadius * 2 + 1
-        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(
-                roundedRect: rect,
-                xRadius: cornerRadius,
-                yRadius: cornerRadius
-            ).fill()
-            return true
-        }
-        image.capInsets = NSEdgeInsets(
-            top: cornerRadius,
-            left: cornerRadius,
-            bottom: cornerRadius,
-            right: cornerRadius
-        )
-        image.resizingMode = .stretch
-        return image
-    }
-}
 
 @MainActor
-private final class WindowSwitcherOverlayModel: ObservableObject {
-    @Published var entries: [WindowSwitcherAppEntry] = []
-    @Published var selectedID: String?
-    @Published var recordingEntryID: String?
-    @Published var recordingCandidate: String?
-    @Published var recordingHasConflict: Bool = false
-    @Published var presentation: WindowSwitcherOverlayPresentation = .keyWindow
-    @Published var columnCount: Int = 1
-    @Published var shortcutText: String = ""
-}
-
-@MainActor
-final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate {
+final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTableViewDataSource,
+    NSTableViewDelegate, NSSearchFieldDelegate {
     var onSelect: ((WindowSwitcherAppEntry) -> Void)?
+    var onClose: ((WindowSwitcherAppEntry) -> Void)?
     var onQuit: ((WindowSwitcherAppEntry) -> Void)?
-    var onShortcutChange: ((WindowSwitcherAppEntry, String?) -> WindowSwitcherShortcutCustomizationResult)?
     var onCancel: (() -> Void)?
+    var onSessionChange: ((WindowSwitcherSession) -> Void)?
+    var onPreviewChange: ((Bool) -> Void)?
+    private(set) var session: WindowSwitcherSession?
 
-    private final class KeyablePanel: NSPanel {
+    private final class Panel: NSPanel {
+        var shortcutHandler: ((NSEvent) -> Bool)?
+        var searchEventFilter: ((NSEvent) -> NSEvent)?
+        var searchTransitionHandler: ((NSEvent) -> Bool)?
+        override func sendEvent(_ event: NSEvent) {
+            if event.type == .keyDown, searchTransitionHandler?(event) == true { return }
+            super.sendEvent(searchEventFilter?(event) ?? event)
+        }
         override var canBecomeKey: Bool { true }
-        override var canBecomeMain: Bool { true }
-    }
-
-    private let model = WindowSwitcherOverlayModel()
-    private var panel: KeyablePanel?
-    private var keyMonitor: Any?
-    private var clickMonitor: Any?
-    private var hostingView: NSView?
-    private var isClosing = false
-
-    var isVisible: Bool {
-        panel?.isVisible ?? false
-    }
-
-    func showDirect(
-        entries: [WindowSwitcherAppEntry],
-        selectedID: String?,
-        shortcutText: String
-    ) {
-        show(
-            entries: entries,
-            selectedID: selectedID,
-            presentation: .direct,
-            shortcutText: shortcutText
-        )
-    }
-
-    func showKeyWindow(
-        entries: [WindowSwitcherAppEntry],
-        shortcutText: String
-    ) {
-        show(
-            entries: entries,
-            selectedID: nil,
-            presentation: .keyWindow,
-            shortcutText: shortcutText
-        )
-    }
-
-    func updateDirectSelection(selectedID: String?) {
-        model.selectedID = selectedID
-    }
-
-    func updateEntries(entries: [WindowSwitcherAppEntry], selectedID: String?) {
-        model.entries = entries
-        model.selectedID = selectedID
-        if let recordingEntryID = model.recordingEntryID,
-           !entries.contains(where: { $0.id == recordingEntryID }) {
-            cancelShortcutRecording()
+        override var canBecomeMain: Bool { false }
+        override func performKeyEquivalent(with event: NSEvent) -> Bool {
+            let filtered = searchEventFilter?(event) ?? event
+            if filtered.modifierFlags != event.modifierFlags {
+                // Consume the original chord so AppKit cannot retry menus with
+                // the held Command modifier after native text input handles it.
+                firstResponder?.keyDown(with: filtered)
+                return true
+            }
+            return shortcutHandler?(event) == true || searchTransitionHandler?(event) == true || super.performKeyEquivalent(with: event)
         }
-        model.columnCount = columnCount(
-            for: entries.count,
-            presentation: model.presentation,
-            screen: targetScreen()
-        )
-
-        if entries.isEmpty {
-            hide()
-        } else if let panel {
-            resize(panel)
-            center(panel, on: targetScreen())
+    }
+    private final class Table: NSTableView {
+        var keyHandler: ((NSEvent) -> Bool)?
+        override func keyDown(with event: NSEvent) {
+            if keyHandler?(event) != true { super.keyDown(with: event) }
         }
+    }
+    private let panel = Panel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    private let table = Table()
+    private let search = NSSearchField()
+    private let scope = NSSegmentedControl(labels: ["", ""], trackingMode: .selectOne, target: nil, action: nil)
+    private let display = NSPopUpButton()
+    private let count = NSTextField(labelWithString: "")
+    private let footer = NSTextField(labelWithString: "")
+    private let empty = NSTextField(wrappingLabelWithString: "")
+    private let previewImage = NSImageView()
+    private let previewLabel = NSTextField(wrappingLabelWithString: "")
+    private let previewPane = NSStackView()
+    private let preview: WindowSwitcherPreview
+    private let localization: PluginLocalization
+    private let closeButton = NSButton(title: "", target: nil, action: nil)
+    private let quitButton = NSButton(title: "", target: nil, action: nil)
+    private let openButton = NSButton(title: "", target: nil, action: nil)
+    private let previewButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let cancelButton = NSButton(title: "", target: nil, action: nil)
+    private var rows: [WindowSwitcherAppEntry] = []
+    private var currentPID: pid_t?
+    private var updating = false
+    private var closing = false
+    private var previewedEntry: WindowSwitcherAppEntry?
+    private var previewedPermission: Bool?
+    private var showsPreview = false
+    private var screenObserver: NSObjectProtocol?
+    private var actionMessage: String?
+    private var renderedSession: WindowSwitcherSession?
+    private var searchHeldModifiers: NSEvent.ModifierFlags = []
+
+    init(localization: PluginLocalization = PluginLocalization(bundle: .main)) {
+        self.localization = localization
+        self.preview = WindowSwitcherPreview(localization: localization)
+        super.init()
+        buildPanel()
+        preview.onChange = { [weak self] image, message in
+            guard let self else { return }
+            self.previewImage.image = image
+            self.previewLabel.stringValue = message ?? (image == nil ? localization.string("preview.loading", defaultValue: "正在加载预览…") : "")
+        }
+        screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
+                                                                 object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.layoutPanel() }
+        }
+    }
+
+    var isVisible: Bool { panel.isVisible }
+
+    func show(_ session: WindowSwitcherSession, currentPID: pid_t?, showsPreview: Bool) {
+        self.session = session
+        self.currentPID = currentPID
+        self.showsPreview = showsPreview
+        renderedSession = nil
+        searchHeldModifiers = []
+        previewButton.state = showsPreview ? .on : .off
+        search.stringValue = session.query
+        actionMessage = nil
+        previewedEntry = nil; previewedPermission = nil
+        render()
+        layoutPanel()
+        PluginPresentationSafety.prepareForWindowOrdering(panel)
+        // The nonactivating panel takes keyboard input without activating the
+        // MacTools application or changing the user's current Space.
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(table)
+    }
+
+    func update(_ value: WindowSwitcherSession) {
+        session = value
+        render()
     }
 
     func hide() {
-        model.recordingEntryID = nil
-        model.recordingCandidate = nil
-        model.recordingHasConflict = false
-        removeKeyMonitor()
-        removeClickMonitor()
-        isClosing = true
-        panel?.orderOut(nil)
-        isClosing = false
+        closing = true
+        panel.orderOut(nil)
+        closing = false
+        session = nil
+        renderedSession = nil
+        searchHeldModifiers = []
+        previewedEntry = nil; previewedPermission = nil
+        preview.cancel()
     }
 
-    private func show(
-        entries: [WindowSwitcherAppEntry],
-        selectedID: String?,
-        presentation: WindowSwitcherOverlayPresentation,
-        shortcutText: String
-    ) {
-        let screen = targetScreen()
-        model.entries = entries
-        model.selectedID = selectedID
-        model.recordingEntryID = nil
-        model.recordingCandidate = nil
-        model.recordingHasConflict = false
-        model.presentation = presentation
-        model.shortcutText = shortcutText
-        model.columnCount = columnCount(for: entries.count, presentation: presentation, screen: screen)
+    func showMessage(_ message: String) { actionMessage = message; footer.stringValue = message }
 
-        let panel = panel ?? makePanel()
-        self.panel = panel
-        resize(panel)
-        center(panel, on: screen)
+    private func layoutPanel() {
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main else { return }
+        let usePreview = showsPreview && screen.visibleFrame.width >= 760
+        previewPane.isHidden = !usePreview
+        panel.setFrame(WindowSwitcherSession.panelFrame(visibleFrame: screen.visibleFrame, preview: usePreview), display: true)
+    }
 
-        switch presentation {
-        case .direct:
-            removeKeyMonitor()
-            removeClickMonitor()
-            PluginPresentationSafety.prepareForWindowOrdering(panel)
-            panel.orderFrontRegardless()
-        case .keyWindow:
-            installKeyMonitor()
-            installClickMonitor()
-            NSApp.activate(ignoringOtherApps: true)
-            PluginPresentationSafety.prepareForWindowOrdering(panel)
-            panel.makeKeyAndOrderFront(nil)
+    private func buildPanel() {
+        panel.identifier = NSUserInterfaceItemIdentifier("WindowSwitcherChooser")
+        panel.searchEventFilter = { [weak self] event in self?.filterSearchEvent(event) ?? event }
+        panel.searchTransitionHandler = { [weak self] event in
+            guard let self, let session, !session.isPersistent,
+                  !session.invocationModifiers.intersection(event.modifierFlags).isEmpty,
+                  let text = event.charactersIgnoringModifiers, !text.isEmpty,
+                  !text.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return false }
+            // Keep explicit close/quit shortcuts available before search begins.
+            if event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+               ["w", "q"].contains(text.lowercased()) { return false }
+            return handleKey(event)
         }
-    }
-
-    private func makePanel() -> KeyablePanel {
-        let panel = KeyablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 220),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
+        panel.shortcutHandler = { [weak self] event in
+            guard let self,
+                  event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+                  let key = event.charactersIgnoringModifiers?.lowercased(), ["w", "q"].contains(key) else { return false }
+            // Never let target actions leak into the host's main menu. Marked
+            // text must be settled before a window/application action can run.
+            if let editor = search.currentEditor() as? NSTextView, editor.hasMarkedText() { return true }
+            if key == "w" { closeSelected() } else { quitSelected() }
+            return true
+        }
         panel.level = .popUpMenu
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = true
-        panel.isMovableByWindowBackground = false
+        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
-        panel.animationBehavior = .none
-        panel.delegate = self
-
-        let hostingView = NSHostingView(
-            rootView: WindowSwitcherOverlayView(model: model) { [weak self] entry in
-                self?.select(entry)
-            } onQuit: { [weak self] entry in
-                self?.quit(entry)
-            } onRecordShortcut: { [weak self] entry in
-                self?.beginShortcutRecording(entry)
-            } onCancelShortcutRecording: { [weak self] in
-                self?.cancelShortcutRecording()
-            }
-        )
-        hostingView.wantsLayer = true
-        hostingView.layer?.cornerRadius = WindowSwitcherOverlayMetrics.cornerRadius
-        hostingView.layer?.cornerCurve = .continuous
-        hostingView.layer?.masksToBounds = true
-
-        self.hostingView = hostingView
-        panel.contentView = makeGlassContentView(hostingView: hostingView)
-        return panel
-    }
-
-    private func makeGlassContentView(hostingView: NSView) -> NSView {
-        if #available(macOS 26.0, *) {
-            let glassView = NSGlassEffectView()
-            glassView.style = .regular
-            glassView.cornerRadius = WindowSwitcherOverlayMetrics.cornerRadius
-            glassView.contentView = hostingView
-            glassView.wantsLayer = true
-            glassView.layer?.cornerRadius = WindowSwitcherOverlayMetrics.cornerRadius
-            glassView.layer?.cornerCurve = .continuous
-            glassView.layer?.masksToBounds = true
-            return glassView
-        }
-
-        let effectView = NSVisualEffectView()
-        effectView.material = .hudWindow
-        effectView.blendingMode = .behindWindow
-        effectView.state = .active
-        effectView.maskImage = WindowSwitcherOverlayMetrics.roundedMaskImage()
-        effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = WindowSwitcherOverlayMetrics.cornerRadius
-        effectView.layer?.cornerCurve = .continuous
-        effectView.layer?.masksToBounds = true
-
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        effectView.addSubview(hostingView)
+        panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false; panel.delegate = self
+        let effect = NSVisualEffectView()
+        effect.material = .hudWindow; effect.state = .active; effect.blendingMode = .behindWindow
+        effect.wantsLayer = true; effect.layer?.cornerRadius = 16; effect.layer?.masksToBounds = true
+        panel.contentView = effect
+        let title = NSTextField(labelWithString: localization.string("chooser.title", defaultValue: "窗口切换"))
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        search.placeholderString = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用")
+        search.delegate = self; search.sendsSearchStringImmediately = true
+        search.setAccessibilityLabel(localization.string("chooser.search", defaultValue: "搜索窗口标题或应用"))
+        search.font = .systemFont(ofSize: 15)
+        scope.target = self; scope.action = #selector(scopeChanged)
+        scope.selectedSegment = 0
+        display.target = self; display.action = #selector(displayChanged)
+        display.setAccessibilityLabel(localization.string("chooser.displayFilter", defaultValue: "显示器筛选"))
+        count.font = .systemFont(ofSize: 12); count.textColor = .secondaryLabelColor
+        previewButton.target = self; previewButton.action = #selector(previewChanged)
+        cancelButton.target = self; cancelButton.action = #selector(cancelSelection); cancelButton.bezelStyle = .rounded
+        let header = NSStackView(views: [title, NSView(), previewButton, cancelButton])
+        let filters = NSStackView(views: [scope, display, NSView(), count])
+        header.orientation = .horizontal; filters.orientation = .horizontal
+        filters.spacing = 8
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true; scroll.drawsBackground = false
+        table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("window")))
+        table.headerView = nil; table.rowHeight = 54; table.intercellSpacing = NSSize(width: 0, height: 2)
+        table.backgroundColor = .clear; table.selectionHighlightStyle = .regular
+        table.dataSource = self; table.delegate = self
+        table.allowsEmptySelection = true; table.allowsMultipleSelection = false
+        table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
+        table.target = self; table.doubleAction = #selector(openSelected)
+        table.setAccessibilityLabel(localization.string("chooser.list", defaultValue: "窗口列表"))
+        table.keyHandler = { [weak self] event in self?.handleKey(event) ?? false }
+        scroll.documentView = table
+        previewImage.imageScaling = .scaleProportionallyUpOrDown
+        previewLabel.font = .systemFont(ofSize: 12); previewLabel.textColor = .secondaryLabelColor
+        previewPane.orientation = .vertical; previewPane.alignment = .leading
+        previewPane.spacing = 12; previewPane.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        previewPane.addArrangedSubview(previewImage); previewPane.addArrangedSubview(previewLabel)
+        let body = NSStackView(views: [scroll, previewPane])
+        body.orientation = .horizontal; body.spacing = 8; body.alignment = .top
+        empty.font = .systemFont(ofSize: 12); empty.textColor = .secondaryLabelColor
+        openButton.target = self; openButton.action = #selector(openSelected); openButton.bezelStyle = .rounded
+        closeButton.target = self; closeButton.action = #selector(closeSelected); closeButton.bezelStyle = .rounded
+        quitButton.target = self; quitButton.action = #selector(quitSelected); quitButton.bezelStyle = .rounded
+        footer.font = .systemFont(ofSize: 11); footer.textColor = .secondaryLabelColor
+        footer.lineBreakMode = .byTruncatingTail
+        let actions = NSStackView(views: [openButton, closeButton, quitButton, NSView()])
+        actions.orientation = .horizontal
+        let stack = NSStackView(views: [header, search, filters, body, empty, actions, footer])
+        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        effect.addSubview(stack)
         NSLayoutConstraint.activate([
-            hostingView.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
-            hostingView.topAnchor.constraint(equalTo: effectView.topAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: effect.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: effect.trailingAnchor, constant: -14),
+            stack.topAnchor.constraint(equalTo: effect.topAnchor, constant: 14),
+            stack.bottomAnchor.constraint(equalTo: effect.bottomAnchor, constant: -14),
+            previewPane.widthAnchor.constraint(equalToConstant: 250),
+            previewImage.heightAnchor.constraint(equalToConstant: 190),
+            previewImage.widthAnchor.constraint(equalTo: previewPane.widthAnchor, constant: -24),
+            previewLabel.widthAnchor.constraint(equalTo: previewPane.widthAnchor, constant: -24),
+            scroll.heightAnchor.constraint(equalTo: body.heightAnchor),
         ])
-        return effectView
-    }
-
-    private func resize(_ panel: NSPanel) {
-        guard let hostingView else {
-            return
+        for view in [header, search, filters, body, empty, actions, footer] {
+            view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-
-        hostingView.layoutSubtreeIfNeeded()
-        panel.setContentSize(hostingView.fittingSize)
-        panel.invalidateShadow()
+        body.setContentHuggingPriority(.defaultLow, for: .vertical)
+        scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        display.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     }
 
-    private func center(_ panel: NSPanel, on screen: NSScreen?) {
-        guard let frame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame else {
-            return
+    private func localizeControls() {
+        scope.setLabel(localization.string("chooser.all", defaultValue: "全部窗口"), forSegment: 0)
+        scope.setLabel(localization.string("chooser.current", defaultValue: "当前应用"), forSegment: 1)
+        closeButton.title = localization.string("chooser.close", defaultValue: "关闭窗口")
+        quitButton.title = localization.string("chooser.quit", defaultValue: "退出应用")
+        openButton.title = localization.string("chooser.open", defaultValue: "打开窗口")
+        previewButton.title = localization.string("chooser.preview", defaultValue: "预览")
+        cancelButton.title = localization.string("chooser.cancel", defaultValue: "取消")
+    }
+
+    private func render() {
+        guard var session else { return }
+        localizeControls()
+        session.normalizeSelection(); self.session = session
+        let revealSelection = renderedSession == nil || renderedSession?.selectedID != session.selectedID
+            || renderedSession?.query != session.query || renderedSession?.scope != session.scope
+            || renderedSession?.display != session.display
+        let viewport = table.enclosingScrollView?.contentView.bounds.origin
+        updating = true
+        rows = session.results
+        table.reloadData()
+        if let index = rows.firstIndex(where: { $0.id == session.selectedID }) {
+            table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+            if revealSelection { table.scrollRowToVisible(index) }
+        } else { table.deselectAll(nil) }
+        if !revealSelection, let viewport, let scroll = table.enclosingScrollView {
+            scroll.contentView.scroll(to: viewport)
+            scroll.reflectScrolledClipView(scroll.contentView)
         }
-
-        let size = panel.frame.size
-        let origin = NSPoint(
-            x: frame.midX - size.width / 2,
-            y: frame.midY - size.height / 2
-        )
-        panel.setFrameOrigin(origin)
-    }
-
-    private func targetScreen() -> NSScreen? {
-        let mouseLocation = NSEvent.mouseLocation
-        return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
-            ?? NSScreen.main
-    }
-
-    private func columnCount(
-        for entryCount: Int,
-        presentation: WindowSwitcherOverlayPresentation,
-        screen: NSScreen?
-    ) -> Int {
-        guard entryCount > 0 else {
-            return 1
+        renderedSession = session
+        count.stringValue = localization.format("chooser.count", defaultValue: "%d 个窗口", rows.count)
+        scope.selectedSegment = session.scope == .all ? 0 : 1
+        scope.setEnabled(currentPID != nil, forSegment: 1)
+        display.removeAllItems(); display.addItem(withTitle: localization.string("chooser.allDisplays", defaultValue: "所有显示器"))
+        for screen in session.displays {
+            display.addItem(withTitle: screen.name)
+            display.lastItem?.representedObject = NSNumber(value: screen.id)
+            if session.display == screen.id { display.select(display.lastItem) }
         }
-
-        let frame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 900, height: 700)
-        let tileWidth = presentation == .direct
-            ? WindowSwitcherOverlayMetrics.directTileWidth
-            : WindowSwitcherOverlayMetrics.keyWindowTileWidth
-        let horizontalPadding = WindowSwitcherOverlayMetrics.panelHorizontalPadding * 2
-        let spacing = WindowSwitcherOverlayMetrics.horizontalSpacing
-        let maxWidth = min(frame.width - 96, presentation == .direct ? 980 : 1040)
-        let capacity = Int((maxWidth - horizontalPadding + spacing) / (tileWidth + spacing))
-        return max(1, min(entryCount, capacity))
+        if let selectedDisplay = session.display, !session.displays.contains(where: { $0.id == selectedDisplay }) {
+            // Keep the visible control honest if the selected display has lost
+            // its last window or disconnected while this session is open.
+            display.addItem(withTitle: localization.string("chooser.emptyDisplay", defaultValue: "所选显示器暂无窗口"))
+            display.lastItem?.representedObject = NSNumber(value: selectedDisplay)
+            display.select(display.lastItem)
+        }
+        let selected = session.selected
+        closeButton.isEnabled = selected?.isWindowEntry == true && selected?.metadataUnavailable == false
+        quitButton.isEnabled = selected != nil; openButton.isEnabled = selected != nil
+        empty.stringValue = rows.isEmpty ? localization.string("chooser.empty", defaultValue: "没有匹配的窗口。窗口信息可能仍在更新。") : ""
+        empty.isHidden = !rows.isEmpty
+        footer.stringValue = actionMessage ?? (session.isPersistent
+            ? localization.string("chooser.persistentHelp", defaultValue: "↑↓ 选择 · 回车打开 · Esc 取消 · 所有空间（系统允许访问的窗口）")
+            : localization.string("chooser.cycleHelp", defaultValue: "按住快捷键循环 · 松开切换 · 输入文字搜索 · Esc 取消"))
+        updating = false
+        if showsPreview, selected != previewedEntry || preview.isPermissionGranted != previewedPermission {
+            previewedEntry = selected
+            previewedPermission = preview.isPermissionGranted
+            preview.select(selected?.isWindowEntry == true ? selected : nil)
+        }
     }
 
-    private func installKeyMonitor() {
-        removeKeyMonitor()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else {
-                return event
+    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard rows.indices.contains(row) else { return nil }
+        let entry = rows[row]
+        let icon = NSImageView(image: entry.icon ?? NSImage())
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        let displayName = entry.localizedDisplayName(using: localization)
+        let title = NSTextField(labelWithString: displayName)
+        title.font = .systemFont(ofSize: 13, weight: .medium); title.lineBreakMode = .byTruncatingMiddle
+        title.attributedStringValue = highlighted(displayName, query: session?.query ?? "")
+        let parts = [entry.appName, entry.displayNameContext,
+                     entry.isMinimized ? localization.string("window.minimized", defaultValue: "已最小化") : nil, entry.isHidden ? localization.string("window.hidden", defaultValue: "已隐藏") : nil,
+                     entry.metadataUnavailable ? localization.string("window.unavailable", defaultValue: "暂时无法更新") : nil, entry.isWindowEntry ? nil : localization.string("window.none", defaultValue: "无可用窗口")]
+        let subtitle = NSTextField(labelWithString: parts.compactMap { $0 }.joined(separator: " · "))
+        subtitle.attributedStringValue = highlighted(subtitle.stringValue, query: session?.query ?? "")
+        subtitle.font = .systemFont(ofSize: 11); subtitle.textColor = .secondaryLabelColor; subtitle.lineBreakMode = .byTruncatingTail
+        let labels = NSStackView(views: [title, subtitle])
+        labels.orientation = .vertical; labels.alignment = .leading; labels.spacing = 3
+        let cell = NSStackView(views: [icon, labels])
+        cell.orientation = .horizontal; cell.spacing = 10
+        cell.edgeInsets = NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 8)
+        return cell
+    }
+
+    static func matchRanges(in text: String, query: String) -> [NSRange] {
+        query.split(whereSeparator: \.isWhitespace).flatMap { term in
+            var ranges: [NSRange] = []
+            var start = text.startIndex
+            while start < text.endIndex, let range = text.range(of: String(term),
+                options: [.caseInsensitive, .diacriticInsensitive], range: start..<text.endIndex) {
+                ranges.append(NSRange(range, in: text)); start = range.upperBound
             }
-
-            return self.handleKeyDown(event) ? nil : event
+            return ranges
         }
     }
 
-    private func removeKeyMonitor() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
+    private func highlighted(_ text: String, query: String) -> NSAttributedString {
+        let value = NSMutableAttributedString(string: text)
+        for range in Self.matchRanges(in: text, query: query) {
+            value.addAttribute(.backgroundColor, value: NSColor.findHighlightColor, range: range)
         }
-        keyMonitor = nil
+        return value
     }
 
-    private func installClickMonitor() {
-        removeClickMonitor()
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.cancel()
-            }
-        }
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        guard !updating, rows.indices.contains(table.selectedRow), var session else { return }
+        session.selectedID = rows[table.selectedRow].id
+        self.session = session
+        actionMessage = nil
+        onSessionChange?(session)
+        render()
     }
 
-    private func removeClickMonitor() {
-        if let clickMonitor {
-            NSEvent.removeMonitor(clickMonitor)
-        }
-        clickMonitor = nil
+    private func beginSearch() {
+        guard var session else { return }
+        session.beginSearch(); self.session = session
+        onSessionChange?(session)
     }
 
-    private func handleKeyDown(_ event: NSEvent) -> Bool {
-        guard model.presentation == .keyWindow else {
-            return false
+    func controlTextDidBeginEditing(_ obj: Notification) { beginSearch() }
+    func controlTextDidChange(_ obj: Notification) {
+        guard var session else { return }
+        session.beginSearch(); session.query = search.stringValue; session.normalizeSelection()
+        self.session = session; actionMessage = nil
+        onSessionChange?(session); render()
+    }
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard !textView.hasMarkedText() else { return false }
+        switch commandSelector {
+        case #selector(NSResponder.moveDown(_:)): move(1)
+        case #selector(NSResponder.moveUp(_:)): move(-1)
+        case #selector(NSResponder.insertNewline(_:)): openSelected()
+        case #selector(NSResponder.cancelOperation(_:)): onCancel?()
+        default: return false
         }
-
-        if model.recordingEntryID != nil {
-            return handleRecordingKeyDown(event)
-        }
-
-        if event.keyCode == 53 {
-            cancel()
-            return true
-        }
-
-        guard let shortcut = selectionShortcut(from: event) else {
-            return false
-        }
-
-        resolveShortcutToken(shortcut.storageValue)
         return true
     }
 
-    private func handleRecordingKeyDown(_ event: NSEvent) -> Bool {
-        if event.keyCode == 53 {
-            cancelShortcutRecording()
-            return true
+    private func handleKey(_ original: NSEvent) -> Bool {
+        var event = original
+        switch Int(event.keyCode) {
+        case kVK_Escape: onCancel?()
+        case kVK_DownArrow: move(1)
+        case kVK_UpArrow: move(-1)
+        case kVK_Return, kVK_ANSI_KeypadEnter: openSelected()
+        default:
+            if session?.isPersistent == false, let modifiers = session?.invocationModifiers {
+                // The held invocation chord is navigation state, not an editing
+                // modifier. Continue suppressing it until its physical release.
+                searchHeldModifiers = modifiers.intersection(event.modifierFlags)
+                event = filterSearchEvent(event)
+            }
+            let command = event.modifierFlags.contains(.command)
+            let key = event.charactersIgnoringModifiers?.lowercased()
+            if command && key != "f" && key != "v" { return false }
+            guard let text = event.charactersIgnoringModifiers, !text.isEmpty,
+                  !text.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return false }
+            beginSearch()
+            panel.makeFirstResponder(search)
+            if command && key == "v" {
+                (search.currentEditor() as? NSTextView)?.paste(nil)
+            } else if !command {
+                search.currentEditor()?.interpretKeyEvents([event])
+            }
         }
-
-        if event.keyCode == 51 || event.keyCode == 117 {
-            commitRecordedShortcut(nil)
-            return true
-        }
-
-        guard let shortcut = selectionShortcut(from: event) else {
-            NSSound.beep()
-            return true
-        }
-
-        commitRecordedShortcut(shortcut.storageValue)
         return true
     }
 
-    private func selectionShortcut(from event: NSEvent) -> WindowSwitcherSelectionShortcut? {
-        guard event.modifierFlags.intersection([.control, .option]).isEmpty,
-              let chars = event.charactersIgnoringModifiers?.lowercased(),
-              let character = chars.first
-        else {
-            return nil
+    func filterSearchEvent(_ event: NSEvent) -> NSEvent {
+        if event.type == .flagsChanged {
+            searchHeldModifiers.formIntersection(event.modifierFlags)
+            return event
         }
-
-        return WindowSwitcherSelectionShortcut(
-            key: String(character),
-            usesCommand: event.modifierFlags.contains(.command)
-        )
+        guard event.type == .keyDown, !searchHeldModifiers.isEmpty else { return event }
+        searchHeldModifiers.formIntersection(event.modifierFlags)
+        guard !searchHeldModifiers.isEmpty else { return event }
+        let flags = event.modifierFlags.subtracting(searchHeldModifiers)
+        return NSEvent.keyEvent(with: .keyDown, location: event.locationInWindow, modifierFlags: flags,
+            timestamp: event.timestamp, windowNumber: event.windowNumber, context: nil,
+            characters: event.charactersIgnoringModifiers ?? "", charactersIgnoringModifiers: event.charactersIgnoringModifiers ?? "",
+            isARepeat: event.isARepeat, keyCode: event.keyCode) ?? event
     }
 
-    private func resolveShortcutToken(_ token: String) {
-        guard let entry = model.entries.first(where: { $0.shortcutToken == token }) else {
-            NSSound.beep()
-            return
-        }
-
-        select(entry)
+    private func move(_ delta: Int) {
+        guard var session else { return }
+        session.advance(delta); self.session = session; actionMessage = nil
+        onSessionChange?(session); render()
     }
-
-    private func select(_ entry: WindowSwitcherAppEntry) {
-        cancelShortcutRecording()
-        hide()
-        onSelect?(entry)
+    @objc private func openSelected() { if let entry = session?.selected { onSelect?(entry) } }
+    @objc private func cancelSelection() { onCancel?() }
+    @objc private func closeSelected() { if let entry = session?.selected { beginSearch(); onClose?(entry) } }
+    @objc private func quitSelected() { if let entry = session?.selected { beginSearch(); onQuit?(entry) } }
+    @objc private func scopeChanged() {
+        guard var session else { return }
+        session.scope = scope.selectedSegment == 1 ? currentPID.map(WindowSwitcherSession.Scope.currentApplication) ?? .all : .all
+        session.beginSearch(); session.normalizeSelection(); self.session = session
+        actionMessage = nil; onSessionChange?(session); render()
     }
-
-    private func beginShortcutRecording(_ entry: WindowSwitcherAppEntry) {
-        guard model.presentation == .keyWindow else {
-            return
-        }
-
-        cancelShortcutRecording()
-        model.recordingEntryID = entry.id
-        model.recordingCandidate = nil
-        model.recordingHasConflict = false
+    @objc private func displayChanged() {
+        guard var session else { return }
+        session.display = (display.selectedItem?.representedObject as? NSNumber)?.uint32Value
+        session.beginSearch(); session.normalizeSelection(); self.session = session
+        actionMessage = nil; onSessionChange?(session); render()
     }
-
-    private func commitRecordedShortcut(_ token: String?) {
-        guard let entryID = model.recordingEntryID,
-              let entry = model.entries.first(where: { $0.id == entryID }),
-              let onShortcutChange
-        else {
-            cancelShortcutRecording()
-            return
-        }
-
-        model.recordingCandidate = token
-        switch onShortcutChange(entry, token) {
-        case let .updated(entries):
-            model.entries = entries
-            cancelShortcutRecording()
-        case .conflict:
-            model.recordingHasConflict = true
-            NSSound.beep()
-        case .unavailable:
-            cancelShortcutRecording()
-            NSSound.beep()
-        }
+    @objc private func previewChanged() {
+        showsPreview = previewButton.state == .on
+        onPreviewChange?(showsPreview)
+        previewedEntry = nil; previewedPermission = nil
+        if !showsPreview { preview.cancel() }
+        layoutPanel(); render()
     }
-
-    private func cancelShortcutRecording() {
-        model.recordingEntryID = nil
-        model.recordingCandidate = nil
-        model.recordingHasConflict = false
-    }
-
-    private func quit(_ entry: WindowSwitcherAppEntry) {
-        cancelShortcutRecording()
-        onQuit?(entry)
-    }
-
-    private func cancel() {
-        cancelShortcutRecording()
-        hide()
-        onCancel?()
-    }
-
     func windowDidResignKey(_ notification: Notification) {
-        guard !isClosing, model.presentation == .keyWindow else {
-            return
-        }
-
-        cancel()
-    }
-}
-
-@MainActor
-private struct WindowSwitcherOverlayView: View {
-    @ObservedObject var model: WindowSwitcherOverlayModel
-    let onSelect: (WindowSwitcherAppEntry) -> Void
-    let onQuit: (WindowSwitcherAppEntry) -> Void
-    let onRecordShortcut: (WindowSwitcherAppEntry) -> Void
-    let onCancelShortcutRecording: () -> Void
-
-    private var tileWidth: CGFloat {
-        model.presentation == .direct
-            ? WindowSwitcherOverlayMetrics.directTileWidth
-            : WindowSwitcherOverlayMetrics.keyWindowTileWidth
-    }
-
-    private var tileHeight: CGFloat {
-        model.presentation == .direct
-            ? WindowSwitcherOverlayMetrics.directTileHeight
-            : WindowSwitcherOverlayMetrics.keyWindowTileHeight
-    }
-
-    private var spacing: CGFloat {
-        WindowSwitcherOverlayMetrics.horizontalSpacing
-    }
-
-    private var contentWidth: CGFloat {
-        let columns = max(1, model.columnCount)
-        let gridWidth = CGFloat(columns) * tileWidth + CGFloat(max(0, columns - 1)) * spacing
-        return max(220, gridWidth)
-    }
-
-    var body: some View {
-        VStack(spacing: WindowSwitcherOverlayMetrics.verticalSpacing) {
-            if model.entries.isEmpty {
-                emptyState
-            } else {
-                appGrid
-            }
-        }
-        .frame(width: contentWidth)
-        .padding(.horizontal, WindowSwitcherOverlayMetrics.panelHorizontalPadding)
-        .padding(.vertical, WindowSwitcherOverlayMetrics.panelVerticalPadding)
-        .background {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    guard model.recordingEntryID != nil else {
-                        return
-                    }
-                    onCancelShortcutRecording()
-                }
-        }
-        .fixedSize()
-    }
-
-    private var appGrid: some View {
-        LazyVGrid(
-            columns: Array(
-                repeating: GridItem(.fixed(tileWidth), spacing: spacing),
-                count: max(1, model.columnCount)
-            ),
-            spacing: WindowSwitcherOverlayMetrics.verticalSpacing
-        ) {
-            ForEach(model.entries) { entry in
-                WindowSwitcherAppTile(
-                    entry: entry,
-                    isSelected: entry.id == model.selectedID,
-                    isRecording: entry.id == model.recordingEntryID,
-                    recordingCandidate: entry.id == model.recordingEntryID
-                        ? model.recordingCandidate
-                        : nil,
-                    recordingHasConflict: entry.id == model.recordingEntryID
-                        && model.recordingHasConflict,
-                    showsShortcut: model.presentation == .keyWindow,
-                    tileWidth: tileWidth,
-                    tileHeight: tileHeight,
-                    onSelect: { onSelect(entry) },
-                    onQuit: { onQuit(entry) },
-                    onRecordShortcut: { onRecordShortcut(entry) }
-                )
-            }
-        }
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "app.dashed")
-                .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.secondary)
-            Text("没有可切换的窗口")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-        }
-        .frame(height: 110)
-        .frame(maxWidth: .infinity)
-    }
-
-}
-
-private struct WindowSwitcherAppTile: View {
-    let entry: WindowSwitcherAppEntry
-    let isSelected: Bool
-    let isRecording: Bool
-    let recordingCandidate: String?
-    let recordingHasConflict: Bool
-    let showsShortcut: Bool
-    let tileWidth: CGFloat
-    let tileHeight: CGFloat
-    let onSelect: () -> Void
-    let onQuit: () -> Void
-    let onRecordShortcut: () -> Void
-
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var isIconHovered = false
-    @State private var isQuitHovered = false
-    @State private var isShortcutHovered = false
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(spacing: showsShortcut ? WindowSwitcherOverlayMetrics.shortcutContentSpacing : 0) {
-                if showsShortcut {
-                    Button(action: onRecordShortcut) {
-                        shortcutBadge
-                            .frame(height: WindowSwitcherOverlayMetrics.shortcutHeight)
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { isShortcutHovered = $0 }
-                    .help("修改 \(entry.appName)快捷键")
-                } else {
-                    Color.clear
-                        .frame(height: WindowSwitcherOverlayMetrics.directTopSpacing)
-                }
-
-                Button(action: onSelect) {
-                    tileContent
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(width: tileWidth, height: tileHeight, alignment: .top)
-
-            quitButton
-                .position(quitButtonCenter)
-        }
-        .frame(width: tileWidth, height: tileHeight)
-    }
-
-    private var shortcutBadge: some View {
-        Group {
-            if isRecording, recordingCandidate == nil {
-                Image(systemName: "keyboard")
-                    .font(.system(size: 10, weight: .semibold))
-            } else {
-                Text(recordingDisplay ?? entry.shortcutDisplay ?? "")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .lineLimit(1)
-            }
-        }
-            .foregroundStyle(shortcutForegroundColor)
-            .frame(minWidth: 22)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(shortcutBackgroundColor)
-            )
-            .contentShape(Capsule(style: .continuous))
-            .animation(.easeOut(duration: 0.12), value: isRecording)
-            .animation(.easeOut(duration: 0.12), value: recordingHasConflict)
-            .animation(.easeOut(duration: 0.12), value: isShortcutHovered)
-    }
-
-    private var shortcutForegroundColor: Color {
-        if recordingHasConflict {
-            return Color(nsColor: .systemRed)
-        }
-        if isRecording {
-            return Color.accentColor
-        }
-        return .secondary
-    }
-
-    private var shortcutBackgroundColor: Color {
-        if recordingHasConflict {
-            return Color(nsColor: .systemRed).opacity(0.16)
-        }
-        if isRecording {
-            return Color.accentColor.opacity(0.16)
-        }
-        if isShortcutHovered {
-            return Color.primary.opacity(0.12)
-        }
-        return Color.primary.opacity(0.07)
-    }
-
-    private var recordingDisplay: String? {
-        guard isRecording, let recordingCandidate else {
-            return nil
-        }
-
-        return WindowSwitcherSelectionShortcut(storageValue: recordingCandidate)?.displayValue
-    }
-
-    private var quitButton: some View {
-        Button(action: onQuit) {
-            Image(systemName: "xmark")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(quitForegroundColor)
-                .frame(
-                    width: WindowSwitcherOverlayMetrics.quitButtonSize,
-                    height: WindowSwitcherOverlayMetrics.quitButtonSize
-                )
-                .background(
-                    Circle()
-                        .fill(quitBackgroundColor)
-                )
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .opacity(showsQuitButton ? 1 : 0)
-        .allowsHitTesting(showsQuitButton)
-        .onHover { isQuitHovered = $0 }
-        .help("退出 \(entry.appName)")
-        .animation(.easeOut(duration: 0.12), value: showsQuitButton)
-        .animation(.easeOut(duration: 0.12), value: isQuitHovered)
-    }
-
-    private var tileContent: some View {
-        VStack(spacing: WindowSwitcherOverlayMetrics.iconLabelSpacing) {
-            highlightedIcon
-
-            VStack(spacing: 1) {
-                Text(entry.displayName)
-                    .font(.system(size: 11, weight: .medium))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundStyle(.primary)
-                    .frame(height: 14)
-
-                if let subtitle = entry.displaySubtitle {
-                    Text(subtitle)
-                        .font(.system(size: 10, weight: .regular))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .foregroundStyle(.secondary)
-                        .frame(height: 12)
-                } else {
-                    Color.clear
-                        .frame(height: 12)
-                }
-            }
-            .frame(
-                width: tileWidth - 12,
-                height: WindowSwitcherOverlayMetrics.labelAreaHeight,
-                alignment: .top
-            )
-        }
-        .frame(width: tileWidth, height: highlightedContentHeight, alignment: .top)
-        .help(accessibilityTitle)
-    }
-
-    private var highlightedIcon: some View {
-        ZStack {
-            RoundedRectangle(
-                cornerRadius: WindowSwitcherOverlayMetrics.iconHighlightCornerRadius,
-                style: .continuous
-            )
-                .fill(iconBackgroundColor)
-
-            iconView
-        }
-        .frame(
-            width: WindowSwitcherOverlayMetrics.iconHighlightSize,
-            height: WindowSwitcherOverlayMetrics.iconHighlightSize
-        )
-        .frame(
-            width: WindowSwitcherOverlayMetrics.iconLayoutSize,
-            height: WindowSwitcherOverlayMetrics.iconLayoutSize
-        )
-        .contentShape(Rectangle())
-        .onHover { isIconHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isIconHovered)
-        .animation(.easeOut(duration: 0.12), value: isSelected)
-    }
-
-    private var iconBackgroundColor: Color {
-        if isSelected {
-            return Color.accentColor.opacity(0.16)
-        }
-        if showsShortcut && (isIconHovered || isQuitHovered) {
-            return Color.black.opacity(colorScheme == .dark ? 0.16 : 0.08)
-        }
-        return .clear
-    }
-
-    @ViewBuilder
-    private var iconView: some View {
-        if let icon = entry.icon {
-            Image(nsImage: icon)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(
-                    width: WindowSwitcherOverlayMetrics.iconSize,
-                    height: WindowSwitcherOverlayMetrics.iconSize
-                )
-        } else {
-            Image(systemName: "app.fill")
-                .font(.system(size: 52))
-                .foregroundStyle(.secondary)
-                .frame(
-                    width: WindowSwitcherOverlayMetrics.iconSize,
-                    height: WindowSwitcherOverlayMetrics.iconSize
-                )
-        }
-    }
-
-    private var highlightedContentTopOffset: CGFloat {
-        showsShortcut
-            ? WindowSwitcherOverlayMetrics.shortcutHeight
-                + WindowSwitcherOverlayMetrics.shortcutContentSpacing
-            : WindowSwitcherOverlayMetrics.directTopSpacing
-    }
-
-    private var quitButtonCenter: CGPoint {
-        WindowSwitcherOverlayMetrics.quitButtonCenter(
-            tileWidth: tileWidth,
-            contentTopOffset: highlightedContentTopOffset
-        )
-    }
-
-    private var highlightedContentHeight: CGFloat {
-        WindowSwitcherOverlayMetrics.tileContentHeight
-    }
-
-    private var showsQuitButton: Bool {
-        isIconHovered || isQuitHovered
-    }
-
-    private var quitForegroundColor: Color {
-        isQuitHovered ? Color(nsColor: .systemRed) : .secondary
-    }
-
-    private var quitBackgroundColor: Color {
-        isQuitHovered ? Color(nsColor: .systemRed).opacity(0.16) : Color.primary.opacity(0.08)
-    }
-
-    private var accessibilityTitle: String {
-        if let subtitle = entry.displaySubtitle {
-            return "\(entry.displayName)，\(subtitle)"
-        }
-
-        return entry.displayName
+        if !closing, session != nil { onCancel?() }
     }
 }

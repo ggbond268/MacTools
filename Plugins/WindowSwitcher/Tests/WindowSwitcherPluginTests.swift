@@ -6,7 +6,7 @@ import MacToolsPluginKit
 @testable import WindowSwitcherPlugin
 
 @MainActor
-private final class WindowSwitcherMemoryStorage: PluginStorage {
+final class WindowSwitcherMemoryStorage: PluginStorage {
     var values: [String: Any] = [:]
 
     func object(forKey key: String) -> Any? {
@@ -104,11 +104,12 @@ final class WindowSwitcherPluginTests: XCTestCase {
         let center = NotificationCenter()
         let catalog = WindowSwitcherAppCatalog(notificationCenter: center)
         let changed = expectation(description: "catalog reports a workspace change")
+        catalog.start()
         catalog.onChange = {
+            catalog.onChange = nil
             XCTAssertTrue(Thread.isMainThread)
             changed.fulfill()
         }
-        catalog.start()
 
         center.post(name: NSWorkspace.didLaunchApplicationNotification, object: nil)
 
@@ -158,7 +159,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         XCTAssertFalse(loaded.configuration.isEnabled)
     }
 
-    func testObsoleteShortcutAssignmentsAreDiscarded() throws {
+    func testObsoleteShortcutAssignmentsAreRetainedButNeverApplied() throws {
         let storage = WindowSwitcherMemoryStorage()
         storage.set(
             try JSONEncoder().encode(["bundle:com.apple.Safari": "s"]),
@@ -169,8 +170,19 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
         XCTAssertEqual(store.shortcutBindings.manual, [:])
         XCTAssertEqual(store.shortcutBindings.automatic, [:])
-        XCTAssertNil(storage.data(forKey: "shortcut-assignments"))
+        XCTAssertNotNil(storage.data(forKey: "shortcut-assignments"))
+        XCTAssertFalse(store.configuration.usesCompanionDefaults)
         XCTAssertNil(storage.data(forKey: "shortcut-bindings"))
+    }
+
+    func testUsedLegacyDefaultModeDoesNotSilentlyChangeItsInheritedBinding() throws {
+        let storage = WindowSwitcherMemoryStorage()
+        storage.set(try JSONEncoder().encode(WindowSwitcherShortcutBindingState()), forKey: "shortcut-bindings")
+        let store = WindowSwitcherStore(storage: storage)
+        XCTAssertFalse(store.configuration.usesCompanionDefaults)
+        XCTAssertEqual(store.configuration.mode, .keyWindow)
+        store.useCompanionDefaults()
+        XCTAssertTrue(WindowSwitcherStore(storage: storage).configuration.usesCompanionDefaults)
     }
 
     func testShortcutAssignmentUsesLettersThenDigitsThenCommandKeys() {

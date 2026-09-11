@@ -9,6 +9,8 @@ enum WindowSwitcherConstants {
     static let shortcutDefinitionID = "switcher"
     static let shortcutActionID = "switch"
     static let accessibilityPermissionID = "accessibility"
+    static let currentAppShortcutID = "current-app"
+    static let currentAppActionID = "switch-current-app"
 }
 
 enum WindowSwitcherMode: String, Codable, CaseIterable, Identifiable {
@@ -29,6 +31,8 @@ struct WindowSwitcherConfiguration: Codable, Equatable {
     var isEnabled: Bool
     var mode: WindowSwitcherMode
     var sortMode: WindowSwitcherSortMode
+    var usesCompanionDefaults: Bool = true
+    var showsPreview: Bool = false
 
     init(
         isEnabled: Bool,
@@ -45,11 +49,15 @@ struct WindowSwitcherConfiguration: Codable, Equatable {
         self.isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
         self.mode = try container.decodeIfPresent(WindowSwitcherMode.self, forKey: .mode) ?? .keyWindow
         self.sortMode = try container.decodeIfPresent(WindowSwitcherSortMode.self, forKey: .sortMode) ?? .recentUse
+        // Existing installations keep their inherited Command-Tab binding until
+        // they explicitly choose the companion preset. Custom bindings are untouched.
+        self.usesCompanionDefaults = try container.decodeIfPresent(Bool.self, forKey: .usesCompanionDefaults) ?? false
+        self.showsPreview = try container.decodeIfPresent(Bool.self, forKey: .showsPreview) ?? false
     }
 
     static let `default` = WindowSwitcherConfiguration(
         isEnabled: true,
-        mode: .keyWindow,
+        mode: .directCycle,
         sortMode: .recentUse
     )
 
@@ -57,6 +65,8 @@ struct WindowSwitcherConfiguration: Codable, Equatable {
         case isEnabled
         case mode
         case sortMode
+        case usesCompanionDefaults
+        case showsPreview
     }
 }
 
@@ -104,6 +114,14 @@ final class WindowSwitcherStore: ObservableObject {
         if let data = storage.data(forKey: Keys.configuration),
            let loaded = try? decoder.decode(WindowSwitcherConfiguration.self, from: data) {
             self.configuration = loaded
+        } else if storage.object(forKey: Keys.shortcutBindings) != nil
+                    || storage.object(forKey: Keys.obsoleteShortcutAssignments) != nil {
+            // Older default-mode users did not necessarily save configuration.
+            // Letter assignment storage is evidence of an existing installation.
+            var legacy = WindowSwitcherConfiguration.default
+            legacy.mode = .keyWindow
+            legacy.usesCompanionDefaults = false
+            self.configuration = legacy
         } else {
             self.configuration = .default
         }
@@ -114,7 +132,8 @@ final class WindowSwitcherStore: ObservableObject {
         } else {
             self.shortcutBindings = WindowSwitcherShortcutBindingState()
         }
-        storage.removeObject(forKey: Keys.obsoleteShortcutAssignments)
+        // Retain retired assignment records for inspection; never apply them to
+        // newly discovered live window identities.
     }
 
     func setMode(_ mode: WindowSwitcherMode) {
@@ -141,6 +160,16 @@ final class WindowSwitcherStore: ObservableObject {
         }
 
         configuration.isEnabled = isEnabled
+        persist()
+    }
+
+    func useCompanionDefaults() {
+        configuration.usesCompanionDefaults = true
+        persist()
+    }
+
+    func setShowsPreview(_ value: Bool) {
+        configuration.showsPreview = value
         persist()
     }
 
@@ -279,12 +308,24 @@ struct WindowSwitcherAppEntry: Identifiable {
     let windowElement: AXUIElement?
     let isMinimized: Bool
     var shortcutToken: String?
+    var bounds: CGRect = .zero
+    var isHidden: Bool = false
+    var metadataUnavailable: Bool = false
+    var displayNameContext: String? = nil
+    var displayID: UInt32? = nil
 
     var displayName: String {
         guard let title = cleanWindowTitle else {
-            return appName
+            return isWindowEntry ? "\(appName) — 无标题窗口" : appName
         }
 
+        return title
+    }
+
+    func localizedDisplayName(using localization: PluginLocalization) -> String {
+        guard let title = cleanWindowTitle else {
+            return isWindowEntry ? localization.format("window.untitled", defaultValue: "%@ — 无标题窗口", appName) : appName
+        }
         return title
     }
 
@@ -376,6 +417,12 @@ extension WindowSwitcherAppEntry: Equatable {
             && lhs.displayName == rhs.displayName
             && lhs.displaySubtitle == rhs.displaySubtitle
             && lhs.shortcutToken == rhs.shortcutToken
+            && lhs.isMinimized == rhs.isMinimized
+            && lhs.isHidden == rhs.isHidden
+            && lhs.metadataUnavailable == rhs.metadataUnavailable
+            && lhs.bounds == rhs.bounds
+            && lhs.displayNameContext == rhs.displayNameContext
+            && lhs.displayID == rhs.displayID
     }
 }
 
@@ -499,7 +546,7 @@ enum WindowSwitcherShortcutAssignment {
             appOccurrences[appIdentifier] = occurrence + 1
             return Target(
                 index: index,
-                identity: occurrence == 0
+                identity: entry.isWindowEntry ? entry.id : occurrence == 0
                     ? appIdentifier
                     : "\(appIdentifier)#window:\(occurrence + 1)",
                 preferredToken: occurrence == 0 ? preferredSingleKeyToken(for: entry) : nil
@@ -603,8 +650,10 @@ enum WindowSwitcherShortcutAssignment {
 enum WindowSwitcherShortcutBindingStore {
     static let defaultBinding = ShortcutBinding(
         keyCode: UInt16(kVK_Tab),
-        modifiers: .command
+        modifiers: .option
     )
+    static let legacyBinding = ShortcutBinding(keyCode: UInt16(kVK_Tab), modifiers: .command)
+    static let currentAppBinding = ShortcutBinding(keyCode: UInt16(kVK_ANSI_Grave), modifiers: .command)
 
     private static let defaultsKey = "shortcut.customization.\(itemID)"
 
@@ -613,7 +662,12 @@ enum WindowSwitcherShortcutBindingStore {
     }
 
     static func resolvedBinding(userDefaults: UserDefaults = .standard) -> ShortcutBinding? {
-        guard let data = userDefaults.data(forKey: defaultsKey) else {
+        resolvedBinding(id: WindowSwitcherConstants.shortcutDefinitionID, defaultBinding: defaultBinding, userDefaults: userDefaults)
+    }
+
+    static func resolvedBinding(id: String, defaultBinding: ShortcutBinding?, userDefaults: UserDefaults = .standard) -> ShortcutBinding? {
+        let key = "shortcut.customization.\(WindowSwitcherConstants.pluginID).shortcut.\(id)"
+        guard let data = userDefaults.data(forKey: key) else {
             return defaultBinding
         }
 

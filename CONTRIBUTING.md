@@ -61,6 +61,8 @@ Thanks for your interest in MacTools. Please keep each contribution small and cl
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.
 
+For Window Switcher changes, see the optional [isolated Chrome diagnostic](scripts/diagnostics/window-switcher/README.md). Keep automated results separate from physical IME, display/Space, and packaged-release acceptance.
+
 ## Pull Request Checklist
 - Keep the PR focused, and explain the purpose, verification, and user impact.
 - Prefer English for commit messages, pull request titles/descriptions, and issues.

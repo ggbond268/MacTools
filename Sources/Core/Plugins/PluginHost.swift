@@ -3282,6 +3282,7 @@ final class PluginHost: ObservableObject {
                     canClear: !descriptor.definition.isRequired && binding != nil,
                     usesDefaultValue: customization == .inheritDefault,
                     errorMessage: shortcutErrors[descriptor.itemID]
+                        ?? eventShortcutConflictError(for: descriptor)
                         ?? binding.flatMap {
                             MacToolsReservedShortcutBindings.validationError(for: $0)?
                                 .localizedDescription
@@ -4775,11 +4776,32 @@ final class PluginHost: ObservableObject {
         )
     }
 
+    private func consumedShortcutBindings(_ binding: ShortcutBinding, for descriptor: ShortcutDescriptor) -> Set<ShortcutBinding> {
+        // Window Switcher's existing phase-based shortcut contract also consumes
+        // Shift for reverse cycling. Account for that chord in host validation
+        // without changing the binary layout of PluginKit v5 shortcut definitions.
+        guard descriptor.pluginID == "window-switcher",
+              descriptor.plugin is any PluginShortcutEventHandling,
+              !binding.modifiers.contains(.shift) else { return [binding] }
+        return [binding, ShortcutBinding(keyCode: binding.keyCode, modifiers: binding.modifiers.union(.shift))]
+    }
+
+    private func shortcutBindingsConflict(_ binding: ShortcutBinding, for descriptor: ShortcutDescriptor,
+                                         with otherBinding: ShortcutBinding, for other: ShortcutDescriptor) -> Bool {
+        // Explicit scope bindings win inside Window Switcher. Its implicit
+        // reverse chord must not shadow a shortcut owned by another plugin.
+        if descriptor.pluginID == other.pluginID { return binding == otherBinding }
+        return !consumedShortcutBindings(binding, for: descriptor)
+            .isDisjoint(with: consumedShortcutBindings(otherBinding, for: other))
+    }
+
     private func pluginShortcutConflict(
         for binding: ShortcutBinding,
         descriptors: [ShortcutDescriptor]
     ) -> ShortcutDescriptor? {
-        descriptors.first { resolvedBinding(for: $0) == binding }
+        descriptors.first { descriptor in
+            resolvedBinding(for: descriptor).map { consumedShortcutBindings($0, for: descriptor).contains(binding) } ?? false
+        }
     }
 
     private func appShortcutConflictError(
@@ -4796,16 +4818,27 @@ final class PluginHost: ObservableObject {
         ).localizedDescription
     }
 
+    private func eventShortcutConflictError(for descriptor: ShortcutDescriptor) -> String? {
+        guard descriptor.plugin is any PluginShortcutEventHandling,
+              let binding = legacyResolvedBinding(for: descriptor) else { return nil }
+        do {
+            try validateShortcutCustomization(.custom(binding), for: descriptor)
+        } catch { return error.localizedDescription }
+        if let conflict = shortcutAssignmentService.assignments.first(where: { consumedShortcutBindings(binding, for: descriptor).contains($0.binding) }) {
+            return ShortcutValidationError.duplicate(
+                ownerDescription: actionRegistry.definition(for: conflict.reference.key)?.title ?? conflict.reference.key.actionID
+            ).localizedDescription
+        }
+        return nil
+    }
+
     private func legacyResolvedBinding(
         forPluginID pluginID: String,
         shortcutDefinitionID: String
     ) -> ShortcutBinding? {
         guard let descriptor = shortcutDescriptors().first(where: {
             $0.pluginID == pluginID && $0.definition.id == shortcutDefinitionID
-        }) else {
-            return nil
-        }
-
+        }), eventShortcutConflictError(for: descriptor) == nil else { return nil }
         return legacyResolvedBinding(for: descriptor)
     }
 
@@ -4989,7 +5022,7 @@ final class PluginHost: ObservableObject {
 
             for otherDescriptor in descriptors.dropFirst(index + 1) {
                 guard let otherBinding = bindingsByID[otherDescriptor.itemID] ?? nil,
-                      otherBinding == binding,
+                      shortcutBindingsConflict(binding, for: descriptor, with: otherBinding, for: otherDescriptor),
                       !canShareShortcutBinding(descriptor, with: otherDescriptor)
                 else {
                     continue
@@ -5026,7 +5059,7 @@ final class PluginHost: ObservableObject {
 
             for descriptor in descriptors {
                 guard let binding = bindingsByID[descriptor.itemID] ?? nil,
-                      binding == appBinding
+                      consumedShortcutBindings(binding, for: descriptor).contains(appBinding)
                 else {
                     continue
                 }
@@ -5139,10 +5172,10 @@ final class PluginHost: ObservableObject {
                 throw error
             }
 
-            if let conflict = shortcutDescriptors().first(where: {
-                $0.itemID != descriptor.itemID
-                    && resolvedBinding(for: $0) == candidate
-                    && !canShareShortcutBinding(descriptor, with: $0)
+            if let conflict = shortcutDescriptors().first(where: { other in
+                other.itemID != descriptor.itemID
+                    && resolvedBinding(for: other).map { shortcutBindingsConflict(candidate, for: descriptor, with: $0, for: other) } == true
+                    && !canShareShortcutBinding(descriptor, with: other)
             }) {
                 throw ShortcutValidationError.duplicate(
                     ownerDescription: "\(conflict.pluginTitle) · \(conflict.definition.title)"
@@ -5150,7 +5183,7 @@ final class PluginHost: ObservableObject {
             }
 
             if let conflict = AppShortcutAction.allCases.first(where: {
-                resolvedAppShortcutBinding(for: $0) == candidate
+                resolvedAppShortcutBinding(for: $0).map { consumedShortcutBindings(candidate, for: descriptor).contains($0) } ?? false
             }) {
                 throw ShortcutValidationError.duplicate(
                     ownerDescription: conflict.title
@@ -5320,6 +5353,13 @@ final class PluginHost: ObservableObject {
             reservedRegistrations: registrations,
             reservedOwnerDescriptions: ownerDescriptions
         )
+        // Phase-aware listeners own their event taps. Refresh their host-resolved
+        // bindings after dynamic defaults or action assignments change; do not
+        // Carbon-register their active-only shortcuts.
+        for descriptor in descriptors where descriptor.plugin is any PluginShortcutEventHandling {
+            notifyShortcutBindingChange(for: descriptor, binding: legacyResolvedBinding(
+                forPluginID: descriptor.pluginID, shortcutDefinitionID: descriptor.definition.id))
+        }
         actionShortcutItems = shortcutAssignmentService.settingsItems
         shortcutBindingRevision = shortcutAssignmentService.revision
         actionShortcutCatalogItems = buildActionShortcutCatalogItems()
