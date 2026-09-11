@@ -1,6 +1,6 @@
 # Window Switcher redesign
 
-Tracks #414 (roadmap), #415 (reliability), and #416 (navigation). This branch implements stages 1–2: tracking and the searchable list chooser. Multiple simultaneous previews and native Command-Tab augmentation remain follow-ups. Stages 1–2 are ready for code review with the validation and manual acceptance limits below. The branch has not been committed, published, or installed as a signed release.
+Tracks #414 (roadmap), #415 (reliability), and #416 (navigation). This branch implements stages 1–2: tracking and the searchable list chooser. Multiple simultaneous previews and native Command-Tab augmentation remain follow-ups. Stages 1–2 are prepared for draft review with the validation and manual acceptance limits below. No signed release was installed. Upstream integration is required before the draft can be considered merge-ready.
 
 ## Interaction contract
 
@@ -41,3 +41,9 @@ The reproducible [native diagnostic](../../../scripts/diagnostics/window-switche
 Physical Chinese IME candidate selection and alternate input sources, physical shortcut delivery, mouse-driven external focus changes, save-dialog cancellation, fullscreen, and multiple physical displays/Spaces remain manual acceptance checks. Automated marked-text, external AX focus, permission, geometry, and lifecycle tests do not establish those results. A hung-app worker fixture proves process isolation, not measured responsiveness of every real application. No packaged signed release was installed for this work.
 
 These gaps do not block review of stages 1–2, but must stay visible when evaluating release readiness. Multiple simultaneous previews, native Command-Tab augmentation, browser-tab search, pinyin/learned ranking, and persistent workspace features remain later work.
+
+## Draft integration status
+
+The implementation and validation above use base `835a78a3`. At draft preparation, upstream `main` was `c3b4fabf` and included a separate Window Switcher tracking rewrite and PluginKit v6. A trial merge identified overlapping changes in the catalog, models, chooser, plugin, shortcut listener, Makefile, and README. That trial was aborted to preserve the reviewed implementation; this branch does not yet incorporate current upstream.
+
+Before marking the PR ready, reconcile the upstream tracking behavior and PluginKit compatibility, resolve the conflicts, and rerun repository and native validation on the integrated revision. The existing test totals do not establish compatibility with current `main`.
