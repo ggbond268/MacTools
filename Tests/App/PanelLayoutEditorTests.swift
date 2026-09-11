@@ -172,6 +172,71 @@ final class PanelLayoutEditorTests: XCTestCase {
         }
     }
 
+    func testDragPreviewKeepsCardFramesAndDropCanvasStableUntilCommit() async throws {
+        for surface in [PluginDisplaySurface.dashboard, .featurePanel] {
+            for direction in [LayoutDirection.leftToRight, .rightToLeft] {
+                let plugins = ["a", "b", "c"].enumerated().map {
+                    LayoutEditorTestPlugin($0.element, order: $0.offset)
+                }
+                // Moving the tall card past the full-width card packs this grid more tightly.
+                plugins[0].spanWidth = 1
+                plugins[0].spanHeight = 24
+                plugins[1].spanWidth = 4
+                plugins[2].spanWidth = 3
+                let host = makeHost(plugins)
+                let session = PanelLayoutEditingSession()
+                let window = mount(PanelLayoutEditor(pluginHost: host, surface: surface, onDismiss: {}, session: session)
+                    .environment(\.layoutDirection, direction))
+                defer { window.close() }
+                try await settle()
+                let root = try XCTUnwrap(window.contentView)
+                let canvas = try XCTUnwrap(descendants(root).first {
+                    $0.identifier?.rawValue == "panel.layout.canvas"
+                })
+                func cardFrames() -> [String: CGRect] {
+                    Dictionary(uniqueKeysWithValues: descendants(root)
+                        .compactMap { $0 as? PanelLayoutDragSourceView }
+                        .map { ($0.identifier!.rawValue, $0.convert($0.bounds, to: canvas)) })
+                }
+                let frames = cardFrames()
+                XCTAssertEqual(frames.count, 3)
+                let canvasBounds = canvas.bounds
+                let ids = renderedIDs(host, surface: surface)
+                let last = try XCTUnwrap(frames["panel.layout.drag.c"])
+                let target = CGPoint(x: direction == .rightToLeft ? last.minX + 8 : last.maxX - 8,
+                                     y: surface == .dashboard ? last.midY : last.maxY - 2)
+                XCTAssertTrue(canvasBounds.contains(target))
+                if surface == .dashboard {
+                    let reordered = ComponentGridPlacementEngine.placements(for: [
+                        host.componentItems[1], host.componentItems[2], host.componentItems[0]
+                    ])
+                    XCTAssertGreaterThan(target.y, ComponentPanelLayout.gridContentHeight(for: reordered)
+                        + PanelLayoutDestination.dropTailHeight, "The fixture must exercise a shrinking preview")
+                }
+
+                _ = session.begin(id: "a", ids: ids)
+                session.preview(offset: 3, ids: ids)
+                try await settle()
+                XCTAssertEqual(session.previewIDs(currentIDs: ids), ["b", "c", "a"])
+                XCTAssertEqual(renderedIDs(host, surface: surface), ids)
+                XCTAssertEqual(cardFrames(), frames)
+                XCTAssertEqual(canvas.bounds, canvasBounds)
+                XCTAssertTrue(canvas.bounds.contains(target), "A stationary drop target must remain valid")
+
+                session.leave()
+                try await settle()
+                XCTAssertEqual(cardFrames(), frames)
+                XCTAssertEqual(canvas.bounds, canvasBounds)
+                session.preview(offset: 3, ids: ids)
+                let move = try XCTUnwrap(session.finish(ids: ids))
+                host.moveRenderedPlugin(id: move.id, toOffset: move.offset, on: surface)
+                try await settle()
+                XCTAssertEqual(renderedIDs(host, surface: surface), ["b", "c", "a"])
+                XCTAssertNotEqual(cardFrames(), frames, "Cards should move after the drop is committed")
+            }
+        }
+    }
+
     func testScrollingCannotClearPendingDropAndUsesScrolledCoordinates() throws {
         let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: 200),
                               styleMask: [.titled], backing: .buffered, defer: false)

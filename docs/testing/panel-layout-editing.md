@@ -13,6 +13,8 @@ Each scenario runs in a separate process with a watchdog. The runner bounds comp
 
 The synthetic host is an interaction fixture, not a persistence test. `PanelLayoutEditorTests` separately exercises the real `PluginHost`, preference-store recreation, hidden-item positions, surface isolation, Undo, body/handle/menu hit testing, and scroll coordinates. `PanelLayoutEditingSessionTests` covers stale completion callbacks, invalidation, Undo eligibility, and insertion boundaries. `PanelLayoutToolbarTests` sends mouse events to the production toolbar. Rendering fixtures attach screenshots to the XCTest result bundle.
 
+`PanelLayoutEditorTests.testDragPreviewKeepsCardFramesAndDropCanvasStableUntilCommit` mounts mixed-size cards in both layout directions and on both surfaces. It checks that previews and leaving the drop area preserve card frames and canvas bounds, and that committing the move updates the actual layout.
+
 A standalone application loop is deliberate. XCTest's async event pumping can initiate a native source without completing its drop; nesting `NSApplication.run()` inside XCTest can hang its runner. Keep native drag acceptance in the separate fixture.
 
 Before marking the feature ready, also check physical mouse/trackpad dragging and drag lock, dragging outside the application, sustained edge scrolling, keyboard navigation, VoiceOver, and Reduce Motion on supported macOS versions. The fixture uses synthetic pointer events and does not establish those hardware/accessibility results.

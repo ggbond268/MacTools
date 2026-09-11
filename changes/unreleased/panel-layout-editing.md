@@ -4,4 +4,4 @@ type: added
 area: Menu-bar panels
 ---
 
-Reorder Dashboard cards and Feature Panel rows with whole-card dragging, live previews, stable drop markers, edge scrolling, and move menus. Changes save immediately with Undo and Done controls.
+Reorder Dashboard cards and Feature Panel rows with whole-card dragging or move menus, automatic saving, and Undo. Mixed-size cards stay in place while dragging, keeping drop targets stable.

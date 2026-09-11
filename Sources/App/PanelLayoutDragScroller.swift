@@ -56,6 +56,7 @@ struct PanelLayoutScrollAnchor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = AnchorView()
+        view.identifier = NSUserInterfaceItemIdentifier("panel.layout.canvas")
         scroller.anchor = view
         return view
     }

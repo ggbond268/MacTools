@@ -30,16 +30,6 @@ struct PanelLayoutEditor: View {
         surface == .dashboard ? ComponentGridPlacementEngine.placements(for: pluginHost.componentItems) : []
     }
 
-    private var previewIDs: [String] {
-        session.previewIDs(currentIDs: ids)
-    }
-
-    private var previewPlacements: [ComponentGridPlacement] {
-        guard surface == .dashboard else { return [] }
-        let lookup = Dictionary(uniqueKeysWithValues: pluginHost.componentItems.map { ($0.id, $0) })
-        return ComponentGridPlacementEngine.placements(for: previewIDs.compactMap { lookup[$0] })
-    }
-
     var body: some View {
         VStack(spacing: PanelLayoutDestination.footerSpacing) {
             editor
@@ -107,9 +97,11 @@ struct PanelLayoutEditor: View {
     }
 
     private var featureList: some View {
+        // Keep cards and the drop canvas in the committed layout while dragging.
+        // Only the insertion marker and destination description preview the move.
         let lookup = Dictionary(uniqueKeysWithValues: pluginHost.panelItems.map { ($0.id, $0) })
         return VStack(spacing: PanelLayoutDestination.rowSpacing) {
-            ForEach(Array(previewIDs.enumerated()), id: \.element) { index, id in
+            ForEach(Array(ids.enumerated()), id: \.element) { index, id in
                 if let item = lookup[id] {
                     reorderItem(id: item.id, title: item.title, icon: item.iconName, index: index) {
                         HStack(spacing: 10) {
@@ -126,7 +118,7 @@ struct PanelLayoutEditor: View {
                 }
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: previewIDs)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: ids)
         .overlay(alignment: .top) {
             if let destination = session.destination {
                 Rectangle()
@@ -142,8 +134,8 @@ struct PanelLayoutEditor: View {
     private var dashboard: some View {
         let lookup = Dictionary(uniqueKeysWithValues: pluginHost.componentItems.map { ($0.id, $0) })
         return ZStack(alignment: .topLeading) {
-            ForEach(previewPlacements) { placement in
-                if let item = lookup[placement.id], let index = previewIDs.firstIndex(of: item.id) {
+            ForEach(placements) { placement in
+                if let item = lookup[placement.id], let index = ids.firstIndex(of: item.id) {
                     reorderItem(id: item.id, title: item.title, icon: item.iconName, index: index) {
                         pluginHost.componentViewItem(for: item.id, dismiss: onDismiss).content
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -161,9 +153,9 @@ struct PanelLayoutEditor: View {
                 }
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: previewPlacements)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: placements)
         .frame(width: ComponentPanelLayout.gridWidth,
-               height: ComponentPanelLayout.gridContentHeight(for: previewPlacements), alignment: .topLeading)
+               height: ComponentPanelLayout.gridContentHeight(for: placements), alignment: .topLeading)
         .overlay(alignment: .topLeading) {
             if let destination = session.destination,
                let marker = PanelLayoutDestination.gridInsertionFrame(
