@@ -29,7 +29,9 @@ final class ClipboardHistoryPlugin:
     PluginShortcutBindingValidating,
     PluginInlineShortcutSettingsContextConsuming,
     PluginWindowLayoutTargetProviding,
-    AccessibilityPermissionRefreshing
+    PluginSettingsPresenting,
+    AccessibilityPermissionRefreshing,
+    DisplayTopologyRefreshing
 {
     static let pluginID = "clipboard"
     static let pluginOrder = 125
@@ -74,7 +76,6 @@ final class ClipboardHistoryPlugin:
         static let panelSelectAll = "panel-select-all"
         static let panelCopyCombined = "panel-copy-combined"
         static let panelPasteCombined = "panel-paste-combined"
-        // Keep the stored binding ID stable while cycling filter families instead of scope values.
         static let panelCycleScope = "panel-cycle-scope"
         static let primaryGroup = "primary-shortcuts"
         static let panelGroup = "clipboard-window-shortcuts"
@@ -88,12 +89,10 @@ final class ClipboardHistoryPlugin:
     }
 
     private enum SettingsSectionID {
-        static let essentials = "clipboard-essential-settings"
+        static let history = "clipboard-essential-settings"
         static let queue = "clipboard-queue-settings"
         static let snippets = "clipboard-snippet-settings"
-        static let additionalShortcuts = "clipboard-additional-shortcuts"
-        static let retention = "clipboard-retention-settings"
-        static let exclusions = "clipboard-exclusion-settings"
+        static let advanced = "clipboard-additional-shortcuts"
         static let data = "clipboard-data-settings"
     }
 
@@ -103,6 +102,7 @@ final class ClipboardHistoryPlugin:
     let savedLibraryController: ClipboardSavedLibraryController
 
     var onStateChange: (() -> Void)?
+    var requestSettingsPresentation: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     var inlineShortcutSettingsContextProvider: (() -> PluginSettingsContext)?
@@ -331,6 +331,7 @@ final class ClipboardHistoryPlugin:
         }
         return hud
     }()
+    private var isPanelPreparationPending = false
     private lazy var panelController = ClipboardHistoryPanelController(
         historyController: controller,
         savedLibraryController: savedLibraryController,
@@ -361,6 +362,9 @@ final class ClipboardHistoryPlugin:
         },
         shortcutSettingsContextProvider: { [weak self] in
             self?.inlineShortcutSettingsContextProvider?()
+        },
+        onOpenSettings: { [weak self] in
+            self?.requestSettingsPresentation?()
         }
     )
 
@@ -511,9 +515,11 @@ final class ClipboardHistoryPlugin:
             self?.synchronizeKeywordExpansion()
         }
         controller.onChange = { [weak self] in
+            self?.preparePanelWhenReady()
             self?.onStateChange?()
         }
         savedLibraryController.onChange = { [weak self] in
+            self?.preparePanelWhenReady()
             self?.synchronizeKeywordExpansion()
             self?.onStateChange?()
         }
@@ -588,131 +594,74 @@ final class ClipboardHistoryPlugin:
                 defaultValue: "Search encrypted local History and manage reusable Saved items"
             ),
             sections: [
-                PluginSettingsSection(
-                    id: SettingsSectionID.essentials,
-                    presentation: .edgeToEdge
-                ) { [weak self] context in
-                    if let self {
-                        ClipboardHistorySettingsView(
-                            controller: self.controller,
-                            savedLibraryController: self.savedLibraryController,
-                            localization: self.localization,
-                            settingsContext: context,
-                            contentSections: [.essentials]
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                },
-                PluginSettingsSection(
-                    id: SettingsSectionID.queue,
-                    presentation: .edgeToEdge,
-                    embeddedShortcutGroupIDs: [ShortcutID.queueGroup]
-                ) { [weak self] context in
-                    if let self {
-                        ClipboardHistorySettingsView(
-                            controller: self.controller,
-                            savedLibraryController: self.savedLibraryController,
-                            localization: self.localization,
-                            settingsContext: context,
-                            contentSections: [.queue]
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                },
-                PluginSettingsSection(
+                settingsSection(
+                    id: SettingsSectionID.history,
+                    title: localization.string("settings.history.section", defaultValue: "Clipboard History"),
+                    contentSection: .history,
+                    embeddedShortcutGroupIDs: [ShortcutID.primaryGroup, ShortcutID.collectionGroup]
+                ),
+                settingsSection(
                     id: SettingsSectionID.snippets,
-                    presentation: .edgeToEdge
-                ) { [weak self] _ in
-                    if let self {
-                        ClipboardHistorySettingsView(
-                            controller: self.controller,
-                            savedLibraryController: self.savedLibraryController,
-                            localization: self.localization,
-                            contentSections: [.snippets],
-                            onManageSnippets: { [weak self] in self?.panelController.showSnippets() }
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                },
-                PluginSettingsSection(
-                    id: SettingsSectionID.additionalShortcuts,
-                    presentation: .edgeToEdge,
-                    embeddedShortcutGroupIDs: [ShortcutID.panelGroup, ShortcutID.collectionGroup]
-                ) { [weak self] context in
-                    if let self {
-                        ClipboardHistorySettingsView(
-                            controller: self.controller,
-                            savedLibraryController: self.savedLibraryController,
-                            localization: self.localization,
-                            settingsContext: context,
-                            contentSections: [.additionalShortcuts]
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                }.headerAccessory { [weak self] _ in
-                    if let self {
-                        ClipboardSettingsAdvancedDivider(
-                            title: self.localization.string("settings.advanced.title", defaultValue: "高级")
-                        )
-                    }
-                },
-                PluginSettingsSection(
-                    id: SettingsSectionID.retention,
-                    presentation: .edgeToEdge
-                ) { [weak self] _ in
-                    if let self {
-                        ClipboardHistorySettingsView(
-                            controller: self.controller,
-                            savedLibraryController: self.savedLibraryController,
-                            localization: self.localization,
-                            contentSections: [.retention]
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                },
-                PluginSettingsSection(
-                    id: SettingsSectionID.exclusions,
-                    presentation: .edgeToEdge
-                ) { [weak self] _ in
-                    if let self {
-                        ClipboardHistorySettingsView(
-                            controller: self.controller,
-                            savedLibraryController: self.savedLibraryController,
-                            localization: self.localization,
-                            contentSections: [.exclusions]
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                },
-                PluginSettingsSection(
+                    title: localization.string("settings.snippets.section", defaultValue: "Snippets"),
+                    contentSection: .snippets
+                ),
+                settingsSection(
+                    id: SettingsSectionID.queue,
+                    title: localization.string("hud.queue.explicit", defaultValue: "Paste Queue"),
+                    contentSection: .queue,
+                    embeddedShortcutGroupIDs: [ShortcutID.queueGroup]
+                ),
+                settingsSection(
+                    id: SettingsSectionID.advanced,
+                    title: localization.string("settings.advanced.title", defaultValue: "Advanced"),
+                    contentSection: .advanced,
+                    embeddedShortcutGroupIDs: [ShortcutID.panelGroup, ShortcutID.privacyGroup]
+                ),
+                settingsSection(
                     id: SettingsSectionID.data,
-                    presentation: .edgeToEdge
-                ) { [weak self] _ in
-                    if let self {
-                        ClipboardHistorySettingsView(
-                            controller: self.controller,
-                            savedLibraryController: self.savedLibraryController,
-                            localization: self.localization,
-                            contentSections: [.data],
-                            backupService: { [weak self] in
-                                guard let self else { return nil }
-                                return self.backupPersistence?.backupService(maximumItemBytes: self.settingsStore.snapshot.maximumItemByteCount)
-                            },
-                            onBackupSuspend: { [weak self] in self?.suspendForClipboardBackup() },
-                            onBackupResume: { [weak self] restored in self?.resumeAfterClipboardBackup(restored: restored) }
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                },
+                    title: localization.string("settings.data.section", defaultValue: "Local Data"),
+                    contentSection: .data
+                ),
             ]
         )
+    }
+
+    private func settingsSection(
+        id: String,
+        title: String,
+        contentSection: ClipboardHistorySettingsContentSection,
+        embeddedShortcutGroupIDs: Set<String> = []
+    ) -> PluginSettingsSection {
+        PluginSettingsSection(
+            id: id,
+            title: title,
+            presentation: .edgeToEdge,
+            embeddedShortcutGroupIDs: embeddedShortcutGroupIDs
+        ) { [weak self] context in
+            if let self {
+                ClipboardHistorySettingsView(
+                    controller: self.controller,
+                    savedLibraryController: self.savedLibraryController,
+                    localization: self.localization,
+                    settingsContext: context,
+                    contentSections: [contentSection],
+                    onManageSnippets: { [weak self] in
+                        guard let self, !self.isBackingUpClipboard else { return }
+                        self.panelController.showSnippets()
+                    },
+                    backupService: { [weak self] in
+                        guard let self else { return nil }
+                        return self.backupPersistence?.backupService(
+                            maximumItemBytes: self.settingsStore.snapshot.maximumItemByteCount
+                        )
+                    },
+                    onBackupSuspend: { [weak self] in self?.suspendForClipboardBackup() },
+                    onBackupResume: { [weak self] restored in self?.resumeAfterClipboardBackup(restored: restored) }
+                )
+            } else {
+                EmptyView()
+            }
+        }
     }
 
     var primaryPanelState: PluginPanelState {
@@ -877,11 +826,11 @@ final class ClipboardHistoryPlugin:
                 id: ShortcutID.panelCycleScope,
                 title: localization.string(
                     "panel.shortcuts.cycleScope",
-                    defaultValue: "Cycle Filter Group"
+                    defaultValue: "Switch Scope"
                 ),
                 description: localization.string(
                     "panel.shortcuts.cycleScope.description",
-                    defaultValue: "Switch between available filter groups; add Shift to go backward. Control-1 through Control-9 chooses an option in the active group."
+                    defaultValue: "Switch between All, History, and Snippets; add Shift to go backward. Control-1 through Control-3 selects a scope directly."
                 ),
                 keyCode: 48,
                 modifiers: [.control],
@@ -1060,7 +1009,7 @@ final class ClipboardHistoryPlugin:
                 systemImage: "keyboard",
                 actionIDs: [ActionID.openHistory],
                 shortcutDefinitionIDs: [ShortcutID.pastePlainText],
-                placementAfterSectionID: SettingsSectionID.essentials
+                placementAfterSectionID: SettingsSectionID.history
             ),
             PluginShortcutSettingsGroupConfiguration(
                 id: ShortcutID.queueGroup,
@@ -1096,7 +1045,7 @@ final class ClipboardHistoryPlugin:
                     ShortcutID.panelCopyCombined,
                     ShortcutID.panelPasteCombined,
                 ],
-                placementAfterSectionID: SettingsSectionID.additionalShortcuts
+                placementAfterSectionID: SettingsSectionID.advanced
             ),
             PluginShortcutSettingsGroupConfiguration(
                 id: ShortcutID.privacyGroup,
@@ -1106,7 +1055,7 @@ final class ClipboardHistoryPlugin:
                 ),
                 systemImage: "eye.slash",
                 shortcutDefinitionIDs: [ShortcutID.privateCopy, ShortcutID.ignoreNextCopy],
-                placementAfterSectionID: SettingsSectionID.snippets
+                placementAfterSectionID: SettingsSectionID.advanced
             ),
             PluginShortcutSettingsGroupConfiguration(
                 id: ShortcutID.collectionGroup,
@@ -1120,7 +1069,7 @@ final class ClipboardHistoryPlugin:
                 ),
                 systemImage: "playpause",
                 actionIDs: Set(Self.collectionControlActionIDs),
-                placementAfterSectionID: SettingsSectionID.additionalShortcuts
+                placementAfterSectionID: SettingsSectionID.history
             ),
         ]
     }
@@ -1137,7 +1086,7 @@ final class ClipboardHistoryPlugin:
     ]
 
     var collapsibleShortcutSettingsGroupIDs: Set<String> {
-        [ShortcutID.panelGroup, ShortcutID.collectionGroup]
+        [ShortcutID.panelGroup, ShortcutID.privacyGroup, ShortcutID.collectionGroup]
     }
 
     var collapsibleActionSettingsGroupIDs: Set<String> {
@@ -1444,6 +1393,10 @@ final class ClipboardHistoryPlugin:
         onStateChange?()
     }
 
+    func refreshDisplayTopology() {
+        panelController.refreshDisplayTopology()
+    }
+
     func refreshAccessibilityPermission() {
         synchronizeKeywordExpansion()
         onStateChange?()
@@ -1466,6 +1419,7 @@ final class ClipboardHistoryPlugin:
     func resumeAfterClipboardBackup(restored: Bool) {
         guard isBackingUpClipboard else { return }
         isBackingUpClipboard = false
+        isPanelPreparationPending = true
         // A dispatched private copy can arrive after the backup sheet closes.
         if let lease = privateCopyLeaseStore.load() {
             _ = controller.restorePrivateCopySuppression(lease)
@@ -1473,10 +1427,12 @@ final class ClipboardHistoryPlugin:
         controller.resumeAfterBackup(restored: restored)
         savedLibraryController.start()
         synchronizeKeywordExpansion()
+        preparePanelWhenReady()
         onStateChange?()
     }
 
     func activate(context: PluginRuntimeContext) {
+        isPanelPreparationPending = true
         if let lease = privateCopyLeaseStore.load() {
             _ = controller.restorePrivateCopySuppression(lease)
         }
@@ -1497,9 +1453,18 @@ final class ClipboardHistoryPlugin:
             synchronizeSequentialPasteProtection()
         }
         synchronizeKeywordExpansion()
+        preparePanelWhenReady()
+    }
+
+    private func preparePanelWhenReady() {
+        guard !isBackingUpClipboard, isPanelPreparationPending,
+              controller.isLoaded, savedLibraryController.isLoaded else { return }
+        isPanelPreparationPending = false
+        panelController.prepareForNextPresentation()
     }
 
     func deactivate(reason: PluginDeactivationReason) {
+        isPanelPreparationPending = false
         isBackingUpClipboard = false
         controller.cancelBackupSuspension()
         if reason == .uninstalling {

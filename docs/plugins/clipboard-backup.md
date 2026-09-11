@@ -16,7 +16,7 @@ DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer xcodebuild \
   -only-testing:MacToolsTests/ClipboardBackupServiceTests
 ```
 
-The tests cover encrypted round trips, destination keys, selective membership,
+The tests cover encrypted round trips, destination keys, selective membership, source provenance,
 merge conflicts, snippet keyword ownership and capacity confirmation, atomic replacement, SQLite-full
 failure, authentication failures, malformed framing, cancellation, rollback,
 missing file references, and a 128 MiB synthetic streaming memory regression.
@@ -39,6 +39,11 @@ files use 0600; interrupted-process leftovers contain destination-encrypted data
 Ordinary clips with different IDs are retained even when digests match, preserving
 meaningful provenance and titles. Snippets are never deduplicated by body. Conflict
 and unresolved-file reports are encrypted on disk and paged in the sheet.
+
+Matching-ID merges retain known Universal Clipboard provenance when an older archive
+lacks that optional metadata. A remote source cannot retain an unrelated local-app
+field. Ordinary app and unknown sources keep the legacy encoding, so existing
+archives remain readable without a format migration.
 
 For manual acceptance with an isolated Debug identity, verify save/open panels,
 password confirmation, keyboard navigation, progress cancellation, precise partial

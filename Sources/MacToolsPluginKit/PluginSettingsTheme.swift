@@ -138,6 +138,54 @@ public enum PluginSettingsTheme {
     }
 }
 
+/// Shared row content for native forms and custom settings sections.
+/// The containing form or custom section owns row padding and separators.
+public struct PluginSettingsItem<Control: View>: View {
+    private let title: String
+    private let description: String?
+    private let systemImage: String?
+    private let control: Control
+
+    public init(
+        title: String,
+        description: String? = nil,
+        systemImage: String? = nil,
+        @ViewBuilder control: () -> Control
+    ) {
+        self.title = title
+        self.description = description
+        self.systemImage = systemImage
+        self.control = control()
+    }
+
+    public var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .pluginSettingsRowIconStyle()
+                        .accessibilityHidden(true)
+                }
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    Text(title)
+                        .font(PluginSettingsTheme.Typography.rowTitle)
+                    if let description, !description.isEmpty {
+                        Text(description)
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .layoutPriority(1)
+
+            Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+            control
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 public enum PluginSettingsCardBackgroundStyle {
     case standard
     case recessed

@@ -16,26 +16,33 @@ struct ClipboardPanelPresentationIndex: Sendable {
     private var presentationCount = 0
 
     init(items: [ClipboardHistoryItem], savedItems: [ClipboardSavedItem]) {
+        records.reserveCapacity(items.count + savedItems.count)
+        var keys: [Key] = []
+        keys.reserveCapacity(items.count + savedItems.count)
         for item in items {
-            records[Key(id: item.id, isSnippet: false)] = .init(
-                item: item, isSnippet: false, sortDate: item.capturedAt
-            )
+            let key = Key(id: item.id, isSnippet: false)
+            if records.updateValue(.init(item: item, isSnippet: false, sortDate: item.capturedAt), forKey: key) == nil {
+                keys.append(key)
+            }
         }
         for saved in savedItems where saved.isSnippet {
-            records[Key(id: saved.id, isSnippet: true)] = .init(
-                item: saved.historyPresentationItem(), isSnippet: true, sortDate: saved.updatedAt
-            )
+            let key = Key(id: saved.id, isSnippet: true)
+            if records.updateValue(.init(item: saved.historyPresentationItem(), isSnippet: true, sortDate: saved.updatedAt), forKey: key) == nil {
+                keys.append(key)
+            }
         }
-        for (key, record) in records {
+        // History normally arrives in capture order. Keep that order when possible, and
+        // sort mixed or unordered inputs once before distributing them to every scope.
+        // Sorting dictionary keys independently per scope repeated both sorting and lookups.
+        var orderedRecords = keys.map { ($0, records[$0]!) }
+        if zip(orderedRecords, orderedRecords.dropFirst()).contains(where: { precedes($0.1.1, $0.0.1) }) {
+            orderedRecords.sort { precedes($0.1, $1.1) }
+        }
+        for (key, record) in orderedRecords {
             for scope in scopes(for: record) { order[scope, default: []].append(key) }
             if !key.isSnippet || records[Key(id: key.id, isSnippet: false)] == nil {
                 count(record.item, delta: 1)
             }
-        }
-        for scope in ClipboardPanelMode.allCases {
-            var keys = order[scope] ?? []
-            keys.sort { precedes(records[$0]!, records[$1]!) }
-            order[scope] = keys
         }
     }
 
