@@ -14,6 +14,17 @@ final class AutoHideDockPluginTests: XCTestCase {
         XCTAssertEqual(plugin.primaryPanelState.subtitle, "已开启")
     }
 
+    func testAutomationPermissionIsReportedAsOnDemand() {
+        let state = AutoHideDockPlugin(
+            commandRunner: MockDockCommandRunner(),
+            stateReader: { false }
+        ).permissionState(for: "automation")
+
+        XCTAssertFalse(state.isGranted)
+        XCTAssertEqual(state.statusText, "按需确认")
+        XCTAssertEqual(state.statusTone, .neutral)
+    }
+
     func testSwitchUpdatesDockState() {
         let runner = MockDockCommandRunner()
         let plugin = AutoHideDockPlugin(commandRunner: runner, stateReader: { false })

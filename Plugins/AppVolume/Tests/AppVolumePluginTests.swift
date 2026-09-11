@@ -6,6 +6,16 @@ import MacToolsPluginKit
 
 @MainActor
 final class AppVolumePluginTests: XCTestCase {
+    func testManifestDynamicActionMatchesRuntimePolicy() throws {
+        let plugin = makePlugin()
+
+        try PluginManifestActionAssertions.assertConsistency(
+            pluginDirectoryName: "AppVolume",
+            definitions: plugin.actionDefinitions,
+            permissionIDs: plugin.permissionRequirementIDs(for:)
+        )
+    }
+
     func testMetadataAndPermissionRequirement() {
         let plugin = makePlugin()
 
@@ -163,6 +173,98 @@ final class AppVolumePluginTests: XCTestCase {
         XCTAssertFalse(plugin.primaryPanelState.isEnabled)
         XCTAssertEqual(plugin.primaryPanelState.subtitle, "需要 macOS 15 或更高版本")
         XCTAssertTrue(plugin.permissionRequirements.isEmpty)
+    }
+
+    func testPermissionRefreshRechecksAfterUserDrivenSettingsRoundTrip() async {
+        let router = AppVolumeRouterMock(accessResult: false)
+        var openSettingsCount = 0
+        let plugin = makePlugin(
+            router: router,
+            openSystemAudioPrivacySettings: { openSettingsCount += 1 }
+        )
+
+        plugin.handlePermissionAction(id: "system-audio-recording")
+        for _ in 0 ..< 100 where openSettingsCount == 0 {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(router.accessRequestCount, 1)
+        XCTAssertEqual(openSettingsCount, 1)
+        XCTAssertFalse(plugin.permissionState(for: "system-audio-recording").isGranted)
+
+        router.accessResult = true
+        plugin.refresh()
+        for _ in 0 ..< 100
+            where !plugin.permissionState(for: "system-audio-recording").isGranted {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(router.accessRequestCount, 2)
+        XCTAssertEqual(openSettingsCount, 1)
+        XCTAssertTrue(plugin.permissionState(for: "system-audio-recording").isGranted)
+    }
+
+    func testPermissionRefreshSurvivesActivationBeforeAsynchronousSettingsRoundTrip() async {
+        let router = AppVolumeRouterMock(accessResult: false)
+        router.suspendNextAccessRequest = true
+        var openSettingsCount = 0
+        let plugin = makePlugin(
+            router: router,
+            openSystemAudioPrivacySettings: { openSettingsCount += 1 }
+        )
+        plugin.handlePermissionAction(id: "system-audio-recording")
+        for _ in 0 ..< 100 where !router.hasSuspendedAccessRequest {
+            await Task.yield()
+        }
+
+        plugin.refresh()
+        XCTAssertEqual(router.accessRequestCount, 1)
+
+        router.completeSuspendedAccessRequest(false)
+        for _ in 0 ..< 100 where openSettingsCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(openSettingsCount, 1)
+
+        router.accessResult = true
+        plugin.refresh()
+        for _ in 0 ..< 100
+            where !plugin.permissionState(for: "system-audio-recording").isGranted {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(router.accessRequestCount, 2)
+        XCTAssertEqual(openSettingsCount, 1)
+        XCTAssertTrue(plugin.permissionState(for: "system-audio-recording").isGranted)
+    }
+
+    func testGrantedPermissionActionRechecksRevokedAccessWithoutReopeningSettings() async {
+        let router = AppVolumeRouterMock(accessResult: true)
+        var openSettingsCount = 0
+        let plugin = makePlugin(
+            router: router,
+            openSystemAudioPrivacySettings: { openSettingsCount += 1 }
+        )
+        plugin.handlePermissionAction(id: "system-audio-recording")
+        for _ in 0 ..< 100
+            where !plugin.permissionState(for: "system-audio-recording").isGranted {
+            await Task.yield()
+        }
+        XCTAssertTrue(plugin.permissionState(for: "system-audio-recording").isGranted)
+
+        router.accessResult = false
+        plugin.handlePermissionAction(id: "system-audio-recording")
+        for _ in 0 ..< 100 {
+            let state = plugin.permissionState(for: "system-audio-recording")
+            if router.accessRequestCount == 2, state.statusTone != .neutral {
+                break
+            }
+            await Task.yield()
+        }
+
+        XCTAssertEqual(router.accessRequestCount, 2)
+        XCTAssertEqual(openSettingsCount, 0)
+        XCTAssertFalse(plugin.permissionState(for: "system-audio-recording").isGranted)
     }
 
     func testCanonicalActionsPublishMuteHalfAndFullVolumeForEachPlayingApp() {
@@ -641,12 +743,14 @@ final class AppVolumePluginTests: XCTestCase {
     private func makePlugin(
         storage: AppVolumeStorageMock? = nil,
         monitor: AppVolumeMonitorMock? = nil,
-        router: AppVolumeRouterMock? = nil
+        router: AppVolumeRouterMock? = nil,
+        openSystemAudioPrivacySettings: @escaping () -> Void = {}
     ) -> AppVolumePlugin {
         AppVolumePlugin(
             storage: storage ?? AppVolumeStorageMock(),
             monitor: monitor ?? AppVolumeMonitorMock(),
-            router: router ?? AppVolumeRouterMock()
+            router: router ?? AppVolumeRouterMock(),
+            openSystemAudioPrivacySettings: openSystemAudioPrivacySettings
         )
     }
 
@@ -692,7 +796,7 @@ private final class AppVolumeMonitorMock: AudioApplicationMonitoring {
 @MainActor
 private final class AppVolumeRouterMock: ApplicationVolumeRouting {
     let isSupported: Bool
-    let accessResult: Bool
+    var accessResult: Bool
     private(set) var accessRequestCount = 0
     private(set) var updates: [[ApplicationVolumeTarget]] = []
     private(set) var didStop = false

@@ -245,13 +245,13 @@ private let appleSiliconInhibitKeys = ["CH0B", "CH0C"]
 /// Newer charging-control key seen on macOS 26 ("Tahoe") firmware.
 private let tahoeChargingKey = "CHTE"
 /// Newer adapter-control key seen on macOS 26 ("Tahoe") firmware.
-private let tahoeAdapterKey = "CHIE"
+private let tahoeAdapterKey = BatteryForceDischargePolicy.tahoeAdapterKey
 /// Intel-only persistent charge ceiling key.
 private let intelCeilingKey = "BCLM"
 /// Force-discharge key (drains battery even while plugged in).
-private let forceDischargeKey = "CH0I"
+private let forceDischargeKey = BatteryForceDischargePolicy.legacyAdapterKey
 /// Secondary adapter-control key found on legacy force-discharge firmware.
-private let secondaryForceDischargeKey = "CH0J"
+private let secondaryForceDischargeKey = BatteryForceDischargePolicy.secondaryAdapterKey
 /// MagSafe LED color hint (optional cosmetic).
 private let magSafeLEDKey = "ACLC"
 private let writeMaxAttempts = 3
@@ -264,8 +264,11 @@ private struct Capabilities {
     var hasCH0BC: Bool
     var hasBCLM: Bool
     var hasCH0I: Bool
+    var hasCHIE: Bool
+    var hasCH0J: Bool
 
     var canInhibit: Bool { hasCHTE || hasCH0BC || hasBCLM }
+    var canForceDischarge: Bool { hasCHIE || hasCH0J || hasCH0I }
 }
 
 private func probeCapabilities(connection: SMCConnection) -> Capabilities {
@@ -273,7 +276,9 @@ private func probeCapabilities(connection: SMCConnection) -> Capabilities {
         hasCHTE: connection.hasKey(tahoeChargingKey),
         hasCH0BC: appleSiliconInhibitKeys.allSatisfy { connection.hasKey($0) },
         hasBCLM: connection.hasKey(intelCeilingKey),
-        hasCH0I: connection.hasKey(forceDischargeKey)
+        hasCH0I: connection.hasKey(forceDischargeKey),
+        hasCHIE: connection.hasKey(tahoeAdapterKey),
+        hasCH0J: connection.hasKey(secondaryForceDischargeKey)
     )
 }
 
@@ -341,22 +346,41 @@ private func clearStaleAdapterControl(connection: SMCConnection) -> Bool {
     return (try? writeByte(0x00, key: tahoeAdapterKey, connection: connection)) != nil
 }
 
+private func availableForceDischargeKeys(connection: SMCConnection) -> [BatteryForceDischargePolicy.Candidate] {
+    BatteryForceDischargePolicy.availableCandidates { connection.hasKey($0) }
+}
+
 private func writeForceDischarge(_ on: Bool, connection: SMCConnection) throws {
-    let byte: UInt8 = on ? 0x01 : 0x00
-    let keys = [forceDischargeKey]
-        + (connection.hasKey(secondaryForceDischargeKey) ? [secondaryForceDischargeKey] : [])
-    var lastError: Error?
-
-    for key in keys {
-        do {
-            try writeByte(byte, key: key, connection: connection)
-        } catch {
-            lastError = error
+    let keys = availableForceDischargeKeys(connection: connection)
+    do {
+        if on {
+            try BatteryForceDischargePolicy.enable(keys) { candidate in
+                try writeByte(candidate.enabledValue, key: candidate.key, connection: connection)
+            }
+            return
         }
-    }
 
-    if let lastError {
-        throw lastError
+        try BatteryForceDischargePolicy.disable(
+            keys,
+            isActive: { candidate in
+                let value = try connection.readValue(key: candidate.key)
+                return BatteryForceDischargePolicy.activeState(
+                    for: value.bytes.first,
+                    enabledValue: candidate.enabledValue
+                )
+            },
+            clear: { candidate in
+                try writeByte(0x00, key: candidate.key, connection: connection)
+            }
+        )
+    } catch let error as BatteryForceDischargePolicyError {
+        switch error {
+        case .noAvailableKey, .noKeyCleared:
+            throw SMCHelperError.noWritableInhibitKey
+        case let .activeKeyClearFailed(_, underlying),
+             let .indeterminateKeyClearFailed(_, underlying):
+            throw underlying
+        }
     }
 }
 
@@ -428,9 +452,18 @@ private func resumeCharging(connection: SMCConnection) throws {
             anyOK = true
         }
     }
-    // Stop any force-discharge as part of resume.
-    if caps.hasCH0I {
-        _ = try? writeForceDischarge(false, connection: connection)
+    // Stop any force-discharge as part of resume. Do not report resume as
+    // successful if an active or indeterminate adapter key could not clear.
+    var forceDischargeError: Error?
+    if caps.canForceDischarge {
+        do {
+            try writeForceDischarge(false, connection: connection)
+        } catch {
+            forceDischargeError = error
+        }
+    }
+    if let forceDischargeError {
+        throw forceDischargeError
     }
     if !anyOK {
         throw SMCHelperError.noWritableInhibitKey
@@ -439,7 +472,7 @@ private func resumeCharging(connection: SMCConnection) throws {
 
 private func setForceDischarge(_ on: Bool, connection: SMCConnection) throws {
     let caps = probeCapabilities(connection: connection)
-    guard caps.hasCH0I else { throw SMCHelperError.noWritableInhibitKey }
+    guard caps.canForceDischarge else { throw SMCHelperError.noWritableInhibitKey }
     try writeForceDischarge(on, connection: connection)
 }
 
@@ -452,6 +485,8 @@ private func printProbe(connection: SMCConnection) {
         "  \"CHTE\": \(caps.hasCHTE),",
         "  \"CH0B_CH0C\": \(caps.hasCH0BC),",
         "  \"BCLM\": \(caps.hasBCLM),",
+        "  \"CHIE\": \(caps.hasCHIE),",
+        "  \"CH0J\": \(caps.hasCH0J),",
         "  \"CH0I\": \(caps.hasCH0I)",
         "}"
     ]

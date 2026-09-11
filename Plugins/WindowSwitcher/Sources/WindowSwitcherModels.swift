@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+import CoreGraphics
 import Foundation
 import MacToolsPluginKit
 
@@ -106,11 +107,18 @@ final class WindowSwitcherStore: ObservableObject {
     @Published private(set) var shortcutBindings: WindowSwitcherShortcutBindingState
 
     private let storage: PluginStorage
+    private let processIsRunning: (pid_t) -> Bool
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(storage: PluginStorage) {
+    init(
+        storage: PluginStorage,
+        processIsRunning: @escaping (pid_t) -> Bool = {
+            NSRunningApplication(processIdentifier: $0)?.isTerminated == false
+        }
+    ) {
         self.storage = storage
+        self.processIsRunning = processIsRunning
         if let data = storage.data(forKey: Keys.configuration),
            let loaded = try? decoder.decode(WindowSwitcherConfiguration.self, from: data) {
             self.configuration = loaded
@@ -182,6 +190,7 @@ final class WindowSwitcherStore: ObservableObject {
     }
 
     func assignShortcuts(to entries: [WindowSwitcherAppEntry]) -> [WindowSwitcherAppEntry] {
+        removeExpiredWindowBindings(for: entries)
         let result = WindowSwitcherShortcutAssignment.assignShortcuts(
             to: entries,
             bindingState: shortcutBindings
@@ -200,6 +209,7 @@ final class WindowSwitcherStore: ObservableObject {
         for entryID: String,
         in entries: [WindowSwitcherAppEntry]
     ) -> WindowSwitcherShortcutCustomizationResult {
+        removeExpiredWindowBindings(for: entries)
         let identities = WindowSwitcherShortcutAssignment.identities(for: entries)
         guard let targetIndex = entries.firstIndex(where: { $0.id == entryID }),
               identities.indices.contains(targetIndex)
@@ -249,6 +259,7 @@ final class WindowSwitcherStore: ObservableObject {
         for entryID: String,
         in entries: [WindowSwitcherAppEntry]
     ) -> Bool {
+        removeExpiredWindowBindings(for: entries)
         guard let token = WindowSwitcherShortcutAssignment.normalizedManualToken(rawToken) else {
             return true
         }
@@ -278,9 +289,14 @@ final class WindowSwitcherStore: ObservableObject {
         identities: [String],
         current: WindowSwitcherShortcutAssignment.Result
     ) -> Bool {
+        let activeIdentities = Set(identities)
         let conflictsWithSavedManualBinding = current.bindingState.manual.contains {
             identity, assignedToken in
             identity != targetIdentity
+                && !WindowSwitcherShortcutAssignment.isUnresolvedLegacyIdentity(
+                    identity,
+                    activeIdentities: activeIdentities
+                )
                 && WindowSwitcherShortcutAssignment.normalizedManualToken(assignedToken) == token
         }
         let conflictsWithRunningEntry = current.entries.enumerated().contains { index, entry in
@@ -295,6 +311,40 @@ final class WindowSwitcherStore: ObservableObject {
         }
 
         storage.set(data, forKey: Keys.shortcutBindings)
+    }
+
+    private func removeExpiredWindowBindings(for entries: [WindowSwitcherAppEntry]) {
+        let activeProcessIdentifiers = Set(entries.compactMap { entry in
+            entry.isWindowEntry ? entry.processIdentifier : nil
+        })
+        let previousState = shortcutBindings
+
+        shortcutBindings.manual = shortcutBindings.manual.filter { identity, _ in
+            !isExpiredWindowIdentity(identity, activeProcessIdentifiers: activeProcessIdentifiers)
+        }
+        shortcutBindings.automatic = shortcutBindings.automatic.filter { identity, _ in
+            !isExpiredWindowIdentity(identity, activeProcessIdentifiers: activeProcessIdentifiers)
+        }
+
+        if shortcutBindings != previousState {
+            persistShortcutBindings()
+        }
+    }
+
+    private func isExpiredWindowIdentity(
+        _ identity: String,
+        activeProcessIdentifiers: Set<pid_t>
+    ) -> Bool {
+        let components = identity.split(separator: ":", omittingEmptySubsequences: false)
+        guard components.count >= 4,
+              components[0] == "window",
+              let processIdentifier = pid_t(components[1]),
+              !activeProcessIdentifiers.contains(processIdentifier)
+        else {
+            return false
+        }
+
+        return !processIsRunning(processIdentifier)
     }
 }
 
@@ -478,6 +528,7 @@ enum WindowSwitcherShortcutAssignment {
     private struct Target {
         let index: Int
         let identity: String
+        let legacyIdentity: String?
         let preferredToken: String?
     }
 
@@ -502,14 +553,25 @@ enum WindowSwitcherShortcutAssignment {
         }
 
         let targets = assignmentTargets(for: entries)
-        let reservedManualTokens = Set(bindingState.manual.values.compactMap(normalizedManualToken))
+        let resolvedBindingState = migrateUnambiguousLegacyBindings(
+            from: bindingState,
+            targets: targets
+        )
+        let activeIdentities = Set(targets.map(\.identity))
+        let reservedManualTokens = Set<String>(resolvedBindingState.manual.compactMap { identity, rawToken in
+            guard !isUnresolvedLegacyIdentity(identity, activeIdentities: activeIdentities) else {
+                return nil
+            }
+
+            return normalizedManualToken(rawToken)
+        })
         let availableTokens = shortcutTokens(count: maximumShortcutCount)
         var assignedTokens = Array<String?>(repeating: nil, count: entries.count)
         var activeManualTokens = Set<String>()
         var usedTokens = reservedManualTokens
 
         for target in targets {
-            guard let token = bindingState.manual[target.identity].flatMap(normalizedManualToken),
+            guard let token = resolvedBindingState.manual[target.identity].flatMap(normalizedManualToken),
                   activeManualTokens.insert(token).inserted
             else {
                 continue
@@ -519,7 +581,7 @@ enum WindowSwitcherShortcutAssignment {
         }
 
         for target in targets where assignedTokens[target.index] == nil {
-            guard let token = bindingState.automatic[target.identity].flatMap(normalizedShortcutToken),
+            guard let token = resolvedBindingState.automatic[target.identity].flatMap(normalizedShortcutToken),
                   !usedTokens.contains(token)
             else {
                 continue
@@ -555,7 +617,7 @@ enum WindowSwitcherShortcutAssignment {
             return copy
         }
         let updatedState = updatedBindingState(
-            from: bindingState,
+            from: resolvedBindingState,
             targets: targets,
             assignedTokens: assignedTokens
         )
@@ -582,19 +644,98 @@ enum WindowSwitcherShortcutAssignment {
 
     private static func assignmentTargets(for entries: [WindowSwitcherAppEntry]) -> [Target] {
         var appOccurrences: [String: Int] = [:]
+        var axWindowOccurrences: [String: Int] = [:]
+        let windowCounts = entries.reduce(into: [String: Int]()) { counts, entry in
+            guard entry.isWindowEntry else {
+                return
+            }
+
+            counts[entry.appIdentifier, default: 0] += 1
+        }
 
         return entries.enumerated().map { index, entry in
             let appIdentifier = entry.appIdentifier
-            let occurrence = appOccurrences[appIdentifier, default: 0]
-            appOccurrences[appIdentifier] = occurrence + 1
+            let ordinalIdentity: String?
+            let preferredToken: String?
+            if entry.windowElement != nil {
+                let occurrence = axWindowOccurrences[appIdentifier, default: 0]
+                axWindowOccurrences[appIdentifier] = occurrence + 1
+                ordinalIdentity = nil
+                preferredToken = occurrence == 0 ? preferredSingleKeyToken(for: entry) : nil
+            } else if entry.windowNumber != nil {
+                ordinalIdentity = nil
+                preferredToken = nil
+            } else {
+                let occurrence = appOccurrences[appIdentifier, default: 0]
+                appOccurrences[appIdentifier] = occurrence + 1
+                ordinalIdentity = occurrence == 0
+                    ? appIdentifier
+                    : "\(appIdentifier)#window:\(occurrence + 1)"
+                preferredToken = occurrence == 0 ? preferredSingleKeyToken(for: entry) : nil
+            }
+
+            let identity: String
+            if let windowNumber = entry.windowNumber {
+                identity = "window:\(entry.processIdentifier):cg:\(windowNumber)"
+            } else if entry.windowElement != nil {
+                identity = "window:\(entry.processIdentifier):ax:\(entry.id)"
+            } else {
+                identity = ordinalIdentity ?? appIdentifier
+            }
+
             return Target(
                 index: index,
-                identity: entry.isWindowEntry ? entry.id : occurrence == 0
+                identity: identity,
+                legacyIdentity: entry.isWindowEntry && windowCounts[appIdentifier] == 1
                     ? appIdentifier
-                    : "\(appIdentifier)#window:\(occurrence + 1)",
-                preferredToken: occurrence == 0 ? preferredSingleKeyToken(for: entry) : nil
+                    : nil,
+                preferredToken: preferredToken
             )
         }
+    }
+
+    private static func migrateUnambiguousLegacyBindings(
+        from bindingState: WindowSwitcherShortcutBindingState,
+        targets: [Target]
+    ) -> WindowSwitcherShortcutBindingState {
+        var state = bindingState
+
+        for target in targets {
+            guard let legacyIdentity = target.legacyIdentity,
+                  state.manual[target.identity] == nil,
+                  let token = state.manual.removeValue(forKey: legacyIdentity)
+            else {
+                continue
+            }
+
+            state.manual[target.identity] = token
+        }
+
+        for target in targets {
+            guard let legacyIdentity = target.legacyIdentity,
+                  state.automatic[target.identity] == nil,
+                  let token = state.automatic.removeValue(forKey: legacyIdentity)
+            else {
+                continue
+            }
+
+            state.automatic[target.identity] = token
+        }
+
+        return state
+    }
+
+    static func isUnresolvedLegacyIdentity(
+        _ identity: String,
+        activeIdentities: Set<String>
+    ) -> Bool {
+        guard !activeIdentities.contains(identity) else {
+            return false
+        }
+
+        return identity.contains("#window:")
+            || identity.hasPrefix("bundle:")
+            || identity.hasPrefix("pid:")
     }
 
     private static func updatedBindingState(
@@ -606,8 +747,12 @@ enum WindowSwitcherShortcutAssignment {
         state.version = WindowSwitcherShortcutBindingState.currentVersion
         let validManualBindings = state.manual.compactMapValues(normalizedManualToken)
         state.manual = validManualBindings
-        let manualIdentities = Set(validManualBindings.keys)
-        let manualTokens = Set(validManualBindings.values)
+        let activeTargetIdentities = Set(targets.map(\.identity))
+        let effectiveManualBindings = validManualBindings.filter { identity, _ in
+            !isUnresolvedLegacyIdentity(identity, activeIdentities: activeTargetIdentities)
+        }
+        let manualIdentities = Set(effectiveManualBindings.keys)
+        let manualTokens = Set(effectiveManualBindings.values)
         var activeTokens = Set<String>()
         var activeIdentities = Set<String>()
 
@@ -629,6 +774,10 @@ enum WindowSwitcherShortcutAssignment {
         for (identity, rawToken) in state.automatic {
             guard let token = normalizedShortcutToken(rawToken) else {
                 state.automatic.removeValue(forKey: identity)
+                continue
+            }
+
+            if isUnresolvedLegacyIdentity(identity, activeIdentities: activeTargetIdentities) {
                 continue
             }
 

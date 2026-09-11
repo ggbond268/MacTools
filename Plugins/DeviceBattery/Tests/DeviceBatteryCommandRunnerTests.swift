@@ -48,19 +48,18 @@ final class DeviceBatteryCommandRunnerTests: XCTestCase {
         let start = clock.now
         let output = await DeviceBatteryCommandRunner.run(
             path: "/bin/sh",
-            arguments: ["-c", "printf 'keep\\nskip\\n'; sleep 5"],
-            // Leave enough launch time under the parallel full suite. This test
-            // covers partial-output draining and the 2-second assertion below
-            // still proves that the descendant's 5-second pipe is not awaited.
-            timeout: 0.5,
+            arguments: ["-c", "printf 'keep\\nskip\\n'; sleep 30"],
+            // CI runs the full suite in parallel, so allow the fixture enough
+            // time to launch and emit its output before forcing termination.
+            // The elapsed-time assertion still proves that the inherited pipe
+            // is closed without waiting for the descendant's 30-second sleep.
+            timeout: 2,
             outputLineFilter: { $0 == "keep" }
         )
 
-        XCTAssertEqual(
-            output,
-            DeviceBatteryCommandResult(output: "keep\n", completion: .timedOut)
-        )
-        XCTAssertLessThan(start.duration(to: clock.now), .seconds(2))
+        XCTAssertEqual(output?.completion, .timedOut)
+        XCTAssertEqual(output?.output, "keep\n")
+        XCTAssertLessThan(start.duration(to: clock.now), .seconds(5))
     }
 
     func testCompletedParentDoesNotWaitForDescendantHoldingPipe() async {

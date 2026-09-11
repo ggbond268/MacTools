@@ -132,8 +132,12 @@ struct R2KeychainSecretStore: R2SecretStoring {
     let service: String
     let account: String
 
-    init(service: String = "cc.ggbond.mactools.cloudflare-r2", account: String = "secret-access-key") {
-        self.service = service
+    init(
+        service: String = "cc.ggbond.mactools.cloudflare-r2",
+        account: String = "secret-access-key",
+        releaseChannel: String? = Bundle.main.object(forInfoDictionaryKey: "MTReleaseChannel") as? String
+    ) {
+        self.service = service + (releaseChannel == "nightly" ? ".nightly" : "")
         self.account = account
     }
 

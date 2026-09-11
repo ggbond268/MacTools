@@ -130,6 +130,9 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         self.shortcutTap.onShortcutReleased = { [weak self] in
             self?.handleShortcutReleased()
         }
+        self.shortcutTap.onAccessibilityRevoked = { [weak self] in
+            self?.refreshAccessibilityPermission()
+        }
         self.shortcutTap.onEscape = { [weak self] in
             self?.cancelSession()
         }
@@ -512,13 +515,18 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             self.session = session
             overlayController.update(session)
         } else if let pending = pendingInvocation {
-            if !pending.persistent { pendingSteps += reversed ? -1 : 1 }
+            if !pending.persistent, pendingRelease, !isRepeat {
+                beginSession(reversed: reversed, currentApp: currentApp, persistent: false)
+            } else if !pending.persistent {
+                pendingSteps += reversed ? -1 : 1
+            }
         } else {
             beginSession(reversed: reversed, currentApp: currentApp, persistent: store.configuration.mode == .keyWindow)
         }
     }
 
     private func handleShortcutReleased() {
+        guard store.configuration.isEnabled, ensureAccessibilityForInvocation() else { return }
         if pendingInvocation != nil { pendingRelease = true; return }
         guard let session, !session.isPersistent else { return }
         if let entry = session.selected { select(entry) } else { cancelSession() }

@@ -49,6 +49,16 @@ enum DockClickGesturePolicy {
     static let maximumDuration: TimeInterval = 0.35
     static let maximumDistance: CGFloat = 4
 
+    static func isWithinMaximumDistance(
+        downLocation: CGPoint,
+        currentLocation: CGPoint
+    ) -> Bool {
+        hypot(
+            currentLocation.x - downLocation.x,
+            currentLocation.y - downLocation.y
+        ) <= maximumDistance
+    }
+
     static func isCompletedClick(
         downLocation: CGPoint,
         upLocation: CGPoint,
@@ -57,7 +67,10 @@ enum DockClickGesturePolicy {
         guard duration <= maximumDuration else {
             return false
         }
-        return hypot(upLocation.x - downLocation.x, upLocation.y - downLocation.y) <= maximumDistance
+        return isWithinMaximumDistance(
+            downLocation: downLocation,
+            currentLocation: upLocation
+        )
     }
 }
 
@@ -160,7 +173,13 @@ final class DockClickMonitor: DockClickMonitoring, @unchecked Sendable {
         case .leftMouseDown:
             beginClick(event)
         case .leftMouseDragged:
-            pendingClick = nil
+            if let pendingClick,
+               !DockClickGesturePolicy.isWithinMaximumDistance(
+                   downLocation: pendingClick.location,
+                   currentLocation: event.location
+               ) {
+                self.pendingClick = nil
+            }
         case .leftMouseUp:
             completeClick(event)
         default:

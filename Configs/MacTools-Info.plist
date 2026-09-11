@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.mactools.panel-layout-item</string>
+            <key>UTTypeDescription</key>
+            <string>MacTools Panel Layout Item</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.data</string>
+            </array>
+        </dict>
+    </array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -41,10 +54,16 @@
 	<true/>
 	<key>MTPluginCatalogPublicKey</key>
 	<string>$(PLUGIN_CATALOG_PUBLIC_KEY)</string>
+	<key>MTPluginCatalogURL</key>
+	<string>$(PLUGIN_CATALOG_URL)</string>
+	<key>MTApplicationSupportDirectoryName</key>
+	<string>$(APPLICATION_SUPPORT_DIRECTORY_NAME)</string>
+	<key>MTReleaseChannel</key>
+	<string>$(MACTOOLS_RELEASE_CHANNEL)</string>
 	<key>MTRightClickConfigurationHomeRelativePath</key>
 	<string>$(RIGHT_CLICK_CONFIGURATION_HOME_RELATIVE_PATH)</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>用于控制系统日历并读取 Apple“快捷指令”的图标、颜色和运行状态。</string>
+	<string>用于在系统日历中打开日期、读取 Apple“快捷指令”的图标、颜色和运行状态，并显示 macOS 退出登录、重新启动和关机确认。</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>仅在调节应用独立音量时于本机实时处理系统音频，不会录制、保存或上传声音。</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
@@ -58,7 +77,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://mactools.ggbond.app/appcast.xml</string>
+	<string>$(SPARKLE_FEED_URL)</string>
 	<key>SUPublicEDKey</key>
 	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
 	<key>SUScheduledCheckInterval</key>

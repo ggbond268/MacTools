@@ -7,6 +7,7 @@ from pathlib import Path
 
 DEFAULT_CATALOG_ID = "com.ggbond.mactools.plugins"
 DEFAULT_MINIMUM_HOST_VERSION = "1.1.6"
+SCHEMA3_MINIMUM_HOST_VERSION = "1.2.1"
 
 
 def parse_args():
@@ -54,6 +55,10 @@ def now_iso8601():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def version_tuple(value):
+    return tuple(int(part) for part in value.split("."))
+
+
 def main():
     args = parse_args()
     previous = unsigned(load_json(args.previous, required=False))
@@ -97,7 +102,7 @@ def main():
             merged_entries[plugin_id] = update_entries[plugin_id]
         base_catalog = previous or updates
 
-    schema_version = update_field(base_catalog, updates, "schemaVersion", 2)
+    schema_version = update_field(base_catalog, updates, "schemaVersion", 3)
     plugin_kit_version = update_field(base_catalog, updates, "pluginKitVersion", args.plugin_kit_version)
     if plugin_kit_version != args.plugin_kit_version:
         raise SystemExit(
@@ -116,24 +121,39 @@ def main():
             + ", ".join(incompatible_entries)
         )
 
+    minimum_host_version = args.minimum_host_version or min(
+        (
+            value
+            for value in [
+                (previous or {}).get("minimumHostVersion"),
+                (updates or {}).get("minimumHostVersion"),
+            ]
+            if value
+        ),
+        key=version_tuple,
+        default=(
+            SCHEMA3_MINIMUM_HOST_VERSION
+            if schema_version >= 3
+            else DEFAULT_MINIMUM_HOST_VERSION
+        ),
+    )
+    if schema_version >= 3 and version_tuple(minimum_host_version) < version_tuple(
+        SCHEMA3_MINIMUM_HOST_VERSION
+    ):
+        if args.minimum_host_version:
+            raise SystemExit(
+                "Schema 3 catalogs require minimumHostVersion "
+                f"{SCHEMA3_MINIMUM_HOST_VERSION} or later."
+            )
+        minimum_host_version = SCHEMA3_MINIMUM_HOST_VERSION
+
     catalog = {
         "schemaVersion": schema_version,
         "catalogID": update_field(base_catalog, updates, "catalogID", DEFAULT_CATALOG_ID),
         "generatedAt": now_iso8601(),
         # The catalog floor describes schema compatibility. Per-entry host
         # requirements may be newer and are enforced by each client.
-        "minimumHostVersion": args.minimum_host_version or min(
-            (
-                value
-                for value in [
-                    (previous or {}).get("minimumHostVersion"),
-                    (updates or {}).get("minimumHostVersion"),
-                ]
-                if value
-            ),
-            key=lambda value: tuple(int(part) for part in value.split(".")),
-            default=DEFAULT_MINIMUM_HOST_VERSION,
-        ),
+        "minimumHostVersion": minimum_host_version,
         "pluginKitVersion": plugin_kit_version,
         "plugins": sorted(merged_entries.values(), key=lambda entry: entry["id"]),
         "revoked": update_field(base_catalog, updates, "revoked", []),

@@ -7,10 +7,12 @@ on:
     paths:
       - "site/**"
       - "docs/app-release.json"
+      - "docs/nightly/**"
   workflow_run:
     workflows:
       - Release
       - Plugin Release
+      - Nightly
     types:
       - completed
   workflow_dispatch:

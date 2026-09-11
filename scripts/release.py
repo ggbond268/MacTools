@@ -416,7 +416,15 @@ def read_plugins() -> dict[str, PluginInfo]:
 def plugin_catalog_path(plugin_kit_version: int) -> Path:
     if plugin_kit_version == 2:
         return LEGACY_PLUGIN_CATALOG
+    if plugin_kit_version == 5:
+        return ROOT_DIR / "docs/plugins/v5/schema3/catalog.json"
     return ROOT_DIR / "docs" / "plugins" / f"v{plugin_kit_version}" / "catalog.json"
+
+
+def same_abi_catalog_migration_baseline_path(plugin_kit_version: int) -> Path | None:
+    if plugin_kit_version == 5:
+        return ROOT_DIR / "docs/plugins/v5/catalog.json"
+    return None
 
 
 def previous_plugin_catalog_path() -> Path:
@@ -424,6 +432,10 @@ def previous_plugin_catalog_path() -> Path:
     preferred_path = plugin_catalog_path(plugin_kit_version)
     if preferred_path.exists() or preferred_path == LEGACY_PLUGIN_CATALOG:
         return preferred_path
+
+    same_abi_baseline = same_abi_catalog_migration_baseline_path(plugin_kit_version)
+    if same_abi_baseline is not None and same_abi_baseline.exists():
+        return same_abi_baseline
 
     previous_versioned_catalogs = []
     for candidate in (ROOT_DIR / "docs" / "plugins").glob("v*/catalog.json"):
@@ -459,6 +471,13 @@ def current_plugin_kit_version(plugins: dict[str, PluginInfo]) -> int:
             + ", ".join(str(version) for version in versions)
         )
     return versions[0]
+
+
+def ensure_plugin_kit_releasable(plugin_kit_version: int) -> None:
+    if plugin_kit_version < 5:
+        fail(
+            "PluginKit 5 之前的 catalog 已冻结，不能使用当前 schema-3 流程发布。"
+        )
 
 
 def plugin_release_tag(entry: dict) -> str | None:
@@ -1091,10 +1110,29 @@ def release_app(args: argparse.Namespace) -> None:
 def release_plugin(args: argparse.Namespace) -> None:
     mode, raw_selection = choose_plugin_mode(args.plugin_mode, args.plugin)
     plugins = read_plugins()
-    previous_catalog = read_previous_catalog()
     current_plugin_kit = current_plugin_kit_version(plugins)
+    ensure_plugin_kit_releasable(current_plugin_kit)
+    previous_catalog = read_previous_catalog()
     previous_plugin_kit = previous_catalog.get("pluginKitVersion")
-    if mode == "auto" and previous_plugin_kit is not None and previous_plugin_kit != current_plugin_kit:
+    is_compatibility_migration = (
+        not plugin_catalog_path(current_plugin_kit).exists()
+        and same_abi_catalog_migration_baseline_path(current_plugin_kit)
+        == previous_plugin_catalog_path()
+    )
+    if is_compatibility_migration:
+        if mode == "selected":
+            fail(
+                "检测到同一 PluginKit ABI 的 catalog schema 迁移。"
+                "plugin-mode selected 不能只发布部分插件；"
+                "请使用 plugin-mode all 全量重建并提升所有插件版本。"
+            )
+        if mode == "auto":
+            mode = "all"
+            info(
+                "检测到同一 PluginKit ABI 的 catalog schema 迁移，"
+                "插件发布模式自动切换为 all。"
+            )
+    elif mode == "auto" and previous_plugin_kit is not None and previous_plugin_kit != current_plugin_kit:
         mode = "all"
         info(
             f"检测到 PluginKit ABI 升级（{previous_plugin_kit} -> {current_plugin_kit}），"

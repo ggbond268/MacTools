@@ -3,6 +3,17 @@ import XCTest
 
 @MainActor
 final class FanControlSMCWriterTests: XCTestCase {
+    func testNightlyUsesSeparateHelperInstallPathWithoutChangingStable() {
+        let stablePath = "/Library/PrivilegedHelperTools/cc.ggbond.mactools.fan-control.smc-helper"
+        for channel in [nil, "stable", "development", "unknown"] {
+            XCTAssertEqual(FanControlSMCWriter(releaseChannel: channel).helperInstallPath, stablePath)
+        }
+        XCTAssertEqual(
+            FanControlSMCWriter(releaseChannel: "nightly").helperInstallPath,
+            stablePath + ".nightly"
+        )
+    }
+
     func testHelperPrivilegesRequireRootWheelAndSetuidExecutableMode() {
         let valid: [FileAttributeKey: Any] = [
             .ownerAccountID: NSNumber(value: 0),

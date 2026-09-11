@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import MacToolsPluginKit
+import PermissionFlow
 
 enum GeneralSettingsCardLayout {
     static let horizontalPadding: CGFloat = 8
@@ -26,6 +27,8 @@ private func settingsNavigationTitle(
     switch destination {
     case .general:
         AppL10n.settings("tab.general", defaultValue: "通用")
+    case .permissions:
+        AppL10n.settings("tab.permissions", defaultValue: "权限")
     case .about:
         AppL10n.settings("tab.about", defaultValue: "关于")
     case .plugins(.actionsAndShortcuts):
@@ -37,6 +40,8 @@ private func settingsNavigationTitle(
     case .plugins(.featurePanelLayout):
         AppL10n.settings("plugins.sidebar.featurePanel", defaultValue: "功能面板")
     case .plugins(.marketplace):
+        AppL10n.settings("plugins.sidebar.marketplace", defaultValue: "市场")
+    case .marketplaceDetail:
         AppL10n.settings("plugins.sidebar.marketplace", defaultValue: "市场")
     case let .plugins(.configuration(pluginID)):
         configurationItems.first { $0.id == pluginID }?.title
@@ -88,6 +93,14 @@ struct SettingsView: View {
                     orderedDestinations: orderedSidebarDestinations,
                     sidebarPreferences: sidebarPreferences,
                     selection: settingsSelection,
+                    selectionRevealRequestID:
+                        navigationCoordinator.sidebarSelectionRevealRequestID,
+                    focusRequestID:
+                        navigationCoordinator.sidebarFocusRequestID,
+                    numberShortcutRequest:
+                        navigationCoordinator.sidebarNumberShortcutRequest,
+                    moveShortcutRequest:
+                        navigationCoordinator.sidebarMoveShortcutRequest,
                     onSearch: {
                         navigationCoordinator.presentUnifiedSearch(origin: .settingsSidebar)
                     }
@@ -155,6 +168,9 @@ struct SettingsView: View {
         .onChange(of: pluginHost.pluginSettingsItems.map(\.id)) {
             navigationCoordinator.reconcileCurrentDestinationAvailability()
         }
+        .onChange(of: pluginHost.pluginManagementItems) {
+            navigationCoordinator.reconcileCurrentDestinationAvailability()
+        }
         .blur(
             radius: navigationCoordinator.isUnifiedSearchPresented
                 && !accessibilityReduceTransparency
@@ -162,21 +178,17 @@ struct SettingsView: View {
                 : 0
         )
         .allowsHitTesting(!navigationCoordinator.isUnifiedSearchPresented)
-        .accessibilityHidden(navigationCoordinator.isUnifiedSearchPresented)
         .overlay {
-            Group {
-                if navigationCoordinator.isUnifiedSearchPresented {
-                    UnifiedSearchPresentationView(
-                        pluginHost: pluginHost,
-                        launchAtLoginController: launchAtLoginController,
-                        appearanceUserDefaults: appearanceUserDefaults,
-                        recentStore: commandPaletteRecentStore,
-                        navigationCoordinator: navigationCoordinator
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                }
+            if navigationCoordinator.isUnifiedSearchPresented {
+                UnifiedSearchPresentationView(
+                    pluginHost: pluginHost,
+                    launchAtLoginController: launchAtLoginController,
+                    appearanceUserDefaults: appearanceUserDefaults,
+                    recentStore: commandPaletteRecentStore,
+                    navigationCoordinator: navigationCoordinator
+                )
+                .accessibilityAddTraits(.isModal)
             }
-            .animation(.easeOut(duration: 0.14), value: navigationCoordinator.isUnifiedSearchPresented)
         }
         .id(runtimeLocale.revision)
         .frame(minWidth: 720, maxWidth: .infinity, minHeight: 480, maxHeight: .infinity)
@@ -186,7 +198,7 @@ struct SettingsView: View {
 
     private var settingsSelection: Binding<SettingsNavigationDestination> {
         Binding {
-            navigationCoordinator.destination
+            navigationCoordinator.destination.sidebarDestination
         } set: { destination in
             navigationCoordinator.navigate(to: destination)
         }
@@ -291,6 +303,291 @@ private struct PermissionSettingsRow: View {
     }
 }
 
+private struct PermissionCenterSettingsView: View {
+    @ObservedObject var coordinator: PermissionCoordinator
+
+    var body: some View {
+        SettingsGroupedFormPageScaffold(
+            introduction: SettingsPageIntroductionConfiguration(
+                description: AppL10n.settings(
+                    "permissions.description",
+                    defaultValue: "集中查看已安装功能使用的 macOS 权限。MacTools 只能发起请求或打开系统设置，不能代替你授予权限。"
+                )
+            ),
+            introductionAccessory: {
+                Button {
+                    coordinator.refresh()
+                } label: {
+                    Label(
+                        AppL10n.settings("permissions.recheck", defaultValue: "重新检查"),
+                        systemImage: "arrow.clockwise"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
+                .help(AppL10n.settings("permissions.recheck", defaultValue: "重新检查"))
+            }
+        ) { widths in
+            if coordinator.items.isEmpty {
+                Section {
+                    ContentUnavailableView(
+                        AppL10n.settings("permissions.empty.title", defaultValue: "暂无相关权限"),
+                        systemImage: "checkmark.shield",
+                        description: Text(AppL10n.settings(
+                            "permissions.empty.description",
+                            defaultValue: "安装需要 macOS 权限的插件后，它们会显示在这里。"
+                        ))
+                    )
+                    .frame(width: widths.sectionLayout)
+                    .frame(minHeight: 180)
+                }
+            } else {
+                ForEach(coordinator.items) { item in
+                    Section {
+                        PermissionCenterRow(
+                            item: item,
+                            onAction: {
+                                performPermissionCenterAction(
+                                    coordinator: coordinator,
+                                    item: item,
+                                    sourceFrame: permissionGuidanceSourceFrame(
+                                        eventType: NSApp.currentEvent?.type,
+                                        mouseLocation: NSEvent.mouseLocation
+                                    )
+                                )
+                            }
+                        )
+                        .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    } header: {
+                        SettingsGroupedFormSectionHeader(
+                            title: permissionTitle(for: item.kind),
+                            systemImage: permissionSystemImage(for: item.kind),
+                            layoutWidth: widths.readableContent
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@MainActor
+func performPermissionCenterAction(
+    coordinator: PermissionCoordinator,
+    item: PermissionCenterItem,
+    sourceFrame: CGRect?
+) {
+    coordinator.performAction(for: item, sourceFrame: sourceFrame)
+}
+
+func permissionGuidanceSourceFrame(
+    eventType: NSEvent.EventType?,
+    mouseLocation: CGPoint
+) -> CGRect? {
+    switch eventType {
+    case .leftMouseDown, .leftMouseUp:
+        return CGRect(
+            x: mouseLocation.x - 16,
+            y: mouseLocation.y - 16,
+            width: 32,
+            height: 32
+        )
+    default:
+        return nil
+    }
+}
+
+private struct PermissionCenterRow: View {
+    let item: PermissionCenterItem
+    let onAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            HStack(alignment: .center, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    Label {
+                        Text(item.statusText)
+                    } icon: {
+                        Image(systemName: item.statusSystemImage)
+                    }
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                    .foregroundStyle(statusColor(for: item.statusTone))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button(permissionActionTitle(for: item), action: onAction)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowVertical) {
+                Text(AppL10n.settings(
+                    "permissions.affectedFeatures",
+                    defaultValue: "使用此权限的功能"
+                ))
+                .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                ForEach(item.affectedFeatures) { feature in
+                    HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                        Image(systemName: featureStatusSystemImage(for: feature))
+                            .foregroundStyle(featureStatusColor(for: feature))
+                            .frame(width: 16)
+                            .accessibilityHidden(true)
+
+                        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(feature.pluginTitle)
+                                    .font(PluginSettingsTheme.Typography.rowTitle)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Text(permissionFeatureStatusText(for: feature))
+                                    .font(PluginSettingsTheme.Typography.statusBadge)
+                                    .foregroundStyle(featureStatusColor(for: feature))
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            Text(feature.description)
+                                .font(PluginSettingsTheme.Typography.rowDescription)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let footnote = feature.footnote {
+                                Text(footnote)
+                                    .font(PluginSettingsTheme.Typography.rowDescription)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let footnote = item.footnote {
+                Text(footnote)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+    }
+
+    private func featureStatusSystemImage(
+        for feature: PermissionCenterAffectedFeature
+    ) -> String {
+        if let statusSystemImage = feature.statusSystemImage {
+            return statusSystemImage
+        }
+        return switch feature.status {
+        case .attention: "exclamationmark.circle.fill"
+        case .onDemand: "circle.dashed"
+        case .granted: "checkmark.circle.fill"
+        }
+    }
+
+    private func featureStatusColor(
+        for feature: PermissionCenterAffectedFeature
+    ) -> Color {
+        if let statusTone = feature.statusTone {
+            return statusColor(for: statusTone)
+        }
+        return switch feature.status {
+        case .attention: .orange
+        case .onDemand: .secondary
+        case .granted: .green
+        }
+    }
+}
+
+func permissionFeatureStatusText(
+    for feature: PermissionCenterAffectedFeature
+) -> String {
+    if let statusText = feature.statusText, !statusText.isEmpty {
+        return statusText
+    }
+
+    return switch feature.status {
+    case .attention:
+        AppL10n.plugins("plugin.permission.notGranted", defaultValue: "未授权")
+    case .onDemand:
+        AppL10n.settings("permissions.status.onDemand", defaultValue: "按需请求")
+    case .granted:
+        AppL10n.plugins("plugin.permission.granted", defaultValue: "已授权")
+    }
+}
+
+private func permissionTitle(for kind: HostPermissionKind) -> String {
+    switch kind {
+    case .accessibility:
+        permissionFlowTitle(
+            key: PermissionFlowResources.accessibilityName(),
+            defaultValue: "辅助功能"
+        )
+    case .inputMonitoring:
+        permissionFlowTitle(
+            key: "permission_flow.pane.input_monitoring",
+            defaultValue: "输入监控"
+        )
+    case .screenRecording:
+        permissionFlowTitle(
+            key: "permission_flow.pane.screen_recording",
+            defaultValue: "屏幕录制"
+        )
+    case .calendarFullAccess:
+        permissionFlowTitle(
+            key: "permission_flow.pane.calendars",
+            defaultValue: "日历完全访问"
+        )
+    case .automation:
+        AppL10n.settings("permissions.kind.automation", defaultValue: "自动化")
+    case .systemAudioRecording:
+        AppL10n.settings("permissions.kind.systemAudio", defaultValue: "系统音频录制")
+    case .fullDiskAccess:
+        permissionFlowTitle(
+            key: "permission_flow.pane.full_disk_access",
+            defaultValue: "完全磁盘访问"
+        )
+    case .finderExtension:
+        AppL10n.settings("permissions.kind.finderExtension", defaultValue: "Finder 扩展")
+    }
+}
+
+private func permissionFlowTitle(key: String, defaultValue: String) -> String {
+    PermissionFlowResources.localizedString(
+        for: key,
+        defaultValue: defaultValue,
+        localeIdentifier: PluginRuntimeLocalization.locale.identifier
+    )
+}
+
+private func permissionSystemImage(for kind: HostPermissionKind) -> String {
+    switch kind {
+    case .accessibility: "accessibility"
+    case .inputMonitoring: "keyboard.badge.eye"
+    case .screenRecording: "rectangle.dashed.badge.record"
+    case .calendarFullAccess: "calendar"
+    case .automation: "cursorarrow.click.2"
+    case .systemAudioRecording: "waveform.badge.mic"
+    case .fullDiskAccess: "externaldrive.badge.checkmark"
+    case .finderExtension: "puzzlepiece.extension"
+    }
+}
+
+private func permissionActionTitle(for item: PermissionCenterItem) -> String {
+    if item.status == .granted {
+        return AppL10n.settings("permissions.recheck", defaultValue: "重新检查")
+    }
+    switch item.kind {
+    case .calendarFullAccess, .systemAudioRecording:
+        return AppL10n.plugins("plugin.permission.requestAuthorization", defaultValue: "请求授权")
+    case .automation, .finderExtension:
+        return AppL10n.plugins("plugin.permission.openSettings", defaultValue: "打开设置")
+    default:
+        return AppL10n.plugins("plugin.permission.openAuthorization", defaultValue: "前往授权")
+    }
+}
+
 struct GeneralSettingsView: View {
     @ObservedObject var pluginHost: PluginHost
     @ObservedObject var navigationCoordinator: SettingsNavigationCoordinator
@@ -298,6 +595,7 @@ struct GeneralSettingsView: View {
     @ObservedObject var menuBarIconGallery: MenuBarIconGalleryLibrary
     @ObservedObject var launchAtLoginController: LaunchAtLoginController
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
+    @ObservedObject private var cliService = CLIBrokerServiceController.shared
     @AppStorage(AppAppearancePreference.userDefaultsKey) private var appearancePreferenceRawValue = AppAppearancePreference.system.rawValue
     @AppStorage(AppLanguagePreference.userDefaultsKey) private var languagePreferenceRawValue = AppLanguagePreference.system.rawValue
     @AppStorage(MenuBarClickBehaviorPreference.userDefaultsKey) private var clickBehaviorRawValue = MenuBarClickBehaviorPreference.standard.rawValue
@@ -431,6 +729,20 @@ struct GeneralSettingsView: View {
                         layoutWidth: widths.readableContent
                     )
                 }
+                Section {
+                    if CLIInstallController.isSupportedChannel {
+                        CLIInstallSettingsView()
+                            .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    } else {
+                        CLISettingsRow(service: cliService)
+                            .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    }
+                } header: {
+                    SettingsGroupedFormSectionHeader(
+                        title: AppL10n.settings("general.section.commandLine", defaultValue: "命令行"),
+                        layoutWidth: widths.readableContent
+                    )
+                }
             }
             .onAppear {
                 applySearchRevealRequest(
@@ -520,6 +832,94 @@ struct GeneralSettingsView: View {
                 clickBehaviorRawValue = rawValue
             }
         )
+    }
+}
+
+private struct CLISettingsRow: View {
+    @ObservedObject var service: CLIBrokerServiceController
+
+    var body: some View {
+        HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
+            ZStack {
+                RoundedRectangle(
+                    cornerRadius: GeneralSettingsCardLayout.iconCornerRadius,
+                    style: .continuous
+                )
+                .fill(Color.accentColor.opacity(0.12))
+                Image(systemName: "terminal")
+                    .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .frame(
+                width: GeneralSettingsCardLayout.iconSize,
+                height: GeneralSettingsCardLayout.iconSize
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(AppL10n.settings("commandLine.title", defaultValue: "MacTools 命令行"))
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                Text(subtitle)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(service.lastError == nil ? .secondary : Color.orange)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if service.status == .requiresApproval {
+                Button(AppL10n.settings("commandLine.approve", defaultValue: "允许后台运行")) {
+                    service.openApprovalSettings()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            Toggle(
+                AppL10n.settings("commandLine.title", defaultValue: "MacTools 命令行"),
+                isOn: Binding(
+                    get: { service.isRegistered },
+                    set: { enabled in
+                        if enabled {
+                            _ = service.ensureRegistered()
+                        } else {
+                            _ = service.unregister()
+                        }
+                    }
+                )
+            )
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+        }
+        .frame(
+            maxWidth: .infinity,
+            minHeight: GeneralSettingsCardLayout.minRowHeight,
+            alignment: .leading
+        )
+        .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+        .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
+        .onAppear { service.refresh() }
+    }
+
+    private var subtitle: String {
+        if let error = service.lastError { return error }
+        switch service.status {
+        case .enabled:
+            return AppL10n.settings(
+                "commandLine.enabled",
+                defaultValue: "已允许单独安装的 mactools-cli 连接到 MacTools。"
+            )
+        case .requiresApproval:
+            return AppL10n.settings(
+                "commandLine.requiresApproval",
+                defaultValue: "请在系统设置中允许 MacTools 命令行代理后台运行。"
+            )
+        case .notRegistered, .notFound, .registrationFailed:
+            return AppL10n.settings(
+                "commandLine.description",
+                defaultValue: "单独安装 mactools-cli 后，在此启用本机命令行集成。"
+            )
+        }
     }
 }
 
@@ -742,6 +1142,7 @@ private struct PreferencesBackupSettingsRow: View {
     @State private var alertMessage: String?
     @State private var isPreparingImport = false
     @State private var isImporting = false
+    @State private var importProgress: PreferencesImportProgress?
     @State private var isBackingUp = false
     @State private var manualBackupFeedback: ManualBackupFeedback?
 
@@ -884,6 +1285,7 @@ private struct PreferencesBackupSettingsRow: View {
                 },
                 pluginOptions: pluginOptions(for: Set(pending.backup.pluginPreferences.keys)),
                 isImporting: isImporting,
+                importProgress: importProgress,
                 onCancel: { pendingImport = nil },
                 onImport: { selectedPluginIDs, selection in
                     importPreferences(
@@ -1116,13 +1518,18 @@ private struct PreferencesBackupSettingsRow: View {
     ) {
         Task { @MainActor in
             isImporting = true
-            defer { isImporting = false }
+            importProgress = .preparing(pluginCount: pluginIDs.count)
+            defer {
+                isImporting = false
+                importProgress = nil
+            }
 
             do {
                 let result = try await pluginHost.importPreferences(
                     backup,
                     installingMissingPluginIDs: pluginIDs,
-                    selection: selection
+                    selection: selection,
+                    progress: { importProgress = $0 }
                 )
                 pendingImport = nil
                 let importedMessage = AppL10n.preferencesBackup(
@@ -1137,6 +1544,17 @@ private struct PreferencesBackupSettingsRow: View {
                             .title
                             ?? pluginID
                         return "\(title): \(message)"
+                    }
+                    + result.deferredPluginPreferenceIDs.map { pluginID in
+                        let title = pluginHost.pluginManagementItems
+                            .first(where: { $0.id == pluginID })?
+                            .title
+                            ?? pluginID
+                        return AppL10n.preferencesBackupFormat(
+                            "preferencesBackup.import.pluginRestoreDeferred",
+                            defaultValue: "已安装“%@”。请重新启动 MacTools，然后再次导入此备份以恢复其设置。",
+                            title
+                        )
                     }
                     + result.shortcutErrors
                         .values
@@ -1187,7 +1605,7 @@ private struct PreferencesBackupSettingsRow: View {
     }
 }
 
-private struct PreferencesPluginOption: Identifiable, Equatable {
+struct PreferencesPluginOption: Identifiable, Equatable {
     let id: String
     let title: String
 }
@@ -1428,23 +1846,67 @@ enum PreferencesBackupExportFileName {
     }
 }
 
-private struct PreferencesImportPreviewSheet: View {
+struct PreferencesImportSelectionModel: Equatable {
+    var selectedInstallablePluginIDs: Set<String>
+    var userDeselectedPluginIDs: Set<String>
+
+    init(eligiblePluginIDs: Set<String> = []) {
+        self.selectedInstallablePluginIDs = eligiblePluginIDs
+        self.userDeselectedPluginIDs = []
+    }
+
+    mutating func selectAll(eligiblePluginIDs: Set<String>) {
+        userDeselectedPluginIDs.subtract(eligiblePluginIDs)
+        selectedInstallablePluginIDs = eligiblePluginIDs
+    }
+
+    mutating func deselectAll(eligiblePluginIDs: Set<String>) {
+        userDeselectedPluginIDs.formUnion(eligiblePluginIDs)
+        selectedInstallablePluginIDs.removeAll()
+    }
+
+    mutating func setPluginSelected(_ pluginID: String, isSelected: Bool) {
+        if isSelected {
+            selectedInstallablePluginIDs.insert(pluginID)
+            userDeselectedPluginIDs.remove(pluginID)
+        } else {
+            selectedInstallablePluginIDs.remove(pluginID)
+            userDeselectedPluginIDs.insert(pluginID)
+        }
+    }
+
+    mutating func updateEligiblePlugins(_ eligiblePluginIDs: Set<String>) {
+        selectedInstallablePluginIDs = eligiblePluginIDs.subtracting(userDeselectedPluginIDs)
+    }
+}
+
+struct PreferencesImportPreviewSheet: View {
     let preview: PreferencesImportPreview
     let previewProvider: (PreferencesBackupSelection) throws -> PreferencesImportPreview
     let pluginOptions: [PreferencesPluginOption]
     let isImporting: Bool
+    let importProgress: PreferencesImportProgress?
     let onCancel: () -> Void
     let onImport: (Set<String>, PreferencesBackupSelection) -> Void
-    @State private var selectedInstallablePluginIDs: Set<String> = []
+    @State var selectionModel: PreferencesImportSelectionModel
     @State private var selection: PreferencesBackupSelection
     @State private var currentPreview: PreferencesImportPreview
     @State private var previewErrorMessage: String?
+
+    var selectedInstallablePluginIDs: Set<String> {
+        selectionModel.selectedInstallablePluginIDs
+    }
+
+    var userDeselectedPluginIDs: Set<String> {
+        selectionModel.userDeselectedPluginIDs
+    }
 
     init(
         preview: PreferencesImportPreview,
         previewProvider: @escaping (PreferencesBackupSelection) throws -> PreferencesImportPreview,
         pluginOptions: [PreferencesPluginOption],
         isImporting: Bool,
+        importProgress: PreferencesImportProgress? = nil,
         onCancel: @escaping () -> Void,
         onImport: @escaping (Set<String>, PreferencesBackupSelection) -> Void
     ) {
@@ -1452,18 +1914,25 @@ private struct PreferencesImportPreviewSheet: View {
         self.previewProvider = previewProvider
         self.pluginOptions = pluginOptions
         self.isImporting = isImporting
+        self.importProgress = importProgress
         self.onCancel = onCancel
         self.onImport = onImport
         var availableSelection = preview.selection
         availableSelection.pluginPreferenceIDs.formIntersection(pluginOptions.map(\.id))
         _selection = State(initialValue: availableSelection)
+        let initialPreview: PreferencesImportPreview
+        var errorMessage: String? = nil
         do {
-            _currentPreview = State(initialValue: try previewProvider(availableSelection))
-            _previewErrorMessage = State(initialValue: nil)
+            initialPreview = try previewProvider(availableSelection)
         } catch {
-            _currentPreview = State(initialValue: preview)
-            _previewErrorMessage = State(initialValue: error.localizedDescription)
+            initialPreview = preview
+            errorMessage = error.localizedDescription
         }
+        _currentPreview = State(initialValue: initialPreview)
+        _selectionModel = State(initialValue: PreferencesImportSelectionModel(
+            eligiblePluginIDs: Set(initialPreview.installableMissingPluginIDs)
+        ))
+        _previewErrorMessage = State(initialValue: errorMessage)
     }
 
     var body: some View {
@@ -1473,14 +1942,15 @@ private struct PreferencesImportPreviewSheet: View {
                     .padding(24)
             }
 
+            if isImporting, let importProgress {
+                importProgressView(importProgress)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+            }
+
             Divider()
 
             HStack(spacing: 12) {
-                if isImporting {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
                 Spacer()
                 Button(AppL10n.settings("common.cancel", defaultValue: "取消"), action: onCancel)
                     .buttonStyle(.bordered)
@@ -1497,6 +1967,55 @@ private struct PreferencesImportPreviewSheet: View {
         .frame(width: 500, height: 640)
         .onChange(of: selection) { _, selection in
             refreshPreview(for: selection)
+        }
+    }
+
+    private func importProgressView(_ progress: PreferencesImportProgress) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+
+                Text(importProgressTitle(progress))
+                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                    .lineLimit(1)
+            }
+
+            ProgressView(
+                value: Double(progress.completedUnitCount),
+                total: Double(progress.totalUnitCount)
+            )
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private func importProgressTitle(_ progress: PreferencesImportProgress) -> String {
+        switch progress {
+        case .preparing:
+            return AppL10n.preferencesBackup(
+                "preferencesBackup.importProgress.preparing",
+                defaultValue: "正在准备导入…"
+            )
+        case let .installingPlugin(id, number, total):
+            let title = currentPreview.installablePlugins.first(where: { $0.id == id })?.title ?? id
+            return AppL10n.preferencesBackupFormat(
+                "preferencesBackup.importProgress.installing",
+                defaultValue: "正在安装 %@（%d/%d）…",
+                title,
+                number,
+                total
+            )
+        case .restoringPreferences:
+            return AppL10n.preferencesBackup(
+                "preferencesBackup.importProgress.restoring",
+                defaultValue: "正在应用偏好设置…"
+            )
         }
     }
 
@@ -1532,11 +2051,19 @@ private struct PreferencesImportPreviewSheet: View {
 
             if !currentPreview.installablePlugins.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(AppL10n.preferencesBackup(
-                        "preferencesBackup.preview.installablePlugins",
-                        defaultValue: "可安装的缺失插件"
-                    ))
-                        .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                    HStack {
+                        Text(AppL10n.preferencesBackup(
+                            "preferencesBackup.preview.installablePlugins",
+                            defaultValue: "可安装的缺失插件"
+                        ))
+                            .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                        Spacer()
+
+                        Text(pluginsSelectedCountSummary)
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                    }
 
                     Text(AppL10n.preferencesBackup(
                         "preferencesBackup.preview.installablePluginsDescription",
@@ -1545,6 +2072,28 @@ private struct PreferencesImportPreviewSheet: View {
                         .font(PluginSettingsTheme.Typography.rowDescription)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        Button(AppL10n.preferencesBackup(
+                            "preferencesBackup.preview.selectAllMissingPlugins",
+                            defaultValue: "全选缺失插件"
+                        )) {
+                            selectionModel.selectAll(eligiblePluginIDs: Set(currentPreview.installableMissingPluginIDs))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(isImporting || selectedInstallablePluginIDs.count == currentPreview.installablePlugins.count)
+
+                        Button(AppL10n.preferencesBackup(
+                            "preferencesBackup.preview.deselectAll",
+                            defaultValue: "全不选"
+                        )) {
+                            selectionModel.deselectAll(eligiblePluginIDs: Set(currentPreview.installableMissingPluginIDs))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(isImporting || selectedInstallablePluginIDs.isEmpty)
+                    }
 
                     ForEach(currentPreview.installablePlugins) { plugin in
                         Toggle(isOn: installationSelectionBinding(for: plugin.id)) {
@@ -1558,6 +2107,7 @@ private struct PreferencesImportPreviewSheet: View {
                             }
                         }
                         .toggleStyle(.checkbox)
+                        .disabled(isImporting)
                     }
                 }
             }
@@ -1589,40 +2139,62 @@ private struct PreferencesImportPreviewSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var confirmTitle: String {
-        if selectedInstallablePluginIDs.isEmpty {
-            return AppL10n.preferencesBackup("preferencesBackup.preview.confirm", defaultValue: "导入")
-        }
+    var confirmTitle: String {
+        Self.confirmTitle(selectedCount: selectedInstallablePluginIDs.count)
+    }
 
-        return AppL10n.preferencesBackup(
-            "preferencesBackup.preview.installAndImport",
-            defaultValue: "安装所选插件并导入"
+    var previewDescription: String {
+        Self.previewDescription(selectedCount: selectedInstallablePluginIDs.count)
+    }
+
+    var pluginsSelectedCountSummary: String {
+        Self.pluginsSelectedCountSummary(
+            selectedCount: selectedInstallablePluginIDs.count,
+            totalCount: currentPreview.installablePlugins.count
         )
     }
 
-    private var previewDescription: String {
-        if selectedInstallablePluginIDs.isEmpty {
+    static func confirmTitle(selectedCount: Int) -> String {
+        if selectedCount == 0 {
+            return AppL10n.preferencesBackup("preferencesBackup.preview.confirm", defaultValue: "导入")
+        }
+
+        return AppL10n.preferencesBackupPluralFormat(
+            "preferencesBackup.preview.installAndImportCount",
+            defaultValue: "安装 %d 个插件并导入",
+            count: selectedCount
+        )
+    }
+
+    static func previewDescription(selectedCount: Int) -> String {
+        if selectedCount == 0 {
             return AppL10n.preferencesBackup(
                 "preferencesBackup.preview.description",
                 defaultValue: "请确认以下更改。导入不会安装插件，也不会修改权限、缓存、Keychain 密钥或插件私有数据。"
             )
         }
 
-        return AppL10n.preferencesBackup(
-            "preferencesBackup.description",
-            defaultValue: "包含应用偏好、插件布局、快捷键、工作流、自动化规则、已保存的运行链接和支持导出的插件设置；不包含权限、缓存、凭证或运行历史。"
+        return AppL10n.preferencesBackupPluralFormat(
+            "preferencesBackup.preview.descriptionWithInstall",
+            defaultValue: "请确认以下更改。导入将自动安装 %d 个选中的缺失插件；不会修改权限、缓存、Keychain 密钥或插件私有数据。",
+            count: selectedCount
+        )
+    }
+
+    static func pluginsSelectedCountSummary(selectedCount: Int, totalCount: Int) -> String {
+        AppL10n.preferencesBackupFormat(
+            "preferencesBackup.preview.selectedPluginsSummary",
+            defaultValue: "已选 %d / %d 个插件",
+            selectedCount,
+            totalCount
         )
     }
 
     private func installationSelectionBinding(for pluginID: String) -> Binding<Bool> {
         Binding {
-            selectedInstallablePluginIDs.contains(pluginID)
+            selectionModel.selectedInstallablePluginIDs.contains(pluginID)
         } set: { isSelected in
-            if isSelected {
-                selectedInstallablePluginIDs.insert(pluginID)
-            } else {
-                selectedInstallablePluginIDs.remove(pluginID)
-            }
+            selectionModel.setPluginSelected(pluginID, isSelected: isSelected)
         }
     }
 
@@ -1630,17 +2202,14 @@ private struct PreferencesImportPreviewSheet: View {
         do {
             let refreshed = try previewProvider(selection)
             currentPreview = refreshed
-            selectedInstallablePluginIDs.formIntersection(
-                refreshed.installablePlugins.map(\.id)
-            )
+            selectionModel.updateEligiblePlugins(Set(refreshed.installableMissingPluginIDs))
             previewErrorMessage = nil
         } catch {
             previewErrorMessage = error.localizedDescription
-            selectedInstallablePluginIDs.removeAll()
+            selectionModel.deselectAll(eligiblePluginIDs: [])
         }
     }
 }
-
 private struct MenuBarClickBehaviorSettingsRow: View {
     @Binding var selectionRawValue: String
     @State private var isSwapped = false
@@ -1916,9 +2485,153 @@ private struct SettingsSidebarSearchLauncher: NSViewRepresentable {
     }
 }
 
+private enum SettingsSidebarAccessoryLayout {
+    static let width: CGFloat = 40
+    static let sectionHeaderTrailingInset: CGFloat = 8
+}
+
+enum SettingsSidebarCommandHintPolicy {
+    static let revealDelay: TimeInterval = 0.15
+
+    static func commandIsHeld(in modifierFlags: NSEvent.ModifierFlags) -> Bool {
+        modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .contains(.command)
+    }
+}
+
+@MainActor
+private final class SettingsSidebarCommandHintMonitor: ObservableObject {
+    @Published private(set) var showsHints = false
+
+    private var localEventMonitor: Any?
+    private var applicationDeactivationObserver: NSObjectProtocol?
+    private var pendingReveal: DispatchWorkItem?
+
+    func start() {
+        guard localEventMonitor == nil else { return }
+
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) {
+            [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.handleModifierFlags(event.modifierFlags)
+            }
+            return event
+        }
+        applicationDeactivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.hideHints()
+            }
+        }
+    }
+
+    func stop() {
+        pendingReveal?.cancel()
+        pendingReveal = nil
+        if let localEventMonitor {
+            NSEvent.removeMonitor(localEventMonitor)
+            self.localEventMonitor = nil
+        }
+        if let applicationDeactivationObserver {
+            NotificationCenter.default.removeObserver(applicationDeactivationObserver)
+            self.applicationDeactivationObserver = nil
+        }
+        showsHints = false
+    }
+
+    private func handleModifierFlags(_ modifierFlags: NSEvent.ModifierFlags) {
+        guard SettingsSidebarCommandHintPolicy.commandIsHeld(in: modifierFlags) else {
+            hideHints()
+            return
+        }
+        guard !showsHints, pendingReveal == nil else { return }
+
+        let reveal = DispatchWorkItem { [weak self] in
+            self?.pendingReveal = nil
+            self?.showsHints = true
+        }
+        pendingReveal = reveal
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + SettingsSidebarCommandHintPolicy.revealDelay,
+            execute: reveal
+        )
+    }
+
+    private func hideHints() {
+        pendingReveal?.cancel()
+        pendingReveal = nil
+        showsHints = false
+    }
+}
+
+private struct SettingsSidebarShowsNumberShortcutHintsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var settingsSidebarShowsNumberShortcutHints: Bool {
+        get { self[SettingsSidebarShowsNumberShortcutHintsKey.self] }
+        set { self[SettingsSidebarShowsNumberShortcutHintsKey.self] = newValue }
+    }
+}
+
+private struct SettingsSidebarShortcutLabel: View {
+    enum Style {
+        case plain
+        case badge
+    }
+
+    let shortcut: String
+    var style: Style = .plain
+    @Environment(\.settingsSidebarShowsNumberShortcutHints) private var showsNumberHints
+
+    var body: some View {
+        Group {
+            switch style {
+            case .plain:
+                shortcutText
+            case .badge:
+                shortcutText
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.12))
+                    )
+            }
+        }
+        .frame(
+            width: SettingsSidebarAccessoryLayout.width,
+            alignment: .trailing
+        )
+        .opacity(isVisible ? 1 : 0)
+        .animation(.easeOut(duration: 0.12), value: isVisible)
+        .accessibilityHidden(true)
+    }
+
+    private var isVisible: Bool {
+        switch style {
+        case .plain:
+            showsNumberHints
+        case .badge:
+            true
+        }
+    }
+
+    private var shortcutText: some View {
+        Text(shortcut)
+            .font(PluginSettingsTheme.Typography.statusBadge)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+    }
+}
+
 private struct SettingsSidebar: View {
     private enum Layout {
-        static let sectionHeaderTrailingInset: CGFloat = 8
         static let searchSectionSpacing = PluginSettingsTheme.Spacing.sectionHeaderContent
     }
 
@@ -1926,7 +2639,15 @@ private struct SettingsSidebar: View {
     let orderedDestinations: [SettingsNavigationDestination]
     @ObservedObject var sidebarPreferences: SettingsSidebarPreferencesStore
     @Binding var selection: SettingsNavigationDestination
+    let selectionRevealRequestID: UInt
+    let focusRequestID: UInt
+    let numberShortcutRequest: SidebarNumberShortcutRequest?
+    let moveShortcutRequest: SidebarMoveShortcutRequest?
     let onSearch: () -> Void
+    @State private var highlightedCollapsedSection: SettingsSidebarSection?
+    @StateObject private var commandHintMonitor = SettingsSidebarCommandHintMonitor()
+    @AccessibilityFocusState private var accessibilityFocusedCollapsedSection: SettingsSidebarSection?
+    @FocusState private var isListFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1935,6 +2656,11 @@ private struct SettingsSidebar: View {
                 onActivate: onSearch
             )
             .frame(height: 30)
+            .overlay(alignment: .trailing) {
+                SettingsSidebarShortcutLabel(shortcut: "⌘K", style: .badge)
+                    .padding(.trailing, 14)
+                    .allowsHitTesting(false)
+            }
             .padding(.horizontal, 8)
             .padding(.top, 8)
             .padding(.bottom, Layout.searchSectionSpacing)
@@ -1942,44 +2668,72 @@ private struct SettingsSidebar: View {
             ScrollViewReader { proxy in
                 List(selection: optionalSelectionBinding) {
                     Section {
-                        ForEach(appDestinations, id: \.self) { destination in
-                            sidebarRow(for: destination)
-                        }
-                    } header: {
-                        Text("MacTools")
-                    }
-
-                    Section {
-                        ForEach(primaryPluginDestinations, id: \.self) { destination in
-                            sidebarRow(for: destination)
-                        }
-                    } header: {
-                        Text(AppL10n.settings(
-                            "plugins.sidebar.pluginsSection",
-                            defaultValue: "插件"
-                        ))
-                    }
-
-                    Section {
-                        if configurationDestinations.isEmpty {
-                            Text(emptyConfigurationsText)
-                                .font(PluginSettingsTheme.Typography.secondaryLabel)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(configurationDestinations, id: \.self) { destination in
+                        if sidebarPreferences.isAppSectionExpanded {
+                            ForEach(appDestinations, id: \.self) { destination in
                                 sidebarRow(for: destination)
                             }
-                            .onMove(perform: moveConfigurations)
+                        }
+                    } header: {
+                        disclosureSectionHeader(
+                            title: "MacTools",
+                            section: .app
+                        )
+                    }
+
+                    Section {
+                        if sidebarPreferences.isCustomizeSectionExpanded {
+                            ForEach(primaryPluginDestinations, id: \.self) { destination in
+                                sidebarRow(for: destination)
+                            }
+                        }
+                    } header: {
+                        disclosureSectionHeader(
+                            title: customizeSectionTitle,
+                            section: .customize
+                        )
+                    }
+
+                    Section {
+                        if sidebarPreferences.isPluginSettingsSectionExpanded {
+                            if configurationDestinations.isEmpty {
+                                Text(emptyConfigurationsText)
+                                    .font(PluginSettingsTheme.Typography.secondaryLabel)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(configurationDestinations, id: \.self) { destination in
+                                    sidebarRow(for: destination)
+                                }
+                                .onMove(perform: moveConfigurations)
+                            }
                         }
                     } header: {
                         configurationSectionHeader
                     }
                 }
                 .listStyle(.sidebar)
+                .focused($isListFocused)
                 .onChange(of: selection) { _, destination in
-                    withAnimation {
-                        proxy.scrollTo(destination)
-                    }
+                    highlightedCollapsedSection = nil
+                    reveal(destination, using: proxy)
+                }
+                .onChange(of: selectionRevealRequestID) {
+                    reveal(selection, using: proxy)
+                }
+                .task(id: focusRequestID) {
+                    guard focusRequestID > 0 else { return }
+                    await Task.yield()
+                    isListFocused = true
+                }
+                .onChange(of: numberShortcutRequest) { _, request in
+                    guard let request else { return }
+                    performNumberShortcut(request.number)
+                }
+                .onChange(of: moveShortcutRequest) { _, request in
+                    guard let request else { return }
+                    performMoveShortcut(request.direction)
+                }
+                .onChange(of: highlightedCollapsedSection) { _, section in
+                    accessibilityFocusedCollapsedSection = section
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(AppL10n.settings(
@@ -1989,12 +2743,29 @@ private struct SettingsSidebar: View {
                 .accessibilityHint(configurationDestinations.isEmpty ? emptyConfigurationsText : "")
             }
         }
+        .environment(
+            \.settingsSidebarShowsNumberShortcutHints,
+            commandHintMonitor.showsHints
+        )
+        .onAppear {
+            commandHintMonitor.start()
+        }
+        .onDisappear {
+            commandHintMonitor.stop()
+        }
     }
 
     private var emptyConfigurationsText: String {
         AppL10n.settings(
             "plugins.sidebar.emptyConfigurations",
             defaultValue: "暂无可设置插件"
+        )
+    }
+
+    private var customizeSectionTitle: String {
+        AppL10n.settings(
+            "settings.sidebar.customizeSection",
+            defaultValue: "自定义"
         )
     }
 
@@ -2011,9 +2782,9 @@ private struct SettingsSidebar: View {
     private var appDestinations: [SettingsNavigationDestination] {
         orderedDestinations.filter {
             switch $0 {
-            case .general, .plugins(.automation), .about:
+            case .general, .permissions, .about:
                 true
-            case .plugins:
+            case .plugins, .marketplaceDetail:
                 false
             }
         }
@@ -2022,9 +2793,6 @@ private struct SettingsSidebar: View {
     private var primaryPluginDestinations: [SettingsNavigationDestination] {
         orderedDestinations.filter {
             guard case let .plugins(pane) = $0 else {
-                return false
-            }
-            guard pane != .automation else {
                 return false
             }
             if case .configuration = pane {
@@ -2060,6 +2828,15 @@ private struct SettingsSidebar: View {
                 title: title,
                 systemImage: "gearshape",
                 iconTint: .gray,
+                shortcutNumber: shortcutNumber
+            )
+            .tag(destination)
+            .id(destination)
+        case .permissions:
+            SettingsSidebarRow(
+                title: title,
+                systemImage: "lock.shield",
+                iconTint: .teal,
                 shortcutNumber: shortcutNumber
             )
             .tag(destination)
@@ -2129,16 +2906,17 @@ private struct SettingsSidebar: View {
                 .tag(destination)
                 .id(destination)
             }
+        case .marketplaceDetail:
+            EmptyView()
         }
     }
 
     private var configurationSectionHeader: some View {
         HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-            Text(AppL10n.settings(
-                "plugins.sidebar.configurationSection",
-                defaultValue: "插件设置"
-            ))
-                .foregroundStyle(.secondary)
+            disclosureSectionHeader(
+                title: configurationSectionTitle,
+                section: .pluginSettings
+            )
 
             Spacer(minLength: 0)
 
@@ -2190,17 +2968,26 @@ private struct SettingsSidebar: View {
                 }
                 .disabled(true)
             } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.caption2.weight(.medium))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 11, height: 11, alignment: .center)
+                Color.clear
+                    .frame(width: SettingsSidebarAccessoryLayout.width, height: 11)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .fixedSize()
+            .overlay(alignment: .trailing) {
+                // Keep the visible symbol outside the native menu label's tinting.
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.caption2.weight(.medium))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(sectionHeaderForegroundColor(for: .pluginSettings))
+                    .frame(width: 11, height: 11, alignment: .center)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             .scaleEffect(0.80, anchor: .trailing)
-            .padding(.trailing, Layout.sectionHeaderTrailingInset)
+            .padding(
+                .trailing,
+                SettingsSidebarAccessoryLayout.sectionHeaderTrailingInset
+            )
             .accessibilityLabel(sidebarPreferences.sortMode.localizedTitle)
             .help(AppL10n.settings(
                 "settings.sidebar.pluginSortHelp",
@@ -2227,12 +3014,223 @@ private struct SettingsSidebar: View {
 
     private func shortcutNumber(for destination: SettingsNavigationDestination) -> Int? {
         guard
-            let index = orderedDestinations.firstIndex(of: destination),
-            index < 9
+            let index = effectiveNumberTargets.firstIndex(of: .destination(destination))
         else {
             return nil
         }
         return index + 1
+    }
+
+    private var configurationSectionTitle: String {
+        AppL10n.settings(
+            "plugins.sidebar.configurationSection",
+            defaultValue: "插件设置"
+        )
+    }
+
+    private func sectionHeaderForegroundColor(for section: SettingsSidebarSection) -> Color {
+        let containsSelection = !sectionIsExpanded(section) && selectedSection == section
+        return containsSelection || highlightedCollapsedSection == section
+            ? .primary
+            : .secondary
+    }
+
+    private func disclosureSectionHeader(
+        title: String,
+        section: SettingsSidebarSection
+    ) -> some View {
+        let isExpanded = sectionIsExpanded(section)
+        let shortcutNumber = effectiveNumberTargets.firstIndex(of: .collapsedSection(section))
+            .map { $0 + 1 }
+        let containsSelection = !isExpanded && selectedSection == section
+        let isKeyboardHighlighted = highlightedCollapsedSection == section
+        let isAccessibilitySelected = SettingsSidebarHeaderAccessibility.isSelected(
+            containsSelection: containsSelection
+        )
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                sidebarPreferences.setSection(section, expanded: !isExpanded)
+            }
+            highlightedCollapsedSection = nil
+        } label: {
+            HStack(spacing: 4) {
+                Capsule(style: .continuous)
+                    .fill(Color(nsColor: .controlAccentColor))
+                    .frame(width: 3, height: 14)
+                    .opacity(containsSelection ? 1 : 0)
+                    .accessibilityHidden(true)
+
+                Image(systemName: isExpanded
+                    ? "chevron.down"
+                    : "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                Text(title)
+                    .fontWeight(containsSelection ? .semibold : .regular)
+                Spacer(minLength: 4)
+                if let shortcutNumber {
+                    SettingsSidebarShortcutLabel(shortcut: "⌘\(shortcutNumber)")
+                }
+            }
+            .foregroundStyle(sectionHeaderForegroundColor(for: section))
+            .contentShape(Rectangle())
+            .background {
+                if isKeyboardHighlighted {
+                    SettingsSidebarKeyboardCandidateBackground()
+                        .padding(.horizontal, -4)
+                        .padding(.vertical, -2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(
+            .trailing,
+            SettingsSidebarAccessoryLayout.sectionHeaderTrailingInset
+        )
+        .accessibilityFocused($accessibilityFocusedCollapsedSection, equals: section)
+        .help(disclosureTitle(title: title, isExpanded: isExpanded))
+        .accessibilityLabel(title)
+        .accessibilityHint(sectionAccessibilityHint(
+            title: title,
+            isExpanded: isExpanded,
+            shortcutNumber: shortcutNumber
+        ))
+        .accessibilityAddTraits(isAccessibilitySelected ? .isSelected : [])
+    }
+
+    private var effectiveNumberTargets: [SettingsSidebarNumberTarget] {
+        SettingsSidebarNumberingPolicy.targets(
+            appDestinations: appDestinations,
+            customizeDestinations: primaryPluginDestinations,
+            pluginDestinations: configurationDestinations,
+            appExpanded: sidebarPreferences.isAppSectionExpanded,
+            customizeExpanded: sidebarPreferences.isCustomizeSectionExpanded,
+            pluginSettingsExpanded: sidebarPreferences.isPluginSettingsSectionExpanded
+        )
+    }
+
+    private var selectedSection: SettingsSidebarSection {
+        switch selection.sidebarDestination {
+        case .general, .permissions, .about:
+            .app
+        case .plugins(.configuration):
+            .pluginSettings
+        case .plugins, .marketplaceDetail:
+            .customize
+        }
+    }
+
+    private func sectionIsExpanded(_ section: SettingsSidebarSection) -> Bool {
+        switch section {
+        case .app:
+            sidebarPreferences.isAppSectionExpanded
+        case .customize:
+            sidebarPreferences.isCustomizeSectionExpanded
+        case .pluginSettings:
+            sidebarPreferences.isPluginSettingsSectionExpanded
+        }
+    }
+
+    private func performNumberShortcut(_ number: Int) {
+        let index = number - 1
+        guard effectiveNumberTargets.indices.contains(index) else { return }
+        activate(effectiveNumberTargets[index])
+    }
+
+    private func performMoveShortcut(_ direction: SettingsSidebarMoveDirection) {
+        let targets = SettingsSidebarNumberingPolicy.targets(
+            appDestinations: appDestinations,
+            customizeDestinations: primaryPluginDestinations,
+            pluginDestinations: configurationDestinations,
+            appExpanded: sidebarPreferences.isAppSectionExpanded,
+            customizeExpanded: sidebarPreferences.isCustomizeSectionExpanded,
+            pluginSettingsExpanded: sidebarPreferences.isPluginSettingsSectionExpanded,
+            limit: nil
+        )
+        guard !targets.isEmpty else { return }
+        let currentTarget: SettingsSidebarNumberTarget? = if let highlightedCollapsedSection {
+            .collapsedSection(highlightedCollapsedSection)
+        } else if sectionIsExpanded(selectedSection) {
+            .destination(selection.sidebarDestination)
+        } else {
+            .collapsedSection(selectedSection)
+        }
+        guard let target = SettingsSidebarNumberingPolicy.movedTarget(
+            from: currentTarget,
+            direction: direction,
+            in: targets
+        ) else { return }
+        activate(target, expandSection: false)
+    }
+
+    private func activate(
+        _ target: SettingsSidebarNumberTarget,
+        expandSection: Bool = true
+    ) {
+        switch target {
+        case let .destination(destination):
+            highlightedCollapsedSection = nil
+            selection = destination
+        case let .collapsedSection(section):
+            if expandSection {
+                sidebarPreferences.setSection(section, expanded: true)
+                highlightedCollapsedSection = nil
+            } else {
+                highlightedCollapsedSection = section
+            }
+        }
+    }
+
+    private func sectionAccessibilityHint(
+        title: String,
+        isExpanded: Bool,
+        shortcutNumber: Int?
+    ) -> String {
+        let action = disclosureTitle(title: title, isExpanded: isExpanded)
+        guard let shortcutNumber else { return action }
+        let shortcut = AppL10n.settingsFormat(
+            "settings.sidebar.shortcutAccessibilityHint",
+            defaultValue: "Keyboard shortcut: Command-%d",
+            shortcutNumber
+        )
+        return "\(action). \(shortcut)"
+    }
+
+    private func disclosureTitle(title: String, isExpanded: Bool) -> String {
+        if isExpanded {
+            return AppL10n.settingsFormat(
+                "settings.sidebar.section.collapseFormat",
+                defaultValue: "收起%@",
+                title
+            )
+        }
+        return AppL10n.settingsFormat(
+            "settings.sidebar.section.expandFormat",
+            defaultValue: "展开%@",
+            title
+        )
+    }
+
+    private func reveal(
+        _ destination: SettingsNavigationDestination,
+        using proxy: ScrollViewProxy
+    ) {
+        let sidebarDestination = destination.sidebarDestination
+        withAnimation(.easeInOut(duration: 0.15)) {
+            switch destination {
+            case .general, .permissions, .about:
+                sidebarPreferences.setSection(.app, expanded: true)
+            case .plugins(.configuration):
+                sidebarPreferences.setSection(.pluginSettings, expanded: true)
+            case .plugins, .marketplaceDetail:
+                sidebarPreferences.setSection(.customize, expanded: true)
+            }
+        }
+
+        DispatchQueue.main.async {
+            withAnimation {
+                proxy.scrollTo(sidebarDestination)
+            }
+        }
     }
 
     private func moveConfigurations(fromOffsets: IndexSet, toOffset: Int) {
@@ -2247,7 +3245,9 @@ private struct SettingsSidebar: View {
         Binding(
             get: { selection },
             set: { newSelection in
-                guard let newSelection, newSelection != selection else {
+                guard let newSelection else { return }
+
+                guard newSelection != selection else {
                     return
                 }
 
@@ -2401,11 +3401,7 @@ private struct SettingsSidebarRow: View {
             Spacer(minLength: 0)
 
             if let shortcutNumber {
-                Text("⌘\(shortcutNumber)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .monospacedDigit()
-                    .accessibilityHidden(true)
+                SettingsSidebarShortcutLabel(shortcut: "⌘\(shortcutNumber)")
             }
         }
         .font(.body)
@@ -2413,18 +3409,33 @@ private struct SettingsSidebarRow: View {
         .help(title)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
-        .accessibilityHint(shortcutAccessibilityHint)
+        .accessibilityHint(accessibilityHint)
     }
 
-    private var shortcutAccessibilityHint: String {
-        guard let shortcutNumber else {
-            return ""
+    private var accessibilityHint: String {
+        var hints: [String] = []
+        if let shortcutNumber {
+            hints.append(AppL10n.settingsFormat(
+                "settings.sidebar.shortcutAccessibilityHint",
+                defaultValue: "Keyboard shortcut: Command-%d",
+                shortcutNumber
+            ))
         }
-        return AppL10n.settingsFormat(
-            "settings.sidebar.shortcutAccessibilityHint",
-            defaultValue: "Keyboard shortcut: Command-%d",
-            shortcutNumber
-        )
+        return hints.joined(separator: ". ")
+    }
+}
+
+private struct SettingsSidebarKeyboardCandidateBackground: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .fill(Color(nsColor: .unemphasizedSelectedContentBackgroundColor))
+            .overlay {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(
+                        Color(nsColor: .keyboardFocusIndicatorColor),
+                        lineWidth: PluginSettingsTheme.Stroke.standard
+                    )
+            }
     }
 }
 
@@ -2488,6 +3499,10 @@ private struct SettingsDetailPane: View {
                 menuBarPanelThemeStore: menuBarPanelThemeStore,
                 appearanceUserDefaults: appearanceUserDefaults
             )
+        case .permissions:
+            PermissionCenterSettingsView(
+                coordinator: pluginHost.permissionCoordinator
+            )
         case .about:
             AboutSettingsView(
                 appUpdater: appUpdater,
@@ -2501,6 +3516,12 @@ private struct SettingsDetailPane: View {
                 uninstallConfirmationSession: uninstallConfirmationSession,
                 showDashboard: showDashboard,
                 showFeaturePanel: showFeaturePanel
+            )
+        case let .marketplaceDetail(target):
+            MarketplacePluginDetailView(
+                pluginHost: pluginHost,
+                navigationCoordinator: navigationCoordinator,
+                target: target
             )
         }
     }
@@ -2522,7 +3543,10 @@ private struct PluginSettingsDestinationPane: View {
     private var detail: some View {
         switch selectedPane {
         case .actionsAndShortcuts:
-            ActionShortcutSettingsView(pluginHost: pluginHost)
+            ActionShortcutSettingsView(
+                pluginHost: pluginHost,
+                navigationCoordinator: navigationCoordinator
+            )
         case .automation:
             AutomationSettingsView(
                 pluginHost: pluginHost,
@@ -2849,9 +3873,12 @@ private struct SurfaceLayoutSettingsView: View {
         let confirmation = PluginUninstallConfirmation(
             pluginID: item.id,
             pluginTitle: item.title,
-            surfaceCapabilitySummary: pluginCapabilitySummary(item.capabilities)
+            surfaceCapabilitySummary: pluginCapabilitySummary(item.capabilities),
+            removesDataOnUninstall: item.removesDataOnUninstall
         )
-        if uninstallConfirmationSession.shouldConfirmUninstall {
+        if uninstallConfirmationSession.shouldConfirmUninstall(
+            removesData: confirmation.removesDataOnUninstall
+        ) {
             pendingUninstallItem = confirmation
         } else {
             uninstall(confirmation)
@@ -2910,12 +3937,28 @@ private struct SurfaceLayoutSearchAnchors: View {
     }
 }
 
+struct PluginSettingsPageVisibilityTransition {
+    struct Change: Equatable {
+        let pluginID: String
+        let isVisible: Bool
+    }
+
+    static func changes(from currentPluginID: String?, to pluginID: String?) -> [Change] {
+        guard currentPluginID != pluginID else { return [] }
+        return [
+            currentPluginID.map { Change(pluginID: $0, isVisible: false) },
+            pluginID.map { Change(pluginID: $0, isVisible: true) },
+        ].compactMap { $0 }
+    }
+}
+
 private struct PluginSettingsDetailPane: View {
     @ObservedObject var pluginHost: PluginHost
     @ObservedObject var navigationCoordinator: SettingsNavigationCoordinator
     let item: PluginSettingsPageItem?
     @State private var activeSearchTarget: PluginSettingsSearchTarget?
     @State private var clearSearchTargetTask: Task<Void, Never>?
+    @State private var visiblePluginID: String?
 
     var body: some View {
         Group {
@@ -2951,7 +3994,14 @@ private struct PluginSettingsDetailPane: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            transitionVisiblePlugin(to: item?.pluginID)
+        }
+        .onChange(of: item?.pluginID) { _, pluginID in
+            transitionVisiblePlugin(to: pluginID)
+        }
         .onDisappear {
+            transitionVisiblePlugin(to: nil)
             clearSearchTargetTask?.cancel()
             clearSearchTargetTask = nil
             if let activeSearchTarget {
@@ -2960,6 +4010,13 @@ private struct PluginSettingsDetailPane: View {
                 )
             }
             activeSearchTarget = nil
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
+            // Permission changes are completed in System Settings while MacTools is inactive.
+            // Refresh every provider once on return so form and workspace cards use current state.
+            pluginHost.refreshAll()
         }
     }
 
@@ -2973,11 +4030,16 @@ private struct PluginSettingsDetailPane: View {
                 PluginWorkspacePage(pluginHost: pluginHost, item: item)
             }
         }
-        .onAppear {
-            pluginHost.setPluginSettingsPage(item.pluginID, visible: true)
-        }
-        .onDisappear {
-            pluginHost.setPluginSettingsPage(item.pluginID, visible: false)
+    }
+
+    private func transitionVisiblePlugin(to pluginID: String?) {
+        let changes = PluginSettingsPageVisibilityTransition.changes(
+            from: visiblePluginID,
+            to: pluginID
+        )
+        visiblePluginID = pluginID
+        for change in changes {
+            pluginHost.setPluginSettingsPage(change.pluginID, visible: change.isVisible)
         }
     }
 
@@ -3034,16 +4096,20 @@ private struct PluginFormPage: View {
 
     var body: some View {
         SettingsGroupedFormPageScaffold(introduction: item.introductionConfiguration) { widths in
-            if !item.permissionCards.isEmpty {
+            if !item.missingPermissionCards.isEmpty {
                 Section {
-                    ForEach(item.permissionCards) { card in
+                    ForEach(item.missingPermissionCards) { card in
                         PermissionSettingsRow(
                             card: card,
                             statusColor: statusColor(for: card.statusTone),
                             onAction: {
                                 pluginHost.performPermissionAction(
                                     pluginID: card.pluginID,
-                                    permissionID: card.permissionID
+                                    permissionID: card.permissionID,
+                                    sourceFrame: permissionGuidanceSourceFrame(
+                                        eventType: NSApp.currentEvent?.type,
+                                        mouseLocation: NSEvent.mouseLocation
+                                    )
                                 )
                             }
                         )
@@ -3052,6 +4118,7 @@ private struct PluginFormPage: View {
                             entryID: card.id
                         )
                         .settingsGroupedFormRowWidth(widths.sectionLayout)
+                        .listRowBackground(Color.orange.opacity(0.08))
                     }
                 } header: {
                     SettingsGroupedFormSectionHeader(
@@ -3059,9 +4126,10 @@ private struct PluginFormPage: View {
                             "plugins.configuration.section.permissions",
                             defaultValue: "权限"
                         ),
-                        systemImage: "lock.shield",
+                        systemImage: "exclamationmark.shield",
                         layoutWidth: widths.readableContent
                     )
+                    .foregroundStyle(.orange)
                 }
             }
 
@@ -3083,6 +4151,21 @@ private struct PluginFormPage: View {
                         layoutWidths: widths
                     )
                 }
+
+                ForEach(item.standaloneShortcutSettingsGroups.filter {
+                    $0.placementAfterSectionID == section.id
+                }) { configuration in
+                    PluginMixedShortcutFormSection(
+                        pluginHost: pluginHost,
+                        pluginID: item.pluginID,
+                        configuration: configuration,
+                        shortcutItems: item.shortcutItems,
+                        definitionsFirst: item.shortcutDefinitionFirstSettingsGroupIDs.contains(configuration.id),
+                        collapsesAllContent: item.collapsibleShortcutSettingsGroupIDs.contains(configuration.id),
+                        collapsesActionContent: item.collapsibleActionSettingsGroupIDs.contains(configuration.id),
+                        layoutWidths: widths
+                    )
+                }
             }
 
             if let configuration = item.actionShortcutSettingsConfiguration,
@@ -3094,6 +4177,24 @@ private struct PluginFormPage: View {
                     pluginHost: pluginHost,
                     pluginID: item.pluginID,
                     configuration: configuration,
+                    layoutWidths: widths
+                )
+            }
+
+            ForEach(item.standaloneShortcutSettingsGroups.filter { configuration in
+                configuration.placementAfterSectionID == nil
+                    || !item.sections.contains(where: {
+                        $0.isVisible && $0.id == configuration.placementAfterSectionID
+                    })
+            }) { configuration in
+                PluginMixedShortcutFormSection(
+                    pluginHost: pluginHost,
+                    pluginID: item.pluginID,
+                    configuration: configuration,
+                    shortcutItems: item.shortcutItems,
+                    definitionsFirst: item.shortcutDefinitionFirstSettingsGroupIDs.contains(configuration.id),
+                    collapsesAllContent: item.collapsibleShortcutSettingsGroupIDs.contains(configuration.id),
+                    collapsesActionContent: item.collapsibleActionSettingsGroupIDs.contains(configuration.id),
                     layoutWidths: widths
                 )
             }
@@ -3117,6 +4218,193 @@ private struct PluginFormPage: View {
                 }
             }
         }
+    }
+}
+
+private struct SettingsFullWidthDisclosure<Label: View, Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Binding var isExpanded: Bool
+    private let label: Label
+    private let content: Content
+
+    init(
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder label: () -> Label
+    ) {
+        _isExpanded = isExpanded
+        self.content = content()
+        self.label = label()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+            Button {
+                if accessibilityReduceMotion {
+                    isExpanded.toggle()
+                } else {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isExpanded.toggle()
+                    }
+                }
+            } label: {
+                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    label
+                    Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(Text(AppL10n.settings(
+                isExpanded
+                    ? "plugins.configuration.disclosure.expanded"
+                    : "plugins.configuration.disclosure.collapsed",
+                defaultValue: isExpanded ? "Expanded" : "Collapsed"
+            )))
+
+            if isExpanded {
+                content
+                    .transition(accessibilityReduceMotion
+                        ? .identity
+                        : .opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
+
+struct PluginMixedShortcutFormSection: View {
+    @Environment(\.pluginSettingsSearchTarget) private var searchTarget
+    @ObservedObject var pluginHost: PluginHost
+    let pluginID: String
+    let configuration: PluginShortcutSettingsGroupConfiguration
+    let shortcutItems: [ShortcutSettingsItem]
+    let definitionsFirst: Bool
+    let collapsesAllContent: Bool
+    let collapsesActionContent: Bool
+    let layoutWidths: SettingsGroupedFormWidths
+    @State private var isExpanded = false
+
+    static func searchTarget(pluginID: String, groupID: String) -> PluginSettingsSearchTarget {
+        PluginSettingsSearchTarget(pluginID: pluginID, entryID: groupID)
+    }
+
+    static func reveal(
+        target: PluginSettingsSearchTarget?,
+        pluginID: String,
+        groupID: String,
+        isExpanded: inout Bool
+    ) {
+        if target == searchTarget(pluginID: pluginID, groupID: groupID) {
+            isExpanded = true
+        }
+    }
+
+    private var matchingShortcutItems: [ShortcutSettingsItem] {
+        let itemIDs = Set(configuration.shortcutDefinitionIDs.map {
+            "\(pluginID).shortcut.\($0)"
+        })
+        return shortcutItems.filter { itemIDs.contains($0.id) }
+    }
+
+    var body: some View {
+        Section {
+            if collapsesAllContent {
+                SettingsFullWidthDisclosure(isExpanded: $isExpanded) {
+                    mixedRows
+                } label: {
+                    Text(AppL10n.settings(
+                        "plugins.configuration.shortcuts.show",
+                        defaultValue: "Show Shortcuts"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+                }
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+                .settingsGroupedFormRowWidth(layoutWidths.sectionLayout)
+            } else {
+                mixedRows
+            }
+
+        } header: {
+            SettingsGroupedFormSectionHeader(
+                title: configuration.title,
+                systemImage: configuration.systemImage,
+                layoutWidth: layoutWidths.readableContent
+            )
+        } footer: {
+            if let description = configuration.description {
+                Text(description)
+                    .frame(width: layoutWidths.sectionLayout, alignment: .leading)
+            }
+        }
+        .pluginSettingsSearchAnchor(
+            pluginID: pluginID,
+            entryID: Self.searchTarget(pluginID: pluginID, groupID: configuration.id).entryID
+        )
+        .onChange(of: searchTarget, initial: true) { _, target in
+            Self.reveal(target: target, pluginID: pluginID,
+                        groupID: configuration.id, isExpanded: &isExpanded)
+        }
+    }
+
+    @ViewBuilder
+    private var mixedRows: some View {
+        VStack(spacing: 0) {
+            if definitionsFirst, !matchingShortcutItems.isEmpty {
+                shortcutRows
+            }
+            if definitionsFirst,
+               !matchingShortcutItems.isEmpty,
+               !configuration.actionIDs.isEmpty {
+                PluginSettingsListDivider()
+            }
+            if collapsesActionContent, !configuration.actionIDs.isEmpty {
+                SettingsFullWidthDisclosure(isExpanded: $isExpanded) {
+                    actionRows
+                } label: {
+                    Text(AppL10n.settings(
+                        "plugins.configuration.shortcuts.advanced",
+                        defaultValue: "Advanced Controls"
+                    ))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+                }
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+            } else if !configuration.actionIDs.isEmpty {
+                actionRows
+            }
+            if !definitionsFirst,
+               !configuration.actionIDs.isEmpty,
+               !matchingShortcutItems.isEmpty {
+                PluginSettingsListDivider()
+            }
+            if !definitionsFirst, !matchingShortcutItems.isEmpty {
+                shortcutRows
+            }
+        }
+        .settingsGroupedFormRowWidth(layoutWidths.sectionLayout)
+    }
+
+    private var actionRows: some View {
+        PluginActionShortcutRowsContent(
+            pluginHost: pluginHost,
+            providerID: pluginID,
+            actionIDs: configuration.actionIDs,
+            hidesNeutralStatusBadges: true
+        )
+    }
+
+    private var shortcutRows: some View {
+        ShortcutSettingsRowsView(
+            pluginHost: pluginHost,
+            items: matchingShortcutItems,
+            alignsWithActionRows: true
+        )
     }
 }
 
@@ -3268,6 +4556,7 @@ private struct PluginWorkspacePage: View {
                         spacing: SettingsPageLayout.introductionContentSpacing
                     ) {
                         introduction
+                        workspacePermissions
                         workspaceContent
                     }
                 }
@@ -3277,6 +4566,7 @@ private struct PluginWorkspacePage: View {
                     spacing: SettingsPageLayout.introductionContentSpacing
                 ) {
                     introduction
+                    workspacePermissions
                     workspaceContent
                         .frame(maxHeight: .infinity, alignment: .topLeading)
                 }
@@ -3288,6 +4578,61 @@ private struct PluginWorkspacePage: View {
         SettingsPageIntroduction(
             configuration: item.introductionConfiguration
         )
+    }
+
+    @ViewBuilder
+    private var workspacePermissions: some View {
+        if !item.missingPermissionCards.isEmpty {
+            VStack(
+                alignment: .leading,
+                spacing: PluginSettingsTheme.Spacing.sectionHeaderContent
+            ) {
+                Label(
+                    AppL10n.settings(
+                        "plugins.configuration.section.permissions",
+                        defaultValue: "权限"
+                    ),
+                    systemImage: "exclamationmark.shield"
+                )
+                .font(PluginSettingsTheme.Typography.sectionTitle)
+                .foregroundStyle(.orange)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(item.missingPermissionCards.enumerated()), id: \.element.id) { index, card in
+                        PermissionSettingsRow(
+                            card: card,
+                            statusColor: statusColor(for: card.statusTone),
+                            onAction: {
+                                pluginHost.performPermissionAction(
+                                    pluginID: card.pluginID,
+                                    permissionID: card.permissionID,
+                                    sourceFrame: permissionGuidanceSourceFrame(
+                                        eventType: NSApp.currentEvent?.type,
+                                        mouseLocation: NSEvent.mouseLocation
+                                    )
+                                )
+                            }
+                        )
+                        .pluginSettingsSearchAnchor(
+                            pluginID: card.pluginID,
+                            entryID: card.id
+                        )
+                        .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+
+                        if index < item.missingPermissionCards.count - 1 {
+                            Divider()
+                                .padding(.leading, PluginSettingsTheme.Spacing.rowHorizontal)
+                        }
+                    }
+                }
+                .pluginSettingsCardBackground(.standard)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.orange.opacity(0.65))
+                        .frame(width: 3)
+                }
+            }
+        }
     }
 
     private var workspaceContent: some View {
@@ -3338,38 +4683,13 @@ private struct PluginSettingsRowView: View {
                 }
             )
         } else {
-            HStack(alignment: .center, spacing: 0) {
-                HStack(
-                    alignment: .center,
-                    spacing: PluginSettingsTheme.Spacing.rowContentControl
-                ) {
-                    if let systemImage = row.systemImage {
-                        Image(systemName: systemImage)
-                            .pluginSettingsRowIconStyle(.secondary)
-                    }
-
-                    VStack(
-                        alignment: .leading,
-                        spacing: PluginSettingsTheme.Spacing.rowTitleDescription
-                    ) {
-                        Text(row.title)
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-
-                        if let description = row.description {
-                            Text(description)
-                                .font(PluginSettingsTheme.Typography.rowDescription)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .layoutPriority(1)
-
-                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-
+            PluginSettingsItem(
+                title: row.title,
+                description: row.description,
+                systemImage: row.systemImage
+            ) {
                 control
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

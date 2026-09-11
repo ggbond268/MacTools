@@ -719,7 +719,7 @@ func deviceSymbolName(for item: DeviceBatteryItem) -> String {
         return "applewatch"
     case .spatialComputer:
         return "visionpro"
-    case .rapooMouse:
+    case .vendorHIDMouse:
         return "computermouse.fill"
     case .airPodsPart:
         let ownName = item.name.lowercased()

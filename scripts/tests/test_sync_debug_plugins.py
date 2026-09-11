@@ -22,6 +22,12 @@ def write_manifest(source: pathlib.Path, plugin_id: str, bundle_relative_path: s
                 "minHostVersion": "99.0.0",
                 "pluginKitVersion": 3,
                 "bundleRelativePath": bundle_relative_path,
+                "capabilities": {
+                    "primaryPanel": False,
+                    "componentPanel": False,
+                    "configuration": False,
+                },
+                "permissions": [],
             }
         ),
         encoding="utf-8",

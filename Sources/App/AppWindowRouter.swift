@@ -90,6 +90,38 @@ enum MacToolsLocalKeyboardCommand: Equatable {
 @MainActor
 final class MacToolsCommandWindow: NSWindow {
     var onLocalKeyboardCommand: ((MacToolsLocalKeyboardCommand) -> Bool)?
+    weak var sidebarListView: NSTableView?
+    var isSidebarInteractionEnabled: () -> Bool = { true }
+
+    override func sendEvent(_ event: NSEvent) {
+        restoreSidebarFocusIfNeeded(for: event)
+        super.sendEvent(event)
+    }
+
+    func restoreSidebarFocusIfNeeded(for event: NSEvent) {
+        guard
+            event.type == .leftMouseDown,
+            isSidebarInteractionEnabled(),
+            let sidebarListView,
+            sidebarListView.window === self,
+            let contentView
+        else {
+            return
+        }
+
+        let location = sidebarListView.convert(event.locationInWindow, from: nil)
+        guard sidebarListView.row(at: location) >= 0 else { return }
+
+        // Hit testing takes a point in the receiver's superview coordinates.
+        let hitLocation = contentView.superview?.convert(event.locationInWindow, from: nil)
+            ?? event.locationInWindow
+        guard let hitView = contentView.hitTest(hitLocation),
+              hitView === sidebarListView || hitView.isDescendant(of: sidebarListView) else {
+            return
+        }
+
+        makeFirstResponder(sidebarListView)
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard
@@ -109,11 +141,19 @@ final class MacToolsCommandWindow: NSWindow {
 
 enum StandaloneCommandPaletteLayout {
     static let contentSize = NSSize(width: 720, height: 710)
+    static let surfaceInset: CGFloat = 24
+    static let surfaceInsets = NSEdgeInsets(
+        top: surfaceInset,
+        left: surfaceInset,
+        bottom: surfaceInset,
+        right: surfaceInset
+    )
 
     static func frame(
         contentSize: NSSize = contentSize,
         pointerLocation: NSPoint,
-        visibleFrames: [NSRect]
+        visibleFrames: [NSRect],
+        position: WindowPosition = .defaultAnchor
     ) -> NSRect {
         guard let visibleFrame = visibleFrames.first(where: { $0.contains(pointerLocation) })
             ?? visibleFrames.first
@@ -121,19 +161,11 @@ enum StandaloneCommandPaletteLayout {
             return NSRect(origin: .zero, size: contentSize)
         }
 
-        let size = NSSize(
-            width: min(contentSize.width, visibleFrame.width),
-            height: min(contentSize.height, visibleFrame.height)
+        return WindowSnapGeometry.frame(
+            for: position,
+            contentSize: contentSize,
+            visibleFrame: visibleFrame
         )
-        let proposedOrigin = NSPoint(
-            x: visibleFrame.midX - (size.width / 2),
-            y: visibleFrame.midY - (size.height / 2)
-        )
-        let origin = NSPoint(
-            x: min(max(proposedOrigin.x, visibleFrame.minX), visibleFrame.maxX - size.width),
-            y: min(max(proposedOrigin.y, visibleFrame.minY), visibleFrame.maxY - size.height)
-        )
-        return NSRect(origin: origin, size: size)
     }
 }
 
@@ -201,7 +233,6 @@ enum AppDockVisibilityController {
 @MainActor
 final class StandaloneCommandPaletteState: ObservableObject {
     @Published private(set) var presentationOrigin: UnifiedSearchPresentationOrigin?
-    @Published private(set) var shortcutHint: String?
     @Published private(set) var focusRequestID: UInt = 0
     @Published private(set) var resetRequestID: UInt = 0
     @Published private(set) var quickSelectionRequest: UnifiedSearchQuickSelectionRequest?
@@ -212,7 +243,6 @@ final class StandaloneCommandPaletteState: ObservableObject {
 
     func prepareForPresentation(shortcutLabel: String) {
         presentationOrigin = .globalShortcut(shortcutLabel)
-        shortcutHint = shortcutLabel
         quickSelectionRequest = nil
         resetRequestID &+= 1
         focusRequestID &+= 1
@@ -286,6 +316,7 @@ struct StandaloneCommandPaletteRootView: View {
     let commandPaletteRecentStore: CommandPaletteRecentStore
     @ObservedObject var state: StandaloneCommandPaletteState
     let actions: UnifiedSearchPaletteActions
+    let dragCoordinator: WindowSnapCoordinator?
 
     var body: some View {
         GeometryReader { geometry in
@@ -296,14 +327,14 @@ struct StandaloneCommandPaletteRootView: View {
                 recentStore: commandPaletteRecentStore,
                 availableSize: geometry.size,
                 presentationOrigin: state.presentationOrigin,
-                shortcutHint: state.shortcutHint,
                 focusRequestID: state.focusRequestID,
                 resetRequestID: state.resetRequestID,
                 quickSelectionRequest: state.quickSelectionRequest,
                 showsCustomShadow: false,
-                actions: actions
+                actions: actions,
+                dragCoordinator: dragCoordinator
             )
-            .padding(24)
+            .padding(StandaloneCommandPaletteLayout.surfaceInset)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .id(state.localizationRevision)
@@ -399,6 +430,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     private let menuBarPanelThemeStore: MenuBarPanelThemeStore
     private let appearanceUserDefaults: UserDefaults
     let commandPaletteRecentStore: CommandPaletteRecentStore
+    let windowPositionStore: WindowPositionStore
+    private(set) var commandPaletteSnapCoordinator: WindowSnapCoordinator?
     private let settingsSidebarPreferences: SettingsSidebarPreferencesStore
     private let commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration
     private(set) var settingsWindow: NSWindow?
@@ -420,16 +453,15 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     var focusedWindowLayoutTarget: NSWindow? {
-        guard let settingsWindow,
-              Self.isEligibleFocusedWindowLayoutTarget(
-                  isKeyWindow: settingsWindow.isKeyWindow,
-                  isVisible: settingsWindow.isVisible,
-                  isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
-              )
-        else {
-            return nil
+        if let settingsWindow,
+           Self.isEligibleFocusedWindowLayoutTarget(
+               isKeyWindow: settingsWindow.isKeyWindow,
+               isVisible: settingsWindow.isVisible,
+               isUnifiedSearchPresented: settingsNavigationCoordinator?.isUnifiedSearchPresented == true
+           ) {
+            return settingsWindow
         }
-        return settingsWindow
+        return pluginHost.focusedPluginWindowLayoutTarget()
     }
 
     static func isEligibleFocusedWindowLayoutTarget(
@@ -448,7 +480,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         launchAtLoginController: LaunchAtLoginController,
         menuBarPanelThemeStore: MenuBarPanelThemeStore = .shared,
         appearanceUserDefaults: UserDefaults = .standard,
-        commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration = .init()
+        commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration = .init(),
+        windowPositionStore: WindowPositionStore = .shared
     ) {
         self.pluginHost = pluginHost
         self.appUpdater = appUpdater
@@ -457,6 +490,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         self.launchAtLoginController = launchAtLoginController
         self.menuBarPanelThemeStore = menuBarPanelThemeStore
         self.appearanceUserDefaults = appearanceUserDefaults
+        self.windowPositionStore = windowPositionStore
         self.commandPaletteRecentStore = CommandPaletteRecentStore(
             userDefaults: appearanceUserDefaults
         )
@@ -569,10 +603,12 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             .map(\.visibleFrame)
             + [NSScreen.main?.visibleFrame].compactMap { $0 }
             + screens.map(\.visibleFrame)
+        let storedPosition = windowPositionStore.position(for: .commandPalette)
         panel.setFrame(
             StandaloneCommandPaletteLayout.frame(
                 pointerLocation: pointerLocation,
-                visibleFrames: orderedVisibleFrames
+                visibleFrames: orderedVisibleFrames,
+                position: storedPosition
             ),
             display: true
         )
@@ -583,6 +619,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     func dismissCommandPalette(restoringFocus: Bool = true) {
+        commandPaletteSnapCoordinator?.cancelDragging()
         let wasVisible = commandPalettePanel?.isVisible == true
         if wasVisible {
             commandPaletteState?.prepareForDismissal()
@@ -631,7 +668,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     private func configureSettingsInitialResponder(
-        in window: NSWindow,
+        in window: MacToolsCommandWindow,
         hostingView: NSView
     ) {
         window.layoutIfNeeded()
@@ -656,6 +693,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
 
         if sidebarList?.acceptsFirstResponder == true {
             window.initialFirstResponder = sidebarList
+            window.sidebarListView = sidebarList
         }
     }
 
@@ -716,6 +754,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         window.onLocalKeyboardCommand = { [weak self] command in
             self?.handleLocalKeyboardCommand(command) ?? false
         }
+        window.isSidebarInteractionEnabled = { [weak navigationCoordinator] in
+            navigationCoordinator?.isUnifiedSearchPresented == false
+        }
         window.center()
         settingsNavigationCoordinator = navigationCoordinator
         return window
@@ -730,6 +771,14 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
+        let coordinator = WindowSnapCoordinator(
+            role: .commandPalette,
+            positionStore: windowPositionStore,
+            referenceInsets: StandaloneCommandPaletteLayout.surfaceInsets
+        )
+        commandPaletteSnapCoordinator = coordinator
+        coordinator.attach(to: panel)
+
         let actions = UnifiedSearchPaletteActions(
             dismiss: { [weak self] in
                 self?.dismissCommandPalette()
@@ -743,6 +792,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             consumeQuickSelection: state.consumeQuickSelectionRequest,
             setPendingExecutionCancellation: { [weak state] cancellation in
                 state?.setPendingExecutionCancellation(cancellation)
+            },
+            resetCommandPalettePosition: { [weak self] in
+                self?.resetCommandPalettePosition()
             }
         )
         let hostingView = NSHostingView(
@@ -752,7 +804,8 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 appearanceUserDefaults: appearanceUserDefaults,
                 commandPaletteRecentStore: commandPaletteRecentStore,
                 state: state,
-                actions: actions
+                actions: actions,
+                dragCoordinator: coordinator
             )
         )
         hostingView.sizingOptions = []
@@ -775,6 +828,25 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             self?.dismissCommandPalette()
         }
         return panel
+    }
+
+    func resetCommandPalettePosition() {
+        windowPositionStore.resetPosition(for: .commandPalette)
+        if let panel = commandPalettePanel, panel.isVisible {
+            let pointerLocation = NSEvent.mouseLocation
+            let screens = NSScreen.screens
+            let orderedVisibleFrames = screens
+                .filter { $0.frame.contains(pointerLocation) }
+                .map(\.visibleFrame)
+                + [NSScreen.main?.visibleFrame].compactMap { $0 }
+                + screens.map(\.visibleFrame)
+            let defaultFrame = StandaloneCommandPaletteLayout.frame(
+                pointerLocation: pointerLocation,
+                visibleFrames: orderedVisibleFrames,
+                position: .defaultAnchor
+            )
+            panel.setFrame(defaultFrame, display: true, animate: true)
+        }
     }
 
     private func dismissCommandPaletteAfterSuccessfulExecution() {
@@ -821,6 +893,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         case .general:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .general)
+        case .permissions:
+            pendingAppUpdateVersion = nil
+            settingsNavigationCoordinator?.navigate(to: .permissions)
         case .about:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .about)
@@ -830,6 +905,9 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         case .pluginMarketplace:
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .plugins(.marketplace))
+        case let .pluginMarketplaceDetail(target):
+            pendingAppUpdateVersion = nil
+            settingsNavigationCoordinator?.navigate(to: .marketplaceDetail(target))
         case let .pluginConfiguration(pluginID):
             pendingAppUpdateVersion = nil
             settingsNavigationCoordinator?.navigate(to: .plugins(.configuration(pluginID)))
@@ -882,7 +960,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 return true
             }
 
-            return settingsNavigationCoordinator.selectSidebarDestination(number: number)
+            return settingsNavigationCoordinator.performSidebarNumberShortcut(number: number)
         case .goBack:
             guard
                 let settingsNavigationCoordinator,

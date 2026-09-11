@@ -6,3 +6,4 @@
 - [App Reopen Recovery](app-reopen-recovery.md)
 - [Input Remapping](input-remapping.md)
 - [zsh Config Editor Stability](zsh-config-editor-stability.md)
+- [Window Switcher multi-Space window discovery](window-switcher-multi-space.md)

@@ -23,6 +23,19 @@ final class MacToolsAppRuntime {
     private var statusItemController: MenuBarStatusItemController?
     private var actionGridOverlayController: ActionGridOverlayController?
     private var appIntentCatalogCancellable: AnyCancellable?
+    private var cliBrokerActivationCancellable: AnyCancellable?
+    private lazy var cliDiscovery = CLIActionDiscovery(
+        registry: pluginHost.actionRegistry,
+        workflows: { [weak self] in self?.pluginHost.automationController.workflows ?? [] }
+    )
+    private lazy var cliActionRunner = CLIActionRunner(
+        discovery: cliDiscovery,
+        executor: pluginHost.actionExecutor
+    )
+    private lazy var cliHostBridge = CLIHostBridge(
+        discovery: cliDiscovery,
+        runner: cliActionRunner
+    )
     private lazy var settingsRecoveryScheduler = SettingsRecoveryScheduler { [weak self] in
         self?.windowRouter?.showSettings()
     }
@@ -106,6 +119,7 @@ final class MacToolsAppRuntime {
             menuBarPanelThemeStore: menuBarPanelThemeStore
         )
 
+        startCLIHostIfAvailable()
         bootstrapDynamicPlugins()
     }
 
@@ -121,6 +135,9 @@ final class MacToolsAppRuntime {
 
     func terminate() {
         settingsRecoveryScheduler.cancel()
+        cliBrokerActivationCancellable?.cancel()
+        cliBrokerActivationCancellable = nil
+        cliHostBridge.stop()
         pluginHost.flushAutomaticPreferencesBackupBeforeTermination()
         pluginHost.automationController.stopAutomaticRules()
         actionGridOverlayController?.close(restoringFocus: false)
@@ -182,6 +199,7 @@ final class MacToolsAppRuntime {
                 }
             }
             appIntentCoordinator.actionRegistryDidBecomeReady()
+            cliDiscovery.markReady()
             activateAppURLRouter()
         }
     }
@@ -189,7 +207,24 @@ final class MacToolsAppRuntime {
     private func completeBootstrap() {
         automationStartupCoordinator.actionRegistryDidBecomeReady()
         appIntentCoordinator.actionRegistryDidBecomeReady()
+        cliDiscovery.markReady()
         activateAppURLRouter()
+    }
+
+    private func startCLIHostIfAvailable() {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+            return
+        }
+        cliBrokerActivationCancellable = NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification
+        )
+        .sink { _ in
+            Task { @MainActor in
+                CLIBrokerServiceController.shared.applicationDidBecomeActive()
+            }
+        }
+        cliHostBridge.start()
+        CLIInstallController.shared.start()
     }
 
     private func activateAppURLRouter() {
@@ -199,6 +234,9 @@ final class MacToolsAppRuntime {
             },
             isPluginConfigurationAvailable: { [weak self] pluginID in
                 self?.pluginHost.hasPluginSettings(pluginID: pluginID) == true
+            },
+            isMarketplaceDetailAvailable: { [weak self] target in
+                self?.pluginHost.hasMarketplaceDetail(target: target) == true
             },
             actionIdentityResolver: { [weak self] request in
                 self?.pluginHost.actionRunLinkService.resolve(request)

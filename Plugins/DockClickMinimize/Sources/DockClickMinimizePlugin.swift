@@ -160,7 +160,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
     func activate(context: PluginRuntimeContext) {
         observeApplicationActivation()
         refreshPermissionState()
-        applyMonitoringState(promptForAccessibilityPermission: false)
+        applyMonitoringState(requestMissingPermissions: false)
     }
 
     func deactivate(reason: PluginDeactivationReason) {
@@ -171,7 +171,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
 
     func refresh() {
         refreshPermissionState()
-        applyMonitoringState(promptForAccessibilityPermission: false)
+        applyMonitoringState(requestMissingPermissions: false)
         onStateChange?()
     }
 
@@ -244,7 +244,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
         if !isEnabled {
             invalidatePendingActions()
         }
-        applyMonitoringState(promptForAccessibilityPermission: isEnabled)
+        applyMonitoringState(requestMissingPermissions: isEnabled)
         onStateChange?()
     }
 
@@ -283,7 +283,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
             return
         }
         refreshPermissionState()
-        applyMonitoringState(promptForAccessibilityPermission: false)
+        applyMonitoringState(requestMissingPermissions: false)
         onStateChange?()
     }
 
@@ -303,7 +303,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
         if previouslyGranted && !isAccessibilityGranted {
             invalidatePendingActions()
         }
-        applyMonitoringState(promptForAccessibilityPermission: false)
+        applyMonitoringState(requestMissingPermissions: false)
         onStateChange?()
     }
 
@@ -314,24 +314,38 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
         guard isEnabled,
               isAccessibilityGranted,
               isInputMonitoringGranted,
-              target.bundleIdentifier == frontmostApplication.bundleIdentifier,
-              applicationHider.hasVisibleWindow(for: frontmostApplication.processIdentifier),
-              DockClickDecision.shouldScheduleHide(
-                  target: target,
-                  frontmostApplication: frontmostApplication,
-                  hasVisibleWindow: true
-              )
+              target.bundleIdentifier == frontmostApplication.bundleIdentifier
         else {
             return
         }
 
         let expectedGeneration = actionGeneration
-        scheduleDelayedAction { [weak self] in
-            self?.hideAfterDockClick(
-                target: target,
-                expectedFrontmostApplication: frontmostApplication,
-                expectedGeneration: expectedGeneration
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let hasVisibleWindow = await applicationHider.hasVisibleWindow(
+                for: frontmostApplication.processIdentifier
             )
+            guard expectedGeneration == actionGeneration,
+                  isEnabled,
+                  isAccessibilityGranted,
+                  isInputMonitoringGranted,
+                  frontmostApplicationProvider.frontmostApplication() == frontmostApplication,
+                  DockClickDecision.shouldScheduleHide(
+                      target: target,
+                      frontmostApplication: frontmostApplication,
+                      hasVisibleWindow: hasVisibleWindow
+                  )
+            else {
+                return
+            }
+
+            scheduleDelayedAction { [weak self] in
+                self?.hideAfterDockClick(
+                    target: target,
+                    expectedFrontmostApplication: frontmostApplication,
+                    expectedGeneration: expectedGeneration
+                )
+            }
         }
     }
 
@@ -373,7 +387,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
         isInputMonitoringGranted = inputMonitoringStatus() == .granted
     }
 
-    private func applyMonitoringState(promptForAccessibilityPermission: Bool) {
+    private func applyMonitoringState(requestMissingPermissions: Bool) {
         guard isEnabled else {
             monitor.stop()
             lastErrorMessage = nil
@@ -381,7 +395,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
         }
 
         refreshPermissionState()
-        if !isAccessibilityGranted, promptForAccessibilityPermission {
+        if !isAccessibilityGranted, requestMissingPermissions {
             _ = requestAccessibilityTrust(true)
             refreshPermissionState()
         }
@@ -391,7 +405,9 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
                 "error.accessibilityRequired",
                 defaultValue: "Hide Active App on Dock Click needs Accessibility permission."
             )
-            requestPermissionGuidance?(PermissionID.accessibility)
+            if requestMissingPermissions {
+                requestPermissionGuidance?(PermissionID.accessibility)
+            }
             return
         }
         guard isInputMonitoringGranted else {
@@ -400,7 +416,9 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
                 "error.inputMonitoringRequired",
                 defaultValue: "Hide Active App on Dock Click needs Input Monitoring permission."
             )
-            requestPermissionGuidance?(PermissionID.inputMonitoring)
+            if requestMissingPermissions {
+                requestPermissionGuidance?(PermissionID.inputMonitoring)
+            }
             return
         }
         guard monitor.start() else {
@@ -429,7 +447,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.refreshPermissionState()
-                self.applyMonitoringState(promptForAccessibilityPermission: false)
+                self.applyMonitoringState(requestMissingPermissions: false)
                 self.onStateChange?()
             }
         }

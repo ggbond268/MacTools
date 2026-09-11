@@ -53,6 +53,20 @@ final class WindowSwitcherShortcutTapTests: XCTestCase {
         }
     }
 
+    func testRevokedPermissionReportsOnceIncludingDisabledTapEvents() async throws {
+        for type in [CGEventType.keyDown, .tapDisabledByTimeout, .tapDisabledByUserInput] {
+            let tap = WindowSwitcherShortcutTap(accessibilityTrusted: { false })
+            var reports = 0
+            tap.onAccessibilityRevoked = { reports += 1 }
+            let key = try event(kVK_Tab, flags: .maskAlternate)
+            XCTAssertNotNil(tap.handle(type: type, event: key))
+            XCTAssertNotNil(tap.handle(type: type, event: key))
+            let deadline = ContinuousClock.now + .seconds(1)
+            while reports == 0, ContinuousClock.now < deadline { await Task.yield() }
+            XCTAssertEqual(reports, 1)
+        }
+    }
+
     func testDeniedPermissionAndClearedBindingsNeverConsumeKeys() throws {
         let denied = WindowSwitcherShortcutTap(accessibilityTrusted: { false })
         denied.configure(allBinding: WindowSwitcherShortcutBindingStore.defaultBinding, currentAppBinding: nil)

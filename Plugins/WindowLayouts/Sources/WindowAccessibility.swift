@@ -58,6 +58,25 @@ protocol WindowFrameWriting {
         of window: AccessibilityWindowHandle,
         resize: Bool
     ) async throws
+
+    /// Writes a frame during a continuous pointer gesture. Returning `false` means the
+    /// target application was temporarily busy and the caller should coalesce and retry.
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws -> Bool
+}
+
+extension WindowFrameWriting {
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws -> Bool {
+        try await setFrame(frame, of: window, resize: resize)
+        return true
+    }
 }
 
 @MainActor
@@ -69,9 +88,41 @@ struct ExternalFocusedWindowTarget: Sendable {
     let processIdentifier: pid_t
     let bundleIdentifier: String?
     let preferredWindowNumber: Int?
+    let pointerLocation: CGPoint?
+
+    init(
+        processIdentifier: pid_t,
+        bundleIdentifier: String?,
+        preferredWindowNumber: Int?,
+        pointerLocation: CGPoint? = nil
+    ) {
+        self.processIdentifier = processIdentifier
+        self.bundleIdentifier = bundleIdentifier
+        self.preferredWindowNumber = preferredWindowNumber
+        self.pointerLocation = pointerLocation
+    }
 }
 
-actor WindowAccessibilityWorker {
+func firstCancellableMatch<Element>(
+    in elements: [Element],
+    where predicate: (Element) -> Bool
+) throws -> Element? {
+    for element in elements {
+        try Task.checkCancellation()
+        if predicate(element) {
+            return element
+        }
+    }
+    return nil
+}
+
+protocol ExternalWindowResolving: Sendable {
+    func resolveFocusedWindow(
+        target: ExternalFocusedWindowTarget
+    ) async throws -> AccessibilityWindowHandle
+}
+
+actor WindowAccessibilityWorker: ExternalWindowResolving {
     private let messagingTimeout: Float
 
     init(messagingTimeout: Float = 0.25) {
@@ -84,13 +135,7 @@ actor WindowAccessibilityWorker {
         try Task.checkCancellation()
         let applicationElement = AXUIElementCreateApplication(target.processIdentifier)
         AXUIElementSetMessagingTimeout(applicationElement, messagingTimeout)
-        let resolvedWindow: AXUIElement?
-        if let preferredWindowNumber = target.preferredWindowNumber {
-            resolvedWindow = copyWindow(applicationElement, matching: preferredWindowNumber)
-        } else {
-            resolvedWindow = copyWindowAttribute(applicationElement, kAXFocusedWindowAttribute)
-                ?? copyWindowAttribute(applicationElement, kAXMainWindowAttribute)
-        }
+        let resolvedWindow = try resolveWindow(applicationElement, target: target)
         try Task.checkCancellation()
         guard let window = resolvedWindow else {
             throw WindowLayoutError.noFocusedWindow
@@ -111,10 +156,6 @@ actor WindowAccessibilityWorker {
             throw WindowLayoutError.windowUnavailable
         }
         let windowNumber = copyNumberAttribute(window, "AXWindowNumber")?.uint32Value
-        if let preferredWindowNumber = target.preferredWindowNumber,
-           windowNumber.map(Int.init) != preferredWindowNumber {
-            throw WindowLayoutError.windowUnavailable
-        }
         let token = windowNumber.map { "window-number:\($0)" }
             ?? "ax-hash:\(CFHash(window))"
 
@@ -220,6 +261,39 @@ actor WindowAccessibilityWorker {
         )
     }
 
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) throws -> Bool {
+        try Task.checkCancellation()
+        let element = try externalElement(for: window)
+        guard window.canMove else {
+            throw WindowLayoutError.windowCannotMove
+        }
+        guard !resize else {
+            try setFrame(frame, of: window, resize: true)
+            return true
+        }
+
+        var point = frame.origin
+        guard let value = AXValueCreate(.cgPoint, &point) else {
+            throw WindowLayoutError.frameWriteFailed
+        }
+        let result = AXUIElementSetAttributeValue(
+            element,
+            kAXPositionAttribute as CFString,
+            value
+        )
+        if result == .cannotComplete {
+            return false
+        }
+        guard result == .success else {
+            throw mappedError(result, fallback: .windowCannotMove)
+        }
+        return true
+    }
+
     func setFullScreen(
         _ isFullScreen: Bool,
         for window: AccessibilityWindowHandle
@@ -256,8 +330,74 @@ actor WindowAccessibilityWorker {
         return (value as! AXUIElement)
     }
 
-    private func copyWindow(_ application: AXUIElement, matching windowNumber: Int) -> AXUIElement? {
+    private func resolveWindow(
+        _ application: AXUIElement,
+        target: ExternalFocusedWindowTarget
+    ) throws -> AXUIElement? {
+        if let pointerLocation = target.pointerLocation,
+           let window = try copyWindow(
+               at: pointerLocation,
+               processIdentifier: target.processIdentifier
+           ) {
+            return window
+        }
+        if let preferredWindowNumber = target.preferredWindowNumber {
+            return try copyWindow(application, matching: preferredWindowNumber)
+        }
+        return copyWindowAttribute(application, kAXFocusedWindowAttribute)
+            ?? copyWindowAttribute(application, kAXMainWindowAttribute)
+    }
+
+    private func copyWindow(
+        at location: CGPoint,
+        processIdentifier: pid_t
+    ) throws -> AXUIElement? {
+        try Task.checkCancellation()
+        var element: AXUIElement?
+        let result = AXUIElementCopyElementAtPosition(
+            AXUIElementCreateSystemWide(),
+            Float(location.x),
+            Float(location.y),
+            &element
+        )
+        guard result == .success, let element else {
+            return nil
+        }
+        AXUIElementSetMessagingTimeout(element, messagingTimeout)
+        guard let window = try windowContaining(element) else {
+            return nil
+        }
+        var resolvedProcessIdentifier: pid_t = 0
+        guard AXUIElementGetPid(window, &resolvedProcessIdentifier) == .success,
+              resolvedProcessIdentifier == processIdentifier else {
+            return nil
+        }
+        return window
+    }
+
+    private func windowContaining(_ element: AXUIElement) throws -> AXUIElement? {
+        var current: AXUIElement? = element
+        for _ in 0..<12 {
+            try Task.checkCancellation()
+            guard let currentElement = current else { return nil }
+            AXUIElementSetMessagingTimeout(currentElement, messagingTimeout)
+            if copyStringAttribute(currentElement, kAXRoleAttribute) == kAXWindowRole {
+                return currentElement
+            }
+            if let window = copyWindowAttribute(currentElement, kAXWindowAttribute) {
+                return window
+            }
+            current = copyWindowAttribute(currentElement, kAXParentAttribute)
+        }
+        return nil
+    }
+
+    private func copyWindow(
+        _ application: AXUIElement,
+        matching windowNumber: Int
+    ) throws -> AXUIElement? {
         guard windowNumber > 0 else { return nil }
+        try Task.checkCancellation()
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             application,
@@ -267,13 +407,10 @@ actor WindowAccessibilityWorker {
               let windows = value as? [AXUIElement] else {
             return nil
         }
-        for window in windows {
+        return try firstCancellableMatch(in: windows) { window in
             AXUIElementSetMessagingTimeout(window, messagingTimeout)
-            if copyNumberAttribute(window, "AXWindowNumber")?.intValue == windowNumber {
-                return window
-            }
+            return copyNumberAttribute(window, "AXWindowNumber")?.intValue == windowNumber
         }
-        return nil
     }
 
     private func hasAttribute(_ element: AXUIElement, _ attribute: String) -> Bool {
@@ -524,6 +661,38 @@ final class AccessibilityWindowFrameAdapter: WindowFrameReading, WindowFrameWrit
             return
         }
         try await worker.setFrame(frame, of: window, resize: resize)
+    }
+
+    func setFrameInteractively(
+        _ frame: CGRect,
+        of window: AccessibilityWindowHandle,
+        resize: Bool
+    ) async throws -> Bool {
+        if let hostWindow = window.hostWindow {
+            guard isValidHostWindow(hostWindow, for: window) else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            guard window.canMove else {
+                throw WindowLayoutError.windowCannotMove
+            }
+            if resize, !window.canResize {
+                throw WindowLayoutError.windowCannotResize
+            }
+            guard let anchorMaximumY = WindowCoordinateSpace.anchorMaximumY(in: NSScreen.screens) else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            let appKitFrame = WindowCoordinateSpace.appKitRect(
+                frame,
+                anchorMaximumY: anchorMaximumY
+            )
+            if resize {
+                hostWindow.setFrame(appKitFrame, display: true)
+            } else {
+                hostWindow.setFrameOrigin(appKitFrame.origin)
+            }
+            return true
+        }
+        return try await worker.setFrameInteractively(frame, of: window, resize: resize)
     }
 
     func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) async throws {

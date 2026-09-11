@@ -103,15 +103,15 @@ final class PluginPackageManifestTests: XCTestCase {
         let expectations = [
             (
                 path: "Plugins/MouseEnhancer/plugin.json",
-                minimum: "1.2.0",
-                compatibleHost: "1.2.0",
-                incompatibleHost: "1.1.6" as String?
+                minimum: "1.3.0",
+                compatibleHost: "1.3.0",
+                incompatibleHost: "1.2.0" as String?
             ),
             (
                 path: "Plugins/TrackpadGestures/plugin.json",
-                minimum: "1.2.0",
-                compatibleHost: "1.2.0",
-                incompatibleHost: "1.1.6"
+                minimum: "1.3.0",
+                compatibleHost: "1.3.0",
+                incompatibleHost: "1.2.0"
             ),
         ]
         for expectation in expectations {
@@ -119,7 +119,9 @@ final class PluginPackageManifestTests: XCTestCase {
             let manifestURL = repositoryRoot.appendingPathComponent(relativePath)
             let manifest = try JSONDecoder().decode(
                 PluginPackageManifest.self,
-                from: Data(contentsOf: manifestURL)
+                from: PluginSourceManifestTestProjection.data(
+                    pluginDirectoryName: manifestURL.deletingLastPathComponent().lastPathComponent
+                )
             )
 
             XCTAssertEqual(manifest.minHostVersion, expectation.minimum)
@@ -179,7 +181,9 @@ final class PluginPackageManifestTests: XCTestCase {
             guard FileManager.default.fileExists(atPath: manifestURL.path) else { continue }
             let manifest = try JSONDecoder().decode(
                 PluginPackageManifest.self,
-                from: Data(contentsOf: manifestURL)
+                from: PluginSourceManifestTestProjection.data(
+                    pluginDirectoryName: pluginURL.lastPathComponent
+                )
             )
 
             XCTAssertNoThrow(
@@ -240,6 +244,88 @@ final class PluginPackageManifestTests: XCTestCase {
         let manifest = try JSONDecoder().decode(PluginPackageManifest.self, from: json)
         XCTAssertNil(manifest.category)
         XCTAssertNil(manifest.releaseChannel)
+        XCTAssertEqual(manifest.effectiveUninstallDataPolicy, .preserve)
+    }
+
+    func testManifestDecodesPrivateDataRemovalPolicy() throws {
+        let json = """
+        {
+          "id": "demo",
+          "displayName": "Demo",
+          "version": "1.0.0",
+          "minHostVersion": "1.2.0",
+          "pluginKitVersion": 5,
+          "bundleRelativePath": "Demo.bundle",
+          "capabilities": { "primaryPanel": true, "componentPanel": false, "settings": "workspace" },
+          "permissions": [],
+          "uninstallDataPolicy": "removePrivateData",
+          "presentation": {
+            "publisher": "Clipboard Tests",
+            "longDescription": { "en": "Encrypted clipboard history" },
+            "examples": [],
+            "screenshots": [],
+            "license": "Apache-2.0"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let manifest = try JSONDecoder().decode(PluginPackageManifest.self, from: json)
+
+        XCTAssertEqual(manifest.effectiveUninstallDataPolicy, .removePrivateData)
+        XCTAssertEqual(manifest.presentation?.publisher, "Clipboard Tests")
+    }
+
+    func testRichProjectedManifestDecodesProductMetadata() throws {
+        let manifest = try JSONDecoder().decode(
+            PluginPackageManifest.self,
+            from: PluginSourceManifestTestProjection.data(pluginDirectoryName: "Appearance")
+        )
+
+        XCTAssertEqual(manifest.presentation?.publisher, "MacTools")
+        XCTAssertEqual(
+            manifest.presentation?.longDescription.localizedValue(preferredLanguages: ["en-US"]),
+            "Switch macOS between light and dark appearance from any MacTools action surface."
+        )
+        XCTAssertEqual(manifest.actions?.providers.first?.kind, "static")
+        XCTAssertEqual(
+            manifest.actions?.providers.first?.staticActions.map(\.id),
+            ["toggle", "set-enabled", "set-mode"]
+        )
+        XCTAssertEqual(manifest.requirements?.architectures, ["arm64", "x86_64"])
+        XCTAssertEqual(manifest.privacy?.networkUse, "none")
+        let searchKeywords = PluginProductMetadata.searchKeywords(
+            presentation: manifest.presentation,
+            discovery: manifest.discovery,
+            requirements: manifest.requirements,
+            privacy: manifest.privacy,
+            actions: manifest.actions,
+            setup: manifest.setup,
+            relationships: manifest.relationships
+        )
+        let toggleTitle = try XCTUnwrap(manifest.actions?.providers.first?.staticActions.first?.title)
+        XCTAssertEqual(toggleTitle.values["en"], "Toggle Appearance")
+        let localizedActionTitle = try XCTUnwrap(toggleTitle.localizedValue())
+        XCTAssertTrue(searchKeywords.contains(localizedActionTitle))
+        XCTAssertTrue(toggleTitle.values.values.contains(where: searchKeywords.contains))
+        XCTAssertTrue(searchKeywords.contains("night-shift"))
+    }
+
+    func testUnknownOptionalProductFieldDoesNotBreakRuntimeDecoding() throws {
+        let json = """
+        {
+          "id": "demo",
+          "displayName": "Demo",
+          "version": "1.0.0",
+          "minHostVersion": "1.0.0",
+          "pluginKitVersion": 4,
+          "bundleRelativePath": "Demo.bundle",
+          "capabilities": {"primaryPanel": false, "componentPanel": false, "settings": "none"},
+          "permissions": [],
+          "futureProductSection": {"newField": true}
+        }
+        """.data(using: .utf8)!
+
+        XCTAssertNoThrow(try JSONDecoder().decode(PluginPackageManifest.self, from: json))
     }
 
     func testLocalizedMetadataMatchesPreferredLanguageAndFallbacks() {
@@ -269,6 +355,60 @@ final class PluginPackageManifestTests: XCTestCase {
                 preferredLanguages: ["fr-FR"]
             )?.displayName,
             "Calendar"
+        )
+    }
+}
+
+enum PluginSourceManifestTestProjection {
+    static func data(pluginDirectoryName: String) throws -> Data {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceURL = repositoryRoot
+            .appendingPathComponent("Plugins", isDirectory: true)
+            .appendingPathComponent(pluginDirectoryName, isDirectory: true)
+            .appendingPathComponent("plugin.json")
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mactools-manifest-projection-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let destinationURL = temporaryDirectory.appendingPathComponent("plugin.json")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        process.currentDirectoryURL = repositoryRoot
+        process.arguments = [
+            repositoryRoot.appendingPathComponent("scripts/plugins/copy-plugin-manifest.py").path,
+            "copy",
+            "--source", sourceURL.path,
+            "--destination", destinationURL.path,
+            "--configuration", "Release",
+            "--app-version-config",
+            repositoryRoot.appendingPathComponent("Configs/AppVersion.xcconfig").path,
+        ]
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let message = String(data: errorData, encoding: .utf8) ?? "Unknown projection error"
+            throw projectionError(message.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return try Data(contentsOf: destinationURL)
+    }
+
+    private static func projectionError(_ message: String) -> NSError {
+        NSError(
+            domain: "PluginSourceManifestTestProjection",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: message]
         )
     }
 }

@@ -46,6 +46,9 @@ final class RightClickFinderSync: FIFinderSync {
     private var lastSelectedURLs: [URL] = []
     private var lastTargetedURL: URL?
     private let hostURLScheme = Bundle.main.object(forInfoDictionaryKey: "MTRightClickHostURLScheme") as? String ?? "mactools"
+    private let configuredToolbarItemName = Bundle.main.object(
+        forInfoDictionaryKey: "MTRightClickToolbarItemName"
+    ) as? String ?? "MacTools"
 
     override init() {
         super.init()
@@ -55,10 +58,15 @@ final class RightClickFinderSync: FIFinderSync {
     }
 
     override var toolbarItemName: String {
-        "MacTools"
+        configuredToolbarItemName
     }
 
     override var toolbarItemToolTip: String {
+        if hostURLScheme == "mactools-nightly",
+           let displayName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String {
+            return displayName
+        }
+
         let configuration = RightClickConfigurationStore.load()
         return RightClickLocalization.string(
             "finder.toolbarToolTip",
@@ -68,7 +76,10 @@ final class RightClickFinderSync: FIFinderSync {
     }
 
     override var toolbarItemImage: NSImage {
-        let image = NSImage(systemSymbolName: "contextualmenu.and.cursorarrow", accessibilityDescription: "MacTools")
+        let image = NSImage(
+            systemSymbolName: "contextualmenu.and.cursorarrow",
+            accessibilityDescription: configuredToolbarItemName
+        )
             ?? NSImage()
         image.isTemplate = true
         return image
@@ -88,7 +99,7 @@ final class RightClickFinderSync: FIFinderSync {
             return nil
         }
 
-        let menu = NSMenu(title: "MacTools")
+        let menu = NSMenu(title: configuredToolbarItemName)
 
         switch menuKind {
         case .contextualMenuForContainer:

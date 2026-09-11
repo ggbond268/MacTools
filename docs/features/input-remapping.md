@@ -1,6 +1,6 @@
 # Feature — Input Remapping
 
-Last verified: 2026-08-14
+Last verified: 2026-09-04
 
 Status: in-progress
 Source of truth: yes
@@ -8,7 +8,7 @@ Source of truth: yes
 ## Summary
 
 - Separate plugin for remapping keyboard, mouse, and precise trackpad gestures.
-- Scope: keyboard keys, mouse click/double-click/long-press, scroll wheel, and the precise gestures already recognized by Trackpad Gestures.
+- Scope: keyboard keys, mouse click/double-click/long-press, scroll wheel, and the precise gestures already recognized by Trackpad Gestures. Outputs include shortcuts and atomic single-key taps with distinct left/right modifiers.
 - Out of scope: shell commands, macros, profiles, per-app or per-device conditions.
 
 ## User flow
@@ -18,8 +18,10 @@ Source of truth: yes
 - A new rule starts as a disabled draft with direct input recording and a neutral output selector. Selecting Shortcut reveals its recorder; each captured value is then shown in its normal editor.
 - To select a trigger, the user starts recording and presses a key, a mouse button, or scrolls; the recorded sequence is consumed without executing a rule.
 - Recording first shows a brief preparation state so the click that opened the recorder cannot become the trigger; it then shows an explicit listening state.
+- If shortcut recorder startup fails, the affected mapping card shows a local diagnostic, the confirmed missing permission action when available, and a retry action while restoring the previous mapping state. A retry keeps the shortcut recorder's preparation/listening controls visible even when the restored action is not a shortcut.
 - A matching click, key, or scroll executes the action. Mouse double-click and long-press keep the original click available to avoid unsafe event replay.
 - When the action is a shortcut, the user can record the output combination directly; the recorded key-down and key-up are consumed.
+- When the action is a single key, the user chooses it from a categorized list without generating a physical key press that another global listener could intercept.
 - Each rule presents its Input, Output, and Context in three stable columns. Context is currently global; per-app and per-device conditions remain out of scope.
 - A missing rule, failed action, or event carrying the Input Remapping marker passes through unchanged.
 
@@ -31,9 +33,12 @@ Source of truth: yes
 | Capture accepts keyboard, mouse buttons, and scroll and consumes the recorded event | This document | `InputRemappingCapturedInput` | Settings editor, CGEvent tap |
 | Recording arms after its opening click and distinguishes preparation from active listening | This document | `InputRemappingButtonCaptureCoordinator` | Input and shortcut recorders |
 | Shortcut output can be recorded directly and consumes its key pair | This document | `InputRemappingButtonCaptureCoordinator` | Shortcut action editor, CGEvent tap |
+| Single-key output accepts ordinary macOS virtual keys except Caps Lock and system media keys while preserving left/right modifier identity | This document | `KeyboardKeyTap`, `KeyboardKeyTapEventPoster` | Trackpad Gestures, Custom Shortcuts, future plugins |
+| Single-key output is selected from a shared categorized picker instead of recorded from live input | This document | `PluginKeyTapPicker` | Trackpad Gestures, Custom Shortcuts, future plugins |
 | Exact modifier set required across a full compound mouse gesture | This document | `InputRemappingEventProcessor` | Event processor |
 | A consumed down consumes its matching up | This document | `InputRemappingEventProcessor` | CGEvent tap callback |
 | Events carrying the Input Remapping synthetic marker always pass through | This document | `InputRemappingEventProcessor` | CGEvent tap callback |
+| Current and legacy MacTools synthetic-input markers pass through mixed plugin versions | This document | `MacToolsSyntheticInputEvent` | Input Remapping and Trackpad Gestures event taps |
 | Failed or inapplicable actions fail open | This document | `InputRemappingEventProcessor` | CGEvent tap callback |
 | An unsafe trigger (a keyboard key without modifiers or primary mouse button) is saved disabled and requires explicit confirmation before it can be enabled | This document | `InputRemappingRule` | Rule editor, event processor |
 | Control-Option-Command-Escape always cancels recording and disables every unsafe trigger | This document | `InputRemappingEventTap`, `InputRemappingStore` | Global event tap, warning copy |
@@ -41,6 +46,7 @@ Source of truth: yes
 | Rule context is global only | This document | Rule editor layout | Context column |
 | New rules remain disabled until input and output are configured | This document | `InputRemappingRule` configuration state | Rule editor, matcher |
 | Recording is cancelled when the settings page is hidden | This document | `InputRemappingButtonCaptureCoordinator` | Settings page visibility handler |
+| Recorder startup failures stay attached to the mapping and recording target that initiated them | This document | `InputRemappingRecordingError`, `InputRemappingButtonCaptureCoordinator` | Input and shortcut recorder cards |
 
 ## Decisions
 
@@ -54,6 +60,7 @@ Source of truth: yes
 | 2026-08-13 | Modifier-free keyboard triggers are allowed after a warning | User requires full flexibility while being informed of global typing risk | Rule remains disabled until confirmation |
 | 2026-08-14 | Trackpad gesture ownership is exclusive, persisted, and non-destructive | A single Multitouch listener must arbitrate gestures without deleting user configuration | The host restores the most recent owner; conflicting mappings remain inactive |
 | 2026-08-13 | Unsafe mappings have a keyboard emergency stop | Both primary mouse buttons can otherwise make pointer-based recovery impossible | Control-Option-Command-Escape disables unsafe mappings and cancels recording |
+| 2026-09-02 | Keep recorder startup diagnostics in the mapping card and coordinator plugin-local. | The failure belongs to one draft/control, while arming, raw-input capture, emergency stop, and cancellation are Input Remapping-specific. | The card restores the previous mapping state, then guides permission recovery or retry without widening PluginKit's generic recorder contract. |
 
 ## Known limitation
 
@@ -85,6 +92,11 @@ Source of truth: yes
 - [x] P020 — Guide users from the empty state to the Add Mapping control.
 - [x] P021 — Localize all Input Remapping copy in every MacTools-supported language.
 - [x] P022 — Name keyboard, mouse, and trackpad support in the primary-panel title.
+- [x] P023 — Surface recorder startup failures locally with permission guidance and retry.
+
+## TODO
+
+- [x] F023 — Show local recorder startup diagnostics and recovery actions — files: `Plugins/InputRemapping/Sources/InputRemappingPlugin.swift`, `Plugins/InputRemapping/Tests/InputRemappingModelsTests.swift` — status: done
 
 ## Acceptance / DoD
 
@@ -115,6 +127,7 @@ Source of truth: yes
 - [x] Control-Option-Command-Escape remains available during recording and disables every unsafe mapping.
 - [x] An external TipTap claim consumes its corresponding native click before dispatching its action.
 - [x] The primary-panel title lists keyboard, trackpad, and mouse as supported input sources.
+- [x] Recorder startup failures remain local to the affected mapping card, restore the previous mapping state, and offer permission guidance or retry; shortcut retries keep preparation/listening controls and Cancel visible after a non-shortcut restoration.
 
 ## Implementation journal
 
@@ -177,6 +190,8 @@ Source of truth: yes
 - 2026-08-14 — Replaced the redundant source-list subtitle everywhere with localized “Map inputs to actions” copy.
 - 2026-08-14 — Updated the Custom Shortcuts plugin icon to `arrow.left.arrow.right`.
 - 2026-08-14 — Review fix: persisted precise-trackpad ownership in Core and restore it after restart.
+- 2026-09-02 — P023/F023 complete. The coordinator publishes rule/target-scoped failures for immediate and delayed tap startup, restores the previous shortcut action and enabled state through the editor callback, and mapping cards show localized diagnostics, confirmed permission actions, or retry. Delayed failures rely on the event tap's internal cancellation path exactly once.
+- 2026-09-04 — PR #364 retry regression fixed: shortcut preparation/listening state now controls recorder visibility independently of the restored output action. Targeted `InputRemappingModelsTests/testShortcutRetryAfterFailureShowsRecordingControlsForRestoredNonShortcutAction` and plugin build passed.
 
 ## Files
 
@@ -186,12 +201,14 @@ Source of truth: yes
 - `docs/features/input-remapping.md`
 - `docs/features/INDEX.md`
 - `changes/unreleased/input-remapping.md`
+- `docs/user-stories/plugins/custom-shortcuts-recorder-failure.md`
 
 ## Test / QA commands
 
 - `swiftc -parse Plugins/InputRemapping/Sources/*.swift Plugins/InputRemapping/Tests/*.swift`
 - `ruby -rjson -e 'JSON.parse(File.read(ARGV[0]))' Plugins/InputRemapping/Resources/Localizable.xcstrings`
 - `xcodebuild -project MacTools.xcodeproj -scheme InputRemappingPlugin -configuration Debug -derivedDataPath build/DerivedData test -quiet`
+- `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -only-testing:MacToolsTests/InputRemappingModelsTests -quiet`
 
 ## History
 

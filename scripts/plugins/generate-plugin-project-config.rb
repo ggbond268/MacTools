@@ -300,6 +300,7 @@ plugin_roots.each do |plugin_root|
     "deploymentTarget" => "14.0",
     "configFiles" => {
       "Debug" => "Debug.xcconfig",
+      "Nightly" => "Release.xcconfig",
       "Release" => "Release.xcconfig"
     },
     "sources" => core_sources,
@@ -315,6 +316,7 @@ plugin_roots.each do |plugin_root|
     "deploymentTarget" => "14.0",
     "configFiles" => {
       "Debug" => "Debug.xcconfig",
+      "Nightly" => "Release.xcconfig",
       "Release" => "Release.xcconfig"
     },
     "sources" => bundle_sources,
@@ -352,6 +354,9 @@ test_settings = {
     "Debug" => {
       "TEST_HOST" => "$(BUILT_PRODUCTS_DIR)/MacTools Dev.app/Contents/MacOS/MacTools Dev"
     },
+    "Nightly" => {
+      "TEST_HOST" => "$(BUILT_PRODUCTS_DIR)/MacTools Nightly.app/Contents/MacOS/MacTools Nightly"
+    },
     "Release" => {
       "TEST_HOST" => "$(BUILT_PRODUCTS_DIR)/MacTools.app/Contents/MacOS/MacTools"
     }
@@ -378,6 +383,7 @@ targets["MacToolsTests"] = {
     { "target" => "MacTools" },
     { "target" => "MacToolsPluginKit" },
     { "target" => "MacToolsAppIntents" },
+    { "target" => "MacToolsCLIProtocol" },
     { "target" => "AppInstanceProbe" },
     { "target" => "AppIntentCircuitBreakerProbe" }
   ] + plugin_core_targets.map { |target| { "target" => target } },
@@ -390,6 +396,9 @@ schemes = {
       "targets" => {
         "MacToolsPluginKit" => "all",
         "MacToolsAppIntents" => "all",
+        "MacToolsCLIProtocol" => "all",
+        "MacToolsCLI" => "all",
+        "MacToolsCLIBroker" => "all",
         "AppInstanceProbe" => ["test"],
         "AppIntentCircuitBreakerProbe" => ["test"]
       }.merge(plugin_bundle_targets.to_h { |target| [target, "all"] })
@@ -411,6 +420,17 @@ schemes = {
         }
       ]
     },
+    "profile" => { "config" => "Release" },
+    "archive" => { "config" => "Release" }
+  },
+  "MacToolsCLI" => {
+    "build" => {
+      "targets" => {
+        "MacToolsCLIProtocol" => "all",
+        "MacToolsCLI" => "all"
+      }
+    },
+    "run" => { "config" => "Debug" },
     "profile" => { "config" => "Release" },
     "archive" => { "config" => "Release" }
   }

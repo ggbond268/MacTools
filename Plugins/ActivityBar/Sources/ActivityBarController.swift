@@ -32,6 +32,7 @@ final class ActivityBarController: ObservableObject {
     private let inputMonitor: any ActivityBarInputMonitoring
     private let socketServer: any ActivityBarSocketServing
     private let inputEventNotificationDelay: Duration
+    private let namespace: ActivityBarNamespace
     private var hookInstallerPaths: ActivityBarHookInstallerPaths
     private var inputEventNotificationTask: Task<Void, Never>?
 
@@ -43,7 +44,8 @@ final class ActivityBarController: ObservableObject {
         codingStats: ActivityBarCodingSessionStore? = nil,
         hookInstallerPaths: ActivityBarHookInstallerPaths? = nil,
         localization: PluginLocalization = PluginLocalization(bundle: .main),
-        inputEventNotificationDelay: Duration = .milliseconds(750)
+        inputEventNotificationDelay: Duration = .milliseconds(750),
+        namespace: ActivityBarNamespace = .init()
     ) {
         let resolvedInputStats = inputStats ?? ActivityBarStatsStore(storage: context.storage)
         let resolvedCodingStats = codingStats ?? ActivityBarCodingSessionStore(storage: context.storage)
@@ -51,9 +53,10 @@ final class ActivityBarController: ObservableObject {
         let resolvedHookInstallerPaths = hookInstallerPaths
             ?? ActivityBarHookInstallerPaths.defaults(
                 supportDirectory: context.supportDirectory,
-                homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+                homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
+                namespace: namespace
             )
-        let resolvedSocketServer = socketServer ?? ActivityBarHookSocketServer { event in
+        let resolvedSocketServer = socketServer ?? ActivityBarHookSocketServer(socketPath: namespace.socketPath) { event in
             resolvedCodingStats.handleEvent(event)
         }
 
@@ -65,6 +68,7 @@ final class ActivityBarController: ObservableObject {
         self.hookInstallerPaths = resolvedHookInstallerPaths
         self.socketServer = resolvedSocketServer
         self.inputEventNotificationDelay = inputEventNotificationDelay
+        self.namespace = namespace
         isTrackingEnabled = context.storage.bool(forKey: StorageKey.isTrackingEnabled)
 
         self.inputMonitor.onEvent = { [weak self] event in
@@ -187,7 +191,8 @@ final class ActivityBarController: ObservableObject {
     func activate(context: PluginRuntimeContext) {
         hookInstallerPaths = ActivityBarHookInstallerPaths.defaults(
             supportDirectory: context.supportDirectory,
-            homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
+            namespace: namespace
         )
 
         startHookListenerIfNeeded()
@@ -289,7 +294,7 @@ final class ActivityBarController: ObservableObject {
     }
 
     func installHooks() {
-        let installer = ActivityBarHookInstaller(paths: hookInstallerPaths)
+        let installer = ActivityBarHookInstaller(paths: hookInstallerPaths, namespace: namespace)
 
         do {
             let summary = try installer.install()
@@ -315,7 +320,7 @@ final class ActivityBarController: ObservableObject {
     }
 
     func uninstallHooks() {
-        let installer = ActivityBarHookInstaller(paths: hookInstallerPaths)
+        let installer = ActivityBarHookInstaller(paths: hookInstallerPaths, namespace: namespace)
 
         do {
             let summary = try installer.uninstall()

@@ -7,6 +7,7 @@ private final class ControlledSwitcherTap: WindowSwitcherShortcutListening {
     var onShortcutPressed: @MainActor @Sendable (Bool, Bool, Bool) -> Void = { _, _, _ in }
     var onShortcutReleased: @MainActor @Sendable () -> Void = {}
     var onEscape: @MainActor @Sendable () -> Void = {}
+    var onAccessibilityRevoked: @MainActor @Sendable () -> Void = {}
     var isRunning = false
     var isEditing = false
     func start() { isRunning = true }
@@ -242,6 +243,39 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         XCTAssertFalse(tap.isRunning)
         tap.onShortcutReleased()
         XCTAssertTrue(catalog.activated.isEmpty)
+    }
+
+    func testNewGestureAfterColdReleaseDoesNotInheritOldStepsOrCommitEarly() async {
+        for reversed in [false, true] {
+            let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+            let plugin = plugin(catalog: catalog, tap: tap)
+            tap.onShortcutPressed(false, false, false)
+            tap.onShortcutPressed(false, true, false)
+            tap.onShortcutReleased()
+            tap.onShortcutPressed(reversed, false, false)
+            catalog.windows = [entry("a"), entry("b"), entry("c")]
+            catalog.onChange?()
+            XCTAssertTrue(catalog.activated.isEmpty)
+            XCTAssertEqual(plugin.session?.selectedID, reversed ? "c" : "b")
+            tap.onShortcutReleased()
+            await eventually { catalog.activated == [reversed ? "c" : "b"] }
+            plugin.deactivate(reason: .hostShutdown)
+        }
+    }
+
+    func testReleaseRechecksPermissionBeforeAnyCatalogNotification() async {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        let permission = PermissionFixture()
+        catalog.windows = [entry("a"), entry("b")]
+        let plugin = plugin(catalog: catalog, tap: tap, trusted: { permission.granted })
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        tap.onShortcutPressed(false, false, false)
+        permission.granted = false
+        tap.onShortcutReleased()
+        await Task.yield()
+        XCTAssertTrue(catalog.activated.isEmpty)
+        XCTAssertNil(plugin.session)
+        XCTAssertFalse(tap.isRunning)
     }
 
     func testReverseCycleAnchorsToExactWindowWithinSameApplication() async {

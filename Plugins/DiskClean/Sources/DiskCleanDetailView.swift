@@ -3,7 +3,7 @@ import MacToolsPluginKit
 
 /// Detail view (design §8.3).
 ///
-/// Top-to-bottom layout: FDA status card → limited-scan banner → scan scope & actions → category cards → execution result →
+/// Top-to-bottom layout: limited-scan banner → scan scope & actions → category cards → execution result →
 /// purge segment → leftover installers segment → settings (removal mode, cleanup history) → scan log.
 /// Everything uses `PluginSettingsTheme`; visual baseline is `FanControlPresetManagerView`.
 ///
@@ -21,7 +21,6 @@ struct DiskCleanDetailView: View {
     @ObservedObject private var purgeRoots: DiskCleanPurgeRootsModel
     private let localization: PluginLocalization
     private let historyProvider: (any DiskCleanCleanupHistoryProviding)?
-    private let fullDiskAccess: any DiskCleanFullDiskAccessProbing
     private let showsHeader: Bool
     private let contentPadding: CGFloat
     private let minimumContentHeight: CGFloat
@@ -36,7 +35,6 @@ struct DiskCleanDetailView: View {
         purgeRoots: DiskCleanPurgeRootsModel,
         localization: PluginLocalization = PluginLocalization(bundle: .main),
         historyProvider: (any DiskCleanCleanupHistoryProviding)? = nil,
-        fullDiskAccess: any DiskCleanFullDiskAccessProbing = DiskCleanFullDiskAccessProbe.shared,
         showsHeader: Bool = true,
         contentPadding: CGFloat = 20,
         minimumContentHeight: CGFloat = 420
@@ -47,7 +45,6 @@ struct DiskCleanDetailView: View {
         self.purgeRoots = purgeRoots
         self.localization = localization
         self.historyProvider = historyProvider
-        self.fullDiskAccess = fullDiskAccess
         self.showsHeader = showsHeader
         self.contentPadding = contentPadding
         self.minimumContentHeight = minimumContentHeight
@@ -58,7 +55,6 @@ struct DiskCleanDetailView: View {
             if showsHeader {
                 header
             }
-            fullDiskAccessCard
             limitationsBanner
             errorBanner
             scopeSection
@@ -113,42 +109,6 @@ struct DiskCleanDetailView: View {
     }
 
     // MARK: - Banners
-
-    /// FDA status card (design §8.3 item 1, §9).
-    ///
-    /// Shown only when unauthorized, and **independent of whether a scan has run**—authorization is a pre-scan prerequisite;
-    /// explaining after the user has already scanned and missed a pile of system caches is too late.
-    ///
-    /// The footnote says "quit and reopen" rather than "takes effect later": FDA is bound at process launch and cannot be changed mid-run,
-    /// and the probe result is therefore cached for the process lifetime.
-    @ViewBuilder
-    private var fullDiskAccessCard: some View {
-        if !fullDiskAccess.hasFullDiskAccess {
-            DiskCleanBanner(
-                symbolName: "lock.shield",
-                tint: .orange,
-                title: localization.string(
-                    "detail.fda.title",
-                    defaultValue: "完全磁盘访问未开启——部分系统缓存将被跳过"
-                ),
-                lines: [
-                    localization.string(
-                        "detail.fda.footnote",
-                        defaultValue: "授权后请退出并重新打开 MacTools。"
-                    )
-                ]
-            ) {
-                Button {
-                    DiskCleanFullDiskAccessGuide.openSettings()
-                } label: {
-                    Text(localization.string("detail.fda.openSettings", defaultValue: "前往授权"))
-                        .font(PluginSettingsTheme.Typography.controlLabel)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        }
-    }
 
     @ViewBuilder
     private var limitationsBanner: some View {

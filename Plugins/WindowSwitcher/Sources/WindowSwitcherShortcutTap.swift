@@ -7,6 +7,7 @@ protocol WindowSwitcherShortcutListening: AnyObject {
     var onShortcutPressed: @MainActor (Bool, Bool, Bool) -> Void { get set }
     var onShortcutReleased: @MainActor () -> Void { get set }
     var onEscape: @MainActor () -> Void { get set }
+    var onAccessibilityRevoked: @MainActor () -> Void { get set }
     var isRunning: Bool { get }
     func start()
     func stop()
@@ -19,6 +20,8 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
     var onShortcutPressed: @MainActor (_ reversed: Bool, _ isRepeat: Bool, _ currentApp: Bool) -> Void = { _, _, _ in }
     var onShortcutReleased: @MainActor () -> Void = {}
     var onEscape: @MainActor () -> Void = {}
+    var onAccessibilityRevoked: @MainActor () -> Void = {}
+    private var didReportAccessibilityRevocation = false
 
     private let lock = NSLock()
     private var currentBinding: ShortcutBinding?
@@ -73,6 +76,7 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
             tap = nil
             runLoopSource = nil
             activeModifiers = nil
+            didReportAccessibilityRevocation = false
             sessionActive = false; isEditing = false
             return state
         }
@@ -106,15 +110,22 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
     }
 
     func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        guard accessibilityTrusted() else {
+            let notify = lock.withLock {
+                activeModifiers = nil
+                guard !didReportAccessibilityRevocation else { return false }
+                didReportAccessibilityRevocation = true
+                return true
+            }
+            if notify { Task { @MainActor in self.onAccessibilityRevoked() } }
+            return Unmanaged.passUnretained(event)
+        }
+        lock.withLock { didReportAccessibilityRevocation = false }
+
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = lock.withLock({ tap }) {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
-            return Unmanaged.passUnretained(event)
-        }
-
-        guard accessibilityTrusted() else {
-            setActiveModifiers(nil)
             return Unmanaged.passUnretained(event)
         }
 

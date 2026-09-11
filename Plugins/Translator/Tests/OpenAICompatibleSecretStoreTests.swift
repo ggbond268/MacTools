@@ -10,7 +10,7 @@ final class OpenAICompatibleSecretStoreTests: XCTestCase {
         try super.setUpWithError()
 
         service = "cc.ggbond.mactools.translator.tests.\(UUID().uuidString)"
-        store = OpenAICompatibleSecretStore(service: service)
+        store = OpenAICompatibleSecretStore(service: service, releaseChannel: "stable")
         try store.deleteAPIKey()
     }
 
@@ -30,6 +30,45 @@ final class OpenAICompatibleSecretStoreTests: XCTestCase {
         try store.deleteAPIKey()
 
         XCTAssertNil(try store.loadAPIKey())
+    }
+
+    func testNightlyServiceNamePreservesExistingStableNamespace() {
+        for channel in [nil, "stable", "development", "unknown"] {
+            XCTAssertEqual(
+                OpenAICompatibleSecretStore(releaseChannel: channel).service,
+                "cc.ggbond.mactools.translator"
+            )
+        }
+        XCTAssertEqual(
+            OpenAICompatibleSecretStore(releaseChannel: "nightly").service,
+            "cc.ggbond.mactools.translator.nightly"
+        )
+    }
+
+    func testNightlySecretWritesAndDeletesDoNotAffectStable() throws {
+        let nightly = OpenAICompatibleSecretStore(service: service, releaseChannel: "nightly")
+        let profileID = UUID().uuidString
+        defer {
+            try? nightly.deleteAPIKey()
+            try? nightly.deleteAPIKey(forProfileID: profileID)
+            try? store.deleteAPIKey(forProfileID: profileID)
+        }
+
+        try store.saveAPIKey("stable-key")
+        try store.saveAPIKey("stable-profile-key", forProfileID: profileID)
+        XCTAssertNil(try nightly.loadAPIKey())
+        XCTAssertNil(try nightly.loadAPIKey(forProfileID: profileID))
+
+        try nightly.saveAPIKey("nightly-key")
+        try nightly.saveAPIKey("nightly-profile-key", forProfileID: profileID)
+        try nightly.saveAPIKey("updated-nightly-key")
+        XCTAssertEqual(try nightly.loadAPIKey(), "updated-nightly-key")
+        XCTAssertEqual(try nightly.loadAPIKey(forProfileID: profileID), "nightly-profile-key")
+
+        try nightly.deleteAPIKey()
+        try nightly.deleteAPIKey(forProfileID: profileID)
+        XCTAssertEqual(try store.loadAPIKey(), "stable-key")
+        XCTAssertEqual(try store.loadAPIKey(forProfileID: profileID), "stable-profile-key")
     }
 
     func testSavingBlankDeletesExistingAPIKey() throws {

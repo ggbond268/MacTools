@@ -3,7 +3,7 @@ import Foundation
 /// Writes battery charge-control SMC values via the bundled privileged helper.
 /// Follows the same setuid-helper + AppleScript install pattern used by
 /// `FanControlSMCWriter`, with helper-side handling of CHTE / CH0B+CH0C /
-/// BCLM key probing and CH0I force-discharge.
+/// BCLM key probing and SMC adapter-isolation force-discharge.
 @MainActor
 final class BatteryChargeLimitWriter: BatteryChargeLimitWriting {
     private enum Helper {
@@ -15,13 +15,19 @@ final class BatteryChargeLimitWriter: BatteryChargeLimitWriting {
 
     private let fileManager: FileManager
     private let resourceBundle: Bundle
+    let helperInstallPath: String
 
     private var resolvedHelperPath: String?
     private var cachedCapabilities: BatterySMCCapabilities?
 
-    init(resourceBundle: Bundle = .main, fileManager: FileManager = .default) {
+    init(
+        resourceBundle: Bundle = .main,
+        fileManager: FileManager = .default,
+        releaseChannel: String? = Bundle.main.object(forInfoDictionaryKey: "MTReleaseChannel") as? String
+    ) {
         self.resourceBundle = resourceBundle
         self.fileManager = fileManager
+        self.helperInstallPath = Helper.installPath + (releaseChannel == "nightly" ? ".nightly" : "")
     }
 
     // MARK: - Public API
@@ -56,7 +62,9 @@ final class BatteryChargeLimitWriter: BatteryChargeLimitWriting {
             hasCHTE: dict["CHTE"] ?? false,
             hasCH0BC: dict["CH0B_CH0C"] ?? false,
             hasBCLM: dict["BCLM"] ?? false,
-            hasCH0I: dict["CH0I"] ?? false
+            hasCH0I: dict["CH0I"] ?? false,
+            hasCHIE: dict["CHIE"] ?? false,
+            hasCH0J: dict["CH0J"] ?? false
         )
         cachedCapabilities = caps
         return caps
@@ -135,13 +143,13 @@ final class BatteryChargeLimitWriter: BatteryChargeLimitWriting {
            installedHelperMatchesBundled(installedPath: cached, bundledURL: bundledHelperURL) {
             return cached
         }
-        guard isExecutable(at: Helper.installPath),
-              installedHelperMatchesBundled(installedPath: Helper.installPath, bundledURL: bundledHelperURL)
+        guard isExecutable(at: helperInstallPath),
+              installedHelperMatchesBundled(installedPath: helperInstallPath, bundledURL: bundledHelperURL)
         else {
             return nil
         }
-        resolvedHelperPath = Helper.installPath
-        return Helper.installPath
+        resolvedHelperPath = helperInstallPath
+        return helperInstallPath
     }
 
     private func isExecutable(at path: String) -> Bool {
@@ -198,9 +206,9 @@ final class BatteryChargeLimitWriter: BatteryChargeLimitWriting {
 
         let command = [
             "/bin/mkdir -p \(shellQuoted(Helper.installDirectory))",
-            "/usr/bin/install -o root -g wheel -m 4755 \(shellQuoted(sourceURL.path)) \(shellQuoted(Helper.installPath))",
-            "/usr/bin/touch -r \(shellQuoted(sourceURL.path)) \(shellQuoted(Helper.installPath))",
-            "/bin/chmod 4755 \(shellQuoted(Helper.installPath))"
+            "/usr/bin/install -o root -g wheel -m 4755 \(shellQuoted(sourceURL.path)) \(shellQuoted(helperInstallPath))",
+            "/usr/bin/touch -r \(shellQuoted(sourceURL.path)) \(shellQuoted(helperInstallPath))",
+            "/bin/chmod 4755 \(shellQuoted(helperInstallPath))"
         ].joined(separator: " && ")
 
         let script = "do shell script \"\(appleScriptEscaped(command))\" with administrator privileges"

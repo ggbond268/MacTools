@@ -14,9 +14,14 @@ final class AppleShortcutsIconCache {
     /// removed explicitly when the settings workspace closes.
     static let defaultTotalCostLimit = 16 * 1_024 * 1_024
 
-    private let cache = NSCache<NSUUID, NSData>()
+    private let cache: NSCache<NSUUID, NSData>
 
-    init(totalCostLimit: Int = AppleShortcutsIconCache.defaultTotalCostLimit) {
+    // Inject storage for deterministic tests; production keeps NSCache's automatic eviction.
+    init(
+        totalCostLimit: Int = AppleShortcutsIconCache.defaultTotalCostLimit,
+        cache: NSCache<NSUUID, NSData> = NSCache()
+    ) {
+        self.cache = cache
         cache.totalCostLimit = totalCostLimit
     }
 

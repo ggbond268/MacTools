@@ -7,6 +7,8 @@ targets:
     type: tool
     platform: macOS
     deploymentTarget: '14.0'
+    configFiles:
+      Nightly: Release.xcconfig
     bundleResourcePath: SMCHelper
     sources:
       - path: SMCHelper/Sources
@@ -20,3 +22,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         OTHER_LDFLAGS: -framework IOKit
+      configs:
+        Nightly:
+          PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.plugins.fan-control.smc-helper.nightly"
+          CREATE_INFOPLIST_SECTION_IN_BINARY: true

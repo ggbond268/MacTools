@@ -2510,6 +2510,7 @@ actor DeviceBatterySampler: DeviceBatterySampling {
             "IORegistry": 0,
             "MobileDevice": 0,
             "Rapoo HID": 0,
+            "MCHOSE HID": 0,
             "AppleHeadphoneAdvertisement": 1,
             "BatteryCenter": 2,
             "BluetoothPowerLog": 3,
@@ -2987,7 +2988,7 @@ struct DeviceBatterySupplementalItemCache {
     ) -> Set<DeviceBatteryDeviceIdentity> {
         Set(candidates.map(\.item.deviceIdentity).filter { identity in
             switch identity.namespace {
-            case .internalBattery, .bluetooth, .mobileDevice, .rapooHID:
+            case .internalBattery, .bluetooth, .mobileDevice, .vendorHID:
                 return true
             case .batteryCenter, .source:
                 return false
@@ -3003,7 +3004,7 @@ struct DeviceBatterySupplementalItemCache {
             .internalBattery: 0,
             .bluetooth: 1,
             .mobileDevice: 1,
-            .rapooHID: 1,
+            .vendorHID: 1,
             .batteryCenter: 2,
             .source: 3
         ]

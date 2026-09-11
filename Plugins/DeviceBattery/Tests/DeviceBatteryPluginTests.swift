@@ -9,7 +9,7 @@ final class DeviceBatteryPluginTests: XCTestCase {
             context: makeContext(),
             viewModel: DeviceBatteryViewModel(
                 sampler: StubDeviceBatterySampler(items: []),
-                rapooMonitor: StubRapooBatteryMonitor()
+                vendorHIDMonitor: StubVendorHIDBatteryMonitor()
             ),
             inputMonitoringAuthorizationStatus: { .unknown }
         )
@@ -33,14 +33,14 @@ final class DeviceBatteryPluginTests: XCTestCase {
         store.setLayoutMode(.list)
         store.setShowBluetoothDevices(false)
         store.setShowAppleMobileDevices(false)
-        store.setShowRapooDevices(false)
+        store.setShowVendorHIDDevices(false)
 
         let reloaded = DeviceBatteryStore(storage: storage)
         XCTAssertEqual(reloaded.layoutMode, .list)
         XCTAssertTrue(reloaded.showInternalBattery)
         XCTAssertFalse(reloaded.showBluetoothDevices)
         XCTAssertFalse(reloaded.showAppleMobileDevices)
-        XCTAssertFalse(reloaded.showRapooDevices)
+        XCTAssertFalse(reloaded.showVendorHIDDevices)
     }
 
     func testStorePersistsLowBatteryNotificationSettings() {
@@ -61,7 +61,7 @@ final class DeviceBatteryPluginTests: XCTestCase {
     func testAppleMobileRefreshIntervalTracksComponentVisibility() {
         let viewModel = DeviceBatteryViewModel(
             sampler: StubDeviceBatterySampler(items: []),
-            rapooMonitor: StubRapooBatteryMonitor()
+            vendorHIDMonitor: StubVendorHIDBatteryMonitor()
         )
         let plugin = DeviceBatteryPlugin(
             context: makeContext(),
@@ -1560,9 +1560,83 @@ final class DeviceBatteryPluginTests: XCTestCase {
         let report = [UInt8](repeating: 0, count: 16).setting(1, at: 6).setting(83, at: 7)
 
         XCTAssertEqual(
-            RapooBatteryParser.parseInputReport(reportID: 7, bytes: report),
-            RapooBatteryReading(level: 83, chargeState: .normal, statusCode: 1)
+            VendorHIDRapooParser.parseInputReport(reportID: 7, bytes: report),
+            VendorHIDBatteryReading(level: 83, chargeState: .normal, statusCode: 1)
         )
+    }
+
+    func testMCHOSEParserReadsBatteryReadBasicsResponse() {
+        // Frame captured from a real A7 V3 Ultra+ linked over 2.4G through a MagDock,
+        // answering a 0x0900 readBasics query while the web driver showed 100%:
+        // `4d 01 01 10 00 09 00 00 | 37 38 26 40 04 00 00 00 | 00 10 | 02 | 00 | 64 | 00 08 e4 ef`
+        // (header | vid=0x3837 pid=0x4026 fw=4 | ? ? | mode=2 | charge=0 | level=100 | trailer).
+        var report = [UInt8](repeating: 0, count: 32)
+        let captured: [UInt8] = [
+            0x4D, 0x01, 0x01, 0x10, 0x00, 0x09, 0x00, 0x00,
+            0x37, 0x38, 0x26, 0x40, 0x04, 0x00, 0x00, 0x00,
+            0x00, 0x10, 0x02, 0x00, 0x64, 0x00, 0x08, 0xE4, 0xEF, 0x00, 0x00
+        ]
+        report.replaceSubrange(0..<captured.count, with: captured)
+
+        XCTAssertEqual(
+            VendorHIDMCHOSEParser.parseInputReport(reportID: 0x4D, bytes: report),
+            VendorHIDBatteryReading(level: 100, chargeState: .normal, statusCode: 0)
+        )
+    }
+
+    func testMCHOSEParserAcceptsCommunityDocumentedReplyCommand() {
+        // Some community captures describe a 0x0010 reply command instead of the
+        // echoed 0x0900; both shapes must parse.
+        var report = [UInt8](repeating: 0, count: 32)
+        report[0] = 0x4D
+        report[1] = 0x01
+        report[4] = 0x10 // reply command 0x0010 (LE)
+        report[5] = 0x00
+        report[8] = 0x37
+        report[9] = 0x38
+        report[8 + 11] = 0x00
+        report[8 + 12] = 88
+
+        XCTAssertEqual(
+            VendorHIDMCHOSEParser.parseInputReport(reportID: 0x4D, bytes: report),
+            VendorHIDBatteryReading(level: 88, chargeState: .normal, statusCode: 0)
+        )
+    }
+
+    func testMCHOSEParserRejectsUnexpectedFrames() {
+        var report = [UInt8](repeating: 0, count: 32)
+        report[0] = 0x4D
+        report[1] = 0x01
+        report[4] = 0x01 // wrong response command
+        report[5] = 0x02
+        report[8 + 12] = 88
+
+        XCTAssertNil(VendorHIDMCHOSEParser.parseInputReport(reportID: 0x4D, bytes: report))
+        XCTAssertNil(VendorHIDMCHOSEParser.parseInputReport(reportID: 0x07, bytes: report)) // wrong report ID
+    }
+
+    func testMCHOSEParserMarksChargingState() {
+        var report = [UInt8](repeating: 0, count: 32)
+        report[0] = 0x4D
+        report[1] = 0x01
+        report[4] = 0x00 // echoed 0x0900 (LE)
+        report[5] = 0x09
+        report[8 + 11] = 0x01 // charging
+        report[8 + 12] = 42
+
+        XCTAssertEqual(
+            VendorHIDMCHOSEParser.parseInputReport(reportID: 0x4D, bytes: report),
+            VendorHIDBatteryReading(level: 42, chargeState: .charging, statusCode: 1)
+        )
+    }
+
+    func testVendorHIDCatalogResolvesKnownModels() {
+        XCTAssertEqual(VendorHIDDeviceCatalog.mchose.modelName(forProductID: 0x1018), "A7 V3 Ultra+")
+        XCTAssertEqual(VendorHIDDeviceCatalog.mchose.modelName(forProductID: 0x418C), "G3 V2")
+        XCTAssertTrue(VendorHIDDeviceCatalog.mchose.isSupportedMouseProductID(0x1018))
+        XCTAssertFalse(VendorHIDDeviceCatalog.mchose.isSupportedMouseProductID(0x9999))
+        XCTAssertEqual(VendorHIDDeviceCatalog.rapoo.modelName(forProductID: 5136), "VT0")
+        XCTAssertEqual(VendorHIDDeviceCatalog.rapoo.modelName(forProductID: 17936), "VT0") // web alias
     }
 
     func testMobileBatteryParserReadsChargingIPhone() throws {
@@ -2892,7 +2966,7 @@ final class DeviceBatteryPluginTests: XCTestCase {
             accessState: .ready,
             items: items,
             lastUpdated: Date(),
-            rapooState: .idle
+            vendorHIDState: .idle
         )
     }
 
@@ -3076,9 +3150,9 @@ private final class RecordingLowBatteryNotifier: DeviceBatteryLowBatteryNotifyin
 }
 
 @MainActor
-private final class StubRapooBatteryMonitor: RapooBatteryMonitoring {
-    var snapshot = RapooMouseBatterySnapshot.idle
-    var onSnapshotChange: ((RapooMouseBatterySnapshot) -> Void)?
+private final class StubVendorHIDBatteryMonitor: VendorHIDBatteryMonitoring {
+    var snapshot = VendorHIDMouseBatterySnapshot.idle
+    var onSnapshotChange: ((VendorHIDMouseBatterySnapshot) -> Void)?
 
     func start() {}
     func stop() {}

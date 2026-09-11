@@ -419,6 +419,18 @@ enum MacToolsSearchIndexBuilder {
                 ),
                 systemImage: "gearshape",
                 destination: .general,
+                suggestionPriority: 6
+            ),
+            navigationResult(
+                id: "navigation.permissions",
+                title: AppL10n.settings("tab.permissions", defaultValue: "权限"),
+                subtitle: AppL10n.search("search.subtitle.appSettings", defaultValue: "应用设置"),
+                detail: AppL10n.settings(
+                    "permissions.description",
+                    defaultValue: "集中查看已安装功能使用的 macOS 权限。"
+                ),
+                systemImage: "lock.shield",
+                destination: .permissions,
                 suggestionPriority: 5
             ),
             navigationResult(
@@ -467,7 +479,7 @@ enum MacToolsSearchIndexBuilder {
                 ),
                 systemImage: "info.circle",
                 destination: .about,
-                suggestionPriority: 6
+                suggestionPriority: 7
             )
         ]
 
@@ -564,10 +576,6 @@ enum MacToolsSearchIndexBuilder {
         }
 
         items += pluginHost.pluginManagementItems.compactMap { item in
-            guard item.canUninstall else {
-                return nil
-            }
-
             return MacToolsSearchResult(
                 id: "plugin.marketplace.\(item.id)",
                 kind: .navigation,
@@ -580,7 +588,8 @@ enum MacToolsSearchIndexBuilder {
                 keywords: pluginMetadataKeywords(
                     pluginID: item.id,
                     category: item.category,
-                    releaseChannel: item.releaseChannel
+                    releaseChannel: item.releaseChannel,
+                    additionalKeywords: item.productSearchKeywords
                 ) + [item.statusText, item.version] + [item.summary].compactMap { $0 },
                 systemImage: "shippingbox",
                 action: .navigate(
@@ -923,7 +932,7 @@ enum MacToolsSearchIndexBuilder {
             }
         }
 
-        let permissions = item.permissionCards.map { card in
+        let permissions = item.missingPermissionCards.map { card in
             settingResult(
                 id: "permission.\(card.id)",
                 item: item,
@@ -1051,9 +1060,10 @@ enum MacToolsSearchIndexBuilder {
     static func pluginMetadataKeywords(
         pluginID: String,
         category: String?,
-        releaseChannel: String?
+        releaseChannel: String?,
+        additionalKeywords: [String] = []
     ) -> [String] {
-        var keywords = [pluginID]
+        var keywords = [pluginID] + additionalKeywords
 
         if let category = nonEmptyMetadataValue(category) {
             keywords.append(category)

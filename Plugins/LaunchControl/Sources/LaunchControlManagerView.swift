@@ -1,6 +1,15 @@
 import SwiftUI
 import MacToolsPluginKit
 
+@MainActor
+final class LaunchControlSettingsSearchFocusController: ObservableObject {
+    @Published private(set) var requestID: UInt = 0
+
+    func requestFocus() {
+        requestID &+= 1
+    }
+}
+
 enum LaunchControlManagerLayout {
     static let compactWidthThreshold: CGFloat = 720
     static let compactHeightThreshold: CGFloat = 520
@@ -31,6 +40,7 @@ struct LaunchControlManagerView: View {
     }
 
     @ObservedObject var controller: LaunchControlController
+    @ObservedObject var searchFocusController: LaunchControlSettingsSearchFocusController
     private let localization: PluginLocalization
 
     @State private var scopeFilter: LaunchControlFilter = .user
@@ -40,13 +50,16 @@ struct LaunchControlManagerView: View {
     @State private var pendingAction: LaunchControlPendingAction?
     @State private var compactPane: CompactPane = .items
     @State private var noteDrafts: [String: String] = [:]
+    @FocusState private var isSearchFocused: Bool
 
     init(
         controller: LaunchControlController,
-        localization: PluginLocalization = PluginLocalization(bundle: .main)
+        localization: PluginLocalization = PluginLocalization(bundle: .main),
+        searchFocusController: LaunchControlSettingsSearchFocusController = .init()
     ) {
         self.controller = controller
         self.localization = localization
+        self.searchFocusController = searchFocusController
     }
 
     var body: some View {
@@ -66,6 +79,9 @@ struct LaunchControlManagerView: View {
                !visibleIDs.contains(selectedID) {
                 compactPane = .items
             }
+        }
+        .onChange(of: searchFocusController.requestID) {
+            isSearchFocused = true
         }
         .confirmationDialog(
             pendingAction?.confirmationTitle(localization: localization)
@@ -196,6 +212,7 @@ struct LaunchControlManagerView: View {
     private var searchAndActionControls: some View {
         HStack(spacing: 10) {
             TextField(localization.string("manager.search.placeholder", defaultValue: "搜索 label、命令或路径"), text: $searchText)
+                .focused($isSearchFocused)
                 .textFieldStyle(.roundedBorder)
                 .frame(minWidth: 140, idealWidth: 260, maxWidth: .infinity)
 

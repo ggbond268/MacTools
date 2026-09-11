@@ -2,6 +2,13 @@ import Foundation
 import MacToolsPluginKit
 
 extension TrackpadGesture {
+    var producesNativeClick: Bool {
+        physicalClickFingerCount != nil
+            || fingerTapCount != nil
+            || doubleFingerTapCount != nil
+            || tipTapConfiguration != nil
+    }
+
     var settingsOrder: Int {
         Self.configurableCases.firstIndex(of: self) ?? Self.configurableCases.count
     }
@@ -37,23 +44,27 @@ enum TrackpadGestureMappingActionFilter: String, CaseIterable, Sendable {
     case all
     case macToolsAction
     case keyboardShortcut
+    case singleKey
     case middleClick
 }
 
 enum TrackpadGestureAction: Codable, Equatable, Sendable {
     case action(ActionReference)
     case keyboardShortcut(ShortcutBinding)
+    case keyTap(KeyboardKeyTap)
     case middleClick
 
     private enum CodingKeys: String, CodingKey {
         case kind
         case reference
         case shortcut
+        case keyTap
     }
 
     private enum Kind: String, Codable {
         case action
         case keyboardShortcut
+        case keyTap
         case middleClick
     }
 
@@ -64,6 +75,8 @@ enum TrackpadGestureAction: Codable, Equatable, Sendable {
             self = .action(try container.decode(ActionReference.self, forKey: .reference))
         case .keyboardShortcut:
             self = .keyboardShortcut(try container.decode(ShortcutBinding.self, forKey: .shortcut))
+        case .keyTap:
+            self = .keyTap(try container.decode(KeyboardKeyTap.self, forKey: .keyTap))
         case .middleClick:
             self = .middleClick
         }
@@ -78,6 +91,9 @@ enum TrackpadGestureAction: Codable, Equatable, Sendable {
         case let .keyboardShortcut(shortcut):
             try container.encode(Kind.keyboardShortcut, forKey: .kind)
             try container.encode(shortcut, forKey: .shortcut)
+        case let .keyTap(keyTap):
+            try container.encode(Kind.keyTap, forKey: .kind)
+            try container.encode(keyTap, forKey: .keyTap)
         case .middleClick:
             try container.encode(Kind.middleClick, forKey: .kind)
         }
@@ -163,6 +179,7 @@ final class TrackpadGestureStore: ObservableObject {
     @Published private(set) var mappings: [TrackpadGestureMapping]
     @Published private(set) var isTesting = false
     @Published private(set) var lastTestGesture: TrackpadGesture?
+    @Published private(set) var testRecognitionSequence: UInt64 = 0
     @Published private(set) var ignoresGesturesWhileTyping: Bool
     @Published private(set) var typingGracePeriod: TimeInterval
     @Published private(set) var mappingSort: TrackpadGestureMappingSort
@@ -218,6 +235,21 @@ final class TrackpadGestureStore: ObservableObject {
 
     var enabledGestures: Set<TrackpadGesture> {
         Set(mappings.lazy.filter(\.isEnabled).map(\.gesture))
+    }
+
+    var enabledOverlappingTapFingerCounts: [Int] {
+        enabledOverlappingTapFingerCounts { _ in true }
+    }
+
+    func enabledOverlappingTapFingerCounts(
+        where gestureIsActive: (TrackpadGesture) -> Bool
+    ) -> [Int] {
+        let enabled = Set(mappings
+            .filter { $0.isEnabled && gestureIsActive($0.gesture) }
+            .map(\.gesture))
+        let singleTapFingerCounts = Set(enabled.compactMap(\.fingerTapCount))
+        let doubleTapFingerCounts = Set(enabled.compactMap(\.doubleFingerTapCount))
+        return singleTapFingerCounts.intersection(doubleTapFingerCounts).sorted()
     }
 
     func mapping(for gesture: TrackpadGesture) -> TrackpadGestureMapping? {
@@ -303,6 +335,11 @@ final class TrackpadGestureStore: ObservableObject {
 
     func recordTestGesture(_ gesture: TrackpadGesture) {
         lastTestGesture = gesture
+        testRecognitionSequence &+= 1
+    }
+
+    func clearTestGesture() {
+        lastTestGesture = nil
     }
 
     @discardableResult
@@ -674,6 +711,8 @@ final class TrackpadGestureStore: ObservableObject {
             true
         case let .keyboardShortcut(binding):
             binding.isValid
+        case let .keyTap(keyTap):
+            keyTap.isSupported
         case .middleClick:
             true
         }

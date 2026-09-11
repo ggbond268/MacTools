@@ -320,13 +320,17 @@ final class MenuBarPanelPresenter: NSObject {
                 onPresentDiskCleanConfiguration: onPresentDiskCleanConfiguration,
                 onPresentLaunchControlConfiguration: onPresentLaunchControlConfiguration
             ),
-            onUnhandledEscape: onDismiss
+            onUnhandledEscape: {
+                if !panelModel.endLayoutEditing() { onDismiss() }
+            }
         )
         self.hostingController = hostingController
         self.containerController = MenuBarPanelContainerController(
             hostingController: hostingController,
             themeStore: menuBarPanelThemeStore,
-            onUnhandledEscape: onDismiss
+            onUnhandledEscape: {
+                if !panelModel.endLayoutEditing() { onDismiss() }
+            }
         )
 
         super.init()
@@ -539,6 +543,10 @@ final class MenuBarPanelPresenter: NSObject {
             return event
         }
 
+        if action == .dismissPanel, panelModel.endLayoutEditing() {
+            return nil
+        }
+
         if action == .dismissPanel,
            let firstResponder = eventWindow.firstResponder,
            firstResponder !== eventWindow {
@@ -552,7 +560,7 @@ final class MenuBarPanelPresenter: NSObject {
     func performKeyboardAction(_ action: MenuBarPanelKeyboardAction) {
         switch action {
         case .dismissPanel:
-            onDismiss()
+            if !panelModel.endLayoutEditing() { onDismiss() }
         case .showSettings:
             onOpenSettings()
         case .showUnifiedSearch:
@@ -630,6 +638,15 @@ final class MenuBarPanelPresenter: NSObject {
     }
 
     private func observePanelItemChanges() {
+        panelModel.$isEditingLayout
+            .dropFirst()
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { [weak self] in
+                    self?.refreshHeightForVisiblePanel()
+                }
+            }
+            .store(in: &heightRefreshCancellables)
+
         pluginHost.$panelItems
             .dropFirst()
             .receive(on: RunLoop.main)
@@ -784,6 +801,20 @@ final class MenuBarPanelPresenter: NSObject {
     ) -> MenuBarPanelHeightResolution {
         let maximumFeatureListHeight = MenuBarPanelLayout.maximumFeatureListHeight(for: screen)
 
+        if panelModel.isEditingLayout, tab == panelModel.selectedTab {
+            let itemHeight = tab == .components
+                ? ComponentPanelLayout.gridContentHeight(for: ComponentGridPlacementEngine.placements(for: pluginHost.componentItems))
+                : CGFloat(pluginHost.panelItems.count) * PanelLayoutDestination.rowHeight
+                    + CGFloat(max(0, pluginHost.panelItems.count - 1)) * PanelLayoutDestination.rowSpacing
+            let maximumHeight = tab == .components
+                ? MenuBarPanelLayout.maximumContentHeight(for: screen)
+                : max(MenuBarPanelLayout.minimumContentHeight, maximumFeatureListHeight + MenuBarPanelLayout.contentVerticalPadding)
+            return MenuBarPanelHeightResolution(
+                contentHeight: PanelLayoutDestination.editorContentHeight(itemHeight: itemHeight, maximumHeight: maximumHeight),
+                maximumFeatureListHeight: maximumFeatureListHeight
+            )
+        }
+
         switch tab {
         case .components:
             return MenuBarPanelHeightResolution(
@@ -899,6 +930,7 @@ final class MenuBarUnifiedPanelModel: ObservableObject {
     private(set) var contentHeight: CGFloat
     private(set) var maximumFeatureListHeight: CGFloat
     private(set) var isPanelVisible: Bool
+    @Published private(set) var isEditingLayout = false
     var onTabSelection: ((MenuBarPanelTab) -> Void)?
 
     init(
@@ -928,6 +960,9 @@ final class MenuBarUnifiedPanelModel: ObservableObject {
             return
         }
 
+        if self.selectedTab != selectedTab || !isPanelVisible {
+            endLayoutEditing()
+        }
         objectWillChange.send()
         self.selectedTab = selectedTab
         self.contentHeight = contentHeight
@@ -936,7 +971,20 @@ final class MenuBarUnifiedPanelModel: ObservableObject {
     }
 
     func selectTab(_ tab: MenuBarPanelTab) {
+        if tab != selectedTab { endLayoutEditing() }
         onTabSelection?(tab)
+    }
+
+    func beginLayoutEditing(visibleItemCount: Int) {
+        guard isPanelVisible, visibleItemCount >= 2 else { return }
+        isEditingLayout = true
+    }
+
+    @discardableResult
+    func endLayoutEditing() -> Bool {
+        guard isEditingLayout else { return false }
+        isEditingLayout = false
+        return true
     }
 
 }
@@ -971,6 +1019,18 @@ struct MenuBarUnifiedPanelContent: View {
             MenuBarPanelToolbar(
                 selectedTab: model.selectedTab,
                 availableUpdateVersion: appUpdater.availableUpdateVersion,
+                canEditLayout: visibleItemCount >= 2,
+                isEditingLayout: model.isEditingLayout,
+                onEditLayout: {
+                    if !model.endLayoutEditing() {
+                        model.beginLayoutEditing(visibleItemCount: visibleItemCount)
+                        if model.isEditingLayout {
+                            for item in pluginHost.panelItems where item.isExpanded && item.controlStyle == .disclosure {
+                                pluginHost.setDisclosureExpanded(false, for: item.id)
+                            }
+                        }
+                    }
+                },
                 onTabSelection: handleTabSelection,
                 onOpenUpdate: presentUpdate,
                 onOpenSettings: presentSettings,
@@ -1009,30 +1069,46 @@ struct MenuBarUnifiedPanelContent: View {
             : .leftToRight
     }
 
+    private var visibleItemCount: Int {
+        model.selectedTab == .components ? pluginHost.componentItems.count : pluginHost.panelItems.count
+    }
+
+    @ViewBuilder
     private func panelContent(contentBodyHeight: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            ComponentPanelContent(
+        if model.isEditingLayout {
+            PanelLayoutEditor(
                 pluginHost: pluginHost,
-                contentBodyHeight: contentBodyHeight,
+                surface: model.selectedTab == .components ? .dashboard : .featurePanel,
                 onDismiss: onDismiss
             )
-            .opacity(model.selectedTab == .components ? 1 : 0)
-            .allowsHitTesting(model.isPanelVisible && model.selectedTab == .components)
-            .accessibilityHidden(model.selectedTab != .components)
+            .id(model.selectedTab)
+            .frame(height: contentBodyHeight)
+        } else {
+            ZStack(alignment: .topLeading) {
+                ComponentPanelContent(
+                    pluginHost: pluginHost,
+                    contentBodyHeight: contentBodyHeight,
+                    isPanelVisible: model.isPanelVisible && model.selectedTab == .components,
+                    onDismiss: onDismiss
+                )
+                .opacity(model.selectedTab == .components ? 1 : 0)
+                .allowsHitTesting(model.isPanelVisible && model.selectedTab == .components)
+                .accessibilityHidden(model.selectedTab != .components)
 
-            MenuBarContent(
-                pluginHost: pluginHost,
-                contentBodyHeight: contentBodyHeight,
-                maximumFeatureListHeight: model.maximumFeatureListHeight,
-                isPanelVisible: model.isPanelVisible && model.selectedTab == .features,
-                onDismiss: onDismiss,
-                onOpenSettings: onOpenSettings,
-                onPresentDiskCleanConfiguration: onPresentDiskCleanConfiguration,
-                onPresentLaunchControlConfiguration: onPresentLaunchControlConfiguration
-            )
-            .opacity(model.selectedTab == .features ? 1 : 0)
-            .allowsHitTesting(model.isPanelVisible && model.selectedTab == .features)
-            .accessibilityHidden(model.selectedTab != .features)
+                MenuBarContent(
+                    pluginHost: pluginHost,
+                    contentBodyHeight: contentBodyHeight,
+                    maximumFeatureListHeight: model.maximumFeatureListHeight,
+                    isPanelVisible: model.isPanelVisible && model.selectedTab == .features,
+                    onDismiss: onDismiss,
+                    onOpenSettings: onOpenSettings,
+                    onPresentDiskCleanConfiguration: onPresentDiskCleanConfiguration,
+                    onPresentLaunchControlConfiguration: onPresentLaunchControlConfiguration
+                )
+                .opacity(model.selectedTab == .features ? 1 : 0)
+                .allowsHitTesting(model.isPanelVisible && model.selectedTab == .features)
+                .accessibilityHidden(model.selectedTab != .features)
+            }
         }
     }
 
@@ -1083,9 +1159,12 @@ private struct MenuBarPanelContentSurface<Content: View>: View {
     }
 }
 
-private struct MenuBarPanelToolbar: View {
+struct MenuBarPanelToolbar: View {
     let selectedTab: MenuBarPanelTab
     let availableUpdateVersion: String?
+    let canEditLayout: Bool
+    let isEditingLayout: Bool
+    let onEditLayout: () -> Void
     let onTabSelection: (MenuBarPanelTab) -> Void
     let onOpenUpdate: () -> Void
     let onOpenSettings: () -> Void
@@ -1093,6 +1172,24 @@ private struct MenuBarPanelToolbar: View {
 
     var body: some View {
         ZStack {
+            HStack {
+                if isEditingLayout {
+                    Button(PanelLayoutCopy.done, action: onEditLayout)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("panel.layout.edit")
+                } else if canEditLayout {
+                    MenuBarPanelIconButton(
+                        systemImage: "arrow.up.arrow.down",
+                        accessibilityTitle: PanelLayoutCopy.edit,
+                        action: onEditLayout
+                    )
+                    .accessibilityIdentifier("panel.layout.edit")
+                }
+                Spacer()
+            }
+
             MenuBarPanelTabSwitcher(
                 selectedTab: selectedTab,
                 onTabSelection: onTabSelection
@@ -1117,8 +1214,9 @@ private struct MenuBarPanelToolbar: View {
                 )
 
                 MenuBarPanelIconButton(
-                    systemImage: "power",
+                    systemImage: "rectangle.portrait.and.arrow.right",
                     accessibilityTitle: AppL10n.settings("app.quit", defaultValue: "退出"),
+                    symbolOffsetX: -1,
                     action: onQuit
                 )
             }
@@ -1181,6 +1279,7 @@ private struct MenuBarPanelTabSwitcher: View {
 private struct MenuBarPanelIconButton: View {
     let systemImage: String
     let accessibilityTitle: String
+    var symbolOffsetX: CGFloat = 0
     var showsNotificationDot = false
     let action: () -> Void
     @State private var isHovered = false
@@ -1191,6 +1290,7 @@ private struct MenuBarPanelIconButton: View {
             Image(systemName: PluginSystemImage.resolvedName(systemImage))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(theme.text.secondary)
+                .offset(x: symbolOffsetX)
                 .overlay(alignment: .bottomTrailing) {
                     if showsNotificationDot {
                         Circle()

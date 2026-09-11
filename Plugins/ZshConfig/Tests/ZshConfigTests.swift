@@ -2,6 +2,17 @@ import XCTest
 @testable import ZshConfigPlugin
 
 final class ZshConfigTests: XCTestCase {
+    @MainActor
+    func testPublishesOptionalAutomationRequirement() {
+        let plugin = ZshConfigPlugin()
+
+        XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["automation"])
+        let state = plugin.permissionState(for: "automation")
+        XCTAssertFalse(state.isGranted)
+        XCTAssertEqual(state.statusText, "按需确认")
+        XCTAssertEqual(state.statusTone, .neutral)
+    }
+
     func testFileTypesExposeStableFilenamesAndMetadata() throws {
         XCTAssertEqual(ZshConfigFileType.allCases.map(\.filename), [
             ".zshrc",

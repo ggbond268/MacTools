@@ -8,7 +8,7 @@ final class DeviceBatteryStore: ObservableObject {
         static let showInternalBattery = "show-internal-battery"
         static let showBluetoothDevices = "show-bluetooth-devices"
         static let showAppleMobileDevices = "show-apple-mobile-devices"
-        static let showRapooDevices = "show-rapoo-devices"
+        static let showVendorHIDDevices = "show-rapoo-devices"  // storage key kept for backward compatibility
         static let lowBatteryNotificationEnabled = "low-battery-notification-enabled"
         static let lowBatteryNotificationThreshold = "low-battery-notification-threshold"
     }
@@ -17,7 +17,7 @@ final class DeviceBatteryStore: ObservableObject {
     @Published private(set) var showInternalBattery: Bool
     @Published private(set) var showBluetoothDevices: Bool
     @Published private(set) var showAppleMobileDevices: Bool
-    @Published private(set) var showRapooDevices: Bool
+    @Published private(set) var showVendorHIDDevices: Bool
     @Published private(set) var lowBatteryNotificationEnabled: Bool
     @Published private(set) var lowBatteryNotificationThreshold: Int
 
@@ -31,7 +31,7 @@ final class DeviceBatteryStore: ObservableObject {
         showInternalBattery = Self.boolValue(storage, key: Key.showInternalBattery, defaultValue: true)
         showBluetoothDevices = Self.boolValue(storage, key: Key.showBluetoothDevices, defaultValue: true)
         showAppleMobileDevices = Self.boolValue(storage, key: Key.showAppleMobileDevices, defaultValue: true)
-        showRapooDevices = Self.boolValue(storage, key: Key.showRapooDevices, defaultValue: true)
+        showVendorHIDDevices = Self.boolValue(storage, key: Key.showVendorHIDDevices, defaultValue: true)
         lowBatteryNotificationEnabled = Self.boolValue(
             storage,
             key: Key.lowBatteryNotificationEnabled,
@@ -80,13 +80,13 @@ final class DeviceBatteryStore: ObservableObject {
         storage.set(isShown, forKey: Key.showAppleMobileDevices)
     }
 
-    func setShowRapooDevices(_ isShown: Bool) {
-        guard showRapooDevices != isShown else {
+    func setShowVendorHIDDevices(_ isShown: Bool) {
+        guard showVendorHIDDevices != isShown else {
             return
         }
 
-        showRapooDevices = isShown
-        storage.set(isShown, forKey: Key.showRapooDevices)
+        showVendorHIDDevices = isShown
+        storage.set(isShown, forKey: Key.showVendorHIDDevices)
     }
 
     func setLowBatteryNotificationEnabled(_ isEnabled: Bool) {

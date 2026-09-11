@@ -30,6 +30,25 @@ final class AutomaticPreferencesBackupTests: XCTestCase {
         )
     }
 
+    func testDefaultBackupDirectoryUsesConfiguredApplicationSupportScope() {
+        let nightlyDirectory = AutomaticPreferencesBackupStore.defaultDirectoryURL(
+            infoDictionary: ["MTApplicationSupportDirectoryName": "MacTools Nightly"]
+        )
+        let stableDirectory = AutomaticPreferencesBackupStore.defaultDirectoryURL(
+            infoDictionary: ["MTApplicationSupportDirectoryName": "MacTools"]
+        )
+
+        XCTAssertEqual(
+            Array(nightlyDirectory.pathComponents.suffix(2)),
+            ["MacTools Nightly", "Automatic Backups"]
+        )
+        XCTAssertEqual(
+            Array(stableDirectory.pathComponents.suffix(2)),
+            ["MacTools", "Automatic Backups"]
+        )
+        XCTAssertNotEqual(nightlyDirectory, stableDirectory)
+    }
+
     func testStatusFormattingUsesAppLocaleForPluralCountsAndSizes() {
         let originalPreference = UserDefaults.standard.string(
             forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey

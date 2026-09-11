@@ -145,6 +145,79 @@ final class ActivityBarHookInstallerTests: XCTestCase {
         XCTAssertTrue(containsString("/usr/bin/true", in: codexObject))
     }
 
+    func testStableAndNightlyHooksCoexistRegardlessOfInstallAndUninstallOrder() throws {
+        for nightlyFirst in [false, true] {
+            let home = temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            let stableNamespace = ActivityBarNamespace(releaseChannel: "stable")
+            let nightlyNamespace = ActivityBarNamespace(releaseChannel: "nightly")
+            // Include spaces and a quote, as real Application Support paths may contain both.
+            let stablePaths = ActivityBarHookInstallerPaths(
+                homeDirectory: home, hookScriptsDirectory: home.appendingPathComponent("Stable's hooks")
+            )
+            let nightlyPaths = ActivityBarHookInstallerPaths(
+                homeDirectory: home, hookScriptsDirectory: home.appendingPathComponent("Nightly's hooks")
+            )
+            let stable = ActivityBarHookInstaller(paths: stablePaths, namespace: stableNamespace)
+            let nightly = ActivityBarHookInstaller(paths: nightlyPaths, namespace: nightlyNamespace)
+            let first = nightlyFirst ? nightly : stable
+            let second = nightlyFirst ? stable : nightly
+            _ = try first.install()
+            _ = try second.install()
+            let configs = [stablePaths.claudeSettingsPath, stablePaths.cursorHooksPath, stablePaths.codexHooksPath]
+            let before = try configs.map { try Data(contentsOf: $0) }
+            _ = try first.install()
+            _ = try second.install()
+            XCTAssertEqual(try configs.map { try Data(contentsOf: $0) }, before)
+            for config in configs {
+                let text = try serializedJSONObject(readJSONObject(config))
+                XCTAssertTrue(text.contains("mactools-activity-"))
+                XCTAssertTrue(text.contains("mactools-nightly-activity-"))
+            }
+            for tool in ["claude", "cursor", "codex"] {
+                let stableName = stableNamespace.hookFileName(tool: tool)
+                let nightlyName = nightlyNamespace.hookFileName(tool: tool)
+                // Older Stable versions match the full filename as a substring.
+                XCTAssertFalse(nightlyName.contains(stableName))
+                let script = try String(
+                    contentsOf: nightlyPaths.hookScriptsDirectory.appendingPathComponent(nightlyName), encoding: .utf8
+                )
+                XCTAssertTrue(script.contains(nightlyNamespace.socketPath))
+                XCTAssertFalse(script.contains(stableNamespace.socketPath))
+            }
+            _ = try first.uninstall()
+            let removedPrefix = nightlyFirst ? "mactools-nightly-activity-" : "mactools-activity-"
+            let retainedPrefix = nightlyFirst ? "mactools-activity-" : "mactools-nightly-activity-"
+            for config in configs {
+                let text = try serializedJSONObject(readJSONObject(config))
+                XCTAssertFalse(text.contains(removedPrefix))
+                XCTAssertTrue(text.contains(retainedPrefix))
+            }
+            _ = try second.uninstall()
+            for config in configs {
+                let text = try serializedJSONObject(readJSONObject(config))
+                XCTAssertFalse(text.contains("mactools-activity-"))
+                XCTAssertFalse(text.contains("mactools-nightly-activity-"))
+            }
+        }
+    }
+
+    func testUninstallPreservesSameFilenameOwnedByAnotherDirectory() throws {
+        let firstPaths = ActivityBarHookInstallerPaths(
+            homeDirectory: temporaryDirectory, hookScriptsDirectory: temporaryDirectory.appendingPathComponent("first")
+        )
+        let secondPaths = ActivityBarHookInstallerPaths(
+            homeDirectory: temporaryDirectory, hookScriptsDirectory: temporaryDirectory.appendingPathComponent("second")
+        )
+        let first = ActivityBarHookInstaller(paths: firstPaths)
+        let second = ActivityBarHookInstaller(paths: secondPaths)
+        _ = try first.install()
+        let configs = [firstPaths.claudeSettingsPath, firstPaths.cursorHooksPath, firstPaths.codexHooksPath]
+        let original = try configs.map { try Data(contentsOf: $0) }
+        _ = try second.install()
+        _ = try second.uninstall()
+        XCTAssertEqual(try configs.map { try Data(contentsOf: $0) }, original)
+    }
+
     private func readJSONObject(_ url: URL) throws -> [String: Any] {
         let data = try Data(contentsOf: url)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])

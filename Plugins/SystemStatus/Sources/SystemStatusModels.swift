@@ -51,6 +51,107 @@ enum SystemStatusMetricKind: String, CaseIterable, Codable, Equatable, Hashable,
     }
 }
 
+enum SystemStatusMenuBarValueKind: String, CaseIterable, Codable, Equatable, Hashable, Identifiable, Sendable {
+    case usage
+    case temperature
+    case power
+    case load
+    case used
+    case swap
+    case free
+    case read
+    case write
+    case activity
+    case download
+    case upload
+    case throughput
+    case level
+    case timeRemaining
+    case state
+
+    var id: String { rawValue }
+
+    static func availableValues(for metric: SystemStatusMetricKind) -> [SystemStatusMenuBarValueKind] {
+        switch metric {
+        case .cpu:
+            return [.usage, .temperature, .power, .load]
+        case .gpu:
+            return [.usage, .temperature]
+        case .memory:
+            return [.usage, .used, .swap]
+        case .disk:
+            return [.free, .usage, .read, .write, .activity]
+        case .battery:
+            return [.level, .power, .timeRemaining, .temperature, .state]
+        case .network:
+            return [.download, .upload, .throughput]
+        case .topProcesses:
+            return []
+        }
+    }
+
+    static func defaultValues(for metric: SystemStatusMetricKind) -> [SystemStatusMenuBarValueKind] {
+        switch metric {
+        case .cpu, .gpu:
+            return [.usage, .temperature]
+        case .memory:
+            return [.usage, .used]
+        case .disk:
+            return [.free, .activity]
+        case .battery:
+            return [.level, .power]
+        case .network:
+            return [.download, .upload]
+        case .topProcesses:
+            return []
+        }
+    }
+
+    func title(localization: PluginLocalization = PluginLocalization(bundle: .main)) -> String {
+        switch self {
+        case .usage:
+            return localization.string("settings.menuBarValue.usage", defaultValue: "使用率")
+        case .temperature:
+            return localization.string("settings.menuBarValue.temperature", defaultValue: "温度")
+        case .power:
+            return localization.string("settings.menuBarValue.power", defaultValue: "功率")
+        case .load:
+            return localization.string("settings.menuBarValue.load", defaultValue: "1 分钟负载")
+        case .used:
+            return localization.string("settings.menuBarValue.used", defaultValue: "已用")
+        case .swap:
+            return localization.string("settings.menuBarValue.swap", defaultValue: "交换空间")
+        case .free:
+            return localization.string("settings.menuBarValue.free", defaultValue: "可用空间")
+        case .read:
+            return localization.string("settings.menuBarValue.read", defaultValue: "读取速率")
+        case .write:
+            return localization.string("settings.menuBarValue.write", defaultValue: "写入速率")
+        case .activity:
+            return localization.string("settings.menuBarValue.activity", defaultValue: "读写活动")
+        case .download:
+            return localization.string("settings.menuBarValue.download", defaultValue: "下载速率")
+        case .upload:
+            return localization.string("settings.menuBarValue.upload", defaultValue: "上传速率")
+        case .throughput:
+            return localization.string("settings.menuBarValue.throughput", defaultValue: "总速率")
+        case .level:
+            return localization.string("settings.menuBarValue.level", defaultValue: "电量")
+        case .timeRemaining:
+            return localization.string("settings.menuBarValue.timeRemaining", defaultValue: "剩余时间")
+        case .state:
+            return localization.string("settings.menuBarValue.state", defaultValue: "电源状态")
+        }
+    }
+}
+
+enum SystemStatusProcessSort: String, Codable, CaseIterable, Equatable, Identifiable, Sendable {
+    case cpu
+    case memory
+
+    var id: String { rawValue }
+}
+
 struct SystemStatusGridPosition: Equatable, Sendable {
     let row: Int
     let column: Int
@@ -69,7 +170,7 @@ enum SystemStatusComponentLayout {
     static let metricRows = 3
 
     static let dashboardSectionSpacing: CGFloat = cardSpacing
-    static let dashboardMetricTileHeight: CGFloat = 99
+    static let dashboardMetricTileHeight: CGFloat = 82
     static let dashboardLowerTileHeight: CGFloat = 96
     static let dashboardMetricGridHeight = CGFloat(metricRows) * dashboardMetricTileHeight
         + CGFloat(max(metricRows - 1, 0)) * cardSpacing

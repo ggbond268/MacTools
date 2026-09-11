@@ -35,6 +35,15 @@ final class WindowSwitcherApplicationActivationTests: XCTestCase {
         XCTAssertEqual(result, .succeeded)
     }
 
+    func testOtherSpaceWindowRequestsOneActivationEvenForForegroundApp() async {
+        var requests: [WindowSwitcherApplicationActivation.Request] = []
+        let result = await WindowSwitcherApplicationActivation.prepare(
+            state: { .init(isHidden: false, isFrontmost: true) },
+            request: { requests.append($0) }, activateAllSpaces: true)
+        XCTAssertEqual(result, .succeeded)
+        XCTAssertEqual(requests, [.activate])
+    }
+
     func testUnconfirmedActivationFailsWithoutRetryingRequest() async {
         let fixture = Fixture()
         fixture.value.isHidden = false

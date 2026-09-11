@@ -2,11 +2,45 @@ import Combine
 import Carbon
 import SwiftUI
 import XCTest
-import MacToolsPluginKit
+@testable import MacToolsPluginKit
 @testable import MacTools
 
 @MainActor
 final class MacToolsSearchTests: XCTestCase {
+    func testPaletteKeyboardHintsCoverEverySupportedLanguage() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let data = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Sources/Resources/Localization/Search.xcstrings"
+        ))
+        let catalog = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        let supportedLanguages = Set(
+            AppLanguagePreference.allCases
+                .filter { $0 != .system }
+                .map(\.rawValue)
+        )
+
+        for key in [
+            "search.footer.actions",
+            "search.footer.open",
+            "search.footer.quickOpen",
+            "search.footer.select",
+            "search.footer.settings",
+        ] {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], key)
+            let localizations = try XCTUnwrap(
+                entry["localizations"] as? [String: Any],
+                key
+            )
+            XCTAssertEqual(Set(localizations.keys), supportedLanguages, key)
+        }
+    }
+
     func testIndexIncludesNavigationDeclarativeSettingsCustomSettingsAndCommands() throws {
         let plugin = SearchableTestPlugin()
         let host = makePluginHostForTests(plugins: [plugin, SurfaceOnlySearchTestPlugin()])
@@ -252,6 +286,44 @@ final class MacToolsSearchTests: XCTestCase {
         })
     }
 
+    func testModelQueryBindingKeepsCanonicalQueryAndResultsInSync() {
+        let suiteName = "MacToolsSearchQueryBindingTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let model = UnifiedSearchPaletteModel(
+            commandContext: AppHostCommandContext(
+                pluginHost: makePluginHostForTests(plugins: [SearchableTestPlugin()]),
+                launchAtLoginController: LaunchAtLoginController(
+                    service: SearchTestLaunchAtLoginService()
+                ),
+                appearanceUserDefaults: defaults
+            ),
+            recentStore: CommandPaletteRecentStore(userDefaults: defaults)
+        )
+        var transitions: [(String, String)] = []
+        let binding = model.queryBinding { oldQuery, newQuery in
+            transitions.append((oldQuery, newQuery))
+        }
+
+        binding.wrappedValue = "快捷键目标"
+
+        XCTAssertEqual(model.query, "快捷键目标")
+        XCTAssertEqual(model.sections.map(\.kind), [.results])
+        XCTAssertEqual(model.results.map(\.title), ["快捷键目标"])
+        XCTAssertEqual(transitions.count, 1)
+        XCTAssertEqual(transitions.first?.0, "")
+        XCTAssertEqual(transitions.first?.1, "快捷键目标")
+
+        binding.wrappedValue = "快捷键目标"
+        XCTAssertEqual(transitions.count, 1)
+
+        binding.wrappedValue = ""
+        XCTAssertEqual(model.query, "")
+        XCTAssertFalse(model.sections.contains { $0.kind == .results })
+        XCTAssertEqual(transitions.count, 2)
+    }
+
     func testModelAutomaticallyRebuildsAfterLaunchAtLoginChanges() async {
         let suiteName = "MacToolsSearchLaunchModelTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -427,6 +499,36 @@ final class MacToolsSearchTests: XCTestCase {
         XCTAssertEqual(coordinator.searchRevealRequest?.target, .plugin(expectedTarget))
     }
 
+    func testGroupedShortcutSearchTargetsRenderedAnchorAndExpandsCollapsedContent() throws {
+        let plugin = SearchableTestPlugin()
+        plugin.usesShortcutGroup = true
+        let host = makePluginHostForTests(plugins: [plugin])
+        let page = try XCTUnwrap(host.pluginSettingsItems.first { $0.pluginID == plugin.metadata.id })
+        XCTAssertEqual(page.standaloneShortcutSettingsGroups.map(\.id), ["primary-shortcuts"])
+        let result = try XCTUnwrap(MacToolsSearchIndexBuilder.build(pluginHost: host).items.first {
+            $0.id == "shortcut-group.\(plugin.metadata.id).primary-shortcuts"
+        })
+        let anchor = PluginMixedShortcutFormSection.searchTarget(
+            pluginID: plugin.metadata.id, groupID: "primary-shortcuts")
+        XCTAssertEqual(result.action, .navigate(
+            destination: .plugins(.configuration(plugin.metadata.id)), target: .plugin(anchor)))
+        XCTAssertTrue(host.hasPluginSettingsSearchTarget(anchor))
+
+        var isExpanded = false
+        PluginMixedShortcutFormSection.reveal(target: anchor, pluginID: "other-plugin",
+                                             groupID: "primary-shortcuts", isExpanded: &isExpanded)
+        XCTAssertFalse(isExpanded)
+        PluginMixedShortcutFormSection.reveal(target: anchor, pluginID: plugin.metadata.id,
+                                             groupID: "other-group", isExpanded: &isExpanded)
+        XCTAssertFalse(isExpanded)
+        PluginMixedShortcutFormSection.reveal(target: anchor, pluginID: plugin.metadata.id,
+                                             groupID: "primary-shortcuts", isExpanded: &isExpanded)
+        XCTAssertTrue(isExpanded)
+        PluginMixedShortcutFormSection.reveal(target: nil, pluginID: plugin.metadata.id,
+                                             groupID: "primary-shortcuts", isExpanded: &isExpanded)
+        XCTAssertTrue(isExpanded, "Clearing the highlight must not collapse the user's controls")
+    }
+
     func testGeneralSettingResultCarriesGeneralPageAndExactSearchTarget() throws {
         let host = makePluginHostForTests(plugins: [])
         let result = try XCTUnwrap(
@@ -494,6 +596,7 @@ final class MacToolsSearchTests: XCTestCase {
                 "navigation.actions-and-shortcuts",
                 "navigation.automation",
                 "navigation.marketplace",
+                "navigation.permissions",
                 "navigation.general",
                 "navigation.about"
             ]
@@ -740,69 +843,129 @@ final class MacToolsSearchTests: XCTestCase {
 
     func testUnifiedSearchFieldLeavesTabForInlineControlNavigation() {
         XCTAssertNil(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertTab(_:)),
                 hasMarkedText: false
             )
         )
         XCTAssertNil(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertBacktab(_:)),
                 hasMarkedText: false
             )
         )
         XCTAssertEqual(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertNewline(_:)),
                 hasMarkedText: false,
-                modifierFlags: .command
+                modifierFlags: .command,
+                alternateSubmitModifier: .command
             ),
-            .openOwner
+            .alternateSubmit
         )
         XCTAssertEqual(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)),
-                hasMarkedText: false
+                hasMarkedText: false,
+                modifierFlags: [],
+                alternateSubmitModifier: .command
             ),
-            .openOwner
+            .alternateSubmit
         )
-        XCTAssertTrue(UnifiedSearchTextField.isOpenOwnerKeyEquivalent(
+        XCTAssertTrue(PluginPaletteSearchField.isAlternateSubmitKeyEquivalent(
             keyCode: 36,
-            modifierFlags: .command
+            modifierFlags: .command,
+            alternateSubmitModifier: .command
         ))
-        XCTAssertTrue(UnifiedSearchTextField.isOpenOwnerKeyEquivalent(
+        XCTAssertTrue(PluginPaletteSearchField.isAlternateSubmitKeyEquivalent(
             keyCode: 76,
-            modifierFlags: [.command, .shift]
+            modifierFlags: [.command, .shift],
+            alternateSubmitModifier: .command
         ))
-        XCTAssertFalse(UnifiedSearchTextField.isOpenOwnerKeyEquivalent(
+        XCTAssertFalse(PluginPaletteSearchField.isAlternateSubmitKeyEquivalent(
             keyCode: 36,
-            modifierFlags: []
+            modifierFlags: [],
+            alternateSubmitModifier: .command
         ))
         XCTAssertNil(
-            UnifiedSearchTextField.command(
+            PluginPaletteSearchField.command(
                 for: #selector(NSResponder.insertTab(_:)),
                 hasMarkedText: true
             )
         )
     }
 
+    func testPaletteSearchFieldNormalizesMultilineInputWithoutChangingOrdinaryTyping() {
+        XCTAssertEqual(
+            PluginPaletteSearchField.normalizedSingleLineText("first\r\nsecond\tthird\u{2028}fourth"),
+            "first second third fourth"
+        )
+        XCTAssertEqual(
+            PluginPaletteSearchField.normalizedSingleLineText("ordinary  spacing"),
+            "ordinary  spacing"
+        )
+    }
+
+    func testPaletteSearchFieldPreservesSelectionAcrossMultilineNormalization() {
+        XCTAssertEqual(
+            PluginPaletteSearchField.normalizedSelection(
+                NSRange(location: 14, length: 0),
+                in: "before one\ntwo after"
+            ),
+            NSRange(location: 14, length: 0)
+        )
+        XCTAssertEqual(
+            PluginPaletteSearchField.normalizedSelection(
+                NSRange(location: 8, length: 0),
+                in: "before \nafter"
+            ),
+            NSRange(location: 7, length: 0)
+        )
+    }
+
+    func testPaletteSearchFieldUsesSingleLineScrollableConfigurationAndFontDerivedHeight() {
+        let field = PluginPaletteSearchField.SearchTextField(
+            frame: NSRect(x: 0, y: 0, width: 320, height: 22)
+        )
+        let input = "first\nsecond"
+        field.stringValue = input
+
+        XCTAssertTrue(field.usesSingleLineMode)
+        XCTAssertEqual(field.maximumNumberOfLines, 1)
+        XCTAssertFalse(field.cell?.wraps ?? true)
+        XCTAssertTrue(field.cell?.isScrollable ?? false)
+        XCTAssertEqual(field.stringValue, input)
+        guard let font = field.font else {
+            return XCTFail("Expected the search field to have a font")
+        }
+        XCTAssertEqual(
+            field.intrinsicContentSize.height,
+            ceil(font.ascender - font.descender + font.leading)
+        )
+        XCTAssertLessThan(
+            field.intrinsicContentSize.height,
+            PluginPaletteMetrics.toolbarControlSize.height
+        )
+    }
+
     func testUnifiedSearchFocusRetriesUntilFocusCanBeClaimed() {
-        let parent = UnifiedSearchTextField(
+        let parent = PluginPaletteSearchField(
             text: .constant(""),
             placeholder: "Search",
             accessibilityLabel: "Search",
+            accessibilityIdentifier: "search",
             focusRequestID: 1,
             onCommand: { _ in }
         )
         var focusAttempts = 0
-        let coordinator = UnifiedSearchTextField.Coordinator(
+        let coordinator = PluginPaletteSearchField.Coordinator(
             parent: parent,
             focusClaim: { _ in
                 focusAttempts += 1
                 return focusAttempts == 3
             }
         )
-        let field = UnifiedSearchTextField.SearchTextField(
+        let field = PluginPaletteSearchField.SearchTextField(
             frame: NSRect(x: 0, y: 0, width: 320, height: 28)
         )
         defer {
@@ -871,6 +1034,11 @@ final class MacToolsSearchTests: XCTestCase {
         ))
         XCTAssertEqual(UnifiedSearchResultRowLayout.quickSelectionColumnWidth, 32)
         XCTAssertEqual(UnifiedSearchResultRowLayout.primaryActionColumnWidth, 56)
+        XCTAssertEqual(PluginPaletteMetrics.rowCornerRadius, 8)
+        XCTAssertEqual(PluginPaletteMetrics.rowHorizontalPadding, 10)
+        XCTAssertEqual(PluginPaletteMetrics.rowVerticalPadding, 9)
+        XCTAssertEqual(PluginPaletteMetrics.rowIconWidth, 18)
+        XCTAssertEqual(PluginPaletteMetrics.rowContentSpacing, 12)
         XCTAssertEqual(UnifiedSearchResultRowLayout.minimumShortcutRecorderWidth, 60)
 
         let binding = ShortcutBinding(
@@ -936,6 +1104,68 @@ final class MacToolsSearchTests: XCTestCase {
                 )
             )
         )
+    }
+
+    func testAvailablePluginIsDiscoverableByCatalogOnlyKeywords() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "MacToolsSearchTests-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let defaults = UserDefaults(
+            suiteName: "MacToolsSearchTests-\(UUID().uuidString)"
+        )!
+        let store = PluginPackageStore(
+            rootDirectory: root,
+            userDefaults: defaults,
+            hostVersion: "1.2.1"
+        )
+        let manager = DynamicPluginManager(packageStore: store)
+        let entry = PluginCatalogEntry(
+            id: "com.example.presentation",
+            displayName: "Presentation Helper",
+            summary: "Keeps a Mac ready for presenting",
+            version: "1.0.0",
+            minimumHostVersion: "1.2.0",
+            package: PluginCatalogPackage(
+                url: URL(fileURLWithPath: "/tmp/PresentationHelper.mactoolsplugin"),
+                sha256: String(repeating: "a", count: 64),
+                size: 42
+            ),
+            discovery: PluginProductMetadata.Discovery(
+                keywords: ["caffeine"],
+                localizedSynonyms: [:],
+                useCases: [],
+                goalCategories: [],
+                relatedPluginIDs: [],
+                alternativePluginIDs: []
+            )
+        )
+        manager.rebuildManagementItems(
+            catalogSnapshot: PluginCatalogSnapshot(
+                catalog: PluginCatalog(
+                    catalogID: "com.example.catalog",
+                    generatedAt: Date(timeIntervalSince1970: 0),
+                    minimumHostVersion: "1.2.1",
+                    plugins: [entry]
+                ),
+                sourceURL: URL(fileURLWithPath: "/tmp/catalog.json"),
+                sourceKind: .production,
+                loadedAt: Date(timeIntervalSince1970: 0)
+            )
+        )
+        let host = makePluginHostForTests(
+            plugins: [],
+            dynamicPluginManager: manager,
+            loadDynamicPluginsOnInit: false
+        )
+
+        let results = MacToolsSearchIndexBuilder.build(pluginHost: host)
+            .results(matching: "caffeine")
+
+        XCTAssertEqual(results.map(\.id), ["plugin.marketplace.com.example.presentation"])
+        XCTAssertEqual(manager.pluginManagementItems.first?.state, .available)
     }
 
     func testInstalledIncompatiblePluginIsDiscoverableInMarketplace() throws {
@@ -1094,10 +1324,12 @@ private final class SearchTestLaunchAtLoginService: LaunchAtLoginServicing {
 private final class SearchableTestPlugin:
     MacToolsPlugin,
     PluginPrimaryPanel,
+    PluginGroupedShortcutSettingsProviding,
     PluginSettingsSearchProviding,
     PluginCommandProviding
 {
     static let customEntryID = "shortcut-target"
+    var usesShortcutGroup = false
 
     let metadata = PluginMetadata(
         id: "searchable",
@@ -1116,6 +1348,16 @@ private final class SearchableTestPlugin:
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     var performedCommandIDs: [String] = []
     var commandTitle = "让显示器休眠"
+
+    var shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration] {
+        guard usesShortcutGroup else { return [] }
+        return [PluginShortcutSettingsGroupConfiguration(
+            id: "primary-shortcuts",
+            title: "Primary Shortcuts",
+            systemImage: "keyboard",
+            shortcutDefinitionIDs: ["decrease"]
+        )]
+    }
 
     var primaryPanelState: PluginPanelState {
         PluginPanelState(
@@ -1186,7 +1428,9 @@ private final class SearchableTestPlugin:
                 actionID: "decrease",
                 scope: .global,
                 defaultBinding: nil,
-                isRequired: false
+                isRequired: false,
+                settingsGroupID: usesShortcutGroup ? "primary-shortcuts" : nil,
+                settingsGroupTitle: usesShortcutGroup ? "Primary Shortcuts" : nil
             )
         ]
     }
@@ -1215,7 +1459,7 @@ private final class SearchableTestPlugin:
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
-        PluginPermissionState(isGranted: true, footnote: nil)
+        PluginPermissionState(isGranted: false, footnote: nil)
     }
 
     func handleAction(_ action: PluginPanelAction) {}

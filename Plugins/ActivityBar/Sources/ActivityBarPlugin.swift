@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import SwiftUI
 import MacToolsPluginKit
 
@@ -23,10 +24,15 @@ private struct ActivityBarPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginComponentPanel, PluginActionProviding {
+final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginComponentPanel,
+    PluginActionProviding, PluginActionPermissionProviding
+{
     private enum ActionID {
         static let setTrackingEnabled = "set-tracking-enabled"
         static let resetToday = "reset-today"
+    }
+    private enum PermissionID {
+        static let inputMonitoring = "inputMonitoring"
     }
 
     private struct SettingsStatus {
@@ -110,6 +116,20 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
             isVisible: true,
             errorMessage: controller.lastErrorMessage
         )
+    }
+
+    var permissionRequirements: [PluginPermissionRequirement] {
+        [
+            PluginPermissionRequirement(
+                id: PermissionID.inputMonitoring,
+                kind: .inputMonitoring,
+                title: localization.string("settings.inputMonitoring.title", defaultValue: "输入监控"),
+                description: localization.string(
+                    "settings.inputMonitoring.description",
+                    defaultValue: "用于统计键盘、鼠标点击和滚动事件。"
+                )
+            ),
+        ]
     }
 
     var settingsPage: PluginSettingsPage? {
@@ -274,10 +294,25 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {
-        PluginPermissionState(isGranted: true, footnote: nil)
+        guard permissionID == PermissionID.inputMonitoring else {
+            return PluginPermissionState(isGranted: true, footnote: nil)
+        }
+        return PluginPermissionState(
+            isGranted: CGPreflightListenEventAccess(),
+            footnote: controller.inputMonitoringFootnote
+        )
     }
 
-    func handlePermissionAction(id: String) {}
+    func handlePermissionAction(id: String) {
+        guard id == PermissionID.inputMonitoring else { return }
+        controller.openInputMonitoringSettings()
+    }
+
+    func permissionRequirementIDs(for actionKey: ActionKey) -> [String] {
+        guard actionKey.providerID == metadata.id,
+              actionKey.actionID == ActionID.setTrackingEnabled else { return [] }
+        return [PermissionID.inputMonitoring]
+    }
 
     func handleSettingsAction(_ action: PluginSettingsAction) {
         guard case let .invoke(controlID) = action else { return }

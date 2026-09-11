@@ -114,6 +114,59 @@ final class DynamicPluginManagerTests: XCTestCase {
         )
     }
 
+    func testUpdateThenUninstallUsesManifestOwnedPrivateDataCleanup() throws {
+        var removedKeyPluginIDs: [String] = []
+        let firstPackageURL = try makePackage(
+            id: "com.example.private",
+            version: "1.0.0",
+            uninstallDataPolicy: .removePrivateData
+        )
+        let updatePackageURL = try makePackage(
+            id: "com.example.private",
+            version: "2.0.0",
+            uninstallDataPolicy: .removePrivateData
+        )
+        let store = makeStore(privateDataKeyRemover: { removedKeyPluginIDs.append($0) })
+        _ = try store.installPackage(from: firstPackageURL)
+        let plugin = MockDynamicPlugin(id: "com.example.private")
+        let loader = StubDynamicPluginLoader { records in
+            records.map { record in
+                DynamicPluginLoadResult(record: record, plugins: [plugin], errorMessage: nil)
+            }
+        }
+        let manager = DynamicPluginManager(packageStore: store, pluginLoader: loader)
+        _ = manager.loadInstalledPlugins()
+
+        try manager.updatePluginPackage(from: updatePackageURL)
+        XCTAssertTrue(manager.loadInstalledPlugins().isEmpty)
+        try manager.uninstallPlugin(pluginID: "com.example.private")
+
+        XCTAssertEqual(removedKeyPluginIDs, ["com.example.private"])
+        XCTAssertTrue(store.installedRecords().isEmpty)
+    }
+
+    func testUnloadablePluginUninstallUsesManifestOwnedPrivateDataCleanup() throws {
+        var removedKeyPluginIDs: [String] = []
+        let sourceURL = try makePackage(
+            id: "com.example.private",
+            uninstallDataPolicy: .removePrivateData
+        )
+        let store = makeStore(privateDataKeyRemover: { removedKeyPluginIDs.append($0) })
+        _ = try store.installPackage(from: sourceURL)
+        let loader = StubDynamicPluginLoader { records in
+            records.map { record in
+                DynamicPluginLoadResult(record: record, plugins: [], errorMessage: "load failed")
+            }
+        }
+        let manager = DynamicPluginManager(packageStore: store, pluginLoader: loader)
+        XCTAssertTrue(manager.loadInstalledPlugins().isEmpty)
+
+        try manager.uninstallPlugin(pluginID: "com.example.private")
+
+        XCTAssertEqual(removedKeyPluginIDs, ["com.example.private"])
+        XCTAssertTrue(store.installedRecords().isEmpty)
+    }
+
     func testDirectSourceRetirementUpdateRequiresExtractionCoordinator() throws {
         let oldMouseURL = try makePackage(id: "mouse-enhancer", version: "1.0.6")
         let retiredMouseURL = try makePackage(id: "mouse-enhancer", version: "1.0.7")
@@ -733,10 +786,13 @@ final class DynamicPluginManagerTests: XCTestCase {
         XCTAssertEqual(manager.pluginManagementItems.first?.canInstall, true)
     }
 
-    private func makeStore() -> PluginPackageStore {
+    private func makeStore(
+        privateDataKeyRemover: ((String) throws -> Void)? = nil
+    ) -> PluginPackageStore {
         PluginPackageStore(
             rootDirectory: temporaryRoot,
             userDefaults: defaults,
+            privateDataKeyRemover: privateDataKeyRemover,
             hostVersion: "1.0.0"
         )
     }
@@ -761,7 +817,8 @@ final class DynamicPluginManagerTests: XCTestCase {
         bundleRelativePath: String = "Demo.bundle",
         pluginKitVersion: Int = PluginPackageManifestLoader.supportedPluginKitVersion,
         minHostVersion: String = "0.1.0",
-        releaseChannel: String? = nil
+        releaseChannel: String? = nil,
+        uninstallDataPolicy: PluginPackageManifest.UninstallDataPolicy? = nil
     ) throws -> URL {
         let packageURL = temporaryRoot
             .appendingPathComponent("Source", isDirectory: true)
@@ -778,7 +835,8 @@ final class DynamicPluginManagerTests: XCTestCase {
             minHostVersion: minHostVersion,
             pluginKitVersion: pluginKitVersion,
             bundleRelativePath: bundleRelativePath,
-            releaseChannel: releaseChannel
+            releaseChannel: releaseChannel,
+            uninstallDataPolicy: uninstallDataPolicy
         )
         let data = try JSONEncoder().encode(manifest)
         try data.write(to: packageURL.appendingPathComponent("plugin.json"))

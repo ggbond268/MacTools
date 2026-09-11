@@ -2,6 +2,11 @@ import Foundation
 import MacToolsPluginKit
 
 struct PluginPackageManifest: Codable, Equatable {
+    enum UninstallDataPolicy: String, Codable, Equatable {
+        case preserve
+        case removePrivateData
+    }
+
     struct Capabilities: Codable, Equatable {
         enum Settings: String, Codable, CaseIterable {
             case none
@@ -79,6 +84,14 @@ struct PluginPackageManifest: Codable, Equatable {
     let category: String?
     let releaseChannel: String?
     let localizedMetadata: [String: PluginLocalizedMetadata]?
+    let uninstallDataPolicy: UninstallDataPolicy?
+    let presentation: PluginProductMetadata.Presentation?
+    let discovery: PluginProductMetadata.Discovery?
+    let requirements: PluginProductMetadata.Requirements?
+    let privacy: PluginProductMetadata.Privacy?
+    let actions: PluginProductMetadata.Actions?
+    let setup: PluginProductMetadata.Setup?
+    let relationships: PluginProductMetadata.Relationships?
 
     init(
         id: String,
@@ -92,7 +105,15 @@ struct PluginPackageManifest: Codable, Equatable {
         permissions: [String] = [],
         category: String? = nil,
         releaseChannel: String? = nil,
-        localizedMetadata: [String: PluginLocalizedMetadata]? = nil
+        localizedMetadata: [String: PluginLocalizedMetadata]? = nil,
+        uninstallDataPolicy: UninstallDataPolicy? = nil,
+        presentation: PluginProductMetadata.Presentation? = nil,
+        discovery: PluginProductMetadata.Discovery? = nil,
+        requirements: PluginProductMetadata.Requirements? = nil,
+        privacy: PluginProductMetadata.Privacy? = nil,
+        actions: PluginProductMetadata.Actions? = nil,
+        setup: PluginProductMetadata.Setup? = nil,
+        relationships: PluginProductMetadata.Relationships? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -106,6 +127,18 @@ struct PluginPackageManifest: Codable, Equatable {
         self.category = category
         self.releaseChannel = releaseChannel
         self.localizedMetadata = localizedMetadata
+        self.uninstallDataPolicy = uninstallDataPolicy
+        self.presentation = presentation
+        self.discovery = discovery
+        self.requirements = requirements
+        self.privacy = privacy
+        self.actions = actions
+        self.setup = setup
+        self.relationships = relationships
+    }
+
+    var effectiveUninstallDataPolicy: UninstallDataPolicy {
+        uninstallDataPolicy ?? .preserve
     }
 
     var localizedDisplayName: String {

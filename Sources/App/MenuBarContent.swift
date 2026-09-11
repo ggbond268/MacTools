@@ -700,7 +700,11 @@ struct MenuBarContent: View {
     }
 
     private var visibleFeatureListHeight: CGFloat {
-        min(featureListHeight, contentBodyHeight)
+        if pluginHost.panelItems.isEmpty {
+            return contentBodyHeight
+        }
+
+        return min(featureListHeight, contentBodyHeight)
     }
 
     private var isFeatureListScrollable: Bool {
@@ -997,14 +1001,12 @@ struct MenuBarContent: View {
         VStack(spacing: MenuBarPanelLayout.featureRowSpacing) {
             if pluginHost.panelItems.isEmpty {
                 PanelPluginEmptyState(
-                    title: AppL10n.plugins("plugin.panel.empty.title", defaultValue: "暂无插件"),
-                    systemImage: "shippingbox",
-                    iconTint: .blue,
+                    tab: .features,
                     onInstall: {
                         pluginHost.presentPluginMarketplace()
                     }
                 )
-                .frame(minHeight: MenuBarPanelLayout.emptyContentHeight)
+                .frame(height: contentBodyHeight)
             } else {
                 ForEach(pluginHost.panelItems) { item in
                     FeatureRowView(
@@ -1903,23 +1905,8 @@ private struct PluginPanelDetailView: View {
     private func panelControl(_ control: PluginPanelControl) -> some View {
         switch control.kind {
         case .segmented:
-            Picker(
-                String(),
-                selection: Binding(
-                    get: { control.selectedOptionID ?? "" },
-                    set: { newValue in
-                        onSelectionChange(control.id, newValue)
-                    }
-                )
-            ) {
-                ForEach(control.options) { option in
-                    Text(option.title).tag(option.id)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
+            PluginPanelSegmentedControl(control: control, onSelectionChange: onSelectionChange)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .disabled(!control.isEnabled)
         case .datePicker:
             switch control.datePickerStyle ?? .compact {
             case .compact:
@@ -1989,6 +1976,71 @@ private struct PluginPanelDetailView: View {
                     onActionInvoke(control.id, control.actionBehavior)
                 }
             )
+        }
+    }
+}
+
+private struct PluginPanelSegmentedControl: NSViewRepresentable {
+    let control: PluginPanelControl
+    let onSelectionChange: (String, String) -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let view = NSSegmentedControl(
+            labels: control.options.map(\.title),
+            trackingMode: .selectOne,
+            target: context.coordinator,
+            action: #selector(Coordinator.selectionChanged(_:))
+        )
+        view.segmentDistribution = .fillProportionally
+        return view
+    }
+
+    func updateNSView(_ nsView: NSSegmentedControl, context: Context) {
+        context.coordinator.parent = self
+        if nsView.segmentCount != control.options.count {
+            nsView.segmentCount = control.options.count
+        }
+        for (index, option) in control.options.enumerated() {
+            if nsView.label(forSegment: index) != option.title {
+                nsView.setLabel(option.title, forSegment: index)
+            }
+            nsView.setToolTip(option.title, forSegment: index)
+        }
+        let selectedIndex = control.options.firstIndex { $0.id == control.selectedOptionID } ?? -1
+        if nsView.selectedSegment != selectedIndex {
+            nsView.selectedSegment = selectedIndex
+        }
+        nsView.isEnabled = control.isEnabled
+        nsView.selectedSegmentBezelColor = NSColor(theme.accent)
+        nsView.userInterfaceLayoutDirection = context.environment.layoutDirection == .rightToLeft
+            ? .rightToLeft : .leftToRight
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSegmentedControl, context: Context) -> CGSize? {
+        // SwiftUI's segmented Picker can insist on a wider intrinsic size on macOS 27.
+        // Size the native control itself to the row, so both drawing and hit testing fit.
+        let intrinsicWidth = nsView.intrinsicContentSize.width
+        let proposedWidth = proposal.width ?? intrinsicWidth
+        return CGSize(width: proposedWidth.isFinite ? max(0, proposedWidth) : intrinsicWidth, height: 24)
+    }
+
+    final class Coordinator: NSObject {
+        var parent: PluginPanelSegmentedControl
+
+        init(parent: PluginPanelSegmentedControl) {
+            self.parent = parent
+        }
+
+        @objc func selectionChanged(_ sender: NSSegmentedControl) {
+            guard sender.isEnabled, parent.control.options.indices.contains(sender.selectedSegment) else {
+                return
+            }
+            parent.onSelectionChange(parent.control.id, parent.control.options[sender.selectedSegment].id)
         }
     }
 }
@@ -2528,13 +2580,13 @@ private struct SecondarySlidingPanel: View {
     }
 }
 
-private final class SecondaryPanelWindow: NSPanel {
+final class SecondaryPanelWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
 
 @MainActor
-private final class SecondaryPanelController: ObservableObject {
+final class SecondaryPanelController: ObservableObject {
     // The secondary panel must remain a sibling of the MenuBarExtra popover, not a child window.
     //
     // Background: `NSWindow.addChildWindow(_:, ordered:)` binds parent and child key status into the
@@ -2560,9 +2612,10 @@ private final class SecondaryPanelController: ObservableObject {
     @Published private(set) var isPresentingInline = false
     var onHostWindowDismissRequest: (() -> Void)?
 
-    func setHostWindow(_ window: NSWindow?) {
+    @discardableResult
+    func setHostWindow(_ window: NSWindow?) -> Bool {
         guard hostWindow !== window else {
-            return
+            return false
         }
 
         removeHostWindowObservers()
@@ -2570,10 +2623,11 @@ private final class SecondaryPanelController: ObservableObject {
 
         guard window != nil else {
             hide()
-            return
+            return true
         }
 
         observeHostWindowIfNeeded()
+        return true
     }
 
     func show(
@@ -2612,8 +2666,42 @@ private final class SecondaryPanelController: ObservableObject {
             .foregroundStyle(theme.text.primary)
             .tint(theme.accent)
             .environment(\.menuBarPanelTheme, theme)
-            .environment(\.pluginComponentTheme, theme.componentTheme)
+                .environment(\.pluginComponentTheme, theme.componentTheme)
         )
+
+        show(
+            rootView: rootView,
+            width: MenuBarPanelLayout.secondaryPanelWidth,
+            minimumHeight: MenuBarPanelLayout.secondaryPanelMinimumHeight,
+            anchorRect: anchorRect,
+            screen: screen
+        )
+    }
+
+    func show(
+        content: AnyView,
+        width: CGFloat,
+        minimumHeight: CGFloat,
+        anchorRect: CGRect
+    ) {
+        guard let hostWindow, hostWindow.isVisible else { return }
+        show(
+            rootView: content,
+            width: width,
+            minimumHeight: minimumHeight,
+            anchorRect: anchorRect,
+            screen: screenContaining(anchorRect: anchorRect)
+        )
+    }
+
+    private func show(
+        rootView: AnyView,
+        width: CGFloat,
+        minimumHeight: CGFloat,
+        anchorRect: CGRect,
+        screen: NSScreen?
+    ) {
+        guard let hostWindow, hostWindow.isVisible else { return }
 
         let panelWindow = panelWindow ?? makePanel()
         // Reuse one NSHostingView. Rebuilding `contentView` on every `show()` destroys the SwiftUI
@@ -2632,9 +2720,8 @@ private final class SecondaryPanelController: ObservableObject {
         applyCurrentAppearance()
 
         let fittingSize = hostingView.fittingSize
-        let width = MenuBarPanelLayout.secondaryPanelWidth
         let height = min(
-            max(fittingSize.height, MenuBarPanelLayout.secondaryPanelMinimumHeight),
+            max(fittingSize.height, minimumHeight),
             maximumSecondaryPanelHeight(for: screen)
         )
         let visibleFrame = screen?.visibleFrame
@@ -2649,7 +2736,7 @@ private final class SecondaryPanelController: ObservableObject {
 
         switch placement {
         case let .right(frame), let .left(frame):
-            isPresentingInline = false
+            setPresentingInline(false)
             panelWindow.setFrame(frame, display: true)
             // Align the panel level to `hostWindow.level + 1` at runtime so it stays above the popover.
             // The MenuBarExtra popover level is a private SwiftUI implementation detail.
@@ -2657,7 +2744,7 @@ private final class SecondaryPanelController: ObservableObject {
             PluginPresentationSafety.prepareForWindowOrdering(panelWindow)
             panelWindow.orderFrontRegardless()
         case .inline:
-            isPresentingInline = true
+            setPresentingInline(true)
             panelWindow.orderOut(nil)
         }
         self.panelWindow = panelWindow
@@ -2673,7 +2760,15 @@ private final class SecondaryPanelController: ObservableObject {
         panelWindow?.orderOut(nil)
         self.panelWindow = nil
         self.panelHostingView = nil
-        isPresentingInline = false
+        setPresentingInline(false)
+    }
+
+    private func setPresentingInline(_ isPresentingInline: Bool) {
+        guard self.isPresentingInline != isPresentingInline else {
+            return
+        }
+
+        self.isPresentingInline = isPresentingInline
     }
 
     private func screenContaining(anchorRect: CGRect) -> NSScreen? {
@@ -2759,7 +2854,7 @@ private final class SecondaryPanelController: ObservableObject {
     }
 }
 
-private struct MenuWindowAccessor: NSViewRepresentable {
+struct MenuWindowAccessor: NSViewRepresentable {
     let onWindowChange: (NSWindow?) -> Void
 
     func makeNSView(context: Context) -> NSView {

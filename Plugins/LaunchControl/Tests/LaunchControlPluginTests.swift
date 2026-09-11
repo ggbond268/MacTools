@@ -39,7 +39,10 @@ final class LaunchControlCanonicalActionTests: XCTestCase {
 
         let result = await handle.result()
         XCTAssertEqual(result, .succeeded())
-        XCTAssertEqual(runner.calls, [["kickstart", "gui/501/\(item.label)"]])
+        XCTAssertEqual(
+            try XCTUnwrap(runner.calls.first),
+            ["kickstart", "gui/501/\(item.label)"]
+        )
     }
 
     func testOpenManagerRequestsConfigurationPresentation() {

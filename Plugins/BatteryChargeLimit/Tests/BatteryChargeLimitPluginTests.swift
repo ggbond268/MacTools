@@ -528,6 +528,55 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         XCTAssertTrue(writer.dischargeCalls.contains(true))
     }
 
+    func testForceDischargeSupportsAdapterIsolationWithoutCH0I() async throws {
+        let writer = MockBatteryWriter(
+            capabilities: BatterySMCCapabilities(
+                hasCHTE: false,
+                hasCH0BC: true,
+                hasBCLM: false,
+                hasCH0I: false,
+                hasCHIE: true
+            )
+        )
+        let plugin = makePlugin(
+            reader: MockBatteryReader(snapshot: makeSnapshot(level: 90)),
+            writer: writer
+        )
+        plugin.refresh()
+        let discharge = try XCTUnwrap(
+            plugin.actionCatalogEntries.first(where: { $0.reference.key.actionID == "discharge" })?.reference
+        )
+
+        plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
+        writer.dischargeCalls = []
+
+        XCTAssertTrue(plugin.actionAvailability(for: discharge).isAvailable)
+        let result = try await plugin.beginAction(
+            ActionInvocation(reference: discharge, source: .test, mode: .foreground)
+        ).result()
+
+        XCTAssertEqual(result, .succeeded())
+        XCTAssertEqual(plugin.store.mode, .discharging)
+        XCTAssertEqual(writer.dischargeCalls, [true])
+    }
+
+    func testForceDischargeCapabilityAcceptsAllSupportedAdapterKeys() {
+        let capabilities = [
+            BatterySMCCapabilities(
+                hasCHTE: false, hasCH0BC: true, hasBCLM: false, hasCH0I: false, hasCHIE: true
+            ),
+            BatterySMCCapabilities(
+                hasCHTE: false, hasCH0BC: true, hasBCLM: false, hasCH0I: false, hasCH0J: true
+            ),
+            BatterySMCCapabilities(
+                hasCHTE: false, hasCH0BC: true, hasBCLM: false, hasCH0I: true
+            ),
+        ]
+
+        XCTAssertTrue(capabilities.allSatisfy(\.canForceDischarge))
+        XCTAssertFalse(BatterySMCCapabilities.none.canForceDischarge)
+    }
+
     func testCanonicalActionsPublishLimitsAndExplicitModes() {
         let plugin = makePlugin(reader: MockBatteryReader(snapshot: makeSnapshot(level: 90)))
         plugin.refresh()

@@ -4,6 +4,16 @@ import MacToolsPluginKit
 
 @MainActor
 final class IPOverviewPluginTests: XCTestCase {
+    func testManifestActionsMatchRuntimePolicy() throws {
+        let plugin = IPOverviewPlugin(viewModel: IPOverviewViewModel(storage: IPOverviewPluginTestStorage()))
+
+        try PluginManifestActionAssertions.assertConsistency(
+            pluginDirectoryName: "IPOverview",
+            definitions: plugin.actionDefinitions,
+            permissionIDs: { _ in [] }
+        )
+    }
+
     func testCanonicalCopyActionsRefreshBeforeCopyingCurrentAddresses() async throws {
         let pasteboard = NSPasteboard(name: .init("IPOverviewPluginTests.\(UUID().uuidString)"))
         let snapshot = IPOverviewSnapshot(

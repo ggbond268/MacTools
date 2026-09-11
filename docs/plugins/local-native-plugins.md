@@ -6,6 +6,8 @@ This phase intentionally supports only trusted local plugins built by the same d
 
 For catalog-based installation, GitHub release distribution, and Debug `file://` development catalogs, see [plugin-catalog.md](plugin-catalog.md).
 
+For a complete workspace-plugin example with a typed catalog, verified adapters, portable preferences, profiles, and composition of canonical actions from other providers, see [Mac Settings](mac-settings.md).
+
 ## Package Layout
 
 Use a directory package with the `.mactoolsplugin` extension:
@@ -13,6 +15,8 @@ Use a directory package with the `.mactoolsplugin` extension:
 ```text
 Example.mactoolsplugin/
   plugin.json
+  LICENSE                    # Required when the package is distributed independently
+  THIRD_PARTY_NOTICES.txt    # Present only when third-party notices apply
   Example.bundle/
     Contents/
       Info.plist
@@ -21,6 +25,8 @@ Example.mactoolsplugin/
 ```
 
 `plugin.json` is read before loading executable code:
+
+PluginKit v6 first ships in MacTools 1.3.0. Every v6 package must declare `minHostVersion` of at least `1.3.0`; raise it again when using APIs introduced in a later host. Older ABI packages remain discoverable for updates but cannot load into the v6 host.
 
 ```json
 {
@@ -38,8 +44,8 @@ Example.mactoolsplugin/
     }
   },
   "version": "1.0.0",
-  "minHostVersion": "1.2.0",
-  "pluginKitVersion": 5,
+  "minHostVersion": "1.3.0",
+  "pluginKitVersion": 6,
   "bundleRelativePath": "Example.bundle",
   "factoryClass": "Example.ExamplePluginFactory",
   "capabilities": {
@@ -48,6 +54,7 @@ Example.mactoolsplugin/
     "settings": "form"
   },
   "permissions": [],
+  "uninstallDataPolicy": "preserve",
   "category": "productivity"
 }
 ```
@@ -55,6 +62,10 @@ Example.mactoolsplugin/
 `displayName` and `summary` are fallback marketplace metadata. Add `localizedMetadata` for every user-facing marketplace language the plugin supports. The host chooses the best match from the user's language preferences before the plugin bundle is loaded, but it does not own plugin translations.
 
 `category` is optional and is used by the marketplace and "已安装" list to group plugins. Supported values: `display`, `audio`, `system`, `storage`, `productivity`, `monitoring`. Unknown or omitted values fall back to "其他".
+
+`uninstallDataPolicy` defaults to `preserve`. Use `removePrivateData` only when uninstall must crypto-shred sensitive plugin data. The host then always shows a destructive-data warning, removes the plugin's host-owned support/cache/temporary directories and preferences, and deletes the standardized Keychain item identified by `PluginPrivateDataKeychainIdentity`; cleanup does not depend on loading plugin executable code.
+
+If private-data cleanup fails, its recovery intent blocks a fresh installation of the same plugin until cleanup succeeds. A completed cleanup intent that only retains obsolete package residue does not block installation. This prevents a delayed uninstall retry from deleting the replacement installation's data.
 
 The plugin bundle must expose a factory that conforms to `MacToolsPluginBundleFactory`. The factory returns a `PluginProvider`, and the provider returns exactly one `MacToolsPlugin` instance for the package.
 
@@ -70,11 +81,13 @@ Plugins/Example/
   Resources/            # Optional plugin resources
 ```
 
-Only `plugin.json` and the built `.bundle` are copied into a `.mactoolsplugin` package. Bundle resources must therefore be copied into the built `.bundle` by the generated Xcode target. In this repository, `Plugins/<PluginName>/Resources` is automatically added to the generated bundle target, so plugin-owned `.xcstrings`, images, JSON files, and other runtime resources should live there. `Tests/` is included only by the host unit-test target during development and is never packaged into the app or plugin distribution.
+The runtime payload contains the projected `plugin.json` and the built `.bundle`. Bundle resources must therefore be copied into the built `.bundle` by the generated Xcode target. In this repository, `Plugins/<PluginName>/Resources` is automatically added to the generated bundle target, so plugin-owned `.xcstrings`, images, JSON files, and other runtime resources should live there. Official release packaging also copies the repository `LICENSE` into every independently distributed ZIP and generates a product-specific `THIRD_PARTY_NOTICES.txt` when required. These legal files are generated from central sources and are not maintained inside each plugin source directory. `Tests/` is included only by the host unit-test target during development and is never packaged into the app or plugin distribution.
 
 In this repository, plugin Xcode targets are generated before XcodeGen runs. The generator scans `Plugins/*/plugin.json` and applies a shared target template for `Sources/`, `Bundle/`, `Tests/`, plugin schemes, and the host test target. Most plugins do not need any root project changes. Add `Plugins/<PluginName>/project.yml` only for plugin-local build differences such as `OTHER_LDFLAGS`, `SWIFT_INCLUDE_PATHS`, extra bundle resources, helper/tool targets, or additional target dependencies. A helper/tool target can declare `bundleResourcePath` to have the generated bundle target copy its built executable into `Contents/Resources/<bundleResourcePath>/`.
 
 The manifest ID is the stable identity of the package. It must match the runtime `PluginMetadata.id`, and a package must return exactly one plugin instance. Use lower-case, readable IDs such as `display-brightness` unless there is a strong reason to use a reverse-DNS identifier. The ID `marketplace` is reserved for the host-owned URL route and is not a valid plugin ID.
+
+The same source manifest may add optional product metadata for pre-install discovery, requirements, privacy, actions, setup, and plugin relationships. Follow [`plugin-manifest.schema.json`](plugin-manifest.schema.json); do not create a second marketplace metadata file. Declare localized product copy under the source-only `productStrings` table. Each entry either reuses `@displayName` or `@summary`, imports an existing `Resources/Localizable.xcstrings` key with `@localizable.<key>`, uses a standard localized toggle or enabled-state label with `@standardAction.<key>`, renders declared requirements with `@standardSetup.requirements.title` or `@standardSetup.requirements.description`, or supplies all 11 supported locale values; localized product fields uniformly reference `@productStrings.<key>`. Packaging and catalog generation expand the references and remove the source table before distribution. Keep screenshots under `MarketplaceAssets/`, and describe dynamic machine-local action entries with templates instead of enumerating local values. The catalog generator validates localization, identifiers, permission and surface values, references, domains, assets, and action completeness before projection.
 
 When a plugin uses a private Apple framework, it must load that framework dynamically at runtime and validate every required class and selector before use. Do not add a static framework link: unsupported systems must present a clear plugin error instead of crashing.
 
@@ -127,7 +140,7 @@ When a change touches `Sources/MacToolsPluginKit/`, it is package-relevant for e
 
 ## Settings UI
 
-Plugin settings are hosted by MacTools. PluginKit 5 exposes one `settingsPage` entry point with two explicit layouts:
+Plugin settings are hosted by MacTools. PluginKit 6 exposes one `settingsPage` entry point with two explicit layouts:
 
 - `PluginSettingsPage.form` is the default. Describe standard controls with `PluginSettingsSection`, `PluginSettingsRow`, and `PluginSettingsControl`; the host renders the native grouped form, search entries, validation, permissions, and shortcuts.
 - Reserve segmented pickers for a few short labels; use `.menu` when options are longer or localization can make the row overflow. Declarative sliders should provide `valueFormat` for a live host-rendered readout. Custom settings use `PluginSettingsSlider` to keep stepped values without drawing dense tick marks.
@@ -147,6 +160,8 @@ Settings changes use typed `PluginSettingsAction` values (`setBoolean`, `setSele
 Custom sections and workspaces provide only plugin-specific content. The settings window title, plugin icon, description, permission cards, shortcut cards, scrolling shell, and system background are derived by the host; do not repeat a page title inside custom content. Form sections must not draw their own outer card or section header: use `presentation: .standard` for normal custom content, or `.edgeToEdge` for an AppKit table or an internally padded row collection. Add/Refresh-style actions belong in `.headerAccessory`.
 
 All custom settings views should use `MacToolsPluginKit.PluginSettingsTheme` for typography, spacing, radii, colors, and shared card backgrounds. This keeps the dependency direction clean: the host app and plugins both depend on `MacToolsPluginKit`, while plugins never depend on `Sources/App/SettingsStyle.swift`.
+
+Use `PluginSettingsItem` (host 1.3.1+) for an icon, title, optional description, and trailing custom control. It shares the host form row layout and neutral icon styling. The containing form or custom section still owns padding and separators; use `pluginSettingsListRowPadding` for internally padded sections.
 
 Recommended mapping:
 
