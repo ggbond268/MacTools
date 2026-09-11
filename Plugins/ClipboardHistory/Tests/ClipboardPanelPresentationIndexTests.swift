@@ -66,7 +66,7 @@ final class ClipboardPanelPresentationIndexTests: XCTestCase {
         }
         for item in items { index.update(nil, id: item.id) }
         for snippet in snippets { index.updateSnippet(nil, id: snippet.id) }
-        XCTAssertEqual(index.scopeModes, [.history])
+        XCTAssertEqual(index.scopeModes, [.all])
         XCTAssertTrue(index.filterFamilies.isEmpty)
         XCTAssertTrue(index.contentFilters.isEmpty)
         XCTAssertTrue(index.semanticFilters.isEmpty)

@@ -48,8 +48,7 @@ struct ClipboardPanelPresentationIndex: Sendable {
 
     var scopeModes: [ClipboardPanelMode] {
         let scopes = [ClipboardPanelMode.history, .saved, .snippets].filter { count(in: $0) > 0 }
-        if scopes.isEmpty { return [.history] }
-        return scopes.count > 1 ? [.all] + scopes : scopes
+        return [.all] + scopes
     }
 
     var contentFilters: [ClipboardHistoryContentFilter] {

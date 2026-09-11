@@ -332,6 +332,7 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         XCTAssertFalse(model.isPreviewPresentationActive)
         model.activatePreviewPresentation()
         model.prepareForPresentationAsynchronously(items: items, historyRevision: 1, savedRevision: 1)
+        XCTAssertEqual(model.mode, .all, "A newer default opening must select All before preparation finishes")
         gate.resume()
         await model.waitForPresentationPreparationForTesting()
         await model.waitForSearchForTesting()
@@ -519,9 +520,60 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         XCTAssertFalse(model.visibleItems.contains { $0.id == recopy.id })
         model.updateSavedItems([], revision: 3)
         model.prepareForPresentationAsynchronously(items: items, historyRevision: 3, savedRevision: 3)
-        XCTAssertEqual(model.mode, .history)
+        XCTAssertEqual(model.mode, .all)
         XCTAssertFalse(model.availableScopeModes.contains(.snippets))
         XCTAssertEqual(model.visibleItems.map(\.id), Array(items.prefix(50)).map(\.id))
+    }
+
+    func testDefaultOpeningUsesAllAcrossCollectionsAndPreparationPaths() async {
+        let history = makeItems(2)
+        var saved = makeItems(1)[0]
+        saved.isInHistory = false
+        saved.setSavedMetadata(.init(title: "Saved", savedAt: .now))
+        let snippet = ClipboardSavedItem(title: "Reply", savedKind: .snippet, payload: .plainText("Body"))
+        let collections: [([ClipboardHistoryItem], [ClipboardSavedItem])] = [
+            ([], []), (history, []), ([saved], []), ([], [snippet]), (history + [saved], [snippet]),
+        ]
+
+        for (items, snippets) in collections {
+            let expectedIDs = Set(items.map(\.id) + snippets.map(\.id))
+            for asynchronous in [false, true] {
+                let checkpoints = ClipboardPreparationCheckpointCounter()
+                let model = ClipboardHistoryPanelModel(presentationPreparationCheckpointForTesting: {
+                    checkpoints.increment()
+                })
+                model.mode = .history
+                if asynchronous {
+                    model.prepareForPresentationAsynchronously(
+                        items: items, savedItems: snippets, historyRevision: 1, savedRevision: 1
+                    )
+                } else {
+                    model.prepareForPresentation(
+                        items: items, savedItems: snippets, historyRevision: 1, savedRevision: 1
+                    )
+                }
+                XCTAssertEqual(model.mode, .all, "Select All immediately, even before asynchronous preparation finishes")
+                await model.waitForPresentationPreparationForTesting()
+                await model.waitForSearchForTesting()
+                XCTAssertEqual(model.mode, .all)
+                XCTAssertEqual(model.availableScopeModes.first, .all)
+                XCTAssertEqual(Set(model.visibleItems.map(\.id)), expectedIDs)
+                if items.isEmpty || snippets.isEmpty {
+                    XCTAssertFalse(model.availableFilterFamilies.contains(.scope))
+                }
+
+                let preparedCheckpoints = checkpoints.value
+                model.mode = .snippets
+                model.prepareForPresentationAsynchronously(
+                    items: items, savedItems: snippets, historyRevision: 1, savedRevision: 1
+                )
+                XCTAssertFalse(model.isPreparingPresentation)
+                XCTAssertFalse(model.isSearching)
+                XCTAssertEqual(model.mode, .all)
+                XCTAssertEqual(Set(model.visibleItems.map(\.id)), expectedIDs)
+                XCTAssertEqual(checkpoints.value, preparedCheckpoints, "Reopening must reuse the prepared All page")
+            }
+        }
     }
 
     func testColdPresentationPreservesRequestedSnippetDestination() async {
@@ -613,10 +665,11 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         )
         try await waitUntilPaused(gate)
         model.prepareForPresentationAsynchronously(items: items, historyRevision: 1, savedRevision: 1)
+        XCTAssertEqual(model.mode, .all, "A newer default opening must select All before preparation finishes")
         gate.resume()
         await model.waitForPresentationPreparationForTesting()
         await model.waitForSearchForTesting()
-        XCTAssertEqual(model.mode, .history)
+        XCTAssertEqual(model.mode, .all)
         XCTAssertEqual(model.visibleItems.map(\.id), items.map(\.id))
     }
 

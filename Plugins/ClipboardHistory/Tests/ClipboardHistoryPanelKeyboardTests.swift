@@ -528,7 +528,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.query = "existing"
         await model.waitForSearchForTesting()
         model.revealCreatedSnippet(id: UUID(), savedItems: [])
-        XCTAssertEqual(model.mode, .history)
+        XCTAssertEqual(model.mode, .all)
         XCTAssertEqual(model.query, "existing")
         XCTAssertEqual(model.selectedItemID, history.id)
     }
@@ -671,7 +671,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         )
         let model = ClipboardHistoryPanelModel()
         model.prepareForPresentation(items: [], savedItems: [snippet])
-        XCTAssertEqual(model.mode, .snippets)
+        XCTAssertEqual(model.mode, .all)
         XCTAssertTrue(model.availableFilterFamilies.isEmpty)
     }
 

@@ -604,7 +604,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     @Published private(set) var deleteConfirmationRequestID: UInt = 0
     @Published private(set) var requestedScrollItemID: UUID?
     @Published private(set) var savedEditRequestID: UInt = 0
-    @Published private(set) var availableScopeModes: [ClipboardPanelMode] = [.history]
+    @Published private(set) var availableScopeModes: [ClipboardPanelMode] = [.all]
     @Published private(set) var availableContentFilters: [ClipboardHistoryContentFilter] = []
     @Published private(set) var availableSemanticFilters: [ClipboardHistorySemanticFilter] = []
     @Published private(set) var availableFilterFamilies: [ClipboardHistoryFilterFamily] = []
@@ -887,7 +887,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             savedItems: savedItems
         ) else { return }
         applyFilterAvailability(preparation)
-        mode = availableScopeModes.first ?? .history
+        mode = .all
         contentFilter = .all
         semanticFilter = .any
         allItems = items
@@ -951,14 +951,14 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         savedItems: [ClipboardSavedItem] = [],
         historyRevision: UInt64? = nil,
         savedRevision: UInt64? = nil,
-        initialMode: ClipboardPanelMode? = nil
+        initialMode: ClipboardPanelMode = .all
     ) {
         // A visible opening may join background preparation with a different destination.
         pendingPresentationMode = initialMode
         if isPreparingPresentation,
            let historyRevision, let savedRevision,
            historyRevision == currentHistoryRevision, savedRevision == currentSavedRevision {
-            if let initialMode { selectPresentationMode(initialMode) }
+            selectPresentationMode(initialMode)
             return
         }
         presentationPreparationTask?.cancel()
@@ -977,7 +977,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 historyRevision: historyRevision,
                 savedRevision: savedRevision
             )
-            if let initialMode { selectPresentationMode(initialMode) }
+            selectPresentationMode(initialMode)
             return
         }
 
@@ -985,7 +985,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         searchProgressTask?.cancel()
         searchGeneration &+= 1
         isPreparingPresentation = true
-        if let initialMode { selectPresentationMode(initialMode) }
+        selectPresentationMode(initialMode)
         isSearching = true
         showsSearchProgress = false
         query = ""
@@ -1220,7 +1220,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         if !availableScopeModes.contains(requestedMode) {
             availableScopeModes.append(requestedMode)
         }
-        if !availableFilterFamilies.contains(.scope) {
+        if requestedMode != .all, !availableFilterFamilies.contains(.scope) {
             availableFilterFamilies.insert(.scope, at: 0)
         }
     }
@@ -1547,7 +1547,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         if let pendingPresentationMode {
             selectPresentationMode(pendingPresentationMode)
         } else {
-            mode = availableScopeModes.first ?? .history
+            mode = .all
         }
         pendingPresentationMode = nil
         contentFilter = .all
@@ -1653,7 +1653,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
 
     private func refreshInitialPage() {
         guard let index = presentationIndex else { initialPage = nil; return }
-        let initialMode = index.scopeModes.first ?? .history
+        let initialMode = ClipboardPanelMode.all
         let page = index.page(in: initialMode, limit: Self.resultPageSize)
         initialPage = InitialPage(
             historyRevision: currentHistoryRevision, savedRevision: currentSavedRevision,
@@ -2131,7 +2131,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         )
     }
 
-    func show(initialMode: ClipboardPanelMode? = nil) {
+    func show(initialMode: ClipboardPanelMode = .all) {
         invalidatePendingItemAction()
         actionState.beginPresentation()
         model.activatePreviewPresentation()
