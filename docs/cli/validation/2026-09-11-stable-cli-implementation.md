@@ -16,11 +16,11 @@ The release workflow builds the selected release tag. Signing, execution verific
 - Workflow linting, shell syntax, changelog validation, Markdown links, and personal-identifier scans passed.
 - Native panel layout fixtures passed for both left-to-right and right-to-left layouts. PluginKit v6 binary compatibility passed.
 
-## Full-suite baseline limitation
+## Full-suite failure and correction
 
 `make ci` was run. The initial native run passed 4,638 of 4,642 tests. Two failures were outdated localization expectations introduced by changing the wording; those expectations were corrected and the localization class passed on rerun. An unrelated keyboard modifier test passed on isolated rerun.
 
-One source-scanning test still fails on unchanged upstream code: `PluginPresentationSafetyTests.testEveryWindowPresentationCallsiteUsesTheSharedSafetyBoundary`. The screenshot plugin's folder chooser calls `PluginPresentationSafety.prepareForWindowOrdering`, but more than 240 characters before `panel.runModal()`, outside the scanner's look-back window. Both the plugin and test match base `7a5f7f56`; neither is modified by this PR. This blocks claiming a completely green full suite. The UI fixture and binary compatibility checks that follow XCTest in `make ci` were run separately and passed.
+The remaining source-scanning failure originated in base `7a5f7f56`: the screenshot folder chooser prepared presentation safety more than 240 characters before `panel.runModal()`, outside the scanner's look-back window. This PR now also calls `PluginPresentationSafety.prepareForWindowOrdering` immediately before opening that dialog, preserving the earlier protection before app activation. The entire presentation-safety test class passed after this targeted correction. The test itself was not weakened or skipped. The UI fixture and binary compatibility checks that followed XCTest in `make ci` were also run separately and passed; the latest full hosted result is tracked on the PR.
 
 ## Signed acceptance still required
 

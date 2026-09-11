@@ -94,4 +94,4 @@ Stable candidates with sealed CLI metadata use `~/.local/bin/mactools` and a pub
 
 The stable release workflow defaults `STABLE_CLI_ENABLED` to `false`. Ordinary stable builds omit CLI metadata and retain the existing manual integration settings. Validate shared behavior through signed Nightly builds, then test stable-specific behavior with a locally built, signed and notarized stable candidate. The Release workflow builds the selected release tag and is not a validation-only workflow. Changing the default requires a reviewed follow-up after the remaining acceptance checks pass. See the [release procedure](../../plugins/cli-release.md).
 
-Current implementation checks and baseline limitations are recorded in the [stable implementation validation report](../validation/2026-09-11-stable-cli-implementation.md).
+Current implementation checks and validation history are recorded in the [stable implementation validation report](../validation/2026-09-11-stable-cli-implementation.md).
