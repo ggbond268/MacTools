@@ -168,14 +168,14 @@ final class ScreenshotPluginTests: XCTestCase {
     }
 
     private func makePlugin(
-        storage: PluginStorage = ScreenshotTestStorage(),
+        storage: PluginStorage? = nil,
         screenAccess: @escaping @MainActor () -> Bool = { true },
         requestScreenAccess: @escaping @MainActor () -> Void = {},
         capture: @escaping @MainActor (Bool) -> Void = { _ in },
         folderPicker: @escaping @MainActor (URL) -> URL? = { _ in nil }
     ) -> ScreenshotPlugin {
         ScreenshotPlugin(
-            context: PluginRuntimeContext(pluginID: "screenshot", storage: storage),
+            context: PluginRuntimeContext(pluginID: "screenshot", storage: storage ?? ScreenshotTestStorage()),
             screenAccess: screenAccess,
             requestScreenAccess: requestScreenAccess,
             capture: capture,

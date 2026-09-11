@@ -10,35 +10,80 @@ final class Stitcher {
     static let cols = 64
     private static let coarseStep = 4       // Sample every fourth row in the coarse search.
 
-    /// Returns the number of newly appended rows; zero means no new content was found.
-    @discardableResult
-    func push(_ frame: CGImage) -> Int {
-        let gray = Self.grayColumns(frame)
-        defer { lastGray = gray; width = frame.width; height = frame.height }
-        guard !pieces.isEmpty, frame.width == width, frame.height == height else {
-            pieces = [frame]
-            return frame.height
-        }
-        guard let dy = Self.offset(prev: lastGray, next: gray, height: height) else {
-            pieces.append(frame)              // Preserve the whole frame when there is no overlap.
-            return frame.height
-        }
-        guard dy > 0, let strip = frame.cropping(to: CGRect(x: 0, y: frame.height - dy, width: frame.width, height: dy))
-        else { return 0 }
-        pieces.append(strip)
-        return dy
+    private(set) var totalRows = 0
+    private let maximumBytes: Int
+    private let maximumHeight: Int
+
+    init(maximumBytes: Int = 128 * 1024 * 1024, maximumHeight: Int = 32_768) {
+        self.maximumBytes = maximumBytes
+        self.maximumHeight = maximumHeight
     }
 
-    func compose() -> CGImage? {
+    func reset() {
+        pieces.removeAll()
+        lastGray.removeAll()
+        totalRows = 0
+        width = 0
+        height = 0
+    }
+
+    /// Limits retained RGBA pixels before allocating grayscale data or copying a strip.
+    private func validate(width: Int, rows: Int) throws {
+        guard width > 0, rows > 0, rows <= maximumHeight,
+              width <= maximumBytes / 4, rows <= maximumBytes / 4 / width else {
+            throw ScrollCaptureError.outputTooLarge
+        }
+    }
+
+    /// Returns the number of newly appended rows; zero means no new content was found.
+    @discardableResult
+    func push(_ frame: CGImage) throws -> Int {
+        try Task.checkCancellation()
+        try validate(width: frame.width, rows: frame.height)
+        let gray = Self.grayColumns(frame)
+        let replaces = pieces.isEmpty || frame.width != width || frame.height != height
+        let added: Int
+        if replaces {
+            added = frame.height
+        } else {
+            added = try Self.offset(prev: lastGray, next: gray, height: height) ?? frame.height
+        }
+        let nextRows = replaces ? added : totalRows + added
+        if added > 0 {
+            try validate(width: frame.width, rows: nextRows)
+            // Cropped CGImages retain their original provider. Draw into an independently
+            // allocated bitmap so a few new rows cannot keep an entire capture alive.
+            guard let strip = frame.cropping(to: CGRect(x: 0, y: frame.height - added,
+                                                        width: frame.width, height: added)),
+                  let context = CGContext(data: nil, width: frame.width, height: added,
+                                          bitsPerComponent: 8, bytesPerRow: frame.width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+                throw ScrollCaptureError.compositionFailed
+            }
+            context.draw(strip, in: CGRect(x: 0, y: 0, width: frame.width, height: added))
+            guard let copy = context.makeImage() else { throw ScrollCaptureError.compositionFailed }
+            try Task.checkCancellation()
+            if replaces { pieces = [copy] } else { pieces.append(copy) }
+        }
+        lastGray = gray
+        width = frame.width
+        height = frame.height
+        totalRows = nextRows
+        return added
+    }
+
+    func compose() throws -> CGImage? {
+        try Task.checkCancellation()
         guard let first = pieces.first else { return nil }
-        let total = pieces.reduce(0) { $0 + $1.height }
-        guard let ctx = CGContext(data: nil, width: first.width, height: total, bitsPerComponent: 8, bytesPerRow: 0,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return nil }
+        guard let ctx = CGContext(data: nil, width: first.width, height: totalRows, bitsPerComponent: 8,
+                                  bytesPerRow: first.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         var top = 0
         for piece in pieces {
-            ctx.draw(piece, in: CGRect(x: 0, y: total - top - piece.height, width: piece.width, height: piece.height))
+            try Task.checkCancellation()
+            ctx.draw(piece, in: CGRect(x: 0, y: totalRows - top - piece.height,
+                                      width: piece.width, height: piece.height))
             top += piece.height
         }
         return ctx.makeImage()
@@ -59,14 +104,14 @@ final class Stitcher {
     }
 
     /// Searches all offsets coarsely, then refines near the best match using every row.
-    static func offset(prev: [UInt8], next: [UInt8], height h: Int) -> Int? {
+    static func offset(prev: [UInt8], next: [UInt8], height h: Int) throws -> Int? {
         let top = h * 12 / 100                        // Ignore fixed headers near the top edge.
         let minOverlap = max(h * 15 / 100, 8)
         let maxDy = h - minOverlap
         guard maxDy > 0 else { return nil }
 
-        return prev.withUnsafeBufferPointer { p in
-            next.withUnsafeBufferPointer { q in
+        return try prev.withUnsafeBufferPointer { p in
+            try next.withUnsafeBufferPointer { q in
                 func error(_ dy: Int, step: Int) -> Double {
                     var sum = 0, n = 0, y = top
                     while y + dy < h {
@@ -79,10 +124,14 @@ final class Stitcher {
                 }
                 var best = 0, bestErr = Double.infinity
                 for dy in 0...maxDy {
+                    try Task.checkCancellation()
                     let e = error(dy, step: coarseStep)
                     if e < bestErr { bestErr = e; best = dy }
                 }
-                for dy in max(0, best - 2)...min(maxDy, best + 2) {
+                let candidate = best
+                bestErr = .infinity
+                for dy in max(0, candidate - coarseStep)...min(maxDy, candidate + coarseStep) {
+                    try Task.checkCancellation()
                     let e = error(dy, step: 1)
                     if e < bestErr { bestErr = e; best = dy }
                 }
@@ -93,6 +142,29 @@ final class Stitcher {
 
 }
 
+/// Actor isolation keeps matching, copying, and final composition off the main actor.
+actor ScrollStitchingWorker {
+    private let stitcher: Stitcher
+
+    init(maximumBytes: Int = 128 * 1024 * 1024, maximumHeight: Int = 32_768) {
+        stitcher = Stitcher(maximumBytes: maximumBytes, maximumHeight: maximumHeight)
+    }
+
+    func push(_ image: CGImage) throws -> (added: Int, totalRows: Int) {
+        let added = try stitcher.push(image)
+        return (added, stitcher.totalRows)
+    }
+
+    func compose() throws -> CGImage {
+        defer { stitcher.reset() }
+        guard !stitcher.pieces.isEmpty else { throw ScrollCaptureError.noFrames }
+        guard let image = try stitcher.compose() else { throw ScrollCaptureError.compositionFailed }
+        return image
+    }
+
+    func clear() { stitcher.reset() }
+}
+
 /// Capture completion must recheck the session after every suspension point.
 @MainActor
 final class ScrollCapture {
@@ -100,37 +172,61 @@ final class ScrollCapture {
     var onFinish: ((Result<CGImage?, Error>) -> Void)?
 
     private let captureImage: @MainActor () async throws -> CGImage
-    private let stitcher = Stitcher()
+    private let worker: ScrollStitchingWorker
+    private var compositionTask: Task<Void, Never>?
     private var busy = false
-    private var rows = 0
+    private var processing = false
+    private var finishing = false
     private var done = false
 
-    init(captureImage: @escaping @MainActor () async throws -> CGImage) {
+    init(worker: ScrollStitchingWorker = ScrollStitchingWorker(),
+         captureImage: @escaping @MainActor () async throws -> CGImage) {
+        self.worker = worker
         self.captureImage = captureImage
     }
 
     func tick() async {
-        guard !done, !busy else { return }
+        guard !done, !finishing, !busy else { return }
         busy = true
         defer { busy = false }
         do {
             let frame = try await captureImage()
+            guard !done, !finishing else { return }
+            processing = true
+            let progress = try await worker.push(frame)
+            processing = false
             guard !done else { return }
-            let added = stitcher.push(frame)
-            if added > 0 {
-                rows += added
-                onProgress?(Double(rows) / Double(frame.height))
+            if finishing { compose(); return }
+            if progress.added > 0 {
+                onProgress?(Double(progress.totalRows) / Double(frame.height))
             }
         } catch {
-            end(.failure(error))
+            let wasProcessing = processing
+            processing = false
+            guard !done, !finishing || wasProcessing else { return }
+            if error is CancellationError { cancel() } else { end(.failure(error)) }
         }
     }
 
     func finish() {
-        guard !done else { return }
-        guard !stitcher.pieces.isEmpty else { end(.failure(ScrollCaptureError.noFrames)); return }
-        guard let image = stitcher.compose() else { end(.failure(ScrollCaptureError.compositionFailed)); return }
-        end(.success(image))
+        guard !done, !finishing else { return }
+        finishing = true
+        // Include an accepted frame before composition, regardless of actor scheduling order.
+        guard !processing else { return }
+        compose()
+    }
+
+    private func compose() {
+        compositionTask = Task { [weak self, worker] in
+            do {
+                let image = try await worker.compose()
+                guard !Task.isCancelled else { return }
+                self?.end(.success(image))
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.end(.failure(error))
+            }
+        }
     }
 
     func cancel() { end(.success(nil)) }
@@ -138,12 +234,15 @@ final class ScrollCapture {
     private func end(_ result: Result<CGImage?, Error>) {
         guard !done else { return }
         done = true
+        compositionTask?.cancel()
+        compositionTask = nil
+        Task { [worker] in await worker.clear() }
         onFinish?(result)
     }
 }
 
 enum ScrollCaptureError: Error {
-    case noFrames, compositionFailed
+    case noFrames, compositionFailed, outputTooLarge
 }
 
 /// Samples user-driven scrolling every 250 ms without synthesizing input events.

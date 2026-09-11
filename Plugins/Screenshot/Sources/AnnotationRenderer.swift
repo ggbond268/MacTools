@@ -9,6 +9,7 @@ enum Shape {
     case pen([NSPoint])
     case text(String, at: NSPoint)
     case tag(Int, at: NSPoint)
+    case redaction(NSRect)
     case mosaic(NSRect)
     case blur(NSRect)
 }
@@ -30,6 +31,10 @@ struct Stroke {
 struct Item {
     let shape: Shape
     let stroke: Stroke
+
+    static func qrMask(_ rect: NSRect) -> Item {
+        Item(shape: .redaction(rect.insetBy(dx: -6, dy: -6)), stroke: Stroke(color: .black, width: 0))
+    }
 }
 
 /// Draw annotations and export the frozen image without depending on overlay interaction state.
@@ -75,9 +80,16 @@ final class AnnotationRenderer {
     }
 
     func drawItems(_ items: [Item], draft: Item? = nil, selection: NSRect) {
-        for item in items { draw(item, cache: true, selection: selection) }
+        for item in items {
+            if case .redaction = item.shape { continue }
+            draw(item, cache: true, selection: selection)
+        }
         // Draft geometry changes every frame, so it must not grow the blur cache.
         if let draft { draw(draft, cache: false, selection: selection) }
+        // Blur and mosaic sample the frozen source; keep masks above those effects.
+        for item in items {
+            if case .redaction = item.shape { draw(item, cache: true, selection: selection) }
+        }
     }
 
     private func draw(_ item: Item, cache: Bool, selection: NSRect) {
@@ -127,6 +139,13 @@ final class AnnotationRenderer {
             ])
             let size = label.size()
             label.draw(at: NSPoint(x: r.midX - size.width / 2, y: r.midY - size.height / 2))
+        case .redaction(let r):
+            guard let context = NSGraphicsContext.current?.cgContext else { return }
+            context.saveGState()
+            context.setBlendMode(.copy)
+            context.setFillColor(NSColor.black.cgColor)
+            context.fill(r.intersection(selection).intersection(bounds))
+            context.restoreGState()
         case .mosaic(let r):
             drawMosaic(in: r, selection: selection)
         case .blur(let r):

@@ -119,11 +119,12 @@ final class RecorderTests: XCTestCase {
     func testOnlyRegisteredControlsAreExcludedAndStartupCleanupLeavesHostWindowsAlone() throws {
         _ = NSApplication.shared
         let environment = ScreenshotEnvironment(context: PluginRuntimeContext(pluginID: "screenshot", storage: ScreenshotTestStorage()))
-        let control = CaptureTestWindow(number: 101)
-        let outline = CaptureTestWindow(number: 102)
-        let hostWindow = CaptureTestWindow(number: 103)
+        let control = CaptureTestWindow()
+        let outline = CaptureTestWindow()
+        let hostWindow = CaptureTestWindow()
         environment.registerCaptureControls([control, outline])
-        XCTAssertEqual(try environment.captureControlWindowIDs(availableWindowIDs: [101, 102, 103]), [101, 102])
+        XCTAssertEqual(try environment.captureControlWindowIDs(availableWindowIDs: [CGWindowID(control.windowNumber), CGWindowID(outline.windowNumber), CGWindowID(hostWindow.windowNumber)]),
+                       [CGWindowID(control.windowNumber), CGWindowID(outline.windowNumber)])
 
         environment.closeAll()
         XCTAssertEqual(control.orderOutCalls, 1)
@@ -134,17 +135,17 @@ final class RecorderTests: XCTestCase {
     func testMissingControlWindowPreventsCaptureUntilTheSnapshotContainsIt() throws {
         _ = NSApplication.shared
         let environment = ScreenshotEnvironment(context: PluginRuntimeContext(pluginID: "screenshot", storage: ScreenshotTestStorage()))
-        let control = CaptureTestWindow(number: 101)
+        let control = CaptureTestWindow()
         environment.registerCaptureControls([control])
         defer { environment.closeAll() }
 
         do {
-            _ = try environment.captureControlWindowIDs(availableWindowIDs: [103])
+            _ = try environment.captureControlWindowIDs(availableWindowIDs: [])
             XCTFail("A missing control window must not silently become part of the recording")
         } catch {
             XCTAssertEqual(error as? ScreenshotControlError, .notReady)
         }
-        XCTAssertEqual(try environment.captureControlWindowIDs(availableWindowIDs: [101, 103]), [101])
+        XCTAssertEqual(try environment.captureControlWindowIDs(availableWindowIDs: [CGWindowID(control.windowNumber)]), [CGWindowID(control.windowNumber)])
     }
 
     private enum TestError: Error { case captureFailed }
@@ -152,15 +153,16 @@ final class RecorderTests: XCTestCase {
 
 @MainActor
 private final class CaptureTestWindow: NSWindow {
-    private let testNumber: Int
     private(set) var orderOutCalls = 0
-    override var windowNumber: Int { testNumber }
 
-    init(number: Int) {
-        testNumber = number
-        super.init(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: true)
+    init() {
+        super.init(contentRect: NSRect(x: 100, y: 100, width: 80, height: 60),
+                   styleMask: .borderless, backing: .buffered, defer: false)
         isReleasedWhenClosed = false
     }
 
-    override func orderOut(_ sender: Any?) { orderOutCalls += 1 }
+    override func orderOut(_ sender: Any?) {
+        orderOutCalls += 1
+        super.orderOut(sender)
+    }
 }

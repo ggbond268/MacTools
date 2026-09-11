@@ -1,4 +1,6 @@
 import AppKit
+import CoreImage
+import Vision
 import XCTest
 @testable import ScreenshotPlugin
 
@@ -105,6 +107,53 @@ final class AnnotationRendererTests: XCTestCase {
         renderer.clearCache()
         XCTAssertTrue(renderer.render(selection: selection, items: items, draft: draft,
                                 radius: 0, shadowSize: 0, shadowColor: .black) == exported)
+    }
+
+    func testQRMaskExportCannotDecodeOriginalPayloadAtEitherDisplayScale() throws {
+        let payload = "https://example.com/private-token-for-redaction-test"
+        let filter = try XCTUnwrap(CIFilter(name: "CIQRCodeGenerator"))
+        filter.setValue(Data(payload.utf8), forKey: "inputMessage")
+        filter.setValue("H", forKey: "inputCorrectionLevel")
+        let generated = try XCTUnwrap(filter.outputImage).transformed(by: CGAffineTransform(scaleX: 20, y: 20))
+        let qr = try XCTUnwrap(CIContext().createCGImage(generated, from: generated.extent))
+        let padding = 40
+        let width = qr.width + padding * 2, height = qr.height + padding * 2
+        let context = try XCTUnwrap(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor.white)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.interpolationQuality = .none
+        context.draw(qr, in: CGRect(x: padding, y: padding, width: qr.width, height: qr.height))
+        let original = try XCTUnwrap(context.makeImage())
+        func decode(_ image: CGImage) throws -> [String] {
+            let request = VNDetectBarcodesRequest()
+            request.symbologies = [.qr]
+            try VNImageRequestHandler(cgImage: image).perform([request])
+            return request.results?.compactMap(\.payloadStringValue) ?? []
+        }
+        XCTAssertEqual(try decode(original), [payload], "The original fixture must be readable")
+        for scale: CGFloat in [1, 2] {
+            let size = NSSize(width: CGFloat(width) / scale, height: CGFloat(height) / scale)
+            let renderer = AnnotationRenderer(image: original, scale: scale, size: size)
+            let rect = NSRect(x: CGFloat(padding) / scale, y: CGFloat(padding) / scale,
+                              width: CGFloat(qr.width) / scale, height: CGFloat(qr.height) / scale)
+            let mask = Item.qrMask(rect)
+            let mosaic = Item(shape: .mosaic(rect), stroke: Stroke(color: .red, width: 2))
+            let blur = Item(shape: .blur(rect), stroke: Stroke(color: .red, width: 2))
+            for (items, draft) in [([mask], Optional<Item>.none), ([mask, mosaic], nil), ([mask, blur], mosaic)] {
+                let png = try XCTUnwrap(renderer.render(selection: NSRect(origin: .zero, size: size),
+                    items: items, draft: draft, radius: 0, shadowSize: 0, shadowColor: .black))
+                let exported = try XCTUnwrap(NSBitmapImageRep(data: png))
+                XCTAssertTrue(try decode(XCTUnwrap(exported.cgImage)).isEmpty)
+                let center = try XCTUnwrap(exported.colorAt(x: width / 2, y: height / 2)?.usingColorSpace(.deviceRGB))
+                XCTAssertEqual(center.alphaComponent, 1)
+                XCTAssertEqual(center.redComponent, 0)
+                XCTAssertEqual(center.greenComponent, 0)
+                XCTAssertEqual(center.blueComponent, 0)
+                XCTAssertEqual(try XCTUnwrap(exported.colorAt(x: 0, y: 0)?.usingColorSpace(.deviceRGB)).redComponent, 1)
+            }
+        }
     }
 
     func testStrokeWidthsSelectExistingFontSizes() {

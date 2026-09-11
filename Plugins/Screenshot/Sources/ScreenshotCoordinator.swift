@@ -142,6 +142,8 @@ final class ScreenshotCoordinator {
         switch error {
         case ScrollCaptureError.noFrames:
             return environment.string("scroll.noFrames", "尚未采集到图片，请稍后重试")
+        case ScrollCaptureError.outputTooLarge:
+            return environment.string("scroll.outputTooLarge", "长截图已达大小上限，请缩小截图范围或分段截取")
         case ScrollCaptureError.compositionFailed:
             return environment.string("scroll.compositionFailed", "无法合成长截图，请缩小截图范围后重试")
         default: return captureErrorDescription(error)

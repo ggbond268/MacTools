@@ -1280,7 +1280,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     @objc private func maskQR() {
-        for r in qrRects { items.append(Item(shape: .mosaic(r.insetBy(dx: -6, dy: -6)), stroke: stroke)) }
+        items.append(contentsOf: qrRects.map(Item.qrMask))
         qrRects = []
         hideOcrPanel()
         layoutToolbar()

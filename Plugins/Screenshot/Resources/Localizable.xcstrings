@@ -1,6 +1,23 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "scroll.outputTooLarge": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrolling screenshot size limit reached. Capture a smaller area or split it into sections."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长截图已达大小上限，请缩小截图范围或分段截取"
+          }
+        }
+      }
+    },
     "capture.controlsNotReady": {
       "extractionState": "manual",
       "localizations": {
