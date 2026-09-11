@@ -20,19 +20,21 @@ def make_manifest(archive, app, source_release, source_commit, team, protocol_so
     version = info["CFBundleShortVersionString"]
     build = info["CFBundleVersion"]
     identifier = info["CFBundleIdentifier"]
-    if (info.get("MTReleaseChannel") != "nightly"
-            or not identifier.endswith(".mactools.nightly")
+    channel = info.get("MTReleaseChannel")
+    suffix = {"nightly": ".mactools.nightly", "stable": ".mactools"}.get(channel)
+    if (suffix is None or not identifier.endswith(suffix)
             or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,3}", version)
             or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,3}", build)
             or not re.fullmatch(r"[a-f0-9]{40}", source_commit)
             or not re.fullmatch(r"[A-Z0-9]{10}", team)):
-        raise ValueError("Invalid Nightly app identity or source metadata")
+        raise ValueError("Invalid app channel, identity, or source metadata")
+    tag = "nightly-" + build.replace(".", "-") if channel == "nightly" else "v" + version
     url = urllib.parse.urlsplit(source_release)
     if (url.scheme != "https" or not url.hostname or url.username or url.password
             or url.port or url.query or url.fragment or "%" in source_release
             or ".." in url.path.split("/")
             or not (url.path == f"/releases/{build}" or url.path.endswith(
-                "/releases/download/nightly-" + build.replace(".", "-")))):
+                "/releases/download/" + tag))):
         raise ValueError("CLI source release must be an immutable HTTPS release directory")
     expected = f"mactools-cli-{version}-{build}-macos-arm64.zip"
     data = archive.read_bytes()
@@ -53,7 +55,7 @@ def make_manifest(archive, app, source_release, source_commit, team, protocol_so
     protocol = protocol_source.read_text()
     minimum = int(re.search(r"public static let minimum = (\d+)", protocol)[1])
     maximum = int(re.search(r"public static let current = (\d+)", protocol)[1])
-    return dict(schema=1, channel="nightly", appVersion=version, appBuild=build,
+    return dict(schema=1, channel=channel, appVersion=version, appBuild=build,
                 cliVersion=version, cliBuild=build, sourceCommit=source_commit,
                 sourceRelease=source_release, assetURL=source_release + "/" + expected,
                 sha256=hashlib.sha256(data).hexdigest(), size=len(data), architecture="arm64",

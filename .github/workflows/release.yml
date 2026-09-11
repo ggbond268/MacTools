@@ -11,6 +11,11 @@ on:
         description: "Tag to release, for example v0.9.2 or v0.9.2-beta.1"
         required: true
         type: string
+      cli_candidate:
+        description: "Build and verify a stable CLI candidate without publishing a release or feeds"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -24,12 +29,22 @@ env:
   SCHEME: MacTools
   DERIVED_DATA: build/DerivedData
   ARTIFACT_DIR: build/release
+  # Enable only in a reviewed follow-up after issue #417 signed acceptance.
+  STABLE_CLI_ENABLED: "false"
 
 jobs:
   release:
-    name: Build, sign, notarize, and release
+    name: Build and notarize immutable release candidate
     runs-on: macos-26
     timeout-minutes: 60
+    outputs:
+      artifact_id: ${{ steps.candidate.outputs.artifact-id }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      version: ${{ steps.metadata.outputs.version }}
+      build_number: ${{ steps.metadata.outputs.build_number }}
+      prerelease: ${{ steps.metadata.outputs.prerelease }}
+      source_sha: ${{ steps.metadata.outputs.source_sha }}
+      cli_enabled: ${{ steps.metadata.outputs.cli_enabled }}
 
     steps:
       - name: Checkout
@@ -39,6 +54,9 @@ jobs:
           fetch-depth: 0
 
       - name: Set release metadata
+        id: metadata
+        env:
+          CLI_CANDIDATE: ${{ github.event.inputs.cli_candidate }}
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -63,6 +81,11 @@ jobs:
             exit 1
           fi
 
+          if [[ "$CLI_CANDIDATE" == "true" ]]; then
+            STABLE_CLI_ENABLED="true"
+            echo "STABLE_CLI_ENABLED=true" >> "$GITHUB_ENV"
+          fi
+
           PRERELEASE="false"
           if [[ "$VERSION" == *"-"* || "$VERSION" == *"beta"* || "$VERSION" == *"alpha"* || "$VERSION" == *"rc"* ]]; then
             PRERELEASE="true"
@@ -76,6 +99,16 @@ jobs:
             echo "DMG_PATH=${ARTIFACT_DIR}/${TAG}/${PROJECT_NAME}.dmg"
             echo "SHA256_PATH=${ARTIFACT_DIR}/${TAG}/${PROJECT_NAME}.sha256"
           } >> "$GITHUB_ENV"
+
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "build_number=$BUILD_NUMBER"
+            echo "prerelease=$PRERELEASE"
+            echo "source_sha=$(git rev-parse HEAD)"
+            echo "cli_enabled=$STABLE_CLI_ENABLED"
+          } >> "$GITHUB_OUTPUT"
+          echo "CLI_ARCHIVE_PATH=${ARTIFACT_DIR}/${TAG}/mactools-cli-${VERSION}-${BUILD_NUMBER}-macos-arm64.zip" >> "$GITHUB_ENV"
 
       - name: Verify production plugin catalog
         run: |
@@ -184,6 +217,33 @@ jobs:
             CODE_SIGN_IDENTITY= \
             build \
             -quiet
+
+      - name: Package optional stable CLI and seal installation metadata
+        if: env.STABLE_CLI_ENABLED == 'true'
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+        run: |
+          CLI_PATH="$DERIVED_DATA/Build/Products/Release/mactools"
+          APP_PATH="$DERIVED_DATA/Build/Products/Release/$PROJECT_NAME.app"
+          CLI_ARCHS="$(lipo -archs "$CLI_PATH")"
+          if [[ "$CLI_ARCHS" != "arm64" ]]; then
+            lipo "$CLI_PATH" -thin arm64 -output "$CLI_PATH.arm64"
+            mv "$CLI_PATH.arm64" "$CLI_PATH"
+          fi
+          [[ "$(lipo -archs "$CLI_PATH")" == "arm64" ]]
+          /usr/bin/codesign --force --sign "$SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" \
+            --options runtime --timestamp "$CLI_PATH"
+          scripts/nightly-release.py package-cli --cli "$CLI_PATH" --output "$CLI_ARCHIVE_PATH"
+          python3 scripts/cli-install-manifest.py \
+            --archive "$CLI_ARCHIVE_PATH" --app "$APP_PATH" \
+            --source-release "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG" \
+            --source-commit "$(git rev-parse HEAD)" --team "$APPLE_DEVELOPMENT_TEAM" \
+            --output "$(dirname "$CLI_ARCHIVE_PATH")/cli-install.json"
+
+      - name: Reject stale CLI metadata when publication is disabled
+        if: env.STABLE_CLI_ENABLED != 'true'
+        run: |
+          test ! -e "$DERIVED_DATA/Build/Products/Release/$PROJECT_NAME.app/Contents/Resources/cli-install.json"
 
       - name: Sign app bundle
         run: |
@@ -341,6 +401,13 @@ jobs:
             --wait \
             --timeout 30m
 
+          if [[ "$STABLE_CLI_ENABLED" == "true" ]]; then
+            xcrun notarytool submit "$CLI_ARCHIVE_PATH" \
+              --key "$API_KEY_PATH" --key-id "$ASC_API_KEY_ID" --issuer "$ASC_API_ISSUER_ID" \
+              --wait --timeout 30m --output-format json > "$RUNNER_TEMP/cli-notarization.json"
+            scripts/nightly-release.py verify-notarization --input "$RUNNER_TEMP/cli-notarization.json"
+          fi
+
           xcrun stapler staple "$DMG_PATH"
           spctl -a -t open --context context:primary-signature -v "$DMG_PATH"
           rm -f "$API_KEY_PATH"
@@ -348,6 +415,19 @@ jobs:
       - name: Compute SHA256
         run: |
           shasum -a 256 "$DMG_PATH" | tee "$SHA256_PATH"
+
+      - name: Statically verify notarized stable CLI
+        if: env.STABLE_CLI_ENABLED == 'true'
+        env:
+          BUNDLE_IDENTIFIER_PREFIX: ${{ secrets.BUNDLE_IDENTIFIER_PREFIX }}
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+        run: |
+          CLI_DIR="$(dirname "$CLI_ARCHIVE_PATH")"
+          (cd "$CLI_DIR" && shasum -a 256 "$(basename "$CLI_ARCHIVE_PATH")") > "$CLI_ARCHIVE_PATH.sha256"
+          scripts/nightly-release.py verify-cli-archive --channel stable --skip-execution \
+            --archive "$CLI_ARCHIVE_PATH" --checksum "$CLI_ARCHIVE_PATH.sha256" \
+            --bundle-identifier-prefix "$BUNDLE_IDENTIFIER_PREFIX" --team-identifier "$APPLE_DEVELOPMENT_TEAM" \
+            --version "$VERSION" --build-number "$BUILD_NUMBER"
 
       - name: Extract release notes from CHANGELOG
         run: |
@@ -470,15 +550,102 @@ jobs:
           python3 -c 'import xml.etree.ElementTree as ET; ET.parse("docs/appcast.xml")'
           python3 -m json.tool docs/app-release.json >/dev/null
 
-      - name: Upload notarized DMG artifact
+      - name: Stage release metadata with immutable artifacts
+        run: |
+          RELEASE_DIR="$ARTIFACT_DIR/$TAG"
+          cp "$RELEASE_NOTES_PATH" "$RELEASE_DIR/release-notes.md"
+          cp docs/appcast.xml "$RELEASE_DIR/appcast.xml"
+          if [[ "$PRERELEASE" == "false" ]]; then
+            cp docs/app-release.json "$RELEASE_DIR/app-release.json"
+          fi
+
+      - name: Upload immutable release candidate
+        id: candidate
         uses: actions/upload-artifact@v4
         with:
           name: MacTools-${{ env.TAG }}
-          path: |
-            ${{ env.DMG_PATH }}
-            ${{ env.SHA256_PATH }}
+          path: ${{ env.ARTIFACT_DIR }}/${{ env.TAG }}/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          fi
+
+  verify_cli:
+    name: Verify release candidate without signing or publication credentials
+    needs: release
+    runs-on: macos-26
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate source without credentials
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.release.outputs.source_sha }}
+          persist-credentials: false
+      - name: Download immutable release candidate
+        uses: actions/download-artifact@v5
+        with:
+          artifact-ids: ${{ needs.release.outputs.artifact_id }}
+          path: candidate
+      - name: Verify and execute optional CLI
+        env:
+          CLI_ENABLED: ${{ needs.release.outputs.cli_enabled }}
+          VERSION: ${{ needs.release.outputs.version }}
+          BUILD_NUMBER: ${{ needs.release.outputs.build_number }}
+        run: |
+          if [[ "$CLI_ENABLED" != "true" ]]; then
+            test ! -e candidate/cli-install.json
+            exit 0
+          fi
+          IDENTIFIER="$(jq -er '.signingIdentifier | select(test("^[A-Za-z0-9.-]+\\.mactools\\.cli$"))' candidate/cli-install.json)"
+          PREFIX="${IDENTIFIER%.mactools.cli}"
+          TEAM="$(jq -er '.teamIdentifier | select(test("^[A-Z0-9]{10}$"))' candidate/cli-install.json)"
+          CLI_ARCHIVE="candidate/mactools-cli-$VERSION-$BUILD_NUMBER-macos-arm64.zip"
+          scripts/nightly-release.py verify-cli-archive --channel stable \
+            --archive "$CLI_ARCHIVE" --checksum "$CLI_ARCHIVE.sha256" \
+            --bundle-identifier-prefix "$PREFIX" --team-identifier "$TEAM" \
+            --version "$VERSION" --build-number "$BUILD_NUMBER"
+
+  publish:
+    name: Publish verified release
+    needs: [release, verify_cli]
+    if: github.event.inputs.cli_candidate != 'true'
+    runs-on: macos-26
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+      VERSION: ${{ needs.release.outputs.version }}
+      BUILD_NUMBER: ${{ needs.release.outputs.build_number }}
+      PRERELEASE: ${{ needs.release.outputs.prerelease }}
+      CLI_ENABLED: ${{ needs.release.outputs.cli_enabled }}
+      DMG_PATH: candidate/MacTools.dmg
+      SHA256_PATH: candidate/MacTools.sha256
+      RELEASE_NOTES_PATH: candidate/release-notes.md
+    steps:
+      - name: Checkout candidate source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.release.outputs.source_sha }}
+          fetch-depth: 0
+      - name: Download verified immutable release candidate
+        uses: actions/download-artifact@v5
+        with:
+          artifact-ids: ${{ needs.release.outputs.artifact_id }}
+          path: candidate
+      - name: Restore generated release metadata
+        run: |
+          cp candidate/appcast.xml docs/appcast.xml
+          if [[ "$PRERELEASE" == "false" ]]; then
+            cp candidate/app-release.json docs/app-release.json
+          fi
 
       - name: Create or update GitHub Release
         env:
@@ -491,11 +658,22 @@ jobs:
             RELEASE_ARGS+=(--latest)
           fi
 
+          ASSETS=("$DMG_PATH#${PROJECT_NAME}.dmg" "$SHA256_PATH#${PROJECT_NAME}.sha256")
+          if [[ "$CLI_ENABLED" == "true" ]]; then
+            CLI_ARCHIVE="candidate/mactools-cli-$VERSION-$BUILD_NUMBER-macos-arm64.zip"
+            ASSETS+=("$CLI_ARCHIVE" "$CLI_ARCHIVE.sha256" "candidate/cli-install.json")
+            # Signed app metadata binds exact CLI bytes; never replace assets under an existing tag.
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "Refusing to overwrite a stable CLI release; use a new version and tag." >&2
+              exit 1
+            fi
+          fi
+
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$DMG_PATH#${PROJECT_NAME}.dmg" "$SHA256_PATH#${PROJECT_NAME}.sha256" --clobber
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
             gh release edit "$TAG" "${RELEASE_ARGS[@]}"
           else
-            gh release create "$TAG" "$DMG_PATH#${PROJECT_NAME}.dmg" "$SHA256_PATH#${PROJECT_NAME}.sha256" "${RELEASE_ARGS[@]}"
+            gh release create "$TAG" "${ASSETS[@]}" "${RELEASE_ARGS[@]}"
           fi
 
       - name: Commit app release metadata to main
@@ -519,11 +697,4 @@ jobs:
           else
             git commit -m "ci: update app release metadata for ${TAG}"
             git push origin main
-          fi
-
-      - name: Cleanup keychain
-        if: always()
-        run: |
-          if [[ -n "${KEYCHAIN_PATH:-}" ]]; then
-            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
           fi

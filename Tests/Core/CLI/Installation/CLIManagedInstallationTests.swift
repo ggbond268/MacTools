@@ -12,13 +12,13 @@ final class CLIManagedInstallationTests: XCTestCase {
     override func tearDownWithError() throws { try FileManager.default.removeItem(at: home) }
 
     private func manifest(build: String = "123.1", host: String = "example.invalid",
-                          minimum: Int = 1, maximum: Int = 3) -> CLIReleaseManifest {
-        CLIReleaseManifest(schema: 1, channel: "nightly", appVersion: "1.3.0", appBuild: build,
+                          minimum: Int = 1, maximum: Int = 3, channel: String = "nightly") -> CLIReleaseManifest {
+        CLIReleaseManifest(schema: 1, channel: channel, appVersion: "1.3.0", appBuild: build,
             cliVersion: "1.3.0", cliBuild: build, sourceCommit: String(repeating: "a", count: 40),
             sourceRelease: URL(string: "https://\(host)/releases/\(build)")!,
             assetURL: URL(string: "https://\(host)/releases/\(build)/mactools-cli-1.3.0-\(build)-macos-arm64.zip")!,
             sha256: String(repeating: "a", count: 64), size: 100, architecture: "arm64",
-            signingIdentifier: "test.mactools.nightly.cli", teamIdentifier: "TESTTEAM00",
+            signingIdentifier: channel == "stable" ? "test.mactools.cli" : "test.mactools.nightly.cli", teamIdentifier: "TESTTEAM00",
             protocolMinimum: minimum, protocolMaximum: maximum)
     }
 
@@ -54,6 +54,81 @@ final class CLIManagedInstallationTests: XCTestCase {
             let tampered = try JSONDecoder().decode(CLIReleaseManifest.self, from: JSONSerialization.data(withJSONObject: fields))
             XCTAssertThrowsError(try tampered.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools.nightly", team: "TESTTEAM00"), key)
         }
+    }
+
+    func testStableMetadataRequiresMatchingChannelIdentityAndRelease() throws {
+        let valid = manifest(channel: "stable")
+        try valid.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools", team: "TESTTEAM00", expectedChannel: "stable")
+        XCTAssertThrowsError(try valid.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools", team: "TESTTEAM00", expectedChannel: "nightly"))
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(valid)) as? [String: Any])
+        for path in ["/releases/download/v1.3.0", "/releases/download/v1.3.1", "/releases/download/nightly-123-1"] {
+            var fields = original
+            fields["sourceRelease"] = "https://example.invalid" + path
+            fields["assetURL"] = "https://example.invalid" + path + "/mactools-cli-1.3.0-123.1-macos-arm64.zip"
+            let candidate = try JSONDecoder().decode(CLIReleaseManifest.self, from: JSONSerialization.data(withJSONObject: fields))
+            if path == "/releases/download/v1.3.0" {
+                try candidate.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools", team: "TESTTEAM00")
+            } else {
+                XCTAssertThrowsError(try candidate.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools", team: "TESTTEAM00"))
+            }
+        }
+    }
+
+    func testManagedUIRequiresSealedMetadataForStableAndExcludesDevelopment() {
+        XCTAssertTrue(CLIInstallChannel.isAvailable(channel: "nightly", hasManifest: false))
+        XCTAssertTrue(CLIInstallChannel.isAvailable(channel: "stable", hasManifest: true))
+        XCTAssertFalse(CLIInstallChannel.isAvailable(channel: "stable", hasManifest: false))
+        for channel in [nil, "development", "beta", ""] {
+            XCTAssertFalse(CLIInstallChannel.isAvailable(channel: channel, hasManifest: true))
+        }
+    }
+
+    func testStableAndNightlyCoexistAcrossUpdateRollbackAndRemoval() throws {
+        let (stable, first) = try prepare(manifest(channel: "stable"))
+        let (nightly, nightlyFirst) = try prepare(manifest())
+        XCTAssertEqual(stable.command.lastPathComponent, "mactools")
+        XCTAssertEqual(nightly.command.lastPathComponent, "mactools-nightly")
+        XCTAssertNotEqual(stable.root, nightly.root)
+        XCTAssertNotEqual(stable.owner, nightly.owner)
+        _ = try stable.activate(first.manifest.directoryName, automaticUpdates: true) { _, _ in }
+        _ = try nightly.activate(nightlyFirst.manifest.directoryName, automaticUpdates: true) { _, _ in }
+        let nightlyInode = try XCTUnwrap(CLIManagedStore.entry(nightly.command)).st_ino
+        let (_, next) = try prepare(manifest(build: "124.1", channel: "stable"))
+        _ = try stable.activate(next.manifest.directoryName, automaticUpdates: true) { _, _ in }
+        XCTAssertEqual(try Data(contentsOf: stable.command), Data("fixture-124.1".utf8))
+        _ = try stable.activate(first.manifest.directoryName, automaticUpdates: true,
+                               rollbackForRelease: next.manifest.directoryName) { _, _ in }
+        XCTAssertEqual(try stable.recover()?.rollbackForRelease, next.manifest.directoryName)
+        try stable.remove()
+        XCTAssertNil(try CLIManagedStore.entry(stable.command))
+        XCTAssertEqual(try CLIManagedStore.entry(nightly.command)?.st_ino, nightlyInode)
+        XCTAssertEqual(try Data(contentsOf: nightly.command), Data("fixture-123.1".utf8))
+        XCTAssertEqual(try nightly.recover()?.active, nightlyFirst.manifest.directoryName)
+    }
+
+    func testStableCollisionsPreserveManualHomebrewAndOtherPublisherCommands() throws {
+        let (store, first) = try prepare(manifest(channel: "stable"))
+        try CLIManagedStore.directory(store.command.deletingLastPathComponent(), create: true)
+        for target in ["file", "directory", "/missing", "/opt/homebrew/bin/mactools", "/other-publisher/current/mactools"] {
+            if target == "file" { try Data("manual".utf8).write(to: store.command) }
+            else if target == "directory" { try FileManager.default.createDirectory(at: store.command, withIntermediateDirectories: false) }
+            else { XCTAssertEqual(symlink(target, store.command.path), 0) }
+            let inode = try XCTUnwrap(CLIManagedStore.entry(store.command)).st_ino
+            XCTAssertThrowsError(try store.activate(first.manifest.directoryName, automaticUpdates: true) { _, _ in })
+            XCTAssertEqual(try CLIManagedStore.entry(store.command)?.st_ino, inode)
+            try FileManager.default.removeItem(at: store.command)
+        }
+    }
+
+    func testStableReceiptCannotChangeChannelWhileRetainingOwner() throws {
+        let (store, first) = try prepare(manifest(channel: "stable"))
+        let receiptURL = URL(fileURLWithPath: first.managedPath).deletingLastPathComponent().appendingPathComponent("receipt.json")
+        var fields = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: receiptURL)) as? [String: Any])
+        var metadata = try XCTUnwrap(fields["manifest"] as? [String: Any])
+        metadata["channel"] = "nightly"
+        fields["manifest"] = metadata
+        try JSONSerialization.data(withJSONObject: fields).write(to: receiptURL)
+        XCTAssertThrowsError(try store.receipt(first.manifest.directoryName))
     }
 
     func testLaunchPolicyRequiresManagedReceiptAndHonorsReleaseSpecificRollback() throws {

@@ -116,3 +116,7 @@ For the PluginKit v6 migration, source manifests declare `pluginKitVersion: 6` a
 ### Managed Nightly CLI distribution
 
 Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-install.json` with `scripts/cli-install-manifest.py`, embeds it in the app resources, and then signs the outer app. Publish that same ZIP and JSON only after both notarization submissions pass. The app trusts the resource seal, never a downloaded unsigned manifest. Personal publishers must use the same ordering with an immutable `/releases/<build>` URL. See [managed CLI distribution](docs/plugins/managed-cli-distribution.md) for the contract, ownership layout, and release acceptance gates.
+
+## Stable CLI candidates
+
+The optional stable CLI uses the existing host-owned commands and separate signed download. Publication remains disabled until signed acceptance is complete. See [CLI candidate packaging and release gates](docs/plugins/cli-release.md) before changing release metadata or enabling distribution. Run the installer/channel tests, `make script-tests`, and `make ci` for changes across installer and release infrastructure. Never use a successful unsigned test run as evidence of signed stable acceptance.

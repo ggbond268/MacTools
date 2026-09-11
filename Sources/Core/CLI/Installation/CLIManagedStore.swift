@@ -26,14 +26,18 @@ struct CLIManagedStore: Sendable {
     let root: URL
     let command: URL
     let owner: String
+    let channel: String
     private var current: URL { root.appendingPathComponent("current") }
     private var stateURL: URL { root.appendingPathComponent("state.json") }
     var commandTarget: String { current.appendingPathComponent("mactools").path }
 
     init(manifest: CLIReleaseManifest, home: URL = FileManager.default.homeDirectoryForCurrentUser) {
         owner = Self.owner(for: manifest)
-        root = home.appendingPathComponent("Library/Application Support/MacTools Nightly/CLI/" + owner)
-        command = home.appendingPathComponent(".local/bin/mactools-nightly")
+        channel = manifest.channel
+        let releaseChannel = CLIInstallChannel(rawValue: channel)
+        root = home.appendingPathComponent("Library/Application Support/"
+            + (releaseChannel?.supportDirectory ?? "MacTools") + "/CLI/" + owner)
+        command = home.appendingPathComponent(".local/bin/" + (releaseChannel?.commandName ?? "mactools"))
     }
 
     private static func owner(for manifest: CLIReleaseManifest) -> String {
@@ -124,7 +128,7 @@ struct CLIManagedStore: Sendable {
         if files.contains("mactools") { try Self.regular(executable) }
         if files.contains("LICENSE") { try Self.regular(directory.appendingPathComponent("LICENSE"), maximum: 65536) }
         guard receipt.owner == owner, Self.owner(for: receipt.manifest) == owner,
-              receipt.manifest.channel == "nightly",
+              CLIInstallChannel(rawValue: channel) != nil, receipt.manifest.channel == channel,
               receipt.manifest.directoryName == name,
               receipt.managedPath == root.appendingPathComponent(name).appendingPathComponent("mactools").path,
               receipt.linkPath == command.path else { throw CLIInstallError.ownership }
