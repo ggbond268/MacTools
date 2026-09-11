@@ -1867,10 +1867,11 @@ final class ClipboardHistoryControllerTests: XCTestCase {
 
         pasteboard.simulateCopy("trigger save")
         controller.processPasteboardChange()
-        for _ in 0..<100 where controller.errorMessage == nil {
-            await Task.yield()
+        let didReportFailure = await waitUntil {
+            controller.errorMessage == "Localized storage failure"
         }
 
+        XCTAssertTrue(didReportFailure)
         XCTAssertEqual(controller.errorMessage, "Localized storage failure")
         XCTAssertTrue(controller.items.isEmpty)
         XCTAssertTrue(try persistence.load().isEmpty)
@@ -1898,8 +1899,11 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         await waitUntilLoaded(controller)
 
         fixture.settings.expiration = .oneDay
-        for _ in 0..<100 where controller.errorMessage == nil { await Task.yield() }
+        let didReportFailure = await waitUntil {
+            controller.errorMessage == "Localized storage failure"
+        }
 
+        XCTAssertTrue(didReportFailure)
         XCTAssertEqual(controller.items, [existing])
         XCTAssertEqual(try persistence.load(), [existing])
         XCTAssertEqual(controller.errorMessage, "Localized storage failure")
@@ -1929,8 +1933,11 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         await waitUntilLoaded(controller)
 
         controller.processRetentionExpiration(now: referenceDate.addingTimeInterval(120))
-        for _ in 0..<100 where controller.errorMessage == nil { await Task.yield() }
+        let didReportFailure = await waitUntil {
+            controller.errorMessage == "Localized storage failure"
+        }
 
+        XCTAssertTrue(didReportFailure)
         XCTAssertEqual(controller.items, [existing])
         XCTAssertEqual(try persistence.load(), [existing])
         XCTAssertEqual(controller.errorMessage, "Localized storage failure")
