@@ -16,27 +16,28 @@ Each owner derives from the signing identity, team, and distribution location. E
 
 The app trusts only `Contents/Resources/cli-install.json` sealed by its Developer ID signature. The channel must match the app's `MTReleaseChannel` and signing identity. Architecture, app/CLI versions and builds, protocol range, archive shape, digest, identity, and notarization remain validated before activation. A metadata resource only makes the stable installer visible; it does not bypass authentication. Development and Intel builds do not expose managed installation.
 
-## Candidate-only validation
+## Nightly and local stable validation
 
-After explicit release-operator authorization, dispatch the **Release** workflow with a matching version tag and `cli_candidate: true`. This builds and notarizes a candidate and uploads its artifacts, but the publication job is excluded. It does not create a GitHub release, advance the appcast, or update app-release metadata on main. No workflow was dispatched as part of implementing this support.
+Use signed Nightly builds to validate shared installer behavior. Existing results apply to their recorded source and artifacts; changed behavior requires fresh checks. Then validate a locally built, signed and notarized stable candidate for stable signing/broker identities, metadata, command/store paths, and coexistence with Nightly. Complete the advertised OS matrix, including macOS 14, before enabling stable publication.
 
-The candidate workflow:
+Build local candidates from a recorded source commit, using the intended stable identity and version/build. A release tag is not required for local validation. After release-operator authorization, use the same packaging order as production:
 
-1. Builds the Release app and separate CLI, preserving the app's supported architectures and thinning only the CLI to arm64.
-2. Signs the CLI with Developer ID and packages exactly `mactools` and the GPL license.
-3. Generates channel-bound metadata with `scripts/cli-install-manifest.py` and embeds it before signing the outer app.
-4. Signs the app and DMG, submits the DMG and CLI ZIP separately for notarization, and statically verifies the CLI without executing it in the signing job.
-5. Uploads one immutable candidate artifact containing the DMG/checksum, CLI ZIP/checksum, installation manifest, and generated release metadata.
-6. Downloads that exact artifact ID on a separate runner, verifies the stable CLI's architecture, macOS deployment target, embedded identity/version, Developer ID signature, dependencies, and checksum, then executes `version --json`. That runner has no signing or publication credentials and checkout does not persist Git credentials.
+1. Build the Release app and separate CLI. Preserve the app's supported architectures and thin only the CLI to arm64.
+2. Sign the CLI with Developer ID and package exactly `mactools` and the GPL license using `scripts/nightly-release.py package-cli`.
+3. Generate channel-bound metadata with `scripts/cli-install-manifest.py`, using an authorized immutable HTTPS test-distribution URL, and embed it before signing the outer app. The distribution must serve the exact archive bytes named in that manifest for in-app download testing.
+4. Sign the app and DMG, submit the DMG and CLI ZIP separately for notarization, and verify their results. Use `verify-cli-archive --channel stable --skip-execution` for static CLI checks.
+5. Transfer the verified artifacts to the test environment without signing or publication credentials. Verify the archive again, execute `version --json`, and exercise real in-app installation, permissions, updates, rollback, removal, and stable/Nightly coexistence. Keep normal quarantine behavior and record hashes and outcomes.
 
-Candidate metadata references the intended immutable release URL. Since candidate-only runs do not publish that URL, signed in-app download validation needs an explicitly authorized test distribution with matching metadata generated before app signing. Never change metadata after signing, replace assets at an existing tag, re-sign downloaded product binaries to bypass verification, or remove quarantine. The publication gate must not be enabled merely to make candidate downloads available.
+The shared packaging and verification subcommands in `scripts/nightly-release.py` support both channels. `scripts/release-local.sh` continues producing app-only releases; it does not automatically package a managed stable CLI. Candidate preparation must explicitly follow the CLI packaging and metadata-sealing steps above.
 
-Local packaging can use the same `package-cli` and `verify-cli-archive --channel stable` subcommands in `scripts/nightly-release.py`; their shared archive/signature checks are reused for both channels. `scripts/release-local.sh` continues producing app-only releases and does not enable managed stable CLI installation automatically.
+Never change metadata after signing, replace published assets at an existing tag, re-sign downloaded product binaries to bypass verification, or remove quarantine. Do not enable the publication gate merely to make test downloads available. No stable candidate was signed or published as part of implementing this support.
+
+The **Release** workflow retains normal tag-based checkout and publication semantics, including when started manually. It has no candidate-only mode and must not be dispatched as a dry run. Local validation avoids creating a release tag that would trigger normal publication.
 
 ## Stable publication
 
 `.github/workflows/release.yml` commits `STABLE_CLI_ENABLED: "false"`. Ordinary stable builds therefore do not include installation metadata or publish CLI assets. A separate reviewed change can enable it only after the [acceptance report's remaining checks](../cli/validation/2026-09-10-nightly-signed-acceptance.md) and stable-specific signed tests pass, including macOS 14 and simultaneous stable/Nightly installations.
 
-When enabled, publication depends on the signing job and the credential-isolated CLI verification job. The publisher downloads the same artifact ID, includes the separately verified ZIP/checksum and informational manifest, and refuses to overwrite an existing stable CLI release tag. The app's embedded metadata is authoritative. No CLI executable is embedded in the app, no shell files are changed, and users who have not installed the CLI receive no automatic CLI installation.
+When enabled, the release workflow signs and notarizes the separate CLI, seals its metadata before app signing, and statically verifies it. Publication depends on the signing job and the credential-isolated CLI verification job, which verifies and executes the archive on a separate runner. The publisher downloads the same artifact ID, includes the separately verified ZIP/checksum and informational manifest, and refuses to overwrite an existing stable CLI release tag. The app's embedded metadata is authoritative. No CLI executable is embedded in the app, no shell files are changed, and users who have not installed the CLI receive no automatic CLI installation.
 
 Code/unit tests, candidate archive smoke tests, signed native installation/permission checks, full Sparkle updates, and release approval are separate evidence. Track the remaining Nightly matrix in #403 and stable rollout in #417; this implementation alone closes neither issue.

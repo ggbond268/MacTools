@@ -18,15 +18,18 @@ class StableCLIReleaseTests(unittest.TestCase):
             str(ROOT / ".github/workflows/release.yml"),
         ], text=True))
 
-    def test_publication_is_disabled_and_candidate_run_cannot_publish(self):
+    def test_cli_publication_defaults_off_and_release_requires_verification(self):
         self.assertEqual(self.workflow["env"]["STABLE_CLI_ENABLED"], "false")
         publish = self.workflow["jobs"]["publish"]
         self.assertEqual(publish["needs"], ["release", "verify_cli"])
-        self.assertEqual(publish["if"], "github.event.inputs.cli_candidate != 'true'")
+        self.assertNotIn("cli_candidate", json.dumps(self.workflow))
         build = self.workflow["jobs"]["release"]
         runs = "\n".join(step.get("run", "") for step in build["steps"])
         self.assertNotIn("gh release create", runs)
         self.assertNotIn("git push", runs)
+        self.assertNotIn("STABLE_CLI_ENABLED=true", runs)
+        checkout = next(s for s in build["steps"] if s["name"] == "Checkout")
+        self.assertEqual(checkout["with"]["ref"], "${{ github.event.inputs.tag || github.ref }}")
 
     def test_signing_and_execution_use_separate_jobs_and_same_artifact(self):
         build = self.workflow["jobs"]["release"]
