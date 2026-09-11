@@ -203,6 +203,62 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
         ) == .success
     }
 
+    func centeredGuideSnapshot(_ window: AccessibilityWindowHandle) throws -> WindowCenteredGuideSnapshot {
+        try Task.checkCancellation()
+        guard AXIsProcessTrusted(), isValid(window),
+              window.identity.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            throw WindowLayoutError.windowUnavailable
+        }
+        let element = try externalElement(for: window)
+        let application = AXUIElementCreateApplication(window.identity.processIdentifier)
+        AXUIElementSetMessagingTimeout(application, messagingTimeout)
+        // Missing required state is not evidence that a target is safe to move.
+        guard let minimized = copyBooleanAttribute(element, kAXMinimizedAttribute),
+              let hidden = copyBooleanAttribute(application, kAXHiddenAttribute),
+              let role = copyStringAttribute(element, kAXRoleAttribute),
+              let subrole = copyStringAttribute(element, kAXSubroleAttribute) else {
+            throw WindowLayoutError.windowUnavailable
+        }
+        var fullScreenValue: CFTypeRef?
+        let fullScreenError = AXUIElementCopyAttributeValue(element, "AXFullScreen" as CFString, &fullScreenValue)
+        guard fullScreenError == .success || fullScreenError == .attributeUnsupported else {
+            throw WindowLayoutError.windowUnavailable
+        }
+        let fullScreen: Bool
+        if fullScreenError == .attributeUnsupported {
+            fullScreen = subrole == "AXFullScreenWindow"
+        } else {
+            guard let value = fullScreenValue, CFGetTypeID(value) == CFBooleanGetTypeID() else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            fullScreen = (value as! Bool) || subrole == "AXFullScreenWindow"
+        }
+        return WindowCenteredGuideSnapshot(
+            frame: try frame(of: window), isFullScreen: fullScreen,
+            isMinimized: minimized, isHidden: hidden,
+            canMove: isAttributeSettable(element, kAXPositionAttribute),
+            isStandardWindow: role == kAXWindowRole && subrole == kAXStandardWindowSubrole
+        )
+    }
+
+    func snapCenteredGuide(
+        _ window: AccessibilityWindowHandle,
+        expected: CGRect,
+        target: CGRect,
+        usableFrame: CGRect
+    ) throws {
+        // Revalidate inside the worker immediately before the only write. A queued
+        // release must not move a resized, replaced, hidden or newly full-screen target.
+        let snapshot = try centeredGuideSnapshot(window)
+        guard WindowCenteredGuidePolicy.canReleaseSnap(
+            snapshot: snapshot, expected: expected, target: target, usableFrame: usableFrame
+        ) else { return }
+        try Task.checkCancellation()
+        guard AXIsProcessTrusted() else { return }
+        // One position write only: no resize, retry, activation, or fallback target.
+        try setPoint(target.origin, on: externalElement(for: window))
+    }
+
     func setFrame(
         _ frame: CGRect,
         of window: AccessibilityWindowHandle,

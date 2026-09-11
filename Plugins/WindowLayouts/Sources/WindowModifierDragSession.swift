@@ -10,11 +10,16 @@ protocol WindowModifierDragSessionManaging: AnyObject {
     var isRunning: Bool { get }
     func configure(modifiers: ShortcutModifiers, showsIndicator: Bool)
     func configure(modifiers: ShortcutModifiers)
+    func configureFeatures(modifierDragEnabled: Bool, centeredGuidesEnabled: Bool, respectsStageManager: Bool)
+    func cancelCenteredGuides()
     func start() -> Result<Void, WindowModifierDragMonitorStartError>
     func stop()
 }
 
 extension WindowModifierDragSessionManaging {
+    func cancelCenteredGuides() {}
+    func configureFeatures(modifierDragEnabled: Bool, centeredGuidesEnabled: Bool, respectsStageManager: Bool) {}
+
     func configure(modifiers: ShortcutModifiers) {
         configure(modifiers: modifiers, showsIndicator: true)
     }
@@ -437,6 +442,9 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
     private let eventMonitor: any WindowModifierDragEventMonitoring
     private var gesture: WindowModifierDragGesture
     private var actionQueue = WindowModifierDragActionQueue()
+    private var centeredQueue = WindowCenteredGuideEventQueue()
+    private var modifierDragEnabled = true
+    private let centeredController: WindowCenteredGuideController
 
     @MainActor var isRunning: Bool { eventMonitor.isRunning }
 
@@ -447,6 +455,7 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
         resolver: (any WindowUnderPointerResolving)? = nil,
         frameAdapter: AccessibilityWindowFrameAdapter? = nil,
         eventMonitor: (any WindowModifierDragEventMonitoring)? = nil,
+        centeredEnvironment: (any WindowCenteredGuideEnvironment)? = nil,
         hudPresenter: (any WindowModifierDragHUDPresenting)? = nil,
         pointerLocation: (() -> CGPoint)? = nil,
         localizedErrorMessage: ((WindowLayoutError) -> String)? = nil,
@@ -482,8 +491,25 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
             showsIndicator: showsIndicator,
             requiredModifiers: modifiers
         )
+        self.centeredController = WindowCenteredGuideController(environment: centeredEnvironment ?? SystemWindowCenteredGuideEnvironment())
         self.eventMonitor = eventMonitor ?? SystemWindowModifierDragEventMonitor()
         self.gesture = WindowModifierDragGesture(requiredModifiers: modifiers)
+    }
+
+    @MainActor
+    func cancelCenteredGuides() {
+        lock.withLock { centeredQueue.discardPending() }
+        centeredController.cancel()
+    }
+
+    @MainActor
+    func configureFeatures(modifierDragEnabled: Bool, centeredGuidesEnabled: Bool, respectsStageManager: Bool) {
+        lock.withLock {
+            self.modifierDragEnabled = modifierDragEnabled
+            centeredQueue.configure(enabled: centeredGuidesEnabled)
+        }
+        if !modifierDragEnabled { controller.stop() }
+        centeredController.configure(enabled: centeredGuidesEnabled, respectsStageManager: respectsStageManager)
     }
 
     @MainActor
@@ -517,6 +543,8 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
         }
         let result = eventMonitor.start(handler: eventHandler)
         if case .failure = result {
+            centeredController.configure(enabled: false, respectsStageManager: true)
+            lock.withLock { centeredQueue.configure(enabled: false) }
             eventMonitor.stop()
             lock.withLock {
                 _ = gesture.reset()
@@ -529,6 +557,8 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
 
     @MainActor
     func stop() {
+        centeredController.configure(enabled: false, respectsStageManager: true)
+        lock.withLock { centeredQueue.configure(enabled: false) }
         eventMonitor.stop()
         lock.withLock {
             _ = gesture.reset()
@@ -538,6 +568,16 @@ nonisolated final class WindowModifierDragSession: @unchecked Sendable,
     }
 
     private func handle(_ event: WindowModifierDragMonitorEvent) {
+        if let epoch = lock.withLock({ centeredQueue.enqueue(event) }) {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                while let event = self.lock.withLock({ self.centeredQueue.next(epoch: epoch) }) {
+                    self.centeredController.handle(event)
+                }
+            }
+        }
+        guard lock.withLock({ modifierDragEnabled }) else { return }
+
         if event.type == .tapDisabledByTimeout || event.type == .tapDisabledByUserInput {
             let cancellation = lock.withLock { gesture.reset() }
             dispatch(cancellation)

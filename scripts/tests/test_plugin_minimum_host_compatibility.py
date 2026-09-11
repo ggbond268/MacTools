@@ -20,6 +20,15 @@ PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swif
 PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
+    # Centered guide APIs were added after the released 1.3.0 host.
+    "WindowSnapGuideRole": "1.3.1",
+    "WindowSnapGuideOrientation": "1.3.1",
+    "WindowSnapGuide": "1.3.1",
+    "WindowSnapResult": "1.3.1",
+    "WindowSnapGeometry": "1.3.1",
+    "WindowSnapOverlayController": "1.3.1",
+    "PluginWindowSnapCoordinator": "1.3.1",
+
     # Canonical action registry, execution, discovery, and surface bridges.
     "ActionKey": "1.2.0",
     "ActionParameterSet": "1.2.0",
@@ -336,6 +345,14 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             self.assertEqual(NEW_API_MINIMUM_HOSTS[symbol], "1.2.1")
             self.assertEqual(len(minimum_host_violations("probe", "1.2.0", symbol)), 1)
             self.assertEqual(minimum_host_violations("probe", "1.2.1", symbol), [])
+
+    def test_centered_window_snap_inventory_requires_host_1_3_1(self) -> None:
+        for filename in ("WindowSnapGeometry.swift", "WindowSnapOverlayController.swift", "PluginWindowSnapCoordinator.swift"):
+            source = (REPO_ROOT / "Sources/MacToolsPluginKit" / filename).read_text(encoding="utf-8")
+            for symbol in public_top_level_type_names(source):
+                self.assertEqual(NEW_API_MINIMUM_HOSTS[symbol], "1.3.1")
+                self.assertTrue(minimum_host_violations("probe", "1.3.0", symbol))
+                self.assertEqual(minimum_host_violations("probe", "1.3.1", symbol), [])
 
     def test_component_theme_inventory_covers_every_public_type_used_by_plugins(self) -> None:
         component_theme_symbols = public_top_level_type_names(
