@@ -76,6 +76,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let model = ClipboardHistoryPanelModel()
         model.prepareForPresentation(items: fixture.controller.items)
         await model.waitForSearchForTesting()
+        model.mode = .history
+        await model.waitForSearchForTesting()
         let id = try XCTUnwrap(model.selectedItemID)
         var changedIDs: Set<UUID>?
         let subscription = fixture.controller.itemUpdates.sink { update in

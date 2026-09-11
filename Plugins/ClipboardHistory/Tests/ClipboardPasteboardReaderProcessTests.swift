@@ -77,10 +77,20 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         publish([item], to: pasteboard)
         let revision = pasteboard.changeCount
         _ = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
-        let capture = await access.readCaptureAsynchronously(maximumByteCount: 1_024, expectedChangeCount: revision)
+        let capture = try await readPublishedCapture(
+            from: access,
+            pasteboard: pasteboard,
+            maximumByteCount: 1_024,
+            expectedChangeCount: revision
+        )
         XCTAssertEqual(capture.sourceHint, .universalClipboard)
         XCTAssertEqual(capture.result, .payload(.plainText("Remote text")))
-        let plainRead = await access.readPayloadAsynchronously(maximumByteCount: 1_024, expectedChangeCount: revision)
+        let plainRead = try await readPublishedPayload(
+            from: access,
+            pasteboard: pasteboard,
+            maximumByteCount: 1_024,
+            expectedChangeCount: revision
+        )
         XCTAssertEqual(plainRead, capture.result)
         pasteboard.clearContents()
         pasteboard.setString("New copy", forType: .string)
@@ -533,6 +543,58 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         XCTAssertEqual(response.status, expectedStatus,
                        "Expected the published revision, received \(response.status)")
         return response
+    }
+
+    @MainActor
+    private func readPublishedCapture(
+        from access: GeneralClipboardPasteboard,
+        pasteboard: NSPasteboard,
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async throws -> ClipboardPasteboardCaptureReadResult {
+        let deadline = ContinuousClock.now + .seconds(2)
+        var capture = await access.readCaptureAsynchronously(
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: expectedChangeCount
+        )
+        while (capture.result == .changed || capture.result == .empty), ContinuousClock.now < deadline {
+            guard pasteboard.changeCount == expectedChangeCount else {
+                XCTFail("The test pasteboard changed while waiting for its published capture")
+                return capture
+            }
+            try await Task.sleep(for: .milliseconds(10))
+            capture = await access.readCaptureAsynchronously(
+                maximumByteCount: maximumByteCount,
+                expectedChangeCount: expectedChangeCount
+            )
+        }
+        return capture
+    }
+
+    @MainActor
+    private func readPublishedPayload(
+        from access: GeneralClipboardPasteboard,
+        pasteboard: NSPasteboard,
+        maximumByteCount: Int,
+        expectedChangeCount: Int
+    ) async throws -> ClipboardPasteboardReadResult {
+        let deadline = ContinuousClock.now + .seconds(2)
+        var result = await access.readPayloadAsynchronously(
+            maximumByteCount: maximumByteCount,
+            expectedChangeCount: expectedChangeCount
+        )
+        while (result == .changed || result == .empty), ContinuousClock.now < deadline {
+            guard pasteboard.changeCount == expectedChangeCount else {
+                XCTFail("The test pasteboard changed while waiting for its published payload")
+                return result
+            }
+            try await Task.sleep(for: .milliseconds(10))
+            result = await access.readPayloadAsynchronously(
+                maximumByteCount: maximumByteCount,
+                expectedChangeCount: expectedChangeCount
+            )
+        }
+        return result
     }
 
     private func request(
