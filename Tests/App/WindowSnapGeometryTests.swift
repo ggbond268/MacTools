@@ -443,7 +443,8 @@ final class WindowSnapCoordinatorTests: XCTestCase {
     }
 
     func testPluginWindowGuidesFollowTheCurrentResizedFrame() throws {
-        let screen = try XCTUnwrap(NSScreen.screens.first)
+        let screen = try XCTUnwrap(NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+            ?? NSScreen.screens.first)
         let window = NSPanel(
             contentRect: CGRect(x: screen.frame.midX, y: screen.frame.midY, width: 420, height: 300),
             styleMask: [.titled, .resizable, .fullSizeContentView],

@@ -593,6 +593,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
     }
 
     func dismissCommandPalette(restoringFocus: Bool = true) {
+        commandPaletteSnapCoordinator?.cancelDragging()
         let wasVisible = commandPalettePanel?.isVisible == true
         if wasVisible {
             commandPaletteState?.prepareForDismissal()

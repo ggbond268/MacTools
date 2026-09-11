@@ -109,6 +109,16 @@ final class WindowSnapCoordinator {
         positionStore.savePosition(.custom(normalizedPoint: point), for: role)
     }
 
+    func cancelDragging() {
+        isDragging = false
+        dragReleaseTask?.cancel()
+        dragReleaseTask = nil
+        isSnappingX = false
+        isSnappingY = false
+        lastResult = nil
+        overlayController.hide()
+    }
+
     func resetPosition() {
         positionStore.resetPosition(for: role)
         guard let window, let screen = activeScreen(for: window) else { return }
