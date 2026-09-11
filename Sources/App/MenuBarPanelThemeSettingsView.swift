@@ -506,52 +506,71 @@ private struct MenuBarPanelThemePreview: View {
             contrast: .standard
         )
 
-        VStack(spacing: 6) {
-            previewToolbar(style)
+        VStack(spacing: 5) {
+            previewHeader(style)
 
             HStack(spacing: 6) {
                 previewFeatureCard(style)
                 previewComponentCard(style)
             }
+
+            previewActionBar(style)
         }
         .padding(8)
-        .frame(height: 92)
+        .frame(height: 102)
         .background(style.surfaces.panel)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .environment(\.colorScheme, colorScheme)
         .accessibilityHidden(true)
     }
 
-    private func previewToolbar(_ style: MenuBarPanelThemeStyle) -> some View {
-        HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(style.surfaces.tabSelection)
-                .frame(width: 34, height: 15)
+    private func previewHeader(_ style: MenuBarPanelThemeStyle) -> some View {
+        HStack {
+            Spacer(minLength: 0)
+
+            Capsule()
+                .fill(style.surfaces.panel)
+                .frame(width: 54, height: 15)
                 .overlay {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(style.accent)
-                            .frame(width: 5, height: 5)
-                        RoundedRectangle(cornerRadius: 1, style: .continuous)
-                            .fill(style.text.primary)
-                            .frame(width: 8, height: 4)
+                    Capsule()
+                        .strokeBorder(style.surfaces.separator, lineWidth: 0.5)
+                }
+                .overlay {
+                    HStack(spacing: 2) {
+                        Capsule()
+                            .fill(style.surfaces.tabSelection)
+                            .frame(width: 25, height: 13)
+                            .overlay {
+                                Circle()
+                                    .fill(style.text.primary)
+                                    .frame(width: 5, height: 5)
+                            }
+
+                        Color.clear
+                            .frame(width: 25, height: 13)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                                    .fill(style.text.secondary)
+                                    .frame(width: 8, height: 4)
+                            }
                     }
                 }
 
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(style.surfaces.control)
-                .frame(width: 15, height: 15)
-                .overlay {
-                    Circle()
-                        .fill(style.text.secondary)
-                        .frame(width: 5, height: 5)
-                }
+            Spacer(minLength: 0)
+        }
+    }
 
+    private func previewActionBar(_ style: MenuBarPanelThemeStyle) -> some View {
+        HStack(spacing: 6) {
             Spacer(minLength: 0)
 
-            Circle().fill(style.text.tertiary).frame(width: 5, height: 5)
-            Circle().fill(style.text.secondary).frame(width: 5, height: 5)
+            ForEach(0..<3) { index in
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(index == 0 ? style.text.tertiary : style.text.secondary)
+                    .frame(width: index == 0 ? 7 : 5, height: 5)
+            }
         }
+        .padding(.top, 4)
     }
 
     private func previewFeatureCard(_ style: MenuBarPanelThemeStyle) -> some View {

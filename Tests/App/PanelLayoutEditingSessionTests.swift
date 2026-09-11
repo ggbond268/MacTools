@@ -160,6 +160,21 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
         XCTAssertFalse(model.isEditingLayout)
     }
 
+    func testNormalActionCooldownHonorsMinimumAndSystemDoubleClickInterval() {
+        XCTAssertEqual(
+            MenuBarUnifiedPanelModel.normalActionCooldownInterval(
+                systemDoubleClickInterval: 0.2
+            ),
+            0.5
+        )
+        XCTAssertEqual(
+            MenuBarUnifiedPanelModel.normalActionCooldownInterval(
+                systemDoubleClickInterval: 0.8
+            ),
+            0.8
+        )
+    }
+
     func testNativeCompletionDoesNotCancelACommittedMoveOrANewerDrag() throws {
         let session = PanelLayoutEditingSession()
         let ids = ["a", "b", "c"]
@@ -229,7 +244,6 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
     func testEditorSizingKeepsShortCardsVisibleAndBoundsLongLayouts() {
         let short = PanelLayoutDestination.editorContentHeight(itemHeight: 96, maximumHeight: 600)
         let viewport = short - MenuBarPanelLayout.contentVerticalPadding
-            - PanelLayoutDestination.footerHeight - PanelLayoutDestination.footerSpacing
         XCTAssertGreaterThanOrEqual(viewport, 96 + PanelLayoutDestination.dropTailHeight)
         XCTAssertEqual(PanelLayoutDestination.editorContentHeight(itemHeight: 2000, maximumHeight: 600), 600)
     }

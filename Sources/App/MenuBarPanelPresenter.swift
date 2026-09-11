@@ -926,12 +926,16 @@ struct MenuBarPanelHeightResolution: Equatable {
 
 @MainActor
 final class MenuBarUnifiedPanelModel: ObservableObject {
+    static let minimumNormalActionCooldown: TimeInterval = 0.5
+
     private(set) var selectedTab: MenuBarPanelTab
     private(set) var contentHeight: CGFloat
     private(set) var maximumFeatureListHeight: CGFloat
     private(set) var isPanelVisible: Bool
     @Published private(set) var isEditingLayout = false
+    @Published private(set) var areNormalActionsBlocked = false
     var onTabSelection: ((MenuBarPanelTab) -> Void)?
+    private var normalActionsUnblockTask: Task<Void, Never>?
 
     init(
         selectedTab: MenuBarPanelTab,
@@ -980,11 +984,40 @@ final class MenuBarUnifiedPanelModel: ObservableObject {
         isEditingLayout = true
     }
 
+    static func normalActionCooldownInterval(
+        systemDoubleClickInterval: TimeInterval
+    ) -> TimeInterval {
+        max(minimumNormalActionCooldown, systemDoubleClickInterval)
+    }
+
+    private func blockNormalActionsAfterEditing() {
+        normalActionsUnblockTask?.cancel()
+        areNormalActionsBlocked = true
+        let interval = Self.normalActionCooldownInterval(
+            systemDoubleClickInterval: NSEvent.doubleClickInterval
+        )
+        normalActionsUnblockTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(interval))
+            } catch {
+                return
+            }
+            guard let self else { return }
+            areNormalActionsBlocked = false
+            normalActionsUnblockTask = nil
+        }
+    }
+
     @discardableResult
     func endLayoutEditing() -> Bool {
         guard isEditingLayout else { return false }
+        blockNormalActionsAfterEditing()
         isEditingLayout = false
         return true
+    }
+
+    isolated deinit {
+        normalActionsUnblockTask?.cancel()
     }
 
 }
@@ -995,6 +1028,7 @@ struct MenuBarUnifiedPanelContent: View {
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
     @ObservedObject private var runtimeLocale = PluginRuntimeLocalization.source
     @ObservedObject var model: MenuBarUnifiedPanelModel
+    @StateObject private var layoutEditingSession = PanelLayoutEditingSession()
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     let onDismiss: () -> Void
@@ -1016,36 +1050,37 @@ struct MenuBarUnifiedPanelContent: View {
         )
 
         VStack(spacing: MenuBarPanelLayout.rootSpacing) {
-            MenuBarPanelToolbar(
+            MenuBarPanelTabSwitcher(
                 selectedTab: model.selectedTab,
+                onTabSelection: handleTabSelection
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: MenuBarPanelLayout.headerHeight)
+            .padding(.horizontal, MenuBarPanelLayout.outerPadding)
+
+            MenuBarPanelContentSurface(contentBodyHeight: contentBodyHeight) {
+                panelContent(contentBodyHeight: contentBodyHeight)
+            }
+
+            MenuBarPanelActionBar(
                 availableUpdateVersion: appUpdater.availableUpdateVersion,
                 canEditLayout: visibleItemCount >= 2,
                 isEditingLayout: model.isEditingLayout,
-                onEditLayout: {
-                    if !model.endLayoutEditing() {
-                        model.beginLayoutEditing(visibleItemCount: visibleItemCount)
-                        if model.isEditingLayout {
-                            for item in pluginHost.panelItems where item.isExpanded && item.controlStyle == .disclosure {
-                                pluginHost.setDisclosureExpanded(false, for: item.id)
-                            }
-                        }
-                    }
-                },
-                onTabSelection: handleTabSelection,
+                canUndoLayout: layoutEditingSession.canUndo(ids: visibleLayoutItemIDs),
+                layoutEditingStatus: layoutEditingStatus,
+                areNormalActionsBlocked: model.areNormalActionsBlocked,
+                onEditLayout: toggleLayoutEditing,
+                onUndoLayout: undoLayoutEdit,
                 onOpenUpdate: presentUpdate,
                 onOpenSettings: presentSettings,
                 onQuit: {
                     NSApplication.shared.terminate(nil)
                 }
             )
-            .frame(height: MenuBarPanelLayout.toolbarHeight)
-            .padding(.horizontal, MenuBarPanelLayout.outerPadding)
-
-            MenuBarPanelContentSurface(contentBodyHeight: contentBodyHeight) {
-                panelContent(contentBodyHeight: contentBodyHeight)
-            }
+            .frame(height: MenuBarPanelLayout.actionBarHeight)
         }
-        .padding(.top, MenuBarPanelLayout.outerPadding)
+        .padding(.top, MenuBarPanelLayout.panelTopPadding)
+        .padding(.bottom, MenuBarPanelLayout.panelBottomPadding)
         .frame(
             width: MenuBarPanelLayout.baseWidth,
             height: MenuBarPanelLayout.panelHeight(forContentHeight: model.contentHeight),
@@ -1079,7 +1114,8 @@ struct MenuBarUnifiedPanelContent: View {
             PanelLayoutEditor(
                 pluginHost: pluginHost,
                 surface: model.selectedTab == .components ? .dashboard : .featurePanel,
-                onDismiss: onDismiss
+                onDismiss: onDismiss,
+                session: layoutEditingSession
             )
             .id(model.selectedTab)
             .frame(height: contentBodyHeight)
@@ -1127,7 +1163,74 @@ struct MenuBarUnifiedPanelContent: View {
             return
         }
 
+        layoutEditingSession.reset()
         model.selectTab(tab)
+    }
+
+    private var visibleLayoutItemIDs: [String] {
+        model.selectedTab == .components
+            ? pluginHost.componentItems.map(\.id)
+            : pluginHost.panelItems.map(\.id)
+    }
+
+    private var layoutEditingStatus: String {
+        guard
+            let sourceID = layoutEditingSession.sourceID,
+            layoutEditingSession.destination != nil,
+            let index = layoutEditingSession.previewIDs(
+                currentIDs: visibleLayoutItemIDs
+            ).firstIndex(of: sourceID),
+            let title = layoutEditingItemTitle(for: sourceID)
+        else {
+            return layoutEditingSession.feedback.message
+        }
+
+        return PanelLayoutCopy.position(
+            title,
+            index: index,
+            count: visibleLayoutItemIDs.count
+        )
+    }
+
+    private func layoutEditingItemTitle(for id: String) -> String? {
+        model.selectedTab == .components
+            ? pluginHost.componentItems.first { $0.id == id }?.title
+            : pluginHost.panelItems.first { $0.id == id }?.title
+    }
+
+    private func toggleLayoutEditing() {
+        if model.isEditingLayout {
+            model.endLayoutEditing()
+            layoutEditingSession.reset()
+            return
+        }
+
+        layoutEditingSession.reset()
+        model.beginLayoutEditing(visibleItemCount: visibleItemCount)
+        guard model.isEditingLayout else { return }
+
+        for item in pluginHost.panelItems where item.isExpanded && item.controlStyle == .disclosure {
+            pluginHost.setDisclosureExpanded(false, for: item.id)
+        }
+    }
+
+    private func undoLayoutEdit() {
+        let before = visibleLayoutItemIDs
+        guard let move = layoutEditingSession.takeUndo(ids: before) else { return }
+        let result = PanelLayoutDestination.moving(move.id, toOffset: move.offset, in: before)
+        guard result != before else { return }
+
+        let surface: PluginDisplaySurface = model.selectedTab == .components
+            ? .dashboard
+            : .featurePanel
+        pluginHost.moveRenderedPlugin(id: move.id, toOffset: move.offset, on: surface)
+
+        guard visibleLayoutItemIDs == result else {
+            layoutEditingSession.rejectMove()
+            return
+        }
+
+        layoutEditingSession.didUndo()
     }
 
 }
@@ -1159,69 +1262,85 @@ private struct MenuBarPanelContentSurface<Content: View>: View {
     }
 }
 
-struct MenuBarPanelToolbar: View {
-    let selectedTab: MenuBarPanelTab
+struct MenuBarPanelActionBar: View {
     let availableUpdateVersion: String?
     let canEditLayout: Bool
     let isEditingLayout: Bool
+    let canUndoLayout: Bool
+    let layoutEditingStatus: String
+    let areNormalActionsBlocked: Bool
     let onEditLayout: () -> Void
-    let onTabSelection: (MenuBarPanelTab) -> Void
+    let onUndoLayout: () -> Void
     let onOpenUpdate: () -> Void
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
 
     var body: some View {
-        ZStack {
-            HStack {
-                if isEditingLayout {
-                    Button(PanelLayoutCopy.done, action: onEditLayout)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .lineLimit(1)
+        HStack(spacing: 4) {
+            if isEditingLayout {
+                Text(layoutEditingStatus)
+                    .font(.caption)
+                    .foregroundStyle(theme.text.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                MenuBarPanelEditingButton(
+                    title: PanelLayoutCopy.undo,
+                    emphasis: .standard,
+                    isEnabled: canUndoLayout,
+                    action: onUndoLayout
+                )
+                .accessibilityIdentifier("panel.layout.undo")
+
+                MenuBarPanelEditingButton(
+                    title: PanelLayoutCopy.done,
+                    emphasis: .prominent,
+                    action: onEditLayout
+                )
+                .accessibilityIdentifier("panel.layout.edit")
+            } else {
+                Group {
+                    Spacer(minLength: 8)
+
+                    MenuBarPanelIconButton(
+                        systemImage: "rectangle.portrait.and.arrow.right",
+                        accessibilityTitle: AppL10n.settings("app.quit", defaultValue: "退出"),
+                        symbolOffsetX: -1,
+                        action: onQuit
+                    )
+
+                    if canEditLayout {
+                        MenuBarPanelIconButton(
+                            systemImage: "rectangle.3.group",
+                            accessibilityTitle: PanelLayoutCopy.edit,
+                            action: onEditLayout
+                        )
                         .accessibilityIdentifier("panel.layout.edit")
-                } else if canEditLayout {
-                    MenuBarPanelIconButton(
-                        systemImage: "arrow.up.arrow.down",
-                        accessibilityTitle: PanelLayoutCopy.edit,
-                        action: onEditLayout
-                    )
-                    .accessibilityIdentifier("panel.layout.edit")
-                }
-                Spacer()
-            }
+                    }
 
-            MenuBarPanelTabSwitcher(
-                selectedTab: selectedTab,
-                onTabSelection: onTabSelection
-            )
+                    if let availableUpdateVersion {
+                        MenuBarPanelIconButton(
+                            systemImage: "arrow.triangle.2.circlepath",
+                            accessibilityTitle: updateAccessibilityTitle(
+                                version: availableUpdateVersion
+                            ),
+                            showsNotificationDot: true,
+                            action: onOpenUpdate
+                        )
+                    }
 
-            HStack(spacing: 4) {
-                if let availableUpdateVersion {
                     MenuBarPanelIconButton(
-                        systemImage: "arrow.triangle.2.circlepath",
-                        accessibilityTitle: updateAccessibilityTitle(
-                            version: availableUpdateVersion
-                        ),
-                        showsNotificationDot: true,
-                        action: onOpenUpdate
+                        systemImage: "gearshape",
+                        accessibilityTitle: AppL10n.settings("settings.window.title", defaultValue: "设置"),
+                        action: onOpenSettings
                     )
                 }
-
-                MenuBarPanelIconButton(
-                    systemImage: "gearshape",
-                    accessibilityTitle: AppL10n.settings("settings.window.title", defaultValue: "设置"),
-                    action: onOpenSettings
-                )
-
-                MenuBarPanelIconButton(
-                    systemImage: "rectangle.portrait.and.arrow.right",
-                    accessibilityTitle: AppL10n.settings("app.quit", defaultValue: "退出"),
-                    symbolOffsetX: -1,
-                    action: onQuit
-                )
+                .disabled(areNormalActionsBlocked)
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .padding(.horizontal, MenuBarPanelLayout.outerPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func updateAccessibilityTitle(version: String) -> String {
@@ -1238,9 +1357,92 @@ struct MenuBarPanelToolbar: View {
     }
 }
 
+private struct MenuBarPanelEditingButton: View {
+    let title: String
+    let emphasis: MenuBarPanelEditingButtonStyle.Emphasis
+    var isEnabled = true
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(title, action: action)
+            .buttonStyle(
+                MenuBarPanelEditingButtonStyle(
+                    emphasis: emphasis,
+                    isHovered: isHovered
+                )
+            )
+            .disabled(!isEnabled)
+            .fixedSize(horizontal: true, vertical: false)
+            .onHover { isHovered = isEnabled && $0 }
+    }
+}
+
+private struct MenuBarPanelEditingButtonStyle: ButtonStyle {
+    enum Emphasis {
+        case standard
+        case prominent
+    }
+
+    let emphasis: Emphasis
+    let isHovered: Bool
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.menuBarPanelTheme) private var theme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: emphasis == .prominent ? .semibold : .medium))
+            .foregroundStyle(foregroundColor)
+            .padding(.horizontal, 10)
+            .frame(height: 24)
+            .background {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(backgroundColor(isPressed: configuration.isPressed))
+                    .brightness(backgroundBrightness(isPressed: configuration.isPressed))
+            }
+            .overlay {
+                if emphasis == .standard {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(
+                            theme.surfaces.separator.opacity(isEnabled ? 0.8 : 0.45),
+                            lineWidth: colorSchemeContrast == .increased ? 1 : 0.5
+                        )
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .scaleEffect(configuration.isPressed && isEnabled ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+
+    private var foregroundColor: Color {
+        guard isEnabled else { return theme.text.disabled }
+        return emphasis == .prominent ? theme.text.onAccent : theme.text.primary
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        guard isEnabled else { return theme.surfaces.control.opacity(0.6) }
+        switch emphasis {
+        case .standard:
+            if isPressed { return theme.surfaces.selected }
+            return isHovered ? theme.surfaces.hover : theme.surfaces.control
+        case .prominent:
+            return theme.prominentControlFill
+        }
+    }
+
+    private func backgroundBrightness(isPressed: Bool) -> Double {
+        guard isEnabled, emphasis == .prominent else { return 0 }
+        if isPressed { return -0.06 }
+        return isHovered ? 0.04 : 0
+    }
+}
+
 private struct MenuBarPanelTabSwitcher: View {
     let selectedTab: MenuBarPanelTab
     let onTabSelection: (MenuBarPanelTab) -> Void
+    @State private var hoveredTab: MenuBarPanelTab?
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.menuBarPanelTheme) private var theme
 
     var body: some View {
@@ -1264,15 +1466,43 @@ private struct MenuBarPanelTabSwitcher: View {
                 .accessibilityLabel(tab.accessibilityTitle)
                 .background {
                     Capsule()
-                        .fill(selectedTab == tab ? theme.surfaces.tabSelection : Color.clear)
+                        .fill(tabBackground(for: tab))
+                }
+                .onHover { isHovered in
+                    if isHovered {
+                        hoveredTab = tab
+                    } else if hoveredTab == tab {
+                        hoveredTab = nil
+                    }
                 }
             }
         }
-        .padding(3)
+        .padding(2)
         .background {
             Capsule()
-                .fill(theme.surfaces.control)
+                .fill(theme.surfaces.panel)
+                .overlay {
+                    Capsule()
+                        .strokeBorder(
+                            theme.surfaces.separator,
+                            lineWidth: tabOutlineWidth
+                        )
+                }
         }
+    }
+
+    private func tabBackground(for tab: MenuBarPanelTab) -> Color {
+        if selectedTab == tab {
+            return theme.surfaces.tabSelection
+        }
+        if hoveredTab == tab {
+            return theme.surfaces.hover
+        }
+        return .clear
+    }
+
+    private var tabOutlineWidth: CGFloat {
+        colorSchemeContrast == .increased ? 1 : 0.5
     }
 }
 

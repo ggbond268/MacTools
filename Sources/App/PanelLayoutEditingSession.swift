@@ -5,13 +5,11 @@ import MacToolsPluginKit
 enum PanelLayoutDestination {
     static let rowHeight: CGFloat = 44
     static let rowSpacing: CGFloat = 8
-    static let footerHeight: CGFloat = 40
-    static let footerSpacing: CGFloat = 4
     static let dropTailHeight: CGFloat = 24
 
     static func editorContentHeight(itemHeight: CGFloat, maximumHeight: CGFloat) -> CGFloat {
         min(maximumHeight, max(MenuBarPanelLayout.minimumContentHeight,
-                              itemHeight + footerHeight + footerSpacing + dropTailHeight
+                              itemHeight + dropTailHeight
                                 + MenuBarPanelLayout.contentVerticalPadding))
     }
 
@@ -205,6 +203,12 @@ final class PanelLayoutEditingSession: ObservableObject {
         sourceID = nil
         originalIDs = []
         token = nil
+    }
+
+    func reset() {
+        cancel()
+        undoMove = nil
+        feedback = .guidance
     }
 }
 

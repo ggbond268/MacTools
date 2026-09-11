@@ -2,7 +2,7 @@
 """Run native panel drag acceptance without loading plugins or user preferences.
 
 The fixture compiles the production editor, drag source, destination/session,
-scrolling, grid packing, and toolbar with synthetic host/theme interfaces. XCTest
+scrolling, grid packing, and panel action bar with synthetic host/theme interfaces. XCTest
 separately verifies real PluginHost persistence. A standalone NSApplication run
 loop is required: XCTest's async event pump does not deliver native drop sessions.
 """
@@ -26,7 +26,7 @@ def main():
         parts = [(ROOT / "scripts/e2e/PanelLayoutInteractionFixture.swift").read_text()]
         parts.append(extract("Sources/App/ComponentPanelContent.swift",
                              "enum ComponentGridPlacementEngine {", "\nstruct ComponentPanelContent:"))
-        parts.append(extract("Sources/App/MenuBarPanelPresenter.swift", "struct MenuBarPanelToolbar: View {"))
+        parts.append(extract("Sources/App/MenuBarPanelPresenter.swift", "struct MenuBarPanelActionBar: View {"))
         for name in ("PanelLayoutEditingSession", "PanelLayoutDragScroller", "PanelLayoutEditor", "PanelLayoutDragSource"):
             parts.append((ROOT / f"Sources/App/{name}.swift").read_text().replace("import MacToolsPluginKit", ""))
         source = output / "Fixture.swift"

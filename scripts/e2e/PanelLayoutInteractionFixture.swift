@@ -13,10 +13,12 @@ struct Theme {
         let control = Color.gray.opacity(0.15)
         let hover = Color.gray
         let tabSelection = Color.gray
+        let separator = Color.gray.opacity(0.4)
     }
     struct Texts {
         let primary = Color.black
         let secondary = Color.gray
+        let tertiary = Color.gray.opacity(0.8)
     }
     struct Status { let warning = Color.orange }
     let surfaces = Surfaces()
@@ -95,6 +97,7 @@ enum MenuBarPanelTab: CaseIterable {
 enum MenuBarPanelLayout {
     static let minimumContentHeight: CGFloat = 184
     static let contentVerticalPadding: CGFloat = 10
+    static let outerPadding: CGFloat = 6
 }
 
 @MainActor
@@ -110,11 +113,9 @@ private struct FixtureRoot: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            MenuBarPanelToolbar(
+            MenuBarPanelTabSwitcher(
                 selectedTab: surface == .dashboard ? .components : .features,
-                availableUpdateVersion: nil, canEditLayout: true, isEditingLayout: state.editing,
-                onEditLayout: { state.editing.toggle() }, onTabSelection: { _ in },
-                onOpenUpdate: {}, onOpenSettings: {}, onQuit: {}
+                onTabSelection: { _ in }
             )
             .frame(height: 30)
             if state.editing {
@@ -123,9 +124,31 @@ private struct FixtureRoot: View {
                 Text("Finished")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            MenuBarPanelActionBar(
+                availableUpdateVersion: nil, canEditLayout: true, isEditingLayout: state.editing,
+                canUndoLayout: session.canUndo(ids: host.componentItems.map(\.id)),
+                layoutEditingStatus: session.feedback.message,
+                areNormalActionsBlocked: false,
+                onEditLayout: { state.editing.toggle() },
+                onUndoLayout: undo,
+                onOpenUpdate: {}, onOpenSettings: {}, onQuit: {}
+            )
+            .frame(height: 34)
         }
         .padding(6)
         .frame(width: 316, height: 500)
+    }
+
+    private func undo() {
+        let before = host.componentItems.map(\.id)
+        guard let move = session.takeUndo(ids: before) else { return }
+        let result = PanelLayoutDestination.moving(move.id, toOffset: move.offset, in: before)
+        host.moveRenderedPlugin(id: move.id, toOffset: move.offset, on: surface)
+        guard host.componentItems.map(\.id) == result else {
+            session.rejectMove()
+            return
+        }
+        session.didUndo()
     }
 }
 
@@ -191,12 +214,12 @@ private struct PanelLayoutInteractionFixture {
                         requireOrder(["a", "b", "c"], feedback: .saved)
                         let root = controller.view
                         click(
-                            root.convert(CGPoint(x: rtl ? 30 : 280, y: root.bounds.height - 26), to: nil),
+                            root.convert(CGPoint(x: rtl ? 90 : 226, y: root.bounds.height - 20), to: nil),
                             in: dragWindow)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                             requireOrder(["b", "c", "a"], feedback: .undone)
                             click(
-                                root.convert(CGPoint(x: rtl ? root.bounds.width - 24 : 24, y: 20), to: nil),
+                                root.convert(CGPoint(x: rtl ? 40 : 276, y: root.bounds.height - 20), to: nil),
                                 in: dragWindow)
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                 guard !state.editing else { fail("Done did not finish editing") }

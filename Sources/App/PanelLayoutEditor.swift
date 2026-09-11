@@ -31,23 +31,7 @@ struct PanelLayoutEditor: View {
     }
 
     var body: some View {
-        VStack(spacing: PanelLayoutDestination.footerSpacing) {
-            editor
-            HStack(spacing: 8) {
-                Text(destinationDescription ?? session.feedback.message)
-                    .font(.caption)
-                    .foregroundStyle(theme.text.secondary)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button(PanelLayoutCopy.undo, action: undo)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(!session.canUndo(ids: ids))
-                    .accessibilityIdentifier("panel.layout.undo")
-            }
-            .padding(.horizontal, 4)
-            .frame(height: PanelLayoutDestination.footerHeight)
-        }
+        editor
         .onChange(of: session.feedback) { _, feedback in
             guard feedback != .guidance else { return }
             announce(feedback.message)
@@ -87,7 +71,7 @@ struct PanelLayoutEditor: View {
             }
             .onDisappear {
                 scroller.stop()
-                session.cancel()
+                session.reset()
             }
             .environment(\.panelLayoutScrollToItem, { id in
                 if reduceMotion { proxy.scrollTo(id) }
@@ -206,15 +190,10 @@ struct PanelLayoutEditor: View {
     }
 
     private func commit(_ move: PanelLayoutEditingSession.Move) {
-        save(move, isUndo: false)
+        save(move)
     }
 
-    private func undo() {
-        guard let move = session.takeUndo(ids: ids) else { return }
-        save(move, isUndo: true)
-    }
-
-    private func save(_ move: PanelLayoutEditingSession.Move, isUndo: Bool) {
+    private func save(_ move: PanelLayoutEditingSession.Move) {
         scroller.stop()
         session.cancel()
         let before = ids
@@ -223,15 +202,7 @@ struct PanelLayoutEditor: View {
         guard result != before else { return }
         pluginHost.moveRenderedPlugin(id: move.id, toOffset: move.offset, on: surface)
         guard ids == result else { session.rejectMove(); return }
-        if isUndo { session.didUndo() }
-        else { session.didSave(move, beforeIDs: before, afterIDs: result) }
-    }
-
-    private var destinationDescription: String? {
-        guard let source = session.sourceID, session.destination != nil,
-              let index = session.previewIDs(currentIDs: ids).firstIndex(of: source),
-              let title = title(for: source) else { return nil }
-        return PanelLayoutCopy.position(title, index: index, count: ids.count)
+        session.didSave(move, beforeIDs: before, afterIDs: result)
     }
 
     private func title(for id: String) -> String? {

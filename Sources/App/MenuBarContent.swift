@@ -12,16 +12,20 @@ enum MenuBarPanelLayout {
     static let baseWidth: CGFloat = 316
     static let secondaryPanelWidth: CGFloat = 216
     static let maximumPanelHeight: CGFloat = 720
-    static let minimumPanelHeight: CGFloat = 220
+    static let minimumPanelHeight: CGFloat = 254
     static let featureListMaximumHeight: CGFloat = 860
     static let featurePanelScreenHeightRatio: CGFloat = 0.75
     static let screenVerticalMargin: CGFloat = 48
     static let cornerRadius: CGFloat = 12
     static let panelSpacing: CGFloat = 10
     static let outerPadding: CGFloat = 6
+    static let panelTopPadding: CGFloat = 4
     static let contentTopPadding: CGFloat = 4
+    static let contentBottomPadding: CGFloat = 2
+    static let panelBottomPadding: CGFloat = 2
     static let rootSpacing: CGFloat = 0
-    static let toolbarHeight: CGFloat = 30
+    static let headerHeight: CGFloat = 28
+    static let actionBarHeight: CGFloat = 30
     static let featureRowSpacing: CGFloat = 5
     static let rowHeaderHeight: CGFloat = 31
     static let rowVerticalPadding: CGFloat = 16
@@ -44,12 +48,8 @@ enum MenuBarPanelLayout {
         baseWidth - (outerPadding * 2)
     }
 
-    static var topChromeHeight: CGFloat {
-        outerPadding + toolbarHeight + rootSpacing
-    }
-
-    static var contentBottomPadding: CGFloat {
-        outerPadding
+    static var panelChromeHeight: CGFloat {
+        panelTopPadding + headerHeight + actionBarHeight + panelBottomPadding + (rootSpacing * 2)
     }
 
     static var contentVerticalPadding: CGFloat {
@@ -61,18 +61,18 @@ enum MenuBarPanelLayout {
     }
 
     static var minimumContentHeight: CGFloat {
-        max(0, minimumPanelHeight - topChromeHeight)
+        max(0, minimumPanelHeight - panelChromeHeight)
     }
 
     static func maximumContentHeight(for screen: NSScreen?) -> CGFloat {
         max(
             minimumContentHeight,
-            maximumPanelHeight(for: screen) - topChromeHeight
+            maximumPanelHeight(for: screen) - panelChromeHeight
         )
     }
 
     static func panelHeight(forContentHeight contentHeight: CGFloat) -> CGFloat {
-        topChromeHeight + contentHeight
+        panelChromeHeight + contentHeight
     }
 
     static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
@@ -101,7 +101,7 @@ enum MenuBarPanelLayout {
     }
 
     static func availableFeatureHeight(forPanelHeight panelHeight: CGFloat) -> CGFloat {
-        max(0, panelHeight - topChromeHeight - contentVerticalPadding)
+        max(0, panelHeight - panelChromeHeight - contentVerticalPadding)
     }
 
     static func preferredPanelHeight(for panelItems: [PluginPanelItem], screen: NSScreen?) -> CGFloat {
@@ -160,7 +160,7 @@ enum MenuBarPanelLayout {
         }
 
         let screenMaximum = (visibleFrameHeight * featurePanelScreenHeightRatio)
-            - topChromeHeight
+            - panelChromeHeight
             - contentVerticalPadding
         return max(0, min(featureListMaximumHeight, screenMaximum))
     }
