@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+import MacToolsPluginKit
 @testable import ClipboardHistoryPlugin
 
 final class ClipboardHistoryPanelPositionTrackerTests: XCTestCase {
@@ -63,6 +64,24 @@ final class ClipboardHistoryPanelPositionTrackerTests: XCTestCase {
         XCTAssertEqual(saved.screenID, external.id)
         XCTAssertEqual(ClipboardHistoryPanelPlacement.frame(size: size, on: external, savedPosition: saved.position), dragged)
         XCTAssertNil(tracker.positionToRemember(frame: dragged, screens: screens))
+    }
+
+    func testFinalSnapReplacesTheDragPositionBeforeMovementEnds() throws {
+        var tracker = ClipboardHistoryPanelPositionTracker()
+        let screens = [laptop, external]
+        let target = WindowSnapGeometry.defaultFrame(contentSize: size, visibleFrame: external.visibleFrame)
+        let proposed = target.offsetBy(dx: 12, dy: -10)
+        tracker.beginUserMovement(frame: proposed.offsetBy(dx: 80, dy: 60), screens: screens)
+        let intermediate = try XCTUnwrap(tracker.positionToRemember(frame: proposed, screens: screens))
+        let snapped = WindowSnapGeometry.calculate(
+            proposedFrame: proposed, contentSize: size, visibleFrame: external.visibleFrame
+        )
+        XCTAssertTrue(snapped.isFullySnapped)
+        let final = try XCTUnwrap(tracker.positionToRemember(frame: snapped.snappedFrame, screens: screens))
+        tracker.endUserMovement()
+        XCTAssertNotEqual(final.position, intermediate.position)
+        XCTAssertEqual(final.screenID, external.id)
+        XCTAssertEqual(ClipboardHistoryPanelPlacement.frame(size: size, on: external, savedPosition: final.position), target)
     }
 
     func testReconnectionPreservesEachDisplaysIndependentPosition() throws {

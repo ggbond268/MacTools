@@ -1944,15 +1944,8 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     private final class KeyablePanel: NSPanel {
-        var onBeginUserMovement: (() -> Void)?
-
         override var canBecomeKey: Bool { true }
         override var canBecomeMain: Bool { false }
-
-        override func performDrag(with event: NSEvent) {
-            onBeginUserMovement?()
-            super.performDrag(with: event)
-        }
     }
 
     private let historyController: ClipboardHistoryController
@@ -1984,6 +1977,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private var previousApplicationState = ClipboardHistoryPreviousApplicationState<NSRunningApplication>()
     private var actionState = ClipboardHistoryPanelActionState()
     private var itemActionTask: Task<Void, Never>?
+    private let windowSnapCoordinator = PluginWindowSnapCoordinator()
     private lazy var actionPaletteController = ClipboardHistoryActionPaletteController(
         localization: localization
     )
@@ -2164,6 +2158,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     private func presentPanel(_ panel: NSPanel) {
+        windowSnapCoordinator.cancelDragging()
         savePendingPanelPosition()
         isPositioningPanel = true
         defer { isPositioningPanel = false }
@@ -2197,32 +2192,40 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             screens: ClipboardHistoryPanelScreen.currentScreens()
         )
         positionSaveTask = Task { @MainActor [weak self] in
-            // performDrag returns immediately; WindowServer may consume the mouse-up event.
+            // WindowServer may consume mouse-up. Wait for the snap coordinator to apply
+            // its final frame before recording the completed user movement.
             repeat {
                 do { try await Task.sleep(for: .milliseconds(150)) }
                 catch { return }
-            } while NSEvent.pressedMouseButtons & 1 != 0
+            } while self?.windowSnapCoordinator.isDragging == true
+                || CGEventSource.buttonState(.combinedSessionState, button: .left)
             self?.rememberPanelPosition()
             self?.savePendingPanelPosition()
         }
     }
 
     private func rememberPanelPosition() {
-        guard let panel, panel.isVisible, !isPositioningPanel,
-              let position = positionTracker.positionToRemember(
-                  frame: panel.frame,
-                  screens: ClipboardHistoryPanelScreen.currentScreens()
-              )
+        guard let panel, panel.isVisible, !isPositioningPanel else { return }
+        let screens = ClipboardHistoryPanelScreen.currentScreens()
+        guard !endPanelMovementIfDisplaysChanged(frame: panel.frame, screens: screens),
+              let position = positionTracker.positionToRemember(frame: panel.frame, screens: screens)
         else { return }
         pendingPanelPosition = position
     }
 
     func refreshDisplayTopology() {
         guard let panel else { return }
-        if positionTracker.refreshScreens(frame: panel.frame, screens: ClipboardHistoryPanelScreen.currentScreens()) {
-            savePendingPanelPosition()
-        }
+        endPanelMovementIfDisplaysChanged(frame: panel.frame, screens: ClipboardHistoryPanelScreen.currentScreens())
         actionPaletteController.reposition(relativeTo: panel)
+    }
+
+    @discardableResult
+    private func endPanelMovementIfDisplaysChanged(frame: NSRect, screens: [ClipboardHistoryPanelScreen]) -> Bool {
+        guard positionTracker.refreshScreens(frame: frame, screens: screens) else { return false }
+        // A move notification can arrive before the host's display-topology notification.
+        windowSnapCoordinator.cancelDragging()
+        savePendingPanelPosition()
+        return true
     }
 
     private func savePendingPanelPosition() {
@@ -2239,6 +2242,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func close(restorePreviousApplication: Bool = true, discardsPreviews: Bool = false) {
+        windowSnapCoordinator.cancelDragging()
         savePendingPanelPosition()
         model.cancelPresentationPreparation()
         model.resetPreviewPresentation()
@@ -2266,6 +2270,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        windowSnapCoordinator.cancelDragging()
         savePendingPanelPosition()
         model.resetPreviewPresentation()
         previewCache.cancelPendingLoads()
@@ -2399,7 +2404,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.minSize = NSSize(width: 860, height: 540)
         panel.delegate = self
-        panel.onBeginUserMovement = { [weak self] in self?.beginPanelUserMovement() }
+        windowSnapCoordinator.attach(to: panel)
         panel.contentView = ClipboardHistoryWindowContent.makeHostingView(
             rootView: ClipboardHistoryPanelView(
                 controller: historyController,
@@ -2478,6 +2483,11 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
                     )
                 },
                 onDismissActionPalette: { [weak self] in self?.actionPaletteController.dismiss() },
+                onDragBegan: { [weak self] in
+                    guard let self else { return }
+                    self.beginPanelUserMovement()
+                    self.windowSnapCoordinator.startDragging()
+                },
                 shortcutTextProvider: { [weak self] shortcutID in
                     guard let binding = self?.shortcutBindingProvider(shortcutID) else {
                         return nil
@@ -3441,23 +3451,32 @@ struct ClipboardRichTextPreviewView: View {
 @MainActor
 private struct ClipboardWindowDragRegion: NSViewRepresentable {
     final class DragView: NSView {
+        var onDragBegan: (() -> Void)?
+
         override func resetCursorRects() {
             addCursorRect(bounds, cursor: .openHand)
         }
 
         override func mouseDown(with event: NSEvent) {
             guard let window else { return }
+            onDragBegan?()
             NSCursor.closedHand.push()
             defer { NSCursor.pop() }
             window.performDrag(with: event)
         }
     }
 
+    let onDragBegan: () -> Void
+
     func makeNSView(context: Context) -> DragView {
-        DragView(frame: .zero)
+        let view = DragView(frame: .zero)
+        view.onDragBegan = onDragBegan
+        return view
     }
 
-    func updateNSView(_ nsView: DragView, context: Context) {}
+    func updateNSView(_ nsView: DragView, context: Context) {
+        nsView.onDragBegan = onDragBegan
+    }
 }
 
 private struct ClipboardRelativeTimestamp: View {
@@ -3613,6 +3632,7 @@ struct ClipboardHistoryPanelView: View {
         @escaping (ClipboardHistoryExportMenuEntry.Action) -> Void
     ) -> Void
     let onDismissActionPalette: () -> Void
+    let onDragBegan: () -> Void
     let shortcutTextProvider: (String) -> String?
     let shortcutSettingsContextProvider: () -> PluginSettingsContext?
     let onClose: () -> Void
@@ -3657,6 +3677,7 @@ struct ClipboardHistoryPanelView: View {
             @escaping (ClipboardHistoryExportMenuEntry.Action) -> Void
         ) -> Void,
         onDismissActionPalette: @escaping () -> Void,
+        onDragBegan: @escaping () -> Void,
         shortcutTextProvider: @escaping (String) -> String?,
         shortcutSettingsContextProvider: @escaping () -> PluginSettingsContext?,
         onClose: @escaping () -> Void,
@@ -3686,6 +3707,7 @@ struct ClipboardHistoryPanelView: View {
         self.onCopySavedItem = onCopySavedItem
         self.onPresentActionPalette = onPresentActionPalette
         self.onDismissActionPalette = onDismissActionPalette
+        self.onDragBegan = onDragBegan
         self.shortcutTextProvider = shortcutTextProvider
         self.shortcutSettingsContextProvider = shortcutSettingsContextProvider
         self.onClose = onClose
@@ -3761,11 +3783,11 @@ struct ClipboardHistoryPanelView: View {
             ClipboardHistoryWindowSurface(role: .history, reducesTransparency: accessibilityReduceTransparency)
         }
         .overlay(alignment: .top) {
-            ClipboardWindowDragRegion()
+            ClipboardWindowDragRegion(onDragBegan: onDragBegan)
                 .frame(width: 72, height: 15)
                 .overlay {
                     Capsule()
-                        .fill(Color.secondary.opacity(0.35))
+                        .fill(Color(nsColor: .separatorColor))
                         .frame(width: 28, height: 3)
                         .allowsHitTesting(false)
                 }

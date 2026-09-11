@@ -37,6 +37,17 @@ final class ClipboardHistoryPanelPlacementTests: XCTestCase {
         }
     }
 
+    func testUnmovedPlacementMatchesSnapReferenceAcrossDisplaysAndWindowSizes() {
+        for screen in [primary, secondary] {
+            for size in [size, NSSize(width: 2500, height: 1600)] {
+                XCTAssertEqual(
+                    ClipboardHistoryPanelPlacement.frame(size: size, on: screen, savedPosition: nil),
+                    WindowSnapGeometry.defaultFrame(contentSize: size, visibleFrame: screen.visibleFrame)
+                )
+            }
+        }
+    }
+
     func testEachDisplayRestoresItsOwnPositionAfterSettingsReload() {
         let storage = PlacementTestStorage()
         let settings = ClipboardHistorySettingsStore(storage: storage)
