@@ -30,7 +30,8 @@ final class ClipboardHistoryPlugin:
     PluginInlineShortcutSettingsContextConsuming,
     PluginWindowLayoutTargetProviding,
     PluginSettingsPresenting,
-    AccessibilityPermissionRefreshing
+    AccessibilityPermissionRefreshing,
+    DisplayTopologyRefreshing
 {
     static let pluginID = "clipboard"
     static let pluginOrder = 125
@@ -1390,6 +1391,10 @@ final class ClipboardHistoryPlugin:
         _ = accessibilityRequester(true)
         synchronizeKeywordExpansion()
         onStateChange?()
+    }
+
+    func refreshDisplayTopology() {
+        panelController.refreshDisplayTopology()
     }
 
     func refreshAccessibilityPermission() {

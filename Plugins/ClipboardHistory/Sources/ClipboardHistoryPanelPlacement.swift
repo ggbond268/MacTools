@@ -89,3 +89,44 @@ enum ClipboardHistoryPanelPlacement {
         return intersection.isNull ? 0 : intersection.width * intersection.height
     }
 }
+
+/// Tracks explicit user movement separately from automatic display reconfiguration.
+struct ClipboardHistoryPanelPositionTracker {
+    private var screens: [ClipboardHistoryPanelScreen] = []
+    private var lastFrame: NSRect?
+    private var isUserMoving = false
+
+    mutating func reset(frame: NSRect, screens: [ClipboardHistoryPanelScreen]) {
+        self.screens = screens
+        lastFrame = frame
+        isUserMoving = false
+    }
+
+    mutating func beginUserMovement(frame: NSRect, screens: [ClipboardHistoryPanelScreen]) {
+        reset(frame: frame, screens: screens)
+        isUserMoving = true
+    }
+
+    mutating func endUserMovement() {
+        isUserMoving = false
+    }
+
+    @discardableResult
+    mutating func refreshScreens(frame: NSRect, screens: [ClipboardHistoryPanelScreen]) -> Bool {
+        guard self.screens != screens else { return false }
+        reset(frame: frame, screens: screens)
+        return true
+    }
+
+    mutating func positionToRemember(
+        frame: NSRect,
+        screens: [ClipboardHistoryPanelScreen]
+    ) -> (screenID: String, position: ClipboardHistoryPanelPosition)? {
+        guard !refreshScreens(frame: frame, screens: screens), isUserMoving,
+              frame.origin != lastFrame?.origin,
+              let screen = ClipboardHistoryPanelPlacement.screen(containing: frame, screens: screens)
+        else { return nil }
+        lastFrame = frame
+        return (screen.id, ClipboardHistoryPanelPlacement.position(of: frame, on: screen))
+    }
+}

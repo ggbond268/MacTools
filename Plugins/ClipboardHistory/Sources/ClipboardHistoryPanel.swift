@@ -631,6 +631,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     private var searchProgressTask: Task<Void, Never>?
     private var presentationPreparationTask: Task<Void, Never>?
     private var presentationPreparationGeneration: UInt64 = 0
+    private var pendingPresentationMode: ClipboardPanelMode?
     private var filterRefreshTask: Task<Void, Never>?
     private var filterRefreshGeneration: UInt64 = 0
     private let searchProgressDelayNanoseconds: UInt64
@@ -842,6 +843,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         historyRevision: UInt64? = nil,
         savedRevision: UInt64? = nil
     ) {
+        pendingPresentationMode = nil
         presentationPreparationTask?.cancel()
         presentationPreparationTask = nil
         filterRefreshGeneration &+= 1
@@ -915,6 +917,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     }
 
     func cancelPresentationPreparation() {
+        pendingPresentationMode = nil
         presentationPreparationGeneration &+= 1
         presentationPreparationTask?.cancel()
         presentationPreparationTask = nil
@@ -947,11 +950,15 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         items: [ClipboardHistoryItem],
         savedItems: [ClipboardSavedItem] = [],
         historyRevision: UInt64? = nil,
-        savedRevision: UInt64? = nil
+        savedRevision: UInt64? = nil,
+        initialMode: ClipboardPanelMode? = nil
     ) {
+        // A visible opening may join background preparation with a different destination.
+        pendingPresentationMode = initialMode
         if isPreparingPresentation,
            let historyRevision, let savedRevision,
            historyRevision == currentHistoryRevision, savedRevision == currentSavedRevision {
+            if let initialMode { selectPresentationMode(initialMode) }
             return
         }
         presentationPreparationTask?.cancel()
@@ -970,6 +977,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                 historyRevision: historyRevision,
                 savedRevision: savedRevision
             )
+            if let initialMode { selectPresentationMode(initialMode) }
             return
         }
 
@@ -977,6 +985,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         searchProgressTask?.cancel()
         searchGeneration &+= 1
         isPreparingPresentation = true
+        if let initialMode { selectPresentationMode(initialMode) }
         isSearching = true
         showsSearchProgress = false
         query = ""
@@ -1203,9 +1212,13 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     }
 
     func showSnippetScope() {
-        mode = .snippets
-        if !availableScopeModes.contains(.snippets) {
-            availableScopeModes.append(.snippets)
+        selectPresentationMode(.snippets)
+    }
+
+    private func selectPresentationMode(_ requestedMode: ClipboardPanelMode) {
+        mode = requestedMode
+        if !availableScopeModes.contains(requestedMode) {
+            availableScopeModes.append(requestedMode)
         }
         if !availableFilterFamilies.contains(.scope) {
             availableFilterFamilies.insert(.scope, at: 0)
@@ -1531,7 +1544,12 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         savedItems: [ClipboardSavedItem]
     ) {
         applyFilterAvailability(preparation)
-        mode = availableScopeModes.first ?? .history
+        if let pendingPresentationMode {
+            selectPresentationMode(pendingPresentationMode)
+        } else {
+            mode = availableScopeModes.first ?? .history
+        }
+        pendingPresentationMode = nil
         contentFilter = .all
         semanticFilter = .any
         allItems = items
@@ -1926,8 +1944,15 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     private final class KeyablePanel: NSPanel {
+        var onBeginUserMovement: (() -> Void)?
+
         override var canBecomeKey: Bool { true }
         override var canBecomeMain: Bool { false }
+
+        override func performDrag(with event: NSEvent) {
+            onBeginUserMovement?()
+            super.performDrag(with: event)
+        }
     }
 
     private let historyController: ClipboardHistoryController
@@ -1948,8 +1973,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     private let model = ClipboardHistoryPanelModel()
     private var panel: KeyablePanel?
     private var isPositioningPanel = false
-    private var presentationScreens: [ClipboardHistoryPanelScreen] = []
-    private var lastPositionedFrame: NSRect?
+    private var positionTracker = ClipboardHistoryPanelPositionTracker()
     private var pendingPanelPosition: (screenID: String, position: ClipboardHistoryPanelPosition)?
     private var positionSaveTask: Task<Void, Never>?
     private let previewCache = ClipboardEmbeddedPreviewCache()
@@ -2113,7 +2137,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         )
     }
 
-    func show() {
+    func show(initialMode: ClipboardPanelMode? = nil) {
         invalidatePendingItemAction()
         actionState.beginPresentation()
         model.activatePreviewPresentation()
@@ -2129,7 +2153,8 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
             items: historyController.items,
             savedItems: savedLibraryController.items,
             historyRevision: historyController.presentationRevision,
-            savedRevision: savedLibraryController.presentationRevision
+            savedRevision: savedLibraryController.presentationRevision,
+            initialMode: initialMode
         )
         let panel = panel ?? makePanel()
         self.panel = panel
@@ -2142,10 +2167,10 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         savePendingPanelPosition()
         isPositioningPanel = true
         defer { isPositioningPanel = false }
-        presentationScreens = ClipboardHistoryPanelScreen.currentScreens()
+        let screens = ClipboardHistoryPanelScreen.currentScreens()
         if let screen = ClipboardHistoryPanelPlacement.targetScreen(
             pointer: NSEvent.mouseLocation,
-            screens: presentationScreens
+            screens: screens
         ) {
             panel.minSize = NSSize(
                 width: min(860, screen.visibleFrame.width),
@@ -2161,30 +2186,47 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         PluginPresentationSafety.prepareForWindowOrdering(panel)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
-        lastPositionedFrame = panel.frame
+        positionTracker.reset(frame: panel.frame, screens: screens)
     }
 
-    private func rememberPanelPosition() {
-        guard let panel, panel.isVisible, !isPositioningPanel,
-              panel.frame.origin != lastPositionedFrame?.origin,
-              presentationScreens == ClipboardHistoryPanelScreen.currentScreens(),
-              let screen = ClipboardHistoryPanelPlacement.screen(containing: panel.frame, screens: presentationScreens)
-        else { return }
-        pendingPanelPosition = (screen.id, ClipboardHistoryPanelPlacement.position(of: panel.frame, on: screen))
-        lastPositionedFrame = panel.frame
-        guard positionSaveTask == nil else { return }
+    private func beginPanelUserMovement() {
+        guard let panel, panel.isVisible, !isPositioningPanel else { return }
+        savePendingPanelPosition()
+        positionTracker.beginUserMovement(
+            frame: panel.frame,
+            screens: ClipboardHistoryPanelScreen.currentScreens()
+        )
         positionSaveTask = Task { @MainActor [weak self] in
-            // Native window dragging runs in WindowServer. Save the final display and position
-            // after release instead of writing every intermediate frame along the drag path.
+            // performDrag returns immediately; WindowServer may consume the mouse-up event.
             repeat {
                 do { try await Task.sleep(for: .milliseconds(150)) }
                 catch { return }
             } while NSEvent.pressedMouseButtons & 1 != 0
+            self?.rememberPanelPosition()
             self?.savePendingPanelPosition()
         }
     }
 
+    private func rememberPanelPosition() {
+        guard let panel, panel.isVisible, !isPositioningPanel,
+              let position = positionTracker.positionToRemember(
+                  frame: panel.frame,
+                  screens: ClipboardHistoryPanelScreen.currentScreens()
+              )
+        else { return }
+        pendingPanelPosition = position
+    }
+
+    func refreshDisplayTopology() {
+        guard let panel else { return }
+        if positionTracker.refreshScreens(frame: panel.frame, screens: ClipboardHistoryPanelScreen.currentScreens()) {
+            savePendingPanelPosition()
+        }
+        actionPaletteController.reposition(relativeTo: panel)
+    }
+
     private func savePendingPanelPosition() {
+        positionTracker.endUserMovement()
         positionSaveTask?.cancel()
         positionSaveTask = nil
         guard let pendingPanelPosition else { return }
@@ -2193,8 +2235,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func showSnippets() {
-        show()
-        model.showSnippetScope()
+        show(initialMode: .snippets)
     }
 
     func close(restorePreviousApplication: Bool = true, discardsPreviews: Bool = false) {
@@ -2252,14 +2293,20 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         actionPaletteController.reposition(relativeTo: panel)
     }
 
+    func windowWillStartLiveResize(_ notification: Notification) {
+        guard let panel, notification.object as? NSWindow === panel else { return }
+        beginPanelUserMovement()
+    }
+
     func windowDidEndLiveResize(_ notification: Notification) {
         guard let panel, notification.object as? NSWindow === panel else { return }
         rememberPanelPosition()
+        savePendingPanelPosition()
     }
 
     func windowDidChangeScreen(_ notification: Notification) {
         guard let panel, notification.object as? NSWindow === panel else { return }
-        actionPaletteController.reposition(relativeTo: panel)
+        refreshDisplayTopology()
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
@@ -2352,6 +2399,7 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.minSize = NSSize(width: 860, height: 540)
         panel.delegate = self
+        panel.onBeginUserMovement = { [weak self] in self?.beginPanelUserMovement() }
         panel.contentView = ClipboardHistoryWindowContent.makeHostingView(
             rootView: ClipboardHistoryPanelView(
                 controller: historyController,

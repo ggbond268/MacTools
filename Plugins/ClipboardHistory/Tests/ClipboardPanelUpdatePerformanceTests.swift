@@ -524,6 +524,102 @@ final class ClipboardPanelUpdatePerformanceTests: XCTestCase {
         XCTAssertEqual(model.visibleItems.map(\.id), Array(items.prefix(50)).map(\.id))
     }
 
+    func testColdPresentationPreservesRequestedSnippetDestination() async {
+        let model = ClipboardHistoryPanelModel()
+        let snippet = ClipboardSavedItem(title: "Reply", savedKind: .snippet, payload: .plainText("Body"))
+        model.prepareForPresentationAsynchronously(
+            items: makeItems(2), savedItems: [snippet], historyRevision: 1, savedRevision: 1,
+            initialMode: .snippets
+        )
+        XCTAssertEqual(model.mode, .snippets, "The requested scope should be visible during preparation")
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.mode, .snippets)
+        XCTAssertEqual(model.visibleItems.map(\.id), [snippet.id])
+        XCTAssertEqual(model.selectedItemID, snippet.id)
+    }
+
+    func testSnippetOpeningJoinsPendingPreparationWithoutLosingItsDestination() async throws {
+        let gate = ClipboardPreparationSuspensionGate()
+        defer { gate.resume() }
+        let checkpoints = ClipboardPreparationCheckpointCounter()
+        let model = ClipboardHistoryPanelModel(presentationPreparationCheckpointForTesting: {
+            checkpoints.increment()
+            gate.pauseOnce()
+        })
+        let items = makeItems(2)
+        let snippet = ClipboardSavedItem(title: "Reply", savedKind: .snippet, payload: .plainText("Body"))
+        model.prepareForPresentationAsynchronously(items: items, savedItems: [snippet], historyRevision: 1, savedRevision: 1)
+        try await waitUntilPaused(gate)
+        model.prepareForPresentationAsynchronously(
+            items: items, savedItems: [snippet], historyRevision: 1, savedRevision: 1,
+            initialMode: .snippets
+        )
+        XCTAssertEqual(model.mode, .snippets)
+        gate.resume()
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(checkpoints.value, 2, "Changing the destination must reuse the history and snippet scan")
+        XCTAssertEqual(model.mode, .snippets)
+        XCTAssertEqual(model.visibleItems.map(\.id), [snippet.id])
+    }
+
+    func testWarmSnippetOpeningReusesPreparationAndDoesNotChangeNextDefaultOpening() async {
+        let checkpoints = ClipboardPreparationCheckpointCounter()
+        let model = ClipboardHistoryPanelModel(presentationPreparationCheckpointForTesting: { checkpoints.increment() })
+        let items = makeItems(2)
+        let snippet = ClipboardSavedItem(title: "Reply", savedKind: .snippet, payload: .plainText("Body"))
+        model.prepareForPresentationAsynchronously(items: items, savedItems: [snippet], historyRevision: 1, savedRevision: 1)
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+        let preparedCheckpoints = checkpoints.value
+        model.prepareForPresentationAsynchronously(
+            items: items, savedItems: [snippet], historyRevision: 1, savedRevision: 1,
+            initialMode: .snippets
+        )
+        XCTAssertFalse(model.isPreparingPresentation)
+        XCTAssertEqual(model.mode, .snippets)
+        XCTAssertEqual(model.visibleItems.map(\.id), [snippet.id])
+        model.cancelPresentationPreparation()
+        model.prepareForPresentationAsynchronously(items: items, savedItems: [snippet], historyRevision: 1, savedRevision: 1)
+        XCTAssertEqual(model.mode, .all)
+        XCTAssertEqual(Set(model.visibleItems.map(\.id)), Set(items.map(\.id) + [snippet.id]))
+        XCTAssertEqual(checkpoints.value, preparedCheckpoints)
+    }
+
+    func testRequestedSnippetDestinationRemainsAvailableForAnEmptyLibrary() async {
+        let model = ClipboardHistoryPanelModel()
+        let items = makeItems(2)
+        for _ in 0..<2 {
+            model.prepareForPresentationAsynchronously(
+                items: items, historyRevision: 1, savedRevision: 1, initialMode: .snippets
+            )
+            await model.waitForPresentationPreparationForTesting()
+            await model.waitForSearchForTesting()
+            XCTAssertEqual(model.mode, .snippets)
+            XCTAssertTrue(model.availableScopeModes.contains(.snippets))
+            XCTAssertTrue(model.visibleItems.isEmpty)
+            XCTAssertNil(model.selectedItemID)
+        }
+    }
+
+    func testNewDefaultOpeningSupersedesPendingSnippetDestination() async throws {
+        let gate = ClipboardPreparationSuspensionGate()
+        defer { gate.resume() }
+        let model = ClipboardHistoryPanelModel(presentationPreparationCheckpointForTesting: { gate.pauseOnce() })
+        let items = makeItems(2)
+        model.prepareForPresentationAsynchronously(
+            items: items, historyRevision: 1, savedRevision: 1, initialMode: .snippets
+        )
+        try await waitUntilPaused(gate)
+        model.prepareForPresentationAsynchronously(items: items, historyRevision: 1, savedRevision: 1)
+        gate.resume()
+        await model.waitForPresentationPreparationForTesting()
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.mode, .history)
+        XCTAssertEqual(model.visibleItems.map(\.id), items.map(\.id))
+    }
+
     private func waitUntilPaused(_ gate: ClipboardPreparationSuspensionGate) async throws {
         for _ in 0..<200 where !gate.isPaused {
             try await Task.sleep(for: .milliseconds(2))

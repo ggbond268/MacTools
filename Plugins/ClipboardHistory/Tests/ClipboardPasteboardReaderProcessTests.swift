@@ -16,15 +16,20 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
             ("", .unknown), ("invalid\nsource", .unknown), (String(repeating: "x", count: 256), .unknown),
         ]
         for (marker, expected) in cases {
-            pasteboard.clearContents()
-            pasteboard.setString("Source-aware text", forType: .string)
-            if let marker { pasteboard.setString(marker, forType: sourceType) }
+            let item = NSPasteboardItem()
+            XCTAssertTrue(item.setString("Source-aware text", forType: .string))
+            if let marker { XCTAssertTrue(item.setString(marker, forType: sourceType)) }
+            publish([item], to: pasteboard)
             let response = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
             XCTAssertEqual(response.sourceHint, expected)
             XCTAssertEqual(plainText(in: response), "Source-aware text")
             XCTAssertFalse(response.items.flatMap(\.representations).contains { $0.typeIdentifier == sourceType.rawValue })
         }
-        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.remoteType))
+        let remoteItem = NSPasteboardItem()
+        XCTAssertTrue(remoteItem.setString("Source-aware text", forType: .string))
+        XCTAssertTrue(remoteItem.setString("com.example.Writer", forType: sourceType))
+        XCTAssertTrue(remoteItem.setData(Data(), forType: .init(ClipboardPasteboardSourceHint.remoteType)))
+        publish([remoteItem], to: pasteboard)
         let remote = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
         XCTAssertEqual(remote.sourceHint, .universalClipboard, "The empty remote marker must override any declared app")
     }
@@ -36,16 +41,21 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         defer { pasteboard.releaseGlobally() }
         let reader = ClipboardPasteboardReaderProcess(helperURL: { helperURL })
         defer { Task { await reader.stop() } }
-        let items = ["com.example.First", "com.example.Second"].map { identifier in
-            let item = NSPasteboardItem()
-            item.setString(identifier, forType: NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.applicationType))
-            item.setString("Text", forType: .string)
-            return item
+        func items(concealed: Bool) -> [NSPasteboardItem] {
+            ["com.example.First", "com.example.Second"].enumerated().map { index, identifier in
+                let item = NSPasteboardItem()
+                XCTAssertTrue(item.setString(identifier, forType: .init(ClipboardPasteboardSourceHint.applicationType)))
+                XCTAssertTrue(item.setString("Text", forType: .string))
+                if concealed && index == 0 {
+                    XCTAssertTrue(item.setData(Data(), forType: .init("org.nspasteboard.ConcealedType")))
+                }
+                return item
+            }
         }
-        XCTAssertTrue(pasteboard.writeObjects(items))
+        publish(items(concealed: false), to: pasteboard)
         let conflict = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
         XCTAssertEqual(conflict.sourceHint, .unknown)
-        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+        publish(items(concealed: true), to: pasteboard)
         let blocked = try await readPublishedRevision(
             request(for: pasteboard), from: pasteboard, using: reader, expectedStatus: .unsafe
         )
@@ -61,8 +71,10 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
         let reader = ClipboardPasteboardReaderProcess(helperURL: { helperURL })
         defer { Task { await reader.stop() } }
         let access = GeneralClipboardPasteboard(pasteboard: pasteboard, payloadReader: reader)
-        pasteboard.setString("Remote text", forType: .string)
-        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.remoteType))
+        let item = NSPasteboardItem()
+        XCTAssertTrue(item.setString("Remote text", forType: .string))
+        XCTAssertTrue(item.setData(Data(), forType: .init(ClipboardPasteboardSourceHint.remoteType)))
+        publish([item], to: pasteboard)
         let revision = pasteboard.changeCount
         _ = try await readPublishedRevision(request(for: pasteboard), from: pasteboard, using: reader)
         let capture = await access.readCaptureAsynchronously(maximumByteCount: 1_024, expectedChangeCount: revision)
@@ -489,6 +501,14 @@ final class ClipboardPasteboardReaderProcessTests: XCTestCase {
 
         let recovered = try await reader.read(request(for: recoveryPasteboard))
         XCTAssertEqual(plainText(in: recovered), "recovered")
+    }
+
+    @MainActor
+    private func publish(_ items: [NSPasteboardItem], to pasteboard: NSPasteboard) {
+        let previousRevision = pasteboard.changeCount
+        pasteboard.clearContents()
+        XCTAssertTrue(pasteboard.writeObjects(items))
+        XCTAssertGreaterThan(pasteboard.changeCount, previousRevision)
     }
 
     @MainActor
