@@ -30,6 +30,11 @@ struct WindowCenteredGuidePolicy {
     static let frameLagAllowance: Duration = .milliseconds(120)
     var isAwaitingCorrelatedFrame: Bool { mismatchStartedAt != nil }
 
+    init(originalFrame: CGRect, originalPointer: CGPoint) {
+        self.originalFrame = originalFrame
+        self.originalPointer = originalPointer
+    }
+
     mutating func update(
         snapshot: WindowCenteredGuideSnapshot,
         pointer: CGPoint,

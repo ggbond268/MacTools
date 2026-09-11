@@ -161,6 +161,8 @@ Custom sections and workspaces provide only plugin-specific content. The setting
 
 All custom settings views should use `MacToolsPluginKit.PluginSettingsTheme` for typography, spacing, radii, colors, and shared card backgrounds. This keeps the dependency direction clean: the host app and plugins both depend on `MacToolsPluginKit`, while plugins never depend on `Sources/App/SettingsStyle.swift`.
 
+Use `PluginSettingsItem` (host 1.3.1+) for an icon, title, optional description, and trailing custom control. It shares the host form row layout and neutral icon styling. The containing form or custom section still owns padding and separators; use `pluginSettingsListRowPadding` for internally padded sections.
+
 Recommended mapping:
 
 - Page-level text: `PluginSettingsTheme.Typography.pageTitle` and `pageDescription`.

@@ -495,7 +495,6 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertTrue(model.availableScopeModes.contains(.all))
         XCTAssertTrue(model.availableScopeModes.contains(.history))
         XCTAssertTrue(model.availableScopeModes.contains(.snippets))
-        XCTAssertEqual(model.selectedFilterFamily, .scope)
     }
 
     func testCreatedSnippetIsSelectedOnFirstPageOfLargeSnippetList() async {
@@ -529,7 +528,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.query = "existing"
         await model.waitForSearchForTesting()
         model.revealCreatedSnippet(id: UUID(), savedItems: [])
-        XCTAssertEqual(model.mode, .history)
+        XCTAssertEqual(model.mode, .all)
         XCTAssertEqual(model.query, "existing")
         XCTAssertEqual(model.selectedItemID, history.id)
     }
@@ -624,7 +623,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertTrue(model.availableFilterFamilies.contains(.scope))
     }
 
-    func testProgressiveFilterBarKeepsOneAvailableFamilySelected() {
+    func testFilterFacetsIncludeOnlyGroupsThatCanNarrowResults() {
         let families = ClipboardHistoryFilterFamily.available(
             totalItemCount: 3,
             scopeCounts: [3, 1, 0],
@@ -633,23 +632,9 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         )
 
         XCTAssertEqual(families, [.scope, .type, .content])
-        XCTAssertEqual(
-            ClipboardHistoryFilterFamily.resolvedSelection(
-                current: .content,
-                available: [.scope, .type]
-            ),
-            .scope
-        )
-        XCTAssertEqual(
-            ClipboardHistoryFilterFamily.resolvedSelection(
-                current: .scope,
-                available: [.scope, .content]
-            ),
-            .scope
-        )
     }
 
-    func testEmptySingleAndUniformCollectionsDoNotReserveFilterSpace() {
+    func testEmptySingleAndUniformCollectionsDoNotOfferRedundantFacets() {
         var savedLink = item(text: "https://example.com", pinned: false)
         savedLink.setSavedMetadata(ClipboardHistorySavedMetadata(title: "Link", savedAt: Date()))
         for items in [[], [item(text: "plain", pinned: false)], [savedLink], [
@@ -660,10 +645,6 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         ]] {
             let model = ClipboardHistoryPanelModel()
             model.prepareForPresentation(items: items)
-            XCTAssertTrue(model.availableFilterFamilies.isEmpty)
-            XCTAssertEqual(model.filterOptionCount, 0)
-            XCTAssertFalse(model.selectFilterOption(at: 0))
-            model.cycleFilterFamily()
             XCTAssertTrue(model.availableFilterFamilies.isEmpty)
         }
     }
@@ -690,9 +671,8 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         )
         let model = ClipboardHistoryPanelModel()
         model.prepareForPresentation(items: [], savedItems: [snippet])
-        XCTAssertEqual(model.mode, .snippets)
+        XCTAssertEqual(model.mode, .all)
         XCTAssertTrue(model.availableFilterFamilies.isEmpty)
-        XCTAssertEqual(model.filterOptionCount, 0)
     }
 
     func testOCRDoesNotAddAFilterGroupDuringAnOpenPresentation() {
@@ -736,10 +716,9 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
 
         model.prepareForPresentation(items: [])
         XCTAssertTrue(model.availableFilterFamilies.isEmpty)
-        XCTAssertEqual(model.filterOptionCount, 0)
     }
 
-    func testVisibleFilterRowAppendsNewOptionsWithoutReorderingExistingOptions() {
+    func testFilterMenuAppendsNewOptionsWithoutReorderingExistingOptions() {
         let email = item(text: "person@example.com", pinned: false)
         let ordinary = item(text: "ordinary", pinned: false)
         let link = item(text: "https://example.com", pinned: false)
@@ -755,7 +734,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(model.availableSemanticFilters, [.email, .link])
     }
 
-    func testHiddenFilterFamilyDoesNotAddANewRowUntilReopen() {
+    func testFilterFacetsAreRefreshedOnReopen() {
         let plain = item(text: "plain", pinned: false)
         let image = item(
             payload: payload(typeIdentifier: NSPasteboard.PasteboardType.png.rawValue),
@@ -770,33 +749,6 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.prepareForPresentation(items: [image, plain])
         XCTAssertEqual(model.availableFilterFamilies, [.type])
         XCTAssertEqual(model.availableContentFilters, [.text, .image])
-    }
-
-    func testFilterOptionNumbersFollowTheVisibleStripWithoutGaps() async {
-        let plain = item(text: "plain", pinned: false)
-        let email = item(text: "person@example.com", pinned: false)
-        let pdf = item(payload: payload(typeIdentifier: NSPasteboard.PasteboardType.pdf.rawValue), pinned: false)
-        let model = ClipboardHistoryPanelModel()
-        model.prepareForPresentation(items: [plain, email, pdf])
-        XCTAssertEqual(model.selectedFilterFamily, .type)
-        XCTAssertEqual(model.filterOptionCount, 3)
-        XCTAssertTrue(model.selectFilterOption(at: 2))
-        XCTAssertEqual(model.contentFilter, .pdf)
-        XCTAssertFalse(model.selectFilterOption(at: 3))
-        XCTAssertFalse(model.selectFilterOption(at: -1))
-        XCTAssertEqual(model.contentFilter, .pdf)
-
-        model.selectFilterOption(at: 0)
-        model.cycleFilterFamily()
-        XCTAssertEqual(model.selectedFilterFamily, .content)
-        XCTAssertEqual(model.filterOptionCount, 2)
-        XCTAssertEqual(model.semanticFilter, .any)
-        XCTAssertTrue(model.selectFilterOption(at: 1))
-        XCTAssertEqual(model.semanticFilter, .email)
-        await model.waitForSearchForTesting()
-        XCTAssertEqual(model.visibleItems.map(\.id), [email.id])
-        model.selectFilterOption(at: 0)
-        XCTAssertEqual(model.semanticFilter, .any)
     }
 
     func testReturningFromAnotherAppRefreshesTypesWithoutResettingInteraction() async {
@@ -815,7 +767,6 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.availableFilterFamilies, [.type])
         XCTAssertEqual(model.availableContentFilters, [.text, .image])
-        XCTAssertEqual(model.selectedFilterFamily, .type)
         XCTAssertEqual(model.query, "plain")
         XCTAssertEqual(model.selectedItemID, plain.id)
         XCTAssertEqual(model.selectedItemIDs, [plain.id])
@@ -823,7 +774,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(model.visibleItems.map(\.id), [plain.id])
     }
 
-    func testReturningRefreshesOCRFiltersButKeepsTheChosenFamilyAndType() async {
+    func testReturningRefreshesOCRFiltersButKeepsTheChosenType() async {
         let plain = item(text: "plain", pinned: false)
         var image = item(payload: payload(typeIdentifier: NSPasteboard.PasteboardType.png.rawValue), pinned: false)
         let model = ClipboardHistoryPanelModel()
@@ -836,7 +787,6 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         await model.waitForFilterRefreshForTesting()
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.availableFilterFamilies, [.type, .content])
-        XCTAssertEqual(model.selectedFilterFamily, .type)
         XCTAssertEqual(model.contentFilter, .image)
         XCTAssertEqual(model.visibleItems.map(\.id), [image.id])
     }
@@ -854,46 +804,9 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(model.availableFilterFamilies, [.type])
         XCTAssertTrue(model.availableContentFilters.contains(.image))
         XCTAssertTrue(model.visibleItems.isEmpty)
-        XCTAssertTrue(model.selectFilterOption(at: 0))
+        model.contentFilter = .all
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.visibleItems.map(\.id), [plain.id])
-    }
-
-    func testFamilyCyclingWrapsWithoutChangingFiltersOrSelection() async {
-        var savedText = item(text: "person@example.com", pinned: false)
-        savedText.setSavedMetadata(ClipboardHistorySavedMetadata(title: "Email", savedAt: Date()))
-        let pdf = item(payload: payload(typeIdentifier: NSPasteboard.PasteboardType.pdf.rawValue), pinned: false)
-        let model = ClipboardHistoryPanelModel()
-        model.prepareForPresentation(items: [savedText, pdf])
-        await model.waitForSearchForTesting()
-        let selectedID = model.selectedItemID
-        XCTAssertEqual(model.availableFilterFamilies, [.scope, .type, .content])
-        model.selectFilterFamily(.scope)
-        model.cycleFilterFamily(offset: -1)
-        XCTAssertEqual(model.selectedFilterFamily, .content)
-        model.cycleFilterFamily()
-        XCTAssertEqual(model.selectedFilterFamily, .scope)
-        model.cycleFilterFamily()
-        XCTAssertEqual(model.selectedFilterFamily, .type)
-        XCTAssertEqual(model.mode, .all)
-        XCTAssertEqual(model.contentFilter, .all)
-        XCTAssertEqual(model.semanticFilter, .any)
-        XCTAssertEqual(model.selectedItemID, selectedID)
-    }
-
-    func testSingleAvailableFamilySupportsOptionsButIgnoresCycling() {
-        let model = ClipboardHistoryPanelModel()
-        model.prepareForPresentation(items: [
-            item(text: "plain", pinned: false), item(text: "https://example.com", pinned: false),
-        ])
-        XCTAssertEqual(model.availableFilterFamilies, [.content])
-        model.selectFilterFamily(.scope)
-        model.cycleFilterFamily()
-        model.cycleFilterFamily(offset: -1)
-        XCTAssertEqual(model.selectedFilterFamily, .content)
-        XCTAssertEqual(model.filterOptionCount, 2)
-        XCTAssertTrue(model.selectFilterOption(at: 1))
-        XCTAssertEqual(model.semanticFilter, .link)
     }
 
     func testGlobalShortcutDismissesOnlyTheVisibleKeyHistoryPanel() {
@@ -947,16 +860,13 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertEqual(Set(items.map(\.id)).subtracting(model.selectedItemIDs).count, 1)
     }
 
-    func testOpeningDefaultsToScopeWhenAvailableAndFallsBackToType() {
+    func testOpeningMixedHistoryAndSnippetsDefaultsToAll() {
         let model = ClipboardHistoryPanelModel()
         let history = item(text: "history", pinned: false)
         let snippet = ClipboardSavedItem(title: "Snippet", savedKind: .snippet,
             payload: .plainText("template"), templateText: "template")
         model.prepareForPresentation(items: [history], savedItems: [snippet])
-        XCTAssertEqual(model.selectedFilterFamily, .scope)
         XCTAssertEqual(model.mode, .all)
-        XCTAssertEqual(ClipboardHistoryFilterFamily.resolvedSelection(current: .scope,
-            available: [.type, .content]), .type)
     }
 
     func testCheckboxMarkingDoesNotMoveFocusAndEmptySelectionHasNoActionTarget() async {
@@ -1137,20 +1047,19 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         model.prepareForPresentation(items: [historyItem], savedItems: [savedItem])
         await model.waitForSearchForTesting()
 
-        model.selectFilterFamily(.scope)
-        model.selectFilterOption(at: 1)
+        model.selectScope(at: 1)
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.mode, .history)
         XCTAssertEqual(model.visibleItems.map(\.id), [historyItem.id])
 
-        model.selectFilterOption(at: 2)
+        model.selectScope(at: 2)
         XCTAssertEqual(model.mode, .snippets)
-        model.selectFilterOption(at: 0)
+        model.selectScope(at: 0)
         await model.waitForSearchForTesting()
         XCTAssertEqual(model.mode, .all)
         XCTAssertEqual(Set(model.visibleItems.map(\.id)), Set([historyItem.id, savedItem.id]))
 
-        model.selectFilterOption(at: 2)
+        model.selectScope(at: 2)
         XCTAssertEqual(model.mode, .snippets)
     }
 
@@ -1181,7 +1090,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
                     ClipboardHistoryPlugin.ShortcutID.panelCycleScope: customScope,
                 ]
             ),
-            .cycleFilterFamily(offset: 1)
+            .cycleScope(offset: 1)
         )
         XCTAssertEqual(
             command(
@@ -1191,7 +1100,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
                     ClipboardHistoryPlugin.ShortcutID.panelCycleScope: customScope,
                 ]
             ),
-            .cycleFilterFamily(offset: -1)
+            .cycleScope(offset: -1)
         )
 
         XCTAssertEqual(
@@ -1269,27 +1178,6 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         XCTAssertFalse(state.commit(first))
         XCTAssertTrue(state.commit(second))
         XCTAssertFalse(state.isCurrent(second, panelIsVisible: true))
-    }
-
-    func testHistoryPanelCentersOnlyBeforeItsFirstPresentation() {
-        XCTAssertTrue(ClipboardHistoryPanelController.shouldCenterPanel(hasExistingPanel: false))
-        XCTAssertFalse(ClipboardHistoryPanelController.shouldCenterPanel(hasExistingPanel: true))
-    }
-
-    func testHistoryPanelDefaultPlacementMatchesItsSnapReferenceFrame() {
-        let contentSize = CGSize(width: 900, height: 620)
-        let visibleFrame = CGRect(x: -1_920, y: 48, width: 1_920, height: 1_032)
-
-        XCTAssertEqual(
-            ClipboardHistoryPanelController.defaultPanelFrame(
-                contentSize: contentSize,
-                visibleFrame: visibleFrame
-            ),
-            WindowSnapGeometry.defaultFrame(
-                contentSize: contentSize,
-                visibleFrame: visibleFrame
-            )
-        )
     }
 
     func testActionPalettePrefersTheRightSideAndStaysInsideTheDisplay() {
@@ -1424,10 +1312,10 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
                              isEditingText: true, hasSelectedText: true))
         XCTAssertEqual(command(keyCode: 14, modifiers: .command), .showExportMenu)
         XCTAssertEqual(command(keyCode: 14, modifiers: [.command, .shift]), .shareSelection)
-        XCTAssertEqual(command(keyCode: 48, modifiers: .control), .cycleFilterFamily(offset: 1))
+        XCTAssertEqual(command(keyCode: 48, modifiers: .control), .cycleScope(offset: 1))
         XCTAssertEqual(
             command(keyCode: 48, modifiers: [.control, .shift]),
-            .cycleFilterFamily(offset: -1)
+            .cycleScope(offset: -1)
         )
         XCTAssertNil(command(keyCode: 47, modifiers: .command))
     }
@@ -1496,17 +1384,48 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         }
     }
 
-    func testControlNumberSelectsAnOptionInTheActiveFamily() {
-        let keyCodes: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
-
-        for (index, keyCode) in keyCodes.enumerated() {
+    func testControlNumbersSelectOnlyTheThreeFixedScopes() {
+        for (index, keyCode) in [UInt16(18), 19, 20].enumerated() {
             XCTAssertEqual(
                 command(keyCode: keyCode, modifiers: .control, isEditingText: true),
-                .selectFilterOption(index: index)
+                .selectScope(index: index)
             )
         }
+        for keyCode: UInt16 in [21, 23, 22, 26, 28, 25, 29] {
+            XCTAssertNil(command(keyCode: keyCode, modifiers: .control, isEditingText: true))
+        }
+    }
 
-        XCTAssertNil(command(keyCode: 29, modifiers: .control, isEditingText: true))
+    func testPrimaryScopesStayAvailableForEmptyCollectionsAndCycleInBothDirections() async {
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [], savedItems: [])
+        for (index, scope) in ClipboardPanelMode.primaryScopes.enumerated() {
+            XCTAssertTrue(model.selectScope(at: index))
+            await model.waitForSearchForTesting()
+            XCTAssertEqual(model.mode, scope)
+            XCTAssertTrue(model.visibleItems.isEmpty)
+        }
+        model.cycleScope()
+        XCTAssertEqual(model.mode, .all)
+        model.cycleScope(offset: -1)
+        XCTAssertEqual(model.mode, .snippets)
+        XCTAssertFalse(model.selectScope(at: 3))
+        XCTAssertFalse(model.selectScope(at: -1))
+    }
+
+    func testScopeShortcutsDoNotRetargetContentFilters() async {
+        let model = ClipboardHistoryPanelModel()
+        model.prepareForPresentation(items: [item(text: "https://example.com", pinned: false)], savedItems: [])
+        model.contentFilter = .text
+        model.semanticFilter = .link
+        model.mode = .saved
+        XCTAssertEqual(model.mode.primaryScope, .all)
+        model.cycleScope()
+        await model.waitForSearchForTesting()
+        XCTAssertEqual(model.mode, .history)
+        XCTAssertEqual(model.contentFilter, .text)
+        XCTAssertEqual(model.semanticFilter, .link)
+        XCTAssertEqual(model.visibleItems.count, 1)
     }
 
     func testOptionNumbersAreNoLongerInterceptedForFiltering() {
@@ -1957,7 +1876,7 @@ final class ClipboardHistoryPanelKeyboardTests: XCTestCase {
         ) else {
             return XCTFail("Expected a formatted rich-text preview")
         }
-        XCTAssertEqual(String(preview.characters), "Formatted note")
+        XCTAssertEqual(String(preview.light.characters), "Formatted note")
 
         let imageItem = ClipboardHistoryItem(
             id: UUID(),

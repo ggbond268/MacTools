@@ -76,6 +76,8 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         let model = ClipboardHistoryPanelModel()
         model.prepareForPresentation(items: fixture.controller.items)
         await model.waitForSearchForTesting()
+        model.mode = .history
+        await model.waitForSearchForTesting()
         let id = try XCTUnwrap(model.selectedItemID)
         var changedIDs: Set<UUID>?
         let subscription = fixture.controller.itemUpdates.sink { update in
@@ -311,6 +313,108 @@ final class ClipboardHistoryControllerTests: XCTestCase {
             "com.example.SourceA"
         )
         fixture.controller.stop()
+    }
+
+    func testRemoteClipboardNeverUsesForegroundAppForSmallOrQueuedCaptures() async {
+        let fixture = makeFixture()
+        defer { fixture.controller.stop() }
+        fixture.source.application = .init(bundleIdentifier: "com.example.Foreground", name: "Foreground")
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.simulatedTypeNames.insert(ClipboardPasteboardSourceHint.remoteType)
+        // The remote marker takes precedence even if another source marker names a local app.
+        fixture.pasteboard.captureSourceHint = .application("com.example.Other")
+        for text in ["Remote text", String(repeating: "Large remote text ", count: 5_000)] {
+            fixture.pasteboard.simulateCopy(text)
+            fixture.controller.processPasteboardChange()
+            await fixture.controller.waitForCaptureProcessingForTesting()
+            XCTAssertEqual(fixture.controller.items.first?.source, .universalClipboard)
+            XCTAssertNil(fixture.controller.items.first?.sourceApplication)
+            XCTAssertTrue(fixture.controller.matchingItems(query: "Foreground").isEmpty)
+        }
+    }
+
+    func testDeclaredSourceSurvivesFocusChangeDuringAsynchronousRead() async {
+        let fixture = makeFixture()
+        defer { fixture.controller.stop() }
+        fixture.source.application = .init(bundleIdentifier: "com.example.Foreground", name: "Foreground")
+        fixture.pasteboard.requiresAsynchronousPayloadRead = true
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.simulatedTypeNames.insert(ClipboardPasteboardSourceHint.applicationType)
+        fixture.pasteboard.captureSourceHint = .application("com.example.Declared")
+        fixture.pasteboard.simulateCopy("Declared content")
+        fixture.controller.processPasteboardChange()
+        let started = await waitUntil { fixture.pasteboard.asyncReadStarted }
+        XCTAssertTrue(started)
+        fixture.source.application = .init(bundleIdentifier: "com.example.NewFocus", name: "New Focus")
+        fixture.pasteboard.completeAsynchronousRead()
+        let captured = await waitUntil { fixture.controller.items.count == 1 }
+        XCTAssertTrue(captured)
+        XCTAssertEqual(fixture.controller.items.first?.sourceApplication?.bundleIdentifier, "com.example.Declared")
+    }
+
+    func testUnknownOrInvalidDeclaredSourceDoesNotFallBackToForeground() async {
+        let fixture = makeFixture()
+        defer { fixture.controller.stop() }
+        fixture.source.application = .init(bundleIdentifier: "com.example.Foreground", name: "Foreground")
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.simulatedTypeNames.insert(ClipboardPasteboardSourceHint.applicationType)
+        let hints: [ClipboardPasteboardSourceHint?] = [nil, .unknown, .application("invalid\nidentifier")]
+        for (index, hint) in hints.enumerated() {
+            fixture.pasteboard.captureSourceHint = hint
+            fixture.pasteboard.simulateCopy("Unknown source \(index)")
+            fixture.controller.processPasteboardChange()
+            XCTAssertEqual(fixture.controller.items.first?.source, .unknown)
+            XCTAssertNil(fixture.controller.items.first?.sourceApplication)
+        }
+    }
+
+    func testDeclaredAndRemoteSourcesCannotBypassForegroundExclusion() async {
+        let fixture = makeFixture()
+        defer { fixture.controller.stop() }
+        fixture.source.application = .init(bundleIdentifier: "com.example.Private", name: "Private")
+        fixture.settings.excludedApplications = [.init(bundleIdentifier: "com.example.Private", name: "Private")]
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        for (index, hint) in [ClipboardPasteboardSourceHint.universalClipboard, .application("com.example.Allowed")].enumerated() {
+            fixture.pasteboard.captureSourceHint = hint
+            fixture.pasteboard.simulateCopy("Private \(index)")
+            fixture.controller.processPasteboardChange()
+        }
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        XCTAssertEqual(fixture.pasteboard.plainTextReadCount, 0)
+    }
+
+    func testExcludedDeclaredApplicationIsRejected() async {
+        let fixture = makeFixture()
+        defer { fixture.controller.stop() }
+        fixture.settings.excludedApplications = [.init(bundleIdentifier: "com.example.Private", name: "Private")]
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.captureSourceHint = .application("com.example.Private")
+        fixture.pasteboard.simulateCopy("Private declared source")
+        fixture.controller.processPasteboardChange()
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+    }
+
+    func testSourceMetadataDoesNotMakeStaleAsyncContentCapturable() async {
+        let fixture = makeFixture()
+        defer { fixture.controller.stop() }
+        fixture.pasteboard.requiresAsynchronousPayloadRead = true
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.pasteboard.captureSourceHint = .universalClipboard
+        fixture.pasteboard.simulateCopy("Stale remote content")
+        fixture.controller.processPasteboardChange()
+        let started = await waitUntil { fixture.pasteboard.asyncReadStarted }
+        XCTAssertTrue(started)
+        fixture.pasteboard.simulateCopy("Replacement content")
+        fixture.pasteboard.completeAsynchronousRead()
+        let completed = await waitUntil { fixture.pasteboard.asyncReadCompleted }
+        XCTAssertTrue(completed)
+        XCTAssertTrue(fixture.controller.items.isEmpty)
     }
 
     func testPasteboardChangeAfterPreflightDiscardsReplacementPayload() async {
@@ -2336,6 +2440,7 @@ private final class BlockingCountingClipboardPayloadLoader: @unchecked Sendable 
 @MainActor
 private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
     var changeCount = 0
+    var captureSourceHint: ClipboardPasteboardSourceHint?
     var requiresAsynchronousPayloadRead = false
     var simulatedTypeNames: Set<String> = [ClipboardRepresentationType.plainText]
     var text: String?
@@ -2400,6 +2505,17 @@ private final class FakeClipboardPasteboard: ClipboardPasteboardAccess {
             expectedChangeCount: asyncReadExpectedChangeCount
         )
         continuation.resume(returning: result)
+    }
+
+    func readCapture(maximumByteCount: Int, expectedChangeCount: Int) -> ClipboardPasteboardCaptureReadResult {
+        .init(result: readPayload(maximumByteCount: maximumByteCount, expectedChangeCount: expectedChangeCount),
+              sourceHint: captureSourceHint)
+    }
+
+    func readCaptureAsynchronously(maximumByteCount: Int, expectedChangeCount: Int) async -> ClipboardPasteboardCaptureReadResult {
+        let hint = captureSourceHint
+        return .init(result: await readPayloadAsynchronously(maximumByteCount: maximumByteCount, expectedChangeCount: expectedChangeCount),
+                     sourceHint: hint)
     }
 
     func writePlainText(_ text: String) -> Bool {

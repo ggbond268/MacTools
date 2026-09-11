@@ -1,8 +1,9 @@
 # Clipboard performance probes
 
 These probes use generated text and image data. They never open the user's database,
-read the system clipboard, install the app, or change settings. Timings cover model
-work and decoding, **not rendered frames or end-to-end app responsiveness**.
+read the system clipboard, install the app, or change settings. The panel and preview
+probes time model work and decoding. The window probe also opens a native test panel
+and flushes AppKit layout/display; none measures physical display latency or the global shortcut path.
 
 Build the plugin in each configuration you want to measure:
 
@@ -13,6 +14,8 @@ xcodebuild -project MacTools.xcodeproj -scheme ClipboardHistoryPlugin \
 bash scripts/benchmarks/clipboard.sh Release panel
 bash scripts/benchmarks/clipboard.sh Release panel --targeted
 bash scripts/benchmarks/clipboard.sh Release previews
+bash scripts/benchmarks/clipboard.sh Release window 10000
+bash scripts/benchmarks/clipboard.sh Release window 10000 --cold
 ```
 
 Use the same commands with `Debug` to measure development builds. Set `DEVELOPER_DIR`
@@ -32,6 +35,13 @@ The preview probe creates a 2,400 × 1,800 PNG and compares ten uncached loads w
 ten cache visits, including the first decode. It also reports ten already-warm visits,
 decode count, and budgeted thumbnail bytes. This comparison isolates caching within
 one build; it is not a frozen-old-binary image benchmark.
+
+The window probe accepts 1–10,000 records, matching the supported history limit. It
+prepares metadata before the first open, as plugin activation does after storage loads.
+`--cold` instead measures opening before that preparation. Each run reports the first
+native window creation followed by five reopens, with explicit layout/display flushes
+and first-page readiness. This probe briefly takes focus and requires a graphical macOS
+session. It uses in-memory stores and never changes the user's panel position.
 
 For comparisons, build and preserve the original probe binaries **before** changing
 the source. The plugin core is linked statically, but PluginKit remains dynamic, so
