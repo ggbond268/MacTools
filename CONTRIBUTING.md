@@ -70,6 +70,7 @@ Unless a file is clearly identified as third-party material under separate terms
 
 ## Testing
 - Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.
+- Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.
@@ -82,6 +83,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - User-visible app or plugin changes include a concise English changelog fragment in `changes/unreleased/*.md`.
 - Plugin manifest `capabilities.settings` (`none`, `form`, or `workspace`) matches the runtime `settingsPage` layout.
 - Rich manifest static and dynamic action descriptors match the runtime provider/action identity, risk, permissions, external policy, automation eligibility, and parameter portability.
+- Capture plugins preserve explicit foreground selection, release overlays and capture sessions when disabled, and never delete user-exported screenshots or recordings during private-data cleanup.
 - High-risk features cover safety checks, error states, and missing-permission cases.
 - The PR does not include unrelated formatting, generated files, local configuration, certificates, or release credentials.
 - New or updated third-party material is recorded in `Sources/Resources/ThirdPartyNotices/manifest.json` with an exact upstream revision, affected products, source paths, and retained license text.
