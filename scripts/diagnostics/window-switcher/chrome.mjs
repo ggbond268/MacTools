@@ -95,7 +95,7 @@ try {
     if (total === 60) {
       assert.equal(probe.stdout.match(/catalogActivation=succeeded exactFocus=true frontmost=true/g)?.length, 3);
       assert.equal(probe.stdout.match(/cancelPreservedFrontmost=true exactWindow=true/g)?.length, 2);
-      for (const expected of ['catalogWindows=60', 'mruExact=true', 'externalFocusMRU=true', 'resetAfterExternalFocus=succeeded', 'restore=succeeded restored=true',
+      for (const expected of ['catalogWindows=60', 'multiWindowPreview=true exactID=true', 'searchEnter=true exactFocus=true', 'mruExact=true', 'externalFocusMRU=true', 'resetAfterExternalFocus=succeeded', 'restore=succeeded restored=true',
         'observedHidden=true', 'activationAfterHide=succeeded visible=true', 'close=requested removed=true remaining=59']) {
         assert.ok(probe.stdout.includes(expected), expected);
       }

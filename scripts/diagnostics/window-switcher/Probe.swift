@@ -9,6 +9,7 @@ struct TracingAXAccess: WindowSwitcherAXAccess {
     func windows(of app: AXUIElement) -> [AXUIElement]? { let r = system.windows(of: app); if r == nil { print("read-unavailable=windows") }; return r }
     func element(_ owner: AXUIElement, attribute: String) -> AXUIElement? { let r = system.element(owner, attribute: attribute); if r == nil { print("read-unavailable=\(attribute)") }; return r }
     func windowAttributes(_ window: AXUIElement) -> [Any]? { system.windowAttributes(window) }
+    func windowNumber(_ window: AXUIElement) -> CGWindowID? { system.windowNumber(window) }
     func minimized(_ window: AXUIElement) -> Bool? { let r = system.minimized(window); if r == nil { print("read-unavailable=minimized") }; return r }
     func set(_ element: AXUIElement, attribute: String, value: Bool) -> AXError { let result = system.set(element, attribute: attribute, value: value); print("set=\(attribute) value=\(value) result=\(result.rawValue)"); return result }
     func perform(_ element: AXUIElement, action: String) -> AXError { let result = system.perform(element, action: action); print("action=\(action) result=\(result.rawValue)"); return result }
@@ -91,6 +92,16 @@ struct TracingAXAccess: WindowSwitcherAXAccess {
         print("catalogWindows=\(entries.count)")
         guard entries.count >= 2 else { return }
         let a = entries[0], b = entries[1]
+        let preview = WindowSwitcherPreview()
+        var previewCompleted = false, captured = false
+        preview.onChange = { image, message in
+            if image != nil || message != nil { previewCompleted = true; captured = image != nil }
+        }
+        preview.select(b)
+        let previewDeadline = ContinuousClock.now + .seconds(4)
+        while !previewCompleted, ContinuousClock.now < previewDeadline { try? await Task.sleep(for: .milliseconds(20)) }
+        print("multiWindowPreview=\(captured) exactID=\(b.windowNumber != nil)")
+        preview.cancel()
         for target in [a, b, a] {
             let result = await catalog.activate(target)
             print("catalogActivation=\(result) exactFocus=\(catalog.focusedWindowID == target.id) frontmost=\(NSWorkspace.shared.frontmostApplication?.processIdentifier == pid)")
@@ -127,6 +138,29 @@ struct TracingAXAccess: WindowSwitcherAXAccess {
             let sameWindow = focused.map { focus in a.windowElement.map { CFEqual($0, focus) } ?? false } ?? false
             print("cancelPreservedFrontmost=\(stayedFrontmost && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid) exactWindow=\(sameWindow)")
         }
+        var entered: WindowSwitcherActionResult?
+        overlay.onSelect = { target in
+            overlay.hide()
+            Task { @MainActor in entered = await catalog.activate(target) }
+        }
+        var searchSession = session
+        searchSession.selectedID = b.id
+        searchSession.query = "Fixture"
+        overlay.show(searchSession, currentPID: pid, showsPreview: false)
+        if let panel = NSApp.windows.first(where: { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible }),
+           let content = panel.contentView {
+            func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+            if let search = descendants(content).compactMap({ $0 as? NSSearchField }).first {
+                panel.makeFirstResponder(search)
+                if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: panel.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+                    isARepeat: false, keyCode: 36) { panel.sendEvent(event) }
+            }
+        }
+        let enterDeadline = ContinuousClock.now + .seconds(3)
+        while entered == nil, ContinuousClock.now < enterDeadline { try? await Task.sleep(for: .milliseconds(20)) }
+        print("searchEnter=\(entered == .succeeded) exactFocus=\(catalog.focusedWindowID == b.id)")
+        overlay.hide()
         if let element = b.windowElement {
             let minimize = SystemWindowSwitcherAXAccess().set(element, attribute: kAXMinimizedAttribute, value: true)
             try? await Task.sleep(for: .milliseconds(700))

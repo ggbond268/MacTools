@@ -14,7 +14,8 @@ enum WindowSwitcherApplicationActivation {
     static func prepare(
         state: () -> State,
         request: (Request) -> Void,
-        timeout: Duration = .seconds(1)
+        timeout: Duration = .seconds(1),
+        activateAllSpaces: Bool = false
     ) async -> WindowSwitcherActionResult {
         let deadline = ContinuousClock.now + timeout
         func wait(until ready: (State) -> Bool) async -> WindowSwitcherActionResult {
@@ -35,7 +36,7 @@ enum WindowSwitcherApplicationActivation {
             guard visible == .succeeded else { return visible }
         }
         guard !Task.isCancelled else { return .cancelled }
-        if !state().isFrontmost { request(.activate) }
+        if activateAllSpaces || !state().isFrontmost { request(.activate) }
         return await wait { !$0.isHidden && $0.isFrontmost }
     }
 }

@@ -2580,6 +2580,29 @@
           }
         }
       }
+    },
+    "chooser.keyboardHelp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑↓ Select · Return Open · ⌘1/2 Scope · ⌘D Display · Esc Cancel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑↓ 选择 · 回车打开 · ⌘1/2 范围 · ⌘D 显示器 · Esc 取消"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑↓ 選擇 · Return 開啟 · ⌘1/2 範圍 · ⌘D 顯示器 · Esc 取消"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

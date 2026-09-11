@@ -107,4 +107,42 @@ final class WindowSwitcherPreviewTests: XCTestCase {
         XCTAssertNil(image)
         XCTAssertEqual(captured, 1)
     }
+    func testExactIDSelectsOverlappingWindowAndRejectsStaleID() {
+        var target = entry("same")
+        target.windowNumber = 2
+        let first = WindowSwitcherPreviewCandidate(processID: 100, frame: target.bounds, title: "same", layer: 0, windowID: 1)
+        var second = first
+        second.windowID = 2
+        XCTAssertEqual(WindowSwitcherPreview.matchingIndex(for: target, candidates: [first, second]), 1)
+        XCTAssertNil(WindowSwitcherPreview.matchingIndex(for: target, candidates: [first]))
+        second.processID = 200
+        XCTAssertNil(WindowSwitcherPreview.matchingIndex(for: target, candidates: [second]))
+    }
+
+    func testTransientFailureRetriesWithoutChangingSelection() async {
+        var captures = 0
+        var delivered: NSImage?
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in
+            captures += 1
+            return captures < 2 ? nil : NSImage(size: NSSize(width: 2, height: 2))
+        })
+        preview.onChange = { image, _ in delivered = image }
+        preview.select(entry("retry"))
+        await eventually { delivered != nil }
+        XCTAssertEqual(captures, 2)
+        preview.cancel()
+    }
+
+    func testPermanentFailureStopsAfterThreeAttempts() async {
+        var captures = 0
+        var message: String?
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in captures += 1; return nil })
+        preview.onChange = { _, value in message = value }
+        preview.select(entry("unavailable"))
+        await eventually { message != nil }
+        try? await Task.sleep(for: .milliseconds(250))
+        XCTAssertEqual(captures, 3)
+        preview.cancel()
+    }
+
 }

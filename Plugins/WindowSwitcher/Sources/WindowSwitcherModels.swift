@@ -299,7 +299,7 @@ final class WindowSwitcherStore: ObservableObject {
 }
 
 struct WindowSwitcherAppEntry: Identifiable {
-    let id: String
+    var id: String
     let processIdentifier: pid_t
     let bundleIdentifier: String?
     let appName: String
@@ -307,12 +307,54 @@ struct WindowSwitcherAppEntry: Identifiable {
     let icon: NSImage?
     let windowElement: AXUIElement?
     let isMinimized: Bool
+    var workerWindowID: String? = nil
+    var windowNumber: CGWindowID?
+    let windowBounds: CGRect?
+    let applicationLaunchDate: Date?
     var shortcutToken: String?
     var bounds: CGRect = .zero
     var isHidden: Bool = false
     var metadataUnavailable: Bool = false
     var displayNameContext: String? = nil
     var displayID: UInt32? = nil
+
+    init(
+        id: String,
+        processIdentifier: pid_t,
+        bundleIdentifier: String?,
+        appName: String,
+        windowTitle: String?,
+        icon: NSImage?,
+        windowElement: AXUIElement?,
+        isMinimized: Bool,
+        windowNumber: CGWindowID? = nil,
+        windowBounds: CGRect? = nil,
+        applicationLaunchDate: Date? = nil,
+        shortcutToken: String?,
+        bounds: CGRect = .zero,
+        isHidden: Bool = false,
+        metadataUnavailable: Bool = false,
+        displayNameContext: String? = nil,
+        displayID: UInt32? = nil
+    ) {
+        self.id = id
+        self.processIdentifier = processIdentifier
+        self.bundleIdentifier = bundleIdentifier
+        self.appName = appName
+        self.windowTitle = windowTitle
+        self.icon = icon
+        self.windowElement = windowElement
+        self.isMinimized = isMinimized
+        self.windowNumber = windowNumber
+        self.windowBounds = windowBounds
+        self.applicationLaunchDate = applicationLaunchDate
+        self.shortcutToken = shortcutToken
+        self.bounds = bounds == .zero ? windowBounds ?? .zero : bounds
+        self.isHidden = isHidden
+        self.metadataUnavailable = metadataUnavailable
+        self.displayNameContext = displayNameContext
+        self.displayID = displayID
+    }
 
     var displayName: String {
         guard let title = cleanWindowTitle else {
@@ -344,7 +386,7 @@ struct WindowSwitcherAppEntry: Identifiable {
     }
 
     var isWindowEntry: Bool {
-        windowElement != nil
+        windowElement != nil || windowNumber != nil
     }
 
     var appIdentifier: String {
@@ -421,6 +463,7 @@ extension WindowSwitcherAppEntry: Equatable {
             && lhs.isHidden == rhs.isHidden
             && lhs.metadataUnavailable == rhs.metadataUnavailable
             && lhs.bounds == rhs.bounds
+            && lhs.windowNumber == rhs.windowNumber
             && lhs.displayNameContext == rhs.displayNameContext
             && lhs.displayID == rhs.displayID
     }

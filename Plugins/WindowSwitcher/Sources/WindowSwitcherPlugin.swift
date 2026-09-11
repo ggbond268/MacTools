@@ -167,7 +167,8 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                 settingsGroupDescription: localization.string(
                     "shortcut.group.description",
                     defaultValue: "修改用于唤起窗口切换的快捷键。"
-                )
+                ),
+                settingsControlTitle: localization.string("chooser.all", defaultValue: "全部窗口")
             ),
             PluginShortcutDefinition(
                 id: WindowSwitcherConstants.currentAppShortcutID,
@@ -176,7 +177,8 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                 scope: .whilePluginActive,
                 defaultBinding: store.configuration.usesCompanionDefaults ? WindowSwitcherShortcutBindingStore.currentAppBinding : nil,
                 isRequired: false,
-                settingsGroupID: "window-switcher"
+                settingsGroupID: "window-switcher",
+                settingsControlTitle: localization.string("chooser.current", defaultValue: "当前应用")
             ),
         ]
     }

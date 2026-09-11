@@ -7,6 +7,7 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
     struct State {
         var windows: [AXUIElement]? = []
         var focused: AXUIElement?
+        var windowNumber: CGWindowID? = nil
         var metadataAvailable = true
         var minimized = false
         var minimizedReadFailures = 0
@@ -46,6 +47,7 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
         return [kAXWindowRole, kAXStandardWindowSubrole, "Same title", read { $0.minimized },
                 AXValueCreate(.cgPoint, &point)!, AXValueCreate(.cgSize, &size)!]
     }
+    func windowNumber(_ window: AXUIElement) -> CGWindowID? { read { $0.windowNumber } }
     func minimized(_ window: AXUIElement) -> Bool? {
         lock.lock(); defer { lock.unlock() }
         if state.minimizedReadFailures > 0 { state.minimizedReadFailures -= 1; return nil }
@@ -269,4 +271,18 @@ final class WindowSwitcherProcessWorkerTests: XCTestCase, @unchecked Sendable {
         let afterCancelledSaveDialog = await worker.scan()
         XCTAssertEqual(afterCancelledSaveDialog.windows.first?.id, id)
     }
+    func testScanCarriesOptionalSystemWindowIdentity() async {
+        let access = ControlledWindowAXAccess()
+        let window = AXUIElementCreateApplication(42)
+        access.update { $0.windows = [window]; $0.windowNumber = 123 }
+        let worker = WindowSwitcherProcessWorker(pid: 99, launchDate: nil, access: access, invalidated: {})
+        defer { worker.stop() }
+        let first = await worker.scan()
+        XCTAssertEqual(first.windows.first?.windowNumber, 123)
+        access.update { $0.windowNumber = nil }
+        let fallback = await worker.scan()
+        XCTAssertEqual(fallback.windows.first?.id, first.windows.first?.id)
+        XCTAssertNil(fallback.windows.first?.windowNumber)
+    }
+
 }

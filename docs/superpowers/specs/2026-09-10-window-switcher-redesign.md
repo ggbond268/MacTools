@@ -47,3 +47,24 @@ These gaps do not block review of stages 1–2, but must stay visible when evalu
 The implementation and validation above use base `835a78a3`. At draft preparation, upstream `main` was `c3b4fabf` and included a separate Window Switcher tracking rewrite and PluginKit v6. A trial merge identified overlapping changes in the catalog, models, chooser, plugin, shortcut listener, Makefile, and README. That trial was aborted to preserve the reviewed implementation; this branch does not yet incorporate current upstream.
 
 Before marking the PR ready, reconcile the upstream tracking behavior and PluginKit compatibility, resolve the conflicts, and rerun repository and native validation on the integrated revision. The existing test totals do not establish compatibility with current `main`.
+
+## Dev audit fixes, 2026-09-10
+
+The Dev audit matched the installed plugin to local integration `13b1ebb7654c`, rather than the original draft head. That integration could discard usable AX identities when several CG windows shared their bounds, admit unconfirmed unnamed helper surfaces, and ignore available window IDs during preview capture.
+
+- Retain confirmed AX windows during ambiguous CG matching. Keep canonical identities and recent-window order when a known window moves out of and back into AX discovery. Window actions still target the current worker's AX handle and verify focus.
+- Use an optional, dynamically resolved `_AXUIElementGetWindow` read to obtain exact system window IDs after checking the AXWindow role. This is an undocumented macOS API, isolated in the AX adapter, with no accessibility initialization or hard symbol dependency. If unavailable, ordinary AX activation remains usable and preview matching falls back conservatively. This API identity bridge is also described in [AltTab's system wrapper](https://github.com/lwouis/alt-tab-macos/blob/master/src/macos/api-wrappers/ApplicationServices.HIServices.framework.swift); no third-party implementation is bundled.
+- Match previews by process and exact window ID first, and retry transient capture failures at most three times. Do not substitute another window when a known ID disappears.
+- Wait for fresh, uniquely matched window state after a Space transition without replaying activation. Previously confirmed untitled windows remain supported; unconfirmed unnamed offscreen CG surfaces are excluded. macOS can still withhold windows or capture content.
+- Label All Windows and Current App shortcut recorders separately. Chooser-local Command-1/2 changes scope, Command-D opens the display menu, Command-P toggles preview, and Command-F focuses search. These controls make the session persistent and respect native marked-text handling.
+- Match the palette/clipboard surface with continuous 14-point corners, semantic background and border colors, and reduced-transparency/increased-contrast support.
+
+Validation results for these fixes are separate from the original draft totals above. Physical multi-display/Space interaction and IME candidate selection still require manual acceptance.
+
+Fix validation: 142 Window Switcher tests passed against the Dev integration (zero failures or skips), and 87 repository script tests passed on the draft branch. The isolated 1/10/30/60-window Chrome diagnostic passed against both builds, with the final integration run additionally asserting native search/Enter activation and exact-ID preview capture among 60 same-title windows. Light and dark chooser surfaces were rendered with synthetic titles and inspected. The integration fixes preserve its PluginKit v6 host routing; no release was published.
+
+### Standalone review corrections
+
+Only exact system window IDs link AX and CG records for identity and actions. Geometry and title matching remain preview-only heuristics. One publication transaction registers fallback identities before AX discovery and retains recent history using the same canonical IDs consumed by selection and actions. A failed CG scan preserves cached rows as unavailable, cannot authorize a fallback action, and does not discard identity mappings; a successful empty scan can remove closed fallback windows.
+
+Review-fix validation: all 148 Window Switcher tests passed on the Dev integration, including six regressions for identity assignment, late AX discovery, recency, and failed scans. The isolated 1/10/30/60-window Chrome diagnostic passed again, including exact activation, native search/Enter, preview capture, restoration, and close verification.

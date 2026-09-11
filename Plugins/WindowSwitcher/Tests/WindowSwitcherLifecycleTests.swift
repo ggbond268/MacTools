@@ -52,9 +52,14 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
     private func plugin(catalog: ControlledSwitcherCatalog, tap: ControlledSwitcherTap,
                         overlay: WindowSwitcherOverlayController? = nil,
                         trusted: @escaping @MainActor @Sendable () -> Bool = { true }) -> WindowSwitcherPlugin {
-        WindowSwitcherPlugin(context: PluginRuntimeContext(pluginID: WindowSwitcherConstants.pluginID,
+        let plugin = WindowSwitcherPlugin(context: PluginRuntimeContext(pluginID: WindowSwitcherConstants.pluginID,
             storage: WindowSwitcherMemoryStorage()), appCatalog: catalog, overlayController: overlay ?? WindowSwitcherOverlayController(), shortcutTap: tap,
             discoveryTimeout: .milliseconds(30), accessibilityTrusted: trusted)
+        plugin.shortcutBindingResolver = { id in
+            id == WindowSwitcherConstants.shortcutDefinitionID
+                ? WindowSwitcherShortcutBindingStore.defaultBinding : WindowSwitcherShortcutBindingStore.currentAppBinding
+        }
+        return plugin
     }
     private func eventually(_ predicate: () -> Bool) async {
         let deadline = ContinuousClock.now + .seconds(1)
@@ -250,4 +255,36 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         tap.onShortcutReleased()
         await eventually { catalog.activated == ["a"] }
     }
+    func testScopeAndPreviewKeyboardCommandsPreservePersistentSelection() {
+        let overlay = WindowSwitcherOverlayController()
+        defer { overlay.hide() }
+        let session = WindowSwitcherSession(entries: [entry("a"), entry("b")], selectedID: "a", isPersistent: true, originalWindowID: "a")
+        overlay.show(session, currentPID: 100, showsPreview: false)
+        func command(_ key: String) -> NSEvent {
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+                windowNumber: 0, context: nil, characters: key, charactersIgnoringModifiers: key,
+                isARepeat: false, keyCode: 0)!
+        }
+        XCTAssertTrue(overlay.handleChooserShortcut(command("2")))
+        XCTAssertEqual(overlay.session?.scope, .currentApplication(100))
+        XCTAssertTrue(overlay.handleChooserShortcut(command("1")))
+        XCTAssertEqual(overlay.session?.scope, .all)
+        var preview: Bool?
+        overlay.onPreviewChange = { preview = $0 }
+        XCTAssertTrue(overlay.handleChooserShortcut(command("p")))
+        XCTAssertEqual(preview, true)
+        XCTAssertTrue(overlay.handleChooserShortcut(command("p")))
+        XCTAssertEqual(preview, false)
+        XCTAssertTrue(overlay.session?.isPersistent == true)
+    }
+
+    func testShortcutSettingsClearlyLabelBothScopes() {
+        let plugin = plugin(catalog: ControlledSwitcherCatalog(), tap: ControlledSwitcherTap())
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        let definitions = plugin.shortcutDefinitions
+        XCTAssertEqual(definitions.count, 2)
+        XCTAssertTrue(definitions.allSatisfy { $0.settingsControlTitle?.isEmpty == false })
+        XCTAssertNotEqual(definitions[0].settingsControlTitle, definitions[1].settingsControlTitle)
+    }
+
 }

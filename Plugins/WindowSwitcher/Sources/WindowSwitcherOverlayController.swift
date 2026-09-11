@@ -18,8 +18,11 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         var searchEventFilter: ((NSEvent) -> NSEvent)?
         var searchTransitionHandler: ((NSEvent) -> Bool)?
         override func sendEvent(_ event: NSEvent) {
-            if event.type == .keyDown, searchTransitionHandler?(event) == true { return }
-            super.sendEvent(searchEventFilter?(event) ?? event)
+            let filtered = searchEventFilter?(event) ?? event
+            if filtered.type == .keyDown {
+                if shortcutHandler?(filtered) == true || searchTransitionHandler?(filtered) == true { return }
+            }
+            super.sendEvent(filtered)
         }
         override var canBecomeKey: Bool { true }
         override var canBecomeMain: Bool { false }
@@ -145,23 +148,12 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
                ["w", "q"].contains(text.lowercased()) { return false }
             return handleKey(event)
         }
-        panel.shortcutHandler = { [weak self] event in
-            guard let self,
-                  event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
-                  let key = event.charactersIgnoringModifiers?.lowercased(), ["w", "q"].contains(key) else { return false }
-            // Never let target actions leak into the host's main menu. Marked
-            // text must be settled before a window/application action can run.
-            if let editor = search.currentEditor() as? NSTextView, editor.hasMarkedText() { return true }
-            if key == "w" { closeSelected() } else { quitSelected() }
-            return true
-        }
+        panel.shortcutHandler = { [weak self] event in self?.handleChooserShortcut(event) ?? false }
         panel.level = .popUpMenu
         panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false; panel.delegate = self
-        let effect = NSVisualEffectView()
-        effect.material = .hudWindow; effect.state = .active; effect.blendingMode = .behindWindow
-        effect.wantsLayer = true; effect.layer?.cornerRadius = 16; effect.layer?.masksToBounds = true
+        let effect = WindowSwitcherPaletteSurface()
         panel.contentView = effect
         let title = NSTextField(labelWithString: localization.string("chooser.title", defaultValue: "窗口切换"))
         title.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -238,6 +230,11 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         openButton.title = localization.string("chooser.open", defaultValue: "打开窗口")
         previewButton.title = localization.string("chooser.preview", defaultValue: "预览")
         cancelButton.title = localization.string("chooser.cancel", defaultValue: "取消")
+        scope.setToolTip("\(scope.label(forSegment: 0) ?? "") · ⌘1", forSegment: 0)
+        scope.setToolTip("\(scope.label(forSegment: 1) ?? "") · ⌘2", forSegment: 1)
+        display.toolTip = "\(localization.string("chooser.displayFilter", defaultValue: "显示器筛选")) · ⌘D"
+        previewButton.title += " ⌘P"
+        search.toolTip = "\(localization.string("chooser.search", defaultValue: "搜索窗口标题或应用")) · ⌘F"
     }
 
     private func render() {
@@ -282,7 +279,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         empty.stringValue = rows.isEmpty ? localization.string("chooser.empty", defaultValue: "没有匹配的窗口。窗口信息可能仍在更新。") : ""
         empty.isHidden = !rows.isEmpty
         footer.stringValue = actionMessage ?? (session.isPersistent
-            ? localization.string("chooser.persistentHelp", defaultValue: "↑↓ 选择 · 回车打开 · Esc 取消 · 所有空间（系统允许访问的窗口）")
+            ? localization.string("chooser.keyboardHelp", defaultValue: "↑↓ 选择 · 回车打开 · ⌘1/2 范围 · ⌘D 显示器 · Esc 取消")
             : localization.string("chooser.cycleHelp", defaultValue: "按住快捷键循环 · 松开切换 · 输入文字搜索 · Esc 取消"))
         updating = false
         if showsPreview, selected != previewedEntry || preview.isPermissionGranted != previewedPermission {
@@ -373,6 +370,33 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         return true
     }
 
+    @discardableResult
+    func handleChooserShortcut(_ event: NSEvent) -> Bool {
+        guard session != nil,
+              event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+              let key = event.charactersIgnoringModifiers?.lowercased(),
+              ["1", "2", "d", "p", "f", "w", "q"].contains(key) else { return false }
+        if let editor = search.currentEditor() as? NSTextView, editor.hasMarkedText() { return true }
+        // Invocation modifiers still being held belong to search input, not a
+        // newly pressed chooser command. Close/quit retain their explicit chord.
+        if session?.isPersistent == false, session?.invocationModifiers.contains(.command) == true,
+           !["w", "q"].contains(key) { return false }
+        switch key {
+        case "1": scope.selectedSegment = 0; scopeChanged()
+        case "2":
+            if currentPID != nil { scope.selectedSegment = 1; scopeChanged() }
+        case "d":
+            beginSearch()
+            display.performClick(nil)
+        case "p": previewButton.state = showsPreview ? .off : .on; previewChanged()
+        case "f": beginSearch(); panel.makeFirstResponder(search)
+        case "w": closeSelected()
+        case "q": quitSelected()
+        default: return false
+        }
+        return true
+    }
+
     private func handleKey(_ original: NSEvent) -> Bool {
         var event = original
         switch Int(event.keyCode) {
@@ -440,6 +464,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         actionMessage = nil; onSessionChange?(session); render()
     }
     @objc private func previewChanged() {
+        beginSearch()
         showsPreview = previewButton.state == .on
         onPreviewChange?(showsPreview)
         previewedEntry = nil; previewedPermission = nil
