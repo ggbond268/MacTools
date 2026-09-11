@@ -770,6 +770,34 @@ final class PluginHostComponentSupportTests: XCTestCase {
         XCTAssertEqual(host.panelItems.map(\.id), ["second", "first"])
     }
 
+    func testPanelEditorMovePersistsAndPreservesHiddenSlotsAndIndependentSurfaces() throws {
+        let host = makeHost(plugins: [
+            MockCombinedPlugin(id: "first", order: 1),
+            MockCombinedPlugin(id: "hidden", order: 2),
+            MockCombinedPlugin(id: "last", order: 3)
+        ])
+        host.setPluginVisible(false, id: "hidden", on: .dashboard)
+        let session = PanelLayoutEditingSession()
+        let ids = host.componentItems.map(\.id)
+        _ = session.begin(id: "last", ids: ids)
+        session.preview(offset: 0, ids: ids)
+        XCTAssertEqual(host.componentItems.map(\.id), ["first", "last"])
+        let move = try XCTUnwrap(session.finish(ids: ids))
+        host.movePlugin(id: move.id, toOffset: move.offset, on: .dashboard)
+        XCTAssertEqual(host.componentItems.map(\.id), ["last", "first"])
+        XCTAssertEqual(host.dashboardLayoutItems.map(\.id), ["last", "first"])
+        XCTAssertEqual(host.dashboardHiddenLayoutItems.map(\.id), ["hidden"])
+        XCTAssertEqual(host.panelItems.map(\.id), ["first", "hidden", "last"])
+
+        let reloaded = PluginDisplayPreferencesStore(userDefaults: UserDefaults(suiteName: suiteName)!)
+        XCTAssertEqual(reloaded.orderedPluginIDs(for: .dashboard, defaultPluginIDs: ["first", "hidden", "last"]),
+                       ["last", "hidden", "first"])
+        XCTAssertEqual(reloaded.visiblePluginIDs(for: .dashboard, defaultPluginIDs: ["first", "hidden", "last"]),
+                       ["last", "first"])
+        host.setPluginVisible(true, id: "hidden", on: .dashboard)
+        XCTAssertEqual(host.componentItems.map(\.id), ["last", "hidden", "first"])
+    }
+
     func testUninstallingDynamicPluginRemovesLayoutAndShortcutReferences() throws {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)

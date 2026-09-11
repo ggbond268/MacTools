@@ -69,6 +69,9 @@ jobs:
             test \
             -quiet
 
+      - name: Verify native panel layout interactions
+        run: make panel-layout-ui-tests
+
       - name: Verify PluginKit v6 binary compatibility
         run: ./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh
 
