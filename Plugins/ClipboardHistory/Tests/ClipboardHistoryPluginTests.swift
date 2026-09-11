@@ -396,23 +396,21 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         let page = try XCTUnwrap(plugin.settingsPage)
         XCTAssertEqual(page.body.layout, .form)
         XCTAssertEqual(page.body.integratedShortcutGroupIDs, [
-            "sequential-paste-shortcuts", "clipboard-window-shortcuts", "collection-shortcuts",
+            "primary-shortcuts", "sequential-paste-shortcuts", "clipboard-window-shortcuts",
+            "privacy-copy-shortcuts", "collection-shortcuts",
         ])
         guard case let .form(sections) = page.body else {
             return XCTFail("Expected form settings")
         }
         XCTAssertEqual(sections.map(\.id), [
             "clipboard-essential-settings",
-            "clipboard-queue-settings",
             "clipboard-snippet-settings",
+            "clipboard-queue-settings",
             "clipboard-additional-shortcuts",
-            "clipboard-retention-settings",
-            "clipboard-exclusion-settings",
             "clipboard-data-settings",
         ])
-        let advancedSection = try XCTUnwrap(sections.first { $0.id == "clipboard-additional-shortcuts" })
-        XCTAssertNotNil(advancedSection.headerAccessory, "Advanced belongs outside the native settings card")
-        XCTAssertEqual(sections.filter { $0.headerAccessory != nil }.map(\.id), [advancedSection.id])
+        XCTAssertTrue(sections.allSatisfy { $0.title?.isEmpty == false }, "Each feature needs a native section header")
+        XCTAssertTrue(sections.allSatisfy { $0.headerAccessory == nil }, "Do not duplicate native section headers")
         XCTAssertEqual(plugin.shortcutSettingsGroups.map(\.id), [
             "primary-shortcuts",
             "sequential-paste-shortcuts",
@@ -456,7 +454,7 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         )
         XCTAssertEqual(
             plugin.collapsibleShortcutSettingsGroupIDs,
-            ["clipboard-window-shortcuts", "collection-shortcuts"]
+            ["clipboard-window-shortcuts", "privacy-copy-shortcuts", "collection-shortcuts"]
         )
         XCTAssertEqual(plugin.shortcutSettingsGroups[4].actionIDs, [
             ClipboardHistoryPlugin.ActionID.toggleCollection,
@@ -470,8 +468,8 @@ final class ClipboardHistoryPluginTests: XCTestCase {
                 "clipboard-essential-settings",
                 "clipboard-queue-settings",
                 "clipboard-additional-shortcuts",
-                "clipboard-snippet-settings",
                 "clipboard-additional-shortcuts",
+                "clipboard-essential-settings",
             ]
         )
         XCTAssertNotNil(plugin.primaryPanel)
@@ -517,6 +515,15 @@ final class ClipboardHistoryPluginTests: XCTestCase {
             let view = NSHostingView(rootView: root(nil))
             view.layoutSubtreeIfNeeded()
             let collapsedHeight = view.fittingSize.height
+
+            if groupID == ClipboardHistoryPlugin.ShortcutID.primaryGroup {
+                view.rootView = root(target)
+                await Task.yield()
+                view.layoutSubtreeIfNeeded()
+                XCTAssertEqual(view.fittingSize.height, collapsedHeight, accuracy: 1,
+                    "Primary history shortcuts are already visible and must not expand advanced controls")
+                continue
+            }
 
             view.rootView = root(target)
             let didExpand = await waitUntil {

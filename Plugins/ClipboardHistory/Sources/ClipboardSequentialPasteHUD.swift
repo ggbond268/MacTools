@@ -186,7 +186,8 @@ final class ClipboardSequentialPasteHUDPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-private struct ClipboardSequentialPasteHUDView: View {
+struct ClipboardSequentialPasteHUDView: View {
+    @Environment(\.accessibilityReduceTransparency) private var reducesTransparency
     let content: ClipboardSequentialPasteHUDContent
     let localization: PluginLocalization
     let onPasteNext: () -> Void
@@ -205,7 +206,8 @@ private struct ClipboardSequentialPasteHUDView: View {
                         : localization.string("hud.queue.recent", defaultValue: "Recent History"),
                     systemImage: "list.number"
                 )
-                .font(.headline)
+                .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                .foregroundStyle(.secondary)
                 Spacer()
                 Text(progressTitle)
                     .font(.caption.monospacedDigit())
@@ -213,8 +215,11 @@ private struct ClipboardSequentialPasteHUDView: View {
                     .accessibilityLabel(progressTitle)
                 Button(action: onClose) {
                     Image(systemName: "xmark")
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
                 .help(localization.string("common.close", defaultValue: "Close"))
                 .accessibilityLabel(localization.string("common.close", defaultValue: "Close"))
             }
@@ -294,16 +299,11 @@ private struct ClipboardSequentialPasteHUDView: View {
                 }
             }
         }
-        .padding(14)
+        .padding(PluginPaletteMetrics.contentPadding)
         .frame(width: 410)
         .frame(minHeight: 118)
         .background {
-            ClipboardSequentialPasteHUDGlassBackground()
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+            ClipboardHistoryWindowSurface(role: .queue, reducesTransparency: reducesTransparency)
         }
         .overlay(alignment: .top) {
             ClipboardSequentialPasteHUDDragRegion(
@@ -312,12 +312,12 @@ private struct ClipboardSequentialPasteHUDView: View {
                     defaultValue: "Drag to move"
                 )
             )
-                .frame(width: 110, height: 30)
+                .frame(width: 72, height: 15)
                 .contentShape(Rectangle())
                 .overlay {
                     Capsule()
-                        .fill(Color.secondary.opacity(0.42))
-                        .frame(width: 30, height: 3)
+                        .fill(Color.secondary.opacity(0.35))
+                        .frame(width: 28, height: 3)
                         .allowsHitTesting(false)
                 }
                 .help(localization.string("panel.drag.help", defaultValue: "Drag to move"))
@@ -410,18 +410,6 @@ enum ClipboardSequentialPasteHUDPreviewLayout {
     static func dimension(hasData: Bool) -> CGFloat {
         hasData ? previewDimension : 0
     }
-}
-
-private struct ClipboardSequentialPasteHUDGlassBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .hudWindow
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 @MainActor

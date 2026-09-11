@@ -126,6 +126,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginPaletteFooter": "1.3.0",
     "PluginPrivateDataKeychainIdentity": "1.3.0",
     "PluginSettingsActionShortcutItem": "1.3.0",
+    "PluginSettingsItem": "1.3.1",
     "PluginInlineShortcutSettingsContextConsuming": "1.3.0",
     "PluginShortcutBindingValidating": "1.3.0",
     "actionShortcutItem": "1.3.0",

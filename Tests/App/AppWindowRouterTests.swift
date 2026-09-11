@@ -1,6 +1,6 @@
 import AppKit
 import Carbon
-import MacToolsPluginKit
+@testable import MacToolsPluginKit
 import SwiftUI
 import XCTest
 @testable import MacTools
@@ -850,6 +850,72 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertEqual(restorationCount, 1)
     }
 
+    func testDismissingPaletteCancelsActiveSnapGuidesWithoutSaving() async throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let router = makeRouter(defaults: defaults)
+        let savedPosition = WindowPosition.custom(normalizedPoint: CGPoint(x: 0.2, y: 0.8))
+        router.windowPositionStore.savePosition(savedPosition, for: .commandPalette)
+        router.toggleCommandPalette()
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+        let coordinator = try XCTUnwrap(router.commandPaletteSnapCoordinator)
+        defer { coordinator.cancelDragging() }
+        coordinator.startDragging()
+        XCTAssertTrue(coordinator.isDragging)
+        let guides = coordinator.overlayController.presentedPanelsForTests
+        XCTAssertEqual(guides.count, 3)
+        XCTAssertTrue(guides.allSatisfy(\.isVisible))
+        let frameBeforeDismissal = panel.frame
+
+        router.dismissCommandPalette(restoringFocus: false)
+
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertFalse(coordinator.isDragging, "Dismissing the palette must cancel its drag lifecycle")
+        XCTAssertTrue(guides.allSatisfy { !$0.isVisible })
+        XCTAssertTrue(coordinator.overlayController.presentedPanelsForTests.isEmpty)
+        coordinator.finishDragging()
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(panel.frame, frameBeforeDismissal)
+        XCTAssertEqual(router.windowPositionStore.position(for: .commandPalette), savedPosition,
+                       "A cancelled drag must not overwrite the saved position after mouse release")
+
+        router.toggleCommandPalette()
+        coordinator.startDragging()
+        XCTAssertTrue(coordinator.isDragging)
+        XCTAssertEqual(coordinator.overlayController.presentedPanelsForTests.count, 3)
+        router.dismissCommandPalette(restoringFocus: false)
+        XCTAssertFalse(coordinator.isDragging)
+    }
+
+    func testResetCommandPalettePositionRestoresDefaultAnchorAndFrame() throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let positionStore = WindowPositionStore(userDefaults: defaults)
+        positionStore.savePosition(
+            .custom(normalizedPoint: CGPoint(x: 0.2, y: 0.8)),
+            for: .commandPalette
+        )
+
+        let router = makeRouter(defaults: defaults, windowPositionStore: positionStore)
+        router.toggleCommandPalette()
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+
+        router.resetCommandPalettePosition()
+        XCTAssertEqual(positionStore.position(for: .commandPalette), .defaultAnchor)
+
+        let defaultFrame = StandaloneCommandPaletteLayout.frame(
+            pointerLocation: NSEvent.mouseLocation,
+            visibleFrames: [panel.screen?.visibleFrame ?? .zero],
+            position: .defaultAnchor
+        )
+        XCTAssertEqual(panel.frame.origin.x, defaultFrame.origin.x, accuracy: 1.0)
+        XCTAssertEqual(panel.frame.origin.y, defaultFrame.origin.y, accuracy: 1.0)
+
+        router.dismissCommandPalette()
+    }
+
     func testSuccessfulStandalonePaletteActionRestoresOnlyWhilePaletteOwnsFocus() {
         XCTAssertTrue(
             StandaloneCommandPaletteSuccessfulExecutionFocusPolicy
@@ -1252,6 +1318,7 @@ final class AppWindowRouterTests: XCTestCase {
         defaults: UserDefaults,
         appUpdater: AppUpdater? = nil,
         commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration? = nil,
+        windowPositionStore: WindowPositionStore? = nil,
         plugins: [any MacToolsPlugin] = [],
         configureHost: (PluginHost) -> Void = { _ in }
     ) -> AppWindowRouter {
@@ -1270,7 +1337,8 @@ final class AppWindowRouterTests: XCTestCase {
             menuBarIconGallery: MenuBarIconGalleryLibrary(),
             launchAtLoginController: LaunchAtLoginController(service: AppWindowRouterFakeLaunchAtLoginService()),
             appearanceUserDefaults: defaults,
-            commandPaletteFocusRestoration: commandPaletteFocusRestoration ?? .init()
+            commandPaletteFocusRestoration: commandPaletteFocusRestoration ?? .init(),
+            windowPositionStore: windowPositionStore ?? WindowPositionStore(userDefaults: defaults)
         )
     }
 

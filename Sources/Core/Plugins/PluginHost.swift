@@ -2249,6 +2249,28 @@ final class PluginHost: ObservableObject {
         rebuildDerivedState()
     }
 
+    /// Moves only currently rendered items. Runtime-hidden plugins keep their slots,
+    /// and the preferences store also preserves slots hidden by the user's settings.
+    func moveRenderedPlugin(id pluginID: String, toOffset targetOffset: Int, on surface: PluginDisplaySurface) {
+        var renderedIDs = surface == .dashboard ? componentItems.map(\.id) : panelItems.map(\.id)
+        guard let currentIndex = renderedIDs.firstIndex(of: pluginID) else { return }
+        let clampedOffset = min(max(targetOffset, 0), renderedIDs.count)
+        guard currentIndex != clampedOffset, currentIndex + 1 != clampedOffset else { return }
+
+        let renderedIDSet = Set(renderedIDs)
+        renderedIDs.move(fromOffsets: IndexSet(integer: currentIndex), toOffset: clampedOffset)
+        var reorderedIDs = renderedIDs.makeIterator()
+        let orderedIDs = visiblePluginIDs(for: surface).map { id in
+            renderedIDSet.contains(id) ? reorderedIDs.next()! : id
+        }
+        pluginDisplayPreferencesStore.setVisiblePluginIDs(
+            orderedIDs,
+            for: surface,
+            defaultPluginIDs: defaultPluginIDs(for: surface)
+        )
+        rebuildDerivedState()
+    }
+
     func setPluginVisible(_ isVisible: Bool, id pluginID: String, on surface: PluginDisplaySurface) {
         pluginDisplayPreferencesStore.setPluginVisible(
             isVisible,

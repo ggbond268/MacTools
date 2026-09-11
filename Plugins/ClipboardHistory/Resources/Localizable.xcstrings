@@ -1,6 +1,794 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "backup.button.create": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Back Up…"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "备份…"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "備份…"}}, "de": {"stringUnit": {"state": "translated", "value": "Sichern…"}}, "es": {"stringUnit": {"state": "translated", "value": "Crear copia…"}}, "fr": {"stringUnit": {"state": "translated", "value": "Sauvegarder…"}}, "ar": {"stringUnit": {"state": "translated", "value": "نسخ احتياطي…"}}, "ja": {"stringUnit": {"state": "translated", "value": "バックアップ…"}}, "ko": {"stringUnit": {"state": "translated", "value": "백업…"}}, "pt": {"stringUnit": {"state": "translated", "value": "Fazer backup…"}}, "ru": {"stringUnit": {"state": "translated", "value": "Создать копию…"}}}},
+    "backup.button.restore": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Restore…"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "恢复…"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "還原…"}}, "de": {"stringUnit": {"state": "translated", "value": "Wiederherstellen…"}}, "es": {"stringUnit": {"state": "translated", "value": "Restaurar…"}}, "fr": {"stringUnit": {"state": "translated", "value": "Restaurer…"}}, "ar": {"stringUnit": {"state": "translated", "value": "استعادة…"}}, "ja": {"stringUnit": {"state": "translated", "value": "復元…"}}, "ko": {"stringUnit": {"state": "translated", "value": "복원…"}}, "pt": {"stringUnit": {"state": "translated", "value": "Restaurar…"}}, "ru": {"stringUnit": {"state": "translated", "value": "Восстановить…"}}}},
+    "backup.rollbackTitle": {"extractionState": "manual", "localizations": {"en": {"stringUnit": {"state": "translated", "value": "Local Rollback Snapshot"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "本机回滚快照"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "本機回復快照"}}, "de": {"stringUnit": {"state": "translated", "value": "Lokaler Wiederherstellungspunkt"}}, "es": {"stringUnit": {"state": "translated", "value": "Instantánea local de reversión"}}, "fr": {"stringUnit": {"state": "translated", "value": "Instantané local de retour en arrière"}}, "ar": {"stringUnit": {"state": "translated", "value": "لقطة محلية للتراجع"}}, "ja": {"stringUnit": {"state": "translated", "value": "ローカルのロールバックスナップショット"}}, "ko": {"stringUnit": {"state": "translated", "value": "로컬 롤백 스냅샷"}}, "pt": {"stringUnit": {"state": "translated", "value": "Instantâneo local de reversão"}}, "ru": {"stringUnit": {"state": "translated", "value": "Локальный снимок для отката"}}}},
+    "settings.snippets.library.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snippet Library"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "片段库"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "片段庫"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スニペットライブラリ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스니펫 라이브러리"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Textbausteinbibliothek"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibliothèque d’extraits"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biblioteca de fragmentos"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biblioteca de trechos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Библиотека фрагментов"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مكتبة المقتطفات"
+          }
+        }
+      }
+    },
+    "settings.history.section": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clipboard History"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪贴板历史"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪貼簿記錄"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップボード履歴"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립보드 기록"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischenablageverlauf"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historique du presse-papiers"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historial del portapapeles"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Histórico da área de transferência"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "История буфера обмена"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سجل الحافظة"
+          }
+        }
+      }
+    },
+    "settings.storage.encrypted.description": {
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يُحفظ السجل والعناصر المحفوظة في قاعدة بيانات محلية مشفّرة ويمكن مسحهما بشكل منفصل. تحفظ سلسلة المفاتيح المفتاح المحلي فقط؛ ولا تُطلب سلسلة مفاتيح iCloud." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Verlauf und gespeicherte Elemente liegen in einer lokalen verschlüsselten Datenbank und können getrennt gelöscht werden. Der Schlüsselbund enthält nur den lokalen Schlüssel; iCloud-Schlüsselbund ist nicht erforderlich." } },
+        "en": { "stringUnit": { "state": "translated", "value": "History and Saved items are stored in a local encrypted database and can be cleared separately. Keychain holds only this Mac’s encryption key; iCloud Keychain is not required." } },
+        "es": { "stringUnit": { "state": "translated", "value": "El historial y los elementos guardados se almacenan en una base de datos local cifrada y pueden borrarse por separado. El Llavero solo guarda la clave de este Mac; no se requiere el Llavero de iCloud." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "L’historique et les éléments enregistrés sont stockés dans une base locale chiffrée et peuvent être effacés séparément. Le trousseau ne contient que la clé de ce Mac ; le trousseau iCloud n’est pas requis." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "履歴と保存済み項目はローカルの暗号化データベースに保存され、個別に消去できます。キーチェーンにはこのMacの暗号化キーのみ保持され、iCloudキーチェーンは不要です。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기록과 저장된 항목은 로컬 암호화 데이터베이스에 저장되며 별도로 지울 수 있습니다. 키체인에는 이 Mac의 암호화 키만 보관되며 iCloud 키체인은 필요하지 않습니다." } },
+        "pt": { "stringUnit": { "state": "translated", "value": "O histórico e os itens salvos ficam em um banco de dados local criptografado e podem ser apagados separadamente. As Chaves guardam apenas a chave deste Mac; as Chaves do iCloud não são necessárias." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "История и сохранённые элементы находятся в локальной зашифрованной базе и могут очищаться отдельно. В Связке ключей хранится только ключ этого Mac; Связка ключей iCloud не требуется." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "历史和已保存项目存放在本机加密数据库中；两者可分别清除。钥匙串只保存这台 Mac 的加密密钥，不需要 iCloud 钥匙串。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "記錄和已儲存項目存放在本機加密資料庫中；兩者可分別清除。鑰匙圈只儲存這部 Mac 的加密金鑰，不需要 iCloud 鑰匙圈。" } }
+      }
+    },
+    "panel.filter.clear": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح عوامل التصفية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter zurücksetzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Filters"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar filtros"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer les filtres"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フィルタを解除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "필터 지우기"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limpar filtros"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сбросить фильтры"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除筛选"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除篩選"
+          }
+        }
+      }
+    },
+    "panel.filter.savedOnly": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المحفوظة فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Gespeicherte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved Only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo guardados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éléments enregistrés uniquement"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存済みのみ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 항목만"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente salvos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только сохранённые"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅显示已保存"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅顯示已儲存"
+          }
+        }
+      }
+    },
+    "panel.collection.resume": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمكين جمع سجل الحافظة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufzeichnen des Zwischenablageverlaufs aktivieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable Clipboard History Collection"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar la recopilación del historial del portapapeles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer la collecte de l’historique du presse-papiers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップボード履歴の収集を有効にする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립보드 기록 수집 활성화"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativar a coleta do histórico da área de transferência"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включить сбор истории буфера обмена"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用剪贴板历史收集"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "啟用剪貼簿歷史收集"
+          }
+        }
+      }
+    },
+    "panel.collection.stop": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعطيل جمع سجل الحافظة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufzeichnen des Zwischenablageverlaufs deaktivieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disable Clipboard History Collection"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivar la recopilación del historial del portapapeles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactiver la collecte de l’historique du presse-papiers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップボード履歴の収集を無効にする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립보드 기록 수집 비활성화"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desativar a coleta do histórico da área de transferência"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отключить сбор истории буфера обмена"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停用剪贴板历史收集"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停用剪貼簿歷史收集"
+          }
+        }
+      }
+    },
+    "panel.settings.help": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعدادات الحافظة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischenablage-Einstellungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clipboard Settings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes del portapapeles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglages du presse-papiers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップボード設定"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립보드 설정"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes da área de transferência"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки буфера обмена"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪贴板设置"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪貼簿設定"
+          }
+        }
+      }
+    },
+    "settings.data.clearSnippets.summary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete snippets and their keywords; keep history and saved clips."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除片段及其关键词，保留历史和已存项目。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除片段及其關鍵字，保留記錄和已儲存項目。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スニペットとキーワードを削除します。履歴と保存済み項目は保持されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스니펫과 키워드를 삭제합니다. 기록과 저장된 항목은 유지됩니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Textbausteine und ihre Kürzel löschen; Verlauf und gespeicherte Einträge behalten."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer les extraits et leurs mots-clés ; conserver l’historique et les éléments enregistrés."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elimina los fragmentos y sus palabras clave; conserva el historial y los elementos guardados."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclua trechos e suas palavras-chave; mantenha o histórico e os itens salvos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить фрагменты и их ключевые слова, оставив историю и сохранённые элементы."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حذف المقتطفات وكلماتها المفتاحية مع الاحتفاظ بالسجل والعناصر المحفوظة."
+          }
+        }
+      }
+    },
+    "settings.data.clearSaved.summary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear saved clips; keep history and snippets."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除已存项目，保留历史和片段。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除已儲存項目，保留記錄和片段。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存済み項目を消去します。履歴とスニペットは保持されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 항목을 지웁니다. 기록과 스니펫은 유지됩니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gespeicherte Einträge löschen; Verlauf und Textbausteine behalten."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer les éléments enregistrés ; conserver l’historique et les extraits."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borra los elementos guardados; conserva el historial y los fragmentos."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limpe os itens salvos; mantenha o histórico e os trechos."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить сохранённые элементы, оставив историю и фрагменты."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح العناصر المحفوظة مع الاحتفاظ بالسجل والمقتطفات."
+          }
+        }
+      }
+    },
+    "settings.data.saved.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved Clips"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已存项目"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存項目"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存済み項目"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 항목"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gespeicherte Einträge"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éléments enregistrés"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elementos guardados"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Itens salvos"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранённые элементы"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "العناصر المحفوظة"
+          }
+        }
+      }
+    },
+    "settings.data.history.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歷史記錄"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "履歴"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlauf"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historique"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historial"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Histórico"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "История"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "السجل"
+          }
+        }
+      }
+    },
     "backup.capacity.title": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Not enough capacity for snippet keywords"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "关键词片段容量不足"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "關鍵詞片段容量不足"}}, "ja": {"stringUnit": {"state": "translated", "value": "スニペットのキーワード用容量が不足しています"}}, "ko": {"stringUnit": {"state": "translated", "value": "스니펫 키워드 용량이 부족합니다"}}, "de": {"stringUnit": {"state": "translated", "value": "Nicht genügend Kapazität für Textbaustein-Schlüsselwörter"}}, "fr": {"stringUnit": {"state": "translated", "value": "Capacité insuffisante pour les mots-clés des extraits"}}, "es": {"stringUnit": {"state": "translated", "value": "Capacidad insuficiente para palabras clave de fragmentos"}}, "pt": {"stringUnit": {"state": "translated", "value": "Capacidade insuficiente para palavras-chave de trechos"}}, "ru": {"stringUnit": {"state": "translated", "value": "Недостаточно места для ключевых слов фрагментов"}}, "ar": {"stringUnit": {"state": "translated", "value": "السعة غير كافية للكلمات المفتاحية للمقتطفات"}}}},
     "backup.continueMerge": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Continue Merge"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "继续合并"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "繼續合併"}}, "ja": {"stringUnit": {"state": "translated", "value": "結合を続ける"}}, "ko": {"stringUnit": {"state": "translated", "value": "병합 계속"}}, "de": {"stringUnit": {"state": "translated", "value": "Zusammenführen fortsetzen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Continuer la fusion"}}, "es": {"stringUnit": {"state": "translated", "value": "Continuar la combinación"}}, "pt": {"stringUnit": {"state": "translated", "value": "Continuar mesclagem"}}, "ru": {"stringUnit": {"state": "translated", "value": "Продолжить объединение"}}, "ar": {"stringUnit": {"state": "translated", "value": "متابعة الدمج"}}}},
     "backup.capacity.message": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "All imported snippet content will be kept. Existing local keywords take priority, followed by imported keywords in backup order. The %d imported keyword bindings that do not fit will be removed; their snippets can still be pasted manually."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "所有导入片段内容都会保留。优先保留本机已有关键词，再按备份顺序保留导入关键词；超出容量的 %d 个导入关键词绑定将被移除，对应片段仍可手动粘贴。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "所有匯入片段內容都會保留。優先保留本機現有關鍵詞，再依備份順序保留匯入關鍵詞；超出容量的 %d 個匯入關鍵詞綁定將被移除，對應片段仍可手動貼上。"}}, "ja": {"stringUnit": {"state": "translated", "value": "読み込んだスニペットの内容はすべて保持されます。既存のローカルキーワードを優先し、残りはバックアップ内の順序で保持します。容量に収まらない %d 個のキーワード割り当ては削除されますが、スニペットは手動で貼り付けできます。"}}, "ko": {"stringUnit": {"state": "translated", "value": "가져온 모든 스니펫 내용은 유지됩니다. 기존 로컬 키워드를 우선 유지한 후 백업 순서대로 가져온 키워드를 유지합니다. 용량을 초과하는 키워드 연결 %d개는 제거되지만 해당 스니펫은 계속 수동으로 붙여넣을 수 있습니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Alle importierten Textbausteininhalte bleiben erhalten. Lokale Schlüsselwörter haben Vorrang, danach folgen importierte Schlüsselwörter in Sicherungsreihenfolge. Die %d importierten Zuweisungen, die nicht mehr passen, werden entfernt. Ihre Textbausteine können weiterhin manuell eingefügt werden."}}, "fr": {"stringUnit": {"state": "translated", "value": "Le contenu de tous les extraits importés sera conservé. Les mots-clés locaux sont prioritaires, puis les mots-clés importés sont retenus dans l’ordre de la sauvegarde. Les %d associations dépassant la capacité seront supprimées ; leurs extraits pourront toujours être collés manuellement."}}, "es": {"stringUnit": {"state": "translated", "value": "Se conservará el contenido de todos los fragmentos importados. Las palabras clave locales tienen prioridad, seguidas de las importadas en el orden de la copia. Se eliminarán las %d asignaciones importadas que excedan la capacidad; sus fragmentos podrán pegarse manualmente."}}, "pt": {"stringUnit": {"state": "translated", "value": "Todo o conteúdo dos trechos importados será mantido. As palavras-chave locais têm prioridade, seguidas das importadas na ordem do backup. As %d associações importadas que excederem a capacidade serão removidas; seus trechos ainda poderão ser colados manualmente."}}, "ru": {"stringUnit": {"state": "translated", "value": "Содержимое всех импортированных фрагментов сохранится. Приоритет имеют локальные ключевые слова, затем импортированные в порядке резервной копии. Будут удалены %d привязок импортированных ключевых слов, превышающих лимит; фрагменты по-прежнему можно вставлять вручную."}}, "ar": {"stringUnit": {"state": "translated", "value": "سيُحتفظ بمحتوى جميع المقتطفات المستوردة. تُعطى الأولوية للكلمات المفتاحية المحلية الحالية، ثم للمستوردة حسب ترتيب النسخة الاحتياطية. ستُزال %d من ارتباطات الكلمات المفتاحية المستوردة التي تتجاوز السعة؛ ويمكن لصق مقتطفاتها يدويًا."}}}},
@@ -31,8 +819,6 @@
     "backup.error.limit": {"localizations": {"ar": {"stringUnit": {"state": "translated", "value": "تتجاوز النسخة الاحتياطية حد الأمان أو حد الحجم الحالي لكل عنصر."}}, "de": {"stringUnit": {"state": "translated", "value": "Das Backup überschreitet eine Sicherheitsgrenze oder die aktuelle Größenbegrenzung pro Eintrag."}}, "en": {"stringUnit": {"state": "translated", "value": "The backup exceeds a safety limit or the current per-item size limit."}}, "es": {"stringUnit": {"state": "translated", "value": "La copia supera un límite de seguridad o el tamaño máximo actual por elemento."}}, "fr": {"stringUnit": {"state": "translated", "value": "La sauvegarde dépasse une limite de sécurité ou la taille maximale actuelle par élément."}}, "ja": {"stringUnit": {"state": "translated", "value": "バックアップが安全上限または現在の項目サイズ上限を超えています。"}}, "ko": {"stringUnit": {"state": "translated", "value": "백업이 안전 한도 또는 현재 항목별 크기 제한을 초과합니다."}}, "pt": {"stringUnit": {"state": "translated", "value": "O backup excede um limite de segurança ou o limite de tamanho atual por item."}}, "ru": {"stringUnit": {"state": "translated", "value": "Резервная копия превышает предел безопасности или текущий предел размера одного элемента."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "备份超过安全上限或当前单项大小限制。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "備份超過安全上限或目前單項大小限制。"}}}},
     "backup.error.changed": {"localizations": {"ar": {"stringUnit": {"state": "translated", "value": "تغيرت بيانات الحافظة المحلية. عاين النسخة الاحتياطية مجددًا."}}, "de": {"stringUnit": {"state": "translated", "value": "Die lokalen Zwischenablagedaten wurden geändert. Zeige die Vorschau erneut an."}}, "en": {"stringUnit": {"state": "translated", "value": "Local clipboard data changed. Preview the backup again."}}, "es": {"stringUnit": {"state": "translated", "value": "Los datos locales del portapapeles han cambiado. Vuelve a previsualizar la copia."}}, "fr": {"stringUnit": {"state": "translated", "value": "Les données locales du presse-papiers ont changé. Affichez à nouveau l’aperçu."}}, "ja": {"stringUnit": {"state": "translated", "value": "このMacのクリップボードデータが変更されました。もう一度プレビューしてください。"}}, "ko": {"stringUnit": {"state": "translated", "value": "이 Mac의 클립보드 데이터가 변경되었습니다. 백업을 다시 미리 보세요."}}, "pt": {"stringUnit": {"state": "translated", "value": "Os dados locais da área de transferência mudaram. Visualize o backup novamente."}}, "ru": {"stringUnit": {"state": "translated", "value": "Локальные данные буфера обмена изменились. Повторите предварительный просмотр."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "本机剪贴板数据已更改。请重新预览备份。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "本機剪貼簿資料已變更。請重新預覽備份。"}}}},
     "backup.error.storage": {"localizations": {"ar": {"stringUnit": {"state": "translated", "value": "تعذرت قراءة النسخة الاحتياطية أو كتابتها. تحقق من مساحة القرص وأذونات الملف."}}, "de": {"stringUnit": {"state": "translated", "value": "Das Backup kann nicht gelesen oder geschrieben werden. Prüfe Speicherplatz und Dateiberechtigungen."}}, "en": {"stringUnit": {"state": "translated", "value": "Unable to read or write the backup. Check available disk space and file permissions."}}, "es": {"stringUnit": {"state": "translated", "value": "No se puede leer o escribir la copia. Comprueba el espacio en disco y los permisos del archivo."}}, "fr": {"stringUnit": {"state": "translated", "value": "Impossible de lire ou d’écrire la sauvegarde. Vérifiez l’espace disque et les autorisations du fichier."}}, "ja": {"stringUnit": {"state": "translated", "value": "バックアップを読み書きできません。空き容量とファイルのアクセス権を確認してください。"}}, "ko": {"stringUnit": {"state": "translated", "value": "백업을 읽거나 쓸 수 없습니다. 여유 디스크 공간과 파일 권한을 확인하세요."}}, "pt": {"stringUnit": {"state": "translated", "value": "Não foi possível ler ou gravar o backup. Verifique o espaço em disco e as permissões do arquivo."}}, "ru": {"stringUnit": {"state": "translated", "value": "Не удалось прочитать или записать резервную копию. Проверьте свободное место и права доступа к файлу."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "无法读写备份。请检查可用磁盘空间和文件权限。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "無法讀寫備份。請檢查可用磁碟空間和檔案權限。"}}}},
-    "backup.create": {"localizations": {"ar": {"stringUnit": {"state": "translated", "value": "نسخ بيانات الحافظة احتياطيًا…"}}, "de": {"stringUnit": {"state": "translated", "value": "Zwischenablagedaten sichern…"}}, "en": {"stringUnit": {"state": "translated", "value": "Back Up Clipboard Data…"}}, "es": {"stringUnit": {"state": "translated", "value": "Crear copia de los datos del portapapeles…"}}, "fr": {"stringUnit": {"state": "translated", "value": "Sauvegarder les données du presse-papiers…"}}, "ja": {"stringUnit": {"state": "translated", "value": "クリップボードデータをバックアップ…"}}, "ko": {"stringUnit": {"state": "translated", "value": "클립보드 데이터 백업…"}}, "pt": {"stringUnit": {"state": "translated", "value": "Fazer backup dos dados da área de transferência…"}}, "ru": {"stringUnit": {"state": "translated", "value": "Создать резервную копию буфера обмена…"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "备份剪贴板数据…"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "備份剪貼簿資料…"}}}},
-    "backup.restore": {"localizations": {"ar": {"stringUnit": {"state": "translated", "value": "استعادة نسخة الحافظة الاحتياطية…"}}, "de": {"stringUnit": {"state": "translated", "value": "Zwischenablage-Backup wiederherstellen…"}}, "en": {"stringUnit": {"state": "translated", "value": "Restore Clipboard Backup…"}}, "es": {"stringUnit": {"state": "translated", "value": "Restaurar copia del portapapeles…"}}, "fr": {"stringUnit": {"state": "translated", "value": "Restaurer une sauvegarde du presse-papiers…"}}, "ja": {"stringUnit": {"state": "translated", "value": "クリップボードのバックアップを復元…"}}, "ko": {"stringUnit": {"state": "translated", "value": "클립보드 백업 복원…"}}, "pt": {"stringUnit": {"state": "translated", "value": "Restaurar backup da área de transferência…"}}, "ru": {"stringUnit": {"state": "translated", "value": "Восстановить резервную копию буфера обмена…"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "恢复剪贴板备份…"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "還原剪貼簿備份…"}}}},
     "backup.rollback": {"localizations": {"ar": {"stringUnit": {"state": "translated", "value": "استعادة لقطة التراجع المحلية…"}}, "de": {"stringUnit": {"state": "translated", "value": "Lokalen Wiederherstellungspunkt wiederherstellen…"}}, "en": {"stringUnit": {"state": "translated", "value": "Restore Local Rollback Snapshot…"}}, "es": {"stringUnit": {"state": "translated", "value": "Restaurar instantánea local de recuperación…"}}, "fr": {"stringUnit": {"state": "translated", "value": "Restaurer l’instantané local de récupération…"}}, "ja": {"stringUnit": {"state": "translated", "value": "ローカル復元スナップショットを復元…"}}, "ko": {"stringUnit": {"state": "translated", "value": "로컬 롤백 스냅샷 복원…"}}, "pt": {"stringUnit": {"state": "translated", "value": "Restaurar instantâneo local de recuperação…"}}, "ru": {"stringUnit": {"state": "translated", "value": "Восстановить локальный снимок для отката…"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "恢复本机回滚快照…"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "還原本機回復快照…"}}}},
     "backup.password": {"localizations": {"ar": {"stringUnit": {"state": "translated", "value": "كلمة سر النسخة الاحتياطية"}}, "de": {"stringUnit": {"state": "translated", "value": "Backup-Passwort"}}, "en": {"stringUnit": {"state": "translated", "value": "Backup password"}}, "es": {"stringUnit": {"state": "translated", "value": "Contraseña de la copia"}}, "fr": {"stringUnit": {"state": "translated", "value": "Mot de passe de sauvegarde"}}, "ja": {"stringUnit": {"state": "translated", "value": "バックアップパスワード"}}, "ko": {"stringUnit": {"state": "translated", "value": "백업 암호"}}, "pt": {"stringUnit": {"state": "translated", "value": "Senha do backup"}}, "ru": {"stringUnit": {"state": "translated", "value": "Пароль резервной копии"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "备份密码"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "備份密碼"}}}},
     "backup.confirmPassword": {"localizations": {"ar": {"stringUnit": {"state": "translated", "value": "تأكيد كلمة السر"}}, "de": {"stringUnit": {"state": "translated", "value": "Passwort bestätigen"}}, "en": {"stringUnit": {"state": "translated", "value": "Confirm password"}}, "es": {"stringUnit": {"state": "translated", "value": "Confirmar contraseña"}}, "fr": {"stringUnit": {"state": "translated", "value": "Confirmer le mot de passe"}}, "ja": {"stringUnit": {"state": "translated", "value": "パスワードを確認"}}, "ko": {"stringUnit": {"state": "translated", "value": "암호 확인"}}, "pt": {"stringUnit": {"state": "translated", "value": "Confirmar senha"}}, "ru": {"stringUnit": {"state": "translated", "value": "Подтвердите пароль"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "再次输入密码"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "再次輸入密碼"}}}},
@@ -68,21 +854,6 @@
     "panel.preview.payloadUnavailable": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "The saved content could not be read."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "无法读取已保存的内容。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "無法讀取已儲存的內容。"}}, "ja": {"stringUnit": {"state": "translated", "value": "保存された内容を読み取れませんでした。"}}, "ko": {"stringUnit": {"state": "translated", "value": "저장된 내용을 읽을 수 없습니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Der gespeicherte Inhalt konnte nicht gelesen werden."}}, "fr": {"stringUnit": {"state": "translated", "value": "Le contenu enregistré n’a pas pu être lu."}}, "es": {"stringUnit": {"state": "translated", "value": "No se pudo leer el contenido guardado."}}, "pt": {"stringUnit": {"state": "translated", "value": "Não foi possível ler o conteúdo salvo."}}, "ru": {"stringUnit": {"state": "translated", "value": "Не удалось прочитать сохранённое содержимое."}}, "ar": {"stringUnit": {"state": "translated", "value": "تعذرت قراءة المحتوى المحفوظ."}}}},
     "panel.preview.unsupported": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "This content has no supported preview format."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "此内容没有可用的预览格式。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "此內容沒有可用的預覽格式。"}}, "ja": {"stringUnit": {"state": "translated", "value": "この内容には対応するプレビュー形式がありません。"}}, "ko": {"stringUnit": {"state": "translated", "value": "이 콘텐츠에는 지원되는 미리보기 형식이 없습니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Für diesen Inhalt ist kein unterstütztes Vorschauformat verfügbar."}}, "fr": {"stringUnit": {"state": "translated", "value": "Ce contenu n’a pas de format d’aperçu pris en charge."}}, "es": {"stringUnit": {"state": "translated", "value": "Este contenido no tiene un formato de vista previa compatible."}}, "pt": {"stringUnit": {"state": "translated", "value": "Este conteúdo não tem um formato de prévia compatível."}}, "ru": {"stringUnit": {"state": "translated", "value": "Для этого содержимого нет поддерживаемого формата предпросмотра."}}, "ar": {"stringUnit": {"state": "translated", "value": "لا يتوفر تنسيق معاينة مدعوم لهذا المحتوى."}}}},
     "panel.preview.decodeFailed": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "The preview could not be decoded. Retry or use the original content."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "无法解码预览，可重试或使用原始内容。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "無法解碼預覽，可重試或使用原始內容。"}}, "ja": {"stringUnit": {"state": "translated", "value": "プレビューをデコードできませんでした。再試行するか、元の内容を使用してください。"}}, "ko": {"stringUnit": {"state": "translated", "value": "미리보기를 디코딩할 수 없습니다. 다시 시도하거나 원본 콘텐츠를 사용하세요."}}, "de": {"stringUnit": {"state": "translated", "value": "Die Vorschau konnte nicht dekodiert werden. Versuchen Sie es erneut oder verwenden Sie den Originalinhalt."}}, "fr": {"stringUnit": {"state": "translated", "value": "L’aperçu n’a pas pu être décodé. Réessayez ou utilisez le contenu original."}}, "es": {"stringUnit": {"state": "translated", "value": "No se pudo decodificar la vista previa. Reinténtalo o usa el contenido original."}}, "pt": {"stringUnit": {"state": "translated", "value": "Não foi possível decodificar a prévia. Tente novamente ou use o conteúdo original."}}, "ru": {"stringUnit": {"state": "translated", "value": "Не удалось декодировать предпросмотр. Повторите попытку или используйте исходное содержимое."}}, "ar": {"stringUnit": {"state": "translated", "value": "تعذر فك ترميز المعاينة. أعد المحاولة أو استخدم المحتوى الأصلي."}}}},
-    "settings.snippets.advanced": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Advanced" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "高级" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "進階" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "詳細設定" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "고급" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Erweitert" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Avancé" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Avanzado" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Avançado" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Дополнительно" } },
-        "ar": { "stringUnit": { "state": "translated", "value": "متقدم" } }
-      }
-    },
     "settings.snippets.expandedLimit.title": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Expanded Text Limit" } },
@@ -471,21 +1242,6 @@
         "pt": { "stringUnit": { "state": "translated", "value": "Gerir excertos" } },
         "ru": { "stringUnit": { "state": "translated", "value": "Управление фрагментами" } },
         "ar": { "stringUnit": { "state": "translated", "value": "إدارة المقتطفات" } }
-      }
-    },
-    "settings.data.maintenance": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Clear Data…" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "清除数据…" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除資料…" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "データを消去…" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "데이터 지우기…" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Daten löschen…" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Effacer les données…" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Borrar datos…" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Limpar dados…" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Очистить данные…" } },
-        "ar": { "stringUnit": { "state": "translated", "value": "مسح البيانات…" } }
       }
     },
     "panel.color.preview.help": {
@@ -938,21 +1694,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "已找到目前的編輯器，但無法確認其所屬 App 視窗。請改用剪貼簿貼上片段。" } }
       }
     },
-    "settings.shortcuts.additional.title": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "اختصارات إضافية" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Weitere Kurzbefehle" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Additional Shortcuts" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Atajos adicionales" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Raccourcis supplémentaires" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "その他のショートカット" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "추가 단축키" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Atalhos adicionais" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Дополнительные сочетания клавиш" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "其他快捷键" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "其他快捷鍵" } }
-      }
-    },
     "settings.expansion.focusUnavailable": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "تعذّر الوصول إلى المحرر النشط. حاول كتابة الكلمة المفتاحية مجددًا." } },
@@ -981,21 +1722,6 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Шаблоны" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "片段" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "片段" } }
-      }
-    },
-    "settings.queue.advanced": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "خيارات إضافية للقائمة" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Weitere Warteschlangenoptionen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "More Queue Options" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Más opciones de cola" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Autres options de la file" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "キューの詳細設定" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "추가 대기열 옵션" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Mais opções da fila" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Другие параметры очереди" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "更多队列选项" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "更多佇列選項" } }
       }
     },
     "settings.expansion.listening": {
@@ -1823,51 +2549,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "正在搜尋…" } }
       }
     },
-    "settings.collection.controls.section": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "التجميع" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Erfassung" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Collection" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Recopilación" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Collecte" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "収集" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "수집" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Recolha" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Сбор" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "收集" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "收集" } }
-      }
-    },
-    "settings.privacyOverview.details": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "التفاصيل" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Details" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Details" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Detalles" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Détails" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "詳細" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "세부사항" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Detalhes" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Подробнее" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "详情" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "詳細資訊" } }
-      }
-    },
-    "settings.privacyOverview.hideDetails": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "إخفاء التفاصيل" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Details ausblenden" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Hide Details" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Ocultar detalles" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Masquer les détails" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "詳細を隠す" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "세부사항 가리기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Ocultar detalhes" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Скрыть подробности" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "隐藏详情" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "隱藏詳細資訊" } }
-      }
-    },
     "settings.privacyOverview.section": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "الخصوصية والتخزين" } },
@@ -1885,17 +2566,72 @@
     },
     "settings.privacyOverview.summary": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تبقى بيانات الحافظة مشفّرة على هذا الـ Mac؛ تخزّن سلسلة المفاتيح المفتاح فقط. تتيح تسهيلات الاستخدام اللصق والنسخ الخاص وتوسيع الكلمات المفتاحية الاختياري." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Zwischenablagedaten bleiben auf diesem Mac verschlüsselt; der Schlüsselbund speichert nur den Schlüssel. Bedienungshilfen ermöglichen Einfügen, privates Kopieren und optionale Schlüsselworterweiterung." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Clipboard data stays encrypted on this Mac; Keychain stores only the key. Accessibility enables pasting, private copy, and optional keyword expansion." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Los datos del portapapeles permanecen cifrados en este Mac; el llavero solo guarda la clave. Accesibilidad permite pegar, copiar en privado y expandir palabras clave de forma opcional." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Les données du presse-papiers restent chiffrées sur ce Mac ; le trousseau ne conserve que la clé. Accessibilité permet le collage, la copie privée et l’expansion facultative des mots-clés." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードデータはこのMac上で暗号化され、キーチェーンにはキーのみを保存します。アクセシビリティは貼り付け、プライベートコピー、任意のキーワード展開に使用します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "클립보드 데이터는 이 Mac에서 암호화되며 키체인에는 키만 저장됩니다. 손쉬운 사용은 붙여넣기, 비공개 복사 및 선택적 키워드 확장에 사용됩니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Os dados da área de transferência ficam encriptados neste Mac; o Porta-chaves guarda apenas a chave. A Acessibilidade permite colar, copiar em privado e expandir palavras-chave opcionalmente." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Данные буфера обмена хранятся зашифрованными на этом Mac; Связка ключей хранит только ключ. Универсальный доступ нужен для вставки, приватного копирования и необязательной подстановки ключевых слов." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板数据在本机加密，钥匙串只保存密钥。辅助功能用于粘贴、私密复制及可选的关键词展开。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼簿資料在本機加密，鑰匙圈只儲存金鑰。輔助使用用於貼上、私密複製及選用的關鍵字展開。" } }
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُحفظ المحتوى مشفرًا على هذا الـ Mac، ويُحفظ المفتاح في سلسلة المفاتيح."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inhalte werden auf diesem Mac verschlüsselt gespeichert. Der Schlüssel liegt im Schlüsselbund."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Content is encrypted on this Mac. The key is stored in Keychain."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El contenido se cifra en este Mac. La clave se guarda en el llavero."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le contenu est chiffré sur ce Mac. La clé est conservée dans le trousseau."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内容はこのMac上で暗号化され、鍵はキーチェーンに保存されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "콘텐츠는 이 Mac에 암호화되어 저장되며 키는 키체인에 보관됩니다."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O conteúdo é criptografado neste Mac. A chave fica nas Chaves."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данные шифруются на этом Mac. Ключ хранится в Связке ключей."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内容在本机加密保存，密钥存于钥匙串。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內容在本機加密儲存，密鑰存於鑰匙圈。"
+          }
+        }
       }
     },
     "settings.storage.status.preparing": {
@@ -1913,21 +2649,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "準備中" } }
       }
     },
-    "settings.storage.encrypted.title": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تخزين محلي مشفّر" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Verschlüsselter lokaler Speicher" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Encrypted Local Storage" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Almacenamiento local cifrado" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Stockage local chiffré" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "暗号化ローカルストレージ" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "암호화된 로컬 저장 공간" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Armazenamento local criptografado" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Локальное зашифрованное хранилище" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "本机加密存储" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "本機加密儲存空間" } }
-      }
-    },
     "settings.storage.status.ready": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "جاهز" } },
@@ -1941,21 +2662,6 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Готово" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "已就绪" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "已就緒" } }
-      }
-    },
-    "settings.storage.encrypted.description": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "يُحفظ السجل والعناصر المحفوظة في قاعدة بيانات محلية مشفّرة ويمكن مسحهما بشكل منفصل. تحفظ سلسلة المفاتيح المفتاح المحلي فقط؛ ولا تُطلب سلسلة مفاتيح iCloud." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Verlauf und gespeicherte Elemente liegen in einer lokalen verschlüsselten Datenbank und können getrennt gelöscht werden. Der Schlüsselbund enthält nur den lokalen Schlüssel; iCloud-Schlüsselbund ist nicht erforderlich." } },
-        "en": { "stringUnit": { "state": "translated", "value": "History and Saved items are stored in a local encrypted database and can be cleared separately. Keychain holds only this Mac’s encryption key; iCloud Keychain is not required." } },
-        "es": { "stringUnit": { "state": "translated", "value": "El historial y los elementos guardados se almacenan en una base de datos local cifrada y pueden borrarse por separado. El Llavero solo guarda la clave de este Mac; no se requiere el Llavero de iCloud." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "L’historique et les éléments enregistrés sont stockés dans une base locale chiffrée et peuvent être effacés séparément. Le trousseau ne contient que la clé de ce Mac ; le trousseau iCloud n’est pas requis." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "履歴と保存済み項目はローカルの暗号化データベースに保存され、個別に消去できます。キーチェーンにはこのMacの暗号化キーのみ保持され、iCloudキーチェーンは不要です。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기록과 저장된 항목은 로컬 암호화 데이터베이스에 저장되며 별도로 지울 수 있습니다. 키체인에는 이 Mac의 암호화 키만 보관되며 iCloud 키체인은 필요하지 않습니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "O histórico e os itens salvos ficam em um banco de dados local criptografado e podem ser apagados separadamente. As Chaves guardam apenas a chave deste Mac; as Chaves do iCloud não são necessárias." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "История и сохранённые элементы находятся в локальной зашифрованной базе и могут очищаться отдельно. В Связке ключей хранится только ключ этого Mac; Связка ключей iCloud не требуется." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "历史和已保存项目存放在本机加密数据库中；两者可分别清除。钥匙串只保存这台 Mac 的加密密钥，不需要 iCloud 钥匙串。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "記錄和已儲存項目存放在本機加密資料庫中；兩者可分別清除。鑰匙圈只儲存這部 Mac 的加密金鑰，不需要 iCloud 鑰匙圈。" } }
       }
     },
     "setup.show": {
@@ -2128,67 +2834,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جمع سجل الحافظة"
+            "value": "تمكين سجل الحافظة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zwischenablageverlauf erfassen"
+            "value": "Zwischenablageverlauf aktivieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collect Clipboard History"
+            "value": "Enable Clipboard History"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recopilar historial del portapapeles"
+            "value": "Activar el historial del portapapeles"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enregistrer l’historique du presse-papiers"
+            "value": "Activer l’historique du presse-papiers"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クリップボード履歴を収集"
+            "value": "クリップボード履歴を有効にする"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "클립보드 기록 수집"
+            "value": "클립보드 기록 활성화"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coletar histórico da área de transferência"
+            "value": "Ativar histórico da área de transferência"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сохранять историю буфера обмена"
+            "value": "Включить историю буфера обмена"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集剪贴板历史"
+            "value": "启用剪贴板历史"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集剪貼簿記錄"
+            "value": "啟用剪貼簿記錄"
           }
         }
       }
@@ -3363,67 +4069,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الجمع قيد التشغيل. يُحفظ السجل في قاعدة بيانات محلية مشفّرة، وتحتفظ سلسلة المفاتيح بمفتاح التشفير فقط."
+            "value": "حفظ المحتوى المنسوخ تلقائيًا للعثور عليه ولصقه لاحقًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erfassung ist aktiviert. Der Verlauf liegt in einer lokal verschlüsselten Datenbank; nur der Schlüssel wird im Schlüsselbund gespeichert."
+            "value": "Kopierte Inhalte automatisch speichern, um sie später zu finden und einzufügen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collection is on. History is stored in an encrypted local database; Keychain stores only the encryption key."
+            "value": "Automatically save copied content to find and paste it later."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La recopilación está activada. El historial se guarda en una base de datos local cifrada; el Llavero solo contiene la clave."
+            "value": "Guarda automáticamente lo que copias para buscarlo y pegarlo después."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La collecte est activée. L’historique est conservé dans une base de données locale chiffrée ; seule la clé est dans le trousseau."
+            "value": "Enregistrez automatiquement le contenu copié pour le retrouver et le coller plus tard."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "収集はオンです。履歴は暗号化されたローカルデータベースに保存され、キーチェーンには暗号化キーのみ保存されます。"
+            "value": "コピーした内容を自動保存し、後から検索してペーストできます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "수집이 켜져 있습니다. 기록은 암호화된 로컬 데이터베이스에 저장되고 키체인에는 암호화 키만 저장됩니다."
+            "value": "복사한 콘텐츠를 자동 저장해 나중에 찾아 붙여넣을 수 있습니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "A coleta está ativada. O histórico fica em uma base de dados local criptografada; as Chaves guardam apenas a chave."
+            "value": "Salve automaticamente o conteúdo copiado para encontrá-lo e colá-lo depois."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сбор включён. История хранится в локальной зашифрованной базе данных; в Связке ключей находится только ключ."
+            "value": "Автоматически сохранять скопированное для поиска и вставки позже."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集已开启。历史保存在本机加密数据库中，钥匙串只保存加密密钥。"
+            "value": "自动保存复制的内容，方便查找和粘贴。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集已開啟。記錄儲存在本機加密資料庫中，鑰匙圈只儲存加密金鑰。"
+            "value": "自動儲存複製的內容，方便搜尋和貼上。"
           }
         }
       }
@@ -3433,67 +4139,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الجمع متوقف مؤقتًا؛ يبقى السجل المشفّر الحالي محفوظًا محليًا."
+            "value": "التسجيل متوقف مؤقتًا. يبقى السجل الحالي محفوظًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erfassung ist pausiert; der bestehende verschlüsselte Verlauf bleibt lokal erhalten."
+            "value": "Die Aufzeichnung pausiert. Der bisherige Verlauf bleibt erhalten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collection is paused; existing encrypted history remains stored locally."
+            "value": "Recording is paused. Existing history is kept."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La recopilación está en pausa; el historial cifrado existente permanece guardado localmente."
+            "value": "El registro está pausado. Se conserva el historial existente."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La collecte est en pause ; l’historique chiffré existant reste stocké localement."
+            "value": "L’enregistrement est en pause. L’historique existant est conservé."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "収集は一時停止中です。既存の暗号化された履歴はローカルに保持されます。"
+            "value": "記録は一時停止中です。既存の履歴は保持されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "수집이 일시 정지되었습니다. 기존 암호화 기록은 로컬에 유지됩니다."
+            "value": "기록이 일시 정지되었습니다. 기존 기록은 유지됩니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "A coleta está pausada; o histórico criptografado existente permanece armazenado localmente."
+            "value": "O registro está pausado. O histórico existente é mantido."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сбор приостановлен; существующая зашифрованная история остаётся на устройстве."
+            "value": "Запись приостановлена. Существующая история сохранена."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集已暂停；现有加密历史仍保留在本机。"
+            "value": "已暂停记录，已有历史仍保留。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集已暫停；現有加密記錄仍保留在本機。"
+            "value": "已暫停記錄，現有記錄仍保留。"
           }
         }
       }
@@ -8023,76 +8729,6 @@
         }
       }
     },
-    "panel.badge.paused": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "متوقف مؤقتًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pausiert"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Paused"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En pausa"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En pause"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一時停止中"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "일시 정지됨"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pausado"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Приостановлено"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已暂停"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已暫停"
-          }
-        }
-      }
-    },
     "panel.button.open": {
       "localizations": {
         "ar": {
@@ -8193,36 +8829,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇範圍" } }
       }
     },
-    "panel.filter.chooseType": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "اختيار النوع" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Typ wählen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Choose Type" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Elegir tipo" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Choisir le type" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "種類を選択" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "유형 선택" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Escolher tipo" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Выбрать тип" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择类型" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇類型" } }
-      }
-    },
-    "panel.filter.chooseContent": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "اختيار المحتوى" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Inhalt wählen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Choose Content" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Elegir contenido" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Choisir le contenu" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "内容を選択" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "콘텐츠 선택" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Escolher conteúdo" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Выбрать содержимое" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择内容" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇內容" } }
-      }
-    },
     "panel.filter.empty": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "لا توجد عناصر من هذا النوع" } },
@@ -8240,32 +8846,142 @@
     },
     "panel.filter.title": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تصفية حسب النوع" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Nach Typ filtern" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Filter by Type" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Filtrar por tipo" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Filtrer par type" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "種類で絞り込む" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "유형별 필터" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Filtrar por tipo" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Фильтр по типу" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按类型筛选" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "依類型篩選" } }
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عوامل التصفية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filters"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtros"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtres"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フィルタ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "필터"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtros"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Фильтры"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "篩選"
+          }
+        }
       }
     },
     "panel.footer.filter": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "مجموعة التصفية" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Filtergruppe" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Filter Group" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Grupo de filtros" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Groupe de filtres" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "フィルタグループ" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "필터 그룹" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Grupo de filtros" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Группа фильтров" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "筛选组" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "篩選群組" } }
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبديل النطاق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereich wechseln"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch Scope"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar ámbito"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changer de portée"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "範囲を切り替え"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "범위 전환"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternar escopo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить область"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换范围"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切換範圍"
+          }
+        }
       }
     },
     "panel.footer.navigate": {
@@ -8731,21 +9447,6 @@
             "value": "無法讀取剪貼簿記錄"
           }
         }
-      }
-    },
-    "panel.section.results": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "النتائج" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Ergebnisse" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Results" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Resultados" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Résultats" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "結果" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "결과" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Resultados" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Результаты" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "结果" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "結果" } }
       }
     },
     "panel.status.count": {
@@ -9243,67 +9944,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جمع سجل الحافظة"
+            "value": "تمكين سجل الحافظة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zwischenablageverlauf sammeln"
+            "value": "Zwischenablageverlauf aktivieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collect Clipboard History"
+            "value": "Enable Clipboard History"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recopilar historial del portapapeles"
+            "value": "Activar el historial del portapapeles"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collecter l’historique du presse-papiers"
+            "value": "Activer l’historique du presse-papiers"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クリップボード履歴を収集"
+            "value": "クリップボード履歴を有効にする"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "클립보드 기록 수집"
+            "value": "클립보드 기록 활성화"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coletar histórico da área de transferência"
+            "value": "Ativar histórico da área de transferência"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Собирать историю буфера обмена"
+            "value": "Включить историю буфера обмена"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集剪贴板历史"
+            "value": "启用剪贴板历史"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "收集剪貼簿記錄"
+            "value": "啟用剪貼簿記錄"
           }
         }
       }
@@ -9724,146 +10425,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "排除的 App"
-          }
-        }
-      }
-    },
-    "settings.privacy.description": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعذّر الوصول المؤقت إلى سلسلة المفاتيح لا يحذف البيانات؛ حذف مفتاح التشفير يجعل السجل والعناصر المحفوظة غير قابلين للقراءة نهائيًا. تُحفظ الملفات كمراجع للمسارات فقط. عند تمكين توسيع الكلمات المفتاحية، تُراقب الكتابة محليًا عبر تسهيلات الاستخدام."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vorübergehende Schlüsselbundfehler löschen keine Daten; wird der Schlüssel gelöscht, bleiben Verlauf und gespeicherte Elemente dauerhaft unlesbar. Dateien werden nur als Pfadverweise gespeichert. Bei aktivierter Stichworterweiterung werden Eingaben lokal über Bedienungshilfen beobachtet."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Temporary Keychain access failures do not delete data; deleting the encryption key makes existing History and Saved items permanently unreadable. Files are stored only as path references. When keyword expansion is enabled, Accessibility observes typing locally."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los fallos temporales del Llavero no eliminan datos; borrar la clave vuelve ilegibles para siempre el historial y los elementos guardados. Los archivos se guardan solo como referencias de ruta. Al activar la expansión de palabras clave, Accesibilidad observa la escritura localmente."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une indisponibilité temporaire du trousseau ne supprime aucune donnée ; supprimer la clé rend définitivement illisibles l’historique et les éléments enregistrés. Les fichiers sont stockés uniquement comme références de chemin. Si l’expansion par mot-clé est activée, l’accessibilité observe la saisie localement."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キーチェーンに一時的にアクセスできなくてもデータは削除されません。暗号化キーを削除すると履歴と保存済み項目は永久に読み取れなくなります。ファイルはパス参照のみ保存されます。キーワード展開を有効にすると、アクセシビリティが入力をローカルで監視します。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "키체인에 일시적으로 접근할 수 없어도 데이터는 삭제되지 않습니다. 암호화 키를 삭제하면 기록과 저장된 항목을 영구적으로 읽을 수 없습니다. 파일은 경로 참조로만 저장됩니다. 키워드 확장을 켜면 손쉬운 사용이 입력을 로컬에서 관찰합니다."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Falhas temporárias nas Chaves não apagam dados; apagar a chave torna o histórico e os itens salvos permanentemente ilegíveis. Os arquivos são guardados apenas como referências de caminho. Com a expansão por palavra-chave ativa, a Acessibilidade observa a digitação localmente."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Временная недоступность Связки ключей не удаляет данные; удаление ключа навсегда делает историю и сохранённые элементы нечитаемыми. Для файлов сохраняются только пути. При включённой подстановке по ключевым словам Универсальный доступ локально отслеживает ввод."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂时无法访问钥匙串不会删除数据；删除加密密钥会使现有历史和已保存项目永久无法读取。文件仅保存路径引用。关键词展开启用时会在本机使用辅助功能观察输入。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暫時無法存取鑰匙圈不會刪除資料；刪除加密金鑰會使現有記錄和已儲存項目永久無法讀取。檔案僅儲存路徑參照。啟用關鍵詞展開時會在本機使用輔助使用觀察輸入。"
-          }
-        }
-      }
-    },
-    "settings.privacy.title": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حدود الخصوصية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Datenschutzgrenzen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Privacy Boundaries"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Límites de privacidad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Limites de confidentialité"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "プライバシー保護"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "개인정보 보호 범위"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Limites de privacidade"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Границы конфиденциальности"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "隐私边界"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "隱私界線"
           }
         }
       }
@@ -10704,76 +11265,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "最多保留"
-          }
-        }
-      }
-    },
-    "settings.retention.section": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قواعد الاحتفاظ"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aufbewahrung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retention"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conservación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conservation"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保持ルール"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "보관 규칙"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retenção"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Хранение"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保留规则"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保留規則"
           }
         }
       }
@@ -11839,76 +12330,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法貼上純文字"
-          }
-        }
-      }
-    },
-    "panel.close.help": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إغلاق (Esc)"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schließen (Esc)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close (Esc)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cerrar (Esc)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fermer (Échap)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "閉じる（Esc）"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "닫기(Esc)"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fechar (Esc)"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Закрыть (Esc)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭（Esc）"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "關閉（Esc）"
           }
         }
       }
@@ -13416,21 +13837,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "任何內容" } }
       }
     },
-    "panel.filter.contains": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "يتضمن" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Enthält" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Contains" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Contiene" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Contient" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "含む" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "포함" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Contém" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Содержит" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "包含" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "包含" } }
-      }
-    },
     "panel.mode.all": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "الكل" } },
@@ -13583,32 +13989,142 @@
     },
     "panel.shortcuts.cycleScope": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تبديل مجموعة التصفية" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Filtergruppe wechseln" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Cycle Filter Group" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Cambiar grupo de filtros" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Changer de groupe de filtres" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "フィルタグループを切り替え" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "필터 그룹 전환" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Alternar grupo de filtros" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Сменить группу фильтров" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "切换筛选组" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "切換篩選群組" } }
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبديل النطاق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereich wechseln"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch Scope"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar ámbito"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changer de portée"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "範囲を切り替え"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "범위 전환"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternar escopo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сменить область"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换范围"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切換範圍"
+          }
+        }
       }
     },
     "panel.shortcuts.cycleScope.description": {
       "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "التبديل بين مجموعات التصفية المتاحة؛ أضف Shift للرجوع. استخدم Control-1 إلى Control-9 لاختيار خيار في المجموعة النشطة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Zwischen verfügbaren Filtergruppen wechseln; mit Umschalt rückwärts. Control-1 bis Control-9 wählt eine Option in der aktiven Gruppe." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Switch between available filter groups; add Shift to go backward. Control-1 through Control-9 chooses an option in the active group." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Cambia entre los grupos de filtros disponibles; añade Mayúsculas para retroceder. Control-1 a Control-9 elige una opción del grupo activo." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Parcourir les groupes de filtres disponibles ; ajouter Maj pour revenir en arrière. Contrôle-1 à Contrôle-9 sélectionne une option du groupe actif." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "使用可能なフィルタグループを切り替えます。Shift を加えると逆方向に切り替わります。Control-1〜Control-9 で現在のグループの項目を選択します。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "사용 가능한 필터 그룹을 전환합니다. Shift를 추가하면 반대 방향으로 전환합니다. Control-1부터 Control-9까지 눌러 현재 그룹의 옵션을 선택합니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Alterna entre os grupos de filtros disponíveis; adicione Shift para voltar. Control-1 a Control-9 escolhe uma opção do grupo ativo." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Переключение доступных групп фильтров; добавьте Shift для обратного порядка. Control-1–Control-9 выбирает вариант в активной группе." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "切换可用的筛选组；加按 Shift 可反向切换。Control-1 至 Control-9 可选择当前组中的选项。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "切換可用的篩選群組；加按 Shift 可反向切換。Control-1 至 Control-9 可選擇目前群組中的選項。" } }
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التبديل بين الكل والسجل والمقتطفات؛ أضف Shift للرجوع. استخدم Control-1 إلى Control-3 لاختيار النطاق مباشرةً."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischen Alle, Verlauf und Textbausteine wechseln; mit Umschalt rückwärts. Control-1 bis Control-3 wählt den Bereich direkt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch between All, History, and Snippets; add Shift to go backward. Control-1 through Control-3 selects a scope directly."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambia entre Todo, Historial y Fragmentos; añade Mayúsculas para retroceder. Control-1 a Control-3 selecciona un ámbito directamente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parcourir Tout, Historique et Extraits ; ajouter Maj pour revenir en arrière. Contrôle-1 à Contrôle-3 sélectionne directement une portée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて、履歴、スニペットを切り替えます。Shift を加えると逆方向になります。Control-1〜Control-3 で範囲を直接選択します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체, 기록, 스니펫을 전환합니다. Shift를 추가하면 반대 방향으로 전환합니다. Control-1부터 Control-3까지 눌러 범위를 직접 선택합니다."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alterna entre Tudo, Histórico e Trechos; adicione Shift para voltar. Control-1 a Control-3 seleciona um escopo diretamente."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключение между всеми элементами, историей и фрагментами; добавьте Shift для обратного порядка. Control-1–Control-3 выбирает область напрямую."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换全部、历史和片段；加按 Shift 可反向切换。Control-1 至 Control-3 可直接选择范围。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切換全部、歷史和片段；加按 Shift 可反向切換。Control-1 至 Control-3 可直接選擇範圍。"
+          }
+        }
       }
     },
     "panel.shortcuts.cycleScope.shiftReserved": {
@@ -14391,21 +14907,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除記錄" } }
       }
     },
-    "settings.data.historyDescription": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "يمكن مسح السجل من دون إزالة العناصر المحفوظة." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Der Verlauf kann gelöscht werden, ohne gespeicherte Elemente zu entfernen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "History can be cleared without removing Saved items." } },
-        "es": { "stringUnit": { "state": "translated", "value": "El historial puede borrarse sin eliminar los elementos guardados." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "L’historique peut être effacé sans supprimer les éléments enregistrés." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "保存済み項目を削除せずに履歴を消去できます。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "저장된 항목을 제거하지 않고 기록을 지울 수 있습니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "O histórico pode ser limpo sem remover itens salvos." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Историю можно очистить, не удаляя сохранённые элементы." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "清除历史不会移除已存项目。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除記錄不會移除已儲存項目。" } }
-      }
-    },
     "settings.queue.shortcuts.description": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "عيّن «لصق التالي» أولًا؛ عناصر التحكم الأخرى اختيارية." } },
@@ -14449,21 +14950,6 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Активная явная очередь вставки хранит зашифрованные копии до завершения или отмены очереди." } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "活动的显式粘贴队列会保留加密副本，直到队列完成或取消。" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "使用中的明確貼上佇列會保留加密副本，直到佇列完成或取消。" } }
-      }
-    },
-    "settings.saved.clear": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "مسح المقاطع المحفوظة" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Gespeicherte Clips leeren" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Clear Saved Clips" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Borrar recortes guardados" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Effacer les éléments enregistrés" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "保存したクリップを消去" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "저장된 클립 지우기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Limpar recortes salvos" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Очистить сохранённые записи" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "清除已存剪贴" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除已儲存剪貼" } }
       }
     },
     "settings.saved.clear.confirm": {
@@ -14661,21 +15147,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "隱藏內容預覽" } }
       }
     },
-    "settings.sequentialPaste.options.section": {
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "قائمة انتظار اللصق" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Einfügereihenfolge" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Paste Queue" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Cola de pegado" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "File de collage" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ペーストキュー" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "붙여넣기 대기열" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Fila de colagem" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Очередь вставки" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "粘贴队列" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "貼上佇列" } }
-      }
-    },
     "share.action": {
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "مشاركة" } },
@@ -14804,7 +15275,147 @@
     "settings.snippets.clear.title": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"حذف كل المقتطفات؟"}},"de":{"stringUnit":{"state":"translated","value":"Alle Textbausteine löschen?"}},"en":{"stringUnit":{"state":"translated","value":"Delete All Snippets?"}},"es":{"stringUnit":{"state":"translated","value":"¿Eliminar todos los fragmentos?"}},"fr":{"stringUnit":{"state":"translated","value":"Supprimer tous les extraits ?"}},"ja":{"stringUnit":{"state":"translated","value":"すべてのスニペットを削除しますか？"}},"ko":{"stringUnit":{"state":"translated","value":"모든 스니펫을 삭제할까요?"}},"pt":{"stringUnit":{"state":"translated","value":"Apagar todos os trechos?"}},"ru":{"stringUnit":{"state":"translated","value":"Удалить все фрагменты?"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"删除所有片段？"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"刪除所有片段？"}}}},
     "settings.snippets.count": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"%d مقتطفات"}},"de":{"stringUnit":{"state":"translated","value":"%d Textbausteine"}},"en":{"stringUnit":{"state":"translated","value":"%d snippets"}},"es":{"stringUnit":{"state":"translated","value":"%d fragmentos"}},"fr":{"stringUnit":{"state":"translated","value":"%d extraits"}},"ja":{"stringUnit":{"state":"translated","value":"%d 個のスニペット"}},"ko":{"stringUnit":{"state":"translated","value":"스니펫 %d개"}},"pt":{"stringUnit":{"state":"translated","value":"%d trechos"}},"ru":{"stringUnit":{"state":"translated","value":"Фрагментов: %d"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%d 个片段"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"%d 個片段"}}}},
     "settings.snippets.description": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"قوالب قابلة لإعادة الاستخدام مع كلمات وتوسيمات ومتغيرات وقت اللصق."}},"de":{"stringUnit":{"state":"translated","value":"Wiederverwendbare Vorlagen mit optionalen Kürzeln, Tags und Variablen beim Einsetzen."}},"en":{"stringUnit":{"state":"translated","value":"Reusable editable templates with optional keywords, tags, and paste-time variables."}},"es":{"stringUnit":{"state":"translated","value":"Plantillas editables reutilizables con palabras clave, etiquetas y variables al pegar."}},"fr":{"stringUnit":{"state":"translated","value":"Modèles modifiables réutilisables avec mots-clés, tags et variables au collage."}},"ja":{"stringUnit":{"state":"translated","value":"キーワード、タグ、ペースト時変数に対応した再利用可能な編集用テンプレートです。"}},"ko":{"stringUnit":{"state":"translated","value":"키워드, 태그, 붙여넣기 시점 변수를 지원하는 재사용 가능한 편집 템플릿입니다."}},"pt":{"stringUnit":{"state":"translated","value":"Modelos editáveis reutilizáveis com palavras-chave, etiquetas e variáveis ao colar."}},"ru":{"stringUnit":{"state":"translated","value":"Редактируемые шаблоны с ключевыми словами, тегами и переменными при вставке."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"可复用的可编辑模板，支持可选关键词、标签和粘贴时变量。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"可重複使用的可編輯範本，支援選用關鍵字、標籤與貼上時變數。"}}}},
-    "snippet.createFromClip": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"إنشاء مقتطف من النسخة…"}},"de":{"stringUnit":{"state":"translated","value":"Textbaustein aus Clip erstellen…"}},"en":{"stringUnit":{"state":"translated","value":"Create Snippet from Clip…"}},"es":{"stringUnit":{"state":"translated","value":"Crear fragmento desde el clip…"}},"fr":{"stringUnit":{"state":"translated","value":"Créer un extrait depuis le clip…"}},"ja":{"stringUnit":{"state":"translated","value":"クリップからスニペットを作成…"}},"ko":{"stringUnit":{"state":"translated","value":"클립에서 스니펫 생성…"}},"pt":{"stringUnit":{"state":"translated","value":"Criar trecho do clipe…"}},"ru":{"stringUnit":{"state":"translated","value":"Создать фрагмент из клипа…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"从片段创建文本片段…"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"從剪輯建立片段…"}}}}
+    "snippet.createFromClip": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"إنشاء مقتطف من النسخة…"}},"de":{"stringUnit":{"state":"translated","value":"Textbaustein aus Clip erstellen…"}},"en":{"stringUnit":{"state":"translated","value":"Create Snippet from Clip…"}},"es":{"stringUnit":{"state":"translated","value":"Crear fragmento desde el clip…"}},"fr":{"stringUnit":{"state":"translated","value":"Créer un extrait depuis le clip…"}},"ja":{"stringUnit":{"state":"translated","value":"クリップからスニペットを作成…"}},"ko":{"stringUnit":{"state":"translated","value":"클립에서 스니펫 생성…"}},"pt":{"stringUnit":{"state":"translated","value":"Criar trecho do clipe…"}},"ru":{"stringUnit":{"state":"translated","value":"Создать фрагмент из клипа…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"从片段创建文本片段…"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"從剪輯建立片段…"}}}},
+    "source.otherDevice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other Device"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他设备"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他裝置"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ほかのデバイス"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다른 기기"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anderes Gerät"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autre appareil"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otro dispositivo"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outro dispositivo"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Другое устройство"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جهاز آخر"
+          }
+        }
+      }
+    },
+    "source.universalClipboard": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Universal Clipboard"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通用剪贴板"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通用剪貼板"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ユニバーサルクリップボード"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "공통 클립보드"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Universelle Zwischenablage"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presse-papiers universel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portapapeles universal"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Área de transferência universal"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Универсальный буфер обмена"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحافظة العامة"
+          }
+        }
+      }
+    }
   },
   "version": "1.0"
 }
