@@ -86,17 +86,20 @@ final class AIAssistantCoordinator {
         sessionID = currentSessionID
         lastSourceText = nil
         lastPrompt = prompt
-        let frontmostApplication = NSWorkspace.shared.frontmostApplication
+        let runningApp = NSWorkspace.shared.frontmostApplication
+        let frontmostApplication: NSRunningApplication?
+        if runningApp == .current {
+            frontmostApplication = NSWorkspace.shared.runningApplications.first(where: {
+                $0.isActive && $0 != .current && $0.activationPolicy == .regular
+            })
+        } else {
+            frontmostApplication = runningApp
+        }
         panelController?.close()
 
-        snapshot = AIAssistantPanelSnapshot(
-            phase: .capturing,
-            sourceText: nil,
-            result: nil,
-            errorMessage: nil
-        )
-        panelController?.show(snapshot: snapshot)
+        AIAssistantLog.capture.notice("Starting capture for prompt: \(prompt.normalizedName), targetApp: \(frontmostApplication?.localizedName ?? "nil", privacy: .public) (pid: \(frontmostApplication?.processIdentifier ?? -1, privacy: .public))")
 
+        // 先在目标应用完整持有焦点状态下取词，避免提前弹窗抢占焦点导致划词与模拟复制失败
         let result = await selectedTextCapturePipeline.capture(
             context: SelectedTextCaptureContext(frontmostApplication: frontmostApplication)
         )
@@ -106,6 +109,7 @@ final class AIAssistantCoordinator {
         guard let sourceText = result.text?.trimmingCharacters(in: .whitespacesAndNewlines),
               !sourceText.isEmpty
         else {
+            AIAssistantLog.capture.error("Capture failed, reason: \(result.failureReason ?? "missingSelection", privacy: .public)")
             if result.failureReason == AIAssistantPanelError.permissionRequired.message(localization: localization) {
                 setError(.permissionRequired, sourceText: nil)
             } else {
@@ -114,6 +118,8 @@ final class AIAssistantCoordinator {
             panelController?.show(snapshot: snapshot)
             return
         }
+
+        AIAssistantLog.capture.notice("Capture succeeded: \(sourceText.prefix(30), privacy: .public)... (\(sourceText.count) chars)")
 
         lastSourceText = sourceText
         await process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
