@@ -75,13 +75,17 @@ struct OpenAICompatibleClient: AIProcessing, Sendable {
         }
 
         guard (200 ... 299).contains(response.statusCode) else {
-            AIAssistantLog.provider.error("completion request failed with status \(response.statusCode, privacy: .public)")
+            let serverMessage = Self.extractErrorMessage(from: data)
+            AIAssistantLog.provider.error(
+                "completion request failed with status \(response.statusCode, privacy: .public): \(serverMessage ?? "none", privacy: .public)"
+            )
 
             if response.statusCode == 401 || response.statusCode == 403 {
-                throw OpenAICompatibleClientError.unauthorized
+                throw OpenAICompatibleClientError.unauthorized(message: serverMessage)
             }
 
-            throw OpenAICompatibleClientError.requestFailed
+            let detail = serverMessage ?? "HTTP \(response.statusCode)"
+            throw OpenAICompatibleClientError.requestFailed(message: detail)
         }
 
         let decoded = try decodeResponse(from: data)
@@ -123,16 +127,41 @@ struct OpenAICompatibleClient: AIProcessing, Sendable {
         }
 
         guard (200 ... 299).contains(response.statusCode) else {
-            AIAssistantLog.provider.error("models request failed with status \(response.statusCode, privacy: .public)")
+            let serverMessage = Self.extractErrorMessage(from: data)
+            AIAssistantLog.provider.error(
+                "models request failed with status \(response.statusCode, privacy: .public): \(serverMessage ?? "none", privacy: .public)"
+            )
 
             if response.statusCode == 401 || response.statusCode == 403 {
-                throw OpenAICompatibleClientError.unauthorized
+                throw OpenAICompatibleClientError.unauthorized(message: serverMessage)
             }
 
-            throw OpenAICompatibleClientError.requestFailed
+            let detail = serverMessage ?? "HTTP \(response.statusCode)"
+            throw OpenAICompatibleClientError.requestFailed(message: detail)
         }
 
         return try decodeModelsResponse(from: data)
+    }
+
+    private static func extractErrorMessage(from data: Data) -> String? {
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let errorObj = json["error"] as? [String: Any],
+               let msg = errorObj["message"] as? String,
+               !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return msg.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if let msg = json["message"] as? String,
+               !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return msg.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty,
+           text.count <= 400,
+           !text.lowercased().contains("<html") {
+            return text
+        }
+        return nil
     }
 
     private func decodeModelsResponse(from data: Data) throws -> [String] {
@@ -178,10 +207,13 @@ struct OpenAICompatibleClient: AIProcessing, Sendable {
 
 enum OpenAICompatibleClientError: Error, Equatable, Sendable {
     case invalidResponse
-    case requestFailed
-    case unauthorized
+    case requestFailed(message: String?)
+    case unauthorized(message: String?)
     case emptyResponse
     case parseFailed
+
+    static var requestFailed: Self { .requestFailed(message: nil) }
+    static var unauthorized: Self { .unauthorized(message: nil) }
 }
 
 extension OpenAICompatibleClientError: LocalizedError {
@@ -191,10 +223,18 @@ extension OpenAICompatibleClientError: LocalizedError {
 
     func errorDescription(localization: PluginLocalization = PluginLocalization(bundle: .main)) -> String {
         switch self {
-        case .invalidResponse, .requestFailed:
+        case let .requestFailed(message):
+            if let message, !message.isEmpty {
+                return message
+            }
             return localization.string("openAIClient.error.requestFailed", defaultValue: "请求失败，请稍后重试")
-        case .unauthorized:
+        case let .unauthorized(message):
+            if let message, !message.isEmpty {
+                return message
+            }
             return localization.string("openAIClient.error.unauthorized", defaultValue: "API Key 无效或无权限")
+        case .invalidResponse:
+            return localization.string("openAIClient.error.requestFailed", defaultValue: "请求失败，请稍后重试")
         case .emptyResponse:
             return localization.string("openAIClient.error.emptyResponse", defaultValue: "响应为空")
         case .parseFailed:

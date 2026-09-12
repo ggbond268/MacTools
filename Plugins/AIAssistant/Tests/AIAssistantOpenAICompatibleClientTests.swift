@@ -226,6 +226,14 @@ final class AIAssistantOpenAICompatibleClientTests: XCTestCase {
         )
     }
 
+    func testHTTP404ExtractsServerErrorDetail() async {
+        let errorPayload = Data(#"{"error":{"message":"The model 'deepseek-v4-flash' does not exist","code":"model_not_found"}}"#.utf8)
+        await assertError(
+            result: .success((errorPayload, Self.httpResponse(statusCode: 404))),
+            expected: .requestFailed(message: "The model 'deepseek-v4-flash' does not exist")
+        )
+    }
+
     func testEmptyResponseContentMapsToEmptyResponse() async {
         await assertError(
             result: .success((
