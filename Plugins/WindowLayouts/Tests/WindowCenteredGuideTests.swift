@@ -300,6 +300,7 @@ final class WindowCenteredGuideControllerTests: XCTestCase {
         let native = NSWindow(contentRect: CGRect(x: 200, y: 200, width: 400, height: 300),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         native.isReleasedWhenClosed = false
+        PluginPresentationSafety.prepareForWindowOrdering(native)
         native.orderFrontRegardless()
         defer { native.close() }
         let environment = SystemWindowCenteredGuideEnvironment()
@@ -338,6 +339,7 @@ final class WindowCenteredGuideControllerTests: XCTestCase {
         let panel = NSPanel(contentRect: CGRect(x: 200, y: 200, width: 400, height: 300),
                             styleMask: [.titled], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
+        PluginPresentationSafety.prepareForWindowOrdering(panel)
         panel.orderFrontRegardless()
         defer { panel.close() }
         XCTAssertFalse(SystemWindowCenteredGuideEnvironment.eligibleHostWindow(panel))
