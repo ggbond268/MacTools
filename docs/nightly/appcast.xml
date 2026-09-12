@@ -5,9 +5,9 @@
     <description>Unstable public Nightly updates for MacTools.</description>
     <language>en</language>
     <item>
-      <title>MacTools Nightly 1.3.1 (25.1)</title>
-      <link>https://github.com/ggbond268/MacTools/releases/tag/nightly-25-1</link>
-      <sparkle:version>25.1</sparkle:version>
+      <title>MacTools Nightly 1.3.1 (26.1)</title>
+      <link>https://github.com/ggbond268/MacTools/releases/tag/nightly-26-1</link>
+      <sparkle:version>26.1</sparkle:version>
       <sparkle:shortVersionString>1.3.1</sparkle:shortVersionString>
       <description sparkle:format="markdown"><![CDATA[> [!WARNING]
 > **MacTools Nightly is unstable.** It may contain unfinished features, regressions, or data-format changes. Keep the stable app installed and do not rely on Nightly for critical workflows.
@@ -15,15 +15,15 @@
 This prerelease is an automated snapshot of the current MacTools source. It installs alongside stable MacTools and uses isolated preferences, Application Support data, plugins, URL routing, and update metadata.
 
 - App version: `1.3.1`
-- Nightly build: `25.1`
-- Source commit: [`1ddea694379de3c13d4663e4fa49073ef0118b42`](https://github.com/ggbond268/MacTools/commit/1ddea694379de3c13d4663e4fa49073ef0118b42)
-- Optional CLI: `mactools-cli-1.3.1-25.1-macos-arm64.zip`
+- Nightly build: `26.1`
+- Source commit: [`796d138f2a096a240ffbb67fb519226940d0f142`](https://github.com/ggbond268/MacTools/commit/796d138f2a096a240ffbb67fb519226940d0f142)
+- Optional CLI: `mactools-cli-1.3.1-26.1-macos-arm64.zip`
 
-The CLI is a separate, optional download and requires the matching Nightly app's Command-Line Integration. Follow the [download and verification guide](https://github.com/ggbond268/MacTools/blob/1ddea694379de3c13d4663e4fa49073ef0118b42/docs/testing/cli-nightly-distribution.md) before running it. To roll back, publish a known-good source commit that supports Nightly release interface v4. Signed assets for an existing Nightly tag are never replaced.
+The CLI is a separate, optional download and requires the matching Nightly app's Command-Line Integration. Follow the [download and verification guide](https://github.com/ggbond268/MacTools/blob/796d138f2a096a240ffbb67fb519226940d0f142/docs/testing/cli-nightly-distribution.md) before running it. To roll back, publish a known-good source commit that supports Nightly release interface v4. Signed assets for an existing Nightly tag are never replaced.
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/ggbond268/MacTools/releases/tag/nightly-25-1</sparkle:fullReleaseNotesLink>
-      <pubDate>Fri, 11 Sep 2026 12:34:25 +0000</pubDate>
-      <enclosure url="https://github.com/ggbond268/MacTools/releases/download/nightly-25-1/MacTools-Nightly.dmg" length="11929140" type="application/octet-stream" sparkle:edSignature="V0pi5ynJVPfqf1OdQIjeFirIuP1g0OHktI4UdzW3kqKcsit1hXIloHVebrMvpTafScAk34pHjWQazJVq1DUEBA==" />
+      <sparkle:fullReleaseNotesLink>https://github.com/ggbond268/MacTools/releases/tag/nightly-26-1</sparkle:fullReleaseNotesLink>
+      <pubDate>Sat, 12 Sep 2026 10:58:59 +0000</pubDate>
+      <enclosure url="https://github.com/ggbond268/MacTools/releases/download/nightly-26-1/MacTools-Nightly.dmg" length="12191265" type="application/octet-stream" sparkle:edSignature="i6+nFYRTtj7ra2O0p7N7lJj3xc8wckO2EPiC+0udYaWs6SWiWYxvHNkc9kSpv/iHem808T0GYl/MoOFW6ISWDg==" />
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
     </item>
   </channel>
