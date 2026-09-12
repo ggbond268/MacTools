@@ -304,6 +304,7 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = current
+        PluginPresentationSafety.prepareForWindowOrdering(panel)
         return panel.runModal() == .OK ? panel.url : nil
     }
 }

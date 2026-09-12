@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import MacToolsPluginKit
 import UniformTypeIdentifiers
 
 protocol UninstallReviewProviding: Sendable {
@@ -85,6 +86,7 @@ final class AppUninstallerController: ObservableObject {
         panel.canChooseDirectories = false
         panel.resolvesAliases = false
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        PluginPresentationSafety.prepareForWindowOrdering(panel)
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             self?.review(url)
