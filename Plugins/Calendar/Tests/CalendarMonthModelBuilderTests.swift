@@ -1,4 +1,5 @@
 import XCTest
+import MacToolsPluginKit
 @testable import MacTools
 @testable import CalendarPlugin
 
@@ -96,6 +97,7 @@ final class CalendarMonthModelBuilderTests: XCTestCase {
             date: day,
             dayNumber: "29",
             lunarText: "十三",
+            lunarDateText: "四月十三",
             isInDisplayedMonth: true,
             isToday: true,
             isWeekend: false,
@@ -104,6 +106,39 @@ final class CalendarMonthModelBuilderTests: XCTestCase {
         )
 
         XCTAssertEqual(model.visibleEvents.map(\.id), ["event-0", "event-1", "event-2"])
+    }
+
+    func testFestivalLabelKeepsTheFullLunarDate() throws {
+        let calendar = Self.makeCalendar(firstWeekday: 1)
+        let localization = PluginLocalization(bundle: .main)
+        let builder = CalendarMonthModelBuilder(calendar: calendar, localization: localization)
+        let model = builder.makeMonth(
+            containing: try Self.date(year: 2026, month: 9, day: 15, calendar: calendar)
+        )
+        let midAutumnDate = try Self.date(year: 2026, month: 9, day: 25, calendar: calendar)
+
+        let midAutumnDay = try XCTUnwrap(model.days.first { calendar.isDate($0.date, inSameDayAs: midAutumnDate) })
+        let expectedLunarMonth = localization.string("lunar.month.8", defaultValue: "八月")
+        let expectedLunarDay = localization.string("lunar.day.15", defaultValue: "十五")
+        let expectedFestival = localization.string("lunar.festival.midAutumn", defaultValue: "中秋")
+
+        XCTAssertEqual(midAutumnDay.lunarDateText, expectedLunarMonth + expectedLunarDay)
+        XCTAssertEqual(midAutumnDay.lunarText, expectedFestival)
+    }
+
+    func testFestivalDateSubtitleIncludesFullLunarDateAndFestival() throws {
+        let calendar = Self.makeCalendar(firstWeekday: 1)
+        let localization = PluginLocalization(bundle: .main)
+        let model = CalendarMonthModelBuilder(calendar: calendar, localization: localization).makeMonth(
+            containing: try Self.date(year: 2026, month: 9, day: 15, calendar: calendar)
+        )
+        let midAutumnDate = try Self.date(year: 2026, month: 9, day: 25, calendar: calendar)
+        let midAutumnDay = try XCTUnwrap(model.days.first { calendar.isDate($0.date, inSameDayAs: midAutumnDate) })
+
+        let subtitle = CalendarDayPresentation.dateSubtitle(for: midAutumnDay, localization: localization)
+
+        XCTAssertTrue(subtitle.contains(midAutumnDay.lunarDateText))
+        XCTAssertTrue(subtitle.contains(midAutumnDay.lunarText))
     }
 
     private static func makeCalendar(firstWeekday: Int) -> Calendar {

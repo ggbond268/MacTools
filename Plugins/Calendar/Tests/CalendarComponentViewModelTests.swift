@@ -111,6 +111,7 @@ final class CalendarComponentViewModelTests: XCTestCase {
             date: targetDate,
             dayNumber: "29",
             lunarText: "十三",
+            lunarDateText: "四月十三",
             isInDisplayedMonth: true,
             isToday: true,
             isWeekend: false,
@@ -122,6 +123,46 @@ final class CalendarComponentViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.selectedDay?.id, "20260429")
         XCTAssertEqual(service.openedDates, [targetDate])
+    }
+
+    func testSelectingDayUpdatesTheSelectedDayDetailSource() throws {
+        let calendar = Self.makeCalendar()
+        let service = MockCalendarEventService()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let targetDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 29)))
+        let event = CalendarEventSummary(
+            id: "event-1",
+            title: "Planning",
+            timeText: "10:00",
+            startDate: targetDate,
+            endDate: targetDate,
+            isAllDay: false,
+            color: .accent
+        )
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today
+        )
+        let targetDay = CalendarDayModel(
+            id: "20260429",
+            date: targetDate,
+            dayNumber: "29",
+            lunarText: "十三",
+            lunarDateText: "四月十三",
+            isInDisplayedMonth: true,
+            isToday: false,
+            isWeekend: false,
+            holidayKind: nil,
+            events: [event]
+        )
+
+        viewModel.select(targetDay)
+
+        XCTAssertEqual(viewModel.selectedDay, targetDay)
+        XCTAssertEqual(viewModel.selectedDay?.lunarDateText, "四月十三")
+        XCTAssertEqual(viewModel.selectedDay?.events, [event])
     }
 
     private static func makeCalendar() -> Calendar {

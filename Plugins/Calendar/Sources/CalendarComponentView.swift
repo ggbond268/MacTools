@@ -2,17 +2,17 @@ import AppKit
 import SwiftUI
 import MacToolsPluginKit
 
-struct CalendarComponentView: View {
-    private enum Layout {
-        static let contentPadding: CGFloat = 8
-        static let sectionSpacing: CGFloat = 3
-        static let gridSpacing: CGFloat = 6
-        static let headerHeight: CGFloat = 20
-        static let weekdayHeight: CGFloat = 10
-        static let dayCellSize: CGFloat = 36
-        static let cornerRadius: CGFloat = PluginComponentPanelLayoutMetrics.cardCornerRadius
-    }
+private enum CalendarComponentLayout {
+    static let contentPadding: CGFloat = 8
+    static let sectionSpacing: CGFloat = 3
+    static let gridSpacing: CGFloat = 6
+    static let headerHeight: CGFloat = 20
+    static let weekdayHeight: CGFloat = 10
+    static let dayCellSize: CGFloat = 36
+    static let cornerRadius: CGFloat = PluginComponentPanelLayoutMetrics.cardCornerRadius
+}
 
+struct CalendarComponentView: View {
     @ObservedObject private var viewModel: CalendarComponentViewModel
     private let localization: PluginLocalization
 
@@ -26,15 +26,16 @@ struct CalendarComponentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: CalendarComponentLayout.sectionSpacing) {
             calendarCard
+            selectedDayDetails
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var calendarCard: some View {
-        VStack(spacing: Layout.sectionSpacing) {
+        VStack(spacing: CalendarComponentLayout.sectionSpacing) {
             CalendarHeaderView(
                 title: viewModel.month.title,
                 localization: localization,
@@ -45,29 +46,38 @@ struct CalendarComponentView: View {
 
             CalendarWeekdayRow(
                 symbols: viewModel.month.weekdaySymbols,
-                dayCellSize: Layout.dayCellSize,
-                gridSpacing: Layout.gridSpacing
+                dayCellSize: CalendarComponentLayout.dayCellSize,
+                gridSpacing: CalendarComponentLayout.gridSpacing
             )
 
             CalendarMonthGrid(
                 days: viewModel.month.days,
                 selectedDayID: viewModel.selectedDay?.id,
-                dayCellSize: Layout.dayCellSize,
-                gridSpacing: Layout.gridSpacing,
+                dayCellSize: CalendarComponentLayout.dayCellSize,
+                gridSpacing: CalendarComponentLayout.gridSpacing,
                 localization: localization,
                 onSelect: { viewModel.select($0) },
                 onOpen: { viewModel.open($0) }
             )
         }
-        .padding(Layout.contentPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(CalendarComponentLayout.contentPadding)
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(
             PluginComponentCardBackground(
-                cornerRadius: Layout.cornerRadius
+                cornerRadius: CalendarComponentLayout.cornerRadius
             )
         )
     }
 
+    @ViewBuilder
+    private var selectedDayDetails: some View {
+        if let selectedDay = viewModel.selectedDay {
+            CalendarSelectedDayDetails(
+                day: selectedDay,
+                localization: localization
+            )
+        }
+    }
 }
 
 private struct CalendarHeaderView: View {
@@ -498,7 +508,49 @@ private struct CalendarFloatingEventPopoverContent: View {
     }
 }
 
-private enum CalendarDayPresentation {
+private struct CalendarSelectedDayDetails: View {
+    let day: CalendarDayModel
+    let localization: PluginLocalization
+    @Environment(\.pluginComponentTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(CalendarDayPresentation.dateTitle(for: day))
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+
+                Text(CalendarDayPresentation.dateSubtitle(for: day, localization: localization))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(theme.text.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !day.events.isEmpty {
+                Rectangle()
+                    .fill(theme.surfaces.track)
+                    .frame(height: 1)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(day.visibleEvents) { event in
+                        CalendarEventRow(event: event)
+                    }
+                }
+            }
+        }
+        .padding(CalendarComponentLayout.contentPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            PluginComponentCardBackground(
+                cornerRadius: CalendarComponentLayout.cornerRadius
+            )
+        )
+        .accessibilityElement(children: .contain)
+    }
+}
+
+enum CalendarDayPresentation {
     static func dateTitle(for day: CalendarDayModel) -> String {
         let formatter = DateFormatter()
         formatter.locale = PluginRuntimeLocalization.locale
@@ -512,7 +564,12 @@ private enum CalendarDayPresentation {
         localization: PluginLocalization = PluginLocalization(bundle: .main)
     ) -> String {
         var parts: [String] = []
-        if !day.lunarText.isEmpty {
+        if !day.lunarDateText.isEmpty {
+            parts.append(day.lunarDateText)
+            if !day.lunarText.isEmpty && !day.lunarDateText.contains(day.lunarText) {
+                parts.append(day.lunarText)
+            }
+        } else if !day.lunarText.isEmpty {
             parts.append(day.lunarText)
         }
         if let holidayKind = day.holidayKind {
