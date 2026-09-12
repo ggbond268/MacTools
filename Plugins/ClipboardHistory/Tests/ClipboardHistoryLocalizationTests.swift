@@ -35,7 +35,7 @@ final class ClipboardHistoryLocalizationTests: XCTestCase {
         )
     }
 
-    func testRuntimeCatalogCoversEveryReferencedKeyAndManifestLocale() throws {
+    func testCatalogCoversEverySourceAndManifestReferenceAndLocale() throws {
         let pluginDirectory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -132,6 +132,21 @@ final class ClipboardHistoryLocalizationTests: XCTestCase {
                 keys.insert(String(source[keyRange]))
             }
         }
+
+        // Packaging also resolves catalog strings referenced only by the manifest.
+        // Removing a settings view must not remove copy still used by setup metadata.
+        func collectManifestReferences(in value: Any) {
+            if let string = value as? String, string.hasPrefix("@localizable.") {
+                keys.insert(String(string.dropFirst("@localizable.".count)))
+            } else if let object = value as? [String: Any] {
+                for child in object.values { collectManifestReferences(in: child) }
+            } else if let array = value as? [Any] {
+                for child in array { collectManifestReferences(in: child) }
+            }
+        }
+        collectManifestReferences(in: try jsonObject(
+            at: pluginDirectory.appendingPathComponent("plugin.json")
+        ))
         return keys
     }
 

@@ -117,16 +117,16 @@ struct ClipboardBackupRegion: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            actionRow(.backup, title: localization.string("backup.create", defaultValue: "备份剪贴板数据…"),
+            actionRow(.backup, title: localization.string("backup.createTitle", defaultValue: "备份剪贴板数据"),
                       description: localization.string("backup.createDescription", defaultValue: "将所选数据保存为加密文件，可迁移到另一台 Mac。"),
                       systemImage: "externaldrive.badge.plus")
             PluginSettingsListDivider()
-            actionRow(.restore, title: localization.string("backup.restore", defaultValue: "恢复剪贴板备份…"),
+            actionRow(.restore, title: localization.string("backup.restoreTitle", defaultValue: "恢复剪贴板备份"),
                       description: localization.string("backup.restoreDescription", defaultValue: "选择备份文件并输入密码，预览后再恢复。"),
                       systemImage: "arrow.down.doc")
             if let service = makeService(), FileManager.default.fileExists(atPath: service.rollbackURL.path) {
                 PluginSettingsListDivider()
-                actionRow(.rollback, title: localization.string("backup.rollback", defaultValue: "恢复本机回滚快照…"),
+                actionRow(.rollback, title: localization.string("backup.rollbackTitle", defaultValue: "本机回滚快照"),
                           description: localization.string("backup.rollbackDescription", defaultValue: "恢复到上次替换前的本机数据，无需备份密码。"),
                           systemImage: "clock.arrow.circlepath")
             }
@@ -134,24 +134,29 @@ struct ClipboardBackupRegion: View {
         .buttonStyle(.bordered).controlSize(.small)
         .sheet(item: $action) { action in
             if let service = makeService() {
+                let history = controller.items.filter(\.isInHistory)
                 ClipboardBackupSheet(action: action, service: service, localization: localization,
-                                     historyCount: controller.items.filter(\.isInHistory).count,
-                                     historyBytes: controller.items.filter(\.isInHistory).reduce(0) { $0 + $1.payloadByteCount },
+                                     historyCount: history.count,
+                                     historyBytes: history.reduce(0) { $0 + $1.payloadByteCount },
                                      suspend: suspend, resume: resume)
             }
         }
     }
 
     private func actionRow(_ action: Action, title: String, description: String, systemImage: String) -> some View {
-        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-            Image(systemName: systemImage).pluginSettingsRowIconStyle(.blue)
-            Text(description)
-                .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(title) { self.action = action }
-                .fixedSize()
+        let buttonTitle = action == .backup
+            ? localization.string("backup.button.create", defaultValue: "备份…")
+            : localization.string("backup.button.restore", defaultValue: "恢复…")
+        return PluginSettingsItem(title: title, description: description, systemImage: systemImage) {
+            Button {
+                self.action = action
+            } label: {
+                Text(buttonTitle)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 64)
+            }
+            .fixedSize()
+            .accessibilityLabel(title + " · " + buttonTitle)
         }
         .pluginSettingsListRowPadding(interactive: true)
     }

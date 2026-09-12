@@ -55,6 +55,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - When a plugin adopts an action-surface or other newly exported PluginKit type, set its `plugin.json.minHostVersion` to the first compatible app release. Compatibility metadata belongs in the source manifest. When local plugin validation requires that unreleased host version, `MARKETING_VERSION` may predeclare it; the app release helper treats a source version ahead of the latest app tag as the default release target and remains responsible for advancing `CURRENT_PROJECT_VERSION`. Release tooling owns plugin package version bumps.
 - If ordinary plugin resources rarely change, prefer bundling them into the executable. If extra bundle resources are needed, declare the smallest necessary differences in the plugin's own `project.yml`.
 - Custom plugin settings views must reuse `MacToolsPluginKit.PluginSettingsTheme` and `.pluginSettingsCardBackground(.standard/.recessed)`. Do not copy private plugin settings styles, and do not make plugins depend on `Sources/App/SettingsStyle.swift`.
+- Use `PluginSettingsItem` (host 1.3.1+) for custom rows that combine an icon, title, optional description, and trailing control. Keep row padding and separators in the containing form or section.
 - Call `onStateChange?()` after plugin state changes. Long-running scans, file system work, and system calls should not block the main thread for extended periods.
 - User-facing copy is primarily Chinese. Keep it concise, clear, and close to native macOS wording.
 - Localize user-facing copy with `.xcstrings`. App/Core copy belongs under `Sources/Resources/Localization`, PluginKit copy under `Sources/MacToolsPluginKit/Resources`, and plugin copy under `Plugins/<PluginName>/Resources`. Plugin `plugin.json` files should keep `displayName`/`summary` as fallbacks and add `localizedMetadata` for marketplace and unloaded-plugin presentation. Pre-install product, capability, privacy, setup, and relationship metadata belongs in the same `plugin.json`; follow `docs/plugins/plugin-manifest.schema.json`. Declare localized product copy once under the source-only `productStrings` table, using `@displayName`, `@summary`, `@localizable.<key>`, `@standardAction.<key>`, `@standardSetup.requirements.<key>`, or all 11 locale values, and make every localized product field reference `@productStrings.<key>`. Keep referenced screenshots under `MarketplaceAssets/`, and never add a parallel marketplace manifest or machine-local dynamic action entries.
@@ -69,6 +70,7 @@ Unless a file is clearly identified as third-party material under separate terms
 
 ## Testing
 - Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.
+- Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.
@@ -81,6 +83,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - User-visible app or plugin changes include a concise English changelog fragment in `changes/unreleased/*.md`.
 - Plugin manifest `capabilities.settings` (`none`, `form`, or `workspace`) matches the runtime `settingsPage` layout.
 - Rich manifest static and dynamic action descriptors match the runtime provider/action identity, risk, permissions, external policy, automation eligibility, and parameter portability.
+- Capture plugins preserve explicit foreground selection, release overlays and capture sessions when disabled, and never delete user-exported screenshots or recordings during private-data cleanup.
 - High-risk features cover safety checks, error states, and missing-permission cases.
 - The PR does not include unrelated formatting, generated files, local configuration, certificates, or release credentials.
 - New or updated third-party material is recorded in `Sources/Resources/ThirdPartyNotices/manifest.json` with an exact upstream revision, affected products, source paths, and retained license text.

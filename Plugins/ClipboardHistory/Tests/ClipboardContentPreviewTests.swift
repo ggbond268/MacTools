@@ -4,6 +4,25 @@ import XCTest
 
 @MainActor
 final class ClipboardContentPreviewTests: XCTestCase {
+    func testReopeningRichPreviewDoesNotReadOrRetainTheSourcePayload() async {
+        let payload = ClipboardHistoryPayload(pasteboardItems: [.init(representations: [
+            .init(typeIdentifier: ClipboardRepresentationType.rtf, data: Data("{\\rtf1\\ansi Cached formatting}".utf8)),
+        ])])
+        let item = clip(payload)
+        item.configurePayloadLoader({ payload }, discardCachedPayload: true)
+        let cache = ClipboardRichTextPreviewCache()
+        guard case .formatted = await cache.preview(for: item) else { return XCTFail("Expected formatted preview") }
+        XCTAssertNil(item.payload)
+        item.configurePayloadLoader({ throw CocoaError(.fileReadNoSuchFile) }, discardCachedPayload: true)
+        cache.invalidatePendingLoad()
+        guard case let .formatted(document) = await cache.preview(for: item) else {
+            return XCTFail("Reopening should reuse the preview even if a new payload read would fail")
+        }
+        XCTAssertEqual(String(document.light.characters), "Cached formatting")
+        XCTAssertEqual(String(document.dark.characters), "Cached formatting")
+        XCTAssertNil(item.payload)
+    }
+
     func testRichTextReadFailureKeepsCachedTextAndRetryLoadsFormatting() async throws {
         let payload = ClipboardHistoryPayload(pasteboardItems: [.init(representations: [
             .init(typeIdentifier: ClipboardRepresentationType.rtf, data: Data("{\\rtf1\\ansi Full content}".utf8)),
@@ -18,7 +37,7 @@ final class ClipboardContentPreviewTests: XCTestCase {
         item.configurePayloadLoader({ payload }, discardCachedPayload: true)
         let retried = await ClipboardRichTextPreviewLoader.load(for: item, fallbackText: item.text)
         guard case let .formatted(text) = retried else { return XCTFail("Retry should attempt formatted loading again") }
-        XCTAssertEqual(String(text.characters), "Full content")
+        XCTAssertEqual(String(text.light.characters), "Full content")
         XCTAssertNil(item.payload)
     }
 

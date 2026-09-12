@@ -5047,38 +5047,13 @@ private struct PluginSettingsRowView: View {
                 }
             )
         } else {
-            HStack(alignment: .center, spacing: 0) {
-                HStack(
-                    alignment: .center,
-                    spacing: PluginSettingsTheme.Spacing.rowContentControl
-                ) {
-                    if let systemImage = row.systemImage {
-                        Image(systemName: systemImage)
-                            .pluginSettingsRowIconStyle(.secondary)
-                    }
-
-                    VStack(
-                        alignment: .leading,
-                        spacing: PluginSettingsTheme.Spacing.rowTitleDescription
-                    ) {
-                        Text(row.title)
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-
-                        if let description = row.description {
-                            Text(description)
-                                .font(PluginSettingsTheme.Typography.rowDescription)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .layoutPriority(1)
-
-                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-
+            PluginSettingsItem(
+                title: row.title,
+                description: row.description,
+                systemImage: row.systemImage
+            ) {
                 control
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

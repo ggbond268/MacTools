@@ -8,6 +8,8 @@ For catalog-based installation, GitHub release distribution, and Debug `file://`
 
 For a complete workspace-plugin example with a typed catalog, verified adapters, portable preferences, profiles, and composition of canonical actions from other providers, see [Mac Settings](mac-settings.md).
 
+For a foreground capture plugin with native editing windows, host-owned permissions and shortcuts, local recognition, and capture-session cleanup, see [Screenshot](screenshot.md).
+
 ## Package Layout
 
 Use a directory package with the `.mactoolsplugin` extension:
@@ -160,6 +162,8 @@ Settings changes use typed `PluginSettingsAction` values (`setBoolean`, `setSele
 Custom sections and workspaces provide only plugin-specific content. The settings window title, plugin icon, description, permission cards, shortcut cards, scrolling shell, and system background are derived by the host; do not repeat a page title inside custom content. Form sections must not draw their own outer card or section header: use `presentation: .standard` for normal custom content, or `.edgeToEdge` for an AppKit table or an internally padded row collection. Add/Refresh-style actions belong in `.headerAccessory`.
 
 All custom settings views should use `MacToolsPluginKit.PluginSettingsTheme` for typography, spacing, radii, colors, and shared card backgrounds. This keeps the dependency direction clean: the host app and plugins both depend on `MacToolsPluginKit`, while plugins never depend on `Sources/App/SettingsStyle.swift`.
+
+Use `PluginSettingsItem` (host 1.3.1+) for an icon, title, optional description, and trailing custom control. It shares the host form row layout and neutral icon styling. The containing form or custom section still owns padding and separators; use `pluginSettingsListRowPadding` for internally padded sections.
 
 Recommended mapping:
 
