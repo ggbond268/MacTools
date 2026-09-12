@@ -29,6 +29,7 @@ struct DiskCleanRule: Identifiable, Equatable, Sendable {
     let targets: [Target]
     let skipWhenProcessIsRunning: [String]
     let requiresAdmin: Bool
+    let explanation: DiskCleanRuleExplanation?
 
     init(
         id: String,
@@ -37,7 +38,8 @@ struct DiskCleanRule: Identifiable, Equatable, Sendable {
         risk: DiskCleanRisk,
         targets: [Target],
         skipWhenProcessIsRunning: [String] = [],
-        requiresAdmin: Bool = false
+        requiresAdmin: Bool = false,
+        explanation: DiskCleanRuleExplanation? = nil
     ) {
         self.id = id
         self.choice = choice
@@ -46,6 +48,27 @@ struct DiskCleanRule: Identifiable, Equatable, Sendable {
         self.targets = targets
         self.skipWhenProcessIsRunning = skipWhenProcessIsRunning
         self.requiresAdmin = requiresAdmin
+        self.explanation = explanation
+    }
+
+    var whyMatched: String {
+        explanation?.whyMatched ?? "Matches pattern for \(id)"
+    }
+
+    var consequence: String {
+        explanation?.consequence ?? "Removes temporary or cached files for \(title)"
+    }
+
+    var safetyTier: DiskCleanSafetyTier {
+        explanation?.safetyTier ?? DiskCleanSafetyTier(risk: risk)
+    }
+
+    var confidence: DiskCleanConfidence {
+        explanation?.confidence ?? .high
+    }
+
+    var requiresFullDiskAccess: Bool {
+        explanation?.requiresFullDiskAccess ?? false
     }
 }
 
@@ -857,7 +880,8 @@ struct DiskCleanRuleCatalog: Equatable, Sendable {
         risk: DiskCleanRisk = .low,
         targets: [String],
         skipWhenProcessIsRunning: [String] = [],
-        requiresAdmin: Bool = false
+        requiresAdmin: Bool = false,
+        explanation: DiskCleanRuleExplanation? = nil
     ) -> DiskCleanRule {
         DiskCleanRule(
             id: id,
@@ -866,7 +890,8 @@ struct DiskCleanRuleCatalog: Equatable, Sendable {
             risk: risk,
             targets: targets.map { .path($0) },
             skipWhenProcessIsRunning: skipWhenProcessIsRunning,
-            requiresAdmin: requiresAdmin
+            requiresAdmin: requiresAdmin,
+            explanation: explanation
         )
     }
 }

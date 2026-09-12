@@ -110,32 +110,40 @@ private struct DiskCleanCategoryCard: View {
             )
             .disabled(!isInteractionEnabled || !state.isSelectable)
 
-            Image(systemName: group.category.symbolName)
-                .pluginSettingsRowIconStyle()
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    onToggleExpanded()
+                }
+            } label: {
+                HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    Image(systemName: group.category.symbolName)
+                        .pluginSettingsRowIconStyle()
 
-            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                Text(group.category.title(localization: localization))
-                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-                Text(group.category.consequence(localization: localization))
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(countSummary)
-                    .font(PluginSettingsTheme.Typography.statusBadge)
-                    .foregroundStyle(.secondary)
-            }
+                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                        Text(group.category.title(localization: localization))
+                            .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+                        Text(group.category.consequence(localization: localization))
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(countSummary)
+                            .font(PluginSettingsTheme.Typography.statusBadge)
+                            .foregroundStyle(.secondary)
+                    }
 
-            Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+                    Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
-            Text(DiskCleanFormat.approximateBytes(group.selectedEstimatedBytes, localization: localization))
-                .font(PluginSettingsTheme.Typography.monospacedValue)
-                .frame(width: DiskCleanFormat.byteColumnWidth, alignment: .trailing)
+                    Text(DiskCleanFormat.approximateBytes(group.selectedEstimatedBytes, localization: localization))
+                        .font(PluginSettingsTheme.Typography.monospacedValue)
+                        .frame(width: DiskCleanFormat.byteColumnWidth, alignment: .trailing)
 
-            Button(action: onToggleExpanded) {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(PluginSettingsTheme.Typography.rowIcon)
+                    .frame(width: 28, height: 28)
+                }
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .help(
                 isExpanded
                     ? localization.string("detail.category.collapse", defaultValue: "收起项目")
@@ -146,7 +154,7 @@ private struct DiskCleanCategoryCard: View {
     }
 
     private var candidateRows: some View {
-        VStack(spacing: 0) {
+        LazyVStack(spacing: 0) {
             ForEach(group.candidates) { candidate in
                 DiskCleanCandidateRow(
                     candidate: candidate,
@@ -192,43 +200,161 @@ private struct DiskCleanCandidateRow: View {
     let isInteractionEnabled: Bool
     let onToggle: (Bool) -> Void
 
+    @State private var isExplanationExpanded = false
+
     var body: some View {
-        HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-            Toggle("", isOn: Binding(get: { isSelected }, set: { onToggle($0) }))
-                .toggleStyle(.checkbox)
-                .labelsHidden()
-                .disabled(!isInteractionEnabled || !isSelectable)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                Toggle("", isOn: Binding(get: { isSelected }, set: { onToggle($0) }))
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .disabled(!isInteractionEnabled || !isSelectable)
 
-            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                Text(candidate.displayName)
-                    .font(PluginSettingsTheme.Typography.rowTitle)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    Text(candidate.displayName)
+                        .font(PluginSettingsTheme.Typography.rowTitle)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
 
-                Text(candidate.path)
-                    .font(PluginSettingsTheme.Typography.monospacedValue)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
+                    Text(candidate.path)
+                        .font(PluginSettingsTheme.Typography.monospacedValue)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
 
-                if !badges.isEmpty {
-                    HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-                        ForEach(badges) { badge in
-                            DiskCleanBadgeLabel(badge: badge)
+                    if !badges.isEmpty {
+                        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                            ForEach(badges) { badge in
+                                DiskCleanBadgeLabel(badge: badge)
+                            }
                         }
                     }
                 }
+
+                Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+
+                Text(sizeText)
+                    .font(PluginSettingsTheme.Typography.monospacedValue)
+                    .foregroundStyle(candidate.sizeResult == nil ? Color.secondary : Color.primary)
+                    .frame(width: DiskCleanFormat.byteColumnWidth, alignment: .trailing)
+
+                Button {
+                    isExplanationExpanded.toggle()
+                } label: {
+                    Image(systemName: isExplanationExpanded ? "info.circle.fill" : "info.circle")
+                        .font(PluginSettingsTheme.Typography.rowIcon)
+                        .foregroundStyle(isExplanationExpanded ? Color.accentColor : Color.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(localization.string("candidate.action.explain", defaultValue: "规则解释与详情"))
             }
+            .pluginSettingsListRowPadding()
 
-            Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+            if isExplanationExpanded, let explanation = candidate.explanation {
+                VStack(alignment: .leading, spacing: 6) {
+                    PluginSettingsListDivider()
+                        .padding(.vertical, 2)
 
-            Text(sizeText)
-                .font(PluginSettingsTheme.Typography.monospacedValue)
-                .foregroundStyle(candidate.sizeResult == nil ? Color.secondary : Color.primary)
-                .frame(width: DiskCleanFormat.byteColumnWidth, alignment: .trailing)
+                    HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                        Text(localization.string("candidate.explain.tier", defaultValue: "安全级别："))
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                        Text(explanation.safetyTier.title(localization: localization))
+                            .font(PluginSettingsTheme.Typography.statusBadge)
+                            .foregroundStyle(explanation.safetyTier == .safe ? Color.green : Color.orange)
+
+                        Text("·")
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+
+                        Text(localization.string("candidate.explain.confidence", defaultValue: "置信度："))
+                            .font(PluginSettingsTheme.Typography.rowDescription)
+                            .foregroundStyle(.secondary)
+                        Text(confidenceText(explanation.confidence))
+                            .font(PluginSettingsTheme.Typography.statusBadge)
+                            .foregroundStyle(.secondary)
+
+                        if explanation.requiresFullDiskAccess {
+                            Text("·")
+                                .font(PluginSettingsTheme.Typography.rowDescription)
+                                .foregroundStyle(.secondary)
+                            Text(localization.string("candidate.explain.fda", defaultValue: "需要完全磁盘访问权限"))
+                                .font(PluginSettingsTheme.Typography.statusBadge)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .top, spacing: 4) {
+                            Text(localization.string("candidate.explain.whyMatched", defaultValue: "匹配原因："))
+                                .font(PluginSettingsTheme.Typography.rowDescription)
+                                .foregroundStyle(.secondary)
+                            Text(explanation.whyMatched)
+                                .font(PluginSettingsTheme.Typography.rowDescription)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        HStack(alignment: .top, spacing: 4) {
+                            Text(localization.string("candidate.explain.consequence", defaultValue: "删除后果："))
+                                .font(PluginSettingsTheme.Typography.rowDescription)
+                                .foregroundStyle(.secondary)
+                            Text(explanation.consequence)
+                                .font(PluginSettingsTheme.Typography.rowDescription)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if let regen = explanation.regeneration {
+                            HStack(alignment: .top, spacing: 4) {
+                                Text(localization.string("candidate.explain.regeneration", defaultValue: "重建方式："))
+                                    .font(PluginSettingsTheme.Typography.rowDescription)
+                                    .foregroundStyle(.secondary)
+                                Text(regen)
+                                    .font(PluginSettingsTheme.Typography.rowDescription)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+
+                    HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                        Button {
+                            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: candidate.path)])
+                        } label: {
+                            Label(localization.string("candidate.action.reveal", defaultValue: "在访达中显示"), systemImage: "folder")
+                                .font(PluginSettingsTheme.Typography.controlLabel)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(candidate.path, forType: .string)
+                        } label: {
+                            Label(localization.string("candidate.action.copyPath", defaultValue: "拷贝路径"), systemImage: "doc.on.doc")
+                                .font(PluginSettingsTheme.Typography.controlLabel)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+                .padding(.bottom, PluginSettingsTheme.Spacing.rowVertical)
+            }
         }
-        .pluginSettingsListRowPadding()
+    }
+
+    private func confidenceText(_ confidence: DiskCleanConfidence) -> String {
+        switch confidence {
+        case .high:
+            return localization.string("confidence.high", defaultValue: "高")
+        case .medium:
+            return localization.string("confidence.medium", defaultValue: "中")
+        case .low:
+            return localization.string("confidence.low", defaultValue: "低")
+        }
     }
 
     /// Unresolved sizes show "calculating…" rather than "0 bytes"—the latter would look like an empty item.
