@@ -3,13 +3,51 @@ const settingsWindow = document.querySelector<HTMLElement>("[data-settings-windo
 if (settingsWindow) {
   const root = document.documentElement;
   const sidebarTabs = [...settingsWindow.querySelectorAll<HTMLButtonElement>("[data-settings-tab]")];
+  const pluginSettingsTabs = sidebarTabs.filter((tab) => tab.dataset.settingsTab !== "market");
   const panels = [...settingsWindow.querySelectorAll<HTMLElement>("[data-settings-panel]")];
   const marketSearch = settingsWindow.querySelector<HTMLInputElement>("[data-market-search]");
   const filterButtons = [...settingsWindow.querySelectorAll<HTMLButtonElement>("[data-market-filter]")];
   const pluginRows = [...settingsWindow.querySelectorAll<HTMLElement>("[data-market-plugin]")];
+  const marketList = settingsWindow.querySelector<HTMLElement>(".market-list");
   const resultCounts = [...settingsWindow.querySelectorAll<HTMLElement>("[data-result-count]")];
   const marketEmpty = settingsWindow.querySelector<HTMLElement>("[data-market-empty]");
   let activeFilter = "all";
+
+  const sortMarketRows = () => {
+    if (!marketList) return;
+
+    const language = root.dataset.lang === "en" ? "en" : "zh";
+    const nameKey = language === "en" ? "pluginNameEn" : "pluginNameZh";
+    const collator = new Intl.Collator(language === "en" ? "en" : "zh-CN", {
+      numeric: true,
+      sensitivity: "base",
+    });
+    const sortedRows = [...pluginRows].sort((left, right) => {
+      const byName = collator.compare(left.dataset[nameKey] ?? "", right.dataset[nameKey] ?? "");
+      return byName || collator.compare(left.dataset.pluginId ?? "", right.dataset.pluginId ?? "");
+    });
+
+    for (const row of sortedRows) marketList.append(row);
+    if (marketEmpty) marketList.append(marketEmpty);
+  };
+
+  const sortPluginSettingsTabs = () => {
+    const parent = pluginSettingsTabs[0]?.parentElement;
+    if (!parent) return;
+
+    const language = root.dataset.lang === "en" ? "en" : "zh";
+    const nameKey = language === "en" ? "pluginNameEn" : "pluginNameZh";
+    const collator = new Intl.Collator(language === "en" ? "en" : "zh-CN", {
+      numeric: true,
+      sensitivity: "base",
+    });
+    const sortedTabs = [...pluginSettingsTabs].sort((left, right) => {
+      const byName = collator.compare(left.dataset[nameKey] ?? "", right.dataset[nameKey] ?? "");
+      return byName || collator.compare(left.dataset.pluginId ?? "", right.dataset.pluginId ?? "");
+    });
+
+    for (const tab of sortedTabs) parent.append(tab);
+  };
 
   const syncLocalizedFields = () => {
     const language = root.dataset.lang === "en" ? "en" : "zh";
@@ -27,6 +65,8 @@ if (settingsWindow) {
         language === "en" ? item.dataset.ariaLabelEn ?? "" : item.dataset.ariaLabelZh ?? "",
       );
     });
+    sortMarketRows();
+    sortPluginSettingsTabs();
   };
 
   const showPanel = (id: string, updateHash = true) => {
