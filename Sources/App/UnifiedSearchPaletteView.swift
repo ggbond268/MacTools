@@ -5,7 +5,7 @@ import SwiftUI
 
 private var unifiedSearchSelectedRowTextColor: Color {
     // This is the list/table foreground paired with selectedContentBackgroundColor.
-    Color(nsColor: .alternateSelectedControlTextColor)
+    PluginPaletteColors.selectedText
 }
 
 enum UnifiedSearchPaletteLayout {
@@ -37,7 +37,6 @@ enum UnifiedSearchResultRowLayout {
     static let primaryActionColumnWidth: CGFloat = 56
     static let selectedAccessorySpacing: CGFloat = 5
     static let minimumShortcutRecorderWidth: CGFloat = 60
-    static let selectedSubtitleOpacity = 0.64
 
     static var subtitleFont: Font {
         .caption
@@ -332,7 +331,26 @@ private struct UnifiedSearchPaletteShadowModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if isEnabled {
-            content.shadow(color: .black.opacity(0.22), radius: 28, y: 12)
+            content.background {
+                Canvas { context, size in
+                    guard size.width > 48, size.height > 48 else { return }
+                    let canvasBounds = CGRect(origin: .zero, size: size)
+                    let surface = Path(roundedRect: canvasBounds.insetBy(dx: 24, dy: 24),
+                                       cornerRadius: PluginPaletteMetrics.surfaceCornerRadius)
+                    var exterior = Path(canvasBounds)
+                    exterior.addPath(surface)
+                    // Keep the interior transparent: native glass must continue
+                    // sampling the real backdrop, not a painted shadow backing.
+                    context.clip(to: exterior, style: FillStyle(eoFill: true))
+                    context.drawLayer { layer in
+                        layer.addFilter(.shadow(color: .black.opacity(0.22), radius: 12, y: 4))
+                        layer.fill(surface, with: .color(.black))
+                    }
+                }
+                .padding(-24)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
         } else {
             content
         }
@@ -422,7 +440,7 @@ struct UnifiedSearchPaletteView: View {
             if let executionFeedback {
                 Label(executionFeedback, systemImage: "exclamationmark.triangle.fill")
                     .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("mactools.unified-search.execution-feedback")
             }
@@ -438,14 +456,13 @@ struct UnifiedSearchPaletteView: View {
                 reducesTransparency: accessibilityReduceTransparency,
                 backgroundColor: SettingsStyle.contentBackground
             )
-        }
-        .overlay {
-            RoundedRectangle(
+            // Glass can extend its optical edge beyond its layout bounds. Keep
+            // that edge inside the same silhouette in Settings and the panel;
+            // only the outer, shared shadow may extend into the padding.
+            .clipShape(RoundedRectangle(
                 cornerRadius: PluginPaletteMetrics.surfaceCornerRadius,
                 style: .continuous
-            )
-                .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
-                .allowsHitTesting(false)
+            ))
         }
         .overlay(alignment: .top) {
             if dragCoordinator != nil {
@@ -775,9 +792,7 @@ struct UnifiedSearchPaletteView: View {
                             .font(UnifiedSearchResultRowLayout.subtitleFont)
                             .foregroundStyle(
                                 isSelected
-                                    ? unifiedSearchSelectedRowTextColor.opacity(
-                                        UnifiedSearchResultRowLayout.selectedSubtitleOpacity
-                                    )
+                                    ? unifiedSearchSelectedRowTextColor
                                     : Color.secondary
                             )
                             .lineLimit(1)
@@ -787,7 +802,7 @@ struct UnifiedSearchPaletteView: View {
                     Text(quickSelectionNumber.map { "⌘\($0)" } ?? "")
                         .font(PluginSettingsTheme.Typography.statusBadge)
                         .foregroundStyle(
-                            isSelected ? unifiedSearchSelectedRowTextColor.opacity(0.78) : Color.secondary
+                            isSelected ? unifiedSearchSelectedRowTextColor : Color.secondary
                         )
                         .frame(
                             width: UnifiedSearchResultRowLayout.quickSelectionColumnWidth,
@@ -797,15 +812,15 @@ struct UnifiedSearchPaletteView: View {
 
                     Text(result.kind.actionTitle)
                         .font(PluginSettingsTheme.Typography.statusBadge)
-                        .foregroundStyle(isSelected ? unifiedSearchSelectedRowTextColor : Color.accentColor)
+                        .foregroundStyle(isSelected ? unifiedSearchSelectedRowTextColor : Color.primary)
                         .frame(width: UnifiedSearchResultRowLayout.primaryActionColumnWidth)
                         .padding(.vertical, 3)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(
                                     isSelected
-                                        ? unifiedSearchSelectedRowTextColor.opacity(0.16)
-                                        : Color.accentColor.opacity(0.1)
+                                        ? unifiedSearchSelectedRowTextColor.opacity(0.14)
+                                        : Color.primary.opacity(0.07)
                                 )
                         )
                 }
@@ -883,14 +898,17 @@ struct UnifiedSearchPaletteView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(
-                    isSelected ? unifiedSearchSelectedRowTextColor.opacity(0.9) : Color.secondary
+                    isSelected ? unifiedSearchSelectedRowTextColor : Color.secondary
                 )
                 .help(FeatureL10n.string("清除快捷键"))
             }
 
             ActionRunLinkCopyButton(
                 pluginHost: pluginHost,
-                reference: reference
+                reference: reference,
+                labelStyle: AnyShapeStyle(
+                    isSelected ? unifiedSearchSelectedRowTextColor : Color.accentColor
+                )
             )
 
             if pluginHost.canPresentActionOwner(for: reference) {
@@ -901,7 +919,7 @@ struct UnifiedSearchPaletteView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(
-                    isSelected ? unifiedSearchSelectedRowTextColor.opacity(0.9) : Color.secondary
+                    isSelected ? unifiedSearchSelectedRowTextColor : Color.secondary
                 )
                 .help(FeatureL10n.string("打开所属功能的设置"))
                 .accessibilityLabel(FeatureL10n.string("打开所属功能的设置"))

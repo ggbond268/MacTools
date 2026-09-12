@@ -8,7 +8,7 @@ import SwiftUI
 @MainActor
 private var selectedRowTextColor: Color {
     // This is the list/table foreground paired with selectedContentBackgroundColor.
-    Color(nsColor: .alternateSelectedControlTextColor)
+    PluginPaletteColors.selectedText
 }
 
 enum ClipboardHistoryContentFilter: String, CaseIterable, Identifiable, Sendable {
@@ -3641,6 +3641,7 @@ struct ClipboardHistoryPanelView: View {
 
     @ObservedObject private var settings: ClipboardHistorySettingsStore
     @Environment(\.accessibilityReduceTransparency) private var accessibilityReduceTransparency
+    @Environment(\.colorSchemeContrast) private var surfaceContrast
     @Environment(\.locale) private var locale
     @State private var clearRequest: ClipboardHistoryClearRequest?
     @State private var detailMetadataByItemID: [UUID: ClipboardHistoryDetailMetadata] = [:]
@@ -4524,14 +4525,14 @@ struct ClipboardHistoryPanelView: View {
                     if isSaved || isSavePending {
                         Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
                             .font(PluginSettingsTheme.Typography.statusBadge)
-                            .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.85) : Color.secondary)
+                            .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
                             .help(localization.string("saved.kind.clip", defaultValue: "Saved Item"))
                             .opacity(isSavePending ? 0.65 : 1)
                     }
                     if let badgeNumber = model.rowNumber(for: item.id, quickPasteNumber: quickPasteNumber) {
                         Text(model.isMultiSelectionEnabled ? "\(badgeNumber)" : "⌘\(badgeNumber)")
                             .font(PluginSettingsTheme.Typography.statusBadge)
-                            .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.78) : Color.secondary)
+                            .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
                             .frame(minWidth: 24, alignment: .trailing)
                             .fixedSize(horizontal: true, vertical: false)
                     }
@@ -4544,7 +4545,7 @@ struct ClipboardHistoryPanelView: View {
                         .fixedSize()
                 }
                 .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.78) : Color.secondary)
+                .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -6256,14 +6257,20 @@ struct ClipboardHistoryPanelView: View {
                     .frame(width: previewSize.width, height: previewSize.height)
                     .overlay {
                         Rectangle()
-                            .strokeBorder(Color.primary.opacity(0.22), lineWidth: 1)
+                            .strokeBorder(
+                                surfaceContrast == .increased ? Color.primary : Color(nsColor: .separatorColor),
+                                lineWidth: 1
+                            )
                     }
                     .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
             }
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
+                    .strokeBorder(
+                        surfaceContrast == .increased ? Color.primary : PluginSettingsTheme.Palette.cardBorder,
+                        lineWidth: 1
+                    )
             }
         }
     }
@@ -6946,7 +6953,7 @@ private struct ClipboardHistoryActionPalette: View {
                 if let shortcut = actionShortcutText(entry) {
                     Text(shortcut)
                         .font(PluginSettingsTheme.Typography.statusBadge)
-                        .foregroundStyle(isSelected ? selectedRowTextColor.opacity(0.8) : Color.secondary)
+                        .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
                 }
             }
             .foregroundStyle(isSelected ? selectedRowTextColor : Color.primary)

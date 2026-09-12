@@ -309,6 +309,31 @@ final class MacToolsCommandPalettePanel: NSPanel {
     }
 }
 
+/// Keep the window frame owned by AppKit, as in Clipboard History. A top-level
+/// NSHostingView can introduce window-level layout and safe-area treatment in
+/// addition to the palette's own rounded surface.
+@MainActor
+final class CommandPaletteHostingContainer<Content: View>: NSView {
+    let hostingView: NSHostingView<Content>
+
+    init(rootView: Content) {
+        hostingView = NSHostingView(rootView: rootView)
+        super.init(frame: .zero)
+        hostingView.safeAreaRegions = []
+        hostingView.sizingOptions = []
+        hostingView.autoresizingMask = [.width, .height]
+        addSubview(hostingView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layout() {
+        super.layout()
+        hostingView.frame = bounds
+    }
+}
+
 struct StandaloneCommandPaletteRootView: View {
     let pluginHost: PluginHost
     let launchAtLoginController: LaunchAtLoginController
@@ -330,7 +355,7 @@ struct StandaloneCommandPaletteRootView: View {
                 focusRequestID: state.focusRequestID,
                 resetRequestID: state.resetRequestID,
                 quickSelectionRequest: state.quickSelectionRequest,
-                showsCustomShadow: false,
+                showsCustomShadow: true,
                 actions: actions,
                 dragCoordinator: dragCoordinator
             )
@@ -797,7 +822,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 self?.resetCommandPalettePosition()
             }
         )
-        let hostingView = NSHostingView(
+        let hostingView = CommandPaletteHostingContainer(
             rootView: StandaloneCommandPaletteRootView(
                 pluginHost: pluginHost,
                 launchAtLoginController: launchAtLoginController,
@@ -808,14 +833,15 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
                 dragCoordinator: coordinator
             )
         )
-        hostingView.sizingOptions = []
         panel.contentView = hostingView
         let preference = AppAppearancePreference.stored(in: appearanceUserDefaults)
         preference.apply(to: panel)
         preference.apply(to: hostingView)
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        // Both entry points use the same shadow around the visible surface.
+        // A second window shadow would outline the transparent outer padding.
+        panel.hasShadow = false
         panel.level = .floating
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false

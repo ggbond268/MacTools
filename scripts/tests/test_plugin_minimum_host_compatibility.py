@@ -110,6 +110,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginActionSafetyStateChangeProviding": "1.2.0",
     # Shared palette, shortcut-recorder, and private-data APIs introduced after v1.2.0.
     "PluginPaletteMetrics": "1.3.0",
+    "PluginPaletteColors": "1.3.1",
     "PluginPaletteSearchCommand": "1.3.0",
     "PluginPaletteSearchField": "1.3.0",
     "PluginPaletteSearchBar": "1.3.0",
