@@ -5,6 +5,7 @@ import MacToolsPluginKit
 import ActionGridPlugin
 import ActivityBarPlugin
 import AppHotkeyPlugin
+import AppUninstallerPlugin
 import AppVolumePlugin
 import AppearancePlugin
 import AppleShortcutsPlugin
@@ -293,6 +294,7 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
         .init(pluginID: "action-grid", makeProvider: ActionGridPluginFactory.makeProvider),
         .init(pluginID: "activity-bar", makeProvider: ActivityBarPluginFactory.makeProvider),
         .init(pluginID: "app-hotkey", makeProvider: AppHotkeyPluginFactory.makeProvider),
+        .init(pluginID: "app-uninstaller", makeProvider: AppUninstallerPluginFactory.makeProvider),
         .init(pluginID: "app-volume", makeProvider: AppVolumePluginFactory.makeProvider),
         .init(pluginID: "appearance", makeProvider: AppearancePluginFactory.makeProvider),
         .init(pluginID: "apple-shortcuts", makeProvider: AppleShortcutsPluginFactory.makeProvider),

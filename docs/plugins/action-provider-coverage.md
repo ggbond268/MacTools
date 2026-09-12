@@ -15,7 +15,7 @@ The following plugin source directories publish canonical actions:
 - Display and workspace control: `Appearance`, `DisplayBrightness`, `DisplayResolution`, `DisplaySleep`, `DisplayTrueColor`, `DockLock`, `HideNotch`, `NightShift`, `Sidecar`, `StageManager`.
 - Menu bar and Dock control: `AutoHideDock`, `AutoHideMenuBar`, `MenuBarHidden`.
 - System and device control: `BatteryChargeLimit`, `FanControl`, `KeepAwake`, `LockScreen`, `MicrophoneMute`, `SystemMute`, `SystemPower`, `SystemSoftRestart`.
-- Productivity and maintenance: `ActivityBar`, `AppleShortcuts`, `ClipboardClear`, `ClipboardHistory`, `CloudflareR2`, `DiskClean`, `EjectDisk`, `EmptyTrash`, `FixDamagedApp`, `Homebrew`, `IPOverview`, `LaunchControl`, `Launchpad`, `PhysicalCleanMode`, `QuitApps`, `Screenshot`, `Translator`, `WindowLayouts`, `XcodeClean`.
+- Productivity and maintenance: `ActivityBar`, `AppUninstaller`, `AppleShortcuts`, `ClipboardClear`, `ClipboardHistory`, `CloudflareR2`, `DiskClean`, `EjectDisk`, `EmptyTrash`, `FixDamagedApp`, `Homebrew`, `IPOverview`, `LaunchControl`, `Launchpad`, `PhysicalCleanMode`, `QuitApps`, `Screenshot`, `Translator`, `WindowLayouts`, `XcodeClean`.
 
 Parameterized actions publish concrete catalog entries rather than asking each action surface to construct parameters. For example, Sidecar publishes per-device entries, Display Resolution publishes current display modes, App Volume publishes current audio apps, Battery Charge Limit publishes useful limit presets, and Fan Control publishes saved presets. Availability is resolved again at execution time so stale hardware, processes, or configuration fail safely.
 
@@ -29,6 +29,7 @@ Unattended automation is also an explicit provider decision. An action must publ
 
 The maintenance providers use deliberately narrow contracts:
 
+- App Uninstaller exposes only foreground review navigation. Selection, quit, confirmation, and Trash execution stay inside its workspace; no uninstall operation is a canonical action or Run Link.
 - Disk Clean and Xcode Clean expose only a foreground **scan and review** action. It opens the owning settings page and starts a scan; deletion still requires the plugin's existing selection, safety validation, and confirmation flow.
 - Cloudflare R2 exposes only its foreground file-picker upload action. It requires saved configuration, preserves interactive file selection and cancellation, and does not allow Run Links or unattended automation.
 - Homebrew exposes update, upgrade-all, doctor, and cleanup. Upgrade-all and cleanup retain confirmation, every command reports its real completion result, and none can be invoked through a Run Link.

@@ -125,6 +125,7 @@ final class PluginPresentationSafetyTests: XCTestCase {
                 #"\.(?:makeKeyAndOrderFront|orderFrontRegardless|orderFront)\("#,
                 #"(?m)^\s*(?:makeKeyAndOrderFront|orderFrontRegardless)\("#,
                 #"\.(?:runModal|beginSheetModal)\("#,
+                #"\b(?:panel|[A-Za-z_][A-Za-z0-9_]*Panel)\.begin\s*(?:\(|\{)"#,
                 #"\.show\(\s*relativeTo:"#,
             ]
             return try patterns.flatMap { pattern -> [String] in

@@ -116,3 +116,7 @@ For the PluginKit v6 migration, source manifests declare `pluginKitVersion: 6` a
 ### Managed Nightly CLI distribution
 
 Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-install.json` with `scripts/cli-install-manifest.py`, embeds it in the app resources, and then signs the outer app. Publish that same ZIP and JSON only after both notarization submissions pass. The app trusts the resource seal, never a downloaded unsigned manifest. Personal publishers must use the same ordering with an immutable `/releases/<build>` URL. See [managed CLI distribution](docs/plugins/managed-cli-distribution.md) for the contract, ownership layout, and release acceptance gates.
+
+## App Uninstaller safety
+
+App Uninstaller association rules and Trash execution require adjacent fixture tests and independent safety review. Keep ownership confidence separate from data sensitivity, preserve incomplete coverage, and never add a permanent-delete fallback. See [the implementation and provenance notes](docs/plugins/app-uninstaller.md).
