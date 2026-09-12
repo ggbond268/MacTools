@@ -1,0 +1,38 @@
+{
+  "id": "ai-assistant",
+  "displayName": "AI 助手",
+  "summary": "划词调用 AI 翻译、总结、润色等",
+  "localizedMetadata": {
+    "en": {
+      "displayName": "AI Assistant",
+      "summary": "Process selected text with AI: translate, summarize, polish, and more."
+    },
+    "zh-Hans": {
+      "displayName": "AI 助手",
+      "summary": "划词调用 AI 翻译、总结、润色等"
+    },
+    "zh-Hant": {
+      "displayName": "AI 助手",
+      "summary": "透過快速鍵呼叫 AI 翻譯、摘要、潤飾等"
+    }
+  },
+  "version": "0.1.0",
+  "minHostVersion": "1.2.0",
+  "pluginKitVersion": 6,
+  "bundleRelativePath": "AIAssistant.bundle",
+  "factoryClass": "AIAssistantPlugin.AIAssistantPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "AIAssistantPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": [
+    "accessibility",
+    "automation"
+  ],
+  "category": "productivity"
+}
