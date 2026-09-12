@@ -85,7 +85,7 @@
 
 > **Window Switcher:** The catalog includes eligible windows from inactive macOS Spaces, so switching does not depend on the current Space.
 
-> **Preferences sync:** Sync portable preferences through iCloud Drive or a custom shared folder. Manual exports and sync documents are interchangeable; cloud sync removes machine-specific bindings before applying or republishing them. Pending local edits take precedence over incoming cloud conflicts. Sync waits for plugins to finish loading and reports incomplete imports without overwriting the shared snapshot; use Sync Now to retry after resolving the reported error.
+> **Preferences sync:** Sync portable preferences through iCloud Drive or a custom shared folder. Manual exports and sync documents are interchangeable. Cloud updates preserve device-local rules, shortcuts, Run Links, hardware settings, and their workflow dependencies; plugin settings required by those local dependencies stay on this Mac. Concurrent changes pause synchronization and offer a choice between local and shared settings, with both versions saved locally. Pending edits survive restarts and are reconciled before publication; quitting does not overwrite the shared file. Sync waits for plugins to finish loading and supports retry after file errors. A missing established shared file pauses sync until it becomes available again.
 
 > **Shortcut settings:** Plugin and app shortcut rows keep the action icon/name beside the recorder field, wrapping groups between rows without splitting an individual shortcut control.
 

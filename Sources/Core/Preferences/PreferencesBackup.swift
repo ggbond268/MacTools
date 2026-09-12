@@ -296,7 +296,7 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
         }.value
     }
 
-    private static func readFile(at url: URL, maximumSize: Int) throws -> Data {
+    static func readFile(at url: URL, maximumSize: Int = maximumFileSize) throws -> Data {
         precondition(maximumSize > 0)
 
         let file = try FileHandle(forReadingFrom: url)

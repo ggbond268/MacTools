@@ -565,7 +565,7 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(saved.backup.workflows?.first).isEnabled)
     }
 
-    func testPendingLocalEditWinsOverHigherGenerationSnapshot() async throws {
+    func testPendingLocalEditRequiresChoiceBeforeReplacingHigherGenerationSnapshot() async throws {
         let directory = makeTemporaryDirectoryURL()
         let coordinator = makeConfiguredCoordinator(directory: directory)
         var localBackup = makeBackup(marker: "initial")
@@ -589,14 +589,16 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(importCount, 0)
         XCTAssertEqual(localBackup.pluginDisplay.orderedPluginIDs, ["newer-local"])
-        XCTAssertEqual(coordinator.currentGeneration, 15)
+        XCTAssertEqual(coordinator.status, .conflict(deviceName: "Remote Mac"))
         try await coordinator.syncNow()
+        XCTAssertEqual(try readSnapshot(in: directory).documentID, remote.documentID)
+        try await coordinator.resolveConflict(.local)
         let saved = try readSnapshot(in: directory)
         XCTAssertEqual(saved.generation, 16)
         XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["newer-local"])
     }
 
-    func testLocalEditDuringIncomingReadSurvivesEvenAfterItsExportCompletes() async throws {
+    func testLocalEditDuringIncomingReadPreservesBothVersionsUntilChoice() async throws {
         let directory = makeTemporaryDirectoryURL()
         let gate = CloudSnapshotReadGate()
         let coordinator = makeConfiguredCoordinator(directory: directory, debounceDelay: .zero) { url in
@@ -621,16 +623,8 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
         let check = Task { await coordinator.checkForIncomingSnapshots() }
         await gate.waitUntilSuspended()
 
-        let exported = expectation(description: "Local edit exported while remote read is suspended")
-        coordinator.statusHandler = { status in
-            if case .synced = status, coordinator.currentGeneration == 2 {
-                exported.fulfill()
-            }
-        }
         localBackup = makeBackup(marker: "local-edit-during-read")
         coordinator.committedPreferencesDidChange()
-        await fulfillment(of: [exported], timeout: 5)
-        coordinator.statusHandler = nil
         await gate.resume()
         await check.value
 
@@ -638,8 +632,10 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(localBackup.pluginDisplay.orderedPluginIDs, ["local-edit-during-read"])
         try await coordinator.syncNow()
         let saved = try readSnapshot(in: directory)
-        XCTAssertGreaterThan(saved.generation, 100)
-        XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["local-edit-during-read"])
+        XCTAssertEqual(coordinator.status, .conflict(deviceName: "Remote Mac"))
+        XCTAssertEqual(saved.documentID, remote.documentID)
+        try await coordinator.resolveConflict(.local)
+        XCTAssertEqual(try readSnapshot(in: directory).backup.pluginDisplay.orderedPluginIDs, ["local-edit-during-read"])
     }
 
     func testDisablingSyncDuringIncomingReadPreventsImport() async throws {
@@ -719,12 +715,11 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
 
         writer.suspend()
         let captured = expectation(description: "First edit captured for the suspended writer")
-        var reads = 0
-        coordinator.snapshotProvider = {
-            reads += 1
-            // performExport checks availability, then exportSnapshot captures the value.
-            if reads == 2 { captured.fulfill() }
-            return localBackup
+        coordinator.statusHandler = { status in
+            if status.isSyncing {
+                coordinator.statusHandler = nil
+                captured.fulfill()
+            }
         }
         localBackup = makeBackup(marker: "first-edit")
         coordinator.committedPreferencesDidChange()
@@ -742,6 +737,324 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["second-edit"])
         XCTAssertEqual(saved.generation, 3)
         XCTAssertEqual(coordinator.currentGeneration, saved.generation)
+    }
+
+    func testTimestampRoundtripPreservesFractionalSecondsAndParentVersion() throws {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000.875432)
+        let snapshot = CloudPreferencesSnapshot(
+            generation: 3, timestamp: timestamp, deviceID: "remote", deviceName: "Remote",
+            parentDocumentID: "base-version", backup: makeBackup(marker: "remote")
+        )
+        let decoded = try CloudPreferencesSnapshot.decodeJSON(snapshot.encodedJSON())
+        XCTAssertEqual(decoded.timestamp, timestamp)
+        XCTAssertEqual(decoded.syncMetadata?.parentDocumentID, "base-version")
+    }
+
+    func testSameGenerationDifferentContentIsPreservedAsConflict() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        var local = makeBackup(marker: "local")
+        coordinator.snapshotProvider = { local }
+        coordinator.importHandler = { local = $0 }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+        let base = try readSnapshot(in: directory)
+        let remote = CloudPreferencesSnapshot(
+            generation: base.generation, timestamp: base.timestamp.addingTimeInterval(0.1),
+            deviceID: "remote", deviceName: "Remote", backup: makeBackup(marker: "remote")
+        )
+        try remote.encodedJSON().write(to: directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName))
+        try await coordinator.syncNow()
+        XCTAssertEqual(coordinator.status, .conflict(deviceName: "Remote"))
+        XCTAssertEqual(local.pluginDisplay.orderedPluginIDs, ["local"])
+        XCTAssertEqual(try readSnapshot(in: directory).documentID, remote.documentID)
+    }
+
+    func testRelaunchAndQuitWithoutEditsNeverOverwriteNewerSharedFile() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let defaults = configuredDefaults(directory: directory)
+        let local = makeBackup(marker: "old-local")
+        let first = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        first.snapshotProvider = { local }
+        try await first.syncNow()
+        first.flushPendingExportBeforeTermination()
+        let remote = CloudPreferencesSnapshot(generation: 2, deviceID: "remote", deviceName: "Remote", backup: makeBackup(marker: "new-remote"))
+        let url = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        let bytes = try remote.encodedJSON()
+        try bytes.write(to: url)
+        let reopened = CloudPreferencesSyncCoordinator(userDefaults: defaults)
+        reopened.snapshotProvider = { local }
+        reopened.flushPendingExportBeforeTermination()
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+        XCTAssertEqual(reopened.currentGeneration, 1)
+    }
+
+    func testPendingEditAndConflictSurviveRelaunchAndSharedChoice() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let defaults = configuredDefaults(directory: directory)
+        var local = makeBackup(marker: "base")
+        let first = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        first.snapshotProvider = { local }
+        try await first.syncNow()
+        local = makeBackup(marker: "pending-local")
+        first.committedPreferencesDidChange()
+        first.flushPendingExportBeforeTermination()
+        XCTAssertEqual(try readSnapshot(in: directory).backup.pluginDisplay.orderedPluginIDs, ["base"])
+        let remote = CloudPreferencesSnapshot(generation: 2, deviceID: "remote", deviceName: "Remote", backup: makeBackup(marker: "remote-change"))
+        try remote.encodedJSON().write(to: directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName))
+        let reopened = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        reopened.snapshotProvider = { local }
+        reopened.importHandler = { local = $0 }
+        try await reopened.syncNow()
+        XCTAssertEqual(reopened.status, .conflict(deviceName: "Remote"))
+        reopened.flushPendingExportBeforeTermination()
+        let third = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        third.snapshotProvider = { local }
+        third.importHandler = { local = $0 }
+        defer { third.setEnabled(false) }
+        XCTAssertEqual(third.status, .conflict(deviceName: "Remote"))
+        try await third.resolveConflict(.shared)
+        XCTAssertEqual(local.pluginDisplay.orderedPluginIDs, ["remote-change"])
+        XCTAssertEqual(try readSnapshot(in: directory).documentID, remote.documentID)
+        let saved = try savedState(defaults, directory: directory)
+        XCTAssertEqual(saved.lastResolvedConflict?.local.pluginDisplay.orderedPluginIDs, ["pending-local"])
+        XCTAssertEqual(saved.lastResolvedConflict?.shared.documentID, remote.documentID)
+        XCTAssertNil(saved.conflict)
+    }
+
+    func testPendingEditPublishesAfterRelaunchWhenSharedBaseIsUnchanged() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let defaults = configuredDefaults(directory: directory)
+        var local = makeBackup(marker: "base")
+        let first = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        first.snapshotProvider = { local }
+        try await first.syncNow()
+        let base = try readSnapshot(in: directory)
+        local = makeBackup(marker: "pending")
+        first.committedPreferencesDidChange()
+        first.flushPendingExportBeforeTermination()
+        let reopened = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        reopened.snapshotProvider = { local }
+        defer { reopened.setEnabled(false) }
+        try await reopened.syncNow()
+        let saved = try readSnapshot(in: directory)
+        XCTAssertEqual(saved.backup.pluginDisplay.orderedPluginIDs, ["pending"])
+        XCTAssertEqual(saved.syncMetadata?.parentDocumentID, base.documentID)
+        XCTAssertEqual(saved.generation, 2)
+    }
+
+    func testMalformedFileRemovalCanInitializeAccessibleEmptyFolder() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        coordinator.snapshotProvider = { self.makeBackup(marker: "local") }
+        defer { coordinator.setEnabled(false) }
+        let url = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        try Data("{malformed".utf8).write(to: url)
+        do { try await coordinator.syncNow(); XCTFail("Malformed input must fail") } catch {}
+        XCTAssertNotNil(coordinator.status.errorMessage)
+        try FileManager.default.removeItem(at: url)
+        try await coordinator.syncNow()
+        XCTAssertTrue(coordinator.status.isSynced)
+        XCTAssertEqual(try readSnapshot(in: directory).backup.pluginDisplay.orderedPluginIDs, ["local"])
+    }
+
+    func testMissingEstablishedFileWaitsAndRecoversWithoutPublishing() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        coordinator.snapshotProvider = { self.makeBackup(marker: "local") }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+        let url = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        let bytes = try Data(contentsOf: url)
+        try FileManager.default.removeItem(at: url)
+        do { try await coordinator.syncNow(); XCTFail("Missing established file must wait") }
+        catch { XCTAssertEqual(error as? CloudPreferencesSyncError, .snapshotMissing) }
+        XCTAssertEqual(coordinator.status, .offline(reason: .snapshotMissing))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        try bytes.write(to: url)
+        try await coordinator.syncNow()
+        XCTAssertTrue(coordinator.status.isSynced)
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+    }
+
+    func testUnavailableFolderIsNotRecreatedByRetryOrQuit() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        coordinator.snapshotProvider = { self.makeBackup(marker: "local") }
+        try FileManager.default.removeItem(at: directory)
+        do { try await coordinator.syncNow(); XCTFail("Unavailable folder must fail") } catch {}
+        coordinator.flushPendingExportBeforeTermination()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+        XCTAssertEqual(coordinator.status, .offline(reason: .folderNotFound))
+    }
+
+    func testDefaultCloudReaderRejectsOversizedSparseFileAndCanRetry() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let defaults = configuredDefaults(directory: directory)
+        let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        coordinator.snapshotProvider = { self.makeBackup(marker: "local") }
+        defer { coordinator.setEnabled(false) }
+        let url = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: nil))
+        let file = try FileHandle(forWritingTo: url)
+        try file.truncate(atOffset: UInt64(PreferencesBackup.maximumFileSize + 1))
+        try file.close()
+        do { try await coordinator.syncNow(); XCTFail("Oversized input must fail") }
+        catch { XCTAssertEqual(error as? PreferencesBackupError, .fileTooLarge(maximumBytes: PreferencesBackup.maximumFileSize)) }
+        try FileManager.default.removeItem(at: url)
+        try await coordinator.syncNow()
+        XCTAssertTrue(coordinator.status.isSynced)
+    }
+
+    func testCloudImportMergesLocalHardwareFieldsWithoutResettingPortableSettings() throws {
+        let local = Data(#"{"normalSetting":"old","displayID":"local-display","nested":{"safe":false,"hardwareID":"local-hardware"}}"#.utf8)
+        let incoming = Data(#"{"normalSetting":"new","nested":{"safe":true}}"#.utf8)
+        let merged = CloudPreferencesSyncCoordinator.preservingMachineSpecificPluginPreferences(incoming: incoming, local: local, pluginID: "generic")
+        let values = try XCTUnwrap(JSONSerialization.jsonObject(with: merged) as? [String: Any])
+        XCTAssertEqual(values["normalSetting"] as? String, "new")
+        XCTAssertEqual(values["displayID"] as? String, "local-display")
+        let nested = try XCTUnwrap(values["nested"] as? [String: Any])
+        XCTAssertEqual(nested["safe"] as? Bool, true)
+        XCTAssertEqual(nested["hardwareID"] as? String, "local-hardware")
+    }
+
+    private func configuredDefaults(directory: URL) -> UserDefaults {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: CloudPreferencesSyncCoordinator.enabledUserDefaultsKey)
+        defaults.set(directory.path, forKey: CloudPreferencesSyncCoordinator.directoryPathUserDefaultsKey)
+        return defaults
+    }
+
+    private func savedState(_ defaults: UserDefaults, directory: URL) throws -> CloudPreferencesSyncState {
+        let dictionary = try XCTUnwrap(defaults.dictionary(forKey: CloudPreferencesSyncCoordinator.stateUserDefaultsKey))
+        let data = try XCTUnwrap(dictionary[directory.path] as? Data)
+        return try JSONDecoder().decode(CloudPreferencesSyncState.self, from: data)
+    }
+
+    func testSharedChangeDuringQueuedWritePreservesBothVersions() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let writer = DispatchQueue(label: "CloudSyncTests.racingWriter")
+        let coordinator = makeConfiguredCoordinator(directory: directory, writeQueue: writer)
+        var local = makeBackup(marker: "base")
+        coordinator.snapshotProvider = { local }
+        coordinator.importHandler = { local = $0 }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+        writer.suspend()
+        let queued = expectation(description: "Local write prepared")
+        coordinator.statusHandler = { status in
+            if status.isSyncing { coordinator.statusHandler = nil; queued.fulfill() }
+        }
+        local = makeBackup(marker: "local-change")
+        coordinator.committedPreferencesDidChange()
+        let sync = Task { try await coordinator.syncNow() }
+        await fulfillment(of: [queued], timeout: 5)
+        let remote = CloudPreferencesSnapshot(generation: 2, deviceID: "remote", deviceName: "Remote", backup: makeBackup(marker: "remote-change"))
+        try remote.encodedJSON().write(to: directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName))
+        writer.resume()
+        try await sync.value
+        XCTAssertEqual(coordinator.status, .conflict(deviceName: "Remote"))
+        XCTAssertEqual(local.pluginDisplay.orderedPluginIDs, ["local-change"])
+        XCTAssertEqual(try readSnapshot(in: directory).documentID, remote.documentID)
+    }
+
+    func testQuitCancelsQueuedWriteAndKeepsPendingEditForNextLaunch() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let defaults = configuredDefaults(directory: directory)
+        let writer = DispatchQueue(label: "CloudSyncTests.terminationWriter")
+        let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60), writeQueue: writer)
+        var local = makeBackup(marker: "base")
+        coordinator.snapshotProvider = { local }
+        try await coordinator.syncNow()
+        let base = try readSnapshot(in: directory)
+        writer.suspend()
+        let queued = expectation(description: "Write queued before quit")
+        coordinator.statusHandler = { status in
+            if status.isSyncing { coordinator.statusHandler = nil; queued.fulfill() }
+        }
+        local = makeBackup(marker: "pending")
+        coordinator.committedPreferencesDidChange()
+        let sync = Task { try await coordinator.syncNow() }
+        await fulfillment(of: [queued], timeout: 5)
+        coordinator.flushPendingExportBeforeTermination()
+        writer.resume()
+        try await sync.value
+        XCTAssertEqual(try readSnapshot(in: directory).documentID, base.documentID)
+        let reopened = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        reopened.snapshotProvider = { local }
+        defer { reopened.setEnabled(false) }
+        try await reopened.syncNow()
+        XCTAssertEqual(try readSnapshot(in: directory).backup.pluginDisplay.orderedPluginIDs, ["pending"])
+    }
+
+    func testConflictChoiceRechecksSharedVersionBeforeApplying() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        var local = makeBackup(marker: "base")
+        coordinator.snapshotProvider = { local }
+        coordinator.importHandler = { local = $0 }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+        local = makeBackup(marker: "local")
+        coordinator.committedPreferencesDidChange()
+        let first = CloudPreferencesSnapshot(generation: 2, deviceID: "remote", deviceName: "First Mac", backup: makeBackup(marker: "first-remote"))
+        let url = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        try first.encodedJSON().write(to: url)
+        try await coordinator.syncNow()
+        let second = CloudPreferencesSnapshot(generation: 3, deviceID: "remote", deviceName: "Second Mac", backup: makeBackup(marker: "second-remote"))
+        try second.encodedJSON().write(to: url)
+        try await coordinator.resolveConflict(.shared)
+        XCTAssertEqual(coordinator.status, .conflict(deviceName: "Second Mac"))
+        XCTAssertEqual(local.pluginDisplay.orderedPluginIDs, ["local"])
+        try await coordinator.resolveConflict(.shared)
+        XCTAssertEqual(local.pluginDisplay.orderedPluginIDs, ["second-remote"])
+    }
+
+    func testUnchangedWorkflowEchoDoesNotImportOrConflictAfterLocalEdit() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        let workflow = WorkflowDefinition(name: "Fractional dates")
+        var local = makeBackup(marker: "base", workflows: [workflow])
+        var imports = 0
+        coordinator.snapshotProvider = { local }
+        coordinator.importHandler = { local = $0; imports += 1 }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+        await coordinator.checkForIncomingSnapshots()
+        XCTAssertEqual(imports, 0)
+        local = makeBackup(marker: "edit", workflows: [workflow])
+        coordinator.committedPreferencesDidChange()
+        try await coordinator.syncNow()
+        XCTAssertTrue(coordinator.status.isSynced)
+        XCTAssertEqual(imports, 0)
+        XCTAssertEqual(try readSnapshot(in: directory).backup.pluginDisplay.orderedPluginIDs, ["edit"])
+    }
+
+    func testLowerGenerationOfflineEditIsNotSilentlyDiscarded() async throws {
+        let directory = makeTemporaryDirectoryURL()
+        let coordinator = makeConfiguredCoordinator(directory: directory)
+        var local = makeBackup(marker: "base")
+        coordinator.snapshotProvider = { local }
+        defer { coordinator.setEnabled(false) }
+        try await coordinator.syncNow()
+        local = makeBackup(marker: "new-local")
+        coordinator.committedPreferencesDidChange()
+        try await coordinator.syncNow()
+        let offline = CloudPreferencesSnapshot(generation: 1, deviceID: "offline", deviceName: "Offline Mac", backup: makeBackup(marker: "offline-edit"))
+        try offline.encodedJSON().write(to: directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName))
+        try await coordinator.syncNow()
+        XCTAssertEqual(coordinator.status, .conflict(deviceName: "Offline Mac"))
+        XCTAssertEqual(try readSnapshot(in: directory).documentID, offline.documentID)
+    }
+
+    func testFanControlImportPreservesActiveLocalPresetDependency() throws {
+        let local = Data(#"{"version":1,"activePresetID":"local-quiet","customPresets":[{"id":"local-quiet","name":"Local Quiet"}]}"#.utf8)
+        let incoming = Data(#"{"version":1,"activePresetID":"builtin-auto","customPresets":[{"id":"remote","name":"Remote"}]}"#.utf8)
+        let merged = CloudPreferencesSyncCoordinator.preservingMachineSpecificPluginPreferences(incoming: incoming, local: local, pluginID: "fan-control")
+        let values = try XCTUnwrap(JSONSerialization.jsonObject(with: merged) as? [String: Any])
+        XCTAssertEqual(values["activePresetID"] as? String, "local-quiet")
+        let presets = try XCTUnwrap(values["customPresets"] as? [[String: Any]])
+        XCTAssertEqual(Set(presets.compactMap { $0["id"] as? String }), ["local-quiet", "remote"])
     }
 
     // MARK: - Helpers
@@ -776,9 +1089,12 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
             coordinator.flushPendingExportBeforeTermination()
             XCTAssertEqual(try Data(contentsOf: snapshotURL), originalData)
 
+            let retry = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+            defer { retry.setEnabled(false) }
             var imported: PreferencesBackup?
-            coordinator.importHandler = { imported = $0 }
-            await coordinator.checkForIncomingSnapshots()
+            retry.snapshotProvider = { self.makeBackup(marker: "local") }
+            retry.importHandler = { imported = $0 }
+            await retry.checkForIncomingSnapshots()
             XCTAssertEqual(imported?.pluginDisplay.orderedPluginIDs, ["remote"])
         }
     }

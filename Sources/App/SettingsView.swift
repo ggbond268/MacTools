@@ -1771,6 +1771,28 @@ private struct CloudPreferencesSyncSettingsRow: View {
             .controlSize(.small)
             .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
             .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
+            if case .conflict = pluginHost.cloudPreferencesSyncStatus {
+                rowDivider
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.conflict.detail", defaultValue: "本机和共享设置均已更改。两个版本已保留，请选择要同步的版本。此 Mac 的专属设置会保留。"))
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button(AppL10n.preferencesBackup("preferencesBackup.cloudSync.conflict.local", defaultValue: "使用本机设置")) {
+                            resolveConflict(.local)
+                        }
+                        Button(AppL10n.preferencesBackup("preferencesBackup.cloudSync.conflict.shared", defaultValue: "使用共享设置")) {
+                            resolveConflict(.shared)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(isSyncingManually || !pluginHost.cloudPreferencesSyncEnabled)
+                }
+                .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+                .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
         .alert(
@@ -1810,6 +1832,15 @@ private struct CloudPreferencesSyncSettingsRow: View {
         pluginHost.setCloudPreferencesSyncDirectoryURL(url)
     }
 
+    private func resolveConflict(_ choice: CloudPreferencesConflictChoice) {
+        Task { @MainActor in
+            isSyncingManually = true
+            defer { isSyncingManually = false }
+            do { try await pluginHost.resolveCloudPreferencesConflict(choice) }
+            catch { alertMessage = preferencesBackupErrorMessage(error) }
+        }
+    }
+
     private func syncNow() {
         Task { @MainActor in
             isSyncingManually = true
@@ -1834,34 +1865,17 @@ private struct CloudPreferencesSyncSettingsRow: View {
         )
     }
 
-    @ViewBuilder
     private var cloudSyncStatusSubtitleView: some View {
-        switch pluginHost.cloudPreferencesSyncStatus {
-        case .offline(let reason):
-            switch reason {
-            case .disabled:
-                Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.disabled", defaultValue: "云同步未启用"))
-            case .folderNotConfigured:
-                Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.notConfigured", defaultValue: "未配置文件夹"))
-            case .folderNotFound:
-                Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.folderMissing", defaultValue: "配置的同步文件夹不存在"))
-            }
-        case .syncing:
-            Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.syncing", defaultValue: "同步中…"))
-        case .synced(let date):
-            if let date {
-                TimelineView(.periodic(from: .now, by: 60)) { context in
-                    Text(AppL10n.preferencesBackupFormat(
-                        "preferencesBackup.cloudSync.status.lastSynced",
-                        defaultValue: "上次同步：%@",
-                        cloudSyncRelativeDate(date, relativeTo: context.date)
-                    ))
-                }
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            if let date = pluginHost.cloudPreferencesSyncStatus.lastSyncedDate {
+                Text(AppL10n.preferencesBackupFormat(
+                    "preferencesBackup.cloudSync.status.lastSynced",
+                    defaultValue: "上次同步：%@",
+                    cloudSyncRelativeDate(date, relativeTo: context.date)
+                ))
             } else {
-                Text(AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.synced", defaultValue: "已同步"))
+                Text(cloudSyncStatusDetailText ?? cloudSyncStatusText)
             }
-        case .error(let message):
-            Text(message)
         }
     }
 
@@ -1872,6 +1886,10 @@ private struct CloudPreferencesSyncSettingsRow: View {
             Image(systemName: "icloud.slash").foregroundStyle(.secondary)
         case .syncing:
             ProgressView().controlSize(.mini)
+        case .pending:
+            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
+        case .conflict:
+            Image(systemName: "exclamationmark.icloud").foregroundStyle(.orange)
         case .synced:
             Image(systemName: "checkmark.icloud").foregroundStyle(.green)
         case .error:
@@ -1885,6 +1903,10 @@ private struct CloudPreferencesSyncSettingsRow: View {
             AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.offline", defaultValue: "离线")
         case .syncing:
             AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.syncing", defaultValue: "同步中…")
+        case .pending:
+            AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.pending", defaultValue: "等待同步")
+        case .conflict:
+            AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.conflict", defaultValue: "需要选择设置版本")
         case .synced:
             AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.synced", defaultValue: "已同步")
         case .error:
@@ -1902,9 +1924,13 @@ private struct CloudPreferencesSyncSettingsRow: View {
                 AppL10n.preferencesBackup("preferencesBackup.cloudSync.notConfigured", defaultValue: "未配置文件夹")
             case .folderNotFound:
                 AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.folderMissing", defaultValue: "配置的同步文件夹不存在")
+            case .snapshotMissing:
+                AppL10n.preferencesBackup("preferencesBackup.cloudSync.status.snapshotMissing", defaultValue: "共享文件暂不可用。请检查云盘后重试；本机设置已保留。")
             }
-        case .syncing:
+        case .syncing, .pending:
             nil
+        case .conflict(let deviceName):
+            deviceName.isEmpty ? nil : deviceName
         case .synced(let date):
             date.map {
                 AppL10n.preferencesBackupFormat(

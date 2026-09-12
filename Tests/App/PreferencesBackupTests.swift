@@ -2196,6 +2196,68 @@ final class PreferencesBackupTests: XCTestCase {
         XCTAssertEqual(coordinator.currentGeneration, 9)
     }
 
+    func testCloudImportPreservesLocalRulesNestedDependenciesShortcutsAndRunLinks() throws {
+        let defaults = makeDefaults()
+        let provider = BackupActionProviderPlugin()
+        let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults)
+        let host = PluginHost(
+            plugins: [provider], shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            cloudPreferencesSyncCoordinator: coordinator, globalShortcutManager: GlobalShortcutManager()
+        )
+        let references = try provider.references()
+        let child = WorkflowDefinition(name: "Local dependency", steps: [WorkflowStep(reference: references[0])])
+        let parent = WorkflowDefinition(name: "Local parent", steps: [WorkflowStep(reference: child.actionReference)])
+        let localWorkflow = WorkflowDefinition(name: "Hardware workflow", steps: [WorkflowStep(reference: references[1])])
+        let oldPortable = WorkflowDefinition(name: "Deleted on other Mac")
+        let displayRule = AutomationRule(name: "Local display", workflowID: parent.id, trigger: .display(DisplayAutomationTrigger(event: .connected, displayIdentifier: "local-display")))
+        let calendarRule = AutomationRule(name: "Local calendar", workflowID: parent.id, trigger: .calendar(CalendarAutomationTrigger(phase: .starts, calendarIdentifier: "local-calendar")))
+        XCTAssertTrue(host.automationController.restorePreferences(workflows: [child, parent, localWorkflow, oldPortable], rules: [displayRule, calendarRule]))
+        guard case .success = host.setActionShortcutBinding(ShortcutBinding(keyCode: 31, modifiers: [.command, .control]), to: references[1]),
+              case .success = host.createActionRunLink(for: references[1]) else {
+            return XCTFail("Expected local shortcut and Run Link")
+        }
+        let localShortcuts = host.shortcutAssignmentService.assignments
+        let presetStore = ActionInvocationPresetStore(userDefaults: defaults)
+        let localPresets = presetStore.presets()
+        let remoteWorkflow = WorkflowDefinition(name: "New portable workflow")
+        let remoteRule = AutomationRule(name: "Portable rule", workflowID: remoteWorkflow.id, trigger: .display(DisplayAutomationTrigger(event: .connected)))
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: [:],
+            // Replacing this provider would destroy a preset used by the local child.
+            pluginPreferences: [provider.metadata.id: Data("replacement-without-local-preset".utf8)],
+            workflows: [remoteWorkflow], automationRules: [remoteRule]
+        )
+        try withExtendedLifetime(host) { try coordinator.importHandler?(backup) }
+        XCTAssertEqual(Set(host.automationController.workflows.map(\.id)), [child.id, parent.id, localWorkflow.id, remoteWorkflow.id])
+        XCTAssertEqual(host.automationController.workflows.first { $0.id == child.id }, child)
+        XCTAssertEqual(host.automationController.workflows.first { $0.id == parent.id }, parent)
+        XCTAssertEqual(Set(host.automationController.rules.map(\.id)), [displayRule.id, calendarRule.id, remoteRule.id])
+        XCTAssertEqual(host.automationController.rules.first { $0.id == displayRule.id }, displayRule)
+        XCTAssertEqual(host.automationController.rules.first { $0.id == calendarRule.id }, calendarRule)
+        XCTAssertEqual(host.shortcutAssignmentService.assignments, localShortcuts)
+        XCTAssertEqual(presetStore.presets(), localPresets)
+    }
+
+    func testCloudImportPreservesHardwareFieldsInPluginPayload() throws {
+        let local = Data(#"{"safe":"old","displayID":"local-display"}"#.utf8)
+        let plugin = BackupTestPlugin(id: "hardware-settings", order: 1, shortcutID: "toggle", portablePreferences: local)
+        let host = makeHost(plugins: [plugin], defaults: makeDefaults())
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: [:], pluginPreferences: [plugin.metadata.id: Data(#"{"safe":"new"}"#.utf8)]
+        )
+        let result = try host.importCloudPreferences(backup)
+        XCTAssertTrue(result.shortcutErrors.isEmpty)
+        let payload = try XCTUnwrap(plugin.restoredPortablePreferences)
+        let values = try XCTUnwrap(JSONSerialization.jsonObject(with: payload) as? [String: String])
+        XCTAssertEqual(values, ["safe": "new", "displayID": "local-display"])
+    }
+
     func testCloudSyncReportsPluginPreferenceRestoreFailures() throws {
         let defaults = makeDefaults()
         let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults)

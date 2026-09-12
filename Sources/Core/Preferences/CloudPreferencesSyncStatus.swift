@@ -3,6 +3,8 @@ import Foundation
 enum CloudPreferencesSyncStatus: Equatable, Sendable {
     case offline(reason: OfflineReason)
     case syncing
+    case pending
+    case conflict(deviceName: String)
     case synced(lastSyncedAt: Date?)
     case error(message: String)
 
@@ -10,6 +12,7 @@ enum CloudPreferencesSyncStatus: Equatable, Sendable {
         case disabled
         case folderNotConfigured
         case folderNotFound
+        case snapshotMissing
     }
 
     var isSyncing: Bool {

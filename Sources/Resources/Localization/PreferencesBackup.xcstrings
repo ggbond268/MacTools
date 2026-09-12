@@ -1,6 +1,152 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "preferencesBackup.cloudSync.error.sharedFileChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Shared settings are still changing. Retry shortly; local settings are preserved." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "共享设置仍在更改。请稍后重试；本机设置已保留。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "共享設定仍在變更。請稍後重試；本機設定已保留。" } }
+      }
+    },
+    "preferencesBackup.cloudSync.conflict.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机和共享设置均已更改。两个版本已保留，请选择要同步的版本。此 Mac 的专属设置会保留。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local and shared settings have both changed. Both versions are saved. Choose which version to sync; settings specific to this Mac will be preserved."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機和共享設定均已變更。兩個版本已保留，請選擇要同步的版本。此 Mac 的專屬設定會保留。"
+          }
+        }
+      }
+    },
+    "preferencesBackup.cloudSync.conflict.local": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用本机设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Local Settings"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用本機設定"
+          }
+        }
+      }
+    },
+    "preferencesBackup.cloudSync.conflict.shared": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用共享设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Shared Settings"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用共享設定"
+          }
+        }
+      }
+    },
+    "preferencesBackup.cloudSync.status.pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待同步"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to Sync"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待同步"
+          }
+        }
+      }
+    },
+    "preferencesBackup.cloudSync.status.conflict": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要选择设置版本"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Settings Version"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要選擇設定版本"
+          }
+        }
+      }
+    },
+    "preferencesBackup.cloudSync.status.snapshotMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享文件暂不可用。请检查云盘后重试；本机设置已保留。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The shared file is unavailable. Check your cloud drive and retry; local settings are preserved."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享檔案暫不可用。請檢查雲端硬碟後重試；本機設定已保留。"
+          }
+        }
+      }
+    },
     "general.section.preferencesBackup": {
       "extractionState": "manual",
       "localizations": {

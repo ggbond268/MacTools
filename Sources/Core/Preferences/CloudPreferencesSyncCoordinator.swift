@@ -9,17 +9,13 @@ final class CloudPreferencesSyncCoordinator {
     static let generationUserDefaultsKey = "preferencesSync.cloud.generation"
     static let lastSyncedAtUserDefaultsKey = "preferencesSync.cloud.lastSyncedAt"
     static let consumedManualDocumentIDsUserDefaultsKey = "preferencesSync.cloud.consumedManualDocumentIDs"
+    static let stateUserDefaultsKey = "preferencesSync.cloud.folderStates"
 
     private let userDefaults: UserDefaults
     private let fileManager: FileManager
     private let debounceDelay: Duration
     private let readSnapshot: @Sendable (URL) async throws -> Data
     private let writeQueue: DispatchQueue
-    private let observerQueue = DispatchQueue(
-        label: "app.ggbond.MacTools.CloudPreferencesSyncCoordinator.observer",
-        qos: .utility
-    )
-
     private(set) var isEnabled: Bool
     private(set) var syncDirectoryURL: URL?
     private(set) var localDeviceID: String
@@ -32,22 +28,21 @@ final class CloudPreferencesSyncCoordinator {
     var statusHandler: ((CloudPreferencesSyncStatus) -> Void)?
     var directoryURLHandler: ((URL?) -> Void)?
     var failureHandler: ((Error) -> Void)?
-    // The host may finish loading dynamic plugins after this coordinator is configured.
     var isReadyToSync: () -> Bool = { true }
 
+    private var state = CloudPreferencesSyncState()
+    private var stateLoadError: Error?
     private var pendingExportTask: Task<Void, Never>?
     private var pendingCheckTask: Task<Void, Never>?
+    private var syncTask: Task<Void, Error>?
+    private var wantsExport = false
     private var isApplyingExternalSnapshot = false
-    private var hasPendingLocalChanges = false
-    private var mustRepublish = false
-    private var consumedManualDocumentIDs: Set<String> = []
+    private var isTerminating = false
     private var localRevision: UInt64 = 0
-    private var syncSession = UUID()
-    private var exportTask: Task<Void, Error>?
-    private var lastMeaningfulBackup: PreferencesBackup?
+    private var syncSession = CloudPreferencesSyncSession()
+    private var consumedManualDocumentIDs: Set<String>
     private var incomingSnapshotError: Error?
     private var directorySource: DispatchSourceFileSystemObject?
-    private var fileDescriptor: Int32 = -1
     private var filePresenter: SyncFolderPresenter?
 
     init(
@@ -55,12 +50,11 @@ final class CloudPreferencesSyncCoordinator {
         fileManager: FileManager = .default,
         debounceDelay: Duration = .seconds(2),
         writeQueue: DispatchQueue = DispatchQueue(
-            label: "app.ggbond.MacTools.CloudPreferencesSyncCoordinator.writer",
-            qos: .utility
+            label: "app.ggbond.MacTools.CloudPreferencesSyncCoordinator.writer", qos: .utility
         ),
         readSnapshot: @escaping @Sendable (URL) async throws -> Data = { url in
             try await Task.detached(priority: .utility) {
-                try Data(contentsOf: url)
+                try PreferencesBackup.readFile(at: url)
             }.value
         }
     ) {
@@ -69,143 +63,82 @@ final class CloudPreferencesSyncCoordinator {
         self.debounceDelay = debounceDelay
         self.writeQueue = writeQueue
         self.readSnapshot = readSnapshot
-
-        let savedDeviceID = userDefaults.string(forKey: Self.deviceIDUserDefaultsKey)
-        if let savedDeviceID, !savedDeviceID.isEmpty {
-            self.localDeviceID = savedDeviceID
-        } else {
-            let newID = UUID().uuidString
-            self.localDeviceID = newID
-            userDefaults.set(newID, forKey: Self.deviceIDUserDefaultsKey)
-        }
-
-        if let generationString = userDefaults.string(forKey: Self.generationUserDefaultsKey),
-           let generation = UInt64(generationString) {
-            self.currentGeneration = generation
-        } else {
-            let generation = UInt64(userDefaults.integer(forKey: Self.generationUserDefaultsKey))
-            self.currentGeneration = generation
-        }
-
-        let lastSyncedTimestamp = userDefaults.double(forKey: Self.lastSyncedAtUserDefaultsKey)
-        if lastSyncedTimestamp > 0 {
-            self.lastSyncedAt = Date(timeIntervalSince1970: lastSyncedTimestamp)
-        } else {
-            self.lastSyncedAt = nil
-        }
-
+        let savedID = userDefaults.string(forKey: Self.deviceIDUserDefaultsKey)
+        localDeviceID = savedID.flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString
+        userDefaults.set(localDeviceID, forKey: Self.deviceIDUserDefaultsKey)
+        currentGeneration = userDefaults.string(forKey: Self.generationUserDefaultsKey).flatMap(UInt64.init) ?? 0
+        let timestamp = userDefaults.double(forKey: Self.lastSyncedAtUserDefaultsKey)
+        lastSyncedAt = timestamp > 0 ? Date(timeIntervalSince1970: timestamp) : nil
         consumedManualDocumentIDs = Set(
             userDefaults.stringArray(forKey: Self.consumedManualDocumentIDsUserDefaultsKey) ?? []
         )
-
-        self.isEnabled = userDefaults.bool(forKey: Self.enabledUserDefaultsKey)
-
-        if let savedPath = userDefaults.string(forKey: Self.directoryPathUserDefaultsKey), !savedPath.isEmpty {
-            let expanded = NSString(string: savedPath).expandingTildeInPath
-            self.syncDirectoryURL = URL(fileURLWithPath: expanded, isDirectory: true)
-        } else {
-            self.syncDirectoryURL = nil
+        isEnabled = userDefaults.bool(forKey: Self.enabledUserDefaultsKey)
+        if let path = userDefaults.string(forKey: Self.directoryPathUserDefaultsKey), !path.isEmpty {
+            syncDirectoryURL = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath, isDirectory: true)
         }
-
+        loadState()
         updateStatus()
     }
 
     isolated deinit {
+        syncSession.cancel()
         stopObservingDirectory()
         pendingExportTask?.cancel()
         pendingCheckTask?.cancel()
+        syncTask?.cancel()
     }
 
     func start() {
-        guard isReadyToSync() else { return }
-        if isEnabled, syncDirectoryURL != nil {
-            startObservingDirectory()
-            Task { [weak self] in
-                await self?.checkForIncomingSnapshots()
-            }
-        }
+        guard isReadyToSync(), isEnabled, !isTerminating else { return }
+        startObservingDirectory()
+        scheduleExport(immediately: true)
     }
 
     func setEnabled(_ enabled: Bool) {
         guard isEnabled != enabled else { return }
-        syncSession = UUID()
+        invalidateSession()
         isEnabled = enabled
         userDefaults.set(enabled, forKey: Self.enabledUserDefaultsKey)
-
-        if enabled {
-            startObservingDirectory()
-            updateStatus()
-            reconcileIncomingThenScheduleExport()
-        } else {
-            stopObservingDirectory()
-            pendingExportTask?.cancel()
-            pendingExportTask = nil
-            pendingCheckTask?.cancel()
-            pendingCheckTask = nil
-            updateStatus()
-        }
+        if enabled { start() } else { stopObservingDirectory() }
+        updateStatus()
     }
 
     func setSyncDirectoryURL(_ url: URL?) {
         guard syncDirectoryURL != url else { return }
+        invalidateSession()
         stopObservingDirectory()
-
-        syncSession = UUID()
         syncDirectoryURL = url
         incomingSnapshotError = nil
-        if let url {
-            userDefaults.set(url.path, forKey: Self.directoryPathUserDefaultsKey)
-        } else {
-            userDefaults.removeObject(forKey: Self.directoryPathUserDefaultsKey)
-        }
+        currentGeneration = 0
+        lastSyncedAt = nil
+        userDefaults.set(url?.path, forKey: Self.directoryPathUserDefaultsKey)
+        loadState()
         directoryURLHandler?(url)
-
-        if isEnabled, url != nil {
-            startObservingDirectory()
-            updateStatus()
-            reconcileIncomingThenScheduleExport()
-        } else {
-            updateStatus()
-        }
+        start()
+        updateStatus()
     }
 
     func committedPreferencesDidChange() {
-        guard isReadyToSync() else { return }
-        guard isEnabled, !isApplyingExternalSnapshot, syncDirectoryURL != nil else { return }
+        guard isReadyToSync(), !isApplyingExternalSnapshot, !isTerminating,
+              syncDirectoryURL != nil else { return }
         localRevision &+= 1
-        hasPendingLocalChanges = true
-        scheduleExport()
+        do {
+            try captureLocalChanges(isCommit: true)
+            if isEnabled { scheduleExport() }
+            updateStatus()
+        } catch { handleError(error) }
     }
 
-    private func scheduleExport() {
-        pendingExportTask?.cancel()
-        pendingExportTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                if self.debounceDelay > .zero {
-                    try await Task.sleep(for: self.debounceDelay)
-                }
-                guard !Task.isCancelled else { return }
-                try await self.performExport()
-            } catch is CancellationError {
-                return
-            } catch {
-                self.handleError(error)
-            }
+    /// Quitting never writes to the shared folder. The next launch reconciles the
+    /// durable pending edit against its shared base before attempting publication.
+    func flushPendingExportBeforeTermination() {
+        guard isReadyToSync() else { return }
+        if !isApplyingExternalSnapshot {
+            do { try captureLocalChanges() } catch { handleError(error) }
         }
-    }
-
-    private func reconcileIncomingThenScheduleExport() {
-        let session = syncSession
-        Task { [weak self] in
-            guard let self else { return }
-            await self.checkForIncomingSnapshots()
-            guard self.isReadyToSync(), self.incomingSnapshotError == nil,
-                  self.isEnabled, self.syncDirectoryURL != nil, self.syncSession == session else {
-                return
-            }
-            self.scheduleExport()
-        }
+        isTerminating = true
+        invalidateSession()
+        stopObservingDirectory()
     }
 
     func syncNow() async throws {
@@ -213,423 +146,416 @@ final class CloudPreferencesSyncCoordinator {
         pendingExportTask = nil
         pendingCheckTask?.cancel()
         pendingCheckTask = nil
-
-        guard isEnabled else {
-            updateStatus()
-            return
+        do { try await synchronize(publish: true) }
+        catch {
+            handleError(error)
+            throw error
         }
-        guard syncDirectoryURL != nil else {
-            updateStatus()
-            return
-        }
-
-        await checkForIncomingSnapshots()
-        try await performExport()
     }
 
-    func flushPendingExportBeforeTermination() {
-        guard isReadyToSync(), incomingSnapshotError == nil else { return }
-        guard isEnabled, !isApplyingExternalSnapshot, let url = syncDirectoryURL else { return }
+    func checkForIncomingSnapshots() async {
+        do { try await synchronize(publish: false) }
+        catch is CancellationError { return }
+        catch { handleError(error) }
+    }
+
+    func resolveConflict(_ choice: CloudPreferencesConflictChoice) async throws {
+        guard isEnabled, isReadyToSync(), !isTerminating else { return }
+        // Serialize resolution with an observer or an in-flight write.
+        if let syncTask { try await syncTask.value }
+        guard let conflict = state.conflict, let directory = syncDirectoryURL else { return }
+        let session = syncSession
+        let observation = try await readSharedFolder(directory)
+        try session.checkCancellation()
+        try captureLocalChanges()
+        guard let shared = observation.snapshot else { throw CloudPreferencesSyncError.snapshotMissing }
+        guard sameDocument(shared, conflict.shared) else {
+            // The offered version changed while the choice was open. Retain the
+            // previous pair and ask again instead of choosing an unseen revision.
+            state.lastResolvedConflict = state.conflict
+            try recordConflict(shared)
+            return
+        }
+        state.lastResolvedConflict = state.conflict
+        switch choice {
+        case .shared:
+            try applyShared(shared)
+        case .local:
+            state.shared = shared
+            state.conflict = nil
+            state.pending = currentBackup()
+            state.needsPublication = true
+            currentGeneration = max(currentGeneration, shared.generation)
+            try persistState()
+        }
+        try await synchronize(publish: true)
+    }
+
+    private func scheduleExport(immediately: Bool = false) {
+        guard !isTerminating else { return }
+        pendingExportTask?.cancel()
+        pendingExportTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                if !immediately, self.debounceDelay > .zero { try await Task.sleep(for: self.debounceDelay) }
+                try Task.checkCancellation()
+                try await self.synchronize(publish: true)
+            } catch is CancellationError { return }
+            catch { self.handleError(error) }
+        }
+    }
+
+    private func invalidateSession() {
+        syncSession.cancel()
+        syncSession = CloudPreferencesSyncSession()
         pendingExportTask?.cancel()
         pendingExportTask = nil
-        // Invalidate suspended operations; the serial writer finishes any older write first.
-        syncSession = UUID()
-
-        guard let backup = snapshotProvider?() else { return }
-        let sanitized = Self.filterMachineSpecificPreferences(backup)
-        if !mustRepublish, exportTask == nil,
-           let last = lastMeaningfulBackup, last.hasSameMeaningfulContent(as: sanitized) {
-            return
-        }
-
-        do {
-            try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
-            currentGeneration &+= 1
-            userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
-
-            let now = Date.now
-            let snapshot = CloudPreferencesSnapshot(
-                version: CloudPreferencesSnapshot.currentVersion,
-                generation: currentGeneration,
-                timestamp: now,
-                deviceID: localDeviceID,
-                deviceName: Host.current().localizedName ?? "Mac",
-                backup: sanitized
-            )
-            let data = try snapshot.encodedJSON()
-            let destinationURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
-            try writeQueue.sync {
-                try data.write(to: destinationURL, options: .atomic)
-            }
-
-            lastSyncedAt = now
-            userDefaults.set(now.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
-            lastMeaningfulBackup = sanitized
-            hasPendingLocalChanges = false
-            mustRepublish = false
-        } catch {
-            handleError(error)
-        }
+        pendingCheckTask?.cancel()
+        pendingCheckTask = nil
+        wantsExport = false
     }
 
-    // MARK: - Export Logic
-
-    private func performExport() async throws {
-        guard isReadyToSync() else { return }
-        if let incomingSnapshotError { throw incomingSnapshotError }
-        // Debounce cancellation must not start a second writer while an atomic write is in flight.
-        if let exportTask {
-            try await exportTask.value
+    private func synchronize(publish: Bool) async throws {
+        guard isReadyToSync(), isEnabled, syncDirectoryURL != nil, !isTerminating else {
+            updateStatus()
             return
         }
-        guard snapshotProvider?() != nil else {
-            throw CocoaError(.fileNoSuchFile)
+        wantsExport = wantsExport || publish
+        if let syncTask {
+            try await syncTask.value
+            return
         }
         let task = Task { @MainActor in
-            defer { self.exportTask = nil }
-            while self.isEnabled, self.syncDirectoryURL != nil {
+            defer { self.syncTask = nil }
+            var retries = 0
+            repeat {
+                let shouldPublish = self.wantsExport
+                self.wantsExport = false
                 let session = self.syncSession
                 do {
-                    try await self.exportSnapshot()
-                } catch {
-                    guard session != self.syncSession else { throw error }
+                    try await self.synchronizeOnce(publish: shouldPublish)
+                } catch CloudPreferencesSyncError.sharedFileChanged {
+                    retries += 1
+                    guard retries < 3 else { throw CloudPreferencesSyncError.sharedFileChanged }
+                    self.wantsExport = true
+                } catch is CancellationError {
+                    guard session !== self.syncSession, self.isEnabled, !self.isTerminating else { return }
+                    self.wantsExport = true
                 }
-                guard self.hasPendingLocalChanges || session != self.syncSession else { return }
-            }
+            } while self.wantsExport && self.state.conflict == nil && self.isEnabled && !self.isTerminating
         }
-        exportTask = task
+        syncTask = task
         try await task.value
     }
 
-    private func exportSnapshot() async throws {
-        guard isReadyToSync() else { return }
-        if let incomingSnapshotError { throw incomingSnapshotError }
-        guard isEnabled, let url = syncDirectoryURL else {
-            updateStatus()
-            return
-        }
+    private func synchronizeOnce(publish: Bool) async throws {
+        if let stateLoadError { throw stateLoadError }
+        guard let directory = syncDirectoryURL else { return }
         let session = syncSession
-        updateStatus(to: .syncing)
-
-        try await Task.detached(priority: .utility) { [url] in
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        }.value
-        guard isEnabled, syncSession == session else { return }
-
-        // Capture after suspension so the write includes edits made while creating the folder.
-        guard let backup = snapshotProvider?() else {
-            throw CocoaError(.fileNoSuchFile)
+        try captureLocalChanges()
+        // A fresh observation replaces previous parsing and availability errors.
+        incomingSnapshotError = nil
+        let observation = try await readSharedFolder(directory)
+        try session.checkCancellation()
+        try captureLocalChanges()
+        if let snapshot = observation.snapshot {
+            try reconcile(snapshot)
+            // A legacy persisted generation may be newer than the only visible
+            // shared file. Seeing that stale file does not authorize an initial export.
+            if state.shared == nil, state.conflict == nil {
+                updateStatus()
+                return
+            }
+        } else if state.shared != nil || currentGeneration > 0 {
+            throw CloudPreferencesSyncError.snapshotMissing
         }
-        let revision = localRevision
-        let sanitized = Self.filterMachineSpecificPreferences(backup)
-        let destinationURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
-
-        if !mustRepublish, let last = lastMeaningfulBackup,
-           last.hasSameMeaningfulContent(as: sanitized),
-           fileManager.fileExists(atPath: destinationURL.path) {
-            hasPendingLocalChanges = false
+        guard state.conflict == nil else {
             updateStatus()
             return
         }
-
-        currentGeneration &+= 1
-        let generation = currentGeneration
-        userDefaults.set(String(generation), forKey: Self.generationUserDefaultsKey)
-
-        let now = Date.now
+        guard publish || state.needsPublication else {
+            updateStatus()
+            return
+        }
+        guard state.pending != nil || state.needsPublication || state.shared == nil else {
+            updateStatus()
+            return
+        }
+        updateStatus(to: .syncing)
+        try session.checkCancellation()
+        guard let backup = currentBackup() else { throw CocoaError(.fileReadUnknown) }
+        let revision = localRevision
+        guard currentGeneration < UInt64.max else { throw CocoaError(.fileWriteUnknown) }
         let snapshot = CloudPreferencesSnapshot(
-            version: CloudPreferencesSnapshot.currentVersion,
-            generation: generation,
-            timestamp: now,
+            generation: currentGeneration + 1,
             deviceID: localDeviceID,
             deviceName: Host.current().localizedName ?? "Mac",
-            backup: sanitized
+            parentDocumentID: state.shared?.documentID,
+            backup: backup
         )
         let data = try snapshot.encodedJSON()
-
+        let destination = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             writeQueue.async {
                 do {
-                    try data.write(to: destinationURL, options: .atomic)
+                    try Self.writeSnapshot(data, to: destination, replacing: observation.canonicalData, session: session)
                     continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
-                }
+                } catch { continuation.resume(throwing: error) }
             }
         }
-        guard isEnabled, syncSession == session else { return }
-
-        lastSyncedAt = now
-        userDefaults.set(now.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
-        lastMeaningfulBackup = sanitized
-        // An edit or remote conflict observed during the write needs another export.
-        if localRevision == revision, currentGeneration == generation {
-            hasPendingLocalChanges = false
-            mustRepublish = false
-        }
-        updateStatus(to: .synced(lastSyncedAt: lastSyncedAt))
+        try session.checkCancellation()
+        // Compare subsequent reads with the representation actually written,
+        // including the archive's legacy date encoding inside backup records.
+        state.shared = try CloudPreferencesSnapshot.decodeJSON(data)
+        state.localBaseline = backup
+        state.pending = nil
+        state.needsPublication = false
+        currentGeneration = snapshot.generation
+        lastSyncedAt = snapshot.timestamp
+        try captureLocalChanges()
+        try persistState()
+        // Edits committed while the disk write was suspended need a new read first.
+        if localRevision != revision, state.pending != nil { wantsExport = true }
+        updateStatus()
     }
 
-    // MARK: - Incoming Snapshot Check
-
-    func checkForIncomingSnapshots() async {
-        guard isReadyToSync() else { return }
-        guard isEnabled, let url = syncDirectoryURL else {
-            updateStatus()
+    private func reconcile(_ snapshot: CloudPreferencesSnapshot) throws {
+        let incoming = Self.filterMachineSpecificPreferences(snapshot.backup)
+        if state.conflict != nil {
+            // Leave the saved pair intact until an explicit choice; resolution
+            // re-reads the file to avoid applying an unseen shared revision.
             return
         }
-
-        let session = syncSession
-        let revision = localRevision
-        let hadPendingLocalChanges = hasPendingLocalChanges || exportTask != nil
-        guard let fileURL = newestCompatibleSnapshotURL(in: url) else {
-            updateStatus()
-            return
-        }
-
-        do {
-            var data = try await readSnapshot(fileURL)
-            guard !Task.isCancelled, isEnabled, syncSession == session else { return }
-
-            var snapshot = try CloudPreferencesSnapshot.decodeCompatibleJSON(data)
-
-            if !snapshot.isCloudSnapshot,
-               consumedManualDocumentIDs.contains(snapshot.documentID) {
-                let canonicalURL = url.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
-                guard canonicalURL != fileURL,
-                      fileManager.fileExists(atPath: canonicalURL.path) else {
-                    updateStatus()
-                    return
-                }
-                data = try await readSnapshot(canonicalURL)
-                guard !Task.isCancelled, isEnabled, syncSession == session else { return }
-                snapshot = try CloudPreferencesSnapshot.decodeCompatibleJSON(data)
-            }
-
-            if !snapshot.isCloudSnapshot {
-                guard !consumedManualDocumentIDs.contains(snapshot.documentID) else {
-                    updateStatus()
-                    return
-                }
-
-                updateStatus(to: .syncing)
-                let sanitized = Self.filterMachineSpecificPreferences(snapshot.backup)
-                isApplyingExternalSnapshot = true
-                defer { isApplyingExternalSnapshot = false }
-                try importHandler?(sanitized)
-
-                incomingSnapshotError = nil
-                consumedManualDocumentIDs.insert(snapshot.documentID)
-                userDefaults.set(
-                    Array(consumedManualDocumentIDs.suffix(32)),
-                    forKey: Self.consumedManualDocumentIDsUserDefaultsKey
-                )
-                lastSyncedAt = snapshot.timestamp
-                userDefaults.set(snapshot.timestamp.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
-                lastMeaningfulBackup = sanitized
-                hasPendingLocalChanges = true
-                mustRepublish = true
-                scheduleExport()
-                return
-            }
-
-            if snapshot.deviceID == localDeviceID {
-                incomingSnapshotError = nil
-                if snapshot.generation > currentGeneration {
-                    currentGeneration = snapshot.generation
-                    userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
-                }
-                updateStatus()
-                return
-            }
-
-            let isNewer = snapshot.generation > currentGeneration
-                || (snapshot.generation == currentGeneration && snapshot.timestamp > (lastSyncedAt ?? .distantPast))
-
-            if isNewer {
-                // Local commits are already durable preferences even before debounce exports them.
-                // Keep them and publish above the observed generation instead of importing a conflict.
-                if hadPendingLocalChanges || localRevision != revision
-                    || hasPendingLocalChanges || exportTask != nil {
-                    incomingSnapshotError = nil
-                    currentGeneration = max(currentGeneration, snapshot.generation)
-                    userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
-                    hasPendingLocalChanges = true
-                    mustRepublish = true
-                    scheduleExport()
-                    return
-                }
-                updateStatus(to: .syncing)
-                let sanitized = Self.filterMachineSpecificPreferences(snapshot.backup)
-                isApplyingExternalSnapshot = true
-                defer { isApplyingExternalSnapshot = false }
-
-                try importHandler?(sanitized)
-
-                incomingSnapshotError = nil
+        if let base = state.shared {
+            if sameDocument(snapshot, base) { return }
+            let isSibling = snapshot.isCloudSnapshot && base.isCloudSnapshot
+                && snapshot.deviceID != base.deviceID
+                && (snapshot.generation == base.generation
+                    || (snapshot.syncMetadata?.parentDocumentID != nil
+                        && snapshot.syncMetadata?.parentDocumentID == base.syncMetadata?.parentDocumentID))
+            if Self.filterMachineSpecificPreferences(base.backup).hasSameMeaningfulContent(as: incoming) {
+                state.shared = snapshot
                 currentGeneration = max(currentGeneration, snapshot.generation)
-                userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
-                lastSyncedAt = snapshot.timestamp
-                userDefaults.set(snapshot.timestamp.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
-                lastMeaningfulBackup = sanitized
-
-                updateStatus(to: .synced(lastSyncedAt: lastSyncedAt))
-            } else {
-                incomingSnapshotError = nil
-                updateStatus()
-            }
-        } catch {
-            guard !Task.isCancelled, isEnabled, syncSession == session else { return }
-            incomingSnapshotError = error
-            handleError(error)
-        }
-    }
-
-    private func scheduleIncomingSnapshotCheck() {
-        guard isEnabled, syncDirectoryURL != nil else { return }
-        pendingCheckTask?.cancel()
-        pendingCheckTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await Task.sleep(for: .milliseconds(500))
-                guard !Task.isCancelled else { return }
-                await self.checkForIncomingSnapshots()
-            } catch {
+                try persistState()
                 return
             }
+            if let current = currentBackup(), current.hasSameMeaningfulContent(as: incoming) {
+                try accept(snapshot)
+            } else if state.pending != nil || state.needsPublication || isSibling
+                || (snapshot.isCloudSnapshot && snapshot.generation < base.generation) {
+                // An offline Mac can publish from an older base. A smaller
+                // generation does not prove that its different content is stale.
+                try recordConflict(snapshot)
+            } else {
+                try applyShared(snapshot)
+            }
+        } else if snapshot.isCloudSnapshot, snapshot.generation < currentGeneration {
+            // Legacy clients persisted only a counter, so ancestry is unknown.
+            try recordConflict(snapshot)
+        } else if state.pending != nil {
+            if currentBackup()?.hasSameMeaningfulContent(as: incoming) == true {
+                try accept(snapshot)
+            } else { try recordConflict(snapshot) }
+        } else if snapshot.deviceID == localDeviceID {
+            // An echo after relaunch establishes the baseline without restoring it.
+            try accept(snapshot)
+        } else {
+            try applyShared(snapshot)
         }
     }
 
-    private func newestCompatibleSnapshotURL(in directoryURL: URL) -> URL? {
-        let keys: Set<URLResourceKey> = [
-            .addedToDirectoryDateKey,
-            .contentModificationDateKey,
-            .isRegularFileKey,
-        ]
-        guard let urls = try? fileManager.contentsOfDirectory(
-            at: directoryURL,
-            includingPropertiesForKeys: Array(keys),
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        return urls.compactMap { url -> (url: URL, date: Date, canonical: Bool)? in
-            let isCanonical = url.lastPathComponent == CloudPreferencesSnapshot.defaultFileName
-            let isManualExport = url.lastPathComponent.hasPrefix("MacTools Preferences ")
-                && url.pathExtension.lowercased() == "json"
-            guard isCanonical || isManualExport,
-                  let values = try? url.resourceValues(forKeys: keys),
-                  values.isRegularFile == true else {
-                return nil
-            }
-            return (
-                url,
-                values.addedToDirectoryDate ?? values.contentModificationDate ?? .distantPast,
-                isCanonical
-            )
-        }
-        .max { lhs, rhs in
-            if lhs.date == rhs.date {
-                return !lhs.canonical && rhs.canonical
-            }
-            return lhs.date < rhs.date
-        }?
-        .url
+    private func applyShared(_ snapshot: CloudPreferencesSnapshot) throws {
+        isApplyingExternalSnapshot = true
+        defer { isApplyingExternalSnapshot = false }
+        try importHandler?(Self.filterMachineSpecificPreferences(snapshot.backup))
+        try accept(snapshot)
     }
 
-    // MARK: - Directory Observation
+    private func accept(_ snapshot: CloudPreferencesSnapshot) throws {
+        state.shared = snapshot
+        state.localBaseline = currentBackup() ?? Self.filterMachineSpecificPreferences(snapshot.backup)
+        state.pending = nil
+        state.conflict = nil
+        state.needsPublication = !snapshot.isCloudSnapshot
+        currentGeneration = max(currentGeneration, snapshot.generation)
+        lastSyncedAt = snapshot.timestamp
+        if !snapshot.isCloudSnapshot {
+            consumedManualDocumentIDs.insert(snapshot.documentID)
+            userDefaults.set(Array(consumedManualDocumentIDs.sorted().suffix(32)),
+                             forKey: Self.consumedManualDocumentIDsUserDefaultsKey)
+        }
+        try persistState()
+    }
+
+    private func recordConflict(_ snapshot: CloudPreferencesSnapshot) throws {
+        guard let local = currentBackup() else { throw CocoaError(.fileReadUnknown) }
+        state.conflict = CloudPreferencesConflict(local: local, shared: snapshot)
+        state.pending = local
+        try persistState()
+        updateStatus()
+    }
+
+    private func sameDocument(_ lhs: CloudPreferencesSnapshot, _ rhs: CloudPreferencesSnapshot) -> Bool {
+        lhs.documentID == rhs.documentID && lhs.backup.hasSameMeaningfulContent(as: rhs.backup)
+    }
+
+    private func currentBackup() -> PreferencesBackup? {
+        snapshotProvider?().map(Self.filterMachineSpecificPreferences)
+    }
+
+    private func captureLocalChanges(isCommit: Bool = false) throws {
+        if let stateLoadError { throw stateLoadError }
+        guard let current = currentBackup(), syncDirectoryURL != nil else { return }
+        if let baseline = state.localBaseline {
+            state.pending = baseline.hasSameMeaningfulContent(as: current) ? nil : current
+        } else if isCommit || state.pending != nil {
+            state.pending = current
+        } else { state.localBaseline = current }
+        if state.conflict != nil { state.conflict?.local = current }
+        try persistState()
+    }
+
+    private func loadState() {
+        state = CloudPreferencesSyncState()
+        stateLoadError = nil
+        guard let path = syncDirectoryURL?.path,
+              let states = userDefaults.dictionary(forKey: Self.stateUserDefaultsKey),
+              let data = states[path] as? Data else { return }
+        do {
+            state = try JSONDecoder().decode(CloudPreferencesSyncState.self, from: data)
+            currentGeneration = state.shared?.generation ?? 0
+            lastSyncedAt = state.shared?.timestamp
+        } catch { stateLoadError = error }
+    }
+
+    private func persistState() throws {
+        guard let path = syncDirectoryURL?.path else { return }
+        var states = userDefaults.dictionary(forKey: Self.stateUserDefaultsKey) ?? [:]
+        states[path] = try JSONEncoder().encode(state)
+        userDefaults.set(states, forKey: Self.stateUserDefaultsKey)
+        userDefaults.set(String(currentGeneration), forKey: Self.generationUserDefaultsKey)
+        userDefaults.set(lastSyncedAt?.timeIntervalSince1970, forKey: Self.lastSyncedAtUserDefaultsKey)
+    }
+
+    private struct FolderObservation {
+        let snapshot: CloudPreferencesSnapshot?
+        let canonicalData: Data?
+    }
+
+    private func readSharedFolder(_ directory: URL) async throws -> FolderObservation {
+        // Listing errors must not be interpreted as an empty folder. We never
+        // recreate an unavailable provider folder as a side effect of retrying.
+        let keys: Set<URLResourceKey> = [.addedToDirectoryDateKey, .contentModificationDateKey, .isRegularFileKey]
+        let urls = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles])
+        let candidates = try urls.compactMap { url -> (URL, Date, Bool)? in
+            let canonical = url.lastPathComponent == CloudPreferencesSnapshot.defaultFileName
+            let manual = url.lastPathComponent.hasPrefix("MacTools Preferences ") && url.pathExtension.lowercased() == "json"
+            guard canonical || manual else { return nil }
+            let values = try url.resourceValues(forKeys: keys)
+            guard values.isRegularFile == true else { throw CocoaError(.fileReadUnknown) }
+            return (url, values.addedToDirectoryDate ?? values.contentModificationDate ?? .distantPast, canonical)
+        }.sorted {
+            $0.1 == $1.1 ? $0.2 && !$1.2 : $0.1 > $1.1
+        }
+        let canonicalURL = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        let canonicalData = candidates.contains(where: { $0.2 }) ? try await readSnapshot(canonicalURL) : nil
+        for candidate in candidates {
+            let data: Data
+            if candidate.2, let canonicalData { data = canonicalData }
+            else { data = try await readSnapshot(candidate.0) }
+            let snapshot = try CloudPreferencesSnapshot.decodeCompatibleJSON(data)
+            if !snapshot.isCloudSnapshot, consumedManualDocumentIDs.contains(snapshot.documentID),
+               snapshot.documentID != state.shared?.documentID { continue }
+            if !snapshot.isCloudSnapshot, consumedManualDocumentIDs.contains(snapshot.documentID),
+               canonicalData != nil, !candidate.2 { continue }
+            return FolderObservation(snapshot: snapshot, canonicalData: canonicalData)
+        }
+        return FolderObservation(snapshot: nil, canonicalData: canonicalData)
+    }
+
+    nonisolated private static func writeSnapshot(
+        _ data: Data, to url: URL, replacing expected: Data?, session: CloudPreferencesSyncSession
+    ) throws {
+        try session.checkCancellation()
+        let coordinator = NSFileCoordinator()
+        var coordinationError: NSError?
+        var writeError: Error?
+        coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &coordinationError) { coordinatedURL in
+            do {
+                try session.checkCancellation()
+                let current: Data?
+                do { current = try PreferencesBackup.readFile(at: coordinatedURL) }
+                catch CocoaError.fileReadNoSuchFile { current = nil }
+                catch CocoaError.fileNoSuchFile { current = nil }
+                guard current == expected else { throw CloudPreferencesSyncError.sharedFileChanged }
+                try session.checkCancellation()
+                try data.write(to: coordinatedURL, options: .atomic)
+            } catch { writeError = error }
+        }
+        if let coordinationError { throw coordinationError }
+        if let writeError { throw writeError }
+    }
 
     private func startObservingDirectory() {
         stopObservingDirectory()
         guard let url = syncDirectoryURL else { return }
-
-        var isDir: ObjCBool = false
-        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
-            return
-        }
-
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else { return }
-        self.fileDescriptor = fd
-
         let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd,
-            eventMask: [.write, .extend, .rename, .attrib],
-            queue: .main
+            fileDescriptor: fd, eventMask: [.write, .extend, .rename, .attrib, .delete], queue: .main
         )
-        source.setEventHandler { [weak self] in
-            self?.scheduleIncomingSnapshotCheck()
-        }
-        source.setCancelHandler {
-            close(fd)
-        }
+        source.setEventHandler { [weak self] in self?.scheduleIncomingSnapshotCheck() }
+        source.setCancelHandler { close(fd) }
         source.resume()
-        self.directorySource = source
-
+        directorySource = source
         let presenter = SyncFolderPresenter(url: url) { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.scheduleIncomingSnapshotCheck()
-            }
+            Task { @MainActor [weak self] in self?.scheduleIncomingSnapshotCheck() }
         }
         NSFileCoordinator.addFilePresenter(presenter)
-        self.filePresenter = presenter
+        filePresenter = presenter
     }
 
     private func stopObservingDirectory() {
-        if let presenter = filePresenter {
-            NSFileCoordinator.removeFilePresenter(presenter)
-            filePresenter = nil
-        }
-        if let source = directorySource {
-            source.cancel()
-            directorySource = nil
-            fileDescriptor = -1
-        } else if fileDescriptor >= 0 {
-            close(fileDescriptor)
-            fileDescriptor = -1
+        if let filePresenter { NSFileCoordinator.removeFilePresenter(filePresenter) }
+        filePresenter = nil
+        directorySource?.cancel()
+        directorySource = nil
+    }
+
+    private func scheduleIncomingSnapshotCheck() {
+        guard isEnabled, !isTerminating else { return }
+        pendingCheckTask?.cancel()
+        pendingCheckTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+                await self?.checkForIncomingSnapshots()
+            } catch { return }
         }
     }
 
-    // MARK: - Status Management
-
-    private func updateStatus(to explicitStatus: CloudPreferencesSyncStatus? = nil) {
-        if let explicitStatus {
-            status = explicitStatus
-            statusHandler?(status)
-            return
-        }
-
-        guard isEnabled else {
-            status = .offline(reason: .disabled)
-            statusHandler?(status)
-            return
-        }
-
-        guard let url = syncDirectoryURL else {
-            status = .offline(reason: .folderNotConfigured)
-            statusHandler?(status)
-            return
-        }
-
-        var isDir: ObjCBool = false
-        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
+    private func updateStatus(to explicit: CloudPreferencesSyncStatus? = nil) {
+        defer { statusHandler?(status) }
+        if let explicit { status = explicit; return }
+        guard isEnabled else { status = .offline(reason: .disabled); return }
+        guard let directory = syncDirectoryURL else { status = .offline(reason: .folderNotConfigured); return }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             status = .offline(reason: .folderNotFound)
-            statusHandler?(status)
             return
         }
-
-        if let incomingSnapshotError {
-            status = .error(message: incomingSnapshotError.localizedDescription)
-        } else {
-            status = .synced(lastSyncedAt: lastSyncedAt)
-        }
-        statusHandler?(status)
+        if let error = stateLoadError ?? incomingSnapshotError {
+            if error as? CloudPreferencesSyncError == .snapshotMissing { status = .offline(reason: .snapshotMissing) }
+            else { status = .error(message: error.localizedDescription) }
+        } else if let conflict = state.conflict {
+            status = .conflict(deviceName: conflict.shared.deviceName)
+        } else if state.pending != nil || state.needsPublication {
+            status = .pending
+        } else { status = .synced(lastSyncedAt: lastSyncedAt) }
     }
 
     private func handleError(_ error: Error) {
-        status = .error(message: error.localizedDescription)
-        statusHandler?(status)
+        incomingSnapshotError = error
+        updateStatus()
         failureHandler?(error)
     }
 
@@ -730,6 +656,41 @@ final class CloudPreferencesSyncCoordinator {
         }
 
         return false
+    }
+
+    static func preservingMachineSpecificPluginPreferences(incoming: Data, local: Data, pluginID: String) -> Data {
+        guard let localValue = try? JSONSerialization.jsonObject(with: local),
+              let incomingValue = try? JSONSerialization.jsonObject(with: incoming),
+              let filteredData = sanitizePluginPreferenceData(pluginID: pluginID, data: local),
+              let filteredValue = try? JSONSerialization.jsonObject(with: filteredData) else { return incoming }
+        func merge(_ local: Any, _ filtered: Any, _ incoming: Any) -> Any {
+            guard (local as? NSObject)?.isEqual(filtered) != true else { return incoming }
+            if let local = local as? [String: Any], let filtered = filtered as? [String: Any],
+               var incoming = incoming as? [String: Any] {
+                for (key, value) in local {
+                    if let portable = filtered[key] {
+                        if let replacement = incoming[key] { incoming[key] = merge(value, portable, replacement) }
+                        else if (value as? NSObject)?.isEqual(portable) != true { incoming[key] = value }
+                    } else { incoming[key] = value }
+                }
+                return incoming
+            }
+            // Array entries may contain hardware identities. Preserve the local
+            // collection rather than matching devices by an unstable array index.
+            return local
+        }
+        var merged = merge(localValue, filteredValue, incomingValue)
+        if pluginID == "fan-control", let local = localValue as? [String: Any],
+           var values = merged as? [String: Any], let activeID = local["activePresetID"] as? String,
+           let presets = local["customPresets"] as? [[String: Any]],
+           let activePreset = presets.first(where: { $0["id"] as? String == activeID }) {
+            var incomingPresets = values["customPresets"] as? [[String: Any]] ?? []
+            incomingPresets.removeAll { $0["id"] as? String == activeID }
+            incomingPresets.append(activePreset)
+            values["customPresets"] = incomingPresets
+            merged = values
+        }
+        return (try? JSONSerialization.data(withJSONObject: merged, options: [.sortedKeys])) ?? incoming
     }
 
     private static func sanitizePluginPreferenceData(pluginID: String, data: Data) -> Data? {

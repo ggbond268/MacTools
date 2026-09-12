@@ -15,6 +15,7 @@ struct PreferencesArchiveDocument: Codable, Equatable, Sendable {
         let generation: UInt64
         let deviceID: String
         let deviceName: String
+        var parentDocumentID: String? = nil
     }
 
     let version: Int
@@ -51,6 +52,7 @@ struct PreferencesArchiveDocument: Codable, Equatable, Sendable {
         timestamp: Date = .now,
         deviceID: String,
         deviceName: String,
+        parentDocumentID: String? = nil,
         backup: PreferencesBackup
     ) {
         self.init(
@@ -60,7 +62,8 @@ struct PreferencesArchiveDocument: Codable, Equatable, Sendable {
             syncMetadata: SyncMetadata(
                 generation: generation,
                 deviceID: deviceID,
-                deviceName: deviceName
+                deviceName: deviceName,
+                parentDocumentID: parentDocumentID
             ),
             backup: backup
         )
@@ -71,6 +74,7 @@ struct PreferencesArchiveDocument: Codable, Equatable, Sendable {
         case scope
         case documentID
         case timestamp
+        case timestampEpochSeconds
         case syncMetadata
         case backup
 
@@ -83,7 +87,18 @@ struct PreferencesArchiveDocument: Codable, Equatable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decode(Int.self, forKey: .version)
-        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        // Keep the legacy ISO 8601 field readable by older clients, while retaining
+        // the exact timestamp used locally for equal-generation comparisons.
+        if let seconds = try container.decodeIfPresent(Double.self, forKey: .timestampEpochSeconds) {
+            guard seconds.isFinite else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .timestampEpochSeconds, in: container, debugDescription: "Invalid timestamp."
+                )
+            }
+            timestamp = Date(timeIntervalSince1970: seconds)
+        } else {
+            timestamp = try container.decode(Date.self, forKey: .timestamp)
+        }
         backup = try container.decode(PreferencesBackup.self, forKey: .backup)
         scope = try container.decodeIfPresent(PreferencesArchiveScope.self, forKey: .scope) ?? .portable
         documentID = try container.decodeIfPresent(String.self, forKey: .documentID)
@@ -110,6 +125,7 @@ struct PreferencesArchiveDocument: Codable, Equatable, Sendable {
         try container.encode(scope, forKey: .scope)
         try container.encode(documentID, forKey: .documentID)
         try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(timestamp.timeIntervalSince1970, forKey: .timestampEpochSeconds)
         try container.encodeIfPresent(syncMetadata, forKey: .syncMetadata)
         try container.encode(backup, forKey: .backup)
     }
