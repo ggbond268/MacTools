@@ -294,8 +294,6 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
     }
 
     private static func chooseFolder(_ current: URL, environment: ScreenshotEnvironment) -> URL? {
-        PluginPresentationSafety.prepareForWindowOrdering()
-        NSApp.activate(ignoringOtherApps: true)
         let panel = NSOpenPanel()
         environment.savePanel = panel
         defer { if environment.savePanel === panel { environment.savePanel = nil } }
@@ -304,6 +302,8 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = current
+        PluginPresentationSafety.prepareForWindowOrdering()
+        NSApp.activate(ignoringOtherApps: true)
         return panel.runModal() == .OK ? panel.url : nil
     }
 }

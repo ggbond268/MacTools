@@ -269,6 +269,16 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
     }
 
     static func decodeJSON(_ data: Data) throws -> PreferencesBackup {
+        do {
+            return try PreferencesArchiveDocument.decodeJSON(data).backup
+        } catch let validationError as PreferencesBackupError {
+            throw validationError
+        } catch {
+            return try decodePayloadJSON(data)
+        }
+    }
+
+    static func decodePayloadJSON(_ data: Data) throws -> PreferencesBackup {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let backup = try decoder.decode(PreferencesBackup.self, from: data)
@@ -286,7 +296,7 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
         }.value
     }
 
-    private static func readFile(at url: URL, maximumSize: Int) throws -> Data {
+    static func readFile(at url: URL, maximumSize: Int = maximumFileSize) throws -> Data {
         precondition(maximumSize > 0)
 
         let file = try FileHandle(forReadingFrom: url)
