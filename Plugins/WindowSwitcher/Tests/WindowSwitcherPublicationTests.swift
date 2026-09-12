@@ -25,7 +25,91 @@ final class WindowSwitcherPublicationTests: XCTestCase {
         let ax = window("A", title: "Live AX", number: 13)
         let axRecord = WindowSwitcherWindowRecord(windowNumber: 13, processIdentifier: 42, title: "Live AX", isOnScreen: false, bounds: bounds, hasSpace: false)
         let merged = WindowSwitcherAppCatalog.mergeAllSpacesEntries([application(), ax], records: [hidden, otherSpace, unknown, axRecord], confirmedAXWindowNumbers: [10])
-        XCTAssertEqual(Set(merged.compactMap(\.windowNumber)), [11, 12, 13])
+        XCTAssertEqual(Set(merged.compactMap(\.windowNumber)), [11, 13])
+    }
+
+    func testWindowlessApplicationsNeverBecomeSelectableRows() {
+        var state = WindowSwitcherPublishedWindows()
+        let metadata: [pid_t: [WindowSwitcherAppEntry]] = [42: [application(confirmedWindowless: true)]]
+        state.update(snapshots: metadata, records: [], recordsAreFresh: true)
+        XCTAssertTrue(state.entries.isEmpty)
+        // Metadata still permits discovery of real windows on another Space.
+        let otherSpace = WindowSwitcherWindowRecord(windowNumber: 8, processIdentifier: 42,
+            title: "Finder folder", isOnScreen: false, bounds: bounds, hasSpace: true)
+        state.update(snapshots: metadata, records: [otherSpace], recordsAreFresh: true)
+        XCTAssertEqual(state.entries.map(\.windowNumber), [8])
+        state.update(snapshots: metadata, records: [], recordsAreFresh: true)
+        XCTAssertTrue(state.entries.isEmpty)
+    }
+
+    func testHostWindowsBypassCGFallbackAndKeepRecencyAcrossRefresh() {
+        var state = WindowSwitcherPublishedWindows()
+        let host = WindowSwitcherAppEntry(id: "host", processIdentifier: 100,
+            bundleIdentifier: "MacTools", appName: "MacTools", windowTitle: "Settings",
+            icon: nil, windowElement: nil, isMinimized: false, windowNumber: 22, shortcutToken: nil)
+        state.update(snapshots: [:], records: [], recordsAreFresh: false, localEntries: [host])
+        state.recency.record(host.id)
+        state.update(snapshots: [:], records: [], recordsAreFresh: true, localEntries: [host])
+        XCTAssertEqual(state.entries.map(\.id), [host.id])
+        XCTAssertFalse(state.entries[0].metadataUnavailable)
+        XCTAssertEqual(state.recency.focusedID, host.id)
+        state.update(snapshots: [:], records: [], recordsAreFresh: true)
+        XCTAssertTrue(state.entries.isEmpty)
+        XCTAssertNil(state.recency.focusedID)
+    }
+
+    func testConfirmedWindowlessAppsRejectLeftoverVisibleSurfacesWithoutNameExceptions() {
+        for bundle in ["com.google.Chrome", "com.apple.finder", "org.example.application"] {
+            var state = WindowSwitcherPublishedWindows()
+            let emptyApp = WindowSwitcherAppEntry(id: "app", processIdentifier: 42,
+                bundleIdentifier: bundle, appName: "Fixture", windowTitle: nil, icon: nil,
+                windowElement: nil, isMinimized: false, shortcutToken: nil)
+            state.update(snapshots: [42: [emptyApp]], records: [record(9, "Leftover surface")], recordsAreFresh: true)
+            XCTAssertTrue(state.entries.isEmpty, bundle)
+        }
+    }
+
+    func testClosingLastAXWindowCannotResurrectItFromAVisibleCompositorSurface() {
+        var state = WindowSwitcherPublishedWindows()
+        let records = [record(1, "Document")]
+        state.update(snapshots: [42: [window("A", title: "Document", number: 1)]], records: records, recordsAreFresh: true)
+        let selected = state.entries[0].id
+        state.recency.record(selected)
+        // An empty AX list may also mean a Space transition. A failed CG read
+        // must preserve the known row until fresh visibility evidence arrives.
+        state.update(snapshots: [42: [application(confirmedWindowless: true)]], records: records, recordsAreFresh: false)
+        XCTAssertEqual(state.entries.map(\.id), [selected])
+        XCTAssertTrue(state.entries[0].metadataUnavailable)
+        state.update(snapshots: [42: [application(confirmedWindowless: true)]], records: records, recordsAreFresh: true)
+        XCTAssertTrue(state.entries.isEmpty)
+        XCTAssertNil(state.recency.focusedID)
+    }
+
+    func testNamedBackgroundSurfaceNeedsPositiveSpaceEvidence() {
+        var state = WindowSwitcherPublishedWindows()
+        let unknown = WindowSwitcherWindowRecord(windowNumber: 5, processIdentifier: 42,
+            title: "Background helper", isOnScreen: false, bounds: bounds)
+        state.update(snapshots: [42: [application()]], records: [unknown], recordsAreFresh: true)
+        XCTAssertTrue(state.entries.isEmpty)
+        var onSpace = unknown; onSpace.hasSpace = true
+        state.update(snapshots: [42: [application(confirmedWindowless: true)]], records: [onSpace], recordsAreFresh: true)
+        XCTAssertEqual(state.entries.map(\.windowNumber), [5])
+        var removed = unknown; removed.hasSpace = false
+        state.update(snapshots: [42: [application(confirmedWindowless: true)]], records: [removed], recordsAreFresh: true)
+        XCTAssertTrue(state.entries.isEmpty)
+    }
+
+    func testIncompleteAXSnapshotPreservesKnownMinimizedAndUnavailableWindows() {
+        var state = WindowSwitcherPublishedWindows()
+        let minimized = WindowSwitcherAppEntry(id: "minimized", processIdentifier: 42,
+            bundleIdentifier: "fixture", appName: "Fixture", windowTitle: "", icon: nil,
+            windowElement: AXUIElementCreateApplication(900003), isMinimized: true, shortcutToken: nil)
+        state.update(snapshots: [42: [minimized]], records: [], recordsAreFresh: true)
+        XCTAssertEqual(state.entries.map(\.id), ["minimized"])
+        var unreadable = minimized; unreadable.metadataUnavailable = true
+        state.update(snapshots: [42: [unreadable]], records: [], recordsAreFresh: false)
+        XCTAssertEqual(state.entries.map(\.id), ["minimized"])
+        XCTAssertTrue(state.entries[0].metadataUnavailable)
     }
 
     private let bounds = CGRect(x: 0, y: 30, width: 1000, height: 800)
@@ -34,9 +118,10 @@ final class WindowSwitcherPublicationTests: XCTestCase {
             icon: nil, windowElement: AXUIElementCreateApplication(id == "A" ? 900001 : 900002), isMinimized: false,
             windowNumber: number, applicationLaunchDate: Date(timeIntervalSince1970: 100), shortcutToken: nil, bounds: bounds)
     }
-    private func application() -> WindowSwitcherAppEntry {
+    private func application(confirmedWindowless: Bool = false) -> WindowSwitcherAppEntry {
         WindowSwitcherAppEntry(id: "app", processIdentifier: 42, bundleIdentifier: "fixture", appName: "Fixture", windowTitle: nil,
-            icon: nil, windowElement: nil, isMinimized: false, applicationLaunchDate: Date(timeIntervalSince1970: 100), shortcutToken: nil)
+            icon: nil, windowElement: nil, isMinimized: false, applicationLaunchDate: Date(timeIntervalSince1970: 100), shortcutToken: nil,
+            metadataUnavailable: !confirmedWindowless)
     }
     private func record(_ number: CGWindowID, _ title: String) -> WindowSwitcherWindowRecord {
         WindowSwitcherWindowRecord(windowNumber: number, processIdentifier: 42, title: title, isOnScreen: true, bounds: bounds)

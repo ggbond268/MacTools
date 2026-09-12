@@ -18,7 +18,7 @@ struct WindowSwitcherPublishedWindows {
     }
 
     mutating func update(snapshots: [pid_t: [WindowSwitcherAppEntry]], records: [WindowSwitcherWindowRecord],
-                         recordsAreFresh: Bool,
+                         recordsAreFresh: Bool, localEntries: [WindowSwitcherAppEntry] = [],
                          displayContext: (CGRect) -> (id: UInt32, name: String)? = { _ in nil }) {
         for pid in Set(knownWindowIDs.keys).union(axAliases.keys) where snapshots[pid] == nil {
             removeProcess(pid)
@@ -53,11 +53,12 @@ struct WindowSwitcherPublishedWindows {
             let processRecords = records.filter { $0.processIdentifier == pid }
             let merged = WindowSwitcherAppCatalog.mergeAllSpacesEntries(normalized, records: processRecords,
                 knownWindowIDs: knownWindowIDs[pid] ?? [:],
-                confirmedAXWindowNumbers: confirmedAXWindowNumbers[pid] ?? [])
+                confirmedAXWindowNumbers: confirmedAXWindowNumbers[pid] ?? [],
+                hasConfirmedEmptyAXSnapshot: recordsAreFresh && raw.contains { !$0.isWindowEntry && !$0.metadataUnavailable })
             var nextAliases: [String: String] = [:]
             var seenIDs = Set<String>()
             for var entry in merged {
-                guard seenIDs.insert(entry.id).inserted else { continue }
+                guard entry.isWindowEntry, seenIDs.insert(entry.id).inserted else { continue }
                 // Register CG-only rows too, before later AX discovery can give
                 // the same window a different public identity.
                 if let number = entry.windowNumber { knownWindowIDs[pid, default: [:]][number] = entry.id }
@@ -80,7 +81,7 @@ struct WindowSwitcherPublishedWindows {
                 confirmedAXWindowNumbers[pid]?.formIntersection(liveNumbers)
             }
         }
-        entries = published
+        entries = published + localEntries
         recency.retain(Set(entries.map(\.id)))
     }
 }

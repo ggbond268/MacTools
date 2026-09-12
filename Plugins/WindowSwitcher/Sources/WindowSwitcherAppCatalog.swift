@@ -238,7 +238,7 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
 
     func validate(_ id: String) async -> Bool {
         await withCheckedContinuation { continuation in
-            queue.async { [self] in continuation.resume(returning: liveWindow(id) != nil) }
+            queue.async { [self] in continuation.resume(returning: liveWindow(id, retryUnavailable: true) != nil) }
         }
     }
 
@@ -312,7 +312,9 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
             // macOS may accept deminiaturization before its animation completes.
             // Observe readiness without resubmitting the restore request.
             if access.minimized(window) == false {
-                guard liveWindow(id) != nil else { continuation.resume(returning: .unavailable); return }
+                guard liveWindow(id, cancellation: cancellation, retryUnavailable: true) != nil else {
+                    continuation.resume(returning: cancellation.isCancelled ? .cancelled : .unavailable); return
+                }
                 raise(id, window: window, cancellation: cancellation, continuation: continuation)
             } else if attempts > 1 {
                 waitForRestore(id, window: window, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
@@ -341,7 +343,23 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
                              continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
         queue.asyncAfter(deadline: .now() + 0.1) { [self] in
             guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-            guard let live = liveWindow(id) else { continuation.resume(returning: .unavailable); return }
+            guard !stopped, let record = records.first(where: { $0.id == id }) else {
+                continuation.resume(returning: .unavailable); return
+            }
+            // An unavailable AX list is not evidence that the target closed.
+            // Spend the existing verification budget observing, without raising again.
+            guard let windows = copyWindows() else {
+                if attempts > 1 {
+                    verifyFocus(id, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
+                } else {
+                    continuation.resume(returning: .failed)
+                }
+                return
+            }
+            guard windows.contains(where: { CFEqual($0, record.element) }) else {
+                continuation.resume(returning: .unavailable); return
+            }
+            let live = record.element
             if let focused = copyElement(app, kAXFocusedWindowAttribute), CFEqual(focused, live) {
                 continuation.resume(returning: .succeeded)
             } else if attempts > 1 {
@@ -411,6 +429,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
     private var invalidationTask: Task<Void, Never>?
     private let allSpacesCatalog = WindowSwitcherWindowRecords()
     private var publication = WindowSwitcherPublishedWindows()
+    private let hostWindows = WindowSwitcherHostWindows()
     private var allSpacesRecordsAreFresh = false
     private var allSpacesRecords: [WindowSwitcherWindowRecord] = []
     private var allSpacesRefreshTask: Task<Void, Never>?
@@ -447,6 +466,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         allSpacesCatalog.stop()
         allSpacesRecords.removeAll()
         publication = WindowSwitcherPublishedWindows()
+        hostWindows.reset()
         allSpacesRecordsAreFresh = false
         didReadAllSpaces = false
         isInitialDiscoveryComplete = false
@@ -519,6 +539,8 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                     entry.displayID = display?.id
                     return entry
                 }
+                // Retain application metadata for other-Space discovery. Publication never
+                // exposes this metadata-only entry as a selectable window.
                 // A failed read is never evidence of a windowless application.
                 if entries.isEmpty && !result.unavailable {
                     entries = [WindowSwitcherAppEntry(id: "app:\(worker.lifetime)", processIdentifier: pid,
@@ -548,15 +570,22 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         switch sortMode {
         case .recentUse: return publication.recency.sort(entries)
         case .fixed: return entries.sorted {
-            let order = ($0.appName + $0.displayName).localizedCaseInsensitiveCompare($1.appName + $1.displayName)
+            let appOrder = $0.appName.localizedCaseInsensitiveCompare($1.appName)
+            let order = appOrder == .orderedSame
+                ? $0.displayName.localizedCaseInsensitiveCompare($1.displayName) : appOrder
             return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
         }
         }
     }
 
     private func rebuildPublication() {
-        publication.update(snapshots: snapshots, records: allSpacesRecords, recordsAreFresh: allSpacesRecordsAreFresh,
+        publication.update(snapshots: snapshots, records: allSpacesRecords, recordsAreFresh: allSpacesRecordsAreFresh, localEntries: hostWindows.entries(),
                            displayContext: { self.displayContext(for: $0) })
+        if NSApp.isActive, let focusedID = hostWindows.focusedID {
+            publication.recency.observeForeground(entries: publication.entries.filter {
+                $0.processIdentifier == ProcessInfo.processInfo.processIdentifier
+            }, focusedWindowID: focusedID, unavailable: false)
+        }
     }
 
     private func refreshAllSpaces() {
@@ -580,7 +609,8 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
     /// guesses remain preview-only and must never rename a row or route actions.
     static func mergeAllSpacesEntries(_ entries: [WindowSwitcherAppEntry], records: [WindowSwitcherWindowRecord],
                                       knownWindowIDs: [CGWindowID: String] = [:],
-                                      confirmedAXWindowNumbers: Set<CGWindowID> = []) -> [WindowSwitcherAppEntry] {
+                                      confirmedAXWindowNumbers: Set<CGWindowID> = [],
+                                      hasConfirmedEmptyAXSnapshot: Bool = false) -> [WindowSwitcherAppEntry] {
         guard let application = entries.first else { return entries }
         let records = records.filter { $0.processIdentifier == application.processIdentifier }
         var claimed = Set<CGWindowID>()
@@ -596,9 +626,15 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         }
         let fallback = records.compactMap { record -> WindowSwitcherAppEntry? in
             guard !claimed.contains(record.windowNumber) else { return nil }
-            // A named compositor surface with no Space and no current AX window
-            // is not an open window (for example Mail's hidden cleanup utility).
-            guard record.isOnScreen == true || record.hasSpace != false else { return nil }
+            // A complete empty AX scan rules out current-Space window rows.
+            // WindowServer may still retain named surfaces after the last window
+            // closes. Other-Space windows remain discoverable independently.
+            guard !hasConfirmedEmptyAXSnapshot || record.isOnScreen == false else { return nil }
+            // Unknown Space membership is not proof that a newly discovered
+            // off-screen surface is a window. Previously AX-confirmed windows
+            // may survive a missing Space query, but not a confirmed removal.
+            guard record.isOnScreen == true || record.hasSpace == true
+                || (record.hasSpace == nil && confirmedAXWindowNumbers.contains(record.windowNumber)) else { return nil }
             // Do not replace usable AX windows with ambiguous CG duplicates.
             guard !windows.contains(where: { $0.windowNumber == nil && sameBounds($0.bounds, record.bounds) }) else { return nil }
             // Unnamed compositor surfaces can briefly be onscreen and acquire
@@ -667,6 +703,12 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
     }
 
     func activate(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult {
+        if entry.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            let result = await hostWindows.activate(entry)
+            if result == .succeeded { publication.recency.record(entry.id) }
+            refresh()
+            return result
+        }
         guard containsCurrentEntry(entry),
               let worker = workers[entry.processIdentifier],
               let app = NSRunningApplication(processIdentifier: entry.processIdentifier), !app.isTerminated else { return .unavailable }
@@ -740,6 +782,11 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
     }
 
     func closeWindow(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult {
+        if entry.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            let result = hostWindows.close(entry)
+            refresh()
+            return result
+        }
         guard entry.isWindowEntry, containsCurrentEntry(entry), let worker = workers[entry.processIdentifier] else { return .unavailable }
         var targetID = entry.workerWindowID ?? entry.id
         if entry.windowElement == nil {

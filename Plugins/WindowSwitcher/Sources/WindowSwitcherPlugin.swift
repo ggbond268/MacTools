@@ -313,62 +313,40 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                     ]
                 ),
                 PluginSettingsSection(
-                    id: "switching-mode",
-                    title: localization.string("settings.mode.sectionTitle", defaultValue: "切换模式"),
-                    systemImage: "rectangle.2.swap",
+                    id: "preview",
                     rows: [
                         PluginSettingsRow(
                             id: SettingsID.preview, title: localization.string("settings.preview.title", defaultValue: "选中窗口预览"),
                             description: localization.string("settings.preview.description", defaultValue: "仅预览选中窗口。需在系统设置中允许屏幕录制，关闭时仍可搜索和切换。"),
                             systemImage: "rectangle.on.rectangle",
                             control: .toggle(isOn: store.configuration.showsPreview)
-                        ),
-                        PluginSettingsRow(
-                            id: SettingsID.mode,
-                            title: localization.string("settings.mode.title", defaultValue: "默认行为"),
-                            description: settingsModeDescription,
-                            systemImage: "keyboard",
-                            control: .picker(
-                                selectionID: store.configuration.mode.rawValue,
-                                options: [
-                                    PluginSettingsOption(
-                                        id: WindowSwitcherMode.keyWindow.rawValue,
-                                        title: localization.string("settings.mode.legacy", defaultValue: "按键直达")
-                                    ),
-                                    PluginSettingsOption(
-                                        id: WindowSwitcherMode.searchSelect.rawValue,
-                                        title: localization.string("settings.mode.search", defaultValue: "搜索选择")
-                                    ),
-                                    PluginSettingsOption(
-                                        id: WindowSwitcherMode.directCycle.rawValue,
-                                        title: localization.string("settings.mode.directCycle", defaultValue: "连续切换")
-                                    )
-                                ],
-                                style: .menu
-                            )
-                        ),
-                        PluginSettingsRow(
-                            id: SettingsID.sortMode,
-                            title: localization.string("settings.sort.title", defaultValue: "排序"),
-                            description: settingsSortDescription,
-                            systemImage: "arrow.up.arrow.down",
-                            control: .picker(
-                                selectionID: store.configuration.sortMode.rawValue,
-                                options: [
-                                    PluginSettingsOption(
-                                        id: WindowSwitcherSortMode.recentUse.rawValue,
-                                        title: localization.string("settings.sort.recentUse", defaultValue: "最近使用")
-                                    ),
-                                    PluginSettingsOption(
-                                        id: WindowSwitcherSortMode.fixed.rawValue,
-                                        title: localization.string("settings.sort.fixed", defaultValue: "固定排序")
-                                    )
-                                ],
-                                style: .menu
-                            )
                         )
                     ]
                 ),
+                PluginSettingsSection(id: "behavior-options",
+                    title: localization.string("settings.mode.title", defaultValue: "默认行为"),
+                    systemImage: "keyboard") { [weak self] _ in
+                    if let self {
+                        WindowSwitcherBehaviorSettingsView(localization: localization, group: .behavior,
+                            mode: Binding(get: { self.store.configuration.mode }, set: {
+                                self.handleSettingsAction(.setSelection(controlID: SettingsID.mode, optionID: $0.rawValue))
+                            }), sortMode: Binding(get: { self.store.configuration.sortMode }, set: {
+                                self.handleSettingsAction(.setSelection(controlID: SettingsID.sortMode, optionID: $0.rawValue))
+                            }))
+                    }
+                },
+                PluginSettingsSection(id: "order-options",
+                    title: localization.string("settings.sort.title", defaultValue: "排序"),
+                    systemImage: "arrow.up.arrow.down") { [weak self] _ in
+                    if let self {
+                        WindowSwitcherBehaviorSettingsView(localization: localization, group: .order,
+                            mode: Binding(get: { self.store.configuration.mode }, set: {
+                                self.handleSettingsAction(.setSelection(controlID: SettingsID.mode, optionID: $0.rawValue))
+                            }), sortMode: Binding(get: { self.store.configuration.sortMode }, set: {
+                                self.handleSettingsAction(.setSelection(controlID: SettingsID.sortMode, optionID: $0.rawValue))
+                            }))
+                    }
+                },
                 PluginSettingsSection(id: "shortcut-hotkeys", title: localization.string("settings.hotkeys", defaultValue: "快捷键"),
                     systemImage: "command", embeddedShortcutGroupIDs: ["window-switcher"]) { [weak self] context in
                     if let self {
@@ -575,7 +553,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         case .fixed:
             localization.string(
                 "settings.sort.fixed.description",
-                defaultValue: "按应用名称稳定排列，位置更容易记住。"
+                defaultValue: "先按应用名称，再按窗口标题排序。"
             )
         }
     }

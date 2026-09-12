@@ -72,7 +72,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private var previewHeight: NSLayoutConstraint!
     private var cardHeight: NSLayoutConstraint!
     private var initialResultCount = 0
-    private var preferredSize: NSSize?
+    private var preferredSizes: [Bool: NSSize] = [:]
+    private var applyingPanelLayout = false
     private let more = WindowSwitcherToolbarButton(title: "", target: nil, action: nil)
     private final class SearchField: NSTextField {
         override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
@@ -251,7 +252,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         panel.makeFirstResponder(usesList ? table : cards)
     }
 
-    private func layoutPanel(preservePosition: Bool = false) {
+    private func layoutPanel(preservePosition: Bool = false, resizeForPreview: Bool = false) {
+        applyingPanelLayout = true
+        defer { applyingPanelLayout = false }
         let currentScreen = panel.screen ?? NSScreen.screens.max {
             ($0.frame.intersection(panel.frame).width * $0.frame.intersection(panel.frame).height)
                 < ($1.frame.intersection(panel.frame).width * $1.frame.intersection(panel.frame).height)
@@ -259,18 +262,23 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         guard let screen = (preservePosition ? currentScreen : nil)
             ?? NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main else { return }
         let usePreview = showsPreview && screen.visibleFrame.height >= 600
+        let previewVisibilityChanged = previewPane.isHidden == usePreview
         previewPane.isHidden = !usePreview
         previewDivider.isHidden = !usePreview
         var frame = WindowSwitcherSession.panelFrame(visibleFrame: screen.visibleFrame, preview: usePreview)
-        if session?.isPersistent == true, let preferredSize {
+        if session?.isPersistent == true, let preferredSize = preferredSizes[usePreview] {
             frame.size = NSSize(width: min(preferredSize.width, screen.visibleFrame.width - 24), height: min(preferredSize.height, screen.visibleFrame.height - 24))
             frame.origin = CGPoint(x: screen.visibleFrame.midX - frame.width / 2, y: screen.visibleFrame.midY - frame.height / 2)
         }
         if preservePosition {
-            frame.size = NSSize(width: min(panel.frame.width, screen.visibleFrame.width - 24),
-                                height: min(panel.frame.height, screen.visibleFrame.height - 24))
-            frame.origin = CGPoint(x: min(max(panel.frame.minX, screen.visibleFrame.minX + 12), screen.visibleFrame.maxX - frame.width - 12),
-                                   y: min(max(panel.frame.minY, screen.visibleFrame.minY + 12), screen.visibleFrame.maxY - frame.height - 12))
+            if !resizeForPreview && !previewVisibilityChanged {
+                frame.size = NSSize(width: min(panel.frame.width, screen.visibleFrame.width - 24),
+                                    height: min(panel.frame.height, screen.visibleFrame.height - 24))
+            }
+            // Keep the search bar at the same height while the preview expands
+            // below it. Clamp the result when a display edge limits that space.
+            frame.origin = CGPoint(x: min(max(panel.frame.midX - frame.width / 2, screen.visibleFrame.minX + 12), screen.visibleFrame.maxX - frame.width - 12),
+                                   y: min(max(panel.frame.maxY - frame.height, screen.visibleFrame.minY + 12), screen.visibleFrame.maxY - frame.height - 12))
         }
         if !usePreview {
             preview.cancel(); previewedEntry = nil; previewedPermission = nil
@@ -1223,7 +1231,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     func windowDidResize(_ notification: Notification) {
         guard panel.isVisible, session?.isPersistent == true else { return }
-        preferredSize = panel.frame.size
+        if !applyingPanelLayout {
+            preferredSizes[!previewPane.isHidden] = panel.frame.size
+        }
         updateViewportLayout()
     }
 
@@ -1232,7 +1242,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         onPreviewChange?(showsPreview)
         previewedEntry = nil; previewedPermission = nil
         if !showsPreview { preview.cancel() }
-        layoutPanel(preservePosition: true); render()
+        layoutPanel(preservePosition: true, resizeForPreview: true); render()
     }
     func windowDidResignKey(_ notification: Notification) {
         if !closing, !isPresentingMenu, session != nil { onCancel?() }

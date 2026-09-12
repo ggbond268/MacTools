@@ -1640,67 +1640,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أمر ثابت"
+            "value": "أبجدي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Feste Reihenfolge"
+            "value": "Alphabetisch"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Orden fija"
+            "value": "Alfabético"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordre fixe"
+            "value": "Alphabétique"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "고정 순서"
+            "value": "이름순"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordem Fixa"
+            "value": "Alfabética"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Фиксированный порядок"
+            "value": "По алфавиту"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fixed Order"
+            "value": "Alphabetical"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定順"
+            "value": "名前順"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定排序"
+            "value": "按名称排序"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定排序"
+            "value": "依名稱排序"
           }
         }
       }
@@ -1711,67 +1711,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اطلب التطبيقات باستمرار بالاسم حتى يسهل تذكر مواقعها."
+            "value": "الترتيب حسب اسم التطبيق، ثم عنوان النافذة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordnen Sie Apps konsequent nach Namen, damit Sie sich ihre Positionen leichter merken können."
+            "value": "Nach App-Namen und dann nach Fenstertitel sortieren."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordene las aplicaciones constantemente por nombre para que sus posiciones sean más fáciles de recordar."
+            "value": "Ordenar por nombre de app y luego por título de ventana."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Classez les applications de manière cohérente par nom afin que leurs positions soient plus faciles à mémoriser."
+            "value": "Trier par nom d’app, puis par titre de fenêtre."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "앱의 위치를 더 쉽게 기억할 수 있도록 이름별로 일관되게 앱을 주문하세요."
+            "value": "앱 이름, 창 제목 순으로 정렬합니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordene os aplicativos de forma consistente por nome para que suas posições sejam mais fáceis de lembrar."
+            "value": "Ordenar por nome do app e depois por título da janela."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Упорядочивайте приложения по именам, чтобы их расположение было легче запомнить."
+            "value": "Сортировка по имени приложения, затем по заголовку окна."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Order apps consistently by name so their positions are easier to remember."
+            "value": "Sort by app name, then window title."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アプリ名で常に同じ順序に並べ、位置を覚えやすくします。"
+            "value": "アプリ名、ウインドウのタイトルの順に並べます。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按应用名称稳定排列，位置更容易记住。"
+            "value": "先按应用名称，再按窗口标题排序。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "依 App 名稱固定排列，位置更容易記住。"
+            "value": "先依 App 名稱，再依視窗標題排序。"
           }
         }
       }
@@ -3229,13 +3229,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按已分配的按键直接打开窗口。点击搜索框开始搜索。"
+            "value": "按窗口对应的按键立即切换，点击按键标记可修改。"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press an assigned key to open its window. Focus Search to start searching."
+            "value": "Press a window’s assigned key to switch immediately. Click its badge to change the key."
           }
         }
       }
@@ -3331,13 +3331,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Type to search, repeat the shortcut to select, and press Return to open."
+            "value": "Type to find a window. Press Return to switch."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "输入搜索，按快捷键选择下一个窗口，按回车打开。"
+            "value": "输入搜索，按回车切换。"
           }
         }
       }

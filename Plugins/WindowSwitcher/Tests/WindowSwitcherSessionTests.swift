@@ -26,7 +26,7 @@ final class WindowSwitcherSessionTests: XCTestCase {
         XCTAssertTrue(acted.isEmpty)
     }
 
-    func testPreviewTogglePreservesMovedAndResizedChooser() throws {
+    func testPreviewToggleClampsMovedChooserAndRestoresCompactSize() throws {
         let controller = WindowSwitcherOverlayController()
         controller.show(WindowSwitcherSession(entries: [entry("a")], selectedID: "a", isPersistent: true, originalWindowID: nil), currentPID: 100, showsPreview: false)
         defer { controller.hide() }
@@ -34,11 +34,12 @@ final class WindowSwitcherSessionTests: XCTestCase {
         let visible = try XCTUnwrap(panel.screen).visibleFrame
         panel.setFrame(NSRect(x: visible.minX + 30, y: visible.minY + 30, width: 580, height: 440), display: true)
         let original = panel.frame
-        for _ in 0..<2 {
+        for index in 0..<2 {
             let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
                 windowNumber: panel.windowNumber, context: nil, characters: "p", charactersIgnoringModifiers: "p", isARepeat: false, keyCode: UInt16(kVK_ANSI_P)))
             XCTAssertTrue(controller.handleChooserShortcut(event))
-            XCTAssertEqual(panel.frame, original)
+            XCTAssertTrue(visible.contains(panel.frame), "Expansion near a display edge must remain on screen")
+            if index == 1 { XCTAssertEqual(panel.frame.size, original.size) }
         }
     }
 
@@ -463,6 +464,43 @@ final class WindowSwitcherSessionTests: XCTestCase {
         let fitted = WindowSwitcherPreviewStage.fittedFrame(imageSize: stage.image!.size, in: bounds)
         XCTAssertTrue(bounds.contains(fitted))
         XCTAssertEqual(fitted.width / fitted.height, 0.4, accuracy: 0.001)
+    }
+
+    func testPreviewToggleResizesAndRestoresSeparateUserSizes() throws {
+        for layout in [WindowSwitcherLayout.grid, .list] {
+            let controller = WindowSwitcherOverlayController()
+            let value = WindowSwitcherSession(entries: [entry("one", title: "Document")],
+                selectedID: "one", isPersistent: true, originalWindowID: nil)
+            controller.show(value, currentPID: 100, showsPreview: true, preferredLayout: layout)
+            defer { controller.hide() }
+            let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+            let screen = try XCTUnwrap(panel.screen)
+            guard screen.visibleFrame.height >= 764 else { throw XCTSkip("Requires enough room for both preview sizes") }
+            let toggle = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "p",
+                charactersIgnoringModifiers: "p", isARepeat: false, keyCode: UInt16(kVK_ANSI_P)))
+            let expanded = panel.frame
+            XCTAssertTrue(panel.performKeyEquivalent(with: toggle))
+            let compact = panel.frame
+            XCTAssertLessThan(compact.height, expanded.height)
+            XCTAssertEqual(compact.maxY, expanded.maxY, accuracy: 1)
+            XCTAssertTrue(panel.performKeyEquivalent(with: toggle))
+            XCTAssertEqual(panel.frame.height, expanded.height, accuracy: 1)
+            panel.setContentSize(NSSize(width: 720, height: 650))
+            controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
+            let customPreview = panel.frame.size
+            XCTAssertTrue(panel.performKeyEquivalent(with: toggle))
+            XCTAssertEqual(panel.frame.height, compact.height, accuracy: 1, "Automatic resizing must not overwrite the compact preference")
+            panel.setContentSize(NSSize(width: 650, height: 450))
+            controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
+            let customCompact = panel.frame.size
+            XCTAssertTrue(panel.performKeyEquivalent(with: toggle))
+            XCTAssertEqual(panel.frame.size, customPreview)
+            controller.hide()
+            controller.show(value, currentPID: 100, showsPreview: false, preferredLayout: layout)
+            XCTAssertEqual(panel.frame.size, customCompact, "Reopening must use the preference for the active preview mode")
+            XCTAssertTrue(screen.visibleFrame.contains(panel.frame))
+        }
     }
 
     func testCardLayoutKeepsSelectionAndShowsPreviewBelowWindows() throws {

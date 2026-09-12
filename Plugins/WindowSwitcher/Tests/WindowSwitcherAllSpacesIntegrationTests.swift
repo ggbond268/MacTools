@@ -33,7 +33,7 @@ final class WindowSwitcherAllSpacesIntegrationTests: XCTestCase {
             applicationLaunchDate: launch, shortcutToken: nil, bounds: bounds)
     }
     private func record(_ number: UInt32, onScreen: Bool = false) -> WindowSwitcherWindowRecord {
-        WindowSwitcherWindowRecord(windowNumber: number, processIdentifier: 42, title: "Window", isOnScreen: onScreen, bounds: bounds)
+        WindowSwitcherWindowRecord(windowNumber: number, processIdentifier: 42, title: "Window", isOnScreen: onScreen, bounds: bounds, hasSpace: onScreen ? nil : true)
     }
 
     func testMergeKeepsLiveAXIdentityAndOtherSpaceWindow() {
