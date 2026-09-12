@@ -9,6 +9,49 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryPluginTests: XCTestCase {
+    func testCaptureClipboardAppearanceForReview() async throws {
+        let capture = try PaletteCaptureSupport(name: "clipboard-history")
+        defer { try? capture.finish() }
+        var items = (0..<80).map { index in
+            ClipboardHistoryItem(id: UUID(),
+                text: "Synthetic note \(index + 1)\nReview the glass surface with readable text, controls, and previews.\nNo personal clipboard data is used.",
+                capturedAt: Date().addingTimeInterval(-Double(index * 60)),
+                sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        }
+        let preview = NSImage(size: NSSize(width: 480, height: 300), flipped: false) { rect in
+            let colors: [NSColor] = [.systemBlue, .systemYellow, .systemPink, .systemGreen]
+            for (index, color) in colors.enumerated() {
+                color.setFill()
+                NSRect(x: CGFloat(index) * 120, y: 0, width: 120, height: rect.height).fill()
+            }
+            return true
+        }
+        let previewData = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(preview.tiffRepresentation))?
+            .representation(using: .png, properties: [:]))
+        items.insert(ClipboardHistoryItem(id: UUID(), payload: ClipboardHistoryPayload(pasteboardItems: [
+            ClipboardStoredPasteboardItem(representations: [
+                ClipboardStoredRepresentation(typeIdentifier: ClipboardRepresentationType.png, data: previewData)
+            ])
+        ]), capturedAt: .now, sourceApplication: nil, isPinned: false, lastUsedAt: nil), at: 0)
+        let persistence = BlockingClipboardHistoryPersistence(items: items)
+        persistence.allowSaveToFinish()
+        let plugin = makePlugin(pasteboard: PluginTestClipboardPasteboard(), persistence: persistence,
+            savedPersistence: InMemoryClipboardSavedLibraryPersistence(),
+            imageTextRecognizer: FakePluginClipboardImageTextRecognizer(text: nil),
+            accessibilityTrusted: { false }, accessibilityRequester: { _ in false })
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.controller.start()
+        plugin.savedLibraryController.start()
+        await waitUntilLoaded(plugin.controller)
+        _ = await waitUntil { plugin.savedLibraryController.isLoaded }
+        let previous = Set(NSApp.windows.map(\.windowNumber))
+        plugin.handleAction(.invokeAction(controlID: "execute"))
+        let panel = try XCTUnwrap(NSApp.windows.first {
+            !previous.contains($0.windowNumber) && $0 is NSPanel && $0.isVisible
+        })
+        try await capture.exercise(panel) { plugin.handleAction(.invokeAction(controlID: "execute")) }
+    }
+
     func testHistoryAndSnippetClipboardReadsUseIndependentProcesses() {
         let plugin = makePlugin()
         defer { plugin.deactivate(reason: .hostShutdown) }

@@ -7,6 +7,23 @@ import XCTest
 
 @MainActor
 final class AppWindowRouterTests: XCTestCase {
+    func testCaptureCommandPaletteAppearanceForReview() async throws {
+        let capture = try PaletteCaptureSupport(name: "command-palette")
+        defer { try? capture.finish() }
+        let suite = "PaletteCapture.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = makeRouter(defaults: defaults, plugins: [
+            AppWindowRouterSettingsPlugin(id: "Synthetic Notes"),
+            AppWindowRouterSettingsPlugin(id: "Synthetic Calendar"),
+            AppWindowRouterSettingsPlugin(id: "Synthetic Clipboard")
+        ])
+        defer { router.dismissCommandPalette(restoringFocus: false) }
+        router.toggleCommandPalette()
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+        try await capture.exercise(panel) { router.toggleCommandPalette() }
+    }
+
     func testDashboardTargetInvokesOnlyDashboardAction() {
         var dashboardCallCount = 0
         var featurePanelCallCount = 0
