@@ -152,6 +152,7 @@ struct ActionRunLinkControl: View {
 struct ActionRunLinkCopyButton: View {
     @ObservedObject var pluginHost: PluginHost
     let reference: ActionReference
+    var labelStyle = AnyShapeStyle(.tint)
     @State private var didCopy = false
 
     var body: some View {
@@ -162,6 +163,7 @@ struct ActionRunLinkCopyButton: View {
                 Button(FeatureL10n.string("复制终端命令")) { copy(representation.terminalCommand) }
             } label: {
                 Image(systemName: didCopy ? "checkmark" : "link")
+                    .foregroundStyle(labelStyle)
             } primaryAction: {
                 copy(representation.url)
             }
@@ -178,6 +180,7 @@ struct ActionRunLinkCopyButton: View {
                 }
             } label: {
                 Image(systemName: didCopy ? "checkmark" : "link")
+                    .foregroundStyle(labelStyle)
             }
             .buttonStyle(.plain)
             .help(FeatureL10n.string("复制运行链接"))

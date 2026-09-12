@@ -331,7 +331,26 @@ private struct UnifiedSearchPaletteShadowModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if isEnabled {
-            content.shadow(color: .black.opacity(0.22), radius: 28, y: 12)
+            content.background {
+                Canvas { context, size in
+                    guard size.width > 48, size.height > 48 else { return }
+                    let canvasBounds = CGRect(origin: .zero, size: size)
+                    let surface = Path(roundedRect: canvasBounds.insetBy(dx: 24, dy: 24),
+                                       cornerRadius: PluginPaletteMetrics.surfaceCornerRadius)
+                    var exterior = Path(canvasBounds)
+                    exterior.addPath(surface)
+                    // Keep the interior transparent: native glass must continue
+                    // sampling the real backdrop, not a painted shadow backing.
+                    context.clip(to: exterior, style: FillStyle(eoFill: true))
+                    context.drawLayer { layer in
+                        layer.addFilter(.shadow(color: .black.opacity(0.22), radius: 12, y: 4))
+                        layer.fill(surface, with: .color(.black))
+                    }
+                }
+                .padding(-24)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
         } else {
             content
         }
@@ -437,6 +456,13 @@ struct UnifiedSearchPaletteView: View {
                 reducesTransparency: accessibilityReduceTransparency,
                 backgroundColor: SettingsStyle.contentBackground
             )
+            // Glass can extend its optical edge beyond its layout bounds. Keep
+            // that edge inside the same silhouette in Settings and the panel;
+            // only the outer, shared shadow may extend into the padding.
+            .clipShape(RoundedRectangle(
+                cornerRadius: PluginPaletteMetrics.surfaceCornerRadius,
+                style: .continuous
+            ))
         }
         .overlay(alignment: .top) {
             if dragCoordinator != nil {
@@ -793,8 +819,8 @@ struct UnifiedSearchPaletteView: View {
                             Capsule(style: .continuous)
                                 .fill(
                                     isSelected
-                                        ? Color.clear
-                                        : PluginSettingsTheme.Palette.fieldBackground
+                                        ? unifiedSearchSelectedRowTextColor.opacity(0.14)
+                                        : Color.primary.opacity(0.07)
                                 )
                         )
                 }
@@ -879,7 +905,10 @@ struct UnifiedSearchPaletteView: View {
 
             ActionRunLinkCopyButton(
                 pluginHost: pluginHost,
-                reference: reference
+                reference: reference,
+                labelStyle: AnyShapeStyle(
+                    isSelected ? unifiedSearchSelectedRowTextColor : Color.accentColor
+                )
             )
 
             if pluginHost.canPresentActionOwner(for: reference) {

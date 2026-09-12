@@ -8,6 +8,7 @@ Command Palette and Clipboard History use `PluginPaletteSurface` from PluginKit.
 - The background uses a native AppKit `NSGlassEffectView` with regular style on macOS 26 and later, bridged into SwiftUI. Pointer acceptance found that `Color.clear.glassEffect` prevented the borderless Command Palette's handle from dragging, while both the original material and the AppKit bridge moved under the same injected input. The local Window Switcher prototype informed the native AppKit approach; its files were not changed. Existing hosted content stays outside the background and retains its identity.
 - There is one glass surface per panel, with no custom tint, opacity overlay, interactive glass, polling, private preference keys, or additional setting. Native glass owns the macOS 27 appearance control and live system updates. Layout and input content remain outside the background branch, preserving their identity when accessibility settings change.
 - Reduce Transparency selects an opaque semantic background. macOS 14 and 15 use native material. Increase Contrast strengthens panel, selected-row, control, and image-preview boundaries. Selection text preserves the system's preferred foreground when it meets 4.5:1 contrast against the opaque selection background; otherwise it uses black or white. This also protects yellow accents, selected subtitles, and shortcut labels. Colors resolve again for the current appearance.
+- Command Palette clips its backdrop to the visible rounded silhouette and applies one shared content shadow in both Settings and standalone presentations. The standalone panel uses a plain AppKit hosting container, disables automatic SwiftUI safe-area/sizing behavior, and has no second window shadow around its transparent padding. Clipboard keeps its existing hosting and native shadow.
 - The host retains Command Palette routing, focus restoration, drag/snap coordination, and placement. Clipboard History retains its panel lifetime, explicit drag handle, native resizing, per-display placement, search model, previews, and action routing. Glass never tints captured previews or changes clipboard payloads.
 
 Apple references: [custom SwiftUI glass](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views), [macOS 27 AppKit design updates](https://developer.apple.com/videos/play/wwdc2026/289/).
@@ -16,10 +17,11 @@ Apple references: [custom SwiftUI glass](https://developer.apple.com/documentati
 
 Start with `PluginPaletteSurfaceTests`, `ClipboardHistoryWindowStyleTests`, and `ClipboardHistoryDetailActionStyleTests`. The surface regression checks opaque rendering and preserves the native field editor, marked text, hit testing, and window frame across live appearance and surface changes. Follow with routing, keyboard, placement, preview, and panel-update tests. Run `make script-tests` and `make ci` for the shared PluginKit implementation.
 
-Two optional XCTest methods open the production panels with synthetic data and isolated settings. Set `TEST_RUNNER_MACTOOLS_PALETTE_CAPTURE_DIR` to an absolute local output directory when invoking `xcodebuild test`, and select:
+Three optional XCTest methods open the production panels with synthetic data and isolated settings. Set `TEST_RUNNER_MACTOOLS_PALETTE_CAPTURE_DIR` to an absolute local output directory when invoking `xcodebuild test`, and select:
 
 ```text
 -only-testing:MacToolsTests/AppWindowRouterTests/testCaptureCommandPaletteAppearanceForReview
+-only-testing:MacToolsTests/AppWindowRouterTests/testCaptureSettingsCommandPaletteAppearanceForReview
 -only-testing:MacToolsTests/ClipboardHistoryPluginTests/testCaptureClipboardAppearanceForReview
 ```
 
@@ -29,6 +31,8 @@ For the actual composited glass over the synthetic backdrop, run the driver from
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
   python3 scripts/e2e/capture-palette-appearance.py build/PaletteAppearance/review
 ```
+
+For an interactive inspection of the synthetic Command Palette, also set `TEST_RUNNER_MACTOOLS_PALETTE_INTERACTIVE_REVIEW=1` when running its XCTest directly. After the automatic checks it holds the light palette open for 60 seconds for pointer and keyboard review, then closes it.
 
 The output directory must be new. The helper uses the last connected display for review and captures the panel rectangle above an owned synthetic background. Keep unrelated windows and alerts clear of that display: rectangle captures include anything overlapping the panel. A final frame on the other display is recorded separately when available. The driver runs the tests sequentially so native field editors do not compete for key focus.
 
