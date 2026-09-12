@@ -30,6 +30,7 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
     private var isEditing = false
     private var sessionActive = false
     private var deliveryGeneration = 0
+    private var lifecycleGeneration = 0
     private let accessibilityTrusted: @Sendable () -> Bool
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -79,6 +80,7 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
             activeModifiers = nil
             didReportAccessibilityRevocation = false
             deliveryGeneration += 1
+            lifecycleGeneration += 1
             sessionActive = false; isEditing = false
             return state
         }
@@ -124,7 +126,7 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
                 didReportAccessibilityRevocation = true
                 return true
             }
-            if notify { Task { @MainActor in self.onAccessibilityRevoked() } }
+            if notify { deliverLifecycleCallback { $0.onAccessibilityRevoked() } }
             return Unmanaged.passUnretained(event)
         }
         lock.withLock { didReportAccessibilityRevocation = false }
@@ -155,7 +157,7 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
         if editing, ![UInt16(kVK_Tab), UInt16(kVK_ANSI_Grave)].contains(keyCode) { return Unmanaged.passUnretained(event) }
         if keyCode == UInt16(kVK_Escape), lock.withLock({ sessionActive || activeModifiers != nil }) {
             setActiveModifiers(nil)
-            DispatchQueue.main.async { self.onEscape() }
+            deliverLifecycleCallback { $0.onEscape() }
             return nil
         }
 
@@ -193,10 +195,18 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
         }
 
         setActiveModifiers(nil)
-        DispatchQueue.main.async {
-            self.onShortcutReleased()
-        }
+        deliverLifecycleCallback { $0.onShortcutReleased() }
         return Unmanaged.passUnretained(event)
+    }
+
+    // Session setup invalidates queued presses but must preserve the release
+    // already queued behind a quick press. Only a stopped listener ends this epoch.
+    private func deliverLifecycleCallback(_ action: @escaping @MainActor @Sendable (WindowSwitcherShortcutTap) -> Void) {
+        let generation = lock.withLock { lifecycleGeneration }
+        DispatchQueue.main.async {
+            guard self.lock.withLock({ self.lifecycleGeneration == generation }) else { return }
+            action(self)
+        }
     }
 
     private nonisolated static let eventCallback: CGEventTapCallBack = { _, type, event, userInfo in

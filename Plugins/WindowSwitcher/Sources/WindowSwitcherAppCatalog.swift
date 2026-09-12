@@ -21,17 +21,31 @@ struct WindowSwitcherScan: Sendable {
     var windowListReadSucceeded = true
 }
 
+struct WindowSwitcherAXIdentity: Hashable {
+    let element: AXUIElement
+    static func == (lhs: Self, rhs: Self) -> Bool { CFEqual(lhs.element, rhs.element) }
+    func hash(into hasher: inout Hasher) { hasher.combine(CFHash(element)) }
+}
+
 struct WindowSwitcherWindowIdentities {
-    private var live: [(element: AXUIElement, id: String)] = []
+    private var live: [WindowSwitcherAXIdentity: String] = [:]
 
     mutating func reconcile(_ elements: [AXUIElement]) -> [String] {
-        live.removeAll { old in !elements.contains { CFEqual(old.element, $0) } }
-        return elements.map { element in
-            if let match = live.first(where: { CFEqual($0.element, element) }) { return match.id }
-            let id = "window:\(UUID())"
-            live.append((element, id))
-            return id
+        reconcile(elements, shouldContinue: { true })!
+    }
+
+    mutating func reconcile(_ elements: [AXUIElement], shouldContinue: () -> Bool) -> [String]? {
+        var next: [WindowSwitcherAXIdentity: String] = [:]
+        var result: [String] = []
+        for element in elements {
+            guard shouldContinue() else { return nil }
+            let key = WindowSwitcherAXIdentity(element: element)
+            let id = next[key] ?? live[key] ?? "window:\(UUID())"
+            next[key] = id
+            result.append(id)
         }
+        live = next
+        return result
     }
 }
 
@@ -59,13 +73,16 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
     private var records: [WindowSwitcherWindowSnapshot] = []
     private var identities = WindowSwitcherWindowIdentities()
     private var observer: AXObserver?
-    private var observedWindows: [AXUIElement] = []
+    private var observedWindows: Set<WindowSwitcherAXIdentity> = []
+    private let uptime: @Sendable () -> TimeInterval
     private var cursor = 0
     private var stopped = false
     private let invalidated: @Sendable () -> Void
 
-    init(pid: pid_t, launchDate: Date?, access: any WindowSwitcherAXAccess = SystemWindowSwitcherAXAccess(), invalidated: @escaping @Sendable () -> Void) {
+    init(pid: pid_t, launchDate: Date?, access: any WindowSwitcherAXAccess = SystemWindowSwitcherAXAccess(),
+         uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }, invalidated: @escaping @Sendable () -> Void) {
         self.access = access
+        self.uptime = uptime
         self.pid = pid
         self.launchDate = launchDate
         self.invalidated = invalidated
@@ -95,46 +112,54 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
 
     private func read() -> WindowSwitcherScan {
         guard !stopped else { return WindowSwitcherScan(windows: [], unavailable: true, windowListReadSucceeded: false) }
+        let deadline = uptime() + 0.25
+        func incomplete() -> WindowSwitcherScan {
+            WindowSwitcherScan(windows: records.map { var r = $0; r.unavailable = true; return r },
+                               unavailable: true, windowListReadSucceeded: false)
+        }
         AXUIElementSetMessagingTimeout(app, 0.06)
         installObserver()
-        guard let windows = copyWindows() else {
-            return WindowSwitcherScan(windows: records.map { var r = $0; r.unavailable = true; return r }, unavailable: true, windowListReadSucceeded: false)
-        }
-        // CFEqual compares AX identity, not title or array position. New lifetimes
-        // receive UUIDs; closed windows and app restarts cannot inherit old IDs.
-        records.removeAll { old in !windows.contains { CFEqual(old.element, $0) } }
-        observedWindows.removeAll { old in
-            guard !windows.contains(where: { CFEqual(old, $0) }) else { return false }
+        guard let windows = copyWindows(shouldContinue: { self.uptime() < deadline }) else { return incomplete() }
+        let live = Set(windows.map { WindowSwitcherAXIdentity(element: $0) })
+        guard uptime() < deadline,
+              let windowIDs = identities.reconcile(windows, shouldContinue: { self.uptime() < deadline }) else { return incomplete() }
+        records.removeAll { !live.contains(WindowSwitcherAXIdentity(element: $0.element)) }
+        // Deferred observer removal retains ownership until a later scan can finish it.
+        for old in observedWindows where !live.contains(old) {
+            guard uptime() < deadline else { break }
             if let observer {
-                for name in Self.windowNotifications { AXObserverRemoveNotification(observer, old, name as CFString) }
+                for name in Self.windowNotifications { AXObserverRemoveNotification(observer, old.element, name as CFString) }
             }
-            return true
+            observedWindows.remove(old)
         }
-        let windowIDs = identities.reconcile(windows)
-        let start = ProcessInfo.processInfo.systemUptime
+        var indexes = Dictionary(uniqueKeysWithValues: records.enumerated().map { (WindowSwitcherAXIdentity(element: $0.element.element), $0.offset) })
+        var excluded = Set<String>()
         var didRead = 0
         var metadataFailed = false
         let count = windows.count
         for offset in 0..<count {
+            guard uptime() < deadline else { break }
             let index = (cursor + offset) % count
             let window = windows[index]
+            let key = WindowSwitcherAXIdentity(element: window)
             AXUIElementSetMessagingTimeout(window, 0.06)
-            let oldIndex = records.firstIndex { CFEqual($0.element, window) }
+            let oldIndex = indexes[key]
             switch snapshot(window, id: windowIDs[index]) {
             case let .eligible(snapshot):
-                if let oldIndex { records[oldIndex] = snapshot } else { records.append(snapshot) }
-                observe(window)
+                if let oldIndex { records[oldIndex] = snapshot }
+                else { indexes[key] = records.count; records.append(snapshot) }
+                if uptime() < deadline { observe(window) }
             case .excluded:
-                if let oldIndex { records.remove(at: oldIndex) }
+                if let oldIndex { excluded.insert(records[oldIndex].id) }
             case .unavailable:
                 metadataFailed = true
                 if let oldIndex { records[oldIndex].unavailable = true }
             }
             didRead += 1
-            if ProcessInfo.processInfo.systemUptime - start > 0.25 { break }
         }
+        records.removeAll { excluded.contains($0.id) }
         cursor = count == 0 ? 0 : (cursor + didRead) % count
-        let focused = copyElement(app, kAXFocusedWindowAttribute)
+        let focused = uptime() < deadline ? copyElement(app, kAXFocusedWindowAttribute) : nil
         let focusedID = focused.flatMap { element in records.first { CFEqual($0.element, element) }?.id }
         return WindowSwitcherScan(windows: records, focusedID: focusedID, unavailable: metadataFailed || didRead < count)
     }
@@ -178,11 +203,15 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
         return result
     }
 
-    private func copyWindows() -> [AXUIElement]? {
-        guard let values = access.windows(of: app), !values.contains(where: { CFEqual($0, app) }) else { return nil }
-        return values.reduce(into: []) { result, window in
-            if !result.contains(where: { CFEqual($0, window) }) { result.append(window) }
+    private func copyWindows(shouldContinue: () -> Bool = { true }) -> [AXUIElement]? {
+        guard let values = access.windows(of: app), shouldContinue() else { return nil }
+        var seen = Set<WindowSwitcherAXIdentity>()
+        var result: [AXUIElement] = []
+        for window in values {
+            guard shouldContinue(), !CFEqual(window, app) else { return nil }
+            if seen.insert(WindowSwitcherAXIdentity(element: window)).inserted { result.append(window) }
         }
+        return result
     }
 
     private func copyElement(_ element: AXUIElement, _ name: String) -> AXUIElement? {
@@ -236,8 +265,7 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
         return nil
     }
 
-    func perform(_ id: String, close: Bool) async -> WindowSwitcherActionResult {
-        let cancellation = WindowSwitcherActionCancellation()
+    func perform(_ id: String, close: Bool, cancellation: WindowSwitcherActionCancellation = WindowSwitcherActionCancellation()) async -> WindowSwitcherActionResult {
         return await withTaskCancellationHandler {
             if Task.isCancelled { cancellation.cancel() }
             return await withCheckedContinuation { continuation in
@@ -344,11 +372,10 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(result), .commonModes)
     }
     private func observe(_ window: AXUIElement) {
-        guard let observer, !observedWindows.contains(where: { CFEqual($0, window) }) else { return }
+        guard let observer, observedWindows.insert(WindowSwitcherAXIdentity(element: window)).inserted else { return }
         for name in Self.windowNotifications {
             AXObserverAddNotification(observer, window, name as CFString, Unmanaged.passUnretained(self).toOpaque())
         }
-        observedWindows.append(window)
     }
 }
 
@@ -625,8 +652,9 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         repeat {
             guard !Task.isCancelled else { return nil }
             let snapshot = await scan()
+            guard !Task.isCancelled, ContinuousClock.now < deadline else { return nil }
             let currentRecords = await records()
-            guard !Task.isCancelled else { return nil }
+            guard !Task.isCancelled, ContinuousClock.now < deadline else { return nil }
             if snapshot.windowListReadSucceeded,
                let id = matchingFallbackWindowID(entry, windows: snapshot.windows, records: currentRecords) { return id }
             guard ContinuousClock.now < deadline else { return nil }
@@ -681,6 +709,14 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             refresh()
             return .succeeded
         }
+        let cancellation = WindowSwitcherActionCancellation()
+        let targetPID = entry.processIdentifier
+        let intentObserver = notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil, queue: .main) { notification in
+                guard let foreground = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+                if foreground.processIdentifier != targetPID { cancellation.cancel() }
+            }
+        defer { notificationCenter.removeObserver(intentObserver) }
         let targetID: String
         if isFallback {
             // Re-read after the owning app switches Spaces. Never choose one of
@@ -694,7 +730,9 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         } else {
             targetID = entry.workerWindowID ?? entry.id
         }
-        let result = await worker.perform(targetID, close: false)
+        guard !cancellation.isCancelled,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else { return .cancelled }
+        let result = await worker.perform(targetID, close: false, cancellation: cancellation)
         let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier
         if result == .succeeded && isFrontmost { publication.recency.record(entry.id) }
         refresh()

@@ -71,16 +71,21 @@ private func drawPaletteField(in bounds: NSRect) {
 
 @MainActor
 final class WindowSwitcherHeaderSurface: NSView {
-    override func draw(_ dirtyRect: NSRect) { drawPaletteField(in: bounds) }
+    var isFocused = false { didSet { needsDisplay = true } }
+    override func draw(_ dirtyRect: NSRect) {
+        drawPaletteField(in: bounds)
+        if isFocused {
+            let ring = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1),
+                                   xRadius: PluginPaletteMetrics.searchCornerRadius,
+                                   yRadius: PluginPaletteMetrics.searchCornerRadius)
+            NSColor.keyboardFocusIndicatorColor.setStroke()
+            ring.lineWidth = 2; ring.stroke()
+        }
+    }
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
 }
 
 @MainActor
-final class WindowSwitcherHeaderButton: NSButton {
+final class WindowSwitcherToolbarButton: NSButton {
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
-    override func draw(_ dirtyRect: NSRect) {
-        drawPaletteField(in: bounds)
-        super.draw(dirtyRect)
-    }
-    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
 }

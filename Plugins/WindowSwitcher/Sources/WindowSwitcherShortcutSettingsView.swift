@@ -4,6 +4,7 @@ import MacToolsPluginKit
 struct WindowSwitcherShortcutSettingsView: View {
     let context: PluginSettingsContext
     let localization: PluginLocalization
+    let onRecordingChange: (Bool) -> Void
     let binding: (String) -> ShortcutBinding?
     @State private var customEditors: Set<String> = []
     @State private var errors: [String: String] = [:]
@@ -42,20 +43,34 @@ struct WindowSwitcherShortcutSettingsView: View {
                     .labelsHidden().pickerStyle(.menu)
                     .frame(width: 150, alignment: .trailing)
                     .fixedSize(horizontal: true, vertical: false)
-                    PluginSettingsShortcutRecorderControl(title: item.title, displayText: item.bindingText,
-                        canClear: item.canClear,
-                        resetTitle: localization.string("settings.shortcut.reset", defaultValue: "恢复默认"),
-                        clearTitle: localization.string("settings.shortcut.clear", defaultValue: "清除快捷键"),
-                        onRecord: { value in
-                            let result = context.recordShortcut(value, for: item.id)
-                            if case .accepted = result { customEditors.remove(id); errors[id] = nil }
-                            return result
-                        }, onBeginRecording: { context.beginShortcutRecording(for: item.id) },
-                        onReset: {
-                            if case let .rejected(message) = context.recordShortcut(presets[0].1, for: item.id) { errors[id] = message }
-                            else { customEditors.remove(id); errors[id] = nil }
-                        },
-                        onClear: { context.clearShortcut(for: item.id) })
+                    HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                        PluginShortcutRecorder(title: item.title, displayText: item.bindingText,
+                            minWidth: PluginSettingsTheme.Size.shortcutRecorderWidth,
+                            onRecord: { value in
+                                let result = context.recordShortcut(value, for: item.id)
+                                if case .accepted = result { customEditors.remove(id); errors[id] = nil }
+                                return result
+                            }, onBeginRecording: {
+                                onRecordingChange(true)
+                                context.beginShortcutRecording(for: item.id)
+                            }, onEndRecording: { onRecordingChange(false) })
+                        .frame(width: PluginSettingsTheme.Size.shortcutRecorderWidth)
+                        .contextMenu {
+                            Button(localization.string("settings.shortcut.reset", defaultValue: "恢复默认"), systemImage: "arrow.counterclockwise") {
+                                if case let .rejected(message) = context.recordShortcut(presets[0].1, for: item.id) { errors[id] = message }
+                                else { customEditors.remove(id); errors[id] = nil }
+                            }
+                        }
+                        Button { context.clearShortcut(for: item.id) } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(PluginSettingsTheme.Typography.rowIcon)
+                                .frame(width: 22, height: 22)
+                        }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                        .help(localization.string("settings.shortcut.clear", defaultValue: "清除快捷键"))
+                        .accessibilityLabel(localization.string("settings.shortcut.clear", defaultValue: "清除快捷键"))
+                        .opacity(item.canClear ? 1 : 0).disabled(!item.canClear).accessibilityHidden(!item.canClear)
+                    }
                     .frame(width: PluginSettingsTheme.Size.shortcutRecorderWidth
                            + PluginSettingsTheme.Spacing.controlCluster + 22, alignment: .leading)
                 }

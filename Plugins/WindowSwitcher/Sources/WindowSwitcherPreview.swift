@@ -35,6 +35,12 @@ final class WindowSwitcherPreview {
     private var generation = 0
     private var pending: WindowSwitcherAppEntry?
     private var task: Task<Void, Never>?
+    private var watchdog: Task<Void, Never>?
+    private var expiryTask: Task<Void, Never>?
+    private var captureID: UUID?
+    private var captureTimedOut = false
+    private let captureTimeout: Duration
+    private let cacheLifetime: TimeInterval
 
     private let systemCapture = WindowSwitcherSystemPreviewCapture()
     private let localization: PluginLocalization
@@ -42,10 +48,17 @@ final class WindowSwitcherPreview {
     private let capture: @MainActor (WindowSwitcherAppEntry) async throws -> NSImage?
 
     init(localization: PluginLocalization = PluginLocalization(bundle: .main), hasPermission: @escaping @MainActor () -> Bool = { CGPreflightScreenCaptureAccess() },
+         captureTimeout: Duration = .seconds(2), cacheLifetime: TimeInterval = 30,
          capture: (@MainActor (WindowSwitcherAppEntry) async throws -> NSImage?)? = nil) {
+        self.captureTimeout = captureTimeout
+        self.cacheLifetime = cacheLifetime
         self.localization = localization
         self.hasPermission = hasPermission
         self.capture = capture ?? { [systemCapture] entry in try await systemCapture.capture(entry) }
+    }
+
+    deinit {
+        task?.cancel(); watchdog?.cancel(); expiryTask?.cancel()
     }
 
     var isPermissionGranted: Bool { hasPermission() }
@@ -77,59 +90,106 @@ final class WindowSwitcherPreview {
         generation += 1
         pending = entry
         let now = Date()
-        cache = cache.filter { now.timeIntervalSince($0.value.capturedAt) < 30 }
+        cache = cache.filter { now.timeIntervalSince($0.value.capturedAt) < cacheLifetime }
         if var cached = cache[key] {
             cached.usedAt = now
             cache[key] = cached
             onChange?(cached.image, nil)
             if now.timeIntervalSince(cached.capturedAt) < 2 { pending = nil; return }
         } else {
-            onChange?(nil, nil)
+            onChange?(nil, captureTimedOut ? unavailableMessage : nil)
         }
         startNext()
+    }
+
+    private var unavailableMessage: String {
+        localization.string("preview.unavailable", defaultValue: "此窗口暂时无法预览。")
     }
 
     private func startNext() {
         guard task == nil, let entry = pending else { return }
         pending = nil
-        let token = generation
+        let token = generation, id = UUID()
+        captureID = id; captureTimedOut = false
+        let timeout = captureTimeout
+        watchdog = Task { [weak self] in
+            do { try await Task.sleep(for: timeout) } catch { return }
+            guard let self, self.captureID == id else { return }
+            self.captureTimedOut = true
+            if let selectedKey = self.selectedKey, self.cache[selectedKey] == nil {
+                self.onChange?(nil, self.unavailableMessage)
+            }
+        }
+        // Capture the operation, never the owner, across a potentially suspended
+        // system await. Keep the occupied slot until it returns: a timeout must
+        // not accumulate orphaned ScreenCaptureKit operations on every selection.
+        let capture = self.capture
         task = Task { [weak self] in
-            // A short debounce avoids starting a capture for every key repeat.
             try? await Task.sleep(for: .milliseconds(50))
-            guard let self else { return }
-            // Retry transient capture failures without keeping an unbounded
-            // refresh loop alive. A new selection invalidates every old attempt.
             for attempt in 0..<3 {
-                guard token == generation, hasPermission(), !Task.isCancelled else { break }
+                guard !Task.isCancelled, self?.canCapture(token) == true else { break }
                 do {
                     let image = try await capture(entry)
-                    guard token == generation else { break }
-                    guard hasPermission() else {
-                        cache.removeAll()
-                        systemCapture.invalidate()
-                        onChange?(nil, localization.string("preview.permission", defaultValue: "预览需要屏幕录制权限；仍可按标题切换。"))
-                        break
-                    }
-                    if let image {
-                        let now = Date()
-                        cache[CacheKey(entry)] = CachedPreview(image: image, capturedAt: now, usedAt: now)
-                        while cache.count > 8, let oldest = cache.min(by: { $0.value.usedAt < $1.value.usedAt })?.key {
-                            cache.removeValue(forKey: oldest)
-                        }
-                        onChange?(image, nil)
-                        break
-                    }
-                    if attempt == 2, cache[CacheKey(entry)] == nil { onChange?(nil, localization.string("preview.unavailable", defaultValue: "此窗口暂时无法预览。")) }
+                    guard self?.receive(image, entry: entry, token: token, attempt: attempt) == false else { break }
                 } catch {
-                    guard token == generation else { break }
-                    if attempt == 2, cache[CacheKey(entry)] == nil { onChange?(nil, localization.string("preview.failed", defaultValue: "无法读取预览；仍可按标题切换。")) }
+                    guard let owner = self, owner.canCapture(token) else { break }
+                    if attempt == 2, owner.cache[CacheKey(entry)] == nil {
+                        owner.onChange?(nil, owner.localization.string("preview.failed", defaultValue: "无法读取预览；仍可按标题切换。"))
+                    }
                 }
                 if attempt < 2 { try? await Task.sleep(for: .milliseconds(200)) }
             }
-            task = nil
-            startNext()
+            self?.finishCapture(id)
         }
     }
+
+    private func canCapture(_ token: Int) -> Bool {
+        token == generation && !captureTimedOut && hasPermission()
+    }
+
+    /// Return true when no retry is required. Late or revoked images are discarded.
+    private func receive(_ image: NSImage?, entry: WindowSwitcherAppEntry, token: Int, attempt: Int) -> Bool {
+        guard token == generation else { return true }
+        guard hasPermission() else {
+            cache.removeAll(); systemCapture.invalidate()
+            onChange?(nil, localization.string("preview.permission", defaultValue: "预览需要屏幕录制权限；仍可按标题切换。"))
+            return true
+        }
+        guard !captureTimedOut else { return true }
+        if let image {
+            let now = Date()
+            cache[CacheKey(entry)] = CachedPreview(image: image, capturedAt: now, usedAt: now)
+            while cache.count > 8, let oldest = cache.min(by: { $0.value.usedAt < $1.value.usedAt })?.key {
+                cache.removeValue(forKey: oldest)
+            }
+            scheduleExpiry()
+            onChange?(image, nil)
+            return true
+        }
+        if attempt == 2, cache[CacheKey(entry)] == nil { onChange?(nil, unavailableMessage) }
+        return false
+    }
+
+    private func finishCapture(_ id: UUID) {
+        guard captureID == id else { return }
+        watchdog?.cancel(); watchdog = nil
+        task = nil; captureID = nil; captureTimedOut = false
+        startNext()
+    }
+
+    private func scheduleExpiry() {
+        expiryTask?.cancel()
+        guard let oldest = cache.values.map(\.capturedAt).min() else { return }
+        let delay = max(0, cacheLifetime - Date().timeIntervalSince(oldest))
+        expiryTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            guard let self else { return }
+            let now = Date()
+            self.cache = self.cache.filter { now.timeIntervalSince($0.value.capturedAt) < self.cacheLifetime }
+            self.scheduleExpiry()
+        }
+    }
+
     static func matchingIndex(for entry: WindowSwitcherAppEntry, candidates: [WindowSwitcherPreviewCandidate]) -> Int? {
         if let number = entry.windowNumber {
             let exact = candidates.indices.filter {

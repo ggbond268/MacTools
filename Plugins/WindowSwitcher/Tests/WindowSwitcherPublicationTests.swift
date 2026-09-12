@@ -5,6 +5,18 @@ import XCTest
 
 @MainActor
 final class WindowSwitcherPublicationTests: XCTestCase {
+
+    func testImmediateAXReplacementDoesNotInheritReusedWindowNumber() {
+        var state = WindowSwitcherPublishedWindows()
+        state.update(snapshots: [42: [window("A", title: "Old", number: 1)]], records: [record(1, "Old")], recordsAreFresh: true)
+        let old = state.entries[0].id
+        state.recency.record(old)
+        state.update(snapshots: [42: [window("B", title: "New", number: 1)]], records: [record(1, "New")], recordsAreFresh: true)
+        XCTAssertNotEqual(state.entries[0].id, old)
+        XCTAssertNotEqual(state.recency.focusedID, old)
+        XCTAssertEqual(state.entries[0].workerWindowID, "B")
+    }
+
     func testOrderedOutNamedSurfaceIsExcludedWithoutDroppingOtherSpaceOrAXWindows() {
         var hidden = record(10, "Hidden utility"); hidden.hasSpace = false
         hidden = WindowSwitcherWindowRecord(windowNumber: hidden.windowNumber, processIdentifier: 42, title: hidden.title, isOnScreen: false, bounds: bounds, hasSpace: false)

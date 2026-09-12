@@ -6,6 +6,40 @@ import MacToolsPluginKit
 
 @MainActor
 final class WindowSwitcherShortcutTapTests: XCTestCase {
+
+    func testStoppedListenerDropsQueuedReleaseEscapeAndRevocation() async throws {
+        let tap = WindowSwitcherShortcutTap(accessibilityTrusted: { true })
+        tap.configure(allBinding: WindowSwitcherShortcutBindingStore.defaultBinding, currentAppBinding: nil)
+        var callbacks = 0
+        tap.onShortcutReleased = { callbacks += 1 }; tap.onEscape = { callbacks += 1 }
+        _ = tap.handle(type: .keyDown, event: try event(kVK_Tab, flags: .maskAlternate))
+        _ = tap.handle(type: .flagsChanged, event: try event(kVK_Option))
+        tap.setSessionActive(true)
+        _ = tap.handle(type: .keyDown, event: try event(kVK_Escape))
+        tap.stop()
+        let denied = WindowSwitcherShortcutTap(accessibilityTrusted: { false })
+        denied.onAccessibilityRevoked = { callbacks += 1 }
+        _ = denied.handle(type: .keyDown, event: try event(kVK_Tab))
+        denied.stop()
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(callbacks, 0)
+    }
+
+    func testQuickReleaseSurvivesSessionSetupInvalidation() async throws {
+        let tap = WindowSwitcherShortcutTap(accessibilityTrusted: { true })
+        tap.configure(allBinding: WindowSwitcherShortcutBindingStore.defaultBinding, currentAppBinding: nil)
+        var phases: [String] = []
+        tap.onShortcutPressed = { _, _, _ in
+            tap.setSessionActive(false); tap.setSessionActive(true)
+            phases.append("press")
+        }
+        tap.onShortcutReleased = { phases.append("release") }
+        _ = tap.handle(type: .keyDown, event: try event(kVK_Tab, flags: .maskAlternate))
+        _ = tap.handle(type: .flagsChanged, event: try event(kVK_Option))
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(phases, ["press", "release"])
+    }
+
     private func event(_ code: Int, flags: CGEventFlags = []) throws -> CGEvent {
         let event = try XCTUnwrap(CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: true))
         event.flags = flags

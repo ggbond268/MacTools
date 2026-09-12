@@ -74,6 +74,48 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
 }
 
 final class WindowSwitcherProcessWorkerTests: XCTestCase, @unchecked Sendable {
+
+    func testLargeDuplicateListRetainsStableDistinctIdentities() {
+        let handles = (1000..<6000).map { AXUIElementCreateApplication(pid_t($0)) }
+        var identities = WindowSwitcherWindowIdentities()
+        let first = identities.reconcile(handles + handles)
+        XCTAssertEqual(Set(first).count, 5000)
+        XCTAssertEqual(Array(first.prefix(5000)), Array(first.suffix(5000)))
+        XCTAssertEqual(identities.reconcile(handles.reversed()), Array(first.prefix(5000).reversed()))
+        var checks = 0
+        XCTAssertNil(identities.reconcile([AXUIElementCreateApplication(99999)] + handles, shouldContinue: { checks += 1; return checks < 10 }))
+        XCTAssertEqual(identities.reconcile(handles), Array(first.prefix(5000)), "Interrupted identity reconciliation must not commit a partial list")
+    }
+
+    func testWindowListReadTimeCountsAgainstMetadataBudget() async {
+        let access = ControlledWindowAXAccess()
+        access.update { $0.windows = [AXUIElementCreateApplication(201)] }
+        let clock = WindowSwitcherTestClock()
+        let worker = WindowSwitcherProcessWorker(pid: 200, launchDate: nil, access: access, uptime: { clock.now }, invalidated: {})
+        defer { worker.stop() }
+        let initial = await worker.scan()
+        access.update { $0.delayRead = { clock.advance(1) } }
+        let slow = await worker.scan()
+        XCTAssertTrue(slow.unavailable); XCTAssertFalse(slow.windowListReadSucceeded)
+        XCTAssertEqual(slow.windows.map(\.id), initial.windows.map(\.id))
+        XCTAssertTrue(slow.windows.allSatisfy(\.unavailable))
+    }
+
+    func testForegroundIntentCancellationDuringRestorePreventsRaise() async throws {
+        let access = ControlledWindowAXAccess()
+        let intent = WindowSwitcherActionCancellation()
+        access.update {
+            $0.windows = [AXUIElementCreateApplication(201)]; $0.minimized = true
+            $0.restoreRequested = { intent.cancel() }
+        }
+        let worker = WindowSwitcherProcessWorker(pid: 200, launchDate: nil, access: access, invalidated: {})
+        defer { worker.stop() }
+        let initial = await worker.scan()
+        let result = await worker.perform(try XCTUnwrap(initial.windows.first?.id), close: false, cancellation: intent)
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(access.read { $0.actions }, [kAXMinimizedAttribute])
+    }
+
     func testObserverDoesNotRescanAppsForEveryDragFrame() {
         XCTAssertFalse(WindowSwitcherProcessWorker.windowNotifications.contains(kAXMovedNotification))
         XCTAssertFalse(WindowSwitcherProcessWorker.windowNotifications.contains(kAXResizedNotification))
@@ -321,4 +363,11 @@ final class WindowSwitcherProcessWorkerTests: XCTestCase, @unchecked Sendable {
         XCTAssertNil(fallback.windows.first?.windowNumber)
     }
 
+}
+
+private final class WindowSwitcherTestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: TimeInterval = 0
+    var now: TimeInterval { lock.lock(); defer { lock.unlock() }; return value }
+    func advance(_ amount: TimeInterval) { lock.lock(); value += amount; lock.unlock() }
 }

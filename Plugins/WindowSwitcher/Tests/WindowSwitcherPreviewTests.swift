@@ -5,6 +5,54 @@ import XCTest
 
 @MainActor
 final class WindowSwitcherPreviewTests: XCTestCase {
+
+    func testHungCaptureTimesOutWithoutStartingReplacementUntilItFinishes() async {
+        var resumes: [CheckedContinuation<NSImage?, Never>] = []
+        var captured: [String] = [], message: String?
+        let preview = WindowSwitcherPreview(hasPermission: { true }, captureTimeout: .milliseconds(80), capture: { entry in
+            captured.append(entry.id)
+            return await withCheckedContinuation { resumes.append($0) }
+        })
+        preview.onChange = { _, value in message = value }
+        preview.select(entry("a"))
+        await eventually { message != nil }
+        preview.cancel(); preview.select(entry("b"))
+        XCTAssertNotNil(message)
+        try? await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(captured, ["a"])
+        resumes.removeFirst().resume(returning: nil)
+        await eventually { captured == ["a", "b"] }
+        resumes.removeFirst().resume(returning: nil)
+        preview.cancel()
+    }
+
+    func testSuspendedCaptureDoesNotRetainPreviewOwner() async {
+        var resume: CheckedContinuation<NSImage?, Never>?
+        var preview: WindowSwitcherPreview? = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in
+            await withCheckedContinuation { resume = $0 }
+        })
+        weak var owner = preview
+        preview?.select(entry("a"))
+        await eventually { resume != nil }
+        preview = nil
+        XCTAssertNil(owner)
+        resume?.resume(returning: nil)
+    }
+
+    func testIdleDismissedCacheExpiresWithoutAnotherSelection() async {
+        weak var cachedImage: NSImage?
+        let preview = WindowSwitcherPreview(hasPermission: { true }, cacheLifetime: 0.08, capture: { _ in
+            let image = NSImage(size: NSSize(width: 20, height: 10))
+            cachedImage = image
+            return image
+        })
+        preview.select(entry("a"))
+        await eventually { cachedImage != nil }
+        preview.cancel()
+        XCTAssertNotNil(cachedImage)
+        await eventually { cachedImage == nil }
+    }
+
     private func entry(_ id: String) -> WindowSwitcherAppEntry {
         WindowSwitcherAppEntry(id: id, processIdentifier: 100, bundleIdentifier: "fixture", appName: "Fixture",
             windowTitle: id, icon: nil, windowElement: AXUIElementCreateApplication(100), isMinimized: false, shortcutToken: nil)

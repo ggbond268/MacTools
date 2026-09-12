@@ -44,6 +44,34 @@ private final class ControlledSwitcherCatalog: WindowSwitcherCatalog {
 
 @MainActor
 final class WindowSwitcherLifecycleTests: XCTestCase {
+
+    func testLateCallbacksAndRecorderCompletionCannotRestartDeactivatedPlugin() {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        catalog.windows = [entry("a"), entry("b")]
+        let plugin = plugin(catalog: catalog, tap: tap)
+        plugin.deactivate(reason: .disabled)
+        tap.onShortcutReleased(); tap.onShortcutPressed(false, false, false)
+        plugin.setShortcutRecording(false); plugin.refresh()
+        XCTAssertNil(plugin.session)
+        XCTAssertFalse(tap.isRunning); XCTAssertFalse(catalog.isRunning)
+        XCTAssertTrue(plugin.store.configuration.isEnabled)
+    }
+
+    func testRecorderSuspendsChordsThroughBindingRefreshAndRestoresOnEnd() {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        catalog.windows = [entry("a"), entry("b")]
+        let plugin = plugin(catalog: catalog, tap: tap)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        XCTAssertTrue(tap.isRunning)
+        plugin.setShortcutRecording(true)
+        plugin.shortcutBindingDidChange(id: WindowSwitcherConstants.shortcutDefinitionID, binding: nil)
+        plugin.refresh()
+        tap.onShortcutPressed(false, false, false)
+        XCTAssertFalse(tap.isRunning); XCTAssertNil(tap.allBinding); XCTAssertNil(plugin.session)
+        plugin.setShortcutRecording(false)
+        XCTAssertTrue(tap.isRunning); XCTAssertNotNil(tap.allBinding)
+    }
+
     private final class PermissionFixture {
         var granted = true
     }
@@ -64,6 +92,7 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
             id == WindowSwitcherConstants.shortcutDefinitionID
                 ? WindowSwitcherShortcutBindingStore.defaultBinding : WindowSwitcherShortcutBindingStore.currentAppBinding
         }
+        plugin.activate(context: PluginRuntimeContext(pluginID: WindowSwitcherConstants.pluginID, storage: WindowSwitcherMemoryStorage()))
         return plugin
     }
     private func eventually(_ predicate: () -> Bool) async {

@@ -189,7 +189,7 @@ final class WindowSwitcherMigrationTests: XCTestCase {
         defer { controller.hide() }
         let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
         func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
-        let search = try XCTUnwrap(descendants(panel.contentView!).compactMap { $0 as? NSSearchField }.first)
+        let search = try XCTUnwrap(descendants(panel.contentView!).compactMap { $0 as? NSTextField }.first { $0.identifier?.rawValue == "window-switcher-search" })
         panel.makeFirstResponder(search)
         XCTAssertFalse(controller.session!.usesDirectKeys)
         XCTAssertTrue(controller.session!.isPersistent)

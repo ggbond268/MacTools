@@ -26,4 +26,10 @@ Window Switcher filters invisible compositor-only surfaces with no Space members
 
 Direct Keys supports clicking a key badge or choosing Change Key in both grid and list layouts. Slim, wide arrow buttons reveal additional grid rows. Window switching verifies actual foreground and exact window focus across differing app activation behavior, with no app-specific exceptions.
 
-Window Switcher matches the command palette’s rounded search field and full-height close button, with options beside the view controls. Direct Keys editing shows a prominent recording panel near the top; selecting another card preserves its clickable key control, and context menus keep the chooser open while choosing an action.
+Window Switcher uses a full-width rounded search field with separately laid-out icon, native text editor, and Clear Search button. Placeholder and editor share the same geometry. Escape dismisses the chooser; Close Switcher in the options menu provides a mouse-accessible alternative without a separate toolbar button. Direct Keys editing shows a prominent recording panel near the top; selecting another card preserves its clickable key control, and context menus keep the chooser open while choosing an action.
+
+### Reliability boundaries
+
+Window actions retain the menu's original target and reject targets that disappeared. A continuously observed AX replacement receives a new public identity even if its compositor number is reused; legitimate fallback-to-AX Space rediscovery retains selection. Activation stops submitting focus changes after an intervening foreground application change. Already submitted system actions cannot be undone.
+
+Discovery includes list processing in its per-app budget and retains an unavailable snapshot when the budget expires. Preview captures remain serial; after a two-second wait the chooser reports unavailability, keeps the occupied capture slot bounded, and resumes the latest pending selection when the system operation returns. Cached previews expire after thirty seconds even when idle. Hidden preview panes do not initiate captures.

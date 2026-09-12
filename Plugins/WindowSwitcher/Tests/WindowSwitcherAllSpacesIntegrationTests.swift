@@ -5,6 +5,27 @@ import XCTest
 
 @MainActor
 final class WindowSwitcherAllSpacesIntegrationTests: XCTestCase {
+
+    func testFallbackRejectsLateMatchingScanAndDoesNotStartRecordsRead() async {
+        let target = entry("late")
+        let window = WindowSwitcherWindowSnapshot(id: "late", element: AXUIElementCreateApplication(42), title: "Window", minimized: false, bounds: bounds)
+        var recordReads = 0
+        let result = await WindowSwitcherAppCatalog.waitForFallbackWindow(target, timeout: .milliseconds(10), scan: {
+            try? await Task.sleep(for: .milliseconds(35))
+            return WindowSwitcherScan(windows: [window], unavailable: false)
+        }, records: { recordReads += 1; return [] })
+        XCTAssertNil(result); XCTAssertEqual(recordReads, 0)
+    }
+
+    func testFallbackRejectsLateRecordsEvenWhenScanMatched() async {
+        let target = entry("late")
+        let window = WindowSwitcherWindowSnapshot(id: "late", element: AXUIElementCreateApplication(42), title: "Window", minimized: false, bounds: bounds)
+        let result = await WindowSwitcherAppCatalog.waitForFallbackWindow(target, timeout: .milliseconds(10), scan: {
+            WindowSwitcherScan(windows: [window], unavailable: false)
+        }, records: { try? await Task.sleep(for: .milliseconds(35)); return [] })
+        XCTAssertNil(result)
+    }
+
     private let bounds = CGRect(x: 10, y: 20, width: 800, height: 600)
     private func entry(_ id: String, element: AXUIElement? = nil, launch: Date? = Date(timeIntervalSince1970: 100)) -> WindowSwitcherAppEntry {
         WindowSwitcherAppEntry(id: id, processIdentifier: 42, bundleIdentifier: "fixture", appName: "Fixture",

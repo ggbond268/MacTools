@@ -63,6 +63,8 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     private let accessibilityTrusted: @MainActor () -> Bool
     private let requestAccessibilityTrust: @MainActor (Bool) -> Bool
 
+    private var isActive = false
+    private var isRecordingShortcut = false
     private var isAccessibilityGranted: Bool
     private var lastErrorMessage: String?
     private(set) var session: WindowSwitcherSession?
@@ -371,6 +373,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                     systemImage: "command", embeddedShortcutGroupIDs: ["window-switcher"]) { [weak self] context in
                     if let self {
                         WindowSwitcherShortcutSettingsView(context: context, localization: localization,
+                            onRecordingChange: { [weak self] in self?.setShortcutRecording($0) },
                             binding: { id in self.shortcutBindingResolver?(id) ?? (self.shortcutBindingResolver == nil
                                 ? (id == WindowSwitcherConstants.currentAppShortcutID ? WindowSwitcherShortcutBindingStore.currentAppBinding : self.allWindowsDefaultBinding) : nil) })
                     }
@@ -380,11 +383,14 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     }
 
     func activate(context: PluginRuntimeContext) {
+        isActive = true
         refreshAccessibilityPermission()
         syncShortcutTap()
     }
 
     func deactivate(reason: PluginDeactivationReason) {
+        isActive = false
+        isRecordingShortcut = false
         cancelSession()
         shortcutTap.stop()
         appCatalog.stop()
@@ -753,6 +759,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     }
 
     private func ensureAccessibilityForInvocation() -> Bool {
+        guard isActive, !isRecordingShortcut else { return false }
         refreshAccessibilityPermission()
         guard isAccessibilityGranted else {
             lastErrorMessage = localization.string(
@@ -804,6 +811,10 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     }
 
     private func configureShortcutBindings() {
+        guard !isRecordingShortcut else {
+            shortcutTap.configure(allBinding: nil, currentAppBinding: nil)
+            return
+        }
         func resolve(_ id: String, defaultBinding: ShortcutBinding?) -> ShortcutBinding? {
             // A host-supplied nil is authoritative, including conflict suppression.
             if let shortcutBindingResolver { return shortcutBindingResolver(id) }
@@ -814,9 +825,15 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                 defaultBinding: store.configuration.usesCompanionDefaults ? WindowSwitcherShortcutBindingStore.currentAppBinding : nil))
     }
 
+    func setShortcutRecording(_ recording: Bool) {
+        isRecordingShortcut = recording && isActive
+        if isRecordingShortcut { cancelSession() }
+        syncShortcutTap()
+    }
+
     private func syncShortcutTap() {
         configureShortcutBindings()
-        if store.configuration.isEnabled && isAccessibilityGranted {
+        if isActive && !isRecordingShortcut && store.configuration.isEnabled && isAccessibilityGranted {
             appCatalog.start()
             shortcutTap.start()
             if !shortcutTap.isRunning { lastErrorMessage = localization.string("error.shortcutTap", defaultValue: "无法监听快捷键，请检查辅助功能权限。") }

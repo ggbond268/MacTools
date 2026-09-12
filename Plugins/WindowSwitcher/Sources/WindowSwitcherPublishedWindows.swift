@@ -26,6 +26,19 @@ struct WindowSwitcherPublishedWindows {
         var published: [WindowSwitcherAppEntry] = []
         for pid in snapshots.keys.sorted() {
             let raw = snapshots[pid] ?? []
+            // A continuously observed AX replacement is a new lifetime even if
+            // WindowServer immediately reuses its number. Fallback-to-AX discovery
+            // still retains its public ID across legitimate Space transitions.
+            let previousAX = Dictionary(entries.filter { $0.processIdentifier == pid && $0.windowElement != nil && $0.windowNumber != nil }
+                .map { ($0.windowNumber!, $0) }, uniquingKeysWith: { first, _ in first })
+            for entry in raw {
+                if let number = entry.windowNumber, let element = entry.windowElement,
+                   let previous = previousAX[number], let oldElement = previous.windowElement,
+                   !CFEqual(oldElement, element) {
+                    knownWindowIDs[pid]?.removeValue(forKey: number)
+                    confirmedAXWindowNumbers[pid]?.remove(number)
+                }
+            }
             let previousAliases = axAliases[pid] ?? [:]
             let normalized = raw.map { entry in
                 var entry = entry
