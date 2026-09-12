@@ -821,12 +821,13 @@ final class PluginCatalogManager {
 
     private func compatibleCatalogEntry(id: String) throws -> PluginCatalogEntry {
         let entry = try catalogEntry(id: id)
-        guard isCompatibleWithCurrentHost(entry) else {
+        guard PluginVersionComparator.isVersion(dynamicPluginManager.hostVersion, atLeast: entry.minimumHostVersion) else {
             throw PluginPackageManifestError.incompatibleHostVersion(
                 required: entry.minimumHostVersion,
                 current: dynamicPluginManager.hostVersion
             )
         }
+        if let failure = dynamicPluginManager.requirementFailure(for: entry.requirements) { throw failure }
         return entry
     }
 
@@ -834,7 +835,7 @@ final class PluginCatalogManager {
         PluginVersionComparator.isVersion(
             dynamicPluginManager.hostVersion,
             atLeast: entry.minimumHostVersion
-        )
+        ) && dynamicPluginManager.requirementFailure(for: entry.requirements) == nil
     }
 
     private func shouldDeferSourceUpdateForExtraction(

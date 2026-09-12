@@ -232,6 +232,7 @@ enum AppDockVisibilityController {
 
 @MainActor
 final class StandaloneCommandPaletteState: ObservableObject {
+    @Published private(set) var inputItem: ActionInputItem?
     @Published private(set) var presentationOrigin: UnifiedSearchPresentationOrigin?
     @Published private(set) var focusRequestID: UInt = 0
     @Published private(set) var resetRequestID: UInt = 0
@@ -241,7 +242,8 @@ final class StandaloneCommandPaletteState: ObservableObject {
     private var nextQuickSelectionRequestID: UInt = 0
     private var pendingExecutionCancellation: (() -> Void)?
 
-    func prepareForPresentation(shortcutLabel: String) {
+    func prepareForPresentation(shortcutLabel: String, input: ActionInputItem? = nil) {
+        inputItem = input
         presentationOrigin = .globalShortcut(shortcutLabel)
         quickSelectionRequest = nil
         resetRequestID &+= 1
@@ -332,6 +334,7 @@ struct StandaloneCommandPaletteRootView: View {
                 quickSelectionRequest: state.quickSelectionRequest,
                 showsCustomShadow: false,
                 actions: actions,
+                initialInputItem: state.inputItem,
                 dragCoordinator: dragCoordinator
             )
             .padding(StandaloneCommandPaletteLayout.surfaceInset)
@@ -581,6 +584,13 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
             return
         }
 
+        showCommandPalette()
+    }
+
+    func showCommandPalette(input: ActionInputItem? = nil) {
+        if let input, !pluginHost.actionInputRegistry.contains(input) { return }
+        settingsNavigationCoordinator?.dismissUnifiedSearch()
+
         pluginHost.captureCurrentFocusedWindowTarget()
         launchAtLoginController.refreshStatus()
         pluginHost.refreshActionPresentations(providerIDs: ["apple-shortcuts"])
@@ -593,7 +603,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         let shortcutLabel = pluginHost.appShortcutItems.first {
             $0.action == .openCommandPalette
         }?.bindingText ?? ""
-        state.prepareForPresentation(shortcutLabel: shortcutLabel)
+        state.prepareForPresentation(shortcutLabel: shortcutLabel, input: input)
         applyCommandPaletteAppearance()
 
         let screens = NSScreen.screens

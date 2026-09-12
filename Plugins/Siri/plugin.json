@@ -1,0 +1,239 @@
+{
+  "id": "siri",
+  "displayName": "Siri",
+  "summary": "从命令面板向 Siri 发送消息",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "Siri",
+      "summary": "أرسل رسائل إلى Siri من لوحة الأوامر."
+    },
+    "de": {
+      "displayName": "Siri",
+      "summary": "Sende Nachrichten über die Befehlspalette an Siri."
+    },
+    "en": {
+      "displayName": "Siri",
+      "summary": "Send messages to Siri from the command palette."
+    },
+    "es": {
+      "displayName": "Siri",
+      "summary": "Envía mensajes a Siri desde la paleta de comandos."
+    },
+    "fr": {
+      "displayName": "Siri",
+      "summary": "Envoyez des messages à Siri depuis la palette de commandes."
+    },
+    "ja": {
+      "displayName": "Siri",
+      "summary": "コマンドパレットから Siri にメッセージを送信します。"
+    },
+    "ko": {
+      "displayName": "Siri",
+      "summary": "명령 팔레트에서 Siri에 메시지를 보냅니다."
+    },
+    "pt": {
+      "displayName": "Siri",
+      "summary": "Envie mensagens para a Siri pela paleta de comandos."
+    },
+    "ru": {
+      "displayName": "Siri",
+      "summary": "Отправляйте сообщения Siri из палитры команд."
+    },
+    "zh-Hans": {
+      "displayName": "Siri",
+      "summary": "从命令面板向 Siri 发送消息"
+    },
+    "zh-Hant": {
+      "displayName": "Siri",
+      "summary": "從命令面板向 Siri 傳送訊息"
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "action-title": {
+      "ar": "اسأل Siri — محادثة جديدة",
+      "de": "Siri fragen — Neues Gespräch",
+      "en": "Ask Siri — New Conversation",
+      "es": "Preguntar a Siri — Nueva conversación",
+      "fr": "Demander à Siri — Nouvelle conversation",
+      "ja": "Siri に質問 — 新規チャット",
+      "ko": "Siri에게 질문 — 새 대화",
+      "pt": "Perguntar à Siri — Nova conversa",
+      "ru": "Спросить Siri — Новый разговор",
+      "zh-Hans": "询问 Siri — 新对话",
+      "zh-Hant": "詢問 Siri — 新對話"
+    }
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 6,
+  "bundleRelativePath": "Siri.bundle",
+  "factoryClass": "SiriPlugin.SiriPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "SiriPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": [
+    "accessibility"
+  ],
+  "category": "productivity",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "GPL-3.0-only"
+  },
+  "discovery": {
+    "keywords": [
+      "siri",
+      "ask siri",
+      "chat"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "Siri"
+      ],
+      "de": [
+        "Siri"
+      ],
+      "en": [
+        "Siri"
+      ],
+      "es": [
+        "Siri"
+      ],
+      "fr": [
+        "Siri"
+      ],
+      "ja": [
+        "Siri"
+      ],
+      "ko": [
+        "Siri"
+      ],
+      "pt": [
+        "Siri"
+      ],
+      "ru": [
+        "Siri"
+      ],
+      "zh-Hans": [
+        "Siri"
+      ],
+      "zh-Hant": [
+        "Siri"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "productivity"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "27.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [
+      {
+        "bundleID": "com.apple.campo",
+        "name": "Siri AI"
+      }
+    ],
+    "executables": [],
+    "permissionIDs": [
+      "accessibility"
+    ],
+    "setupComplexity": "simple",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "siri-message-input",
+      "siri-submission-state"
+    ],
+    "dataPersisted": [],
+    "retention": {
+      "policy": "none"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "siri",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "ask-new-conversation",
+            "title": "@productStrings.action-title",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "siri",
+              "ask siri"
+            ],
+            "systemImage": "sparkles",
+            "parameters": [
+              {
+                "id": "message",
+                "title": "消息",
+                "kind": "string",
+                "privacy": "sensitive",
+                "portability": "localOnly",
+                "isRequired": true
+              }
+            ],
+            "permissionIDs": [
+              "accessibility"
+            ],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
+}

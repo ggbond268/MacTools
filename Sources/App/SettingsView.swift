@@ -4497,6 +4497,23 @@ private struct PluginFormPage: View {
                 }
             }
 
+            let inputItems = pluginHost.actionInputRegistry.items.filter {
+                $0.id.providerID == item.pluginID && !$0.descriptor.aliases.isEmpty
+            }
+            if !inputItems.isEmpty {
+                Section {
+                    ForEach(inputItems) { input in
+                        CommandPaletteAliasSettingsRow(pluginHost: pluginHost, item: input)
+                            .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    }
+                } header: {
+                    SettingsGroupedFormSectionHeader(
+                        title: AppL10n.settings("actionInput.alias.section", defaultValue: "命令面板触发短语"),
+                        systemImage: "text.cursor", layoutWidth: widths.readableContent
+                    )
+                }
+            }
+
             ForEach(item.sections.filter(\.isVisible)) { section in
                 PluginFormSection(
                     pluginHost: pluginHost,
@@ -4921,6 +4938,7 @@ private struct PluginWorkspacePage: View {
                     ) {
                         introduction
                         workspacePermissions
+                        aliasSettings
                         workspaceContent
                     }
                 }
@@ -4931,8 +4949,25 @@ private struct PluginWorkspacePage: View {
                 ) {
                     introduction
                     workspacePermissions
+                    aliasSettings
                     workspaceContent
                         .frame(maxHeight: .infinity, alignment: .topLeading)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var aliasSettings: some View {
+        let inputs = pluginHost.actionInputRegistry.items.filter {
+            $0.id.providerID == item.pluginID && !$0.descriptor.aliases.isEmpty
+        }
+        if !inputs.isEmpty {
+            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+                Label(AppL10n.settings("actionInput.alias.section", defaultValue: "命令面板触发短语"), systemImage: "text.cursor")
+                    .font(PluginSettingsTheme.Typography.sectionTitle).foregroundStyle(.secondary)
+                ForEach(inputs) { input in
+                    CommandPaletteAliasSettingsRow(pluginHost: pluginHost, item: input)
+                        .padding().pluginSettingsCardBackground(.standard)
                 }
             }
         }

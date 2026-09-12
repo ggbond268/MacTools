@@ -113,6 +113,14 @@ Nightly isolation also covers Activity Bar sockets/hook registrations and CLI/br
 
 For the PluginKit v6 migration, source manifests declare `pluginKitVersion: 6` and `minHostVersion: "1.3.0"`. Leave plugin package versions, `Configs/AppVersion.xcconfig`, signed catalogs, and compiled release notes to `make release`; do not pre-bump them in the ABI migration change. Run `make release` for plugins first (auto selects all plugins), wait for the v6 catalog commit and Pages deployment, then run the app release. CI and `make ci` check the frozen v6 client, including settings row, option, and control layouts.
 
+### Actions that accept palette text
+
+Input actions use the optional `PluginActionInputProviding` contract in MacTools 1.3.1. Keep incomplete input descriptors separate from canonical executable references, mark user text sensitive and local-only, and preserve the existing 4 KiB per-string limit. Selected input actions support Tab completion when they declare an unambiguous alias. Aliases are defaults supplied by the plugin; the host stores user overrides and validates conflicts. Providers still receive their original input descriptors. Add alias/input-session tests, minimum-host inventory entries, and real interaction evidence for app automation. The [Siri plugin documentation](docs/plugins/siri.md) describes the first integration and its current compatibility boundary.
+
+Declared `requirements.minimumMacOSVersion` and `requirements.applications` are enforced by the shared host checker at catalog installation, manual package installation, and activation. Keep required applications accurate: missing requirements disable installation or loading, while permissions remain setup guidance. Legacy packages without requirements retain their existing behavior.
+
+Plugins may adopt `PluginActionInputPresentationRequesting` to request the host composer for one of their registered input actions. The host validates provider ownership and routes presentation; plugins must not create their own palette windows or execute merely to open input. This opt-in API requires MacTools 1.3.1.
+
 ### Managed Nightly CLI distribution
 
 Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-install.json` with `scripts/cli-install-manifest.py`, embeds it in the app resources, and then signs the outer app. Publish that same ZIP and JSON only after both notarization submissions pass. The app trusts the resource seal, never a downloaded unsigned manifest. Personal publishers must use the same ordering with an immutable `/releases/<build>` URL. See [managed CLI distribution](docs/plugins/managed-cli-distribution.md) for the contract, ownership layout, and release acceptance gates.
