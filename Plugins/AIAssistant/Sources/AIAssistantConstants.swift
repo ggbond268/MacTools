@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Foundation
 import MacToolsPluginKit
 
@@ -17,5 +18,8 @@ enum AIAssistantConstants {
 
     enum Defaults {
         static let shortcutEnabled = true
+        static let translateShortcut = ShortcutBinding(keyCode: UInt16(kVK_ANSI_1), modifiers: [.option])
+        static let summarizeShortcut = ShortcutBinding(keyCode: UInt16(kVK_ANSI_2), modifiers: [.option])
+        static let polishShortcut = ShortcutBinding(keyCode: UInt16(kVK_ANSI_3), modifiers: [.option])
     }
 }

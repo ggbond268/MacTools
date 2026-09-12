@@ -276,9 +276,9 @@
     "settings.provider.baseURL.placeholder": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "https://api.deepseek.com" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "https://api.deepseek.com" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "https://api.deepseek.com" } }
+        "en": { "stringUnit": { "state": "translated", "value": "https://api.deepseek.com/v1" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "https://api.deepseek.com/v1" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "https://api.deepseek.com/v1" } }
       }
     },
     "settings.provider.apiKey.placeholder": {
@@ -292,9 +292,9 @@
     "settings.provider.model.placeholder": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "deepseek-v4-flash" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "deepseek-v4-flash" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "deepseek-v4-flash" } }
+        "en": { "stringUnit": { "state": "translated", "value": "deepseek-flash" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "deepseek-flash" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "deepseek-flash" } }
       }
     },
     "settings.provider.reasoning.title": {
