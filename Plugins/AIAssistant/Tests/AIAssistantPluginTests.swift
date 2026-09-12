@@ -22,7 +22,11 @@ final class AIAssistantPluginTests: XCTestCase {
         let definitions = plugin.shortcutDefinitions
         XCTAssertEqual(definitions.map(\.actionID), ["translate", "summarize", "polish"])
         XCTAssertEqual(definitions.map(\.scope), [.global, .global, .global])
-        XCTAssertEqual(definitions.map(\.defaultBinding), [nil, nil, nil])
+        XCTAssertEqual(definitions.map(\.defaultBinding), [
+            AIAssistantConstants.Defaults.translateShortcut,
+            AIAssistantConstants.Defaults.summarizeShortcut,
+            AIAssistantConstants.Defaults.polishShortcut,
+        ])
 
         // A disabled prompt keeps its shortcut definition so its binding stays
         // editable in settings; execution is gated on `isEnabled` instead.
@@ -91,8 +95,8 @@ final class AIAssistantPluginTests: XCTestCase {
         let polishDefinition = definitions.first { $0.actionID == "polish" }
 
         XCTAssertEqual(translateDefinition?.defaultBinding, migratedBinding)
-        XCTAssertNil(summarizeDefinition?.defaultBinding)
-        XCTAssertNil(polishDefinition?.defaultBinding)
+        XCTAssertEqual(summarizeDefinition?.defaultBinding, AIAssistantConstants.Defaults.summarizeShortcut)
+        XCTAssertEqual(polishDefinition?.defaultBinding, AIAssistantConstants.Defaults.polishShortcut)
     }
 
     func testDeclaresAccessibilityAndAutomationPermissions() {

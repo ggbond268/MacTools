@@ -158,10 +158,28 @@ final class AIAssistantPlugin:
                     ),
                     actionID: prompt.id,
                     scope: .global,
-                    defaultBinding: migratedDefaultBinding(for: prompt),
+                    defaultBinding: defaultBinding(for: prompt),
                     isRequired: false
                 )
             }
+    }
+
+    /// Returns the migrated shortcut binding from legacy IDs if present,
+    /// otherwise falls back to the default Option+1 / Option+2 / Option+3 bindings for built-in prompts.
+    private func defaultBinding(for prompt: AIAssistantPrompt) -> ShortcutBinding? {
+        if let migrated = migratedDefaultBinding(for: prompt) {
+            return migrated
+        }
+        switch prompt.id {
+        case "translate":
+            return AIAssistantConstants.Defaults.translateShortcut
+        case "summarize":
+            return AIAssistantConstants.Defaults.summarizeShortcut
+        case "polish":
+            return AIAssistantConstants.Defaults.polishShortcut
+        default:
+            return nil
+        }
     }
 
     /// Maps legacy shortcut definition IDs from earlier versions onto the new

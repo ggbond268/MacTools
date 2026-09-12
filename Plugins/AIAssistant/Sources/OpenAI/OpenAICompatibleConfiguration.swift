@@ -2,8 +2,8 @@ import Foundation
 import MacToolsPluginKit
 
 struct OpenAICompatibleConfiguration: Equatable, Sendable {
-    static let defaultBaseURL = "https://api.deepseek.com"
-    static let defaultModel = "deepseek-v4-flash"
+    static let defaultBaseURL = "https://api.deepseek.com/v1"
+    static let defaultModel = "deepseek-flash"
     static let defaultTemperature = 0.7
 
     var baseURL: String

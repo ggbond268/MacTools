@@ -9,8 +9,8 @@ final class AIAssistantProviderProfileTests: XCTestCase {
 
         XCTAssertEqual(profile.id, "default")
         XCTAssertTrue(profile.isEnabled)
-        XCTAssertEqual(profile.baseURL, "https://api.deepseek.com")
-        XCTAssertEqual(profile.model, "deepseek-v4-flash")
+        XCTAssertEqual(profile.baseURL, "https://api.deepseek.com/v1")
+        XCTAssertEqual(profile.model, "deepseek-flash")
         XCTAssertEqual(profile.temperature, 0.7, accuracy: 0.0001)
         XCTAssertFalse(profile.enableReasoning)
     }

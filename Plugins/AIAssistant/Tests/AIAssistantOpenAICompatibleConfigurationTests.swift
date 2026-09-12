@@ -6,8 +6,8 @@ final class AIAssistantOpenAICompatibleConfigurationTests: XCTestCase {
     func testDefaultValues() {
         let configuration = OpenAICompatibleConfiguration()
 
-        XCTAssertEqual(configuration.baseURL, "https://api.deepseek.com")
-        XCTAssertEqual(configuration.model, "deepseek-v4-flash")
+        XCTAssertEqual(configuration.baseURL, "https://api.deepseek.com/v1")
+        XCTAssertEqual(configuration.model, "deepseek-flash")
         XCTAssertEqual(configuration.temperature, 0.7, accuracy: 0.0001)
         XCTAssertNil(configuration.reasoningRequested)
         XCTAssertNil(configuration.validationError)

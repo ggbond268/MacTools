@@ -147,7 +147,7 @@ struct AIAssistantServiceSettingsView: View {
                 TextField(
                     "",
                     text: providerBinding(\.baseURL),
-                    prompt: Text(localization.string("settings.provider.baseURL.placeholder", defaultValue: "https://api.deepseek.com"))
+                    prompt: Text(localization.string("settings.provider.baseURL.placeholder", defaultValue: "https://api.deepseek.com/v1"))
                 )
                 .labelsHidden()
                 .textFieldStyle(.roundedBorder)
@@ -223,7 +223,7 @@ struct AIAssistantServiceSettingsView: View {
                 TextField(
                     "",
                     text: providerBinding(\.model),
-                    prompt: Text(localization.string("settings.provider.model.placeholder", defaultValue: "deepseek-v4-flash"))
+                    prompt: Text(localization.string("settings.provider.model.placeholder", defaultValue: "deepseek-flash"))
                 )
                 .labelsHidden()
                 .textFieldStyle(.roundedBorder)
