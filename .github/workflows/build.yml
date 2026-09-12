@@ -56,6 +56,7 @@ jobs:
         run: /usr/bin/python3 scripts/changelog.py validate
 
       - name: Build and run tests
+        id: native-tests
         run: |
           xcodebuild \
             -project "${PROJECT_NAME}.xcodeproj" \
@@ -68,6 +69,14 @@ jobs:
             CODE_SIGN_IDENTITY= \
             test \
             -quiet
+
+      - name: Upload failed native test results
+        if: failure() && steps.native-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-test-results
+          path: ${{ env.DERIVED_DATA }}/Logs/Test/*.xcresult
+          retention-days: 7
 
       - name: Verify native panel layout interactions
         run: make panel-layout-ui-tests

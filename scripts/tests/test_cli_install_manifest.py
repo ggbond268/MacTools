@@ -61,8 +61,25 @@ class CLIInstallManifestTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 self.make(url)
 
-    def test_stable_app_is_rejected(self):
+    def test_channel_and_identity_mismatch_is_rejected(self):
         self.info["MTReleaseChannel"] = "stable"
+        self.write_info()
+        with self.assertRaises(ValueError):
+            self.make()
+
+    def test_stable_release_binds_channel_identity_version_and_archive(self):
+        self.info.update(MTReleaseChannel="stable", CFBundleIdentifier="test.mactools")
+        self.write_info()
+        for url in ["https://example.invalid/releases/123.1",
+                    "https://github.com/owner/repository/releases/download/v1.3.0"]:
+            result = self.make(url)
+            self.assertEqual(result["channel"], "stable")
+            self.assertEqual(result["signingIdentifier"], "test.mactools.cli")
+            self.assertEqual(result["assetURL"], url + "/" + self.archive.name)
+        for tag in ["v1.3.1", "nightly-123-1", "latest"]:
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                self.make("https://github.com/owner/repository/releases/download/" + tag)
+        self.info["MTReleaseChannel"] = "development"
         self.write_info()
         with self.assertRaises(ValueError):
             self.make()

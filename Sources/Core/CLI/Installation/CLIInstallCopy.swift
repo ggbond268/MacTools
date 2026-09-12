@@ -63,7 +63,7 @@ enum CLIInstallCopy: String, CaseIterable {
         case .installed: "CLI 已安装"
         case .updateAvailable: "CLI 有可用更新"
         case .failed: "CLI 操作未完成：%@"
-        case .confirmTitle: "安装 Nightly CLI？"
+        case .confirmTitle: "安装 CLI？"
         case .paths: "安装目录：\n%@\n\n命令路径：\n%@"
         case .ownershipHelp: "不会覆盖手动、Homebrew 或其他渠道安装。无需管理员密码。"
         case .enableIntegration: "启用命令行集成"
