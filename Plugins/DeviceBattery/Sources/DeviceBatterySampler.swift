@@ -3380,6 +3380,12 @@ enum DeviceBatteryBluetoothPowerLogComponent: String, Sendable {
     }
 }
 
+struct DeviceBatteryBluetoothPowerLogComponentReading: Equatable, Sendable {
+    let component: DeviceBatteryBluetoothPowerLogComponent
+    let level: Int
+    let chargeState: DeviceBatteryChargeState
+}
+
 enum DeviceBatteryBluetoothPowerLogParser {
     static func readings(from output: String) -> [DeviceBatteryBluetoothPowerLogReading] {
         var latestByIdentity: [String: DeviceBatteryBluetoothPowerLogReading] = [:]
@@ -4166,6 +4172,35 @@ private final class DeviceBatteryBluetoothScanner: NSObject,
             return
         }
 
+        // Check for JBL headphones first
+        if let jblAdvertisement = JBLHeadphoneAdvertisementParser.advertisement(from: manufacturerData) {
+            let deviceName = advertisedName ?? peripheral.name ?? "JBL Headphone"
+            guard JBLHeadphoneCatalog.isJBLHeadphone(name: deviceName, manufacturer: nil) else {
+                return
+            }
+            
+            let target = BluetoothBatteryTarget(
+                id: "jbl-\(peripheral.identifier.uuidString)",
+                name: deviceName,
+                address: peripheral.identifier.uuidString,
+                vendorID: nil,
+                productID: nil,
+                model: deviceName,
+                kind: .jblHeadphone,
+                detail: JBLHeadphoneCatalog.jblVendorName,
+                isConnected: true
+            )
+            
+            var targetReadings = advertisementReadingsByTargetID[target.id] ?? [:]
+            for reading in jblAdvertisement.readings {
+                targetReadings[reading.component] = reading
+            }
+            advertisementReadingsByTargetID[target.id] = targetReadings
+            completedTargetIDs.insert(target.id)
+            return
+        }
+
+        // Fall back to Apple headphone parsing
         guard let advertisement = DeviceBatteryAppleHeadphoneAdvertisementParser.advertisement(
             from: manufacturerData
         ) else {
@@ -4242,9 +4277,11 @@ private final class DeviceBatteryBluetoothScanner: NSObject,
     private func advertisementBatteryItems() -> [DeviceBatteryItem] {
         advertisementReadingsByTargetID.flatMap { targetID, readingsByComponent -> [DeviceBatteryItem] in
             guard let target = targets.first(where: { $0.id == targetID }) else { return [] }
+            let isJBL = target.kind == .jblHeadphone
+            let source = isJBL ? "JBLHeadphoneAdvertisement" : "AppleHeadphoneAdvertisement"
             return readingsByComponent.values.map { reading in
                 DeviceBatteryItem(
-                    id: "apple-headphone-advertisement-\(target.componentGroupID)-\(reading.component.idSuffix)",
+                    id: "\(source)-\(target.componentGroupID)-\(reading.component.idSuffix)",
                     deviceIdentity: target.deviceIdentity,
                     name: DeviceBatterySampler.powerLogItemNameForReader(
                         component: reading.component,
@@ -4252,7 +4289,7 @@ private final class DeviceBatteryBluetoothScanner: NSObject,
                         localization: localization
                     ),
                     model: target.model,
-                    kind: .airPodsPart,
+                    kind: target.kind,
                     level: reading.level,
                     chargeState: reading.chargeState,
                     parentName: DeviceBatterySampler.powerLogParentNameForReader(
@@ -4260,7 +4297,7 @@ private final class DeviceBatteryBluetoothScanner: NSObject,
                         targetName: target.name,
                         localization: localization
                     ),
-                    source: "AppleHeadphoneAdvertisement",
+                    source: source,
                     lastUpdated: referenceDate,
                     isConnected: target.isConnected,
                     detail: target.detail,
@@ -4283,12 +4320,14 @@ private final class DeviceBatteryBluetoothScanner: NSObject,
                 return nil
             }
 
+            let kind: DeviceBatteryKind = JBLHeadphoneCatalog.isJBLHeadphone(name: name, manufacturer: reading.manufacturer) ? .jblHeadphone : target.kind
+
             return DeviceBatteryItem(
                 id: "corebluetooth-\(target.address ?? target.id)",
                 deviceIdentity: target.deviceIdentity,
                 name: target.name,
                 model: firstNonEmpty(reading.model, target.model),
-                kind: target.kind,
+                kind: kind,
                 level: level,
                 chargeState: .unknown,
                 parentName: nil,
@@ -4298,7 +4337,7 @@ private final class DeviceBatteryBluetoothScanner: NSObject,
                 detail: firstNonEmpty(reading.manufacturer, target.detail),
                 componentIdentity: DeviceBatterySampler.componentAggregateIdentity(
                     groupID: target.deviceIdentity.key,
-                    kind: target.kind
+                    kind: kind
                 )
             )
         }

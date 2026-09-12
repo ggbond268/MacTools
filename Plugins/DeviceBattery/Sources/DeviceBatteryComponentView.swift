@@ -723,6 +723,21 @@ func deviceSymbolName(for item: DeviceBatteryItem) -> String {
         return "computermouse.fill"
     case .airPodsPart:
         let ownName = item.name.lowercased()
+        
+        // Check for JBL headphones first
+        if containsAny(haystack, ["jbl"]) {
+            if ownName.contains("case") || ownName.contains("充电盒") {
+                return "headphones"
+            }
+            if ownName.contains("左耳") || ownName.contains("left") || ownName.contains("🄻") {
+                return "headphones"
+            }
+            if ownName.contains("右耳") || ownName.contains("right") || ownName.contains("🅁") {
+                return "headphones"
+            }
+            return "headphones"
+        }
+        
         if ownName.contains("case") || ownName.contains("充电盒") {
             return airPodsSymbolName(in: haystack, part: .case)
         }
@@ -769,6 +784,9 @@ func deviceSymbolName(for item: DeviceBatteryItem) -> String {
         }
         if containsAny(haystack, ["airpods"]) {
             return airPodsSymbolName(in: haystack, part: .all)
+        }
+        if containsAny(haystack, ["jbl"]) {
+            return "headphones"
         }
         if containsAny(haystack, ["beats", "headphone", "headphones", "headset", "earbud", "earbuds", "耳机"]) {
             return "headphones"
