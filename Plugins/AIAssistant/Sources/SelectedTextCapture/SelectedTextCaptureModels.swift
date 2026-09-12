@@ -11,18 +11,22 @@ enum SelectedTextCaptureStrategyID: String, Equatable, Sendable {
 struct SelectedTextCaptureContext: Sendable {
     let frontmostApplicationBundleID: String?
     let frontmostApplicationLocalizedName: String?
+    let frontmostApplicationProcessIdentifier: pid_t?
 
     init(
         frontmostApplicationBundleID: String? = nil,
-        frontmostApplicationLocalizedName: String? = nil
+        frontmostApplicationLocalizedName: String? = nil,
+        frontmostApplicationProcessIdentifier: pid_t? = nil
     ) {
         self.frontmostApplicationBundleID = frontmostApplicationBundleID
         self.frontmostApplicationLocalizedName = frontmostApplicationLocalizedName
+        self.frontmostApplicationProcessIdentifier = frontmostApplicationProcessIdentifier
     }
 
     init(frontmostApplication: NSRunningApplication?) {
         frontmostApplicationBundleID = frontmostApplication?.bundleIdentifier
         frontmostApplicationLocalizedName = frontmostApplication?.localizedName
+        frontmostApplicationProcessIdentifier = frontmostApplication?.processIdentifier
     }
 }
 

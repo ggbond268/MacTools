@@ -27,20 +27,16 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
 
         pasteboard.clearContents()
         let clearedChangeCount = pasteboard.changeCount
-        guard sendCommandC() else {
-            guard snapshot.restore(to: pasteboard) else {
-                return failure(
-                    context: context,
-                    reason: localization.string("capture.error.restorePasteboardFailed", defaultValue: "无法恢复剪贴板")
-                )
-            }
-            return failure(
-                context: context,
-                reason: localization.string("capture.error.simulatedCopyFailed", defaultValue: "模拟复制失败")
-            )
+        let targetPID = context.frontmostApplicationProcessIdentifier
+        _ = sendCommandC(targetPID: targetPID)
+
+        await waitForPasteboardChange(from: clearedChangeCount, in: pasteboard, timeout: 0.35)
+        if pasteboard.changeCount == clearedChangeCount {
+            // 后备：使用 System Events 模拟 ⌘C，绕过部分应用对合成 CGEvent 的安全过滤
+            sendAppleScriptCommandC()
+            await waitForPasteboardChange(from: clearedChangeCount, in: pasteboard, timeout: 0.35)
         }
 
-        await waitForPasteboardChange(from: clearedChangeCount, in: pasteboard)
         let text = pasteboard.string(forType: .string)
         guard snapshot.restore(to: pasteboard) else {
             return failure(
@@ -65,20 +61,20 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
         )
     }
 
-    private func waitForPasteboardChange(from clearedChangeCount: Int, in pasteboard: NSPasteboard) async {
-        let deadline = Date().addingTimeInterval(0.8)
+    private func waitForPasteboardChange(from clearedChangeCount: Int, in pasteboard: NSPasteboard, timeout: TimeInterval = 0.5) async {
+        let deadline = Date().addingTimeInterval(timeout)
         while pasteboard.changeCount == clearedChangeCount && Date() < deadline {
-            try? await Task.sleep(nanoseconds: 25_000_000)
+            try? await Task.sleep(nanoseconds: 20_000_000)
         }
 
         if pasteboard.changeCount != clearedChangeCount {
-            try? await Task.sleep(nanoseconds: 30_000_000)
+            try? await Task.sleep(nanoseconds: 20_000_000)
         }
     }
 
     private func waitForModifierKeysToClear() async {
         let trackedModifiers: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
-        let deadline = Date().addingTimeInterval(0.3)
+        let deadline = Date().addingTimeInterval(0.2)
 
         while Date() < deadline {
             let current = CGEventSource.flagsState(.combinedSessionState)
@@ -90,7 +86,7 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
         }
     }
 
-    private func sendCommandC() -> Bool {
+    private func sendCommandC(targetPID: pid_t?) -> Bool {
         guard let source = CGEventSource(stateID: .combinedSessionState),
               let keyDown = CGEvent(
                 keyboardEventSource: source,
@@ -107,9 +103,22 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
+
+        if let targetPID {
+            keyDown.postToPid(targetPID)
+            keyUp.postToPid(targetPID)
+        }
+        keyDown.post(tap: .cgSessionEventTap)
+        keyUp.post(tap: .cgSessionEventTap)
         return true
+    }
+
+    private func sendAppleScriptCommandC() {
+        let script = "tell application \"System Events\" to keystroke \"c\" using command down"
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            appleScript.executeAndReturnError(&error)
+        }
     }
 
     private func failure(context: SelectedTextCaptureContext, reason: String) -> SelectedTextCaptureResult {

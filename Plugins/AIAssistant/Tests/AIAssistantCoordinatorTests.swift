@@ -109,6 +109,23 @@ final class AIAssistantCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.snapshot.result?.sourceText, "修改后的文本")
     }
 
+    func testCapturesTextBeforeShowingPanel() async {
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .success }
+
+        // 验证没有在 capturing 阶段提前弹出面板抢夺焦点
+        XCTAssertFalse(panelController.shownSnapshots.contains { $0.phase == .capturing })
+        // 验证首次展示的面板已经具备完整的 sourceText
+        guard let firstShown = panelController.shownSnapshots.first else {
+            return XCTFail("Expected at least one shown snapshot")
+        }
+        XCTAssertEqual(firstShown.sourceText, "你好世界")
+        XCTAssertEqual(firstShown.phase, .processing)
+    }
+
     // MARK: - Helpers
 
     private func makeCoordinator(client: any AIProcessing) -> AIAssistantCoordinator {
@@ -180,8 +197,11 @@ final class AIAssistantCoordinatorTests: XCTestCase {
 @MainActor
 private final class RecordingPanelController: AIAssistantPanelControlling {
     var onAction: ((AIAssistantPanelAction) -> Void)?
+    private(set) var shownSnapshots: [AIAssistantPanelSnapshot] = []
 
-    func show(snapshot: AIAssistantPanelSnapshot) {}
+    func show(snapshot: AIAssistantPanelSnapshot) {
+        shownSnapshots.append(snapshot)
+    }
     func update(snapshot: AIAssistantPanelSnapshot) {}
     func close() {}
 }

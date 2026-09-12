@@ -18,23 +18,13 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
             )
         }
 
-        let systemWideElement = AXUIElementCreateSystemWide()
-        var focusedValue: CFTypeRef?
-        let focusedStatus = AXUIElementCopyAttributeValue(
-            systemWideElement,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedValue
-        )
-        guard focusedStatus == .success,
-              let focusedElementValue = focusedValue,
-              CFGetTypeID(focusedElementValue) == AXUIElementGetTypeID() else {
+        guard let focusedElement = findFocusedElement(context: context) else {
             return failure(
                 context: context,
                 reason: localization.string("capture.error.missingSelection", defaultValue: "未找到选中文本")
             )
         }
 
-        let focusedElement = focusedElementValue as! AXUIElement
         let isEditable = isEditableTextElement(focusedElement)
         if let selectedText = stringAttribute(kAXSelectedTextAttribute, from: focusedElement),
            !selectedText.isEmpty {
@@ -58,10 +48,47 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
             )
         }
 
+        // 如果聚焦元素本身未暴露选中文字，尝试从前台 App 的顶层元素直接查询选中文字
+        if let pid = context.frontmostApplicationProcessIdentifier {
+            let appElement = AXUIElementCreateApplication(pid)
+            if let selectedText = stringAttribute(kAXSelectedTextAttribute, from: appElement),
+               !selectedText.isEmpty {
+                return SelectedTextCaptureResult(
+                    text: selectedText,
+                    strategyID: strategyID,
+                    isEditable: isEditable,
+                    sourceApplicationBundleID: context.frontmostApplicationBundleID,
+                    failureReason: nil
+                )
+            }
+        }
+
         return failure(
             context: context,
             reason: localization.string("capture.error.missingSelection", defaultValue: "未找到选中文本")
         )
+    }
+
+    private func findFocusedElement(context: SelectedTextCaptureContext) -> AXUIElement? {
+        if let pid = context.frontmostApplicationProcessIdentifier {
+            let appElement = AXUIElementCreateApplication(pid)
+            var appFocusedValue: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &appFocusedValue) == .success,
+               let element = appFocusedValue,
+               CFGetTypeID(element) == AXUIElementGetTypeID() {
+                return (element as! AXUIElement)
+            }
+        }
+
+        let systemWideElement = AXUIElementCreateSystemWide()
+        var focusedValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
+           let element = focusedValue,
+           CFGetTypeID(element) == AXUIElementGetTypeID() {
+            return (element as! AXUIElement)
+        }
+
+        return nil
     }
 
     private func failure(context: SelectedTextCaptureContext, reason: String) -> SelectedTextCaptureResult {
