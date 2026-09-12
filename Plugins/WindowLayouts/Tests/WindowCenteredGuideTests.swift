@@ -211,7 +211,7 @@ final class WindowCenteredGuideControllerTests: XCTestCase {
         try await waitUntil { environment.visible }
         let reads = environment.reads
         controller.handle(event(.leftMouseDragged, x: 320, y: 260))
-        try await waitUntil { environment.reads >= reads + 2 }
+        try await waitUntil { environment.reads >= reads + 1 }
         XCTAssertTrue(environment.visible)
         controller.handle(event(.leftMouseUp, x: 320, y: 260))
         let releaseReads = environment.reads
@@ -257,6 +257,90 @@ final class WindowCenteredGuideControllerTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
         XCTAssertTrue(environment.shown.isEmpty)
         XCTAssertTrue(environment.writes.isEmpty)
+    }
+
+    func testDragUsesGeometryReadsAndReleaseRevalidatesAccessibility() async throws {
+        let environment = GuideTestEnvironment()
+        let controller = WindowCenteredGuideController(environment: environment, cadence: .milliseconds(1))
+        controller.configure(enabled: true, respectsStageManager: true)
+        defer { controller.configure(enabled: false, respectsStageManager: true) }
+        controller.handle(event(.leftMouseDown))
+        try await waitUntil { environment.reads == 1 }
+        environment.current.frame = CGRect(x: 300, y: 250, width: 400, height: 300)
+        controller.handle(event(.leftMouseDragged, x: 320, y: 260))
+        try await waitUntil { environment.trackingReads >= 1 }
+        XCTAssertEqual(environment.reads - environment.trackingReads, 1, "Live tracking must not request full AX state")
+        XCTAssertEqual(environment.usableFrameReads, 2, "Cache the display safe area during dragging")
+        try await Task.sleep(for: .milliseconds(150))
+        let pausedReads = environment.reads
+        try await Task.sleep(for: .milliseconds(15))
+        XCTAssertEqual(environment.reads, pausedReads, "A settled pointer must stop geometry polling")
+        environment.current.isFullScreen = true
+        controller.handle(event(.leftMouseUp, x: 320, y: 260))
+        try await waitUntil { environment.reads > pausedReads }
+        XCTAssertGreaterThan(environment.reads - environment.trackingReads, 1)
+        XCTAssertTrue(environment.writes.isEmpty, "Fresh eligibility must veto an unsafe release")
+    }
+
+    func testHeldClickDoesNotContinuouslyQueryAccessibility() async throws {
+        let environment = GuideTestEnvironment()
+        let controller = WindowCenteredGuideController(environment: environment, cadence: .milliseconds(1))
+        controller.configure(enabled: true, respectsStageManager: false)
+        defer { controller.configure(enabled: false, respectsStageManager: false) }
+        controller.handle(event(.leftMouseDown))
+        try await waitUntil { environment.reads == 1 }
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(environment.reads, 1)
+        controller.handle(event(.leftMouseUp))
+        try await waitUntil { environment.reads == 2 }
+        XCTAssertTrue(environment.writes.isEmpty)
+    }
+
+    func testHostWindowResolvesReadsAndRejectsHiddenWindow() async throws {
+        let native = NSWindow(contentRect: CGRect(x: 200, y: 200, width: 400, height: 300),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        native.isReleasedWhenClosed = false
+        native.orderFrontRegardless()
+        defer { native.close() }
+        let environment = SystemWindowCenteredGuideEnvironment()
+        let candidate = WindowCenteredGuideCandidate(processIdentifier: ProcessInfo.processInfo.processIdentifier,
+            windowNumber: native.windowNumber, frame: native.frame)
+        let handle = try await environment.resolve(candidate)
+        XCTAssertTrue(handle.hostWindow === native)
+        let first = try await environment.snapshot(handle)
+        XCTAssertTrue(first.canMove)
+        native.setFrameOrigin(native.frame.origin.applying(CGAffineTransform(translationX: 20, y: 0)))
+        let moved = try await environment.snapshot(handle)
+        XCTAssertEqual(moved.frame.minX, first.frame.minX + 20, accuracy: 0.1)
+        native.orderOut(nil)
+        do {
+            _ = try await environment.snapshot(handle)
+            XCTFail("Hidden host windows must not remain eligible")
+        } catch {}
+    }
+
+    func testBackgroundResolverRejectsHostBeforeAccessibilityHitTesting() async {
+        let worker = WindowAccessibilityWorker()
+        for number in [nil, 123] as [Int?] {
+            do {
+                _ = try await worker.resolveFocusedWindow(target: ExternalFocusedWindowTarget(
+                    processIdentifier: ProcessInfo.processInfo.processIdentifier,
+                    bundleIdentifier: Bundle.main.bundleIdentifier,
+                    preferredWindowNumber: number, pointerLocation: .zero))
+                XCTFail("Host windows must never enter background Accessibility hit testing")
+            } catch {
+                XCTAssertEqual(error as? WindowLayoutError, .windowUnavailable)
+            }
+        }
+    }
+
+    func testHostPanelsAreExcluded() {
+        let panel = NSPanel(contentRect: CGRect(x: 200, y: 200, width: 400, height: 300),
+                            styleMask: [.titled], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.orderFrontRegardless()
+        defer { panel.close() }
+        XCTAssertFalse(SystemWindowCenteredGuideEnvironment.eligibleHostWindow(panel))
     }
 
     func testCandidateMatchingSupportsMissingWindowNumberAndRejectsOtherTargets() {
@@ -426,6 +510,8 @@ private final class GuideTestEnvironment: WindowCenteredGuideEnvironment {
     var screenList = [WindowScreen(id: "main", frame: CGRect(x: 0, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: 0, y: 0, width: 1000, height: 800))]
     let window = AccessibilityWindowHandle(identity: .init(processIdentifier: 42, token: "captured"), canMove: true, canResize: true)
     var reads = 0
+    var trackingReads = 0
+    var usableFrameReads = 0
     var resolves = 0
     var shown: [WindowSnapResult] = []
     var writes: [CGRect] = []
@@ -448,8 +534,12 @@ private final class GuideTestEnvironment: WindowCenteredGuideEnvironment {
         if disappeared { throw WindowLayoutError.windowUnavailable }
         return .init(frame: current.frame, isFullScreen: current.isFullScreen)
     }
+    func trackingSnapshot(_ window: AccessibilityWindowHandle) async throws -> WindowCenteredGuideSnapshot {
+        trackingReads += 1
+        return try await snapshot(window)
+    }
     func screens() -> [WindowScreen] { screenList }
-    func usableFrame(for screen: WindowScreen) -> CGRect { screen.visibleFrame }
+    func usableFrame(for screen: WindowScreen) -> CGRect { usableFrameReads += 1; return screen.visibleFrame }
     func show(_ result: WindowSnapResult, on screen: WindowScreen) { shown.append(result); visible = true }
     func hide() { visible = false }
     func snap(_ window: AccessibilityWindowHandle, expected: CGRect, target: CGRect, usableFrame: CGRect) async throws {

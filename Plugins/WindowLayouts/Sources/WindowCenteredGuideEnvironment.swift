@@ -15,11 +15,18 @@ protocol WindowCenteredGuideEnvironment: AnyObject {
     func candidate(at pointer: CGPoint) -> WindowCenteredGuideCandidate?
     func resolve(_ candidate: WindowCenteredGuideCandidate) async throws -> AccessibilityWindowHandle
     func snapshot(_ window: AccessibilityWindowHandle) async throws -> WindowCenteredGuideSnapshot
+    func trackingSnapshot(_ window: AccessibilityWindowHandle) async throws -> WindowCenteredGuideSnapshot
     func screens() -> [WindowScreen]
     func usableFrame(for screen: WindowScreen) -> CGRect
     func show(_ result: WindowSnapResult, on screen: WindowScreen)
     func hide()
     func snap(_ window: AccessibilityWindowHandle, expected: CGRect, target: CGRect, usableFrame: CGRect) async throws
+}
+
+extension WindowCenteredGuideEnvironment {
+    func trackingSnapshot(_ window: AccessibilityWindowHandle) async throws -> WindowCenteredGuideSnapshot {
+        try await snapshot(window)
+    }
 }
 
 @MainActor
@@ -36,7 +43,6 @@ final class SystemWindowCenteredGuideEnvironment: WindowCenteredGuideEnvironment
               let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
                 as? [[String: Any]],
               let target = SystemWindowUnderPointerResolver.windowTarget(at: pointer, in: info),
-              target.processIdentifier != ProcessInfo.processInfo.processIdentifier,
               let entry = info.first(where: {
                   ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == target.windowNumber
               }),
@@ -49,6 +55,15 @@ final class SystemWindowCenteredGuideEnvironment: WindowCenteredGuideEnvironment
     }
 
     func resolve(_ candidate: WindowCenteredGuideCandidate) async throws -> AccessibilityWindowHandle {
+        if candidate.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            guard let native = NSApp.windows.first(where: { $0.windowNumber == candidate.windowNumber }),
+                  Self.eligibleHostWindow(native) else { throw WindowLayoutError.windowUnavailable }
+            return AccessibilityWindowHandle(
+                identity: WindowIdentity(processIdentifier: candidate.processIdentifier, token: "window-number:\(candidate.windowNumber)"),
+                windowNumber: UInt32(exactly: candidate.windowNumber), canMove: native.isMovable,
+                canResize: native.styleMask.contains(.resizable), hostWindow: native
+            )
+        }
         // Hit-test once to support apps that do not expose AXWindowNumber. Verify the
         // captured CG identity when available, and otherwise require the original frame.
         // A delayed resolution that can no longer identify the candidate is discarded.
@@ -78,7 +93,29 @@ final class SystemWindowCenteredGuideEnvironment: WindowCenteredGuideEnvironment
     }
 
     func snapshot(_ window: AccessibilityWindowHandle) async throws -> WindowCenteredGuideSnapshot {
-        try await worker.centeredGuideSnapshot(window)
+        if let native = window.hostWindow {
+            guard Self.eligibleHostWindow(native), native.windowNumber == window.windowNumber.map(Int.init),
+                  let anchor = WindowCoordinateSpace.anchorMaximumY(in: NSScreen.screens) else {
+                throw WindowLayoutError.windowUnavailable
+            }
+            return WindowCenteredGuideSnapshot(
+                frame: WindowCoordinateSpace.accessibilityRect(native.frame, anchorMaximumY: anchor),
+                isFullScreen: native.styleMask.contains(.fullScreen), isMinimized: native.isMiniaturized,
+                isHidden: NSApp.isHidden, canMove: native.isMovable
+            )
+        }
+        return try await worker.centeredGuideSnapshot(window)
+    }
+
+    func trackingSnapshot(_ window: AccessibilityWindowHandle) async throws -> WindowCenteredGuideSnapshot {
+        if window.hostWindow != nil { return try await snapshot(window) }
+        return try await worker.centeredGuideTrackingSnapshot(window)
+    }
+
+    static func eligibleHostWindow(_ window: NSWindow) -> Bool {
+        window.isVisible && window.isMovable && window.styleMask.contains(.titled)
+            && !(window is NSPanel) && window.sheetParent == nil && window.attachedSheet == nil
+            && !window.isMiniaturized && !window.styleMask.contains(.fullScreen)
     }
 
     func screens() -> [WindowScreen] { screenProvider.currentScreens() }
@@ -100,6 +137,14 @@ final class SystemWindowCenteredGuideEnvironment: WindowCenteredGuideEnvironment
     func hide() { overlay.hide() }
 
     func snap(_ window: AccessibilityWindowHandle, expected: CGRect, target: CGRect, usableFrame: CGRect) async throws {
+        if let native = window.hostWindow {
+            let state = try await snapshot(window)
+            guard isTrusted, WindowCenteredGuidePolicy.canReleaseSnap(
+                snapshot: state, expected: expected, target: target, usableFrame: usableFrame
+            ), let anchor = WindowCoordinateSpace.anchorMaximumY(in: NSScreen.screens) else { return }
+            native.setFrameOrigin(WindowCoordinateSpace.appKitRect(target, anchorMaximumY: anchor).origin)
+            return
+        }
         try await worker.snapCenteredGuide(window, expected: expected, target: target, usableFrame: usableFrame)
     }
 }

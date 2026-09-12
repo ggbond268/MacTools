@@ -133,6 +133,11 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
         target: ExternalFocusedWindowTarget
     ) throws -> AccessibilityWindowHandle {
         try Task.checkCancellation()
+        // In-process Accessibility can synchronously invoke AppKit on this actor's
+        // executor. Host windows must be resolved through the main-actor AppKit path.
+        guard target.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            throw WindowLayoutError.windowUnavailable
+        }
         let applicationElement = AXUIElementCreateApplication(target.processIdentifier)
         AXUIElementSetMessagingTimeout(applicationElement, messagingTimeout)
         let resolvedWindow = try resolveWindow(applicationElement, target: target)
@@ -155,7 +160,7 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
               processIdentifier == target.processIdentifier else {
             throw WindowLayoutError.windowUnavailable
         }
-        let windowNumber = copyNumberAttribute(window, "AXWindowNumber")?.uint32Value
+        let windowNumber = Self.windowNumber(of: window)
         let token = windowNumber.map { "window-number:\($0)" }
             ?? "ax-hash:\(CFHash(window))"
 
@@ -203,39 +208,65 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
         ) == .success
     }
 
+    /// Read compositor geometry without sending synchronous Accessibility messages
+    /// to the app that is currently processing a drag. Full eligibility is checked
+    /// separately before tracking and again before any release-time write.
+    func centeredGuideTrackingSnapshot(_ window: AccessibilityWindowHandle) throws -> WindowCenteredGuideSnapshot {
+        guard let number = window.windowNumber,
+              let entries = CGWindowListCopyWindowInfo(.optionIncludingWindow, number) as? [[String: Any]],
+              let entry = entries.first(where: { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value == number }),
+              (entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == window.identity.processIdentifier,
+              (entry[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+              (entry[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue == true,
+              let bounds = entry[kCGWindowBounds as String] as? NSDictionary,
+              let frame = CGRect(dictionaryRepresentation: bounds), WindowCenteredGuidePolicy.valid(frame)
+        else { throw WindowLayoutError.windowUnavailable }
+        return WindowCenteredGuideSnapshot(frame: frame)
+    }
+
     func centeredGuideSnapshot(_ window: AccessibilityWindowHandle) throws -> WindowCenteredGuideSnapshot {
         try Task.checkCancellation()
-        guard AXIsProcessTrusted(), isValid(window),
+        guard AXIsProcessTrusted(),
               window.identity.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
             throw WindowLayoutError.windowUnavailable
         }
         let element = try externalElement(for: window)
         let application = AXUIElementCreateApplication(window.identity.processIdentifier)
         AXUIElementSetMessagingTimeout(application, messagingTimeout)
-        // Missing required state is not evidence that a target is safe to move.
-        guard let minimized = copyBooleanAttribute(element, kAXMinimizedAttribute),
+        // Batch window state so a drag sample does not make a separate IPC round trip
+        // for every attribute. Missing or malformed required state still fails closed.
+        let attributes = [kAXRoleAttribute, kAXSubroleAttribute, kAXMinimizedAttribute,
+                          "AXFullScreen", kAXPositionAttribute, kAXSizeAttribute]
+        var rawValues: CFArray?
+        guard AXUIElementCopyMultipleAttributeValues(element, attributes as CFArray, [], &rawValues) == .success,
+              let values = rawValues as? [AnyObject], values.count == attributes.count,
+              let role = values[0] as? String, let subrole = values[1] as? String,
+              CFGetTypeID(values[2]) == CFBooleanGetTypeID(),
               let hidden = copyBooleanAttribute(application, kAXHiddenAttribute),
-              let role = copyStringAttribute(element, kAXRoleAttribute),
-              let subrole = copyStringAttribute(element, kAXSubroleAttribute) else {
-            throw WindowLayoutError.windowUnavailable
-        }
-        var fullScreenValue: CFTypeRef?
-        let fullScreenError = AXUIElementCopyAttributeValue(element, "AXFullScreen" as CFString, &fullScreenValue)
-        guard fullScreenError == .success || fullScreenError == .attributeUnsupported else {
+              CFGetTypeID(values[4]) == AXValueGetTypeID(),
+              CFGetTypeID(values[5]) == AXValueGetTypeID() else {
             throw WindowLayoutError.windowUnavailable
         }
         let fullScreen: Bool
-        if fullScreenError == .attributeUnsupported {
-            fullScreen = subrole == "AXFullScreenWindow"
+        if CFGetTypeID(values[3]) == CFBooleanGetTypeID() {
+            fullScreen = (values[3] as! Bool) || subrole == "AXFullScreenWindow"
         } else {
-            guard let value = fullScreenValue, CFGetTypeID(value) == CFBooleanGetTypeID() else {
+            guard CFGetTypeID(values[3]) == AXValueGetTypeID() else { throw WindowLayoutError.windowUnavailable }
+            var error = AXError.success
+            guard AXValueGetValue(values[3] as! AXValue, .axError, &error), error == .attributeUnsupported else {
                 throw WindowLayoutError.windowUnavailable
             }
-            fullScreen = (value as! Bool) || subrole == "AXFullScreenWindow"
+            fullScreen = subrole == "AXFullScreenWindow"
+        }
+        var position = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(values[4] as! AXValue, .cgPoint, &position),
+              AXValueGetValue(values[5] as! AXValue, .cgSize, &size) else {
+            throw WindowLayoutError.frameReadFailed
         }
         return WindowCenteredGuideSnapshot(
-            frame: try frame(of: window), isFullScreen: fullScreen,
-            isMinimized: minimized, isHidden: hidden,
+            frame: CGRect(origin: position, size: size), isFullScreen: fullScreen,
+            isMinimized: values[2] as! Bool, isHidden: hidden,
             canMove: isAttributeSettable(element, kAXPositionAttribute),
             isStandardWindow: role == kAXWindowRole && subrole == kAXStandardWindowSubrole
         )
@@ -390,15 +421,14 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
         _ application: AXUIElement,
         target: ExternalFocusedWindowTarget
     ) throws -> AXUIElement? {
-        if let pointerLocation = target.pointerLocation,
-           let window = try copyWindow(
-               at: pointerLocation,
-               processIdentifier: target.processIdentifier
-           ) {
-            return window
-        }
+        // A captured identity is authoritative. Never replace it with whichever
+        // application happens to be under the pointer when this async work runs.
         if let preferredWindowNumber = target.preferredWindowNumber {
             return try copyWindow(application, matching: preferredWindowNumber)
+        }
+        if let pointerLocation = target.pointerLocation,
+           let window = try copyWindow(at: pointerLocation, processIdentifier: target.processIdentifier) {
+            return window
         }
         return copyWindowAttribute(application, kAXFocusedWindowAttribute)
             ?? copyWindowAttribute(application, kAXMainWindowAttribute)
@@ -411,7 +441,7 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
         try Task.checkCancellation()
         var element: AXUIElement?
         let result = AXUIElementCopyElementAtPosition(
-            AXUIElementCreateSystemWide(),
+            AXUIElementCreateApplication(processIdentifier),
             Float(location.x),
             Float(location.y),
             &element
@@ -465,8 +495,30 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
         }
         return try firstCancellableMatch(in: windows) { window in
             AXUIElementSetMessagingTimeout(window, messagingTimeout)
-            return copyNumberAttribute(window, "AXWindowNumber")?.intValue == windowNumber
+            return Self.windowNumber(of: window).map(Int.init) == windowNumber
         }
+    }
+
+    // Match the optional read-only AX-to-CG bridge used by Window Switcher.
+    // Some apps (including Telegram) omit the AXWindowNumber attribute.
+    private typealias WindowNumberLookup = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
+    private static let windowNumberLookup: WindowNumberLookup? = {
+        guard let handle = dlopen(nil, RTLD_LAZY) else { return nil }
+        defer { dlclose(handle) }
+        guard let symbol = dlsym(handle, "_AXUIElementGetWindow") else { return nil }
+        return unsafeBitCast(symbol, to: WindowNumberLookup.self)
+    }()
+
+    static func windowNumber(of window: AXUIElement) -> CGWindowID? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, kAXRoleAttribute as CFString, &value) == .success,
+              value as? String == kAXWindowRole else { return nil }
+        if AXUIElementCopyAttributeValue(window, "AXWindowNumber" as CFString, &value) == .success,
+           let number = value as? NSNumber, number.uint32Value > 0 { return number.uint32Value }
+        guard let lookup = windowNumberLookup else { return nil }
+        var number: CGWindowID = 0
+        guard lookup(window, &number) == .success, number > 0 else { return nil }
+        return number
     }
 
     private func hasAttribute(_ element: AXUIElement, _ attribute: String) -> Bool {

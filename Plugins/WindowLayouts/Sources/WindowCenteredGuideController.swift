@@ -10,6 +10,7 @@ final class WindowCenteredGuideController {
     private var generation: UInt64 = 0
     private var pointer = CGPoint.zero
     private var hasDragEvent = false
+    private var lastDragAt: ContinuousClock.Instant?
     private var released = false
     private var releasedAt: ContinuousClock.Instant?
     private var pointerHistory = WindowCenteredGuidePointerHistory()
@@ -65,6 +66,7 @@ final class WindowCenteredGuideController {
             pointer = event.location
             pointerHistory.record(pointer)
             hasDragEvent = true
+            lastDragAt = .now
         case .leftMouseUp:
             pointer = event.location
             released = true
@@ -82,6 +84,7 @@ final class WindowCenteredGuideController {
         task?.cancel()
         task = nil
         hasDragEvent = false
+        lastDragAt = nil
         released = false
         releasedAt = nil
         pointerHistory = WindowCenteredGuidePointerHistory()
@@ -107,11 +110,41 @@ final class WindowCenteredGuideController {
             let window = try await environment.resolve(candidate)
             guard !Task.isCancelled, self.generation == generation else { return }
             var policy = WindowCenteredGuidePolicy(originalFrame: candidate.frame, originalPointer: originalPointer)
+            var sampledInitialState = false
+            var lastVerifiedAt: ContinuousClock.Instant?
+            var verifiedFrame: CGRect?
+            // Stage Manager discovery can enumerate other windows. Freeze its safe
+            // area for display-only guides, then validate it freshly on release.
+            var usableFrames: [String: CGRect] = [:]
             while !Task.isCancelled, self.generation == generation, environment.isTrusted {
                 guard environment.screens() == initialScreens else { return }
+                // A held click without dragging needs only its initial state read.
+                if sampledInitialState, !released,
+                   !hasDragEvent || (lastDragAt.map { ContinuousClock.now - $0 > WindowCenteredGuidePolicy.frameLagAllowance } == true
+                                    && !policy.isAwaitingCorrelatedFrame) {
+                    try await Task.sleep(for: cadence)
+                    continue
+                }
                 let sampleReleased = released
                 let sampleHasDrag = hasDragEvent
-                let snapshot = try await environment.snapshot(window)
+                let snapshot: WindowCenteredGuideSnapshot
+                if !sampledInitialState || sampleReleased {
+                    snapshot = try await environment.snapshot(window)
+                } else if policy.hasMoved, let verifiedFrame, let lastVerifiedAt,
+                          ContinuousClock.now - lastVerifiedAt < .milliseconds(80) {
+                    // Once real window motion has been established, follow the
+                    // pointer locally between bounded compositor verifications.
+                    // Prediction only draws guides; release always reads fresh AX state.
+                    snapshot = WindowCenteredGuideSnapshot(frame: CGRect(
+                        origin: CGPoint(x: candidate.frame.minX + pointer.x - originalPointer.x,
+                                        y: candidate.frame.minY + pointer.y - originalPointer.y),
+                        size: verifiedFrame.size))
+                } else {
+                    snapshot = try await environment.trackingSnapshot(window)
+                    verifiedFrame = snapshot.frame
+                    lastVerifiedAt = .now
+                }
+                sampledInitialState = true
                 guard !Task.isCancelled, self.generation == generation, environment.isTrusted,
                       environment.screens() == initialScreens
                 else { return }
@@ -125,7 +158,15 @@ final class WindowCenteredGuideController {
                 guard let screen = WindowCenteredGuidePolicy.activeScreen(
                     frame: snapshot.frame, pointer: samplePointer, screens: initialScreens
                 ) else { return }
-                let usable = environment.usableFrame(for: screen)
+                let usable: CGRect
+                if sampleReleased {
+                    usable = environment.usableFrame(for: screen)
+                } else if let cached = usableFrames[screen.id] {
+                    usable = cached
+                } else {
+                    usable = environment.usableFrame(for: screen)
+                    usableFrames[screen.id] = usable
+                }
                 guard snapshot.isEligible(in: usable) else { return }
                 if sampleHasDrag {
                     let result = policy.update(
