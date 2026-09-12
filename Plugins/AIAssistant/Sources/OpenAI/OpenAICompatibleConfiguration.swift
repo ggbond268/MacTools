@@ -73,10 +73,12 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
 
         if Array(lowercasedPathComponents.suffix(2)) == ["chat", "completions"] {
             completionPathComponents = pathComponents
-        } else if lowercasedPathComponents.last == "v1" {
-            completionPathComponents = pathComponents + ["chat", "completions"]
+        } else if pathComponents.isEmpty {
+            // 纯域名无路径时（如 https://api.openai.com），补充官方标准路径 /v1/chat/completions
+            completionPathComponents = ["v1", "chat", "completions"]
         } else {
-            completionPathComponents = pathComponents + ["v1", "chat", "completions"]
+            // 业界标准：对于用户指定的 Base URL（如带 /v1 或自定义代理路径），直接在末尾拼接 /chat/completions
+            completionPathComponents = pathComponents + ["chat", "completions"]
         }
 
         components.path = "/" + completionPathComponents.joined(separator: "/")
@@ -88,9 +90,8 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
         return url
     }
 
-    /// Builds the `GET /models` endpoint from the same base URL, so callers can
-    /// list available model IDs before picking one. The `/models` path follows
-    /// the OpenAI convention and drops any trailing `chat/completions` segment.
+    /// Builds the `GET /models` endpoint from the same base URL.
+    /// 按照业界规范，在 Base URL 后面直接拼接 `/models`；若原地址末尾为 `chat/completions` 则替换为 `models`。
     func modelsEndpointURL() throws -> URL {
         if let validationError {
             throw validationError
@@ -113,10 +114,12 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
             modelsPathComponents = Array(pathComponents.dropLast(2)) + ["models"]
         } else if lowercasedPathComponents.last == "models" {
             modelsPathComponents = pathComponents
-        } else if lowercasedPathComponents.last == "v1" {
-            modelsPathComponents = pathComponents + ["models"]
+        } else if pathComponents.isEmpty {
+            // 纯域名无路径时，补充官方标准路径 /v1/models
+            modelsPathComponents = ["v1", "models"]
         } else {
-            modelsPathComponents = pathComponents + ["v1", "models"]
+            // 业界标准：对于用户指定的 Base URL，直接在末尾拼接 /models
+            modelsPathComponents = pathComponents + ["models"]
         }
 
         components.path = "/" + modelsPathComponents.joined(separator: "/")

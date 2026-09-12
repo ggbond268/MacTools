@@ -143,16 +143,7 @@ struct AIAssistantProviderProfileStore {
         if let data = storage.data(forKey: AIAssistantConstants.StorageKey.providerProfiles),
            let profiles = try? JSONDecoder().decode([AIAssistantProviderProfile].self, from: data),
            !profiles.isEmpty {
-            return profiles.map { profile in
-                var p = profile
-                if p.baseURL == "https://api.deepseek.com" {
-                    p.baseURL = OpenAICompatibleConfiguration.defaultBaseURL
-                }
-                if p.model == "deepseek-v4-flash" {
-                    p.model = OpenAICompatibleConfiguration.defaultModel
-                }
-                return p
-            }
+            return profiles
         }
 
         return [AIAssistantProviderProfile.defaultProfile(localization: localization)]

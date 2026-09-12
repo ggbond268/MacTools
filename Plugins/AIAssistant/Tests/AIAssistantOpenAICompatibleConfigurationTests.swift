@@ -31,14 +31,21 @@ final class AIAssistantOpenAICompatibleConfigurationTests: XCTestCase {
         )
     }
 
-    func testEndpointKeepsFullChatCompletionsPath() throws {
-        let configuration = OpenAICompatibleConfiguration(
-            baseURL: "https://gateway.example.com/openai/v1/chat/completions"
-        )
+    func testEndpointAppendsChatCompletionsToPrivateNetworkBasePath() throws {
+        let configuration = OpenAICompatibleConfiguration(baseURL: "http://172.29.227.37:51381/v1/")
 
         XCTAssertEqual(
             try configuration.endpointURL().absoluteString,
-            "https://gateway.example.com/openai/v1/chat/completions"
+            "http://172.29.227.37:51381/v1/chat/completions"
+        )
+    }
+
+    func testEndpointAppendsChatCompletionsWithoutV1() throws {
+        let configuration = OpenAICompatibleConfiguration(baseURL: "https://gateway.example.com/custom-api")
+
+        XCTAssertEqual(
+            try configuration.endpointURL().absoluteString,
+            "https://gateway.example.com/custom-api/chat/completions"
         )
     }
 
@@ -121,14 +128,12 @@ final class AIAssistantOpenAICompatibleConfigurationTests: XCTestCase {
         )
     }
 
-    func testModelsEndpointReplacesChatCompletionsPath() throws {
-        let configuration = OpenAICompatibleConfiguration(
-            baseURL: "https://gateway.example.com/openai/v1/chat/completions"
-        )
+    func testModelsEndpointAppendsModelsToCustomBasePath() throws {
+        let configuration = OpenAICompatibleConfiguration(baseURL: "http://172.29.227.37:51381/v1/")
 
         XCTAssertEqual(
             try configuration.modelsEndpointURL().absoluteString,
-            "https://gateway.example.com/openai/v1/models"
+            "http://172.29.227.37:51381/v1/models"
         )
     }
 }

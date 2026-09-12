@@ -38,4 +38,18 @@ final class AIAssistantProviderProfileTests: XCTestCase {
         let invalidConfig = AIAssistantProviderProfile(name: "服务", baseURL: "ftp://x", model: "gpt")
         XCTAssertEqual(invalidConfig.validationError, .configuration(.invalidBaseURL))
     }
+
+    func testStoreLoadsCustomModelWithoutOverwriting() throws {
+        let storage = AIAssistantInMemoryPluginStorage()
+        let store = AIAssistantProviderProfileStore(storage: storage)
+        let profile = AIAssistantProviderProfile(
+            name: "AI 服务",
+            baseURL: "https://api.example.com/v1",
+            model: "deepseek-v4-flash"
+        )
+        try store.saveProfiles([profile])
+
+        let loaded = store.loadProfiles()
+        XCTAssertEqual(loaded.first?.model, "deepseek-v4-flash")
+    }
 }
