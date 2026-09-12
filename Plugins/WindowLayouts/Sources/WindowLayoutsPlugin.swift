@@ -21,7 +21,7 @@ private struct WindowLayoutsPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshing,
+final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshing, DisplayTopologyRefreshing,
     PluginActionProviding, PluginActionPermissionProviding,
     PluginActionExposureProviding, PluginActionExecutionRevisionProviding,
     PluginActionSafetyStateChangeProviding,
@@ -37,6 +37,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         static let cyclesHalves = "cycles-halves"
         static let respectsStageManager = "respects-stage-manager"
         static let showsCommandFeedback = "shows-command-feedback"
+        static let centeredGuidesEnabled = "centered-guides.enabled"
         static let modifierDragEnabled = "modifier-drag.enabled"
         static let modifierDragShowsIndicator = "modifier-drag.shows-indicator"
         static let reset = "reset"
@@ -359,6 +360,10 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         applyModifierDragConfiguration()
     }
 
+    func refreshDisplayTopology() {
+        modifierDragSession?.cancelCenteredGuides()
+    }
+
     func refreshAccessibilityPermission() {
         let previous = isAccessibilityGranted
         isAccessibilityGranted = accessibilityTrusted()
@@ -411,8 +416,14 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
                 store.setCyclesHalves(value)
             } else if controlID == SettingsID.respectsStageManager {
                 store.setRespectsStageManager(value)
+                applyModifierDragConfiguration()
             } else if controlID == SettingsID.showsCommandFeedback {
                 store.setShowsCommandFeedback(value)
+            } else if controlID == SettingsID.centeredGuidesEnabled {
+                store.setCenteredGuidesEnabled(value)
+                refreshAccessibilityPermission()
+                applyModifierDragConfiguration()
+                if value && !isAccessibilityGranted { requestPermissionGuidance?(PermissionID.accessibility) }
             } else if controlID == SettingsID.modifierDragEnabled {
                 setModifierDragEnabled(value)
             } else if controlID == SettingsID.modifierDragShowsIndicator {
@@ -553,9 +564,8 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
     }
 
     private func applyModifierDragConfiguration() {
-        guard store.modifierDragEnabled,
-              isAccessibilityGranted,
-              modifierDragConflict == nil
+        guard store.centeredGuidesEnabled || (store.modifierDragEnabled && modifierDragConflict == nil),
+              isAccessibilityGranted
         else {
             stopModifierDragSession()
             return
@@ -582,6 +592,11 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
         session.configure(
             modifiers: store.modifierDragModifiers,
             showsIndicator: store.modifierDragShowsIndicator
+        )
+        session.configureFeatures(
+            modifierDragEnabled: store.modifierDragEnabled && modifierDragConflict == nil,
+            centeredGuidesEnabled: store.centeredGuidesEnabled,
+            respectsStageManager: store.respectsStageManager
         )
         switch session.start() {
         case .success:
@@ -610,6 +625,16 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
 
     private var modifierDragConflict: PluginInputGestureConflict? {
         externalGestureConflicts.first(where: { $0.claim.id == modifierDragClaim.id })
+    }
+
+    private var centeredGuidesDescription: String {
+        if store.centeredGuidesEnabled, modifierDragMonitorStartFailed {
+            return localizedKey("settings.centeredGuides.unavailable", "无法启用窗口居中参考线，请检查辅助功能权限后重试。")
+        }
+        return localizedKey(
+            "settings.centeredGuides.description",
+            "拖移其他应用的窗口时显示参考线，靠近中心松开即可居中。需要辅助功能权限。"
+        )
     }
 
     private var modifierDragFooter: String? {
@@ -673,6 +698,12 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
                         "台前调度缩略图可见时，不把窗口放到缩略图下方。"
                     ),
                     control: .toggle(isOn: store.respectsStageManager)
+                ),
+                PluginSettingsRow(
+                    id: SettingsID.centeredGuidesEnabled,
+                    title: localizedKey("settings.centeredGuides.title", "窗口居中参考线"),
+                    description: centeredGuidesDescription,
+                    control: .toggle(isOn: store.centeredGuidesEnabled)
                 ),
                 PluginSettingsRow(
                     id: SettingsID.showsCommandFeedback,
