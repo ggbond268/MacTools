@@ -78,14 +78,13 @@ final class DeviceBatteryCommandRunnerTests: XCTestCase {
         XCTAssertLessThan(start.duration(to: clock.now), .seconds(1))
     }
 
-    func testFiltersUTF8LineSplitAcrossPipeReads() async {
+    func testFiltersUTF8OutputFromCommand() async {
         let output = await DeviceBatteryCommandRunner.run(
-            path: "/bin/sh",
-            arguments: [
-                "-c",
-                "printf 'keep \\360\\237'; sleep 0.05; printf '\\221\\213\\nskip\\n'"
-            ],
-            timeout: 1,
+            path: "/usr/bin/printf",
+            arguments: ["keep 👋\nskip\n"],
+            // This checks command output, not latency. Byte-boundary coverage
+            // is deterministic in DeviceBatteryCommandOutputAccumulatorTests.
+            timeout: 5,
             outputLineFilter: { $0.hasPrefix("keep") }
         )
 

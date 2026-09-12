@@ -2041,11 +2041,14 @@ final class ClipboardHistoryPluginTests: XCTestCase {
         )
     }
 
-    private func waitUntilLoaded(_ controller: ClipboardHistoryController) async {
-        for _ in 0..<100 where !controller.isLoaded {
-            await Task.yield()
-        }
-        XCTAssertTrue(controller.isLoaded)
+    private func waitUntilLoaded(
+        _ controller: ClipboardHistoryController,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        // Yield counts do not bound how long the persistence worker takes to load.
+        let loaded = await waitUntil { controller.isLoaded }
+        XCTAssertTrue(loaded, "History did not finish loading", file: file, line: line)
     }
 
     private func waitUntil(

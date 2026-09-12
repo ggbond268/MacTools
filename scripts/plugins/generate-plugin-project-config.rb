@@ -384,6 +384,7 @@ targets["MacToolsTests"] = {
     { "target" => "MacToolsPluginKit" },
     { "target" => "MacToolsAppIntents" },
     { "target" => "MacToolsCLIProtocol" },
+    { "target" => "MacToolsFileSystem" },
     { "target" => "AppInstanceProbe" },
     { "target" => "AppIntentCircuitBreakerProbe" }
   ] + plugin_core_targets.map { |target| { "target" => target } },
