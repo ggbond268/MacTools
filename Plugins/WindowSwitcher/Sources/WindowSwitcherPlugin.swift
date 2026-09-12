@@ -26,12 +26,14 @@ private struct WindowSwitcherPluginProvider: PluginProvider {
 @MainActor
 final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefreshing,
     PluginShortcutEventHandling, PluginShortcutBindingChangeHandling, PluginFocusedWindowTargetConsuming,
-    PluginActionProviding, PluginActionPermissionProviding {
+    PluginActionProviding, PluginActionPermissionProviding, PluginInlineShortcutSettingsContextConsuming {
     private enum SettingsID {
         static let enabled = "enabled"
         static let mode = "mode"
         static let sortMode = "sort-mode"
+        static let shortcutPreset = "switching-shortcut"
         static let companion = "companion-defaults"
+        static let commandTab = "command-tab"
         static let preview = "selected-preview"
     }
 
@@ -40,6 +42,9 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
+    private var skippedSingleWindow = false
+    var inlineShortcutSettingsContextProvider: (() -> PluginSettingsContext)?
+    private var shortcutPresetError: String?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)? {
         didSet { configureShortcutBindings() }
     }
@@ -113,9 +118,22 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         self.overlayController.onClose = { [weak self] entry in
             self?.close(entry)
         }
+        self.overlayController.onShortcutChange = { [weak self] entry, token in
+            guard let self, let session = self.session, session.usesDirectKeys else { return .unavailable }
+            return self.store.setManualShortcut(token, for: entry.id, in: session.entries)
+        }
         self.overlayController.onSessionChange = { [weak self] session in
             self?.session = session
-            self?.shortcutTap.setEditing(session.isPersistent)
+            self?.shortcutTap.setEditing(session.usesDirectKeys || self?.overlayController.isEditingSearch == true || self?.overlayController.isPresentingMenu == true)
+        }
+        self.overlayController.onSearchEditingChange = { [weak self] editing in
+            self?.shortcutTap.setEditing(editing || self?.session?.usesDirectKeys == true || self?.overlayController.isPresentingMenu == true)
+        }
+        self.overlayController.onMenuTrackingChange = { [weak self] tracking in
+            self?.shortcutTap.setEditing(tracking || self?.overlayController.isEditingSearch == true || self?.session?.usesDirectKeys == true)
+        }
+        self.overlayController.onLayoutChange = { [weak self] layout in
+            self?.store.setPreferredLayout(layout)
         }
         self.overlayController.onPreviewChange = { [weak self] value in
             self?.store.setShowsPreview(value)
@@ -259,6 +277,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                 try? await Task.sleep(for: .milliseconds(10))
             }
             guard !Task.isCancelled else { return .cancelled }
+            if skippedSingleWindow { return .succeeded() }
             if generation == sessionGeneration { await showTask?.value }
             guard generation == sessionGeneration, session != nil, overlayController.isVisible else {
                 return lastErrorMessage.map { .failed(message: $0) } ?? .cancelled
@@ -297,14 +316,9 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                     systemImage: "rectangle.2.swap",
                     rows: [
                         PluginSettingsRow(
-                            id: SettingsID.companion,
-                            title: localization.string("settings.companion.title", defaultValue: "推荐快捷键"),
-                            description: localization.string("settings.companion.description", defaultValue: "保留系统 ⌘Tab；⌥Tab 切换全部窗口，⌘` 切换当前应用。已有自定义快捷键保持不变。"),
-                            control: .action(title: localization.string("settings.companion.apply", defaultValue: "采用推荐默认键"), role: .normal)
-                        ),
-                        PluginSettingsRow(
                             id: SettingsID.preview, title: localization.string("settings.preview.title", defaultValue: "选中窗口预览"),
                             description: localization.string("settings.preview.description", defaultValue: "仅预览选中窗口。需在系统设置中允许屏幕录制，关闭时仍可搜索和切换。"),
+                            systemImage: "rectangle.on.rectangle",
                             control: .toggle(isOn: store.configuration.showsPreview)
                         ),
                         PluginSettingsRow(
@@ -317,14 +331,18 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                                 options: [
                                     PluginSettingsOption(
                                         id: WindowSwitcherMode.keyWindow.rawValue,
-                                        title: localization.string("settings.mode.keyWindow", defaultValue: "搜索选择")
+                                        title: localization.string("settings.mode.legacy", defaultValue: "按键直达")
+                                    ),
+                                    PluginSettingsOption(
+                                        id: WindowSwitcherMode.searchSelect.rawValue,
+                                        title: localization.string("settings.mode.search", defaultValue: "搜索选择")
                                     ),
                                     PluginSettingsOption(
                                         id: WindowSwitcherMode.directCycle.rawValue,
                                         title: localization.string("settings.mode.directCycle", defaultValue: "连续切换")
                                     )
                                 ],
-                                style: .segmented
+                                style: .menu
                             )
                         ),
                         PluginSettingsRow(
@@ -344,11 +362,19 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                                         title: localization.string("settings.sort.fixed", defaultValue: "固定排序")
                                     )
                                 ],
-                                style: .segmented
+                                style: .menu
                             )
                         )
                     ]
-                )
+                ),
+                PluginSettingsSection(id: "shortcut-hotkeys", title: localization.string("settings.hotkeys", defaultValue: "快捷键"),
+                    systemImage: "command", embeddedShortcutGroupIDs: ["window-switcher"]) { [weak self] context in
+                    if let self {
+                        WindowSwitcherShortcutSettingsView(context: context, localization: localization,
+                            binding: { id in self.shortcutBindingResolver?(id) ?? (self.shortcutBindingResolver == nil
+                                ? (id == WindowSwitcherConstants.currentAppShortcutID ? WindowSwitcherShortcutBindingStore.currentAppBinding : self.allWindowsDefaultBinding) : nil) })
+                    }
+                }
             ]
         )
     }
@@ -401,10 +427,18 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             else if controlID == SettingsID.preview { store.setShowsPreview(value) }
             else { return }
         case let .invoke(controlID):
-            guard controlID == SettingsID.companion else { return }
-            store.useCompanionDefaults()
+            guard controlID == SettingsID.companion || controlID == SettingsID.commandTab else { return }
+            applySwitchingShortcut(controlID == SettingsID.commandTab
+                ? WindowSwitcherShortcutBindingStore.legacyBinding
+                : WindowSwitcherShortcutBindingStore.defaultBinding)
+            return
         case let .setSelection(controlID, optionID):
             switch controlID {
+            case SettingsID.shortcutPreset:
+                guard optionID == "command-tab" || optionID == "option-tab" else { return }
+                applySwitchingShortcut(optionID == "command-tab"
+                    ? WindowSwitcherShortcutBindingStore.legacyBinding : WindowSwitcherShortcutBindingStore.defaultBinding)
+                return
             case SettingsID.mode:
                 guard let mode = WindowSwitcherMode(rawValue: optionID) else { return }
                 store.setMode(mode)
@@ -418,6 +452,45 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             return
         }
         configurationDidChange()
+    }
+
+    var switchingShortcutSelection: String {
+        let binding = shortcutBindingResolver?(WindowSwitcherConstants.shortcutDefinitionID)
+            ?? (shortcutBindingResolver == nil ? allWindowsDefaultBinding : nil)
+        if binding == WindowSwitcherShortcutBindingStore.legacyBinding { return "command-tab" }
+        if binding == WindowSwitcherShortcutBindingStore.defaultBinding { return "option-tab" }
+        return "custom"
+    }
+
+    private var switchingShortcutOptions: [PluginSettingsOption] {
+        var options = [
+            PluginSettingsOption(id: "option-tab", title: localization.string("settings.shortcutPreset.option", defaultValue: "⌥Tab · 保留系统切换")),
+            PluginSettingsOption(id: "command-tab", title: localization.string("settings.shortcutPreset.command", defaultValue: "⌘Tab · 替代系统切换"))
+        ]
+        if switchingShortcutSelection == "custom" {
+            options.append(PluginSettingsOption(id: "custom", title: localization.string("settings.shortcutPreset.custom", defaultValue: "自定义快捷键")))
+        }
+        return options
+    }
+
+    private func applySwitchingShortcut(_ binding: ShortcutBinding) {
+        guard let context = inlineShortcutSettingsContextProvider?(),
+              let item = context.shortcutItem(definitionID: WindowSwitcherConstants.shortcutDefinitionID) else {
+            shortcutPresetError = localization.string("settings.shortcut.unavailable", defaultValue: "快捷键设置暂不可用，请重新打开设置。")
+            onStateChange?()
+            return
+        }
+        switch context.recordShortcut(binding, for: item.id) {
+        case .accepted:
+            // This explicit choice replaces an existing custom assignment. Keep the
+            // inherited default at Option-Tab so the recorder's reset restores it.
+            store.useCompanionDefaults()
+            shortcutPresetError = nil
+            configurationDidChange()
+        case let .rejected(message):
+            shortcutPresetError = message
+            onStateChange?()
+        }
     }
 
     func handleShortcutAction(id: String) {
@@ -472,9 +545,11 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     private var settingsModeDescription: String {
         switch store.configuration.mode {
         case .keyWindow:
+            localization.string("settings.mode.legacy.description", defaultValue: "按已分配的按键直接打开窗口。点击搜索框开始搜索。")
+        case .searchSelect:
             localization.string(
-                "settings.mode.keyWindow.description",
-                defaultValue: "显示可搜索的窗口列表，按回车打开。旧窗口字母分配已停用，保留存储记录。"
+                "settings.mode.search.description",
+                defaultValue: "输入搜索，按快捷键选择下一个窗口，按回车打开。"
             )
         case .directCycle:
             localization.string(
@@ -508,12 +583,21 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
 
     private func handleShortcutPressed(reversed: Bool, isRepeat: Bool, currentApp: Bool = false) {
         guard store.configuration.isEnabled, ensureAccessibilityForInvocation() else { return }
-        // The host's shortcut route must also leave an active text editor alone.
-        guard session?.isPersistent != true else { return }
+        // Tab switching remains available while searching. Preserve ordinary custom
+        // editing chords (for example Command-C) in the native text responder.
+        if session?.isPersistent == true, overlayController.isEditingSearch {
+            let id = currentApp ? WindowSwitcherConstants.currentAppShortcutID : WindowSwitcherConstants.shortcutDefinitionID
+            let binding = shortcutBindingResolver?(id)
+                ?? (shortcutBindingResolver == nil ? (currentApp ? WindowSwitcherShortcutBindingStore.currentAppBinding : allWindowsDefaultBinding) : nil)
+            guard let binding, [UInt16(48), UInt16(50)].contains(binding.keyCode) else { return }
+        }
+        if session?.usesDirectKeys == true || overlayController.isPresentingMenu { return }
         if var session {
-            session.advance(reversed ? -1 : 1)
+            session.navigateScope(currentApp: currentApp, direction: reversed ? -1 : 1)
+            if !session.isPersistent { session.invocationModifiers = invocationModifiers(currentApp: currentApp) }
             self.session = session
             overlayController.update(session)
+            overlayController.noteCyclingInput()
         } else if let pending = pendingInvocation {
             if !pending.persistent, pendingRelease, !isRepeat {
                 beginSession(reversed: reversed, currentApp: currentApp, persistent: false)
@@ -521,20 +605,21 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                 pendingSteps += reversed ? -1 : 1
             }
         } else {
-            beginSession(reversed: reversed, currentApp: currentApp, persistent: store.configuration.mode == .keyWindow)
+            beginSession(reversed: reversed, currentApp: currentApp, persistent: store.configuration.mode != .directCycle)
         }
     }
 
     private func handleShortcutReleased() {
         guard store.configuration.isEnabled, ensureAccessibilityForInvocation() else { return }
         if pendingInvocation != nil { pendingRelease = true; return }
-        guard let session, !session.isPersistent else { return }
+        guard let session, !session.isPersistent, !overlayController.deferReleaseForMenu() else { return }
         if let entry = session.selected { select(entry) } else { cancelSession() }
     }
 
     private func beginSession(reversed: Bool, currentApp: Bool, persistent: Bool, targetPID: pid_t? = nil) {
         guard ensureAccessibilityForInvocation() else { return }
         cancelSession()
+        skippedSingleWindow = false
         shortcutTap.setSessionActive(true)
         invocationPID = targetPID ?? NSWorkspace.shared.frontmostApplication?.processIdentifier
         let entries = appCatalog.entries(sortMode: store.configuration.sortMode)
@@ -560,24 +645,35 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     private func present(_ entries: [WindowSwitcherAppEntry], reversed: Bool, currentApp: Bool, persistent: Bool, steps: Int? = nil) {
         let scope: WindowSwitcherSession.Scope = currentApp
             ? invocationPID.map(WindowSwitcherSession.Scope.currentApplication) ?? .all : .all
-        var value = WindowSwitcherSession(entries: entries, selectedID: appCatalog.focusedWindowID,
+        let directKeys = store.configuration.mode == .keyWindow
+        let assignedEntries = directKeys ? store.assignShortcuts(to: entries) : entries
+        var value = WindowSwitcherSession(entries: assignedEntries, selectedID: appCatalog.focusedWindowID,
             scope: scope, isPersistent: persistent, originalWindowID: appCatalog.focusedWindowID)
+        value.usesDirectKeys = directKeys
+        value.protectedCommandKeys = store.protectedCommandKeys
+        if store.configuration.protectsLegacyCommands { value.protectedCommandKeys.formUnion(["w", "q"]) }
+        if currentApp, value.results.count <= 1 {
+            cancelSession()
+            skippedSingleWindow = true
+            return
+        }
         let hasFocusedTarget = value.results.contains { $0.id == value.selectedID }
         value.normalizeSelection()
-        if !persistent {
+        if !persistent || (!directKeys && store.configuration.sortMode == .recentUse) {
             value.invocationModifiers = invocationModifiers(currentApp: currentApp)
             let delta = steps ?? (reversed ? -1 : 1)
             value.advance(!hasFocusedTarget && delta > 0 ? delta - 1 : delta)
         }
         session = value
-        shortcutTap.setEditing(persistent)
+        shortcutTap.setEditing(directKeys)
         let generation = sessionGeneration
         // Quick tap/release commits from the cached snapshot without flashing UI.
         showTask?.cancel()
         showTask = Task { [weak self] in
             if !persistent { try? await Task.sleep(for: .milliseconds(140)) }
             guard !Task.isCancelled, let self, sessionGeneration == generation, let session else { return }
-            overlayController.show(session, currentPID: invocationPID, showsPreview: store.configuration.showsPreview)
+            overlayController.show(session, currentPID: invocationPID, showsPreview: store.configuration.showsPreview,
+                                   preferredLayout: store.configuration.preferredLayout)
         }
     }
 
@@ -591,7 +687,8 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             pendingSteps = 0
             if pendingRelease { pendingRelease = false; handleShortcutReleased() }
         } else if var session {
-            session.reconcile(entries)
+            session.reconcile(session.usesDirectKeys ? store.assignShortcuts(to: entries) : entries)
+            session.protectedCommandKeys.formUnion(store.protectedCommandKeys)
             self.session = session
             if overlayController.isVisible { overlayController.update(session) }
         }
@@ -599,7 +696,6 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     }
 
     private func select(_ entry: WindowSwitcherAppEntry) {
-        let previousSession = session
         showTask?.cancel()
         session = nil
         shortcutTap.setSessionActive(false)
@@ -613,15 +709,8 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             let result = await appCatalog.activate(entry)
             guard sessionGeneration == generation, !Task.isCancelled else { return }
             lastErrorMessage = localizedActionMessage(result)
-            if let message = localizedActionMessage(result), var restored = previousSession {
-                restored.isPersistent = true
-                restored.reconcile(appCatalog.entries(sortMode: store.configuration.sortMode))
-                session = restored
-                shortcutTap.setSessionActive(true)
-                shortcutTap.setEditing(true)
-                overlayController.show(restored, currentPID: invocationPID, showsPreview: store.configuration.showsPreview)
-                overlayController.showMessage(message)
-            }
+            // A late verification failure must not steal focus back after
+            // the user has already switched. Keep the error in settings.
             onStateChange?()
         }
     }

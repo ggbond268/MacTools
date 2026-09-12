@@ -1,6 +1,6 @@
 import AppKit
 
-/// Presentation-independent state shared by the list and future visual layouts.
+/// Presentation-independent state shared by the list and card layouts.
 struct WindowSwitcherSession {
     enum Scope: Equatable { case all, currentApplication(pid_t) }
     var entries: [WindowSwitcherAppEntry]
@@ -10,6 +10,8 @@ struct WindowSwitcherSession {
     var display: UInt32?
     var isPersistent: Bool
     let originalWindowID: String?
+    var usesDirectKeys = false
+    var protectedCommandKeys: Set<String> = []
     var invocationModifiers: NSEvent.ModifierFlags = []
 
     var results: [WindowSwitcherAppEntry] {
@@ -53,6 +55,32 @@ struct WindowSwitcherSession {
         }
     }
 
+    func canSwitchCurrentApplication(_ pid: pid_t?) -> Bool {
+        guard let pid else { return false }
+        return entries.filter { $0.processIdentifier == pid && $0.isWindowEntry }.count > 1
+    }
+
+    var scopedApplicationPID: pid_t? {
+        if case let .currentApplication(pid) = scope { return pid }
+        return nil
+    }
+
+    var scopeTargetPID: pid_t? { scopedApplicationPID ?? selected?.processIdentifier }
+
+    /// Scope changes keep the highlighted window; subsequent presses advance.
+    mutating func navigateScope(currentApp: Bool, direction: Int) {
+        if currentApp {
+            guard let pid = scopeTargetPID, canSwitchCurrentApplication(pid) else { return }
+            if scope == .currentApplication(pid) { advance(direction) }
+            else { scope = .currentApplication(pid); normalizeSelection() }
+        } else if scope != .all {
+            scope = .all
+            normalizeSelection()
+        } else {
+            advance(direction)
+        }
+    }
+
     var selected: WindowSwitcherAppEntry? { results.first { $0.id == selectedID } }
 
     mutating func reconcile(_ updated: [WindowSwitcherAppEntry]) {
@@ -74,11 +102,11 @@ struct WindowSwitcherSession {
         selectedID = candidates[(anchor + delta % candidates.count + candidates.count) % candidates.count].id
     }
 
-    mutating func beginSearch() { isPersistent = true }
+    mutating func beginSearch() { isPersistent = true; usesDirectKeys = false }
 
     static func panelFrame(visibleFrame: CGRect, preview: Bool) -> CGRect {
-        let width = min(preview ? 840.0 : 570.0, max(0, visibleFrame.width - 24))
-        let height = min(610.0, max(0, visibleFrame.height - 24))
+        let width = min(840.0, max(0, visibleFrame.width - 24))
+        let height = min(preview ? 740.0 : 510.0, max(0, visibleFrame.height - 24))
         return CGRect(x: visibleFrame.midX - width / 2, y: visibleFrame.midY - height / 2, width: width, height: height)
     }
 }

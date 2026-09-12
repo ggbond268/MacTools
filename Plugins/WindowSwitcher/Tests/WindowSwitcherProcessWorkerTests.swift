@@ -74,6 +74,42 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
 }
 
 final class WindowSwitcherProcessWorkerTests: XCTestCase, @unchecked Sendable {
+    func testObserverDoesNotRescanAppsForEveryDragFrame() {
+        XCTAssertFalse(WindowSwitcherProcessWorker.windowNotifications.contains(kAXMovedNotification))
+        XCTAssertFalse(WindowSwitcherProcessWorker.windowNotifications.contains(kAXResizedNotification))
+        XCTAssertTrue(WindowSwitcherProcessWorker.windowNotifications.contains(kAXUIElementDestroyedNotification))
+        XCTAssertTrue(WindowSwitcherProcessWorker.windowNotifications.contains(kAXTitleChangedNotification))
+    }
+
+    func testForegroundRequestIsSubmittedOnceAndStoppedWorkerDoesNotActivate() async {
+        let access = ControlledWindowAXAccess()
+        let worker = WindowSwitcherProcessWorker(pid: 101, launchDate: nil, access: access, invalidated: {})
+        let result = await worker.requestApplicationActivation()
+        XCTAssertEqual(result, .success)
+        XCTAssertEqual(access.read { $0.actions }, [kAXFrontmostAttribute])
+        worker.stop()
+        let stopped = await worker.requestApplicationActivation()
+        XCTAssertEqual(stopped, .cannotComplete)
+        XCTAssertEqual(access.read { $0.actions }, [kAXFrontmostAttribute])
+    }
+
+
+    func testFailedRaiseRequiresExactObservedFocus() async throws {
+        for focusAfterRaise in [true, false] {
+            let access = ControlledWindowAXAccess()
+            access.update {
+                $0.windows = [AXUIElementCreateApplication(201)]
+                $0.raiseSucceeds = false; $0.focusAfterRaise = focusAfterRaise
+            }
+            let worker = WindowSwitcherProcessWorker(pid: 200, launchDate: nil, access: access, invalidated: {})
+            let initial = await worker.scan()
+            let result = await worker.perform(try XCTUnwrap(initial.windows.first?.id), close: false)
+            XCTAssertEqual(result, focusAfterRaise ? .succeeded : .failed)
+            XCTAssertEqual(access.read { $0.actions.filter { $0 == kAXRaiseAction }.count }, 1)
+            worker.stop()
+        }
+    }
+
     func testRestoreWaitsForAnimationWithoutResubmitting() async throws {
         let access = ControlledWindowAXAccess()
         access.update {

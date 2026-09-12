@@ -12,6 +12,21 @@ final class WindowSwitcherShortcutTapTests: XCTestCase {
         return event
     }
 
+    func testDismissalInvalidatesQueuedShortcutPress() async throws {
+        let tap = WindowSwitcherShortcutTap(accessibilityTrusted: { true })
+        tap.configure(allBinding: WindowSwitcherShortcutBindingStore.defaultBinding, currentAppBinding: nil)
+        tap.setSessionActive(true)
+        var presses = 0
+        tap.onShortcutPressed = { _, _, _ in presses += 1 }
+        XCTAssertNil(tap.handle(type: .keyDown, event: try event(kVK_Tab, flags: .maskAlternate)))
+        tap.setSessionActive(false)
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(presses, 0)
+        XCTAssertNil(tap.handle(type: .keyDown, event: try event(kVK_Tab, flags: .maskAlternate)))
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(presses, 1)
+    }
+
     func testCompanionLeavesNativeCommandTabAloneAndDeliversPressReleaseInOrder() async throws {
         let tap = WindowSwitcherShortcutTap(accessibilityTrusted: { true })
         tap.configure(allBinding: WindowSwitcherShortcutBindingStore.defaultBinding,
@@ -65,6 +80,38 @@ final class WindowSwitcherShortcutTapTests: XCTestCase {
             while reports == 0, ContinuousClock.now < deadline { await Task.yield() }
             XCTAssertEqual(reports, 1)
         }
+    }
+
+    func testSearchSessionConsumesConfiguredCommandTabButPreservesTextEditing() async throws {
+        let tap = WindowSwitcherShortcutTap(accessibilityTrusted: { true })
+        tap.configure(allBinding: WindowSwitcherShortcutBindingStore.legacyBinding, currentAppBinding: nil)
+        tap.setEditing(true)
+        tap.setSessionActive(true)
+        var reversals: [Bool] = []
+        tap.onShortcutPressed = { reverse, _, _ in reversals.append(reverse) }
+        XCTAssertNil(tap.handle(type: .keyDown, event: try event(kVK_Tab, flags: .maskCommand)))
+        XCTAssertNil(tap.handle(type: .keyDown, event: try event(kVK_Tab, flags: [.maskCommand, .maskShift])))
+        XCTAssertTrue(tap.handle(type: .keyDown, event: try event(kVK_ANSI_C, flags: .maskCommand)) != nil)
+        XCTAssertTrue(tap.handle(type: .keyDown, event: try event(kVK_Tab)) != nil)
+        XCTAssertTrue(tap.handle(type: .keyDown, event: try event(kVK_Escape)) != nil)
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(reversals, [false, true])
+    }
+
+    func testSearchConsumesCurrentAppCommandGraveAndReverse() async throws {
+        let tap = WindowSwitcherShortcutTap(accessibilityTrusted: { true })
+        tap.configure(allBinding: WindowSwitcherShortcutBindingStore.defaultBinding,
+                      currentAppBinding: WindowSwitcherShortcutBindingStore.currentAppBinding)
+        tap.setEditing(true); tap.setSessionActive(true)
+        var events: [Bool] = []
+        tap.onShortcutPressed = { reverse, _, currentApp in
+            XCTAssertTrue(currentApp); events.append(reverse)
+        }
+        XCTAssertNil(tap.handle(type: .keyDown, event: try event(kVK_ANSI_Grave, flags: .maskCommand)))
+        XCTAssertNil(tap.handle(type: .keyDown, event: try event(kVK_ANSI_Grave, flags: [.maskCommand, .maskShift])))
+        XCTAssertTrue(tap.handle(type: .keyDown, event: try event(kVK_ANSI_Grave)) != nil)
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(events, [false, true])
     }
 
     func testDeniedPermissionAndClearedBindingsNeverConsumeKeys() throws {

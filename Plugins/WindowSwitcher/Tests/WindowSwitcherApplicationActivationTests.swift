@@ -73,4 +73,43 @@ final class WindowSwitcherApplicationActivationTests: XCTestCase {
             state: { .init(isHidden: true, isFrontmost: false, isTerminated: true) }, request: { _ in XCTFail("Terminated") })
         XCTAssertEqual(result, .unavailable)
     }
+    func testAcceptedNativeRequestUsesOneFallbackOnlyWhenStillNotFrontmost() async {
+        var frontmost = false
+        var nativeRequests = 0, fallbacks = 0
+        let result = await WindowSwitcherApplicationActivation.prepare(
+            state: { .init(isHidden: false, isFrontmost: frontmost) },
+            request: { _ in nativeRequests += 1 }, fallbackRequest: {
+                fallbacks += 1; frontmost = true
+            }, fallbackDelay: .zero)
+        XCTAssertEqual(result, .succeeded)
+        XCTAssertEqual(nativeRequests, 1)
+        XCTAssertEqual(fallbacks, 1)
+    }
+
+    func testNativeSuccessDoesNotUseFallback() async {
+        var frontmost = false
+        let result = await WindowSwitcherApplicationActivation.prepare(
+            state: { .init(isHidden: false, isFrontmost: frontmost) },
+            request: { _ in frontmost = true }, fallbackRequest: { XCTFail("Already activated") }, fallbackDelay: .zero)
+        XCTAssertEqual(result, .succeeded)
+    }
+
+    func testUserSwitchingElsewhereCancelsBeforeFallback() async {
+        var currentIntent = true
+        let result = await WindowSwitcherApplicationActivation.prepare(
+            state: { .init(isHidden: false, isFrontmost: false) },
+            request: { _ in currentIntent = false }, fallbackRequest: { XCTFail("User moved on") },
+            fallbackDelay: .zero, shouldContinue: { currentIntent })
+        XCTAssertEqual(result, .cancelled)
+    }
+
+    func testUnsuccessfulFallbackIsNotRepeated() async {
+        var fallbacks = 0
+        let result = await WindowSwitcherApplicationActivation.prepare(
+            state: { .init(isHidden: false, isFrontmost: false) }, request: { _ in },
+            timeout: .milliseconds(50), fallbackRequest: { fallbacks += 1 }, fallbackDelay: .zero)
+        XCTAssertEqual(result, .failed)
+        XCTAssertEqual(fallbacks, 1)
+    }
+
 }

@@ -5,6 +5,17 @@ import XCTest
 
 @MainActor
 final class WindowSwitcherPublicationTests: XCTestCase {
+    func testOrderedOutNamedSurfaceIsExcludedWithoutDroppingOtherSpaceOrAXWindows() {
+        var hidden = record(10, "Hidden utility"); hidden.hasSpace = false
+        hidden = WindowSwitcherWindowRecord(windowNumber: hidden.windowNumber, processIdentifier: 42, title: hidden.title, isOnScreen: false, bounds: bounds, hasSpace: false)
+        let otherSpace = WindowSwitcherWindowRecord(windowNumber: 11, processIdentifier: 42, title: "Other Space", isOnScreen: false, bounds: bounds, hasSpace: true)
+        let unknown = WindowSwitcherWindowRecord(windowNumber: 12, processIdentifier: 42, title: "Unknown", isOnScreen: false, bounds: bounds)
+        let ax = window("A", title: "Live AX", number: 13)
+        let axRecord = WindowSwitcherWindowRecord(windowNumber: 13, processIdentifier: 42, title: "Live AX", isOnScreen: false, bounds: bounds, hasSpace: false)
+        let merged = WindowSwitcherAppCatalog.mergeAllSpacesEntries([application(), ax], records: [hidden, otherSpace, unknown, axRecord], confirmedAXWindowNumbers: [10])
+        XCTAssertEqual(Set(merged.compactMap(\.windowNumber)), [11, 12, 13])
+    }
+
     private let bounds = CGRect(x: 0, y: 30, width: 1000, height: 800)
     private func window(_ id: String, title: String, number: CGWindowID? = nil) -> WindowSwitcherAppEntry {
         WindowSwitcherAppEntry(id: id, processIdentifier: 42, bundleIdentifier: "fixture", appName: "Fixture", windowTitle: title,
@@ -17,6 +28,24 @@ final class WindowSwitcherPublicationTests: XCTestCase {
     }
     private func record(_ number: CGWindowID, _ title: String) -> WindowSwitcherWindowRecord {
         WindowSwitcherWindowRecord(windowNumber: number, processIdentifier: 42, title: title, isOnScreen: true, bounds: bounds)
+    }
+
+    func testUntitledSurfaceNeedsAXConfirmationEvenAfterBeingVisibleOrNamed() {
+        var state = WindowSwitcherPublishedWindows()
+        let snapshots: [pid_t: [WindowSwitcherAppEntry]] = [42: [application()]]
+        state.update(snapshots: snapshots, records: [record(9, "Transient")], recordsAreFresh: true)
+        XCTAssertTrue(state.entries.contains { $0.windowNumber == 9 })
+        state.update(snapshots: snapshots, records: [record(9, "")], recordsAreFresh: true)
+        XCTAssertFalse(state.entries.contains { $0.windowNumber == 9 })
+        state.update(snapshots: [42: [window("real", title: "", number: 9)]], records: [record(9, "")], recordsAreFresh: true)
+        let realID = state.entries[0].id
+        let offspace = WindowSwitcherWindowRecord(windowNumber: 9, processIdentifier: 42, title: "", isOnScreen: false, bounds: bounds)
+        state.update(snapshots: snapshots, records: [offspace], recordsAreFresh: true)
+        XCTAssertEqual(state.entries[0].id, realID)
+        XCTAssertEqual(state.entries[0].windowNumber, 9)
+        state.update(snapshots: snapshots, records: [], recordsAreFresh: true)
+        state.update(snapshots: snapshots, records: [record(9, "")], recordsAreFresh: true)
+        XCTAssertFalse(state.entries.contains { $0.windowNumber == 9 }, "Closed window IDs must not authorize reused helper surfaces")
     }
 
     func testConflictingTitleNeverBorrowsAnotherWindowsIdentityInEitherOrder() {

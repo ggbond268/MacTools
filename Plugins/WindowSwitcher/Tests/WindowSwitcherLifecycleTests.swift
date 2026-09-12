@@ -28,6 +28,7 @@ private final class ControlledSwitcherCatalog: WindowSwitcherCatalog {
     var isInitialDiscoveryComplete = true
     var windows: [WindowSwitcherAppEntry] = []
     var activated: [String] = []
+    var activationResult: WindowSwitcherActionResult = .succeeded
     var isRunning = false
     func start() { isRunning = true }
     func stop() { isRunning = false }
@@ -35,7 +36,7 @@ private final class ControlledSwitcherCatalog: WindowSwitcherCatalog {
     func entries(sortMode: WindowSwitcherSortMode) -> [WindowSwitcherAppEntry] { windows }
     func activate(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult {
         activated.append(entry.id)
-        return .succeeded
+        return activationResult
     }
     func closeWindow(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult { .requested }
     func quitApplication(_ entry: WindowSwitcherAppEntry) -> WindowSwitcherActionResult { .requested }
@@ -56,6 +57,9 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         let plugin = WindowSwitcherPlugin(context: PluginRuntimeContext(pluginID: WindowSwitcherConstants.pluginID,
             storage: WindowSwitcherMemoryStorage()), appCatalog: catalog, overlayController: overlay ?? WindowSwitcherOverlayController(), shortcutTap: tap,
             discoveryTimeout: .milliseconds(30), accessibilityTrusted: trusted)
+        // Most lifecycle scenarios below exercise release-to-activate cycling.
+        // Search and legacy scenarios opt into their respective mode explicitly.
+        plugin.store.setMode(.directCycle)
         plugin.shortcutBindingResolver = { id in
             id == WindowSwitcherConstants.shortcutDefinitionID
                 ? WindowSwitcherShortcutBindingStore.defaultBinding : WindowSwitcherShortcutBindingStore.currentAppBinding
@@ -66,6 +70,51 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         let deadline = ContinuousClock.now + .seconds(1)
         while !predicate(), ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(5)) }
         XCTAssertTrue(predicate())
+    }
+
+    func testLegacySessionRestoresSavedKeyAndKeepsItWhenCatalogRefreshes() async {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        catalog.windows = [entry("a"), entry("b")]
+        catalog.windows[0].windowNumber = 1
+        catalog.windows[1].windowNumber = 2
+        let overlay = WindowSwitcherOverlayController()
+        let plugin = plugin(catalog: catalog, tap: tap, overlay: overlay)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.store.setMode(.keyWindow)
+        _ = plugin.store.setManualShortcut("cmd+w", for: "a", in: catalog.windows)
+        tap.onShortcutPressed(false, false, false)
+        await eventually { overlay.isVisible }
+        XCTAssertEqual(plugin.session?.usesDirectKeys, true)
+        XCTAssertEqual(plugin.session?.entries.first(where: { $0.id == "a" })?.shortcutToken, "cmd+w")
+        catalog.windows.reverse()
+        catalog.onChange?()
+        XCTAssertEqual(plugin.session?.entries.first(where: { $0.id == "a" })?.shortcutToken, "cmd+w")
+        tap.onShortcutReleased()
+        XCTAssertTrue(overlay.isVisible)
+        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+            windowNumber: 0, context: nil, characters: "w", charactersIgnoringModifiers: "w", isARepeat: false, keyCode: 13)!
+        XCTAssertTrue(overlay.handleChooserShortcut(event))
+        await eventually { catalog.activated == ["a"] }
+        XCTAssertFalse(overlay.isVisible)
+    }
+
+    func testRecentUseSearchStartsAtNextWindowAndFailureDoesNotReopen() async {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        catalog.windows = [entry("a"), entry("b")]
+        catalog.activationResult = .failed
+        let overlay = WindowSwitcherOverlayController()
+        let plugin = plugin(catalog: catalog, tap: tap, overlay: overlay)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.store.setMode(.searchSelect)
+        plugin.store.setSortMode(.recentUse)
+        tap.onShortcutPressed(false, false, false)
+        XCTAssertEqual(plugin.session?.selectedID, "b")
+        await eventually { overlay.isVisible }
+        overlay.onSelect?(catalog.windows[1])
+        await eventually { catalog.activated == ["b"] }
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertNil(plugin.session)
+        XCTAssertFalse(overlay.isVisible)
     }
 
     func testHostResolvedNilAndCustomBindingsAreAuthoritative() {
@@ -80,6 +129,145 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         plugin.shortcutBindingDidChange(id: WindowSwitcherConstants.shortcutDefinitionID, binding: nil)
         XCTAssertNil(tap.allBinding)
         XCTAssertNil(tap.currentAppBinding)
+    }
+
+    func testExplicitPresetsReplaceCustomBindingAndNotifyRunningTap() {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        let plugin = plugin(catalog: catalog, tap: tap)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        var binding = ShortcutBinding(keyCode: 40, modifiers: [.control, .option])
+        var reject = false
+        let itemID = "\(WindowSwitcherConstants.pluginID).shortcut.\(WindowSwitcherConstants.shortcutDefinitionID)"
+        plugin.shortcutBindingResolver = { _ in binding }
+        plugin.inlineShortcutSettingsContextProvider = {
+            PluginSettingsContext(pluginID: WindowSwitcherConstants.pluginID,
+                shortcutItems: [ShortcutSettingsItem(id: itemID, pluginID: WindowSwitcherConstants.pluginID,
+                    pluginTitle: "Window Switcher", title: "All windows", description: "", bindingText: "",
+                    isRequired: true, canClear: false, usesDefaultValue: false, errorMessage: nil)],
+                recordShortcut: { id, requested in
+                    XCTAssertEqual(id, itemID)
+                    if reject { return "Conflict" }
+                    binding = requested
+                    return nil
+                })
+        }
+        plugin.handleSettingsAction(.setSelection(controlID: "switching-shortcut", optionID: "command-tab"))
+        XCTAssertEqual(binding, WindowSwitcherShortcutBindingStore.legacyBinding)
+        XCTAssertEqual(tap.allBinding, binding)
+        plugin.handleSettingsAction(.setSelection(controlID: "switching-shortcut", optionID: "option-tab"))
+        XCTAssertEqual(binding, WindowSwitcherShortcutBindingStore.defaultBinding)
+        XCTAssertEqual(tap.allBinding, binding)
+        XCTAssertTrue(plugin.store.configuration.usesCompanionDefaults)
+        reject = true
+        plugin.handleSettingsAction(.setSelection(controlID: "switching-shortcut", optionID: "command-tab"))
+        XCTAssertEqual(binding, WindowSwitcherShortcutBindingStore.defaultBinding)
+        XCTAssertEqual(tap.allBinding, binding)
+    }
+
+    func testCycleReleaseDuringContextMenuDoesNotActivateWindow() async throws {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        let overlay = WindowSwitcherOverlayController()
+        catalog.windows = [entry("a"), entry("b")]
+        let plugin = plugin(catalog: catalog, tap: tap, overlay: overlay)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        tap.onShortcutPressed(false, false, false)
+        // Exercise the menu lifecycle in one actor turn. Waiting for the delayed
+        // presentation lets unrelated parallel test apps steal focus before the
+        // simulated menu opens, which cancels the session for an unrelated reason.
+        overlay.show(try XCTUnwrap(plugin.session), currentPID: nil, showsPreview: false)
+        XCTAssertTrue(overlay.isVisible)
+        let menu = try XCTUnwrap(overlay.contextMenu(forRow: 0))
+        overlay.menuWillOpen(menu)
+        XCTAssertTrue(tap.isEditing, "Escape must reach native menu tracking")
+        tap.onShortcutReleased()
+        XCTAssertNotNil(plugin.session)
+        XCTAssertTrue(catalog.activated.isEmpty)
+        overlay.menuDidClose(menu)
+        await eventually { plugin.session == nil }
+        XCTAssertTrue(catalog.activated.isEmpty)
+    }
+
+    func testCustomShortcutsNarrowHighlightedAppAndReturnToAllWindows() async {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        let overlay = WindowSwitcherOverlayController()
+        let first = entry("original")
+        func browser(_ id: String, _ number: UInt32) -> WindowSwitcherAppEntry {
+            WindowSwitcherAppEntry(id: id, processIdentifier: 200, bundleIdentifier: "org.example.browser", appName: "Browser", windowTitle: id, icon: nil, windowElement: nil, isMinimized: false, windowNumber: number, shortcutToken: nil)
+        }
+        catalog.windows = [first, browser("browser-1", 1), browser("browser-2", 2)]
+        catalog.focusedWindowID = first.id
+        let plugin = plugin(catalog: catalog, tap: tap, overlay: overlay)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.store.setMode(.searchSelect)
+        plugin.shortcutBindingResolver = { id in
+            ShortcutBinding(keyCode: id == WindowSwitcherConstants.shortcutDefinitionID ? 40 : 38, modifiers: [.control, .option])
+        }
+        tap.onShortcutPressed(false, false, false)
+        await eventually { overlay.isVisible }
+        XCTAssertEqual(plugin.session?.selectedID, "browser-1")
+        tap.onShortcutPressed(false, false, true)
+        XCTAssertEqual(plugin.session?.scope, .currentApplication(200))
+        XCTAssertEqual(plugin.session?.selectedID, "browser-1")
+        tap.onShortcutPressed(false, false, true)
+        XCTAssertEqual(plugin.session?.selectedID, "browser-2")
+        tap.onShortcutPressed(false, false, false)
+        XCTAssertEqual(plugin.session?.scope, .all)
+        XCTAssertEqual(plugin.session?.selectedID, "browser-2")
+        tap.onShortcutReleased()
+        XCTAssertTrue(plugin.session?.isPersistent == true)
+        XCTAssertTrue(catalog.activated.isEmpty)
+    }
+
+    func testPersistentSessionCyclesWithRepeatedTabWithoutClosing() {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        catalog.windows = [entry("a"), entry("b"), entry("c")]
+        let plugin = plugin(catalog: catalog, tap: tap)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.store.setMode(.searchSelect)
+        plugin.shortcutBindingResolver = { _ in WindowSwitcherShortcutBindingStore.legacyBinding }
+        tap.onShortcutPressed(false, false, false)
+        XCTAssertTrue(plugin.session?.isPersistent == true)
+        let first = plugin.session?.selectedID
+        tap.onShortcutPressed(false, false, false)
+        XCTAssertNotEqual(plugin.session?.selectedID, first)
+        tap.onShortcutPressed(true, false, false)
+        XCTAssertEqual(plugin.session?.selectedID, first)
+        tap.onShortcutReleased()
+        XCTAssertNotNil(plugin.session)
+        XCTAssertTrue(catalog.activated.isEmpty)
+    }
+
+    func testPersistentSessionCyclesWithRepeatedGraveWithoutClosing() {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        catalog.windows = [entry("a"), entry("b"), entry("c")]
+        let plugin = plugin(catalog: catalog, tap: tap)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.store.setMode(.searchSelect)
+        plugin.shortcutBindingResolver = { _ in WindowSwitcherShortcutBindingStore.currentAppBinding }
+        tap.onShortcutPressed(false, false, false)
+        XCTAssertTrue(plugin.session?.isPersistent == true)
+        let first = plugin.session?.selectedID
+        tap.onShortcutPressed(false, false, false)
+        XCTAssertNotEqual(plugin.session?.selectedID, first)
+        tap.onShortcutPressed(true, false, false)
+        XCTAssertEqual(plugin.session?.selectedID, first)
+        tap.onShortcutReleased()
+        XCTAssertNotNil(plugin.session)
+        XCTAssertTrue(catalog.activated.isEmpty)
+    }
+
+    func testPresetSelectionFollowsActualBindingIncludingCustomAndClearedState() {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        let plugin = plugin(catalog: catalog, tap: tap)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.shortcutBindingResolver = { _ in WindowSwitcherShortcutBindingStore.legacyBinding }
+        XCTAssertEqual(plugin.switchingShortcutSelection, "command-tab")
+        plugin.shortcutBindingResolver = { _ in WindowSwitcherShortcutBindingStore.defaultBinding }
+        XCTAssertEqual(plugin.switchingShortcutSelection, "option-tab")
+        plugin.shortcutBindingResolver = { _ in ShortcutBinding(keyCode: 40, modifiers: [.control, .option]) }
+        XCTAssertEqual(plugin.switchingShortcutSelection, "custom")
+        plugin.shortcutBindingResolver = { _ in nil }
+        XCTAssertEqual(plugin.switchingShortcutSelection, "custom")
     }
 
     func testColdInvocationWaitsForInitialProcessesInsteadOfFirstFastApp() async {
@@ -124,7 +312,7 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
             source: .test, mode: .foreground))
         let result = await handle.result()
         XCTAssertEqual(result, .succeeded())
-        XCTAssertEqual(plugin.session?.results.map(\.id), ["target"])
+        XCTAssertNil(plugin.session, "One current-app window must not open a chooser")
         XCTAssertTrue(catalog.activated.isEmpty)
     }
 
@@ -132,7 +320,7 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
         let plugin = plugin(catalog: catalog, tap: tap)
         defer { plugin.deactivate(reason: .hostShutdown) }
-        plugin.store.setMode(.keyWindow)
+        plugin.store.setMode(.searchSelect)
         tap.onShortcutPressed(false, false, false)
         XCTAssertFalse(tap.isEditing)
         XCTAssertNotNil(plugin.pendingInvocation)
@@ -140,7 +328,7 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         XCTAssertFalse(tap.isEditing)
         catalog.windows = [entry("a"), entry("b")]
         tap.onShortcutPressed(false, false, false)
-        XCTAssertEqual(plugin.session?.selectedID, "a")
+        XCTAssertEqual(plugin.session?.selectedID, "b")
     }
 
     func testQuickReleaseDuringDiscoveryCommitsExactlyOnceWhenSnapshotArrives() async {
@@ -225,7 +413,7 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         await Task.yield()
         XCTAssertTrue(catalog.activated.isEmpty)
         XCTAssertTrue(plugin.session?.isPersistent == true)
-        XCTAssertTrue(tap.isEditing)
+        XCTAssertFalse(tap.isEditing, "Persistent result navigation must still accept custom scope shortcuts")
     }
 
     func testPermissionRevocationCancelsOpenSessionAndStopsWorkers() {
@@ -292,10 +480,11 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
     func testScopeAndPreviewKeyboardCommandsPreservePersistentSelection() {
         let overlay = WindowSwitcherOverlayController()
         defer { overlay.hide() }
-        let session = WindowSwitcherSession(entries: [entry("a"), entry("b")], selectedID: "a", isPersistent: true, originalWindowID: "a")
+        let windows = [entry("a"), entry("b")].enumerated().map { index, entry in var value = entry; value.windowNumber = UInt32(index + 1); return value }
+        let session = WindowSwitcherSession(entries: windows, selectedID: "a", isPersistent: true, originalWindowID: "a")
         overlay.show(session, currentPID: 100, showsPreview: false)
         func command(_ key: String) -> NSEvent {
-            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: ["1", "2"].contains(key) ? [.command, .shift] : .command, timestamp: 0,
                 windowNumber: 0, context: nil, characters: key, charactersIgnoringModifiers: key,
                 isARepeat: false, keyCode: 0)!
         }

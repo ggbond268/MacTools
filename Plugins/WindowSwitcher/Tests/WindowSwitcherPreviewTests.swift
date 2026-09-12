@@ -16,6 +16,55 @@ final class WindowSwitcherPreviewTests: XCTestCase {
         XCTAssertTrue(predicate())
     }
 
+    func testCachedSelectionAppearsImmediatelyWithoutRecaptureAndMetadataDoesNotRestart() async {
+        var captures = 0
+        let image = NSImage(size: NSSize(width: 20, height: 10))
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in captures += 1; return image })
+        var delivered: NSImage?
+        preview.onChange = { image, _ in delivered = image }
+        preview.select(entry("cached"))
+        await eventually { delivered != nil }
+        preview.cancel()
+        preview.select(entry("cached"))
+        XCTAssertTrue(delivered === image)
+        var changed = entry("cached")
+        changed.bounds = CGRect(x: 100, y: 100, width: 100, height: 100)
+        preview.select(changed)
+        try? await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(captures, 1)
+        XCTAssertTrue(delivered === image)
+    }
+
+    func testCachedPreviewIsClearedOnPermissionRevocation() async {
+        var granted = true
+        var captures = 0
+        var delivered: NSImage?
+        let preview = WindowSwitcherPreview(hasPermission: { granted }, capture: { _ in
+            captures += 1
+            return NSImage(size: NSSize(width: 20, height: 10))
+        })
+        preview.onChange = { image, _ in delivered = image }
+        preview.select(entry("cached"))
+        await eventually { delivered != nil }
+        granted = false
+        preview.select(entry("cached"))
+        XCTAssertNil(delivered)
+        granted = true
+        preview.select(entry("cached"))
+        XCTAssertNil(delivered)
+        await eventually { captures == 2 }
+        preview.cancel()
+    }
+
+    func testPreviewResolutionKeepsPortraitAndLandscapeAspectRatioWithinBudget() {
+        for size in [CGSize(width: 1200, height: 800), CGSize(width: 600, height: 1200), CGSize(width: 500, height: 300)] {
+            let pixels = WindowSwitcherPreview.captureSize(for: CGRect(origin: .zero, size: size))
+            XCTAssertLessThanOrEqual(max(pixels.width, pixels.height), 1600)
+            XCTAssertEqual(pixels.width / pixels.height, size.width / size.height, accuracy: 0.002)
+            XCTAssertGreaterThan(max(pixels.width, pixels.height), 600)
+        }
+    }
+
     func testUniqueGeometryMatchesWhenChromeExposesDifferentTitles() {
         var target = entry("a")
         target.bounds = CGRect(x: 20, y: 50, width: 1200, height: 900)

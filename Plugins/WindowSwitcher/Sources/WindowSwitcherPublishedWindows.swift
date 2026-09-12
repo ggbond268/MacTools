@@ -7,11 +7,13 @@ struct WindowSwitcherPublishedWindows {
     private(set) var entries: [WindowSwitcherAppEntry] = []
     private(set) var knownWindowIDs: [pid_t: [CGWindowID: String]] = [:]
     var recency = WindowSwitcherRecency()
+    private var confirmedAXWindowNumbers: [pid_t: Set<CGWindowID>] = [:]
     private var axAliases: [pid_t: [String: String]] = [:]
 
     mutating func removeProcess(_ pid: pid_t) {
         knownWindowIDs.removeValue(forKey: pid)
         axAliases.removeValue(forKey: pid)
+        confirmedAXWindowNumbers.removeValue(forKey: pid)
         entries.removeAll { $0.processIdentifier == pid }
     }
 
@@ -34,9 +36,11 @@ struct WindowSwitcherPublishedWindows {
                 }
                 return entry
             }
+            confirmedAXWindowNumbers[pid, default: []].formUnion(raw.filter { $0.windowElement != nil }.compactMap(\.windowNumber))
             let processRecords = records.filter { $0.processIdentifier == pid }
             let merged = WindowSwitcherAppCatalog.mergeAllSpacesEntries(normalized, records: processRecords,
-                knownWindowIDs: knownWindowIDs[pid] ?? [:])
+                knownWindowIDs: knownWindowIDs[pid] ?? [:],
+                confirmedAXWindowNumbers: confirmedAXWindowNumbers[pid] ?? [])
             var nextAliases: [String: String] = [:]
             var seenIDs = Set<String>()
             for var entry in merged {
@@ -60,6 +64,7 @@ struct WindowSwitcherPublishedWindows {
             if recordsAreFresh {
                 let liveNumbers = Set(processRecords.map(\.windowNumber)).union(raw.compactMap(\.windowNumber))
                 knownWindowIDs[pid] = knownWindowIDs[pid]?.filter { liveNumbers.contains($0.key) }
+                confirmedAXWindowNumbers[pid]?.formIntersection(liveNumbers)
             }
         }
         entries = published

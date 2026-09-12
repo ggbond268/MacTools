@@ -1256,7 +1256,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open a searchable window list and press Return to switch. Old per-window letter assignments are retired; saved records are retained."
+            "value": "Type to search, repeat the shortcut to select, and press Return to switch."
           }
         },
         "ja": {
@@ -1268,7 +1268,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "显示可搜索的窗口列表，按回车打开。旧窗口字母分配已停用，保留存储记录。"
+            "value": "输入搜索，按快捷键选择下一个窗口，按回车打开。"
           }
         },
         "zh-Hant": {
@@ -2366,13 +2366,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "推荐快捷键"
+            "value": "保留系统应用切换"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recommended Shortcuts"
+            "value": "Keep system app switching"
           }
         }
       }
@@ -2383,13 +2383,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "保留系统 ⌘Tab；⌥Tab 切换全部窗口，⌘` 切换当前应用。已有自定义快捷键保持不变。"
+            "value": "将全部窗口快捷键重置为 ⌥Tab，保留系统 ⌘Tab。"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keep native ⌘Tab. Use ⌥Tab for all windows and ⌘` for the current app. Custom shortcuts stay unchanged."
+            "value": "Reset the all-windows shortcut to ⌥Tab and keep the system ⌘Tab switcher."
           }
         }
       }
@@ -2400,13 +2400,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "采用推荐默认键"
+            "value": "使用 ⌥Tab"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use Recommended Defaults"
+            "value": "Use ⌥Tab"
           }
         }
       }
@@ -2587,19 +2587,757 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ Select · Return Open · ⌘1/2 Scope · ⌘D Display · Esc Cancel"
+            "value": "↑↓←→ Select · Return Open · ⌘1/2 Scope · ⌘D Displays · Esc Cancel"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "↑↓ 选择 · 回车打开 · ⌘1/2 范围 · ⌘D 显示器 · Esc 取消"
+            "value": "方向键选择 · 回车打开 · ⌘1/2 范围 · ⌘D 显示器 · Esc 取消"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "↑↓ 選擇 · Return 開啟 · ⌘1/2 範圍 · ⌘D 顯示器 · Esc 取消"
+          }
+        }
+      }
+    },
+    "settings.commandTab.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替代系统应用切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace system app switching"
+          }
+        }
+      }
+    },
+    "settings.commandTab.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 ⌘Tab 切换全部窗口，无需录制系统快捷键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use ⌘Tab to switch all windows without recording the system shortcut."
+          }
+        }
+      }
+    },
+    "settings.commandTab.apply": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 ⌘Tab"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use ⌘Tab"
+          }
+        }
+      }
+    },
+    "settings.shortcut.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键设置暂不可用，请重新打开设置。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut settings are unavailable. Reopen Settings and try again."
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部窗口快捷键"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All windows shortcut"
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择保留或替代系统 ⌘Tab；自定义快捷键会同步显示。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep or replace system ⌘Tab. This selection follows your configured shortcut."
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.option": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥Tab · 保留系统切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥Tab · Keep system"
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.command": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘Tab · 替代系统切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘Tab · Replace system"
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.custom": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义快捷键"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom shortcut"
+          }
+        }
+      }
+    },
+    "chooser.cards": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cards"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片视图"
+          }
+        }
+      }
+    },
+    "chooser.layout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window view"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口视图"
+          }
+        }
+      }
+    },
+    "chooser.more": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More options"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多选项"
+          }
+        }
+      }
+    },
+    "settings.hotkeys": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut hotkeys"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键"
+          }
+        }
+      }
+    },
+    "settings.shortcut.reset": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Default"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复默认"
+          }
+        }
+      }
+    },
+    "settings.shortcut.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear shortcut"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除快捷键"
+          }
+        }
+      }
+    },
+    "chooser.dragHandle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag to move and align"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖移以移动和对齐"
+          }
+        }
+      }
+    },
+    "chooser.shortcuts": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard Shortcuts"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "键盘快捷键"
+          }
+        }
+      }
+    },
+    "chooser.quickSelect": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open visible window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开可见窗口"
+          }
+        }
+      }
+    },
+    "chooser.focusNext": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next control"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一个控件"
+          }
+        }
+      }
+    },
+    "chooser.modifierKeys": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修饰键"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modifiers"
+          }
+        }
+      }
+    },
+    "chooser.modeSearch": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索选择"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search & Select"
+          }
+        }
+      }
+    },
+    "chooser.modeCycle": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "循环切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cycling"
+          }
+        }
+      }
+    },
+    "chooser.searchTransitionHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can release %@; this window stays open."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可松开 %@，此窗口会保持打开。"
+          }
+        }
+      }
+    },
+    "chooser.appWindows": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Windows"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的窗口"
+          }
+        }
+      }
+    },
+    "chooser.quitApp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出 %@"
+          }
+        }
+      }
+    },
+    "chooser.switchWindow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to Window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换到窗口"
+          }
+        }
+      }
+    },
+    "chooser.contextActions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window actions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口操作"
+          }
+        }
+      }
+    },
+    "chooser.moreAbove": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More windows above"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向上查看更多窗口"
+          }
+        }
+      }
+    },
+    "chooser.moreBelow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More windows below"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向下查看更多窗口"
+          }
+        }
+      }
+    },
+    "chooser.changeKey": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change Key…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改按键…"
+          }
+        }
+      }
+    },
+    "chooser.modeSearchHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回车切换 · Esc 关闭"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to switch · Esc to close"
+          }
+        }
+      }
+    },
+    "chooser.modeCycleHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "松开 %@ 切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release %@ to switch"
+          }
+        }
+      }
+    },
+    "chooser.enterSearch": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search…"
+          }
+        }
+      }
+    },
+    "chooser.searchInvitation": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接输入即可搜索"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type to search"
+          }
+        }
+      }
+    },
+    "window.untitledGrid": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无标题窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled Window"
+          }
+        }
+      }
+    },
+    "settings.mode.legacy": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按键直达"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direct Keys"
+          }
+        }
+      }
+    },
+    "settings.mode.search": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索选择"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search and Select"
+          }
+        }
+      }
+    },
+    "settings.mode.legacy.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按已分配的按键直接打开窗口。点击搜索框开始搜索。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press an assigned key to open its window. Focus Search to start searching."
+          }
+        }
+      }
+    },
+    "chooser.legacyHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按分配的按键打开 · 点击标记修改"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assigned key opens · Click a badge to edit"
+          }
+        }
+      }
+    },
+    "chooser.editAssigned": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改所选窗口按键…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change assigned key…"
+          }
+        }
+      }
+    },
+    "chooser.recordAssigned": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按字母或数字（可加 Command）。退格恢复自动分配，Esc 取消。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press a letter or number, optionally with Command. Delete restores automatic assignment; Esc cancels."
+          }
+        }
+      }
+    },
+    "chooser.assignedConflict": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按键已被占用，请选择其他按键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That key is already assigned. Choose another key."
+          }
+        }
+      }
+    },
+    "chooser.assignedUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法修改此窗口的按键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The assigned key for this window could not be changed."
+          }
+        }
+      }
+    },
+    "settings.mode.search.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type to search, repeat the shortcut to select, and press Return to open."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入搜索，按快捷键选择下一个窗口，按回车打开。"
           }
         }
       }

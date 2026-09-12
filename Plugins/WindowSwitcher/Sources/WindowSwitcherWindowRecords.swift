@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import Darwin
 
 struct WindowSwitcherWindowRecord: Equatable, Sendable {
     static let minimumWindowSize = CGSize(width: 80, height: 60)
@@ -11,6 +12,7 @@ struct WindowSwitcherWindowRecord: Equatable, Sendable {
     let title: String
     let isOnScreen: Bool?
     let bounds: CGRect
+    var hasSpace: Bool? = nil
 
     static func parse(_ windowInfo: [[String: Any]]) -> [Self] {
         var seenWindowNumbers = Set<CGWindowID>()
@@ -142,7 +144,11 @@ final class WindowSwitcherWindowRecords {
          windowRecordProvider: @escaping @Sendable () -> [WindowSwitcherWindowRecord]? = {
              guard let info = CGWindowListCopyWindowInfo(
                  [.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
-             return WindowSwitcherWindowRecord.parse(info)
+             return WindowSwitcherWindowRecord.parse(info).map { record in
+                 var record = record
+                 if record.isOnScreen != true { record.hasSpace = WindowSwitcherSpaceMembership.hasSpace(record.windowNumber) }
+                 return record
+             }
          }) {
         self.windowRecordRefreshTimeout = windowRecordRefreshTimeout.isFinite ? max(0, windowRecordRefreshTimeout) : 0.75
         self.windowRecordProvider = windowRecordProvider
@@ -280,4 +286,25 @@ final class WindowSwitcherWindowRecords {
         windowRecordRefreshGeneration &+= 1
     }
 
+}
+
+/// Optional read-only WindowServer metadata distinguishes ordered-out utility
+/// surfaces from real windows on another Space. Missing APIs/data stay unknown.
+private enum WindowSwitcherSpaceMembership {
+    private typealias Connection = @convention(c) () -> UInt32
+    private typealias CopySpaces = @convention(c) (UInt32, UInt32, CFArray) -> Unmanaged<CFArray>?
+    private static let functions: (Connection, CopySpaces)? = {
+        guard let handle = dlopen(nil, RTLD_LAZY) else { return nil }
+        defer { dlclose(handle) }
+        guard let connection = dlsym(handle, "CGSMainConnectionID"),
+              let spaces = dlsym(handle, "CGSCopySpacesForWindows") else { return nil }
+        return (unsafeBitCast(connection, to: Connection.self), unsafeBitCast(spaces, to: CopySpaces.self))
+    }()
+
+    static func hasSpace(_ window: CGWindowID) -> Bool? {
+        guard let (connection, copySpaces) = functions,
+              let raw = copySpaces(connection(), 7, [NSNumber(value: window)] as CFArray)?.takeRetainedValue(),
+              let spaces = raw as? [NSNumber] else { return nil }
+        return !spaces.isEmpty
+    }
 }

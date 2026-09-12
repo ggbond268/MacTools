@@ -106,7 +106,7 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
         observedWindows.removeAll { old in
             guard !windows.contains(where: { CFEqual(old, $0) }) else { return false }
             if let observer {
-                for name in windowNotifications { AXObserverRemoveNotification(observer, old, name as CFString) }
+                for name in Self.windowNotifications { AXObserverRemoveNotification(observer, old, name as CFString) }
             }
             return true
         }
@@ -187,6 +187,24 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
 
     private func copyElement(_ element: AXUIElement, _ name: String) -> AXUIElement? {
         access.element(element, attribute: name)
+    }
+
+    /// The chooser is nonactivating, so ordinary cooperative app activation can
+    /// be declined even after the user explicitly selects a window. Request the
+    /// app's Accessibility foreground state once, then observe it before raising.
+    func requestApplicationActivation() async -> AXError {
+        let cancellation = WindowSwitcherActionCancellation()
+        return await withTaskCancellationHandler {
+            guard !Task.isCancelled else { return .cannotComplete }
+            return await withCheckedContinuation { continuation in
+                queue.async { [self] in
+                    guard !stopped, !cancellation.isCancelled else {
+                        continuation.resume(returning: .cannotComplete); return
+                    }
+                    continuation.resume(returning: access.set(app, attribute: kAXFrontmostAttribute, value: true))
+                }
+            }
+        } onCancel: { cancellation.cancel() }
     }
 
     func validate(_ id: String) async -> Bool {
@@ -285,9 +303,9 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
         guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
         _ = access.set(window, attribute: kAXFocusedAttribute, value: true)
         guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-        guard access.perform(window, action: kAXRaiseAction) == .success else {
-            continuation.resume(returning: .failed); return
-        }
+        // Some apps report an unsupported/failed raise after accepting main or
+        // focus. Observe exact focus before deciding whether switching failed.
+        _ = access.perform(window, action: kAXRaiseAction)
         verifyFocus(id, attempts: 12, cancellation: cancellation, continuation: continuation)
     }
 
@@ -307,9 +325,9 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
         }
     }
 
-    private var windowNotifications: [String] {
+    static var windowNotifications: [String] {
         [kAXUIElementDestroyedNotification, kAXTitleChangedNotification, kAXWindowMiniaturizedNotification,
-         kAXWindowDeminiaturizedNotification, kAXMovedNotification, kAXResizedNotification]
+         kAXWindowDeminiaturizedNotification]
     }
     private func installObserver() {
         guard access.observesSystemNotifications, observer == nil else { return }
@@ -327,7 +345,7 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
     }
     private func observe(_ window: AXUIElement) {
         guard let observer, !observedWindows.contains(where: { CFEqual($0, window) }) else { return }
-        for name in windowNotifications {
+        for name in Self.windowNotifications {
             AXObserverAddNotification(observer, window, name as CFString, Unmanaged.passUnretained(self).toOpaque())
         }
         observedWindows.append(window)
@@ -363,6 +381,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
     private var unavailable: Set<pid_t> = []
     private var timer: Timer?
     private var running = false
+    private var invalidationTask: Task<Void, Never>?
     private let allSpacesCatalog = WindowSwitcherWindowRecords()
     private var publication = WindowSwitcherPublishedWindows()
     private var allSpacesRecordsAreFresh = false
@@ -395,6 +414,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
 
     func stop() {
         running = false
+        invalidationTask?.cancel(); invalidationTask = nil
         allSpacesGeneration = UUID()
         allSpacesRefreshTask?.cancel(); allSpacesRefreshTask = nil
         allSpacesCatalog.stop()
@@ -409,8 +429,21 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         snapshots.removeAll(); inFlight.removeAll(); unavailable.removeAll()
     }
 
+    private func scheduleRefresh() {
+        guard running, invalidationTask == nil else { return }
+        invalidationTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled, let self else { return }
+            invalidationTask = nil
+            refresh()
+        }
+    }
+
     func refresh() {
         guard running else { return }
+        // AX reads execute in the target app. Avoid competing with its tracking
+        // loop during drags; the periodic refresh catches up after mouse-up.
+        guard !CGEventSource.buttonState(.combinedSessionState, button: .left) else { return }
         guard AXIsProcessTrusted() else {
             // Notify the plugin so an open session is cancelled on revocation.
             onChange?()
@@ -435,7 +468,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 publication.removeProcess(pid)
                 inFlight.remove(pid)
                 worker = WindowSwitcherProcessWorker(pid: pid, launchDate: app.launchDate, access: accessFactory(pid)) { [weak self] in
-                    Task { @MainActor [weak self] in self?.refresh() }
+                    Task { @MainActor [weak self] in self?.scheduleRefresh() }
                 }
                 workers[pid] = worker
             }
@@ -519,7 +552,8 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
     /// Only confirmed system IDs link AX and CG identities. Geometry/title
     /// guesses remain preview-only and must never rename a row or route actions.
     static func mergeAllSpacesEntries(_ entries: [WindowSwitcherAppEntry], records: [WindowSwitcherWindowRecord],
-                                      knownWindowIDs: [CGWindowID: String] = [:]) -> [WindowSwitcherAppEntry] {
+                                      knownWindowIDs: [CGWindowID: String] = [:],
+                                      confirmedAXWindowNumbers: Set<CGWindowID> = []) -> [WindowSwitcherAppEntry] {
         guard let application = entries.first else { return entries }
         let records = records.filter { $0.processIdentifier == application.processIdentifier }
         var claimed = Set<CGWindowID>()
@@ -535,11 +569,16 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         }
         let fallback = records.compactMap { record -> WindowSwitcherAppEntry? in
             guard !claimed.contains(record.windowNumber) else { return nil }
+            // A named compositor surface with no Space and no current AX window
+            // is not an open window (for example Mail's hidden cleanup utility).
+            guard record.isOnScreen == true || record.hasSpace != false else { return nil }
             // Do not replace usable AX windows with ambiguous CG duplicates.
             guard !windows.contains(where: { $0.windowNumber == nil && sameBounds($0.bounds, record.bounds) }) else { return nil }
-            // An unobserved, unnamed, offscreen surface is not evidence of a
-            // user window. Untitled AX windows (including minimized ones) remain.
-            guard knownWindowIDs[record.windowNumber] != nil || record.isOnScreen == true || !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            // Unnamed compositor surfaces can briefly be onscreen and acquire
+            // a public row ID. Only AX confirmation proves they are user windows;
+            // retain that evidence across Spaces without trusting CG visibility.
+            guard confirmedAXWindowNumbers.contains(record.windowNumber)
+                || !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
             return WindowSwitcherAppEntry(id: knownWindowIDs[record.windowNumber] ?? "window:cg:\(application.processIdentifier):\(application.applicationLaunchDate.map { String($0.timeIntervalSince1970) } ?? application.id):\(record.windowNumber)",
                 processIdentifier: application.processIdentifier, bundleIdentifier: application.bundleIdentifier,
                 appName: application.appName, windowTitle: record.title, icon: application.icon,
@@ -610,6 +649,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         } else if entry.isWindowEntry, !(await worker.validate(entry.workerWindowID ?? entry.id)) { return .unavailable }
         guard !Task.isCancelled else { return .cancelled }
         guard workers[entry.processIdentifier] === worker else { return .unavailable }
+        let startingForegroundPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let prepared = await WindowSwitcherApplicationActivation.prepare(state: {
             .init(isHidden: app.isHidden,
                   isFrontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier,
@@ -617,9 +657,24 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         }, request: { request in
             switch request {
             case .unhide: _ = app.unhide()
-            case .activate: _ = app.activate(options: isFallback ? [.activateAllWindows] : [])
+            case .activate:
+                NSApp.yieldActivation(to: app)
+                if isFallback {
+                    // Preserve the existing other-Space reveal path, which needs
+                    // all windows brought forward before exact AX matching.
+                    _ = app.activate(options: [.activateAllWindows])
+                    return
+                }
+                // Native activation is a request, not a guarantee. Its observed
+                // outcome controls the one-shot alternate path below.
+                _ = app.activate(options: [])
             }
-        }, activateAllSpaces: isFallback)
+        }, activateAllSpaces: isFallback, fallbackRequest: {
+            _ = await worker.requestApplicationActivation()
+        }, shouldContinue: {
+            let foreground = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            return foreground == nil || foreground == startingForegroundPID || foreground == entry.processIdentifier
+        })
         guard prepared == .succeeded else { return prepared }
         if !entry.isWindowEntry {
             publication.recency.record(entry.id)

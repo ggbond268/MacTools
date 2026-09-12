@@ -16,6 +16,7 @@ enum WindowSwitcherConstants {
 
 enum WindowSwitcherMode: String, Codable, CaseIterable, Identifiable {
     case keyWindow
+    case searchSelect
     case directCycle
 
     var id: String { rawValue }
@@ -28,12 +29,19 @@ enum WindowSwitcherSortMode: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum WindowSwitcherLayout: String, Codable {
+    case grid, list
+}
+
 struct WindowSwitcherConfiguration: Codable, Equatable {
     var isEnabled: Bool
     var mode: WindowSwitcherMode
     var sortMode: WindowSwitcherSortMode
+    var protectsLegacyCommands = false
+    var interactionVersion: Int = 2
     var usesCompanionDefaults: Bool = true
     var showsPreview: Bool = false
+    var preferredLayout: WindowSwitcherLayout? = nil
 
     init(
         isEnabled: Bool,
@@ -49,16 +57,24 @@ struct WindowSwitcherConfiguration: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
         self.mode = try container.decodeIfPresent(WindowSwitcherMode.self, forKey: .mode) ?? .keyWindow
+        // Only the experimental search builds wrote companion-default metadata.
+        // Stable keyWindow profiles keep their assigned-key behavior.
+        if mode == .keyWindow, !container.contains(.interactionVersion), container.contains(.usesCompanionDefaults) {
+            mode = .searchSelect
+        }
+        protectsLegacyCommands = try container.decodeIfPresent(Bool.self, forKey: .protectsLegacyCommands)
+            ?? !container.contains(.interactionVersion)
         self.sortMode = try container.decodeIfPresent(WindowSwitcherSortMode.self, forKey: .sortMode) ?? .recentUse
         // Existing installations keep their inherited Command-Tab binding until
         // they explicitly choose the companion preset. Custom bindings are untouched.
         self.usesCompanionDefaults = try container.decodeIfPresent(Bool.self, forKey: .usesCompanionDefaults) ?? false
         self.showsPreview = try container.decodeIfPresent(Bool.self, forKey: .showsPreview) ?? false
+        self.preferredLayout = try container.decodeIfPresent(WindowSwitcherLayout.self, forKey: .preferredLayout)
     }
 
     static let `default` = WindowSwitcherConfiguration(
         isEnabled: true,
-        mode: .directCycle,
+        mode: .searchSelect,
         sortMode: .recentUse
     )
 
@@ -66,8 +82,11 @@ struct WindowSwitcherConfiguration: Codable, Equatable {
         case isEnabled
         case mode
         case sortMode
+        case protectsLegacyCommands
+        case interactionVersion
         case usesCompanionDefaults
         case showsPreview
+        case preferredLayout
     }
 }
 
@@ -122,7 +141,7 @@ final class WindowSwitcherStore: ObservableObject {
         if let data = storage.data(forKey: Keys.configuration),
            let loaded = try? decoder.decode(WindowSwitcherConfiguration.self, from: data) {
             self.configuration = loaded
-        } else if storage.object(forKey: Keys.shortcutBindings) != nil
+        } else if storage.object(forKey: Keys.configuration) != nil || storage.object(forKey: Keys.shortcutBindings) != nil
                     || storage.object(forKey: Keys.obsoleteShortcutAssignments) != nil {
             // Older default-mode users did not necessarily save configuration.
             // Letter assignment storage is evidence of an existing installation.
@@ -140,8 +159,12 @@ final class WindowSwitcherStore: ObservableObject {
         } else {
             self.shortcutBindings = WindowSwitcherShortcutBindingState()
         }
-        // Retain retired assignment records for inspection; never apply them to
-        // newly discovered live window identities.
+        if storage.object(forKey: Keys.shortcutBindings) != nil || configuration.mode == .keyWindow {
+            configuration.protectsLegacyCommands = true
+        }
+        // Persist the interaction version so explicit legacy choices cannot be
+        // mistaken for experimental search profiles on the next launch.
+        persist()
     }
 
     func setMode(_ mode: WindowSwitcherMode) {
@@ -150,6 +173,7 @@ final class WindowSwitcherStore: ObservableObject {
         }
 
         configuration.mode = mode
+        if mode == .keyWindow { configuration.protectsLegacyCommands = true }
         persist()
     }
 
@@ -181,12 +205,25 @@ final class WindowSwitcherStore: ObservableObject {
         persist()
     }
 
+    func setPreferredLayout(_ layout: WindowSwitcherLayout) {
+        guard configuration.preferredLayout != layout else { return }
+        configuration.preferredLayout = layout
+        persist()
+    }
+
     private func persist() {
         guard let data = try? encoder.encode(configuration) else {
             return
         }
 
         storage.set(data, forKey: Keys.configuration)
+    }
+
+    var protectedCommandKeys: Set<String> {
+        Set((Array(shortcutBindings.manual.values) + Array(shortcutBindings.automatic.values)).compactMap {
+            guard let key = WindowSwitcherSelectionShortcut(storageValue: $0), key.usesCommand else { return nil }
+            return key.key
+        })
     }
 
     func assignShortcuts(to entries: [WindowSwitcherAppEntry]) -> [WindowSwitcherAppEntry] {
@@ -412,6 +449,11 @@ struct WindowSwitcherAppEntry: Identifiable {
         }
 
         return title
+    }
+
+    func localizedGridTitle(using localization: PluginLocalization) -> String {
+        if let title = cleanWindowTitle { return title }
+        return isWindowEntry ? localization.string("window.untitledGrid", defaultValue: "无标题窗口") : appName
     }
 
     func localizedDisplayName(using localization: PluginLocalization) -> String {

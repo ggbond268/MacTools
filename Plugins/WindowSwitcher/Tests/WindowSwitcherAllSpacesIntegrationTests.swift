@@ -89,12 +89,12 @@ final class WindowSwitcherAllSpacesIntegrationTests: XCTestCase {
     func testPreviouslyConfirmedUntitledWindowSurvivesAnotherSpaceWithStableIdentity() {
         let record = WindowSwitcherWindowRecord(windowNumber: 9, processIdentifier: 42, title: "", isOnScreen: false, bounds: bounds)
         let known = [UInt32(9): "original-ax"]
-        let offspace = WindowSwitcherAppCatalog.mergeAllSpacesEntries([entry("app")], records: [record], knownWindowIDs: known)
+        let offspace = WindowSwitcherAppCatalog.mergeAllSpacesEntries([entry("app")], records: [record], knownWindowIDs: known, confirmedAXWindowNumbers: [9])
         XCTAssertEqual(offspace.map(\.id), ["original-ax"])
         XCTAssertNil(offspace.first?.windowElement)
         var rediscovered = entry("new-worker-id", element: AXUIElementCreateApplication(42))
         rediscovered.windowNumber = 9
-        let returned = WindowSwitcherAppCatalog.mergeAllSpacesEntries([rediscovered], records: [record], knownWindowIDs: known)
+        let returned = WindowSwitcherAppCatalog.mergeAllSpacesEntries([rediscovered], records: [record], knownWindowIDs: known, confirmedAXWindowNumbers: [9])
         XCTAssertEqual(returned.first?.id, "original-ax")
         XCTAssertEqual(returned.first?.workerWindowID, "new-worker-id")
     }

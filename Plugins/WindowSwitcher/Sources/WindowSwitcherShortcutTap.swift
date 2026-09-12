@@ -29,6 +29,7 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
     private var activeModifiers: ShortcutModifiers?
     private var isEditing = false
     private var sessionActive = false
+    private var deliveryGeneration = 0
     private let accessibilityTrusted: @Sendable () -> Bool
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -77,6 +78,7 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
             runLoopSource = nil
             activeModifiers = nil
             didReportAccessibilityRevocation = false
+            deliveryGeneration += 1
             sessionActive = false; isEditing = false
             return state
         }
@@ -97,7 +99,12 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
     }
 
     func setEditing(_ value: Bool) { lock.withLock { isEditing = value } }
-    func setSessionActive(_ value: Bool) { lock.withLock { sessionActive = value } }
+    func setSessionActive(_ value: Bool) {
+        lock.withLock {
+            sessionActive = value
+            if !value { deliveryGeneration += 1 }
+        }
+    }
 
     private func activeModifiersSnapshot() -> ShortcutModifiers? {
         lock.withLock { activeModifiers }
@@ -142,8 +149,10 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
     private func handleKeyDown(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
 
-        // Leave all composing and editing keystrokes to the native text system.
-        if lock.withLock({ isEditing }) { return Unmanaged.passUnretained(event) }
+        // Keep the configured Tab switch chord inside the persistent search panel.
+        // Ordinary editing shortcuts and IME keys still belong to its responder.
+        let editing = lock.withLock { isEditing }
+        if editing, ![UInt16(kVK_Tab), UInt16(kVK_ANSI_Grave)].contains(keyCode) { return Unmanaged.passUnretained(event) }
         if keyCode == UInt16(kVK_Escape), lock.withLock({ sessionActive || activeModifiers != nil }) {
             setActiveModifiers(nil)
             DispatchQueue.main.async { self.onEscape() }
@@ -167,7 +176,9 @@ final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @uncheck
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         let reversed = !binding.modifiers.contains(.shift) && event.flags.contains(.maskShift)
 
+        let generation = lock.withLock { deliveryGeneration }
         DispatchQueue.main.async {
+            guard self.lock.withLock({ self.deliveryGeneration == generation }) else { return }
             self.onShortcutPressed(reversed, isRepeat, currentApp)
         }
 
