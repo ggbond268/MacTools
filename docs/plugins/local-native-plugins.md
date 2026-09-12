@@ -8,6 +8,8 @@ For catalog-based installation, GitHub release distribution, and Debug `file://`
 
 For a complete workspace-plugin example with a typed catalog, verified adapters, portable preferences, profiles, and composition of canonical actions from other providers, see [Mac Settings](mac-settings.md).
 
+For a foreground capture plugin with native editing windows, host-owned permissions and shortcuts, local recognition, and capture-session cleanup, see [Screenshot](screenshot.md).
+
 ## Package Layout
 
 Use a directory package with the `.mactoolsplugin` extension:

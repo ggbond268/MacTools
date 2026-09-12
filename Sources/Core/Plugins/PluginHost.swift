@@ -412,6 +412,7 @@ final class PluginHost: ObservableObject {
     private let pluginDisplayPreferencesStore: PluginDisplayPreferencesStore
     private let preferencesBackupStore: any PreferencesBackupApplicationStoring
     private let automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator?
+    private let cloudPreferencesSyncCoordinator: CloudPreferencesSyncCoordinator?
     let preferencesBackupChangeReporter: PreferencesBackupChangeReporter
     private let globalShortcutManager: GlobalShortcutManager
     private let displayConfigurationObserver: (any DisplayConfigurationObserving)?
@@ -468,6 +469,7 @@ final class PluginHost: ObservableObject {
     private var isolatedPluginFailures: [String: String] = [:]
     private var isHandlingPluginAction = false
     private var didLoadDynamicPlugins = false
+    private var areCloudPreferencesReady = false
     private var displayTopologyRefreshTask: Task<Void, Never>?
     private var pluginStateChangeRebuildTask: Task<Void, Never>?
     private var runtimeLocaleCancellable: AnyCancellable?
@@ -532,6 +534,9 @@ final class PluginHost: ObservableObject {
     @Published private(set) var automaticPreferencesBackupEnabled = false
     @Published private(set) var automaticPreferencesBackupSummary =
         AutomaticPreferencesBackupSummary.empty
+    @Published private(set) var cloudPreferencesSyncEnabled = false
+    @Published private(set) var cloudPreferencesSyncStatus: CloudPreferencesSyncStatus = .offline(reason: .disabled)
+    @Published private(set) var cloudPreferencesSyncDirectoryURL: URL?
 
     /// The app shell installs this while the application is running. The host
     /// emits typed requests but never manipulates windows or popovers directly.
@@ -586,6 +591,9 @@ final class PluginHost: ObservableObject {
             automaticPreferencesBackupCoordinator: enablesAutomaticPreferencesBackups
                 ? AutomaticPreferencesBackupCoordinator(userDefaults: shortcutStore.userDefaults)
                 : nil,
+            cloudPreferencesSyncCoordinator: enablesAutomaticPreferencesBackups
+                ? CloudPreferencesSyncCoordinator(userDefaults: shortcutStore.userDefaults)
+                : nil,
             globalShortcutManager: GlobalShortcutManager(),
             displayConfigurationObserver: SystemDisplayConfigurationObserver(),
             accessibilityPermissionObserver: AccessibilityPermissionObserver(),
@@ -604,6 +612,7 @@ final class PluginHost: ObservableObject {
         preferencesBackupChangeReporter providedPreferencesBackupChangeReporter:
             PreferencesBackupChangeReporter? = nil,
         automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator? = nil,
+        cloudPreferencesSyncCoordinator: CloudPreferencesSyncCoordinator? = nil,
         globalShortcutManager: GlobalShortcutManager,
         displayConfigurationObserver: (any DisplayConfigurationObserving)? = nil,
         accessibilityPermissionObserver: (any AccessibilityPermissionObserving)? = nil,
@@ -642,6 +651,7 @@ final class PluginHost: ObservableObject {
         self.pluginDisplayPreferencesStore = pluginDisplayPreferencesStore
         self.preferencesBackupStore = preferencesBackupStore
         self.automaticPreferencesBackupCoordinator = automaticPreferencesBackupCoordinator
+        self.cloudPreferencesSyncCoordinator = cloudPreferencesSyncCoordinator
         self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         self.globalShortcutManager = globalShortcutManager
         self.openPermissionSettings = openPermissionSettings
@@ -701,8 +711,9 @@ final class PluginHost: ObservableObject {
         )
 
         preferencesBackupChangeReporter.onCommittedChange = {
-            [weak automaticPreferencesBackupCoordinator] _ in
+            [weak automaticPreferencesBackupCoordinator, weak cloudPreferencesSyncCoordinator] _ in
             automaticPreferencesBackupCoordinator?.committedPreferencesDidChange()
+            cloudPreferencesSyncCoordinator?.committedPreferencesDidChange()
         }
 
         self.automationController.onCatalogChange = { [weak self] in
@@ -802,7 +813,40 @@ final class PluginHost: ObservableObject {
             }
         }
 
+        if let cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncCoordinator.isReadyToSync = { [weak self] in
+                self?.areCloudPreferencesReady ?? false
+            }
+            cloudPreferencesSyncEnabled = cloudPreferencesSyncCoordinator.isEnabled
+            cloudPreferencesSyncStatus = cloudPreferencesSyncCoordinator.status
+            cloudPreferencesSyncDirectoryURL = cloudPreferencesSyncCoordinator.syncDirectoryURL
+            cloudPreferencesSyncCoordinator.snapshotProvider = { [weak self] in
+                self?.makePreferencesBackup()
+            }
+            cloudPreferencesSyncCoordinator.importHandler = { [weak self] backup in
+                guard let self else { return }
+                let result = try self.importCloudPreferences(backup)
+                guard result.shortcutErrors.isEmpty else {
+                    throw NSError(
+                        domain: "MacTools.CloudPreferencesSync",
+                        code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: result.shortcutErrors
+                            .sorted { $0.key < $1.key }
+                            .map(\.value)
+                            .joined(separator: "\n")]
+                    )
+                }
+            }
+            cloudPreferencesSyncCoordinator.statusHandler = { [weak self] status in
+                self?.cloudPreferencesSyncStatus = status
+            }
+            cloudPreferencesSyncCoordinator.directoryURLHandler = { [weak self] url in
+                self?.cloudPreferencesSyncDirectoryURL = url
+            }
+        }
+
         refreshAll()
+        startCloudPreferencesSyncIfReady()
     }
 
     isolated deinit {
@@ -847,6 +891,41 @@ final class PluginHost: ObservableObject {
 
     func flushAutomaticPreferencesBackupBeforeTermination() {
         automaticPreferencesBackupCoordinator?.flushPendingBackupBeforeTermination()
+        cloudPreferencesSyncCoordinator?.flushPendingExportBeforeTermination()
+    }
+
+    func setCloudPreferencesSyncEnabled(_ enabled: Bool) {
+        cloudPreferencesSyncCoordinator?.setEnabled(enabled)
+        cloudPreferencesSyncEnabled = cloudPreferencesSyncCoordinator?.isEnabled ?? false
+        if let coordinator = cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncStatus = coordinator.status
+        }
+    }
+
+    func setCloudPreferencesSyncDirectoryURL(_ url: URL?) {
+        cloudPreferencesSyncCoordinator?.setSyncDirectoryURL(url)
+        cloudPreferencesSyncDirectoryURL = url
+        if let coordinator = cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncStatus = coordinator.status
+        }
+    }
+
+    func triggerCloudPreferencesSync() async throws {
+        guard let cloudPreferencesSyncCoordinator else {
+            throw CocoaError(.featureUnsupported)
+        }
+        try await cloudPreferencesSyncCoordinator.syncNow()
+    }
+
+    func resolveCloudPreferencesConflict(_ choice: CloudPreferencesConflictChoice) async throws {
+        try await cloudPreferencesSyncCoordinator?.resolveConflict(choice)
+    }
+
+    func openCloudPreferencesSyncFolder() {
+        guard let url = cloudPreferencesSyncDirectoryURL ?? cloudPreferencesSyncCoordinator?.syncDirectoryURL else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     func deactivateAllPlugins(reason: PluginDeactivationReason = .hostShutdown) {
@@ -1085,21 +1164,114 @@ final class PluginHost: ObservableObject {
         return result
     }
 
+    private struct CloudLocalPreferences {
+        let workflows: [WorkflowDefinition]
+        let rules: [AutomationRule]
+        let shortcuts: [ActionShortcutAssignmentRecord]
+        let presets: [ActionInvocationPreset]
+        let shortcutCustomizations: [String: ShortcutCustomization]
+        let protectedPluginIDs: Set<String>
+        let pluginPreferences: [String: Data]
+
+        var workflowIDs: Set<UUID> { Set(workflows.map(\.id)) }
+    }
+
+    /// Cloud updates replace portable records only. Local records are captured
+    /// from their stores, since a portable backup deliberately omits them.
+    func importCloudPreferences(_ backup: PreferencesBackup) throws -> PreferencesImportResult {
+        let exported = makePreferencesBackup()
+        let portable = CloudPreferencesSyncCoordinator.filterMachineSpecificPreferences(exported)
+        let automation = automationController.preferencesBackupSnapshot()
+        let portableWorkflowIDs = Set((portable.workflows ?? []).map(\.id))
+        let portableRuleIDs = Set((portable.automationRules ?? []).map(\.id))
+        let portableShortcutIDs = Set(portable.actionShortcutAssignments.map(\.id))
+        let portablePresetIDs = Set((portable.actionInvocationPresets ?? []).map(\.id))
+        let rules = automation.rules.filter { !portableRuleIDs.contains($0.id) }
+        let shortcuts = shortcutAssignmentService.assignments.filter { !portableShortcutIDs.contains($0.id) }
+        let presets = actionPresetStore.presets().filter { !portablePresetIDs.contains($0.id) }
+        var protectedIDs = Set(automation.workflows.filter { !portableWorkflowIDs.contains($0.id) }.map(\.id))
+        protectedIDs.formUnion(rules.map(\.workflowID))
+        let references = shortcuts.map(\.reference) + presets.map(\.reference)
+        protectedIDs.formUnion(references.compactMap { WorkflowExecutionAnalysis.nestedWorkflowID(for: $0.key) })
+        var previousCount = -1
+        while previousCount != protectedIDs.count {
+            previousCount = protectedIDs.count
+            for workflow in automation.workflows where protectedIDs.contains(workflow.id) {
+                protectedIDs.formUnion(workflow.steps.compactMap {
+                    WorkflowExecutionAnalysis.nestedWorkflowID(for: $0.reference.key)
+                })
+            }
+        }
+        let workflows = automation.workflows.filter { protectedIDs.contains($0.id) }
+        let dependencyReferences = references + workflows.flatMap { $0.steps.map(\.reference) }
+        // Plugin payloads are opaque, replacement-based archives. A provider used
+        // by preserved local automation must retain its presets as well.
+        let protectedPluginIDs = Set(dependencyReferences.compactMap { reference -> String? in
+            guard WorkflowExecutionAnalysis.nestedWorkflowID(for: reference.key) == nil,
+                  let plugin = corePlugin(for: reference.key.providerID),
+                  let provider = plugin as? any PluginActionReferenceBackupProviding else { return nil }
+            let disposition = guardedValue(for: plugin, operation: "preserve local action dependencies",
+                                           provider.backupDisposition(for: reference))
+            guard disposition == .requiresPluginPreferences else { return nil }
+            return reference.key.providerID
+        })
+        let customizations = shortcutStore.customizations(for: shortcutDescriptors().map(\.itemID))
+            .filter { portable.shortcutCustomizations[$0.key] == nil }
+        let local = CloudLocalPreferences(
+            workflows: workflows, rules: rules, shortcuts: shortcuts, presets: presets,
+            shortcutCustomizations: customizations, protectedPluginIDs: protectedPluginIDs,
+            pluginPreferences: exported.pluginPreferences
+        )
+        return try restorePreferences(backup, preserving: local)
+    }
+
+    private func preservingLocalWorkflows(
+        _ context: PreferencesActionRestoreContext, local: CloudLocalPreferences?
+    ) -> PreferencesActionRestoreContext {
+        guard let local else { return context }
+        return PreferencesActionRestoreContext(
+            selection: context.selection,
+            payloadDefinedActionReferencesByPluginID: context.payloadDefinedActionReferencesByPluginID,
+            importedWorkflowIDs: context.importedWorkflowIDs.union(local.workflowIDs),
+            restorableWorkflowIDs: context.restorableWorkflowIDs.union(local.workflowIDs),
+            resolvableWorkflowIDs: context.resolvableWorkflowIDs.union(local.workflowIDs)
+        )
+    }
+
     func importPreferences(
         _ backup: PreferencesBackup,
         selection requestedSelection: PreferencesBackupSelection? = nil
+    ) throws -> PreferencesImportResult {
+        try restorePreferences(backup, selection: requestedSelection)
+    }
+
+    private func restorePreferences(
+        _ backup: PreferencesBackup,
+        selection requestedSelection: PreferencesBackupSelection? = nil,
+        preserving local: CloudLocalPreferences? = nil
     ) throws -> PreferencesImportResult {
         let availableSelection = backup.effectiveSelection
         let selection = (requestedSelection ?? availableSelection).intersecting(availableSelection)
         _ = try preferencesImportPreview(for: backup, selection: selection)
         try automaticPreferencesBackupCoordinator?.createSafetySnapshotBeforeImport()
-        var restoreContext = makePreferencesActionRestoreContext(
+        var restoreContext = preservingLocalWorkflows(makePreferencesActionRestoreContext(
             backup: backup,
             selection: selection
-        )
+        ), local: local)
         let selectedPluginPreferences = backup.pluginPreferences.filter {
             selection.pluginPreferenceIDs.contains($0.key)
+                && !(local?.protectedPluginIDs.contains($0.key) ?? false)
         }
+        let restoredPluginPreferences = selectedPluginPreferences.reduce(into: [String: Data]()) { result, entry in
+            result[entry.key] = if let existing = local?.pluginPreferences[entry.key] {
+                CloudPreferencesSyncCoordinator.preservingMachineSpecificPluginPreferences(
+                    incoming: entry.value, local: existing, pluginID: entry.key
+                )
+            } else { entry.value }
+        }
+        let shortcutCustomizations = backup.shortcutCustomizations.merging(
+            local?.shortcutCustomizations ?? [:], uniquingKeysWith: { _, local in local }
+        )
         preferencesBackupRestoreContext = restoreContext
         defer {
             preferencesBackupRestoreContext = nil
@@ -1144,7 +1316,7 @@ final class PluginHost: ObservableObject {
                 : nil
         })
         var shortcutErrors: [String: String] = [:]
-        let providerPreferences = selectedPluginPreferences.filter {
+        let providerPreferences = restoredPluginPreferences.filter {
             !actionSurfacePluginIDs.contains($0.key)
         }
         let restoredProviderIDs = restorePortablePluginPreferences(providerPreferences)
@@ -1157,11 +1329,11 @@ final class PluginHost: ObservableObject {
         }
         // Only a successfully validated and persisted payload can authorize actions that depend
         // on that payload. This closes the gap between preflight decoding and stateful restore.
-        restoreContext = makePreferencesActionRestoreContext(
+        restoreContext = preservingLocalWorkflows(makePreferencesActionRestoreContext(
             backup: backup,
             selection: selection,
             restoredPluginPreferenceIDs: restoredProviderIDs
-        )
+        ), local: local)
         preferencesBackupRestoreContext = restoreContext
         // Portable plugin settings can create action catalog identities (for example,
         // restored Fan Control preset UUIDs). Rebuild before dependent references.
@@ -1174,14 +1346,15 @@ final class PluginHost: ObservableObject {
             let restorableIDs = restoreContext.restorableWorkflowIDs
             let restored = automationController.restorePreferences(
                 workflows: workflows.compactMap { workflow in
-                    restorableIDs.contains(workflow.id)
+                    restorableIDs.contains(workflow.id) && !(local?.workflowIDs.contains(workflow.id) ?? false)
                         ? migratedWorkflowForRestore(workflow)
                         : nil
-                },
-                rules: rules.filter {
-                    restorableIDs.contains($0.workflowID)
-                        && AutomationRulePortabilityAnalysis.isPortable($0)
-                }
+                } + (local?.workflows ?? []),
+                rules: rules.filter { rule in
+                    restorableIDs.contains(rule.workflowID)
+                        && AutomationRulePortabilityAnalysis.isPortable(rule)
+                        && !(local?.rules.contains(where: { $0.id == rule.id }) ?? false)
+                } + (local?.rules ?? [])
             )
             if !restored {
                 shortcutErrors["automation"] = FeatureL10n.string("无法保存工作流。")
@@ -1199,7 +1372,7 @@ final class PluginHost: ObservableObject {
         // Action-surface layouts are restored only after their referenced providers and
         // workflow dependency graph are known, so a selective import cannot retain a
         // dangling Grid or Trackpad action.
-        let surfacePreferences = selectedPluginPreferences.filter {
+        let surfacePreferences = restoredPluginPreferences.filter {
             actionSurfacePluginIDs.contains($0.key)
         }
         let restoredSurfaceIDs = restorePortablePluginPreferences(surfacePreferences)
@@ -1217,7 +1390,7 @@ final class PluginHost: ObservableObject {
                     uniqueKeysWithValues: AppShortcutAction.allCases.map { action in
                         (
                             action,
-                            backup.shortcutCustomizations[action.rawValue]
+                            shortcutCustomizations[action.rawValue]
                                 ?? .inheritDefault
                         )
                     }
@@ -1226,7 +1399,7 @@ final class PluginHost: ObservableObject {
                     descriptors.map { descriptor in
                         (
                             descriptor.itemID,
-                            backup.shortcutCustomizations[descriptor.itemID]
+                            shortcutCustomizations[descriptor.itemID]
                                 ?? .inheritDefault
                         )
                     },
@@ -1250,9 +1423,10 @@ final class PluginHost: ObservableObject {
                         customizations: targetCustomizations,
                         descriptors: descriptors
                     )
-                    let importedAssignments = backup.actionShortcutAssignments.filter {
-                        actionReferenceRestorePortability($0.reference) != .knownNonPortable
-                    }
+                    let importedAssignments = backup.actionShortcutAssignments.filter { assignment in
+                        actionReferenceRestorePortability(assignment.reference) != .knownNonPortable
+                            && !(local?.shortcuts.contains(where: { $0.id == assignment.id }) ?? false)
+                    } + (local?.shortcuts ?? [])
                     switch shortcutAssignmentService.validateImport(
                         importedAssignments,
                         reservedRegistrations: reservedState.registrations,
@@ -1271,7 +1445,7 @@ final class PluginHost: ObservableObject {
                         case .success:
                             shortcutErrors.merge(
                                 applyImportedShortcutCustomizations(
-                                    backup.shortcutCustomizations,
+                                    shortcutCustomizations,
                                     bridgesLegacyActionAssignments: false,
                                     notifiesActionBackedDescriptors: false
                                 ),
@@ -1284,7 +1458,7 @@ final class PluginHost: ObservableObject {
             } else {
                 shortcutErrors.merge(
                     applyImportedShortcutCustomizations(
-                        backup.shortcutCustomizations,
+                        shortcutCustomizations,
                         bridgesLegacyActionAssignments: true
                     ),
                     uniquingKeysWith: { existing, _ in existing }
@@ -1294,7 +1468,8 @@ final class PluginHost: ObservableObject {
         if selection.includesRunLinks,
            let presets = backup.actionInvocationPresets,
            !actionPresetStore.replaceAllForRecovery(presets.compactMap { preset in
-               guard actionReferenceRestorePortability(preset.reference) != .knownNonPortable else {
+               guard actionReferenceRestorePortability(preset.reference) != .knownNonPortable,
+                     !(local?.presets.contains(where: { $0.id == preset.id }) ?? false) else {
                    return nil
                }
                return ActionInvocationPreset(
@@ -1303,7 +1478,7 @@ final class PluginHost: ObservableObject {
                    createdAt: preset.createdAt,
                    formatVersion: preset.formatVersion
                )
-           }) {
+           } + (local?.presets ?? [])) {
             shortcutErrors["run-links"] = FeatureL10n.string("无法保存运行链接预设。")
         }
         rebuildDerivedState()
@@ -2570,6 +2745,12 @@ final class PluginHost: ObservableObject {
         syncPluginManagementState()
     }
 
+    private func startCloudPreferencesSyncIfReady() {
+        guard dynamicPluginManager == nil || didLoadDynamicPlugins else { return }
+        areCloudPreferencesReady = true
+        cloudPreferencesSyncCoordinator?.start()
+    }
+
     func loadDynamicPluginsIfNeeded() {
         guard !didLoadDynamicPlugins, let dynamicPluginManager else {
             return
@@ -2580,6 +2761,7 @@ final class PluginHost: ObservableObject {
         configureCallbacks(for: dynamicPlugins)
         syncPluginManagementState()
         refreshAll()
+        startCloudPreferencesSyncIfReady()
     }
 
     var hasInstalledDynamicPlugins: Bool {

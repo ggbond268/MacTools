@@ -1792,6 +1792,7 @@ verify_code_session() {
         -only-testing:MacToolsTests/SiriPluginTests \
         -only-testing:MacToolsTests/QuitAppsPluginTests \
         -only-testing:MacToolsTests/SavedScriptsPluginTests \
+        -only-testing:MacToolsTests/ScreenshotPluginTests \
         -only-testing:MacToolsTests/SidecarPluginTests \
         -only-testing:MacToolsTests/StageManagerPluginTests \
         -only-testing:MacToolsTests/SystemMutePluginTests \

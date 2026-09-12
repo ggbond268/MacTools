@@ -21,6 +21,7 @@
 
 | Feature | Description |
 | ------- | ----------- |
+| Screenshot | Select a region or window, annotate with shapes, arrows, text, mosaic, or blur, recognize text and QR codes locally, cover QR codes with opaque masks, pin images, and capture scrolling content with a bounded output size. Quick Capture copies the selection immediately. Silent region recording is available on macOS 15 or later; screenshots support macOS 14 or later. Both actions require an explicit foreground interaction and Screen Recording permission; optional shortcuts start unassigned. See the [Screenshot guide](docs/plugins/screenshot.md) for privacy, output retention, and controls. |
 | Display Resolution | View connected displays and switch each display to an available resolution, with an adaptive list that remains usable near screen edges. |
 | Sidecar | View connected and nearby Sidecar-compatible displays, use direct connect, switch, or disconnect actions, prioritize devices for a first-available shortcut, and keep per-display connection policies and shortcuts, including wired-only connections that request a wired transport rather than a Wi-Fi fallback. |
 | Display Brightness | Quickly adjust built-in and DDC/CI external display brightness, with shortcuts that can follow the mouse or control all displays together, plus Gamma/Shade fallbacks. |
@@ -86,6 +87,8 @@
 > **Window positioning:** The standalone Command Palette and resizable Clipboard History window provide dedicated drag handles, guide-assisted dragging, and magnetic snapping to their current-size default screen anchors. The palette also provides a searchable command that resets its saved position. Dismissing the Command Palette cancels an active drag and immediately hides its guides.
 
 > **Window Switcher:** The catalog includes eligible windows from inactive macOS Spaces, so switching does not depend on the current Space.
+
+> **Preferences sync:** Sync portable preferences through iCloud Drive or a custom shared folder. Manual exports and sync documents are interchangeable. Cloud updates preserve device-local rules, shortcuts, Run Links, hardware settings, and their workflow dependencies; plugin settings required by those local dependencies stay on this Mac. Concurrent changes pause synchronization and offer a choice between local and shared settings, with both versions saved locally. Pending edits survive restarts and are reconciled before publication; quitting does not overwrite the shared file. Sync waits for plugins to finish loading and supports retry after file errors. A missing established shared file pauses sync until it becomes available again.
 
 > **Shortcut settings:** Plugin and app shortcut rows keep the action icon/name beside the recorder field, wrapping groups between rows without splitting an individual shortcut control.
 
