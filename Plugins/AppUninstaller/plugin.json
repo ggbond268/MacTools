@@ -1,0 +1,219 @@
+{
+  "id": "app-uninstaller",
+  "displayName": "应用卸载",
+  "summary": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "de": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "en": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "es": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "fr": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "ja": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "ko": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "pt": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "ru": {
+      "displayName": "App Uninstaller",
+      "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+    },
+    "zh-Hans": {
+      "displayName": "应用卸载",
+      "summary": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。"
+    },
+    "zh-Hant": {
+      "displayName": "App 解除安裝",
+      "summary": "檢查歸屬證據，確認後將 App 與選取的關聯檔案移至垃圾桶。"
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.3.0",
+  "pluginKitVersion": 6,
+  "bundleRelativePath": "AppUninstaller.bundle",
+  "factoryClass": "AppUninstallerPlugin.AppUninstallerPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "AppUninstallerPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": true,
+    "componentPanel": false,
+    "settings": "workspace"
+  },
+  "permissions": [
+    "full-disk-access"
+  ],
+  "category": "storage",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "GPL-3.0-only"
+  },
+  "discovery": {
+    "keywords": [
+      "app",
+      "uninstall",
+      "ownership",
+      "review",
+      "storage"
+    ],
+    "localizedSynonyms": {
+      "ar": [
+        "App Uninstaller"
+      ],
+      "de": [
+        "App Uninstaller"
+      ],
+      "en": [
+        "App Uninstaller"
+      ],
+      "es": [
+        "App Uninstaller"
+      ],
+      "fr": [
+        "App Uninstaller"
+      ],
+      "ja": [
+        "App Uninstaller"
+      ],
+      "ko": [
+        "App Uninstaller"
+      ],
+      "pt": [
+        "App Uninstaller"
+      ],
+      "ru": [
+        "App Uninstaller"
+      ],
+      "zh-Hans": [
+        "应用卸载"
+      ],
+      "zh-Hant": [
+        "App 解除安裝"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "storage"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [
+      "full-disk-access"
+    ],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "storage-state",
+      "application-state"
+    ],
+    "dataPersisted": [
+      "operation-history"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": true
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "app-uninstaller",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "open-review",
+            "title": "@productStrings.display-name",
+            "description": "@productStrings.summary",
+            "keywords": [
+              "app",
+              "uninstall",
+              "review"
+            ],
+            "systemImage": "app.badge.checkmark",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "action-grid",
+              "trackpad-gesture",
+              "manual"
+            ],
+            "automaticEligible": false,
+            "externalInvocation": "unavailable"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
+}
