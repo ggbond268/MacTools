@@ -4418,6 +4418,120 @@
     },
     {
       "action": {
+        "automaticEligible": false,
+        "description": {
+          "ar": "حدد منطقة أو نافذة لإضافة تعليقات أو التعرّف على النصوص والرموز أو التقاط المحتوى القابل للتمرير أو التسجيل.",
+          "de": "Wählen Sie einen Bereich oder ein Fenster zum Beschriften, zur Text- und Codeerkennung, für Scrollaufnahmen oder Videos.",
+          "en": "Select a region or window to annotate, recognize text or codes, capture scrolling content, or record.",
+          "es": "Selecciona una región o ventana para anotar, reconocer texto o códigos, capturar contenido desplazable o grabar.",
+          "fr": "Sélectionnez une zone ou fenêtre pour annoter, reconnaître du texte ou des codes, capturer le défilement ou enregistrer.",
+          "ja": "範囲やウインドウを選び、注釈、文字・コード認識、スクロール撮影、画面収録を行います。",
+          "ko": "영역이나 창을 선택해 주석, 텍스트·코드 인식, 스크롤 캡처 또는 녹화를 사용합니다.",
+          "pt": "Selecione uma área ou janela para anotar, reconhecer texto ou códigos, capturar conteúdo com rolagem ou gravar.",
+          "ru": "Выберите область или окно для пометок, распознавания текста и кодов, снимка с прокруткой или записи.",
+          "zh-Hans": "框选区域或窗口，标注、识别文字或二维码，也可滚动截图和录屏。",
+          "zh-Hant": "框選區域或視窗，標註、辨識文字或 QR 碼，也可捲動截圖和錄製螢幕。"
+        },
+        "externalInvocation": "unavailable",
+        "id": "capture",
+        "keywords": [
+          "screenshot",
+          "capture",
+          "annotation",
+          "OCR",
+          "QR"
+        ],
+        "parameters": [],
+        "permissionIDs": [
+          "screen-recording"
+        ],
+        "risk": "safe",
+        "surfaces": [
+          "unified-search",
+          "global-shortcut",
+          "workflow",
+          "action-grid",
+          "trackpad-gesture",
+          "manual"
+        ],
+        "systemImage": "camera.viewfinder",
+        "title": {
+          "ar": "التقاط لقطة شاشة",
+          "de": "Bildschirmfoto aufnehmen",
+          "en": "Capture Screenshot",
+          "es": "Tomar captura",
+          "fr": "Prendre une capture",
+          "ja": "スクリーンショットを撮影",
+          "ko": "스크린샷 캡처",
+          "pt": "Capturar tela",
+          "ru": "Сделать снимок экрана",
+          "zh-Hans": "截图",
+          "zh-Hant": "截圖"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/screenshot?provider=screenshot&action=capture",
+      "pluginID": "screenshot",
+      "providerID": "screenshot",
+      "route": "/plugins/screenshot/actions/screenshot/capture/"
+    },
+    {
+      "action": {
+        "automaticEligible": false,
+        "description": {
+          "ar": "حدد منطقة لنسخها فورًا إلى الحافظة.",
+          "de": "Bereich auswählen und sofort in die Zwischenablage kopieren.",
+          "en": "Select a region and immediately copy it to the clipboard.",
+          "es": "Selecciona una región y cópiala inmediatamente al portapapeles.",
+          "fr": "Sélectionnez une zone et copiez-la immédiatement dans le presse-papiers.",
+          "ja": "範囲を選ぶと、すぐにクリップボードにコピーします。",
+          "ko": "영역을 선택하면 즉시 클립보드에 복사합니다.",
+          "pt": "Selecione uma área e copie-a imediatamente para a área de transferência.",
+          "ru": "Выберите область, чтобы сразу скопировать её в буфер обмена.",
+          "zh-Hans": "框选后立即复制到剪贴板。",
+          "zh-Hant": "框選後立即複製到剪貼簿。"
+        },
+        "externalInvocation": "unavailable",
+        "id": "quick-capture",
+        "keywords": [
+          "screenshot",
+          "quick capture",
+          "clipboard"
+        ],
+        "parameters": [],
+        "permissionIDs": [
+          "screen-recording"
+        ],
+        "risk": "safe",
+        "surfaces": [
+          "unified-search",
+          "global-shortcut",
+          "workflow",
+          "action-grid",
+          "trackpad-gesture",
+          "manual"
+        ],
+        "systemImage": "camera",
+        "title": {
+          "ar": "التقاط سريع",
+          "de": "Schnellaufnahme",
+          "en": "Quick Capture",
+          "es": "Captura rápida",
+          "fr": "Capture rapide",
+          "ja": "クイック撮影",
+          "ko": "빠른 캡처",
+          "pt": "Captura rápida",
+          "ru": "Быстрый снимок",
+          "zh-Hans": "快速截图",
+          "zh-Hant": "快速截圖"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/screenshot?provider=screenshot&action=quick-capture",
+      "pluginID": "screenshot",
+      "providerID": "screenshot",
+      "route": "/plugins/screenshot/actions/screenshot/quick-capture/"
+    },
+    {
+      "action": {
         "automaticEligible": true,
         "description": {
           "ar": "أول شاشة Sidecar متاحة",

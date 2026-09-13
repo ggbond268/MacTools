@@ -1065,7 +1065,7 @@ const structuredData = {
 
             {settingsPlugins.map((plugin) => {
               const text = localizedPluginText(plugin);
-              const sections = fallbackSections({
+              const sections = settingsModels[plugin.id] ?? fallbackSections({
                 zh: text.zh.displayName,
                 en: text.en.displayName,
               });
@@ -1242,6 +1242,5 @@ const structuredData = {
     </section>
   </main>
   <SiteFooter />
-  <script src="../scripts/site-controls.ts"></script>
   <script src="../scripts/plugin-settings.ts"></script>
 </BaseLayout>

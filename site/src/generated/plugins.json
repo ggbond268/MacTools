@@ -628,6 +628,221 @@
     },
     {
       "capabilities": {
+        "componentPanel": true,
+        "primaryPanel": false,
+        "settings": "form"
+      },
+      "category": "monitoring",
+      "displayName": "AI 用量",
+      "id": "ai-usage",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "استخدام الذكاء الاصطناعي",
+          "summary": "عرض حصص اشتراك Codex وClaude Code وأوقات إعادة التعيين."
+        },
+        "de": {
+          "displayName": "KI-Nutzung",
+          "summary": "Abonnementkontingente und Rücksetzzeiten für Codex und Claude Code anzeigen."
+        },
+        "en": {
+          "displayName": "AI Usage",
+          "summary": "View Codex and Claude Code subscription quotas and reset times."
+        },
+        "es": {
+          "displayName": "Uso de IA",
+          "summary": "Consulta las cuotas y los tiempos de reinicio de Codex y Claude Code."
+        },
+        "fr": {
+          "displayName": "Utilisation IA",
+          "summary": "Consultez les quotas et les heures de réinitialisation de Codex et Claude Code."
+        },
+        "ja": {
+          "displayName": "AI 使用量",
+          "summary": "Codex と Claude Code の利用枠とリセット時刻を確認します。"
+        },
+        "ko": {
+          "displayName": "AI 사용량",
+          "summary": "Codex 및 Claude Code 구독 한도와 초기화 시간을 확인합니다."
+        },
+        "pt": {
+          "displayName": "Uso de IA",
+          "summary": "Veja as cotas e os horários de redefinição de Codex e Claude Code."
+        },
+        "ru": {
+          "displayName": "Использование ИИ",
+          "summary": "Просматривайте квоты подписок Codex и Claude Code и время их сброса."
+        },
+        "zh-Hans": {
+          "displayName": "AI 用量",
+          "summary": "查看 Codex 与 Claude Code 订阅额度和重置时间"
+        },
+        "zh-Hant": {
+          "displayName": "AI 用量",
+          "summary": "查看 Codex 與 Claude Code 訂閱額度和重置時間"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/ai-usage",
+      "product": {
+        "actions": null,
+        "discovery": {
+          "alternativePluginIDs": [],
+          "goalCategories": [
+            "monitoring"
+          ],
+          "keywords": [
+            "ai",
+            "usage",
+            "quota",
+            "codex",
+            "claude",
+            "subscription"
+          ],
+          "localizedSynonyms": {
+            "ar": [
+              "استخدام الذكاء الاصطناعي"
+            ],
+            "de": [
+              "KI-Nutzung"
+            ],
+            "en": [
+              "AI Usage"
+            ],
+            "es": [
+              "Uso de IA"
+            ],
+            "fr": [
+              "Utilisation IA"
+            ],
+            "ja": [
+              "AI 使用量"
+            ],
+            "ko": [
+              "AI 사용량"
+            ],
+            "pt": [
+              "Uso de IA"
+            ],
+            "ru": [
+              "Использование ИИ"
+            ],
+            "zh-Hans": [
+              "AI 用量"
+            ],
+            "zh-Hant": [
+              "AI 用量"
+            ]
+          },
+          "relatedPluginIDs": [],
+          "useCases": [
+            {
+              "id": "primary-use",
+              "title": {
+                "ar": "استخدام الذكاء الاصطناعي",
+                "de": "KI-Nutzung",
+                "en": "AI Usage",
+                "es": "Uso de IA",
+                "fr": "Utilisation IA",
+                "ja": "AI 使用量",
+                "ko": "AI 사용량",
+                "pt": "Uso de IA",
+                "ru": "Использование ИИ",
+                "zh-Hans": "AI 用量",
+                "zh-Hant": "AI 用量"
+              }
+            }
+          ]
+        },
+        "presentation": {
+          "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+          "examples": [
+            {
+              "id": "primary-use",
+              "text": {
+                "ar": "عرض حصص اشتراك Codex وClaude Code وأوقات إعادة التعيين.",
+                "de": "Abonnementkontingente und Rücksetzzeiten für Codex und Claude Code anzeigen.",
+                "en": "View Codex and Claude Code subscription quotas and reset times.",
+                "es": "Consulta las cuotas y los tiempos de reinicio de Codex y Claude Code.",
+                "fr": "Consultez les quotas et les heures de réinitialisation de Codex et Claude Code.",
+                "ja": "Codex と Claude Code の利用枠とリセット時刻を確認します。",
+                "ko": "Codex 및 Claude Code 구독 한도와 초기화 시간을 확인합니다.",
+                "pt": "Veja as cotas e os horários de redefinição de Codex e Claude Code.",
+                "ru": "Просматривайте квоты подписок Codex и Claude Code и время их сброса.",
+                "zh-Hans": "查看 Codex 与 Claude Code 订阅额度和重置时间",
+                "zh-Hant": "查看 Codex 與 Claude Code 訂閱額度和重置時間"
+              }
+            }
+          ],
+          "license": "GPL-3.0-only",
+          "longDescription": {
+            "ar": "عرض حصص اشتراك Codex وClaude Code وأوقات إعادة التعيين.",
+            "de": "Abonnementkontingente und Rücksetzzeiten für Codex und Claude Code anzeigen.",
+            "en": "View Codex and Claude Code subscription quotas and reset times.",
+            "es": "Consulta las cuotas y los tiempos de reinicio de Codex y Claude Code.",
+            "fr": "Consultez les quotas et les heures de réinitialisation de Codex et Claude Code.",
+            "ja": "Codex と Claude Code の利用枠とリセット時刻を確認します。",
+            "ko": "Codex 및 Claude Code 구독 한도와 초기화 시간을 확인합니다.",
+            "pt": "Veja as cotas e os horários de redefinição de Codex e Claude Code.",
+            "ru": "Просматривайте квоты подписок Codex и Claude Code и время их сброса.",
+            "zh-Hans": "查看 Codex 与 Claude Code 订阅额度和重置时间",
+            "zh-Hant": "查看 Codex 與 Claude Code 訂閱額度和重置時間"
+          },
+          "publisher": "MacTools",
+          "screenshots": [],
+          "supportURL": "https://github.com/ggbond268/MacTools/issues"
+        },
+        "privacy": {
+          "allowsUserConfiguredDomains": false,
+          "dataObserved": [
+            "subscription-quota",
+            "local-cli-credentials"
+          ],
+          "dataPersisted": [
+            "plugin-configuration"
+          ],
+          "diagnosticExportsContainUserData": false,
+          "networkDomains": [
+            "chatgpt.com",
+            "api.anthropic.com"
+          ],
+          "networkUse": "required",
+          "processesSensitiveUserContent": true,
+          "retention": {
+            "policy": "user-controlled"
+          },
+          "telemetry": "none"
+        },
+        "relationships": {
+          "includedPackIDs": [],
+          "relatedPluginIDs": [],
+          "suggestedRecipeIDs": [],
+          "supersedesPluginIDs": []
+        },
+        "requirements": {
+          "applications": [],
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "executables": [],
+          "hardware": [],
+          "minimumMacOSVersion": "14.0",
+          "permissionIDs": [],
+          "requiresRelaunch": false,
+          "setupComplexity": "simple"
+        },
+        "setup": {
+          "optionalSurfaces": [],
+          "steps": []
+        }
+      },
+      "releaseChannel": null,
+      "releaseNotesURL": null,
+      "route": "/plugins/ai-usage/",
+      "summary": "查看 Codex 与 Claude Code 订阅额度和重置时间",
+      "version": "1.0.0"
+    },
+    {
+      "capabilities": {
         "componentPanel": false,
         "primaryPanel": true,
         "settings": "form"
@@ -4776,17 +4991,17 @@
               },
               "id": "collection",
               "title": {
-                "ar": "جمع سجل الحافظة",
-                "de": "Zwischenablageverlauf erfassen",
-                "en": "Collect Clipboard History",
-                "es": "Recopilar historial del portapapeles",
-                "fr": "Enregistrer l’historique du presse-papiers",
-                "ja": "クリップボード履歴を収集",
-                "ko": "클립보드 기록 수집",
-                "pt": "Coletar histórico da área de transferência",
-                "ru": "Сохранять историю буфера обмена",
-                "zh-Hans": "收集剪贴板历史",
-                "zh-Hant": "收集剪貼簿記錄"
+                "ar": "تمكين سجل الحافظة",
+                "de": "Zwischenablageverlauf aktivieren",
+                "en": "Enable Clipboard History",
+                "es": "Activar el historial del portapapeles",
+                "fr": "Activer l’historique du presse-papiers",
+                "ja": "クリップボード履歴を有効にする",
+                "ko": "클립보드 기록 활성화",
+                "pt": "Ativar histórico da área de transferência",
+                "ru": "Включить историю буфера обмена",
+                "zh-Hans": "启用剪贴板历史",
+                "zh-Hant": "啟用剪貼簿記錄"
               }
             }
           ],
@@ -15334,6 +15549,430 @@
       "route": "/plugins/saved-scripts/",
       "summary": "保存并运行 AppleScript 和 Shell 脚本。",
       "version": "1.1.0"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "primaryPanel": true,
+        "settings": "form"
+      },
+      "category": "productivity",
+      "displayName": "截图",
+      "id": "screenshot",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "لقطة شاشة",
+          "summary": "التقط مناطق أو نوافذ وأضف تعليقات واستخرج النصوص والرموز والتقط المحتوى القابل للتمرير وسجّل الشاشة."
+        },
+        "de": {
+          "displayName": "Bildschirmfoto",
+          "summary": "Bereiche oder Fenster aufnehmen, beschriften, Text und Codes erkennen, Scrollaufnahmen und Bildschirmvideos erstellen."
+        },
+        "en": {
+          "displayName": "Screenshot",
+          "summary": "Capture regions or windows, annotate, recognize text and codes, take scrolling screenshots, and record the screen."
+        },
+        "es": {
+          "displayName": "Captura de pantalla",
+          "summary": "Captura regiones o ventanas, anota, reconoce texto y códigos, captura contenido desplazable y graba la pantalla."
+        },
+        "fr": {
+          "displayName": "Capture d’écran",
+          "summary": "Capturez des zones ou fenêtres, annotez, reconnaissez du texte et des codes, capturez le défilement et enregistrez l’écran."
+        },
+        "ja": {
+          "displayName": "スクリーンショット",
+          "summary": "範囲やウインドウの撮影、注釈、文字・コード認識、スクロール撮影、画面収録を行います。"
+        },
+        "ko": {
+          "displayName": "스크린샷",
+          "summary": "영역이나 창을 캡처하고 주석, 텍스트·코드 인식, 스크롤 캡처, 화면 녹화를 사용합니다."
+        },
+        "pt": {
+          "displayName": "Captura de tela",
+          "summary": "Capture áreas ou janelas, anote, reconheça textos e códigos, faça capturas com rolagem e grave a tela."
+        },
+        "ru": {
+          "displayName": "Снимок экрана",
+          "summary": "Снимайте области и окна, добавляйте пометки, распознавайте текст и коды, делайте снимки с прокруткой и записывайте экран."
+        },
+        "zh-Hans": {
+          "displayName": "截图",
+          "summary": "区域和窗口截图、标注、文字与二维码识别、贴图、滚动截图和录屏。"
+        },
+        "zh-Hant": {
+          "displayName": "截圖",
+          "summary": "區域和視窗截圖、標註、文字與 QR 碼辨識、釘選圖片、捲動截圖和螢幕錄製。"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/screenshot",
+      "product": {
+        "actions": {
+          "providers": [
+            {
+              "dynamicTemplates": [],
+              "id": "screenshot",
+              "kind": "static",
+              "staticActions": [
+                {
+                  "automaticEligible": false,
+                  "description": {
+                    "ar": "حدد منطقة أو نافذة لإضافة تعليقات أو التعرّف على النصوص والرموز أو التقاط المحتوى القابل للتمرير أو التسجيل.",
+                    "de": "Wählen Sie einen Bereich oder ein Fenster zum Beschriften, zur Text- und Codeerkennung, für Scrollaufnahmen oder Videos.",
+                    "en": "Select a region or window to annotate, recognize text or codes, capture scrolling content, or record.",
+                    "es": "Selecciona una región o ventana para anotar, reconocer texto o códigos, capturar contenido desplazable o grabar.",
+                    "fr": "Sélectionnez une zone ou fenêtre pour annoter, reconnaître du texte ou des codes, capturer le défilement ou enregistrer.",
+                    "ja": "範囲やウインドウを選び、注釈、文字・コード認識、スクロール撮影、画面収録を行います。",
+                    "ko": "영역이나 창을 선택해 주석, 텍스트·코드 인식, 스크롤 캡처 또는 녹화를 사용합니다.",
+                    "pt": "Selecione uma área ou janela para anotar, reconhecer texto ou códigos, capturar conteúdo com rolagem ou gravar.",
+                    "ru": "Выберите область или окно для пометок, распознавания текста и кодов, снимка с прокруткой или записи.",
+                    "zh-Hans": "框选区域或窗口，标注、识别文字或二维码，也可滚动截图和录屏。",
+                    "zh-Hant": "框選區域或視窗，標註、辨識文字或 QR 碼，也可捲動截圖和錄製螢幕。"
+                  },
+                  "externalInvocation": "unavailable",
+                  "id": "capture",
+                  "keywords": [
+                    "screenshot",
+                    "capture",
+                    "annotation",
+                    "OCR",
+                    "QR"
+                  ],
+                  "parameters": [],
+                  "permissionIDs": [
+                    "screen-recording"
+                  ],
+                  "risk": "safe",
+                  "surfaces": [
+                    "unified-search",
+                    "global-shortcut",
+                    "workflow",
+                    "action-grid",
+                    "trackpad-gesture",
+                    "manual"
+                  ],
+                  "systemImage": "camera.viewfinder",
+                  "title": {
+                    "ar": "التقاط لقطة شاشة",
+                    "de": "Bildschirmfoto aufnehmen",
+                    "en": "Capture Screenshot",
+                    "es": "Tomar captura",
+                    "fr": "Prendre une capture",
+                    "ja": "スクリーンショットを撮影",
+                    "ko": "스크린샷 캡처",
+                    "pt": "Capturar tela",
+                    "ru": "Сделать снимок экрана",
+                    "zh-Hans": "截图",
+                    "zh-Hant": "截圖"
+                  }
+                },
+                {
+                  "automaticEligible": false,
+                  "description": {
+                    "ar": "حدد منطقة لنسخها فورًا إلى الحافظة.",
+                    "de": "Bereich auswählen und sofort in die Zwischenablage kopieren.",
+                    "en": "Select a region and immediately copy it to the clipboard.",
+                    "es": "Selecciona una región y cópiala inmediatamente al portapapeles.",
+                    "fr": "Sélectionnez une zone et copiez-la immédiatement dans le presse-papiers.",
+                    "ja": "範囲を選ぶと、すぐにクリップボードにコピーします。",
+                    "ko": "영역을 선택하면 즉시 클립보드에 복사합니다.",
+                    "pt": "Selecione uma área e copie-a imediatamente para a área de transferência.",
+                    "ru": "Выберите область, чтобы сразу скопировать её в буфер обмена.",
+                    "zh-Hans": "框选后立即复制到剪贴板。",
+                    "zh-Hant": "框選後立即複製到剪貼簿。"
+                  },
+                  "externalInvocation": "unavailable",
+                  "id": "quick-capture",
+                  "keywords": [
+                    "screenshot",
+                    "quick capture",
+                    "clipboard"
+                  ],
+                  "parameters": [],
+                  "permissionIDs": [
+                    "screen-recording"
+                  ],
+                  "risk": "safe",
+                  "surfaces": [
+                    "unified-search",
+                    "global-shortcut",
+                    "workflow",
+                    "action-grid",
+                    "trackpad-gesture",
+                    "manual"
+                  ],
+                  "systemImage": "camera",
+                  "title": {
+                    "ar": "التقاط سريع",
+                    "de": "Schnellaufnahme",
+                    "en": "Quick Capture",
+                    "es": "Captura rápida",
+                    "fr": "Capture rapide",
+                    "ja": "クイック撮影",
+                    "ko": "빠른 캡처",
+                    "pt": "Captura rápida",
+                    "ru": "Быстрый снимок",
+                    "zh-Hans": "快速截图",
+                    "zh-Hant": "快速截圖"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "discovery": {
+          "alternativePluginIDs": [],
+          "goalCategories": [
+            "productivity"
+          ],
+          "keywords": [
+            "screenshot",
+            "screen capture",
+            "annotation",
+            "OCR",
+            "QR",
+            "scrolling screenshot",
+            "screen recording",
+            "pin"
+          ],
+          "localizedSynonyms": {
+            "ar": [
+              "لقطة شاشة",
+              "التقاط سريع"
+            ],
+            "de": [
+              "Bildschirmfoto",
+              "Schnellaufnahme"
+            ],
+            "en": [
+              "Screenshot",
+              "Quick Capture"
+            ],
+            "es": [
+              "Captura de pantalla",
+              "Captura rápida"
+            ],
+            "fr": [
+              "Capture d’écran",
+              "Capture rapide"
+            ],
+            "ja": [
+              "スクリーンショット",
+              "クイック撮影"
+            ],
+            "ko": [
+              "스크린샷",
+              "빠른 캡처"
+            ],
+            "pt": [
+              "Captura de tela",
+              "Captura rápida"
+            ],
+            "ru": [
+              "Снимок экрана",
+              "Быстрый снимок"
+            ],
+            "zh-Hans": [
+              "截图",
+              "快速截图"
+            ],
+            "zh-Hant": [
+              "截圖",
+              "快速截圖"
+            ]
+          },
+          "relatedPluginIDs": [],
+          "useCases": [
+            {
+              "id": "capture-and-edit",
+              "title": {
+                "ar": "التقاط لقطة شاشة",
+                "de": "Bildschirmfoto aufnehmen",
+                "en": "Capture Screenshot",
+                "es": "Tomar captura",
+                "fr": "Prendre une capture",
+                "ja": "スクリーンショットを撮影",
+                "ko": "스크린샷 캡처",
+                "pt": "Capturar tela",
+                "ru": "Сделать снимок экрана",
+                "zh-Hans": "截图",
+                "zh-Hant": "截圖"
+              }
+            },
+            {
+              "id": "quick-copy",
+              "title": {
+                "ar": "التقاط سريع",
+                "de": "Schnellaufnahme",
+                "en": "Quick Capture",
+                "es": "Captura rápida",
+                "fr": "Capture rapide",
+                "ja": "クイック撮影",
+                "ko": "빠른 캡처",
+                "pt": "Captura rápida",
+                "ru": "Быстрый снимок",
+                "zh-Hans": "快速截图",
+                "zh-Hant": "快速截圖"
+              }
+            }
+          ]
+        },
+        "presentation": {
+          "documentationURL": "https://github.com/ggbond268/MacTools/blob/main/docs/plugins/screenshot.md",
+          "examples": [
+            {
+              "id": "capture-and-edit",
+              "text": {
+                "ar": "حدد منطقة أو نافذة لإضافة تعليقات أو التعرّف على النصوص والرموز أو التقاط المحتوى القابل للتمرير أو التسجيل.",
+                "de": "Wählen Sie einen Bereich oder ein Fenster zum Beschriften, zur Text- und Codeerkennung, für Scrollaufnahmen oder Videos.",
+                "en": "Select a region or window to annotate, recognize text or codes, capture scrolling content, or record.",
+                "es": "Selecciona una región o ventana para anotar, reconocer texto o códigos, capturar contenido desplazable o grabar.",
+                "fr": "Sélectionnez une zone ou fenêtre pour annoter, reconnaître du texte ou des codes, capturer le défilement ou enregistrer.",
+                "ja": "範囲やウインドウを選び、注釈、文字・コード認識、スクロール撮影、画面収録を行います。",
+                "ko": "영역이나 창을 선택해 주석, 텍스트·코드 인식, 스크롤 캡처 또는 녹화를 사용합니다.",
+                "pt": "Selecione uma área ou janela para anotar, reconhecer texto ou códigos, capturar conteúdo com rolagem ou gravar.",
+                "ru": "Выберите область или окно для пометок, распознавания текста и кодов, снимка с прокруткой или записи.",
+                "zh-Hans": "框选区域或窗口，标注、识别文字或二维码，也可滚动截图和录屏。",
+                "zh-Hant": "框選區域或視窗，標註、辨識文字或 QR 碼，也可捲動截圖和錄製螢幕。"
+              }
+            },
+            {
+              "id": "quick-copy",
+              "text": {
+                "ar": "حدد منطقة لنسخها فورًا إلى الحافظة.",
+                "de": "Bereich auswählen und sofort in die Zwischenablage kopieren.",
+                "en": "Select a region and immediately copy it to the clipboard.",
+                "es": "Selecciona una región y cópiala inmediatamente al portapapeles.",
+                "fr": "Sélectionnez une zone et copiez-la immédiatement dans le presse-papiers.",
+                "ja": "範囲を選ぶと、すぐにクリップボードにコピーします。",
+                "ko": "영역을 선택하면 즉시 클립보드에 복사합니다.",
+                "pt": "Selecione uma área e copie-a imediatamente para a área de transferência.",
+                "ru": "Выберите область, чтобы сразу скопировать её в буфер обмена.",
+                "zh-Hans": "框选后立即复制到剪贴板。",
+                "zh-Hant": "框選後立即複製到剪貼簿。"
+              }
+            }
+          ],
+          "license": "GPL-3.0-only",
+          "longDescription": {
+            "ar": "أداة محلية بلقطات مناطق ونوافذ وتعليقات وإخفاء بالموزاييك أو التمويه والتعرّف على النصوص والرموز وتثبيت الصور ولقطات التمرير. تبدأ فقط بإجراء صريح في الواجهة. تسجيل المناطق بدون صوت يتطلب macOS 15 أو أحدث؛ الميزات الأخرى تعمل على macOS 14 أو أحدث.",
+            "de": "Lokale Bereichs- und Fensteraufnahmen mit Anmerkungen, Mosaik und Weichzeichnen, Text- und Codeerkennung, angehefteten Bildern und Scrollaufnahmen. Start nur durch eine ausdrückliche Vordergrundaktion. Bereichsvideos ohne Ton benötigen macOS 15; alle anderen Funktionen macOS 14.",
+            "en": "Local region and window capture with annotations, mosaic and blur, text and code recognition, pinned images, and scrolling screenshots. Starts only through an explicit foreground action. Silent region recording requires macOS 15 or later; other features support macOS 14 or later.",
+            "es": "Capturas locales de regiones y ventanas con anotaciones, mosaico, desenfoque, reconocimiento de texto y códigos, imágenes fijadas y capturas con desplazamiento. Solo comienza mediante una acción explícita en primer plano. La grabación de regiones sin audio requiere macOS 15; las otras funciones, macOS 14.",
+            "fr": "Captures locales de zones et fenêtres avec annotations, mosaïque et flou, reconnaissance de texte et de codes, images épinglées et captures défilantes. Démarrage uniquement par une action explicite au premier plan. L’enregistrement de zones sans audio nécessite macOS 15 ; les autres fonctions, macOS 14.",
+            "ja": "範囲・ウインドウ撮影、注釈、モザイク・ぼかし、文字・コード認識、画像のピン留め、スクロール撮影をローカルで実行します。明示的な前面操作でのみ開始します。音声なしの範囲収録には macOS 15 以降、その他の機能には macOS 14 以降が必要です。",
+            "ko": "영역·창 캡처, 주석, 모자이크·흐림, 텍스트·코드 인식, 이미지 고정, 스크롤 캡처를 로컬에서 처리합니다. 명시적인 전경 작업으로만 시작합니다. 소리 없는 영역 녹화는 macOS 15 이상, 나머지 기능은 macOS 14 이상이 필요합니다.",
+            "pt": "Capturas locais de áreas e janelas com anotações, mosaico, desfoque, reconhecimento de textos e códigos, imagens fixadas e rolagem. Inicia apenas por uma ação explícita em primeiro plano. A gravação de áreas sem áudio exige macOS 15; os demais recursos, macOS 14.",
+            "ru": "Локальные снимки областей и окон с пометками, мозаикой и размытием, распознаванием текста и кодов, закреплением изображений и прокруткой. Запуск только явным действием на переднем плане. Запись области без звука требует macOS 15; остальные функции — macOS 14.",
+            "zh-Hans": "本地完成区域和窗口截图、标注、马赛克与模糊、文字与二维码识别、贴图和滚动截图。仅由明确的前台操作启动；无声区域录屏需要 macOS 15 或更高，其他功能支持 macOS 14 或更高。",
+            "zh-Hant": "在本機完成區域和視窗截圖、標註、馬賽克與模糊、文字與 QR 碼辨識、釘選圖片及捲動截圖。僅由明確的前景操作啟動；無聲區域錄製需要 macOS 15 或更新版本，其他功能支援 macOS 14 或更新版本。"
+          },
+          "publisher": "MacTools",
+          "screenshots": [],
+          "supportURL": "https://github.com/ggbond268/MacTools/issues"
+        },
+        "privacy": {
+          "allowsUserConfiguredDomains": false,
+          "dataObserved": [
+            "screen-pixels",
+            "window-geometry",
+            "recognized-text-and-codes"
+          ],
+          "dataPersisted": [
+            "user-exported-screenshots",
+            "user-exported-recordings",
+            "clipboard-content",
+            "plugin-configuration"
+          ],
+          "diagnosticExportsContainUserData": false,
+          "networkDomains": [],
+          "networkUse": "none",
+          "processesSensitiveUserContent": true,
+          "retention": {
+            "description": {
+              "ar": "تبقى الملفات المصدّرة ومحتويات الحافظة تحت تحكم المستخدم. تُزال إعدادات الإضافة وملفاتها الخاصة عند إلغاء تثبيتها؛ ولا تُحذف الملفات التي صدّرها المستخدم.",
+              "de": "Exportierte Dateien und Zwischenablage bleiben unter Ihrer Kontrolle. Deinstallation entfernt private Plugin-Daten und Einstellungen, aber keine exportierten Dateien.",
+              "en": "Exported files and clipboard content remain under your control. Uninstall removes plugin-private data and settings, while user-exported files remain.",
+              "es": "Los archivos exportados y el portapapeles quedan bajo tu control. La desinstalación elimina datos privados y ajustes del plugin, pero conserva los archivos exportados.",
+              "fr": "Les fichiers exportés et le presse-papiers restent sous votre contrôle. La désinstallation supprime les données privées et réglages du module, mais conserve les fichiers exportés.",
+              "ja": "書き出したファイルとクリップボードはユーザーが管理します。アンインストール時にプラグイン専用データと設定を削除しますが、書き出したファイルは残ります。",
+              "ko": "내보낸 파일과 클립보드 내용은 사용자가 관리합니다. 제거 시 플러그인 전용 데이터와 설정이 삭제되지만 내보낸 파일은 유지됩니다.",
+              "pt": "Os arquivos exportados e a área de transferência ficam sob seu controle. A desinstalação remove dados privados e ajustes do plugin, mas mantém os arquivos exportados.",
+              "ru": "Экспортированные файлы и буфер обмена остаются под вашим контролем. Удаление плагина очищает его частные данные и настройки, но сохраняет экспортированные файлы.",
+              "zh-Hans": "导出的文件和剪贴板内容由你管理。卸载会清除插件私有数据和设置，保留你导出的文件。",
+              "zh-Hant": "匯出的檔案和剪貼簿內容由你管理。解除安裝會清除外掛程式私有資料與設定，保留你匯出的檔案。"
+            },
+            "policy": "user-controlled"
+          },
+          "telemetry": "none"
+        },
+        "relationships": {
+          "includedPackIDs": [],
+          "relatedPluginIDs": [],
+          "suggestedRecipeIDs": [],
+          "supersedesPluginIDs": []
+        },
+        "requirements": {
+          "applications": [],
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "executables": [],
+          "hardware": [],
+          "minimumMacOSVersion": "14.0",
+          "permissionIDs": [
+            "screen-recording"
+          ],
+          "requiresRelaunch": false,
+          "setupComplexity": "guided"
+        },
+        "setup": {
+          "optionalSurfaces": [
+            "global-shortcut"
+          ],
+          "steps": [
+            {
+              "description": {
+                "ar": "قبل استخدام هذه الإضافة، راجع المتطلبات التالية واستوفها: إذن تسجيل الشاشة.",
+                "de": "Prüfe und erfülle vor der Verwendung dieses Plugins folgende Anforderungen: Bildschirmaufnahme-Berechtigung.",
+                "en": "Before using this plugin, review and satisfy these requirements: Screen Recording permission.",
+                "es": "Antes de usar este plugin, revisa y cumple estos requisitos: permiso de Grabación de pantalla.",
+                "fr": "Avant d’utiliser ce module, vérifiez et remplissez les conditions suivantes : autorisation Enregistrement de l’écran.",
+                "ja": "このプラグインを使用する前に、次の要件を確認して満たしてください：画面収録権限。",
+                "ko": "이 플러그인을 사용하기 전에 다음 요구 사항을 확인하고 충족하세요: 화면 기록 권한.",
+                "pt": "Antes de usar este plugin, revise e cumpra estes requisitos: permissão de Gravação de Tela.",
+                "ru": "Перед использованием плагина проверьте и выполните следующие требования: доступ к Записи экрана.",
+                "zh-Hans": "使用此插件前，请检查并满足以下要求：屏幕录制权限。",
+                "zh-Hant": "使用此外掛程式前，請檢查並滿足以下要求：螢幕錄製權限。"
+              },
+              "id": "review-requirements",
+              "title": {
+                "ar": "إعداد لقطة شاشة",
+                "de": "Bildschirmfoto einrichten",
+                "en": "Set Up Screenshot",
+                "es": "Configurar Captura de pantalla",
+                "fr": "Configurer Capture d’écran",
+                "ja": "スクリーンショットを設定",
+                "ko": "스크린샷 설정",
+                "pt": "Configurar Captura de tela",
+                "ru": "Настройка «Снимок экрана»",
+                "zh-Hans": "设置截图",
+                "zh-Hant": "設定截圖"
+              }
+            }
+          ],
+          "suggestedTestAction": {
+            "actionID": "capture",
+            "providerID": "screenshot"
+          }
+        }
+      },
+      "releaseChannel": null,
+      "releaseNotesURL": null,
+      "route": "/plugins/screenshot/",
+      "summary": "区域和窗口截图、标注、文字与二维码识别、贴图、滚动截图和录屏。",
+      "version": "1.0.0"
     },
     {
       "capabilities": {

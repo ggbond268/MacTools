@@ -8,9 +8,15 @@ After changing a plugin manifest, a referenced localization string, or a Marketp
 npm run generate:plugins
 npm run check:generated-plugins
 npm run build
+npm test
 ```
 
 The website consumes the committed `src/generated/plugins.json` and
 `src/generated/actions.json` files. Checksum-named assets in
 `public/generated/plugin-assets/` are committed alongside them. CI rejects
 stale output.
+
+Navigation controls are loaded by `BaseLayout` on every page. Existing settings
+preview models remain in use, with generic controls only for plugins without a
+model. `npm test` checks control behavior (including unavailable storage), shared
+scripts on the built pages, and the Fan Control preset and slider preview.

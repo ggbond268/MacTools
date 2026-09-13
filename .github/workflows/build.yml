@@ -47,6 +47,10 @@ jobs:
         working-directory: site
         run: npm run build
 
+      - name: Test site controls and rendered previews
+        working-directory: site
+        run: npm test
+
   build:
     name: Build and test
     runs-on: macos-26

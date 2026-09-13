@@ -1,6 +1,21 @@
 const root = document.documentElement;
-const storedTheme = localStorage.getItem("mactools-theme");
-const storedLang = localStorage.getItem("mactools-lang");
+// Browser storage can be unavailable; controls should still work for this page.
+const readPreference = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writePreference = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The visible preference is already applied; persistence is optional.
+  }
+};
+const storedTheme = readPreference("mactools-theme");
+const storedLang = readPreference("mactools-lang");
 const applyLanguage = (lang: "zh" | "en") => {
   root.dataset.lang = lang;
   root.lang = lang === "zh" ? "zh-CN" : "en";
@@ -58,13 +73,13 @@ document.querySelectorAll<HTMLElement>("[data-copy]").forEach((button) => {
 document.querySelector<HTMLElement>("[data-theme-toggle]")?.addEventListener("click", () => {
   const next = root.dataset.theme === "dark" ? "light" : "dark";
   root.dataset.theme = next;
-  localStorage.setItem("mactools-theme", next);
+  writePreference("mactools-theme", next);
 });
 
 document.querySelector<HTMLElement>("[data-language-toggle]")?.addEventListener("click", () => {
   const next = root.dataset.lang === "en" ? "zh" : "en";
   applyLanguage(next);
-  localStorage.setItem("mactools-lang", next);
+  writePreference("mactools-lang", next);
 });
 
 const pluginFilterButtons = [...document.querySelectorAll<HTMLButtonElement>("[data-plugin-filter]")];
