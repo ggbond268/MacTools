@@ -53,7 +53,7 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - name: Validate pending changelog fragments
-        run: /usr/bin/python3 scripts/changelog.py validate
+        run: make validate-changelog
 
       - name: Build and run tests
         run: |

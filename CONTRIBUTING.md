@@ -81,7 +81,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - Prefer English for commit messages, pull request titles/descriptions, and issues.
 - Build or tests have passed. If they could not be run, explain why in the PR.
 - User-visible behavior changes are reflected in `README.md` or the relevant design documentation.
-- User-visible app or plugin changes include a concise English changelog fragment in `changes/unreleased/*.md`.
+- User-visible app or plugin changes include a concise English changelog fragment in `changes/unreleased/*.md`. Run `make validate-changelog` before committing or pushing fragment changes, including when using only focused XCTest. Entries have a 220-character and two-sentence limit; `make script-tests` and `make ci` also validate pending fragments.
 - Plugin manifest `capabilities.settings` (`none`, `form`, or `workspace`) matches the runtime `settingsPage` layout.
 - Rich manifest static and dynamic action descriptors match the runtime provider/action identity, risk, permissions, external policy, automation eligibility, and parameter portability.
 - Capture plugins preserve explicit foreground selection, release overlays and capture sessions when disabled, and never delete user-exported screenshots or recordings during private-data cleanup.
