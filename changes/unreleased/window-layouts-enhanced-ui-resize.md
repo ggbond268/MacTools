@@ -3,4 +3,4 @@ release: plugin
 type: fixed
 ---
 
-Window Layouts now resizes windows more reliably in apps whose enhanced Accessibility mode interferes with layout changes, while preserving that mode when VoiceOver or Switch Control is active. Restore Previous Frame remains available if a layout changes the window but its accessibility cleanup fails.
+Window Layouts resizes windows more reliably while respecting VoiceOver and Switch Control. Restore Previous Frame remains available if accessibility cleanup fails after a resize.
