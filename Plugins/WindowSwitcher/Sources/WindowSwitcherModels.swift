@@ -453,7 +453,7 @@ struct WindowSwitcherAppEntry: Identifiable {
 
     func localizedGridTitle(using localization: PluginLocalization) -> String {
         if let title = cleanWindowTitle { return title }
-        return isWindowEntry ? localization.string("window.untitledGrid", defaultValue: "无标题窗口") : appName
+        return appName
     }
 
     func localizedDisplayName(using localization: PluginLocalization) -> String {

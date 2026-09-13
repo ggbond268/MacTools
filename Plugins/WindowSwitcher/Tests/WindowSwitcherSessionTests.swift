@@ -373,12 +373,25 @@ final class WindowSwitcherSessionTests: XCTestCase {
         XCTAssertEqual(controller.session?.isPersistent, true)
     }
 
+    func testGridUsesAppNameForMissingTitlesAndKeepsRealTitles() {
+        let localization = PluginLocalization(bundle: .main)
+        for title: String? in [nil, "", " \n\t"] {
+            var window = entry("untitled", title: title)
+            window.windowNumber = 1
+            XCTAssertEqual(window.localizedGridTitle(using: localization), window.appName)
+            XCTAssertTrue(window.localizedDisplayName(using: localization).contains(window.appName))
+            XCTAssertNotEqual(window.localizedDisplayName(using: localization), window.appName)
+        }
+        let titled = entry("titled", title: "  Project Notes  ")
+        XCTAssertEqual(titled.localizedGridTitle(using: localization), "Project Notes")
+    }
+
     func testGridOmitsAppSubtitleAndDividerTracksPreviewVisibility() throws {
         let controller = WindowSwitcherOverlayController()
         var window = entry("one", title: "")
         window.windowNumber = 1
         let localization = PluginLocalization(bundle: .main)
-        XCTAssertFalse(window.localizedGridTitle(using: localization).contains(window.appName))
+        XCTAssertEqual(window.localizedGridTitle(using: localization), window.appName)
         let session = WindowSwitcherSession(entries: [window], selectedID: window.id, isPersistent: true, originalWindowID: nil)
         controller.show(session, currentPID: 100, showsPreview: true)
         defer { controller.hide() }
@@ -1078,7 +1091,7 @@ final class WindowSwitcherSessionTests: XCTestCase {
         XCTAssertFalse(scroll.hasContentBelow)
     }
 
-    private func entry(_ id: String, title: String = "Document", pid: pid_t = 100) -> WindowSwitcherAppEntry {
+    private func entry(_ id: String, title: String? = "Document", pid: pid_t = 100) -> WindowSwitcherAppEntry {
         WindowSwitcherAppEntry(id: id, processIdentifier: pid, bundleIdentifier: "org.example.browser",
             appName: "Browser", windowTitle: title, icon: nil, windowElement: nil, isMinimized: false, shortcutToken: nil)
     }
