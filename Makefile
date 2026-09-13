@@ -105,7 +105,7 @@ ci: generate
 		test \
 		-quiet
 	@$(MAKE) panel-layout-ui-tests
-	@./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh
+	@./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh "$(abspath $(DEBUG_BUILD_PRODUCTS_DIR))"
 
 sync-debug-plugins: build
 	@if [ -n "$(PLUGIN)" ]; then \

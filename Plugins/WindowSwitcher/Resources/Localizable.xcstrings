@@ -1185,7 +1185,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press to Switch"
+            "value": "Search and select"
           }
         },
         "ja": {
@@ -1197,7 +1197,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按键直达"
+            "value": "搜索选择"
           }
         },
         "zh-Hant": {
@@ -1256,7 +1256,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Show a fixed window list and press the letter above an entry to switch to it."
+            "value": "Type to search, repeat the shortcut to select, and press Return to switch."
           }
         },
         "ja": {
@@ -1268,7 +1268,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "显示固定窗口，按条目上方字母直达。"
+            "value": "输入搜索，按快捷键选择下一个窗口，按回车打开。"
           }
         },
         "zh-Hant": {
@@ -1611,7 +1611,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Order apps by recent use so you can quickly return to the previous window."
+            "value": "Sort by window recency to return to the previous window."
           }
         },
         "ja": {
@@ -1623,7 +1623,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按最近使用的应用排列，便于快速回到上一个窗口。"
+            "value": "按窗口最近使用时间排列，便于回到上一个窗口。"
           }
         },
         "zh-Hant": {
@@ -1640,67 +1640,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أمر ثابت"
+            "value": "أبجدي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Feste Reihenfolge"
+            "value": "Alphabetisch"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Orden fija"
+            "value": "Alfabético"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordre fixe"
+            "value": "Alphabétique"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "고정 순서"
+            "value": "이름순"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordem Fixa"
+            "value": "Alfabética"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Фиксированный порядок"
+            "value": "По алфавиту"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fixed Order"
+            "value": "Alphabetical"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定順"
+            "value": "名前順"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定排序"
+            "value": "按名称排序"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "固定排序"
+            "value": "依名稱排序"
           }
         }
       }
@@ -1711,67 +1711,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اطلب التطبيقات باستمرار بالاسم حتى يسهل تذكر مواقعها."
+            "value": "الترتيب حسب اسم التطبيق، ثم عنوان النافذة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordnen Sie Apps konsequent nach Namen, damit Sie sich ihre Positionen leichter merken können."
+            "value": "Nach App-Namen und dann nach Fenstertitel sortieren."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordene las aplicaciones constantemente por nombre para que sus posiciones sean más fáciles de recordar."
+            "value": "Ordenar por nombre de app y luego por título de ventana."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Classez les applications de manière cohérente par nom afin que leurs positions soient plus faciles à mémoriser."
+            "value": "Trier par nom d’app, puis par titre de fenêtre."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "앱의 위치를 더 쉽게 기억할 수 있도록 이름별로 일관되게 앱을 주문하세요."
+            "value": "앱 이름, 창 제목 순으로 정렬합니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordene os aplicativos de forma consistente por nome para que suas posições sejam mais fáceis de lembrar."
+            "value": "Ordenar por nome do app e depois por título da janela."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Упорядочивайте приложения по именам, чтобы их расположение было легче запомнить."
+            "value": "Сортировка по имени приложения, затем по заголовку окна."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Order apps consistently by name so their positions are easier to remember."
+            "value": "Sort by app name, then window title."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アプリ名で常に同じ順序に並べ、位置を覚えやすくします。"
+            "value": "アプリ名、ウインドウのタイトルの順に並べます。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按应用名称稳定排列，位置更容易记住。"
+            "value": "先按应用名称，再按窗口标题排序。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "依 App 名稱固定排列，位置更容易記住。"
+            "value": "先依 App 名稱，再依視窗標題排序。"
           }
         }
       }
@@ -1914,6 +1914,1558 @@
           "stringUnit": {
             "state": "translated",
             "value": "視窗切換需要輔助使用權限，請先前往設定完成授權。"
+          }
+        }
+      }
+    },
+    "chooser.all": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Windows"
+          }
+        }
+      }
+    },
+    "chooser.current": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前应用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current App"
+          }
+        }
+      }
+    },
+    "chooser.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Window"
+          }
+        }
+      }
+    },
+    "chooser.quit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出应用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit App"
+          }
+        }
+      }
+    },
+    "chooser.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Window"
+          }
+        }
+      }
+    },
+    "chooser.preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview"
+          }
+        }
+      }
+    },
+    "chooser.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "preview.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载预览…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading preview…"
+          }
+        }
+      }
+    },
+    "chooser.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window Switcher"
+          }
+        }
+      }
+    },
+    "chooser.search": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索窗口标题或应用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search window titles or apps"
+          }
+        }
+      }
+    },
+    "chooser.displayFilter": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示器筛选"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter by display"
+          }
+        }
+      }
+    },
+    "chooser.list": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口列表"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Windows"
+          }
+        }
+      }
+    },
+    "chooser.allDisplays": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有显示器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Displays"
+          }
+        }
+      }
+    },
+    "chooser.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的窗口。窗口信息可能仍在更新。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching windows. Window information may still be updating."
+          }
+        }
+      }
+    },
+    "chooser.persistentHelp": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑↓ 选择 · 回车打开 · Esc 取消 · 所有空间（系统允许访问的窗口）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑↓ Select · Return Open · Esc Cancel · All Spaces accessible to macOS"
+          }
+        }
+      }
+    },
+    "chooser.cycleHelp": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住快捷键循环 · 松开切换 · 输入文字搜索 · Esc 取消"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold to cycle · Release to switch · Type to search · Esc Cancel"
+          }
+        }
+      }
+    },
+    "window.minimized": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已最小化"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimized"
+          }
+        }
+      }
+    },
+    "window.hidden": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已隐藏"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hidden"
+          }
+        }
+      }
+    },
+    "window.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时无法更新"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporarily unavailable"
+          }
+        }
+      }
+    },
+    "window.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无可用窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No available window"
+          }
+        }
+      }
+    },
+    "preview.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此窗口暂时无法预览。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview is unavailable for this window."
+          }
+        }
+      }
+    },
+    "preview.permission": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览需要屏幕录制权限；仍可按标题切换。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview requires Screen Recording permission. You can still switch by title."
+          }
+        }
+      }
+    },
+    "preview.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取预览；仍可按标题切换。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not load the preview. You can still switch by title."
+          }
+        }
+      }
+    },
+    "action.currentApp.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前应用窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current App Windows"
+          }
+        }
+      }
+    },
+    "shortcut.currentApp.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换当前应用的窗口。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch between windows of the current app."
+          }
+        }
+      }
+    },
+    "action.currentApp.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索和选择当前应用的窗口。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find and select a window of the current app."
+          }
+        }
+      }
+    },
+    "settings.companion.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留系统应用切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep system app switching"
+          }
+        }
+      }
+    },
+    "settings.companion.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将全部窗口快捷键重置为 ⌥Tab，保留系统 ⌘Tab。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset the all-windows shortcut to ⌥Tab and keep the system ⌘Tab switcher."
+          }
+        }
+      }
+    },
+    "settings.companion.apply": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 ⌥Tab"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use ⌥Tab"
+          }
+        }
+      }
+    },
+    "settings.preview.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选中窗口预览"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected Window Preview"
+          }
+        }
+      }
+    },
+    "settings.preview.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅预览选中窗口。需在系统设置中允许屏幕录制，关闭时仍可搜索和切换。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview only the selected window. Allow Screen Recording in System Settings. Search and switching also work without previews."
+          }
+        }
+      }
+    },
+    "error.discoveryTimeout": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未读取到可切换窗口，请稍后重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No switchable windows were found. Try again shortly."
+          }
+        }
+      }
+    },
+    "error.shortcutTap": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法监听快捷键，请检查辅助功能权限。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not listen for shortcuts. Check Accessibility permission."
+          }
+        }
+      }
+    },
+    "action.requested": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已发送请求；窗口可能需要确认保存。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request sent. The app may ask you to save changes."
+          }
+        }
+      }
+    },
+    "action.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口已关闭或暂时无法访问，请重新选择。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The window closed or is temporarily unavailable. Select it again."
+          }
+        }
+      }
+    },
+    "action.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能确认目标窗口，请重试或检查辅助功能权限。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not confirm the target window. Try again or check Accessibility permission."
+          }
+        }
+      }
+    },
+    "chooser.count": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d 个窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d windows"
+          }
+        }
+      }
+    },
+    "window.untitled": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — 无标题窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — Untitled Window"
+          }
+        }
+      }
+    },
+    "chooser.emptyDisplay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected Display — No Windows"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选显示器暂无窗口"
+          }
+        }
+      }
+    },
+    "chooser.keyboardHelp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑↓←→ Select · Return Open · ⌘1/2 Scope · ⌘D Displays · Esc Cancel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方向键选择 · 回车打开 · ⌘1/2 范围 · ⌘D 显示器 · Esc 取消"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑↓ 選擇 · Return 開啟 · ⌘1/2 範圍 · ⌘D 顯示器 · Esc 取消"
+          }
+        }
+      }
+    },
+    "settings.commandTab.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替代系统应用切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace system app switching"
+          }
+        }
+      }
+    },
+    "settings.commandTab.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 ⌘Tab 切换全部窗口，无需录制系统快捷键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use ⌘Tab to switch all windows without recording the system shortcut."
+          }
+        }
+      }
+    },
+    "settings.commandTab.apply": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 ⌘Tab"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use ⌘Tab"
+          }
+        }
+      }
+    },
+    "settings.shortcut.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键设置暂不可用，请重新打开设置。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut settings are unavailable. Reopen Settings and try again."
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部窗口快捷键"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All windows shortcut"
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择保留或替代系统 ⌘Tab；自定义快捷键会同步显示。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep or replace system ⌘Tab. This selection follows your configured shortcut."
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.option": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥Tab · 保留系统切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥Tab · Keep system"
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.command": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘Tab · 替代系统切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘Tab · Replace system"
+          }
+        }
+      }
+    },
+    "settings.shortcutPreset.custom": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义快捷键"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom shortcut"
+          }
+        }
+      }
+    },
+    "chooser.cards": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cards"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片视图"
+          }
+        }
+      }
+    },
+    "chooser.layout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window view"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口视图"
+          }
+        }
+      }
+    },
+    "chooser.more": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More options"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多选项"
+          }
+        }
+      }
+    },
+    "settings.hotkeys": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut hotkeys"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键"
+          }
+        }
+      }
+    },
+    "settings.shortcut.reset": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Default"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复默认"
+          }
+        }
+      }
+    },
+    "settings.shortcut.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear shortcut"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除快捷键"
+          }
+        }
+      }
+    },
+    "chooser.dragHandle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag to move and align"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖移以移动和对齐"
+          }
+        }
+      }
+    },
+    "chooser.shortcuts": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard Shortcuts"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "键盘快捷键"
+          }
+        }
+      }
+    },
+    "chooser.quickSelect": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open visible window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开可见窗口"
+          }
+        }
+      }
+    },
+    "chooser.focusNext": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next control"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一个控件"
+          }
+        }
+      }
+    },
+    "chooser.modifierKeys": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修饰键"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modifiers"
+          }
+        }
+      }
+    },
+    "chooser.modeSearch": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索选择"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search & Select"
+          }
+        }
+      }
+    },
+    "chooser.modeCycle": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "循环切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cycling"
+          }
+        }
+      }
+    },
+    "chooser.searchTransitionHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can release %@; this window stays open."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可松开 %@，此窗口会保持打开。"
+          }
+        }
+      }
+    },
+    "chooser.appWindows": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Windows"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的窗口"
+          }
+        }
+      }
+    },
+    "chooser.quitApp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出 %@"
+          }
+        }
+      }
+    },
+    "chooser.switchWindow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to Window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换到窗口"
+          }
+        }
+      }
+    },
+    "chooser.contextActions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window actions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口操作"
+          }
+        }
+      }
+    },
+    "chooser.moreAbove": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More windows above"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向上查看更多窗口"
+          }
+        }
+      }
+    },
+    "chooser.moreBelow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More windows below"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向下查看更多窗口"
+          }
+        }
+      }
+    },
+    "chooser.changeKey": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change Key…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改按键…"
+          }
+        }
+      }
+    },
+    "chooser.modeSearchHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回车切换 · Esc 关闭"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to switch · Esc to close"
+          }
+        }
+      }
+    },
+    "chooser.modeCycleHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "松开 %@ 切换"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release %@ to switch"
+          }
+        }
+      }
+    },
+    "chooser.enterSearch": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search…"
+          }
+        }
+      }
+    },
+    "chooser.searchInvitation": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接输入即可搜索"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type to search"
+          }
+        }
+      }
+    },
+    "window.untitledGrid": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无标题窗口"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled Window"
+          }
+        }
+      }
+    },
+    "settings.mode.legacy": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按键直达"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direct Keys"
+          }
+        }
+      }
+    },
+    "settings.mode.search": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索选择"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search and Select"
+          }
+        }
+      }
+    },
+    "settings.mode.legacy.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按窗口对应的按键立即切换，点击按键标记可修改。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press a window’s assigned key to switch immediately. Click its badge to change the key."
+          }
+        }
+      }
+    },
+    "chooser.legacyHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按分配的按键打开 · 点击标记修改"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assigned key opens · Click a badge to edit"
+          }
+        }
+      }
+    },
+    "chooser.editAssigned": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改所选窗口按键…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change assigned key…"
+          }
+        }
+      }
+    },
+    "chooser.recordAssigned": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按字母或数字（可加 Command）。退格恢复自动分配，Esc 取消。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press a letter or number, optionally with Command. Delete restores automatic assignment; Esc cancels."
+          }
+        }
+      }
+    },
+    "chooser.assignedConflict": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按键已被占用，请选择其他按键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That key is already assigned. Choose another key."
+          }
+        }
+      }
+    },
+    "chooser.assignedUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法修改此窗口的按键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The assigned key for this window could not be changed."
+          }
+        }
+      }
+    },
+    "settings.mode.search.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type to find a window. Press Return to switch."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入搜索，按回车切换。"
+          }
+        }
+      }
+    },
+    "chooser.clearSearch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Search"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除搜索"
+          }
+        }
+      }
+    },
+    "chooser.dismiss": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Switcher"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭窗口切换器"
+          }
+        }
+      }
+    },
+    "chooser.resetSize": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset Size"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置大小"
+          }
+        }
+      }
+    },
+    "preview.zoom": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview Zoom"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览缩放"
+          }
+        }
+      }
+    },
+    "preview.zoomIn": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom In"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放大"
+          }
+        }
+      }
+    },
+    "preview.zoomOut": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom Out"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩小"
+          }
+        }
+      }
+    },
+    "preview.fit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fit Preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适合窗口"
+          }
+        }
+      }
+    },
+    "preview.zoomHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pinch to zoom; drag or use arrow keys when enlarged. Double-click to fit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双指缩放，放大后拖移或使用方向键。双击恢复适合窗口。"
           }
         }
       }
