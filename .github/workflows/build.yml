@@ -69,6 +69,15 @@ jobs:
             test \
             -quiet
 
+      - name: Report test failures
+        if: failure()
+        run: |
+          for result in "${DERIVED_DATA}"/Logs/Test/*.xcresult; do
+            if [[ -d "$result" ]]; then
+              xcrun xcresulttool get test-results summary --path "$result"
+            fi
+          done
+
       - name: Verify native panel layout interactions
         run: make panel-layout-ui-tests
 
