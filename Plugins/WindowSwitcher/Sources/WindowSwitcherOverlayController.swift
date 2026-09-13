@@ -60,6 +60,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             if keyHandler?(event) != true { super.keyDown(with: event) }
         }
     }
+    private let chooserFocus: WindowSwitcherChooserFocus
     private let panel = Panel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     private let table = Table()
     private let cards = WindowSwitcherCardCollection()
@@ -78,6 +79,11 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         var preview: Bool
     }
     private var preferredSizes: [SizePreference: NSSize] = [:]
+    private struct Placement {
+        var origin: NSPoint
+        var displayID: NSNumber?
+    }
+    private var preferredPositions: [SizePreference: Placement] = [:]
     private var sizingScope: WindowSwitcherSession.Scope?
     private var sizingDisplay: UInt32?
     private var applyingPanelLayout = false
@@ -140,7 +146,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private var renderedSession: WindowSwitcherSession?
     private var searchHeldModifiers: NSEvent.ModifierFlags = []
 
-    init(localization: PluginLocalization = PluginLocalization(bundle: .main), preview: WindowSwitcherPreview? = nil) {
+    init(localization: PluginLocalization = PluginLocalization(bundle: .main), preview: WindowSwitcherPreview? = nil,
+         focus: WindowSwitcherChooserFocus? = nil) {
+        self.chooserFocus = focus ?? WindowSwitcherChooserFocus()
         self.localization = localization
         self.preview = preview ?? WindowSwitcherPreview(localization: localization)
         super.init()
@@ -150,6 +158,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         previewImage.contextMenu = { [weak self] in self?.previewZoomMenu(tracksMenu: true) }
         self.preview.onChange = { [weak self] image, message in
             guard let self else { return }
+            if message != nil { self.previewImage.clearTransition() }
             self.previewImage.image = image
             self.loadingTask?.cancel()
             self.previewLabel.isHidden = image != nil || message == nil
@@ -209,8 +218,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         layoutPanel()
         render()
         PluginPresentationSafety.prepareForWindowOrdering(panel)
-        // The nonactivating panel takes keyboard input without activating the
-        // MacTools application or changing the user's current Space.
+        if !previewPane.isHidden { chooserFocus.acquire() }
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(usesList ? table : cards)
         acceptsSearchFocus = true
@@ -222,7 +230,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         render()
     }
 
-    func hide() {
+    func hide(restoringFocus: Bool = true) {
+        let shouldRestoreFocus = restoringFocus && panel.isKeyWindow
         acceptsSearchFocus = false
         menuGeneration += 1
         isPresentingMenu = false
@@ -232,11 +241,13 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         recordingEntryID = nil
         closing = true
         panel.orderOut(nil)
+        chooserFocus.release(restoring: shouldRestoreFocus)
         closing = false
         session = nil
         renderedSession = nil
         searchHeldModifiers = []
         previewedEntry = nil; previewedPermission = nil
+        previewImage.clearTransition()
         preview.cancel()
         loadingTask?.cancel()
         snapCoordinator.cancelDragging()
@@ -285,6 +296,13 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             frame.size = NSSize(width: min(preferredSize.width, screen.visibleFrame.width - 24), height: min(preferredSize.height, screen.visibleFrame.height - 24))
             frame.origin = CGPoint(x: screen.visibleFrame.midX - frame.width / 2, y: screen.visibleFrame.midY - frame.height / 2)
         }
+        if !preservePosition, session?.isPersistent == true,
+           let placement = preferredPositions[SizePreference(list: usesList, preview: usePreview)],
+           placement.displayID == screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+            frame.origin = CGPoint(
+                x: min(max(placement.origin.x, screen.visibleFrame.minX + 12), screen.visibleFrame.maxX - frame.width - 12),
+                y: min(max(placement.origin.y, screen.visibleFrame.minY + 12), screen.visibleFrame.maxY - frame.height - 12))
+        }
         if preservePosition {
             if !resizeToContent && !previewVisibilityChanged {
                 frame.size = NSSize(width: min(panel.frame.width, screen.visibleFrame.width - 24),
@@ -296,6 +314,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
                                    y: min(max(panel.frame.maxY - frame.height, screen.visibleFrame.minY + 12), screen.visibleFrame.maxY - frame.height - 12))
         }
         if !usePreview {
+            previewImage.clearTransition()
             preview.cancel(); previewedEntry = nil; previewedPermission = nil
         }
         panel.setFrame(frame, display: true)
@@ -755,7 +774,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         if showsPreview && !previewPane.isHidden, selected != previewedEntry || preview.isPermissionGranted != previewedPermission {
             if selected?.id != previewedEntry?.id || selected?.processIdentifier != previewedEntry?.processIdentifier ||
                 selected?.applicationLaunchDate != previewedEntry?.applicationLaunchDate || selected?.windowNumber != previewedEntry?.windowNumber {
-                previewImage.fit()
+                previewImage.retireImage()
             }
             previewedEntry = selected
             previewedPermission = preview.isPermissionGranted
@@ -1341,11 +1360,27 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         updateViewportLayout()
     }
 
+    func windowDidMove(_ notification: Notification) {
+        guard panel.isVisible, session?.isPersistent == true, !applyingPanelLayout else { return }
+        preferredPositions[SizePreference(list: usesList, preview: !previewPane.isHidden)] = Placement(
+            origin: panel.frame.origin,
+            displayID: panel.screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
+    }
+
     @objc private func resetPanelSize() {
         preferredSizes.removeValue(forKey: SizePreference(list: usesList, preview: !previewPane.isHidden))
         initialResultCount = session?.sizingResultCount ?? 0
         layoutPanel(preservePosition: true, resizeToContent: true)
         render()
+    }
+
+    private func acquirePreviewGestureFocus() {
+        guard panel.isVisible, !previewPane.isHidden else { return }
+        // A nonactivating panel can receive keys while physical magnification
+        // still targets the previous app. Give the visible preview app focus;
+        // quick cycling commits before showing this panel are unaffected.
+        chooserFocus.acquire()
+        panel.makeKeyAndOrderFront(nil)
     }
 
     @objc private func previewChanged() {
@@ -1354,6 +1389,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         previewedEntry = nil; previewedPermission = nil
         if !showsPreview { preview.cancel() }
         layoutPanel(preservePosition: true, resizeToContent: true); render()
+        acquirePreviewGestureFocus()
     }
     func windowDidResignKey(_ notification: Notification) {
         if !closing, !isPresentingMenu, session != nil { onCancel?() }

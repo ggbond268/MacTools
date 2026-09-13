@@ -686,7 +686,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         shortcutTap.setEditing(false)
         sessionGeneration += 1
         let generation = sessionGeneration
-        overlayController.hide()
+        overlayController.hide(restoringFocus: false)
         actionTask?.cancel()
         actionTask = Task { [weak self] in
             guard let self, !Task.isCancelled else { return }

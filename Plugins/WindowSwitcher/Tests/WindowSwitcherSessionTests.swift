@@ -8,6 +8,134 @@ import XCTest
 @MainActor
 final class WindowSwitcherSessionTests: XCTestCase {
 
+    private final class MagnifyEvent: NSEvent, @unchecked Sendable {
+        var target: NSWindow?
+        var point = NSPoint.zero
+        var delta: CGFloat = 0
+        var gesturePhase: NSEvent.Phase = .began
+        override var type: NSEvent.EventType { .magnify }
+        override var window: NSWindow? { target }
+        override var windowNumber: Int { target?.windowNumber ?? 0 }
+        override var locationInWindow: NSPoint { point }
+        override var magnification: CGFloat { delta }
+        override var phase: NSEvent.Phase { gesturePhase }
+    }
+
+    func testPinchEventsReachPreviewThroughChooserPanel() async throws {
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in
+            NSImage(size: NSSize(width: 400, height: 300))
+        })
+        let controller = WindowSwitcherOverlayController(preview: preview)
+        var item = entry("pinch"); item.windowNumber = 1
+        let session = WindowSwitcherSession(entries: [item], selectedID: item.id,
+            isPersistent: true, originalWindowID: nil)
+        controller.show(session, currentPID: 100, showsPreview: true)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let stage = try XCTUnwrap(descendants(panel.contentView!).compactMap { $0 as? WindowSwitcherPreviewStage }.first)
+        try XCTSkipIf(stage.isHiddenOrHasHiddenAncestor, "Display is too short for preview")
+        let deadline = ContinuousClock.now + .seconds(2)
+        while stage.image == nil, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertNotNil(stage.image)
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let originalFrame = panel.frame
+        let recognizer = try XCTUnwrap(stage.gestureRecognizers.compactMap { $0 as? NSMagnificationGestureRecognizer }.first)
+        XCTAssertTrue(recognizer.isEnabled)
+        // Send through NSWindow, not the zoom helper or recognizer action.
+        // Cover both image and viewport margin, with keyboard focus elsewhere.
+        for point in [NSPoint(x: stage.bounds.midX, y: stage.bounds.midY), NSPoint(x: 5, y: 5)] {
+            stage.fit()
+            panel.makeFirstResponder(nil)
+            let event = MagnifyEvent()
+            event.target = panel
+            event.point = stage.convert(point, to: nil)
+            event.delta = 0.25; event.gesturePhase = .began; panel.sendEvent(event)
+            event.delta = 0.20; event.gesturePhase = .changed; panel.sendEvent(event)
+            event.delta = 0; event.gesturePhase = .ended; panel.sendEvent(event)
+            XCTAssertEqual(stage.zoomScale, 1.5, accuracy: 0.001)
+            event.delta = -0.20; event.gesturePhase = .began; panel.sendEvent(event)
+            event.delta = 0; event.gesturePhase = .ended; panel.sendEvent(event)
+            XCTAssertEqual(stage.zoomScale, 1.2, accuracy: 0.001)
+        }
+        XCTAssertEqual(panel.frame, originalFrame)
+        stage.image = nil
+        XCTAssertFalse(recognizer.isEnabled)
+        XCTAssertEqual(stage.zoomScale, 1)
+    }
+
+    func testPreviewFadeDisablesOldImageAndNeverClearsReplacement() async throws {
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in
+            NSImage(size: NSSize(width: 400, height: 300))
+        })
+        let controller = WindowSwitcherOverlayController(preview: preview)
+        var item = entry("fade"); item.windowNumber = 1
+        controller.show(WindowSwitcherSession(entries: [item], selectedID: item.id,
+            isPersistent: true, originalWindowID: nil), currentPID: 100, showsPreview: true)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let stage = try XCTUnwrap(descendants(panel.contentView!).compactMap { $0 as? WindowSwitcherPreviewStage }.first)
+        try XCTSkipIf(stage.isHiddenOrHasHiddenAncestor, "Display is too short for preview")
+        let deadline = ContinuousClock.now + .seconds(2)
+        while stage.image == nil, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertNotNil(stage.image)
+        stage.reducesMotion = { false }
+        stage.onRequestDetail = nil
+        let original = panel.frame
+        stage.zoom(by: 2)
+        stage.retireImage()
+        XCTAssertNil(stage.image)
+        XCTAssertTrue(stage.hasOutgoingImage)
+        XCTAssertTrue(stage.hasOutgoingBlur)
+        XCTAssertFalse(stage.acceptsFirstResponder)
+        stage.zoom(by: 2)
+        XCTAssertEqual(stage.zoomScale, 1)
+        let replacement = NSImage(size: NSSize(width: 300, height: 200))
+        stage.image = replacement
+        XCTAssertFalse(stage.hasOutgoingImage)
+        XCTAssertFalse(stage.hasOutgoingBlur)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(stage.image === replacement)
+        stage.retireImage()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(stage.hasOutgoingImage)
+        XCTAssertFalse(stage.hasOutgoingBlur)
+        stage.image = replacement
+        stage.reducesMotion = { true }
+        stage.retireImage()
+        XCTAssertFalse(stage.hasOutgoingImage)
+        XCTAssertFalse(stage.hasOutgoingBlur)
+        XCTAssertNil(stage.image)
+        XCTAssertEqual(panel.frame, original)
+    }
+
+    func testPersistentChooserRestoresManualPlacementOnReopen() throws {
+        let controller = WindowSwitcherOverlayController()
+        var session = WindowSwitcherSession(entries: [entry("one")], selectedID: "one",
+            isPersistent: true, originalWindowID: nil)
+        controller.show(session, currentPID: 100, showsPreview: false)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        let screen = try XCTUnwrap(panel.screen).visibleFrame
+        panel.setFrame(NSRect(x: screen.minX + 24, y: screen.minY + 24,
+            width: min(700, screen.width - 48), height: min(400, screen.height - 48)), display: true)
+        controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
+        controller.windowDidMove(Notification(name: NSWindow.didMoveNotification, object: panel))
+        let manual = panel.frame
+        controller.hide()
+        controller.show(session, currentPID: 100, showsPreview: false)
+        XCTAssertEqual(panel.frame, manual)
+        controller.hide()
+        session.isPersistent = false
+        controller.show(session, currentPID: 100, showsPreview: false)
+        XCTAssertNotEqual(panel.frame, manual, "Cycling keeps automatic placement")
+        controller.hide()
+        session.isPersistent = true
+        controller.show(session, currentPID: 100, showsPreview: false)
+        XCTAssertEqual(panel.frame, manual, "Cycling must not overwrite persistent placement")
+    }
+
     func testPreviewZoomAndPanStayBoundedWithoutResizingViewport() {
         let stage = WindowSwitcherPreviewStage(frame: CGRect(x: 0, y: 0, width: 500, height: 300))
         stage.image = NSImage(size: NSSize(width: 1200, height: 800))

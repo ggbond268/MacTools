@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 
 /// A viewport, rather than an image-sized view: captures never participate in
 /// the panel's minimum size. Only the fitted window receives a border/shadow.
@@ -6,16 +7,26 @@ import AppKit
 final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
     private let floatingWindow = NSView()
     private let imageView = NSImageView()
+    private let outgoingImageView = NSImageView()
+    private var fadeTask: Task<Void, Never>?
+    private var fadeGeneration = 0
+    var reducesMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    var hasOutgoingImage: Bool { outgoingImageView.image != nil }
+    var hasOutgoingBlur: Bool { !outgoingImageView.contentFilters.isEmpty }
     var onRequestDetail: (() -> Void)?
     var contextMenu: (() -> NSMenu?)?
     var keyHandler: ((NSEvent) -> Bool)?
     private(set) var zoomScale: CGFloat = 1
     private(set) var panOffset = CGPoint.zero
     private var dragPoint: CGPoint?
+    private lazy var magnificationGesture = NSMagnificationGestureRecognizer(
+        target: self, action: #selector(handleMagnification(_:)))
 
     var image: NSImage? {
         didSet {
+            if image != nil { clearTransition() }
             if image == nil { fit() }
+            magnificationGesture.isEnabled = image != nil
             imageView.image = image
             floatingWindow.isHidden = image == nil
             needsLayout = true
@@ -46,8 +57,19 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         imageView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        // Attach recognition to the entire viewport, including the image and
+        // empty margins. AppKit dispatches recognizers before view responders.
+        magnificationGesture.isEnabled = false
+        addGestureRecognizer(magnificationGesture)
         addSubview(floatingWindow)
         floatingWindow.addSubview(imageView)
+        outgoingImageView.wantsLayer = true
+        outgoingImageView.layer?.cornerRadius = 8
+        outgoingImageView.layer?.masksToBounds = true
+        outgoingImageView.imageScaling = .scaleProportionallyUpOrDown
+        outgoingImageView.isHidden = true
+        outgoingImageView.setAccessibilityElement(false)
+        addSubview(outgoingImageView)
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
         updateAppearance()
@@ -55,8 +77,50 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
 
     required init?(coder: NSCoder) { nil }
 
+    /// Retain only pixels during the transition. All interaction reads `image`,
+    /// which is cleared immediately when the selected target changes.
+    func retireImage() {
+        let outgoing = image
+        let frame = displayedFrame
+        clearTransition()
+        image = nil
+        guard let outgoing, !reducesMotion(), window?.isVisible == true else { return }
+        outgoingImageView.image = outgoing
+        // Mark retired pixels immediately without another screenshot read.
+        // Hold the blur briefly before the faster fade; replacements never wait.
+        if let blur = CIFilter(name: "CIGaussianBlur", parameters: [kCIInputRadiusKey: 3.0]) {
+            outgoingImageView.contentFilters = [blur]
+        }
+        outgoingImageView.frame = frame
+        outgoingImageView.isHidden = false
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = 1
+        animation.toValue = 0
+        animation.beginTime = (outgoingImageView.layer?.convertTime(CACurrentMediaTime(), from: nil) ?? CACurrentMediaTime()) + 0.05
+        animation.fillMode = .backwards
+        animation.duration = 0.04
+        outgoingImageView.layer?.opacity = 0
+        outgoingImageView.layer?.add(animation, forKey: "selectionFade")
+        let token = fadeGeneration
+        fadeTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(90)) } catch { return }
+            guard let self, self.fadeGeneration == token else { return }
+            self.clearTransition()
+        }
+    }
+
+    func clearTransition() {
+        fadeGeneration += 1
+        fadeTask?.cancel(); fadeTask = nil
+        outgoingImageView.layer?.removeAnimation(forKey: "selectionFade")
+        outgoingImageView.contentFilters = []
+        outgoingImageView.image = nil
+        outgoingImageView.isHidden = true
+    }
+
     override func refreshAppearance() {
         super.refreshAppearance()
+        if reducesMotion() { clearTransition() }
         updateAppearance()
     }
 
@@ -136,9 +200,15 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
         panOffset = CGPoint(x: min(x, max(-x, panOffset.x)), y: min(y, max(-y, panOffset.y)))
     }
 
-    override func magnify(with event: NSEvent) {
-        if image != nil { window?.makeFirstResponder(self) }
-        zoom(by: 1 + event.magnification, at: convert(event.locationInWindow, from: nil))
+    @objc private func handleMagnification(_ gesture: NSMagnificationGestureRecognizer) {
+        guard image != nil else { return }
+        let change = gesture.magnification
+        // The recognizer accumulates magnification. Consume each increment
+        // once so a long gesture does not repeatedly compound its whole delta.
+        gesture.magnification = 0
+        guard gesture.state != .cancelled, change.isFinite, change != 0 else { return }
+        window?.makeFirstResponder(self)
+        zoom(by: 1 + change, at: gesture.location(in: self))
     }
 
     override func mouseDown(with event: NSEvent) {

@@ -6,6 +6,55 @@ import XCTest
 @MainActor
 final class WindowSwitcherPreviewTests: XCTestCase {
 
+    func testDebounceCapturesOnlyLatestSelectionAfterQuietPeriod() async {
+        var captured: [String] = []
+        var captureTime: ContinuousClock.Instant?
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { target in
+            captured.append(target.id); captureTime = .now
+            return NSImage(size: NSSize(width: 20, height: 10))
+        })
+        preview.select(entry("a"))
+        preview.select(entry("b"))
+        let latestSelection = ContinuousClock.now
+        preview.select(entry("c"))
+        XCTAssertTrue(captured.isEmpty)
+        await eventually { captureTime != nil }
+        XCTAssertEqual(captured, ["c"])
+        XCTAssertGreaterThanOrEqual(latestSelection.duration(to: captureTime!), .milliseconds(80))
+        preview.cancel()
+    }
+
+    func testDismissCancelsDebouncedCapture() async {
+        var captures = 0
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in
+            captures += 1; return nil
+        })
+        preview.select(entry("a")); preview.cancel()
+        try? await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(captures, 0)
+    }
+
+    func testOldCaptureTimeoutDoesNotChangeNewSelectionsMessage() async {
+        var resume: CheckedContinuation<NSImage?, Never>?
+        var message: String?
+        var captured: [String] = []
+        let preview = WindowSwitcherPreview(hasPermission: { true }, captureTimeout: .milliseconds(100), capture: { target in
+            captured.append(target.id)
+            if target.id == "a" { return await withCheckedContinuation { resume = $0 } }
+            return NSImage(size: NSSize(width: 20, height: 10))
+        })
+        preview.onChange = { _, value in message = value }
+        preview.select(entry("a"))
+        await eventually { resume != nil }
+        preview.select(entry("b"))
+        try? await Task.sleep(for: .milliseconds(150))
+        XCTAssertNil(message)
+        XCTAssertEqual(captured, ["a"])
+        resume?.resume(returning: nil)
+        await eventually { captured == ["a", "b"] }
+        preview.cancel()
+    }
+
     func testDetailCaptureIsOnDemandDeduplicatedAndNeverReplacesCache() async {
         let normal = NSImage(size: NSSize(width: 100, height: 60))
         let detail = NSImage(size: NSSize(width: 200, height: 120))

@@ -38,6 +38,9 @@ final class WindowSwitcherPreview {
         var detail: Bool = false
     }
     private var pending: Request?
+    private var pendingReady = false
+    private var debounceTask: Task<Void, Never>?
+    private let debounceDelay: Duration
     private var selectedEntry: WindowSwitcherAppEntry?
     private var detailRequested = false
     private var task: Task<Void, Never>?
@@ -55,9 +58,10 @@ final class WindowSwitcherPreview {
     private let detailCapture: @MainActor (WindowSwitcherAppEntry) async throws -> NSImage?
 
     init(localization: PluginLocalization = PluginLocalization(bundle: .main), hasPermission: @escaping @MainActor () -> Bool = { CGPreflightScreenCaptureAccess() },
-         captureTimeout: Duration = .seconds(2), cacheLifetime: TimeInterval = 30,
+         captureTimeout: Duration = .seconds(2), cacheLifetime: TimeInterval = 30, debounceDelay: Duration = .milliseconds(80),
          capture: (@MainActor (WindowSwitcherAppEntry) async throws -> NSImage?)? = nil,
          detailCapture: (@MainActor (WindowSwitcherAppEntry) async throws -> NSImage?)? = nil) {
+        self.debounceDelay = debounceDelay
         self.captureTimeout = captureTimeout
         self.cacheLifetime = cacheLifetime
         self.localization = localization
@@ -67,14 +71,15 @@ final class WindowSwitcherPreview {
     }
 
     deinit {
-        task?.cancel(); watchdog?.cancel(); expiryTask?.cancel()
+        task?.cancel(); watchdog?.cancel(); expiryTask?.cancel(); debounceTask?.cancel()
     }
 
     var isPermissionGranted: Bool { hasPermission() }
 
     func cancel() {
         generation += 1
-        pending = nil
+        pending = nil; pendingReady = false
+        debounceTask?.cancel(); debounceTask = nil
         selectedKey = nil; selectedEntry = nil; detailRequested = false
         onChange?(nil, nil)
     }
@@ -99,6 +104,8 @@ final class WindowSwitcherPreview {
         selectedKey = key
         generation += 1
         detailRequested = false
+        debounceTask?.cancel(); debounceTask = nil
+        pendingReady = false
         pending = Request(entry: entry)
         let now = Date()
         cache = cache.filter { now.timeIntervalSince($0.value.capturedAt) < cacheLifetime }
@@ -110,7 +117,18 @@ final class WindowSwitcherPreview {
         } else {
             onChange?(nil, captureTimedOut ? unavailableMessage : nil)
         }
-        startNext()
+        debouncePendingCapture()
+    }
+
+    private func debouncePendingCapture() {
+        let token = generation, delay = debounceDelay
+        debounceTask = Task { [weak self] in
+            do { try await Task.sleep(for: delay) } catch { return }
+            guard let self, self.generation == token else { return }
+            self.debounceTask = nil
+            self.pendingReady = true
+            self.startNext()
+        }
     }
 
     /// Upgrade only the selected preview, once per selection. Retain the fitted
@@ -120,7 +138,9 @@ final class WindowSwitcherPreview {
         guard hasPermission() else { select(entry); return }
         detailRequested = true
         generation += 1
+        debounceTask?.cancel(); debounceTask = nil
         pending = Request(entry: entry, detail: true)
+        pendingReady = true
         startNext()
     }
 
@@ -129,9 +149,9 @@ final class WindowSwitcherPreview {
     }
 
     private func startNext() {
-        guard task == nil, let request = pending else { return }
+        guard task == nil, pendingReady, let request = pending else { return }
         let entry = request.entry
-        pending = nil
+        pending = nil; pendingReady = false
         let token = generation, id = UUID()
         captureID = id; captureTimedOut = false
         let timeout = captureTimeout
@@ -139,7 +159,8 @@ final class WindowSwitcherPreview {
             do { try await Task.sleep(for: timeout) } catch { return }
             guard let self, self.captureID == id else { return }
             self.captureTimedOut = true
-            if !request.detail, let selectedKey = self.selectedKey, self.cache[selectedKey] == nil {
+            if token == self.generation, !request.detail,
+               let selectedKey = self.selectedKey, self.cache[selectedKey] == nil {
                 self.onChange?(nil, self.unavailableMessage)
             }
         }
@@ -148,7 +169,6 @@ final class WindowSwitcherPreview {
         // not accumulate orphaned ScreenCaptureKit operations on every selection.
         let capture = request.detail ? self.detailCapture : self.capture
         task = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(50))
             for attempt in 0..<3 {
                 guard !Task.isCancelled, self?.canCapture(token) == true else { break }
                 do {
