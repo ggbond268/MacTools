@@ -326,8 +326,14 @@ final class WindowSwitcherSessionTests: XCTestCase {
         XCTAssertNotEqual(mode.stringValue, cyclingTitle)
         XCTAssertTrue(button.isHidden)
         XCTAssertTrue(hint.stringValue.contains("⌃⌥"))
-        try await Task.sleep(for: .milliseconds(2100))
-        XCTAssertFalse(hint.stringValue.contains("⌃⌥"))
+        // The expiry task and this test resume independently on the main actor.
+        // Wait for the visible transition rather than assuming 100 ms of scheduler
+        // slack is enough on a busy CI runner. A broken expiry still fails below.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while hint.stringValue.contains("⌃⌥"), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(hint.stringValue.contains("⌃⌥"), "The temporary release-key hint did not expire")
         XCTAssertTrue(hint.stringValue.contains("Esc"))
         XCTAssertEqual(controller.session?.isPersistent, true)
         XCTAssertEqual(search.placeholderString, initialPlaceholder)
