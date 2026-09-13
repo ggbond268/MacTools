@@ -66,11 +66,28 @@ function htmlFiles(dir) {
 
 test('every rendered navigation includes the same controls bundle exactly once', () => {
   const dist = new URL('dist/', site);
-  const controlScripts = (html) => [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
-    .map(([, attributes, contents]) => {
+  // Astro can inline controls or emit a shared module imported by a page entry.
+  const controlScripts = (html) => {
+    const visited = new Set();
+    const inspect = (contents, base) => {
+      const controls = contents.includes('data-theme-toggle') ? [contents] : [];
+      for (const [, dependency] of contents.matchAll(/\b(?:import|export)\s*(?:[^"'`;]*?\sfrom\s*)?["'`]([^"'`]+)["'`]/g)) {
+        const url = dependency.startsWith('/') ? new URL(dependency.slice(1), dist) : new URL(dependency, base);
+        if (visited.has(url.href)) continue;
+        visited.add(url.href);
+        controls.push(...inspect(readFileSync(url, 'utf8'), url));
+      }
+      return controls;
+    };
+    return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].flatMap(([, attributes, contents]) => {
       const src = attributes.match(/src="([^"]+)"/)?.[1];
-      return src ? readFileSync(new URL(src.replace(/^\//, ''), dist), 'utf8') : contents;
-    }).filter((script) => script.includes('data-theme-toggle'));
+      if (!src) return inspect(contents, dist);
+      const url = new URL(src.replace(/^\//, ''), dist);
+      if (visited.has(url.href)) return [];
+      visited.add(url.href);
+      return inspect(readFileSync(url, 'utf8'), url);
+    });
+  };
   const home = readFileSync(new URL('index.html', dist), 'utf8');
   const sharedControls = controlScripts(home);
   assert.equal(sharedControls.length, 1);
