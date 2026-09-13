@@ -24,11 +24,15 @@ final class WindowSwitcherChooserFocus {
         self.activateApplication = activateApplication
     }
 
-    func acquire() {
+    func prepare() {
         if !acquired {
             originalPID = frontmostPID()
             acquired = true
         }
+    }
+
+    func acquire() {
+        prepare()
         // AppKit's active/key flags alone do not establish gesture delivery
         // after a nonactivating panel steals keyboard focus.
         activateHost()

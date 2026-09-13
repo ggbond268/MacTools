@@ -61,6 +61,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
     }
     private let chooserFocus: WindowSwitcherChooserFocus
+    private var previewFocusTask: Task<Void, Never>?
+    private var isAcquiringGestureFocus = false
     private let panel = Panel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     private let table = Table()
     private let cards = WindowSwitcherCardCollection()
@@ -153,6 +155,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         self.preview = preview ?? WindowSwitcherPreview(localization: localization)
         super.init()
         buildPanel()
+        previewImage.onRequestFocus = { [weak self] in
+            self?.previewFocusTask?.cancel()
+            self?.focusPreviewNow()
+        }
         previewImage.onRequestDetail = { [weak self] in self?.preview.requestDetail() }
         previewImage.keyHandler = { [weak self] in self?.handleKey($0) ?? false }
         previewImage.contextMenu = { [weak self] in self?.previewZoomMenu(tracksMenu: true) }
@@ -182,6 +188,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     deinit {
+        previewFocusTask?.cancel()
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         scrollObservers.forEach(NotificationCenter.default.removeObserver)
     }
@@ -218,8 +225,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         layoutPanel()
         render()
         PluginPresentationSafety.prepareForWindowOrdering(panel)
-        if !previewPane.isHidden { chooserFocus.acquire() }
+        if !previewPane.isHidden { chooserFocus.prepare() }
         panel.makeKeyAndOrderFront(nil)
+        acquirePreviewGestureFocus()
         panel.makeFirstResponder(usesList ? table : cards)
         acceptsSearchFocus = true
         noteCyclingInput()
@@ -231,6 +239,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     func hide(restoringFocus: Bool = true) {
+        previewFocusTask?.cancel(); previewFocusTask = nil
         let shouldRestoreFocus = restoringFocus && panel.isKeyWindow
         acceptsSearchFocus = false
         menuGeneration += 1
@@ -649,7 +658,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         zoom.submenu = previewZoomMenu()
         more.menu?.addItem(zoom)
         previewImage.setAccessibilityLabel(localization.string("chooser.preview", defaultValue: "预览"))
-        previewImage.toolTip = localization.string("preview.zoomHelp", defaultValue: "双指缩放，放大后拖移或使用方向键。双击恢复适合窗口。")
+        previewImage.toolTip = localization.string("preview.zoomHelp", defaultValue: "点按预览以聚焦，再双指缩放。放大后拖移或用方向键平移，双击恢复适合窗口。")
         previewImage.setAccessibilityHelp(previewImage.toolTip)
         let shortcuts = NSMenuItem(title: localization.string("chooser.shortcuts", defaultValue: "键盘快捷键"), action: nil, keyEquivalent: "")
         let help = NSMenu()
@@ -774,7 +783,12 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         if showsPreview && !previewPane.isHidden, selected != previewedEntry || preview.isPermissionGranted != previewedPermission {
             if selected?.id != previewedEntry?.id || selected?.processIdentifier != previewedEntry?.processIdentifier ||
                 selected?.applicationLaunchDate != previewedEntry?.applicationLaunchDate || selected?.windowNumber != previewedEntry?.windowNumber {
-                previewImage.retireImage()
+                if selected?.isWindowEntry == true {
+                    previewImage.retireImage()
+                } else {
+                    previewImage.clearTransition()
+                    previewImage.image = nil
+                }
             }
             previewedEntry = selected
             previewedPermission = preview.isPermissionGranted
@@ -1375,11 +1389,26 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     private func acquirePreviewGestureFocus() {
+        previewFocusTask?.cancel()
         guard panel.isVisible, !previewPane.isHidden else { return }
-        // A nonactivating panel can receive keys while physical magnification
-        // still targets the previous app. Give the visible preview app focus;
-        // quick cycling commits before showing this panel are unaffected.
+        chooserFocus.prepare()
+        // Wait for initial panel ordering before requesting application focus.
+        // Keyboard focus on a nonactivating panel alone is insufficient for
+        // physical magnification. Never activate after dismissal or focus loss.
+        previewFocusTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled, let self, self.session != nil,
+                  self.panel.isVisible, self.panel.isKeyWindow, !self.previewPane.isHidden else { return }
+            self.focusPreviewNow()
+        }
+    }
+
+    private func focusPreviewNow() {
+        guard session != nil, panel.isVisible, !previewPane.isHidden else { return }
+        isAcquiringGestureFocus = true
+        defer { isAcquiringGestureFocus = false }
         chooserFocus.acquire()
+        PluginPresentationSafety.prepareForWindowOrdering(panel)
         panel.makeKeyAndOrderFront(nil)
     }
 
@@ -1392,6 +1421,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         acquirePreviewGestureFocus()
     }
     func windowDidResignKey(_ notification: Notification) {
-        if !closing, !isPresentingMenu, session != nil { onCancel?() }
+        if !closing, !isAcquiringGestureFocus, !isPresentingMenu, session != nil { onCancel?() }
     }
 }

@@ -3459,13 +3459,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pinch to zoom; drag or use arrow keys when enlarged. Double-click to fit."
+            "value": "Click to focus, then pinch to zoom. Drag or use arrows to pan; double-click to fit."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "双指缩放，放大后拖移或使用方向键。双击恢复适合窗口。"
+            "value": "点按预览以聚焦，再双指缩放。放大后拖移或用方向键平移，双击恢复适合窗口。"
           }
         }
       }

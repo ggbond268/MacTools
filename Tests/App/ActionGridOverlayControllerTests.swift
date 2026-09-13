@@ -928,8 +928,9 @@ final class ActionGridOverlayControllerTests: XCTestCase {
         )
         XCTAssertTrue(controller.processKeyEvent(enter))
 
-        for _ in 0 ..< 50 where presentationRequests.isEmpty || controller.isShown {
-            await Task.yield()
+        let deadline = ContinuousClock.now + .seconds(2)
+        while (presentationRequests.isEmpty || controller.isShown), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
         }
 
         XCTAssertEqual(presentationRequests, [.toggleDashboard])

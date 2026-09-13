@@ -60,11 +60,49 @@ final class WindowSwitcherSessionTests: XCTestCase {
         }
         XCTAssertEqual(panel.frame, originalFrame)
         stage.image = nil
-        XCTAssertFalse(recognizer.isEnabled)
+        XCTAssertTrue(recognizer.isEnabled, "Loading must not cancel native gesture tracking")
         XCTAssertEqual(stage.zoomScale, 1)
     }
 
-    func testPreviewFadeDisablesOldImageAndNeverClearsReplacement() async throws {
+    func testPinchContinuesAcrossLoadingAndImageReplacement() throws {
+        let controller = WindowSwitcherOverlayController(preview: WindowSwitcherPreview(hasPermission: { false }))
+        let item = entry("gesture-loading")
+        controller.show(WindowSwitcherSession(entries: [item], selectedID: item.id,
+            isPersistent: false, originalWindowID: nil), currentPID: 100, showsPreview: true)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let stage = try XCTUnwrap(descendants(try XCTUnwrap(panel.contentView)).compactMap { $0 as? WindowSwitcherPreviewStage }.first)
+        try XCTSkipIf(stage.isHiddenOrHasHiddenAncestor, "Display is too short for preview")
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let event = MagnifyEvent()
+        event.target = panel; event.point = stage.convert(NSPoint(x: 5, y: 5), to: nil)
+        let image = NSImage(size: NSSize(width: 400, height: 300))
+        // Begin while the initial screenshot is still unavailable.
+        stage.image = nil
+        event.delta = 0.3; event.gesturePhase = .began; panel.sendEvent(event)
+        event.delta = 0.2; event.gesturePhase = .changed; panel.sendEvent(event)
+        XCTAssertEqual(stage.zoomScale, 1)
+        stage.image = image
+        event.delta = 0.1; panel.sendEvent(event)
+        XCTAssertEqual(stage.zoomScale, 1.1, accuracy: 0.001, "Only new increments apply after loading")
+        // A detail capture replaces pixels without cancelling ongoing input.
+        stage.image = NSImage(size: NSSize(width: 800, height: 600))
+        event.delta = 0.2; panel.sendEvent(event)
+        XCTAssertEqual(stage.zoomScale, 1.32, accuracy: 0.001)
+        // Selection changes can clear the image while fingers remain down.
+        stage.retireImage()
+        event.delta = 0.4; panel.sendEvent(event)
+        XCTAssertEqual(stage.zoomScale, 1)
+        stage.image = image
+        event.delta = 0.1; panel.sendEvent(event)
+        XCTAssertEqual(stage.zoomScale, 1.1, accuracy: 0.001)
+        event.delta = 0; event.gesturePhase = .ended; panel.sendEvent(event)
+        XCTAssertEqual(controller.session?.isPersistent, false)
+        XCTAssertEqual(controller.session?.selectedID, item.id)
+    }
+
+    func testPreviewHoldsBlurredImageUntilImmediateReplacement() async throws {
         let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in
             NSImage(size: NSSize(width: 400, height: 300))
         })
@@ -87,25 +125,38 @@ final class WindowSwitcherSessionTests: XCTestCase {
         stage.retireImage()
         XCTAssertNil(stage.image)
         XCTAssertTrue(stage.hasOutgoingImage)
-        XCTAssertTrue(stage.hasOutgoingBlur)
+        let heldImage = try XCTUnwrap(stage.subviews.compactMap { $0 as? NSImageView }.first)
+        XCTAssertEqual(heldImage.contentFilters.count, 1)
+        XCTAssertEqual(heldImage.layer?.opacity, 1)
         XCTAssertFalse(stage.acceptsFirstResponder)
         stage.zoom(by: 2)
         XCTAssertEqual(stage.zoomScale, 1)
+        try await Task.sleep(for: .milliseconds(120))
+        XCTAssertTrue(stage.hasOutgoingImage, "Capture latency must not leave a blank preview")
+        stage.retireImage()
+        XCTAssertTrue(stage.hasOutgoingImage, "Intermediate selections retain the last real preview")
         let replacement = NSImage(size: NSSize(width: 300, height: 200))
         stage.image = replacement
-        XCTAssertFalse(stage.hasOutgoingImage)
-        XCTAssertFalse(stage.hasOutgoingBlur)
-        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(stage.hasOutgoingImage, "Ready pixels replace the blurred image synchronously")
+        XCTAssertTrue(heldImage.contentFilters.isEmpty)
+        XCTAssertTrue(stage.acceptsFirstResponder)
         XCTAssertTrue(stage.image === replacement)
         stage.retireImage()
+        stage.image = NSImage(size: NSSize(width: 200, height: 100))
+        stage.retireImage()
         try await Task.sleep(for: .milliseconds(100))
-        XCTAssertFalse(stage.hasOutgoingImage)
-        XCTAssertFalse(stage.hasOutgoingBlur)
+        XCTAssertTrue(stage.hasOutgoingImage, "Rapid replacements retain the latest retired image without a fade timer")
         stage.image = replacement
         stage.reducesMotion = { true }
         stage.retireImage()
         XCTAssertFalse(stage.hasOutgoingImage)
-        XCTAssertFalse(stage.hasOutgoingBlur)
+        XCTAssertNil(stage.image)
+        stage.reducesMotion = { false }
+        stage.image = replacement
+        stage.retireImage()
+        controller.update(WindowSwitcherSession(entries: [], selectedID: nil,
+            isPersistent: true, originalWindowID: nil))
+        XCTAssertFalse(stage.hasOutgoingImage, "Empty results must not keep stale pixels")
         XCTAssertNil(stage.image)
         XCTAssertEqual(panel.frame, original)
     }
