@@ -94,7 +94,10 @@ final class WindowEnhancedUIFrameGuardTests: XCTestCase {
         XCTAssertEqual(restoreAttempts, 3)
     }
 
-    func testExhaustedRestorationDoesNotReportSuccessfulFrameTransaction() {
+    func testExhaustedRestorationIdentifiesCommittedFrameTransaction() {
+        let original = CGRect(x: 10, y: 20, width: 600, height: 400)
+        let target = CGRect(x: 800, y: 20, width: 800, height: 900)
+        var observed = original
         var enabled = true
         var restoreAttempts = 0
         XCTAssertThrowsError(try WindowEnhancedUIFrameGuard.perform(
@@ -104,9 +107,11 @@ final class WindowEnhancedUIFrameGuardTests: XCTestCase {
                 enabled = false
                 return true
             }
-        ) {}) { error in
-            XCTAssertEqual(error as? WindowLayoutError, .frameWriteFailed)
+        ) { observed = target }) { error in
+            XCTAssertEqual(error as? WindowEnhancedUIFrameGuard.Failure, .restorationFailedAfterWrite)
         }
+        XCTAssertEqual(observed, target)
+        XCTAssertFalse(enabled)
         XCTAssertEqual(restoreAttempts, 3)
     }
 

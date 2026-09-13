@@ -5,6 +5,11 @@ import Foundation
 /// including its rollback; never hold it across task suspension or a pointer gesture.
 /// Compatibility precedent: https://github.com/Hammerspoon/hammerspoon/pull/3836.
 enum WindowEnhancedUIFrameGuard {
+    enum Failure: Error, Equatable {
+        // Callers must preserve undo history for the frame already written.
+        case restorationFailedAfterWrite
+    }
+
     static func perform<Value>(
         preserveEnhancedUI: Bool,
         readEnabled: () -> Bool?,
@@ -22,7 +27,7 @@ enum WindowEnhancedUIFrameGuard {
         let restored = restoreEnabled(readEnabled: readEnabled, setEnabled: setEnabled)
         switch result {
         case .success(let value):
-            guard restored else { throw WindowLayoutError.frameWriteFailed }
+            guard restored else { throw Failure.restorationFailedAfterWrite }
             return value
         case .failure(let error):
             // Preserve the original transaction/cancellation error after cleanup.
