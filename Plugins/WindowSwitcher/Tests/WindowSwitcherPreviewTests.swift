@@ -6,6 +6,86 @@ import XCTest
 @MainActor
 final class WindowSwitcherPreviewTests: XCTestCase {
 
+    func testDetailCaptureIsOnDemandDeduplicatedAndNeverReplacesCache() async {
+        let normal = NSImage(size: NSSize(width: 100, height: 60))
+        let detail = NSImage(size: NSSize(width: 200, height: 120))
+        var normals = 0, details = 0
+        var delivered: NSImage?
+        var resume: CheckedContinuation<NSImage?, Never>?
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in
+            normals += 1; return normal
+        }, detailCapture: { _ in
+            details += 1
+            return await withCheckedContinuation { resume = $0 }
+        })
+        preview.onChange = { image, _ in delivered = image }
+        preview.select(entry("a"))
+        await eventually { delivered === normal }
+        XCTAssertEqual(details, 0)
+        preview.requestDetail(); preview.requestDetail()
+        await eventually { resume != nil }
+        XCTAssertTrue(delivered === normal)
+        XCTAssertEqual(details, 1)
+        resume?.resume(returning: detail)
+        await eventually { delivered === detail }
+        preview.requestDetail()
+        XCTAssertEqual(details, 1)
+        preview.cancel(); preview.select(entry("a"))
+        XCTAssertTrue(delivered === normal)
+        XCTAssertEqual(normals, 1)
+        preview.cancel()
+    }
+
+    func testDetailTimeoutRetainsImageAndSerializesNewSelection() async {
+        let normal = NSImage(size: NSSize(width: 100, height: 60))
+        var delivered: NSImage?, message: String?
+        var resume: CheckedContinuation<NSImage?, Never>?
+        var captured: [String] = []
+        let preview = WindowSwitcherPreview(hasPermission: { true }, captureTimeout: .milliseconds(100), capture: { target in
+            captured.append(target.id); return normal
+        }, detailCapture: { _ in await withCheckedContinuation { resume = $0 } })
+        preview.onChange = { image, value in delivered = image; message = value }
+        preview.select(entry("a"))
+        await eventually { delivered === normal }
+        preview.requestDetail()
+        await eventually { resume != nil }
+        try? await Task.sleep(for: .milliseconds(150))
+        XCTAssertTrue(delivered === normal)
+        XCTAssertNil(message)
+        preview.select(entry("b"))
+        try? await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(captured, ["a"])
+        resume?.resume(returning: NSImage(size: NSSize(width: 200, height: 120)))
+        await eventually { captured == ["a", "b"] && delivered === normal }
+        preview.cancel()
+    }
+
+    func testRevokedPermissionDiscardsSuspendedDetail() async {
+        var granted = true
+        var delivered: NSImage?, message: String?
+        var resume: CheckedContinuation<NSImage?, Never>?
+        let preview = WindowSwitcherPreview(hasPermission: { granted }, capture: { _ in NSImage(size: NSSize(width: 20, height: 10)) },
+            detailCapture: { _ in await withCheckedContinuation { resume = $0 } })
+        preview.onChange = { image, value in delivered = image; message = value }
+        preview.select(entry("a"))
+        await eventually { delivered != nil }
+        preview.requestDetail()
+        await eventually { resume != nil }
+        granted = false
+        resume?.resume(returning: NSImage(size: NSSize(width: 200, height: 100)))
+        await eventually { delivered == nil && message != nil }
+        preview.cancel()
+    }
+
+    func testDetailResolutionIsBoundedAndPreservesAspect() {
+        for size in [CGSize(width: 6000, height: 4000), CGSize(width: 1000, height: 3000), CGSize(width: 500, height: 300)] {
+            let pixels = WindowSwitcherPreview.captureSize(for: CGRect(origin: .zero, size: size), detail: true)
+            XCTAssertLessThanOrEqual(max(pixels.width, pixels.height), 3200)
+            XCTAssertLessThanOrEqual(pixels.width, size.width * 2)
+            XCTAssertEqual(pixels.width / pixels.height, size.width / size.height, accuracy: 0.002)
+        }
+    }
+
     func testHungCaptureTimesOutWithoutStartingReplacementUntilItFinishes() async {
         var resumes: [CheckedContinuation<NSImage?, Never>] = []
         var captured: [String] = [], message: String?

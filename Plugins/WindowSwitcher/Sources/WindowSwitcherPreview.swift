@@ -33,7 +33,13 @@ final class WindowSwitcherPreview {
     private var cache: [CacheKey: CachedPreview] = [:]
     private var selectedKey: CacheKey?
     private var generation = 0
-    private var pending: WindowSwitcherAppEntry?
+    private struct Request {
+        var entry: WindowSwitcherAppEntry
+        var detail: Bool = false
+    }
+    private var pending: Request?
+    private var selectedEntry: WindowSwitcherAppEntry?
+    private var detailRequested = false
     private var task: Task<Void, Never>?
     private var watchdog: Task<Void, Never>?
     private var expiryTask: Task<Void, Never>?
@@ -46,15 +52,18 @@ final class WindowSwitcherPreview {
     private let localization: PluginLocalization
     private let hasPermission: @MainActor () -> Bool
     private let capture: @MainActor (WindowSwitcherAppEntry) async throws -> NSImage?
+    private let detailCapture: @MainActor (WindowSwitcherAppEntry) async throws -> NSImage?
 
     init(localization: PluginLocalization = PluginLocalization(bundle: .main), hasPermission: @escaping @MainActor () -> Bool = { CGPreflightScreenCaptureAccess() },
          captureTimeout: Duration = .seconds(2), cacheLifetime: TimeInterval = 30,
-         capture: (@MainActor (WindowSwitcherAppEntry) async throws -> NSImage?)? = nil) {
+         capture: (@MainActor (WindowSwitcherAppEntry) async throws -> NSImage?)? = nil,
+         detailCapture: (@MainActor (WindowSwitcherAppEntry) async throws -> NSImage?)? = nil) {
         self.captureTimeout = captureTimeout
         self.cacheLifetime = cacheLifetime
         self.localization = localization
         self.hasPermission = hasPermission
         self.capture = capture ?? { [systemCapture] entry in try await systemCapture.capture(entry) }
+        self.detailCapture = detailCapture ?? capture ?? { [systemCapture] entry in try await systemCapture.capture(entry, detail: true) }
     }
 
     deinit {
@@ -66,7 +75,7 @@ final class WindowSwitcherPreview {
     func cancel() {
         generation += 1
         pending = nil
-        selectedKey = nil
+        selectedKey = nil; selectedEntry = nil; detailRequested = false
         onChange?(nil, nil)
     }
 
@@ -84,11 +93,13 @@ final class WindowSwitcherPreview {
             return
         }
         let key = CacheKey(entry)
+        selectedEntry = entry
         // Catalog metadata changes do not restart an unchanged selection.
         guard selectedKey != key else { return }
         selectedKey = key
         generation += 1
-        pending = entry
+        detailRequested = false
+        pending = Request(entry: entry)
         let now = Date()
         cache = cache.filter { now.timeIntervalSince($0.value.capturedAt) < cacheLifetime }
         if var cached = cache[key] {
@@ -102,12 +113,24 @@ final class WindowSwitcherPreview {
         startNext()
     }
 
+    /// Upgrade only the selected preview, once per selection. Retain the fitted
+    /// image while this serial capture runs; large captures never enter the cache.
+    func requestDetail() {
+        guard !detailRequested, let entry = selectedEntry else { return }
+        guard hasPermission() else { select(entry); return }
+        detailRequested = true
+        generation += 1
+        pending = Request(entry: entry, detail: true)
+        startNext()
+    }
+
     private var unavailableMessage: String {
         localization.string("preview.unavailable", defaultValue: "此窗口暂时无法预览。")
     }
 
     private func startNext() {
-        guard task == nil, let entry = pending else { return }
+        guard task == nil, let request = pending else { return }
+        let entry = request.entry
         pending = nil
         let token = generation, id = UUID()
         captureID = id; captureTimedOut = false
@@ -116,24 +139,24 @@ final class WindowSwitcherPreview {
             do { try await Task.sleep(for: timeout) } catch { return }
             guard let self, self.captureID == id else { return }
             self.captureTimedOut = true
-            if let selectedKey = self.selectedKey, self.cache[selectedKey] == nil {
+            if !request.detail, let selectedKey = self.selectedKey, self.cache[selectedKey] == nil {
                 self.onChange?(nil, self.unavailableMessage)
             }
         }
         // Capture the operation, never the owner, across a potentially suspended
         // system await. Keep the occupied slot until it returns: a timeout must
         // not accumulate orphaned ScreenCaptureKit operations on every selection.
-        let capture = self.capture
+        let capture = request.detail ? self.detailCapture : self.capture
         task = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(50))
             for attempt in 0..<3 {
                 guard !Task.isCancelled, self?.canCapture(token) == true else { break }
                 do {
                     let image = try await capture(entry)
-                    guard self?.receive(image, entry: entry, token: token, attempt: attempt) == false else { break }
+                    guard self?.receive(image, entry: entry, token: token, attempt: attempt, detail: request.detail) == false else { break }
                 } catch {
                     guard let owner = self, owner.canCapture(token) else { break }
-                    if attempt == 2, owner.cache[CacheKey(entry)] == nil {
+                    if !request.detail, attempt == 2, owner.cache[CacheKey(entry)] == nil {
                         owner.onChange?(nil, owner.localization.string("preview.failed", defaultValue: "无法读取预览；仍可按标题切换。"))
                     }
                 }
@@ -148,7 +171,7 @@ final class WindowSwitcherPreview {
     }
 
     /// Return true when no retry is required. Late or revoked images are discarded.
-    private func receive(_ image: NSImage?, entry: WindowSwitcherAppEntry, token: Int, attempt: Int) -> Bool {
+    private func receive(_ image: NSImage?, entry: WindowSwitcherAppEntry, token: Int, attempt: Int, detail: Bool) -> Bool {
         guard token == generation else { return true }
         guard hasPermission() else {
             cache.removeAll(); systemCapture.invalidate()
@@ -158,7 +181,7 @@ final class WindowSwitcherPreview {
         guard !captureTimedOut else { return true }
         if let image {
             let now = Date()
-            cache[CacheKey(entry)] = CachedPreview(image: image, capturedAt: now, usedAt: now)
+            if !detail { cache[CacheKey(entry)] = CachedPreview(image: image, capturedAt: now, usedAt: now) }
             while cache.count > 8, let oldest = cache.min(by: { $0.value.usedAt < $1.value.usedAt })?.key {
                 cache.removeValue(forKey: oldest)
             }
@@ -166,7 +189,7 @@ final class WindowSwitcherPreview {
             onChange?(image, nil)
             return true
         }
-        if attempt == 2, cache[CacheKey(entry)] == nil { onChange?(nil, unavailableMessage) }
+        if !detail, attempt == 2, cache[CacheKey(entry)] == nil { onChange?(nil, unavailableMessage) }
         return false
     }
 
@@ -213,9 +236,9 @@ final class WindowSwitcherPreview {
         return titled.count == 1 ? titled.first : nil
     }
 
-    static func captureSize(for frame: CGRect) -> CGSize {
+    static func captureSize(for frame: CGRect, detail: Bool = false) -> CGSize {
         guard frame.width.isFinite, frame.height.isFinite, frame.width > 0, frame.height > 0 else { return CGSize(width: 1, height: 1) }
-        let scale = min(2, 1600 / max(frame.width, frame.height))
+        let scale = min(2, (detail ? 3200.0 : 1600.0) / max(frame.width, frame.height))
         return CGSize(width: max(1, floor(frame.width * scale)), height: max(1, floor(frame.height * scale)))
     }
 
@@ -240,7 +263,7 @@ final class WindowSwitcherSystemPreviewCapture {
 
     func invalidate() { content = nil; capturedAt = .distantPast }
 
-    func capture(_ entry: WindowSwitcherAppEntry) async throws -> NSImage? {
+    func capture(_ entry: WindowSwitcherAppEntry, detail: Bool = false) async throws -> NSImage? {
         guard CGPreflightScreenCaptureAccess() else { invalidate(); return nil }
         if let launchDate = entry.applicationLaunchDate,
            NSRunningApplication(processIdentifier: entry.processIdentifier)?.launchDate != launchDate { return nil }
@@ -260,7 +283,7 @@ final class WindowSwitcherSystemPreviewCapture {
         let window = content.windows[index]
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let configuration = SCStreamConfiguration()
-        let pixels = WindowSwitcherPreview.captureSize(for: window.frame)
+        let pixels = WindowSwitcherPreview.captureSize(for: window.frame, detail: detail)
         configuration.width = Int(pixels.width)
         configuration.height = Int(pixels.height)
         configuration.showsCursor = false

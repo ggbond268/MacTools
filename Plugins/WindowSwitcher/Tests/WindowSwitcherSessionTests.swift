@@ -8,6 +8,167 @@ import XCTest
 @MainActor
 final class WindowSwitcherSessionTests: XCTestCase {
 
+    func testPreviewZoomAndPanStayBoundedWithoutResizingViewport() {
+        let stage = WindowSwitcherPreviewStage(frame: CGRect(x: 0, y: 0, width: 500, height: 300))
+        stage.image = NSImage(size: NSSize(width: 1200, height: 800))
+        let original = stage.frame
+        let fit = stage.displayedFrame
+        stage.zoom(by: 2)
+        XCTAssertEqual(stage.displayedFrame.width, fit.width * 2, accuracy: 0.01)
+        stage.pan(by: CGPoint(x: 10000, y: -10000))
+        XCTAssertLessThanOrEqual(stage.displayedFrame.minX, 20.01)
+        XCTAssertGreaterThanOrEqual(stage.displayedFrame.maxY, 281.99)
+        stage.zoom(by: 100)
+        XCTAssertEqual(stage.zoomScale, 4)
+        stage.zoom(by: .nan)
+        XCTAssertEqual(stage.zoomScale, 4)
+        stage.image = NSImage(size: NSSize(width: 2400, height: 1600))
+        XCTAssertEqual(stage.zoomScale, 4)
+        stage.fit()
+        XCTAssertEqual(stage.panOffset, .zero)
+        XCTAssertEqual(stage.displayedFrame, fit)
+        stage.zoom(by: 0.1)
+        XCTAssertEqual(stage.zoomScale, 1)
+        XCTAssertEqual(stage.frame, original)
+        XCTAssertEqual(stage.intrinsicContentSize.width, NSView.noIntrinsicMetric)
+    }
+
+    func testPreviewZoomShortcutsAndCachedSelectionReset() async throws {
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { _ in NSImage(size: NSSize(width: 400, height: 300)) })
+        let controller = WindowSwitcherOverlayController(preview: preview)
+        var first = entry("one"), second = entry("two")
+        first.windowNumber = 1; second.windowNumber = 2
+        var session = WindowSwitcherSession(entries: [first, second], selectedID: "one", isPersistent: true, originalWindowID: nil)
+        controller.show(session, currentPID: 100, showsPreview: true)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let stage = try XCTUnwrap(descendants(panel.contentView!).compactMap { $0 as? WindowSwitcherPreviewStage }.first)
+        let deadline = ContinuousClock.now + .seconds(2)
+        while stage.image == nil, ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertNotNil(stage.image)
+        let original = panel.frame
+        func event(_ key: String, _ code: Int) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, characters: key, charactersIgnoringModifiers: key,
+                isARepeat: false, keyCode: UInt16(code)))
+        }
+        XCTAssertTrue(controller.handleChooserShortcut(try event("=", kVK_ANSI_Equal)))
+        XCTAssertEqual(stage.zoomScale, 1.25)
+        XCTAssertTrue(panel.firstResponder === stage)
+        XCTAssertTrue(controller.handleChooserShortcut(try event("0", kVK_ANSI_0)))
+        XCTAssertEqual(stage.zoomScale, 1)
+        stage.zoom(by: 2)
+        session.entries[0] = entry("one", title: "Updated metadata")
+        session.entries[0].windowNumber = 1
+        controller.update(session)
+        XCTAssertEqual(stage.zoomScale, 2)
+        session.selectedID = "two"; controller.update(session)
+        XCTAssertEqual(stage.zoomScale, 1)
+        session.selectedID = "one"; controller.update(session)
+        XCTAssertEqual(stage.zoomScale, 1)
+        XCTAssertNotNil(stage.image)
+        session.protectedCommandKeys = ["="]
+        controller.update(session)
+        XCTAssertTrue(controller.handleChooserShortcut(try event("=", kVK_ANSI_Equal)))
+        XCTAssertEqual(stage.zoomScale, 1)
+        session.usesDirectKeys = true
+        session.entries[0].shortcutToken = WindowSwitcherSelectionShortcut(key: "0", usesCommand: true)?.storageValue
+        controller.update(session)
+        var activated: String?
+        controller.onSelect = { activated = $0.id }
+        stage.zoom(by: 2)
+        XCTAssertTrue(controller.handleChooserShortcut(try event("0", kVK_ANSI_0)))
+        XCTAssertEqual(activated, "one")
+        XCTAssertEqual(stage.zoomScale, 2)
+        let menu = try XCTUnwrap(stage.contextMenu?())
+        XCTAssertEqual(menu.items.count, 3)
+        XCTAssertTrue(menu.items.allSatisfy { $0.isEnabled && $0.keyEquivalent.isEmpty })
+        let doubleClick = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 2, pressure: 1))
+        stage.mouseDown(with: doubleClick)
+        XCTAssertEqual(stage.zoomScale, 1)
+        XCTAssertEqual(stage.contextMenu?()?.items.map(\.isEnabled), [true, false, false])
+        XCTAssertEqual(panel.frame, original)
+    }
+
+    func testContentSizingIsCompactAndBounded() {
+        let screen = CGRect(x: -1400, y: 0, width: 1400, height: 1000)
+        let grid = WindowSwitcherSession.panelFrame(visibleFrame: screen, preview: false, count: 9)
+        let list = WindowSwitcherSession.panelFrame(visibleFrame: screen, preview: false, count: 9, layout: .list)
+        XCTAssertLessThan(grid.height, 400)
+        XCTAssertLessThan(list.width, grid.width)
+        XCTAssertGreaterThan(list.height, grid.height)
+        for count in [0, 1, 9, 100, Int.max] {
+            for layout in [WindowSwitcherLayout.grid, .list] {
+                for preview in [true, false] {
+                    let frame = WindowSwitcherSession.panelFrame(visibleFrame: screen, preview: preview, count: count, layout: layout)
+                    XCTAssertTrue(screen.contains(frame))
+                    XCTAssertLessThanOrEqual(frame.height, screen.height * 0.85)
+                }
+            }
+        }
+    }
+
+    func testSizingCountIgnoresSearchButHonorsScope() {
+        var session = WindowSwitcherSession(entries: [entry("a", pid: 100), entry("b", pid: 200)],
+            selectedID: "a", isPersistent: true, originalWindowID: nil)
+        session.query = "no match"
+        XCTAssertEqual(session.results.count, 0)
+        XCTAssertEqual(session.sizingResultCount, 2)
+        session.scope = .currentApplication(100)
+        XCTAssertEqual(session.sizingResultCount, 1)
+    }
+
+    func testChooserResizesForLayoutButNotSearchAndRestoresManualSize() throws {
+        let controller = WindowSwitcherOverlayController()
+        var session = WindowSwitcherSession(entries: (0..<9).map { entry("row-\($0)") },
+            selectedID: "row-0", isPersistent: true, originalWindowID: nil)
+        controller.show(session, currentPID: 100, showsPreview: false, preferredLayout: .grid)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        let compact = panel.frame
+        XCTAssertLessThan(compact.height, 420)
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let content = try XCTUnwrap(panel.contentView)
+        let cards = try XCTUnwrap(descendants(content).compactMap { $0 as? NSCollectionView }.first)
+        let flow = try XCTUnwrap(cards.collectionViewLayout)
+        cards.layoutSubtreeIfNeeded()
+        let first = try XCTUnwrap(flow.layoutAttributesForItem(at: IndexPath(item: 0, section: 0)))
+        let columns = (0..<9).prefix {
+            flow.layoutAttributesForItem(at: IndexPath(item: $0, section: 0))?.frame.minY == first.frame.minY
+        }.count
+        XCTAssertEqual(columns, 5)
+        for (name, suffix) in [(NSAppearance.Name.aqua, "light"), (.darkAqua, "dark")] {
+            panel.appearance = NSAppearance(named: name)
+            content.layoutSubtreeIfNeeded()
+            if let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) {
+                content.cacheDisplay(in: content.bounds, to: bitmap)
+                try bitmap.representation(using: .png, properties: [:])?.write(to:
+                    URL(fileURLWithPath: "/private/tmp/window-switcher-compact-\(suffix).png"))
+            }
+        }
+        session.query = "no match"
+        controller.update(session)
+        XCTAssertEqual(panel.frame, compact)
+        session.query = ""; controller.update(session)
+        panel.setContentSize(NSSize(width: 780, height: 480))
+        controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
+        let manual = panel.frame
+        func changeLayout(_ number: String, keyCode: Int) throws {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, characters: number, charactersIgnoringModifiers: number, isARepeat: false, keyCode: UInt16(keyCode)))
+            XCTAssertTrue(controller.handleChooserShortcut(event))
+        }
+        try changeLayout("2", keyCode: kVK_ANSI_2)
+        XCTAssertLessThan(panel.frame.width, manual.width)
+        XCTAssertEqual(panel.frame.maxY, manual.maxY, accuracy: 1)
+        try changeLayout("1", keyCode: kVK_ANSI_1)
+        XCTAssertEqual(panel.frame.size, manual.size)
+        XCTAssertTrue(NSApp.sendAction(NSSelectorFromString("resetPanelSize"), to: controller, from: nil))
+        XCTAssertEqual(panel.frame.size, compact.size)
+    }
+
     func testMoreMenuRetainsItsTargetWhenCatalogSelectionChanges() throws {
         let controller = WindowSwitcherOverlayController()
         var a = entry("a"), b = entry("b")
@@ -230,6 +391,60 @@ final class WindowSwitcherSessionTests: XCTestCase {
         XCTAssertFalse(session.canSwitchCurrentApplication(nil))
     }
 
+    func testAppScopeButtonHidesAndRestoresWithoutResizingChooser() throws {
+        var first = entry("one", pid: 100); first.windowNumber = 1
+        var second = entry("two", pid: 100); second.windowNumber = 2
+        var other = entry("other", pid: 200); other.windowNumber = 3
+        var session = WindowSwitcherSession(entries: [first, other], selectedID: first.id,
+            isPersistent: true, originalWindowID: nil)
+        let controller = WindowSwitcherOverlayController()
+        controller.show(session, currentPID: 100, showsPreview: false)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let scope = try XCTUnwrap(descendants(panel.contentView!).first { $0.identifier?.rawValue == "window-switcher-scope" } as? WindowSwitcherScopeControl)
+        let singleScopeSize = scope.intrinsicContentSize
+        let frame = panel.frame
+        XCTAssertEqual(scope.segmentCount, 1)
+        XCTAssertFalse(scope.isHidden)
+        XCTAssertEqual(scope.intrinsicContentSize, singleScopeSize)
+        XCTAssertEqual(scope.selectedSegment, 0)
+        scope.selectScope(at: 0)
+        XCTAssertEqual(controller.session?.scope, .all)
+        XCTAssertEqual(scope.selectedSegment, 0, "Clicking the only scope keeps it selected")
+        session.entries.append(second)
+        controller.update(session)
+        XCTAssertEqual(scope.segmentCount, 2)
+        XCTAssertFalse(scope.isHidden)
+        XCTAssertGreaterThan(scope.intrinsicContentSize.width, singleScopeSize.width)
+        XCTAssertTrue(scope.isEnabled(forSegment: 1))
+        session.selectedID = other.id; controller.update(session)
+        XCTAssertEqual(scope.segmentCount, 1)
+        XCTAssertFalse(scope.isHidden)
+        XCTAssertEqual(scope.intrinsicContentSize, singleScopeSize)
+        XCTAssertEqual(panel.frame, frame)
+        session.selectedID = first.id; controller.update(session)
+        XCTAssertEqual(scope.segmentCount, 2)
+        XCTAssertFalse(scope.isHidden)
+        XCTAssertGreaterThan(scope.intrinsicContentSize.width, singleScopeSize.width)
+        scope.selectScope(at: 1)
+        XCTAssertEqual(controller.session?.scope, .currentApplication(100))
+        XCTAssertEqual(scope.selectedSegment, 1)
+        session.scope = .currentApplication(100); controller.update(session)
+        session.entries.removeAll { $0.id == second.id }; controller.update(session)
+        XCTAssertEqual(scope.segmentCount, 2, "An active filter remains visible when a sibling window closes")
+        XCTAssertEqual(scope.selectedSegment, 1)
+        scope.selectScope(at: 0)
+        XCTAssertEqual(controller.session?.scope, .all)
+        XCTAssertEqual(scope.segmentCount, 1)
+        XCTAssertFalse(scope.isHidden)
+        XCTAssertEqual(scope.intrinsicContentSize, singleScopeSize)
+        session.scope = .all; session.entries = []; session.selectedID = nil; controller.update(session)
+        XCTAssertEqual(scope.segmentCount, 1)
+        XCTAssertFalse(scope.isHidden)
+        XCTAssertEqual(scope.intrinsicContentSize, singleScopeSize)
+    }
+
     func testLayoutChoicePersistsAcrossStoreAndChooserRecreation() throws {
         let storage = WindowSwitcherMemoryStorage()
         let store = WindowSwitcherStore(storage: storage)
@@ -411,7 +626,7 @@ final class WindowSwitcherSessionTests: XCTestCase {
         let controller = WindowSwitcherOverlayController()
         let entries = (0..<60).map { entry("window-\($0)", title: "Chrome document \($0 + 1)") }
         let value = WindowSwitcherSession(entries: entries, selectedID: "window-0", isPersistent: true, originalWindowID: nil)
-        controller.show(value, currentPID: 100, showsPreview: false)
+        controller.show(value, currentPID: 100, showsPreview: false, preferredLayout: .list)
         defer { controller.hide() }
         let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
         let content = try XCTUnwrap(panel.contentView)
@@ -604,7 +819,7 @@ final class WindowSwitcherSessionTests: XCTestCase {
         let controller = WindowSwitcherOverlayController()
         var value = WindowSwitcherSession(entries: (0..<60).map { entry("window-\($0)") }, selectedID: "window-0",
                                           isPersistent: true, originalWindowID: nil)
-        controller.show(value, currentPID: 100, showsPreview: false)
+        controller.show(value, currentPID: 100, showsPreview: false, preferredLayout: .list)
         defer { controller.hide() }
         let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
         func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
@@ -941,7 +1156,7 @@ final class WindowSwitcherSessionTests: XCTestCase {
             for preview in [false, true] {
                 let panel = WindowSwitcherSession.panelFrame(visibleFrame: frame, preview: preview)
                 XCTAssertTrue(frame.contains(panel))
-                XCTAssertLessThanOrEqual(panel.height, preview ? 740 : 510)
+                XCTAssertLessThanOrEqual(panel.height, frame.height - 24)
             }
         }
     }

@@ -71,8 +71,15 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private var cardColumns = 1
     private var previewHeight: NSLayoutConstraint!
     private var cardHeight: NSLayoutConstraint!
+    private var listHeight: NSLayoutConstraint!
     private var initialResultCount = 0
-    private var preferredSizes: [Bool: NSSize] = [:]
+    private struct SizePreference: Hashable {
+        var list: Bool
+        var preview: Bool
+    }
+    private var preferredSizes: [SizePreference: NSSize] = [:]
+    private var sizingScope: WindowSwitcherSession.Scope?
+    private var sizingDisplay: UInt32?
     private var applyingPanelLayout = false
     private let more = WindowSwitcherToolbarButton(title: "", target: nil, action: nil)
     private final class SearchField: NSTextField {
@@ -85,7 +92,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
     }
     private let search = SearchField()
-    private let scope = NSSegmentedControl(labels: ["", ""], trackingMode: .selectOne, target: nil, action: nil)
+    private let scope = WindowSwitcherScopeControl()
     private let display = NSPopUpButton()
     private let modeIcon = NSImageView()
     private let modeTitle = NSTextField(labelWithString: "")
@@ -138,6 +145,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         self.preview = preview ?? WindowSwitcherPreview(localization: localization)
         super.init()
         buildPanel()
+        previewImage.onRequestDetail = { [weak self] in self?.preview.requestDetail() }
+        previewImage.keyHandler = { [weak self] in self?.handleKey($0) ?? false }
+        previewImage.contextMenu = { [weak self] in self?.previewZoomMenu(tracksMenu: true) }
         self.preview.onChange = { [weak self] image, message in
             guard let self else { return }
             self.previewImage.image = image
@@ -180,13 +190,14 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         self.currentPID = currentPID
         self.showsPreview = showsPreview
         renderedSession = nil
-        initialResultCount = session.results.count
-        usesList = preferredLayout.map { $0 == .list } ?? (initialResultCount > 30)
+        initialResultCount = session.sizingResultCount
+        sizingScope = session.scope
+        sizingDisplay = session.display
+        usesList = preferredLayout.map { $0 == .list } ?? false
         panel.isMovableByWindowBackground = false
         dragBar.isHidden = !session.isPersistent
         if session.isPersistent { panel.styleMask.insert(.resizable) }
         else { panel.styleMask.remove(.resizable) }
-        panel.contentMinSize = NSSize(width: 560, height: 420)
         searchHeldModifiers = []
         previewButton.state = showsPreview ? .on : .off
         search.stringValue = session.query
@@ -194,6 +205,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         searchSurface.isFocused = false
         actionMessage = nil
         previewedEntry = nil; previewedPermission = nil
+        render()
         layoutPanel()
         render()
         PluginPresentationSafety.prepareForWindowOrdering(panel)
@@ -252,7 +264,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         panel.makeFirstResponder(usesList ? table : cards)
     }
 
-    private func layoutPanel(preservePosition: Bool = false, resizeForPreview: Bool = false) {
+    private func layoutPanel(preservePosition: Bool = false, resizeToContent: Bool = false) {
         applyingPanelLayout = true
         defer { applyingPanelLayout = false }
         let currentScreen = panel.screen ?? NSScreen.screens.max {
@@ -265,13 +277,16 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         let previewVisibilityChanged = previewPane.isHidden == usePreview
         previewPane.isHidden = !usePreview
         previewDivider.isHidden = !usePreview
-        var frame = WindowSwitcherSession.panelFrame(visibleFrame: screen.visibleFrame, preview: usePreview)
-        if session?.isPersistent == true, let preferredSize = preferredSizes[usePreview] {
+        panel.contentMinSize = NSSize(width: min(560, max(0, screen.visibleFrame.width - 24)),
+                                      height: min(usePreview ? 420 : 260, max(0, screen.visibleFrame.height - 24)))
+        var frame = WindowSwitcherSession.panelFrame(visibleFrame: screen.visibleFrame, preview: usePreview,
+                                                     count: initialResultCount, layout: usesList ? .list : .grid)
+        if session?.isPersistent == true, let preferredSize = preferredSizes[SizePreference(list: usesList, preview: usePreview)] {
             frame.size = NSSize(width: min(preferredSize.width, screen.visibleFrame.width - 24), height: min(preferredSize.height, screen.visibleFrame.height - 24))
             frame.origin = CGPoint(x: screen.visibleFrame.midX - frame.width / 2, y: screen.visibleFrame.midY - frame.height / 2)
         }
         if preservePosition {
-            if !resizeForPreview && !previewVisibilityChanged {
+            if !resizeToContent && !previewVisibilityChanged {
                 frame.size = NSSize(width: min(panel.frame.width, screen.visibleFrame.width - 24),
                                     height: min(panel.frame.height, screen.visibleFrame.height - 24))
             }
@@ -306,6 +321,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         let availableForCards = max(110, panel.frame.height * 0.34)
         cardHeight.constant = min(CGFloat(naturalRows) * 96 + 8, availableForCards)
         cardHeight.isActive = !previewPane.isHidden && !usesList
+        listHeight.constant = min(CGFloat(min(4, max(1, initialResultCount))) * 56, availableForCards)
+        listHeight.isActive = !previewPane.isHidden && usesList
         previewHeight.constant = max(100, panel.frame.height * 0.44)
     }
 
@@ -381,6 +398,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             clearSearchButton.widthAnchor.constraint(equalToConstant: 24),
             clearSearchButton.heightAnchor.constraint(equalToConstant: 24)
         ])
+        scope.identifier = NSUserInterfaceItemIdentifier("window-switcher-scope")
         scope.target = self; scope.action = #selector(scopeChanged)
         scope.selectedSegment = 0
         display.target = self; display.action = #selector(displayChanged)
@@ -450,6 +468,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         cardHeight = cardScroll.heightAnchor.constraint(equalToConstant: 224)
         // A preferred row count must not become AppKit's live-resize minimum.
         cardHeight.priority = NSLayoutConstraint.Priority(49)
+        listHeight = scroll.heightAnchor.constraint(equalToConstant: 224)
+        listHeight.priority = NSLayoutConstraint.Priority(49)
         previewImage.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .vertical)
         empty.font = .systemFont(ofSize: 12); empty.textColor = .labelColor
         openButton.target = self; openButton.action = #selector(openSelected); openButton.bezelStyle = .rounded
@@ -554,10 +574,18 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         layoutPicker.setToolTip(localization.string("chooser.list", defaultValue: "窗口列表") + " · ⌘⌥2", forSegment: 1)
         layoutPicker.setAccessibilityLabel(localization.string("chooser.layout", defaultValue: "窗口视图"))
         cards.setAccessibilityLabel(localization.string("chooser.cards", defaultValue: "卡片视图"))
+        // Keep an active filter visible even if its last sibling window closes.
+        // Otherwise there is no useful app scope to offer for a single window.
+        let showsAppScope = session.map { $0.scope != .all || $0.canSwitchCurrentApplication($0.scopeTargetPID) } ?? false
+        let segmentCount = showsAppScope ? 2 : 1
+        if scope.segmentCount != segmentCount { scope.segmentCount = segmentCount }
         scope.setLabel(localization.string("chooser.all", defaultValue: "全部窗口"), forSegment: 0)
         let scopeApp = session?.entries.first { $0.processIdentifier == session?.scopeTargetPID }?.appName
-        scope.setLabel(scopeApp.map { localization.format("chooser.appWindows", defaultValue: "%@ 的窗口", $0) }
-            ?? localization.string("chooser.current", defaultValue: "当前应用"), forSegment: 1)
+        if showsAppScope {
+            scope.setLabel(scopeApp.map { localization.format("chooser.appWindows", defaultValue: "%@ 的窗口", $0) }
+                ?? localization.string("chooser.current", defaultValue: "当前应用"), forSegment: 1)
+            scope.setEnabled(true, forSegment: 1)
+        }
         closeButton.title = localization.string("chooser.close", defaultValue: "关闭窗口")
         quitButton.title = localization.string("chooser.quit", defaultValue: "退出应用")
         openButton.title = localization.string("chooser.open", defaultValue: "打开窗口")
@@ -594,6 +622,16 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             more.menu?.addItem(edit)
         }
         more.menu?.addItem(.separator())
+        let resetSize = NSMenuItem(title: localization.string("chooser.resetSize", defaultValue: "重置大小"),
+                                   action: #selector(resetPanelSize), keyEquivalent: "")
+        resetSize.target = self
+        more.menu?.addItem(resetSize)
+        let zoom = NSMenuItem(title: localization.string("preview.zoom", defaultValue: "预览缩放"), action: nil, keyEquivalent: "")
+        zoom.submenu = previewZoomMenu()
+        more.menu?.addItem(zoom)
+        previewImage.setAccessibilityLabel(localization.string("chooser.preview", defaultValue: "预览"))
+        previewImage.toolTip = localization.string("preview.zoomHelp", defaultValue: "双指缩放，放大后拖移或使用方向键。双击恢复适合窗口。")
+        previewImage.setAccessibilityHelp(previewImage.toolTip)
         let shortcuts = NSMenuItem(title: localization.string("chooser.shortcuts", defaultValue: "键盘快捷键"), action: nil, keyEquivalent: "")
         let help = NSMenu()
         for (key, fallback, chord) in [
@@ -625,13 +663,13 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         more.toolTip = localization.string("chooser.more", defaultValue: "更多选项") + (session?.usesDirectKeys == true ? "" : " · ⌘K")
         more.menu?.autoenablesItems = false
         scope.setToolTip("\(scope.label(forSegment: 0) ?? "") · ⌘⇧1", forSegment: 0)
-        scope.setToolTip("\(scope.label(forSegment: 1) ?? "") · ⌘⇧2", forSegment: 1)
+        if showsAppScope { scope.setToolTip("\(scope.label(forSegment: 1) ?? "") · ⌘⇧2", forSegment: 1) }
         display.toolTip = "\(localization.string("chooser.displayFilter", defaultValue: "显示器筛选")) · ⌘D"
         previewButton.title += " ⌘P"
         search.toolTip = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用") + (session?.usesDirectKeys == true ? "" : " · ⌘F")
         if session?.usesDirectKeys == true {
             scope.setToolTip(scope.label(forSegment: 0), forSegment: 0)
-            scope.setToolTip(scope.label(forSegment: 1), forSegment: 1)
+            if showsAppScope { scope.setToolTip(scope.label(forSegment: 1), forSegment: 1) }
             layoutPicker.setToolTip(localization.string("chooser.cards", defaultValue: "卡片视图"), forSegment: 0)
             layoutPicker.setToolTip(localization.string("chooser.list", defaultValue: "窗口列表"), forSegment: 1)
             display.toolTip = localization.string("chooser.displayFilter", defaultValue: "显示器筛选")
@@ -651,6 +689,12 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         listScroll.isHidden = !usesList
         cardScroll.isHidden = usesList
         layoutPicker.selectedSegment = usesList ? 1 : 0
+        if sizingScope != session.scope || sizingDisplay != session.display {
+            sizingScope = session.scope
+            sizingDisplay = session.display
+            initialResultCount = session.sizingResultCount
+            layoutPanel(preservePosition: true, resizeToContent: true)
+        }
         let activeScroll = usesList ? listScroll : cardScroll
         let viewport = activeScroll.contentView.bounds.origin
         updating = true
@@ -681,7 +725,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         count.stringValue = localization.format("chooser.count", defaultValue: "%d 个窗口", rows.count)
         cardScroll.updateOverflow()
         scope.selectedSegment = session.scope == .all ? 0 : 1
-        scope.setEnabled(session.canSwitchCurrentApplication(session.scopeTargetPID), forSegment: 1)
         display.removeAllItems(); display.addItem(withTitle: localization.string("chooser.allDisplays", defaultValue: "所有显示器"))
         for screen in session.displays {
             display.addItem(withTitle: screen.name)
@@ -710,6 +753,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         updating = false
         updateShortcutBadges()
         if showsPreview && !previewPane.isHidden, selected != previewedEntry || preview.isPermissionGranted != previewedPermission {
+            if selected?.id != previewedEntry?.id || selected?.processIdentifier != previewedEntry?.processIdentifier ||
+                selected?.applicationLaunchDate != previewedEntry?.applicationLaunchDate || selected?.windowNumber != previewedEntry?.windowNumber {
+                previewImage.fit()
+            }
             previewedEntry = selected
             previewedPermission = preview.isPermissionGranted
             preview.select(selected?.isWindowEntry == true ? selected : nil)
@@ -721,6 +768,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         onLayoutChange?(usesList ? .list : .grid)
         renderedSession = nil
         cardHeight.isActive = !usesList && !previewPane.isHidden
+        layoutPanel(preservePosition: true, resizeToContent: true)
         render()
         panel.makeFirstResponder(usesList ? table : cards)
     }
@@ -917,14 +965,22 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         guard modifiers.contains(.command) else { return false }
         let digit = Int(key).flatMap { (1...9).contains($0) ? $0 : nil }
-        let recognized = (modifiers == .command && (digit != nil || ["d", "p", "f", "w", "q", "k"].contains(key)))
+        let zoomKey = (modifiers == .command && ["+", "=", "-", "0"].contains(key)) ||
+            (modifiers == [.command, .shift] && ["+", "="].contains(key))
+        let recognized = zoomKey || (modifiers == .command && (digit != nil || ["d", "p", "f", "w", "q", "k"].contains(key)))
             || ((modifiers == [.command, .option] || modifiers == [.command, .shift]) && ["1", "2"].contains(key))
         guard recognized else { return false }
         if let editor = search.currentEditor() as? NSTextView, editor.hasMarkedText() { return true }
         if session?.isPersistent == false, session?.invocationModifiers.contains(.command) == true,
            digit == nil { return false }
         if ["w", "q"].contains(key), session?.protectedCommandKeys.contains(key) == true { return true }
-        if modifiers == [.command, .option] {
+        if zoomKey {
+            guard session?.protectedCommandKeys.contains(key) != true,
+                  !(["+", "="].contains(key) && session?.protectedCommandKeys.isDisjoint(with: ["+", "="]) == false) else { return true }
+            if key == "0" { fitPreview() }
+            else if key == "-" { zoomPreviewOut() }
+            else { zoomPreviewIn() }
+        } else if modifiers == [.command, .option] {
             layoutPicker.selectedSegment = key == "1" ? 0 : 1; layoutChanged()
         } else if modifiers == [.command, .shift] {
             if key == "1" || session?.canSwitchCurrentApplication(session?.scopeTargetPID) == true { scope.selectedSegment = key == "1" ? 0 : 1; scopeChanged() }
@@ -1176,7 +1232,55 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         menu.popUp(positioning: nil, at: NSPoint(x: anchor.bounds.midX, y: anchor.bounds.midY), in: anchor)
     }
 
+    private func previewZoomMenu(tracksMenu: Bool = false) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        if tracksMenu { menu.delegate = self }
+        for (key, fallback, action, equivalent) in [
+            ("preview.zoomIn", "放大", #selector(zoomPreviewIn), "+"),
+            ("preview.zoomOut", "缩小", #selector(zoomPreviewOut), "-"),
+            ("preview.fit", "适合窗口", #selector(fitPreview), "0")
+        ] {
+            // Keep legacy assignments authoritative. The same actions remain
+            // reachable through the menu without advertising conflicting keys.
+            let hasShortcut = session?.usesDirectKeys != true && session?.isPersistent == true &&
+                session?.protectedCommandKeys.contains(equivalent) != true &&
+                !(equivalent == "+" && session?.protectedCommandKeys.contains("=") == true)
+            let item = NSMenuItem(title: localization.string(key, defaultValue: fallback), action: action,
+                                  keyEquivalent: hasShortcut ? equivalent : "")
+            item.target = self
+            item.keyEquivalentModifierMask = .command
+            menu.addItem(item)
+        }
+        updatePreviewZoomMenu(menu)
+        return menu
+    }
+
+    private func updatePreviewZoomMenu(_ menu: NSMenu) {
+        for item in menu.items {
+            if let submenu = item.submenu { updatePreviewZoomMenu(submenu) }
+            if item.action == #selector(zoomPreviewIn) {
+                item.isEnabled = showsPreview && previewImage.image != nil && previewImage.zoomScale < 4
+            } else if item.action == #selector(zoomPreviewOut) || item.action == #selector(fitPreview) {
+                item.isEnabled = showsPreview && previewImage.image != nil && previewImage.zoomScale > 1
+            }
+        }
+    }
+
+    @objc private func zoomPreviewIn() { changePreviewZoom(1.25) }
+    @objc private func zoomPreviewOut() { changePreviewZoom(0.8) }
+    @objc private func fitPreview() {
+        guard showsPreview else { return }
+        previewImage.fit()
+    }
+    private func changePreviewZoom(_ factor: CGFloat) {
+        guard showsPreview, previewImage.image != nil else { return }
+        previewImage.zoom(by: factor)
+        panel.makeFirstResponder(previewImage)
+    }
+
     func menuWillOpen(_ menu: NSMenu) {
+        updatePreviewZoomMenu(menu)
         menuGeneration += 1
         isPresentingMenu = true
         releasedDuringMenu = false
@@ -1232,9 +1336,16 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     func windowDidResize(_ notification: Notification) {
         guard panel.isVisible, session?.isPersistent == true else { return }
         if !applyingPanelLayout {
-            preferredSizes[!previewPane.isHidden] = panel.frame.size
+            preferredSizes[SizePreference(list: usesList, preview: !previewPane.isHidden)] = panel.frame.size
         }
         updateViewportLayout()
+    }
+
+    @objc private func resetPanelSize() {
+        preferredSizes.removeValue(forKey: SizePreference(list: usesList, preview: !previewPane.isHidden))
+        initialResultCount = session?.sizingResultCount ?? 0
+        layoutPanel(preservePosition: true, resizeToContent: true)
+        render()
     }
 
     @objc private func previewChanged() {
@@ -1242,7 +1353,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         onPreviewChange?(showsPreview)
         previewedEntry = nil; previewedPermission = nil
         if !showsPreview { preview.cancel() }
-        layoutPanel(preservePosition: true, resizeForPreview: true); render()
+        layoutPanel(preservePosition: true, resizeToContent: true); render()
     }
     func windowDidResignKey(_ notification: Notification) {
         if !closing, !isPresentingMenu, session != nil { onCancel?() }

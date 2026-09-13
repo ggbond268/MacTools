@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import MacToolsPluginKit
 
 @MainActor
@@ -88,4 +89,111 @@ final class WindowSwitcherHeaderSurface: NSView {
 @MainActor
 final class WindowSwitcherToolbarButton: NSButton {
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
+}
+
+/// Match Clipboard History's flat scope treatment with one rendering path.
+/// Native buttons avoid the system picker's single-segment text-color bug.
+@MainActor
+final class WindowSwitcherScopeControl: NSControl {
+    private let model = WindowSwitcherScopePickerModel()
+    private var hostingView: NSHostingView<WindowSwitcherScopePicker>!
+    var segmentCount: Int {
+        get { model.count }
+        set {
+            guard model.count != newValue else { return }
+            model.count = newValue
+            if newValue == 1 { selectedSegment = 0 }
+            invalidateIntrinsicContentSize()
+        }
+    }
+    var selectedSegment: Int {
+        get { model.selection }
+        set { if model.selection != newValue { model.selection = newValue } }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        hostingView = NSHostingView(rootView: WindowSwitcherScopePicker(model: model))
+        hostingView.safeAreaRegions = []
+        hostingView.sizingOptions = []
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hostingView)
+        NSLayoutConstraint.activate([
+            hostingView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityChildren([hostingView!])
+        model.onSelection = { [weak self] index in self?.selectScope(at: index) }
+    }
+    required init?(coder: NSCoder) { nil }
+
+    func setLabel(_ title: String, forSegment index: Int) {
+        guard model.titles[index] != title else { return }
+        model.titles[index] = title
+        invalidateIntrinsicContentSize()
+    }
+    func label(forSegment index: Int) -> String? { model.titles[index] }
+    func setEnabled(_ enabled: Bool, forSegment index: Int) {
+        if model.enabled[index] != enabled { model.enabled[index] = enabled }
+    }
+    func isEnabled(forSegment index: Int) -> Bool { model.enabled[index] }
+    func setToolTip(_ title: String?, forSegment index: Int) {
+        if model.help[index] != title { model.help[index] = title }
+    }
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: model.width, height: 24)
+    }
+    func selectScope(at index: Int) {
+        guard (0..<model.count).contains(index), model.enabled[index] else { return }
+        selectedSegment = index
+        sendAction(action, to: target)
+    }
+}
+
+@MainActor
+private final class WindowSwitcherScopePickerModel: ObservableObject {
+    @Published var titles = ["", ""]
+    @Published var help: [String?] = [nil, nil]
+    @Published var enabled = [true, true]
+    @Published var count = 2
+    @Published var selection = 0
+    var onSelection: ((Int) -> Void)?
+    var width: CGFloat {
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        return titles.prefix(count).reduce(CGFloat.zero) {
+            $0 + ceil(($1 as NSString).size(withAttributes: [.font: font]).width) + 24
+        }
+    }
+}
+
+private struct WindowSwitcherScopePicker: View {
+    @ObservedObject var model: WindowSwitcherScopePickerModel
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<model.count, id: \.self) { index in
+                Button { model.onSelection?(index) } label: {
+                    Text(model.titles[index])
+                        .font(.system(size: NSFont.systemFontSize))
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .frame(height: 24)
+                        .foregroundStyle(model.selection == index ? Color.white : Color.primary)
+                        .background(model.selection == index ? Color.accentColor : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 6))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(model.help[index] ?? model.titles[index])
+                .disabled(!model.enabled[index])
+                .accessibilityAddTraits(model.selection == index ? [.isSelected] : [])
+            }
+        }
+        .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+        .frame(width: model.width, height: 24, alignment: .leading)
+        .accessibilityIdentifier("window-switcher-scope-picker")
+    }
 }

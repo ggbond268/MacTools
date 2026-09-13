@@ -33,3 +33,13 @@ Window Switcher uses a full-width rounded search field with separately laid-out 
 Window actions retain the menu's original target and reject targets that disappeared. A continuously observed AX replacement receives a new public identity even if its compositor number is reused; legitimate fallback-to-AX Space rediscovery retains selection. Activation stops submitting focus changes after an intervening foreground application change. Already submitted system actions cannot be undone.
 
 Discovery includes list processing in its per-app budget and retains an unavailable snapshot when the budget expires. Preview captures remain serial; after a two-second wait the chooser reports unavailability, keeps the occupied capture slot bounded, and resumes the latest pending selection when the system operation returns. Cached previews expire after thirty seconds even when idle. Hidden preview panes do not initiate captures.
+
+## Content-aware chooser sizing
+
+Opening the chooser fits its size to the unfiltered window count, selected grid/list view, and preview setting. Small grids use fewer columns and rows; lists use a narrower row-based layout. Large catalogs scroll within a screen-relative height limit. Search, selection changes, and background metadata refreshes keep the current frame stable. Explicit scope, display, layout, and preview changes recalculate size while preserving the top edge where screen bounds allow it.
+
+Manual sizes are retained for the lifetime of the controller, separately for each grid/list and preview combination. Reset Size in the options menu restores content-aware sizing for the current combination. A missing saved layout defaults to grid; catalog growth never changes the chosen view.
+
+Preview inspection stays within the existing viewport: pinch to zoom up to 4×, drag or use arrow keys while the enlarged preview has focus to pan, and double-click to fit. The preview context menu and options menu offer Zoom In, Zoom Out, and Fit Preview. Search and Select also supports Command-Plus, Command-Minus, and Command-0 unless reserved by existing Direct Keys assignments. Selecting another window resets the preview to Fit.
+
+Normal captures keep their 1,600-pixel maximum edge. Zooming requests one sharper capture per selection, capped at 3,200 pixels and serialized with normal captures. The existing image remains visible during that request or if it fails. Detail captures are not cached across selections, and permission and window-identity validation remain unchanged.

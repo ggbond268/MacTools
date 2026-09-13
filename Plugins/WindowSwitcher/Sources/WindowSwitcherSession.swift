@@ -104,11 +104,31 @@ struct WindowSwitcherSession {
 
     mutating func beginSearch() { isPersistent = true; usesDirectKeys = false }
 
-    static func panelFrame(visibleFrame: CGRect, preview: Bool) -> CGRect {
-        let width = min(840.0, max(0, visibleFrame.width - 24))
-        let height = min(preview ? 740.0 : 510.0, max(0, visibleFrame.height - 24))
+    /// Filtering and selection do not change the footprint of an invocation.
+    var sizingResultCount: Int {
+        var unfiltered = self
+        unfiltered.query = ""
+        return unfiltered.results.count
+    }
+
+    static func panelFrame(visibleFrame: CGRect, preview: Bool, count: Int = 12,
+                           layout: WindowSwitcherLayout = .grid) -> CGRect {
+        // Bound arithmetic even for an unexpectedly large catalog.
+        let count = min(10_000, max(1, count))
+        let desiredColumns = count <= 6 ? count : count <= 10 ? 5 : 6
+        let width = min(layout == .list ? 600 : max(560, CGFloat(desiredColumns) * 132 + 44),
+                        max(0, visibleFrame.width - 24))
+        // Include room for the legacy (always visible) scrollbar.
+        let columns = max(1, Int((width - 44) / 132))
+        let rows = (count + columns - 1) / columns
+        let contentHeight = layout == .list
+            ? max(110, CGFloat(min(count, preview ? 4 : 10)) * 56)
+            : max(110, CGFloat(min(rows, preview ? 2 : 4)) * 96 + 8)
+        let height = min(150 + contentHeight + (preview ? 350 : 0),
+                         max(0, min(visibleFrame.height * 0.85, visibleFrame.height - 24)))
         return CGRect(x: visibleFrame.midX - width / 2, y: visibleFrame.midY - height / 2, width: width, height: height)
     }
+
 }
 
 struct WindowSwitcherRecency {
