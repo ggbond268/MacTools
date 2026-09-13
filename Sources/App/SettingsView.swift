@@ -5198,7 +5198,7 @@ private struct PluginSettingsPickerControl: View {
             }
         }
         .labelsHidden()
-        .frame(minWidth: 120, idealWidth: 180, maxWidth: 240)
+        .frame(minWidth: 120, idealWidth: 180, maxWidth: 240, alignment: .trailing)
     }
 }
 
