@@ -34,6 +34,7 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         static let hidesSequentialHUDPreview = "sequential-hud-hide-preview"
         static let keywordExpansionEnabled = "saved-keyword-expansion-enabled"
         static let maximumExpandedTextByteCount = "snippet-maximum-expanded-text-byte-count"
+        static let panelPositions = "history-panel-positions-by-display"
     }
 
     static let allowedItemCounts = [
@@ -149,9 +150,16 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     var onChange: (() -> Void)?
 
     private let storage: PluginStorage
+    private var panelPositions: [String: ClipboardHistoryPanelPosition]
 
     init(storage: PluginStorage) {
         self.storage = storage
+        if let data = storage.data(forKey: Key.panelPositions),
+           let positions = try? JSONDecoder().decode([String: ClipboardHistoryPanelPosition].self, from: data) {
+            panelPositions = positions.filter { $0.value.isValid }
+        } else {
+            panelPositions = [:]
+        }
         let defaults = ClipboardHistorySettings.defaults
         let completedInitialSetup = storage.bool(forKey: Key.didCompleteInitialSetup)
         // Collection is privacy-sensitive on a new installation. Existing installations retain
@@ -214,6 +222,18 @@ final class ClipboardHistorySettingsStore: ObservableObject {
     func setPaused(_ paused: Bool) {
         guard isPaused != paused else { return }
         isPaused = paused
+    }
+
+    func panelPosition(for screenID: String) -> ClipboardHistoryPanelPosition? {
+        panelPositions[screenID]
+    }
+
+    func setPanelPosition(_ position: ClipboardHistoryPanelPosition, for screenID: String) {
+        guard position.isValid, panelPositions[screenID] != position else { return }
+        panelPositions[screenID] = position
+        if let data = try? JSONEncoder().encode(panelPositions) {
+            storage.set(data, forKey: Key.panelPositions)
+        }
     }
 
     func setKeywordExpansionStatus(_ status: ClipboardSnippetKeywordExpansionStatus) {

@@ -4,12 +4,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum ClipboardHistorySettingsContentSection: Hashable {
-    case essentials
+    case history
     case queue
     case snippets
-    case additionalShortcuts
-    case retention
-    case exclusions
+    case advanced
     case data
 }
 
@@ -119,11 +117,11 @@ struct ClipboardHistorySettingsView: View {
     private let onBackupResume: (Bool) -> Void
     @State private var clearRequest: ClipboardHistorySettingsClearRequest?
     @State private var setupDestination: ClipboardHistorySetupDestination?
-    @State private var expandedAdvancedSections: Set<ClipboardHistorySettingsContentSection> = []
-    @State private var showsPrivacyDetails = false
+    @State private var isHistoryAdvancedExpanded = false
+    @State private var isQueueAdvancedExpanded = false
+    @State private var isExclusionsExpanded = false
     @State private var isWindowShortcutsExpanded = false
-    @State private var isCollectionShortcutsExpanded = false
-    @State private var isMaintenanceExpanded = false
+    @State private var isPrivateCopyShortcutsExpanded = false
     @State private var isSnippetAdvancedExpanded = false
 
     init(
@@ -132,12 +130,10 @@ struct ClipboardHistorySettingsView: View {
         localization: PluginLocalization,
         settingsContext: PluginSettingsContext? = nil,
         contentSections: Set<ClipboardHistorySettingsContentSection> = [
-            .essentials,
-            .queue,
+            .history,
             .snippets,
-            .additionalShortcuts,
-            .retention,
-            .exclusions,
+            .queue,
+            .advanced,
             .data,
         ],
         onManageSnippets: (() -> Void)? = nil,
@@ -163,23 +159,17 @@ struct ClipboardHistorySettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.section) {
-            if contentSections.contains(.essentials) {
-                essentialsSection
-            }
-            if contentSections.contains(.queue) {
-                sequentialPasteSection
+            if contentSections.contains(.history) {
+                historySection
             }
             if contentSections.contains(.snippets) {
                 snippetsSection
             }
-            if contentSections.contains(.additionalShortcuts) {
-                additionalShortcutsSection
+            if contentSections.contains(.queue) {
+                sequentialPasteSection
             }
-            if contentSections.contains(.retention) {
-                retentionSection
-            }
-            if contentSections.contains(.exclusions) {
-                exclusionsSection
+            if contentSections.contains(.advanced) {
+                advancedSection
             }
             if contentSections.contains(.data) {
                 dataSection
@@ -201,7 +191,7 @@ struct ClipboardHistorySettingsView: View {
             presentation.refreshSavedLibraryItems(update.items)
         }
         .onAppear {
-            guard contentSections.contains(.essentials),
+            guard contentSections.contains(.history),
                   settingsContext != nil,
                   settings.shouldAutomaticallyPresentInitialSetup()
             else {
@@ -325,223 +315,175 @@ struct ClipboardHistorySettingsView: View {
         guard let target, target.pluginID == ClipboardHistoryPlugin.pluginID else { return }
         switch target.entryID {
         case ClipboardHistoryPlugin.ShortcutID.panelGroup
-            where contentSections.contains(.additionalShortcuts):
+            where contentSections.contains(.advanced):
             isWindowShortcutsExpanded = true
         case ClipboardHistoryPlugin.ShortcutID.collectionGroup
-            where contentSections.contains(.additionalShortcuts):
-            isCollectionShortcutsExpanded = true
+            where contentSections.contains(.history):
+            isHistoryAdvancedExpanded = true
+        case ClipboardHistoryPlugin.ShortcutID.privacyGroup
+            where contentSections.contains(.advanced):
+            isPrivateCopyShortcutsExpanded = true
         case ClipboardHistoryPlugin.ShortcutID.queueGroup where contentSections.contains(.queue):
-            expandedAdvancedSections.insert(.queue)
+            isQueueAdvancedExpanded = true
         default:
             break
         }
     }
 
-    private var essentialsSection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.section) {
+    private var historySection: some View {
+        VStack(spacing: 0) {
             privacyAndStorageOverview
+            PluginSettingsListDivider()
             collectionSection
+            PluginSettingsListDivider()
+            VStack(spacing: 0) {
+                actionShortcutRow(ClipboardHistoryPlugin.ActionID.openHistory, systemImage: "clipboard")
+                PluginSettingsListDivider()
+                pluginShortcutRow(ClipboardHistoryPlugin.ShortcutID.pastePlainText)
+            }
+            .pluginSettingsSearchAnchor(
+                pluginID: ClipboardHistoryPlugin.pluginID,
+                entryID: ClipboardHistoryPlugin.ShortcutID.primaryGroup
+            )
+            PluginSettingsListDivider()
+            ClipboardSettingsDisclosure(
+                isExpanded: $isHistoryAdvancedExpanded,
+                accessibilityValue: disclosureAccessibilityValue(isHistoryAdvancedExpanded),
+                headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
+            ) {
+                VStack(spacing: 0) {
+                    retentionOptions
+                    PluginSettingsListDivider()
+                    if let context = settingsContext {
+                        ForEach(ClipboardHistoryPlugin.collectionControlActionIDs, id: \.self) { actionID in
+                            if context.actionShortcutItem(actionID: actionID) != nil {
+                                actionShortcutRow(actionID, systemImage: collectionControlIcon(actionID))
+                                if actionID != ClipboardHistoryPlugin.collectionControlActionIDs.last {
+                                    PluginSettingsListDivider()
+                                }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                PluginSettingsItem(
+                    title: localization.string("settings.advanced.title", defaultValue: "Advanced"),
+                    description: retentionSummary,
+                    systemImage: "slider.horizontal.3"
+                ) {}
+            }
+            .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+            .pluginSettingsSearchAnchor(
+                pluginID: ClipboardHistoryPlugin.pluginID,
+                entryID: ClipboardHistoryPlugin.ShortcutID.collectionGroup
+            )
         }
     }
 
     private var privacyAndStorageOverview: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            HStack {
-                sectionHeader(
-                    localization.string(
-                        "settings.privacyOverview.section",
-                        defaultValue: "Privacy & Storage"
-                    ),
-                    systemImage: "lock.shield"
-                )
-                Spacer()
+        PluginSettingsItem(
+            title: localization.string("settings.privacyOverview.section", defaultValue: "Privacy & Storage"),
+            description: localization.string(
+                "settings.privacyOverview.summary",
+                defaultValue: "Content is encrypted on this Mac. The key is stored in Keychain."
+            ),
+            systemImage: "lock.shield"
+        ) {
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                 Text(encryptedStorageStatusTitle)
                     .font(PluginSettingsTheme.Typography.statusBadge)
                     .foregroundStyle(encryptedStorageStatusColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(encryptedStorageStatusColor.opacity(0.12), in: Capsule())
+                    .fixedSize()
                 Button {
                     setupDestination = .guide
                 } label: {
-                    Label(
-                        settings.hasCompletedInitialSetup
-                            ? localization.string("setup.show", defaultValue: "Setup Guide")
-                            : localization.string("setup.continue", defaultValue: "Continue Setup"),
-                        systemImage: "questionmark.circle"
-                    )
+                    Text(settings.hasCompletedInitialSetup
+                        ? localization.string("setup.show", defaultValue: "Setup Guide")
+                        : localization.string("setup.continue", defaultValue: "Continue Setup"))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .fixedSize()
                 .disabled(settingsContext == nil)
             }
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    Image(systemName: "lock.shield.fill")
-                        .pluginSettingsRowIconStyle(.green)
-                    Text(localization.string(
-                        "settings.privacyOverview.summary",
-                        defaultValue: "Clipboard data stays encrypted on this Mac; Keychain stores only the key. Accessibility enables pasting, private copy, and optional keyword expansion."
-                    ))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Button {
-                        showsPrivacyDetails.toggle()
-                    } label: {
-                        Label(
-                            showsPrivacyDetails
-                                ? localization.string(
-                                    "settings.privacyOverview.hideDetails",
-                                    defaultValue: "Hide Details"
-                                )
-                                : localization.string(
-                                    "settings.privacyOverview.details",
-                                    defaultValue: "Details"
-                                ),
-                            systemImage: showsPrivacyDetails ? "chevron.up" : "chevron.down"
-                        )
-                    }
-                    .buttonStyle(.link)
-                }
-                .pluginSettingsListRowPadding(interactive: true)
-
-                if showsPrivacyDetails {
-                    PluginSettingsListDivider()
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                        Text(localization.string(
-                            "settings.storage.encrypted.title",
-                            defaultValue: "Encrypted Local Storage"
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(localization.string(
-                            "settings.storage.encrypted.description",
-                            defaultValue: "History, saved clips, and snippets use a local encrypted database. iCloud Keychain is not required."
-                        ))
-                        Text(localization.string(
-                            "settings.privacy.title",
-                            defaultValue: "Privacy Boundaries"
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(privacyDescription)
-                    }
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .pluginSettingsListRowPadding()
-                }
-            }
-            .pluginSettingsCardBackground(.standard)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(localization.string(
-            "settings.privacyOverview.section",
-            defaultValue: "Privacy & Storage"
-        ))
+        .pluginSettingsListRowPadding(interactive: true)
     }
 
     private var snippetsSection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            sectionHeader(
-                localization.string("settings.snippets.section", defaultValue: "Snippets"),
-                systemImage: "text.quote"
-            )
-            VStack(spacing: 0) {
-                if let errorMessage = presentation.snapshot.savedFatalErrorMessage
-                    ?? presentation.snapshot.savedErrorMessage {
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.red)
-                        Text(localization.string(
-                            "settings.snippets.description",
-                            defaultValue: "Reusable editable templates with optional keywords, tags, and paste-time variables."
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                            Button(localization.string(
-                                "settings.storage.retry",
-                                defaultValue: "Retry"
-                            )) {
-                                savedLibraryController.retryLoading()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-
-                            if presentation.snapshot.savedFatalErrorMessage != nil {
-                                Button(localization.string(
-                                    "settings.snippets.clear",
-                                    defaultValue: "Delete Snippets"
-                                ) + "…", role: .destructive) {
-                                    clearRequest = .snippets
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                            }
-
+        VStack(spacing: 0) {
+            if let errorMessage = presentation.snapshot.savedFatalErrorMessage
+                ?? presentation.snapshot.savedErrorMessage {
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.red)
+                    Text(localization.string(
+                        "settings.snippets.description",
+                        defaultValue: "Reusable editable templates with optional keywords, tags, and paste-time variables."
+                    ))
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                        Button(localization.string(
+                            "settings.storage.retry",
+                            defaultValue: "Retry"
+                        )) {
+                            savedLibraryController.retryLoading()
                         }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .pluginSettingsListRowPadding(interactive: true)
-                    PluginSettingsListDivider()
-                }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
 
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Text(localization.format(
-                            "settings.snippets.count",
-                            defaultValue: "%d snippets",
-                            presentation.snapshot.snippetCount
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(localization.string(
-                            "settings.snippets.description",
-                            defaultValue: "Reusable editable templates with optional keywords, tags, and paste-time variables."
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
+                        if presentation.snapshot.savedFatalErrorMessage != nil {
+                            Button(localization.string(
+                                "settings.snippets.clear",
+                                defaultValue: "Delete Snippets"
+                            ) + "…", role: .destructive) {
+                                clearRequest = .snippets
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Button(localization.string("settings.snippets.manage", defaultValue: "Manage Snippets")) {
-                        onManageSnippets?()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(onManageSnippets == nil)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .pluginSettingsListRowPadding(interactive: true)
-
                 PluginSettingsListDivider()
+            }
 
+            PluginSettingsItem(
+                title: localization.string("settings.snippets.library.title", defaultValue: "Snippet Library"),
+                description: localization.format(
+                    "settings.snippets.count", defaultValue: "%d snippets", presentation.snapshot.snippetCount
+                ),
+                systemImage: "text.quote"
+            ) {
+                Button(localization.string("settings.snippets.manage", defaultValue: "Manage Snippets")) {
+                    onManageSnippets?()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(onManageSnippets == nil)
+            }
+            .pluginSettingsListRowPadding(interactive: true)
+
+            PluginSettingsListDivider()
+            PluginSettingsItem(
+                title: localization.string("settings.saved.expansion.title", defaultValue: "Expand Snippet Keywords"),
+                description: localization.string(
+                    "settings.saved.expansion.description",
+                    defaultValue: "Replace a snippet keyword as you type. Secure text fields are ignored."
+                ),
+                systemImage: "text.cursor"
+            ) {
                 HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Text(localization.string(
-                            "settings.saved.expansion.title",
-                            defaultValue: "Expand Snippet Keywords"
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(localization.string(
-                            "settings.saved.expansion.description",
-                            defaultValue: "Immediately replace an unambiguous snippet keyword as you type. Secure text fields are ignored."
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     Text(keywordExpansionStatusTitle)
                         .font(PluginSettingsTheme.Typography.statusBadge)
                         .foregroundStyle(keywordExpansionStatusColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(keywordExpansionStatusColor.opacity(0.12), in: Capsule())
+                        .fixedSize()
                     if settings.keywordExpansionStatus == .accessibilityRequired {
-                        Button(localization.string(
-                            "settings.saved.expansion.allowAccess",
-                            defaultValue: "Allow Access"
-                        )) {
+                        Button(localization.string("settings.saved.expansion.allowAccess", defaultValue: "Allow Access")) {
                             _ = ClipboardHistoryAccessibilityCheck.requestTrust(prompt: true)
                             settings.refreshKeywordExpansion()
                         }
@@ -549,42 +491,42 @@ struct ClipboardHistorySettingsView: View {
                         .controlSize(.small)
                     }
                     ClipboardSettingsSwitch(
-                        accessibilityLabel: localization.string(
-                            "settings.saved.expansion.title",
-                            defaultValue: "Expand Snippet Keywords"
-                        ),
+                        accessibilityLabel: localization.string("settings.saved.expansion.title", defaultValue: "Expand Snippet Keywords"),
                         isOn: $settings.isKeywordExpansionEnabled
                     )
                 }
-                .pluginSettingsListRowPadding(interactive: true)
-                if let diagnostic = keywordExpansionDiagnosticTitle {
-                    Text(diagnostic)
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .pluginSettingsListRowPadding()
-                }
-                PluginSettingsListDivider()
-                ClipboardSettingsDisclosure(
-                    isExpanded: $isSnippetAdvancedExpanded,
-                    accessibilityValue: disclosureAccessibilityValue(isSnippetAdvancedExpanded),
-                    headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal) {
-                    settingPickerRow(
-                        title: localization.string("settings.snippets.expandedLimit.title", defaultValue: "Expanded Text Limit"),
-                        description: localization.string("settings.snippets.expandedLimit.description", defaultValue: "Limits the final text after variables expand, including previews. Oversized output is rejected, never truncated."),
-                        selection: $settings.maximumExpandedTextByteCount
-                    ) {
-                        ForEach(ClipboardHistorySettingsStore.allowedExpandedTextByteCounts, id: \.self) { count in
-                            Text(byteCountTitle(count)).tag(count)
-                        }
-                    }
-                } label: {
-                    Text(localization.string("settings.snippets.advanced", defaultValue: "Advanced"))
-                        .font(PluginSettingsTheme.Typography.rowTitle)
-                }
-                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
             }
-            .pluginSettingsCardBackground(.standard)
+            .pluginSettingsListRowPadding(interactive: true)
+            if let diagnostic = keywordExpansionDiagnosticTitle {
+                Text(diagnostic)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .pluginSettingsListRowPadding()
+            }
+            PluginSettingsListDivider()
+            ClipboardSettingsDisclosure(
+                isExpanded: $isSnippetAdvancedExpanded,
+                accessibilityValue: disclosureAccessibilityValue(isSnippetAdvancedExpanded),
+                headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
+            ) {
+                settingPickerRow(
+                    title: localization.string("settings.snippets.expandedLimit.title", defaultValue: "Expanded Text Limit"),
+                    description: localization.string("settings.snippets.expandedLimit.description", defaultValue: "Limits the final text after variables expand. Oversized output is rejected."),
+                    systemImage: "textformat.size",
+                    selection: $settings.maximumExpandedTextByteCount
+                ) {
+                    ForEach(ClipboardHistorySettingsStore.allowedExpandedTextByteCounts, id: \.self) { count in
+                        Text(byteCountTitle(count)).tag(count)
+                    }
+                }
+            } label: {
+                PluginSettingsItem(
+                    title: localization.string("settings.advanced.title", defaultValue: "Advanced"),
+                    systemImage: "slider.horizontal.3"
+                ) {}
+            }
+            .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
         }
     }
 
@@ -640,137 +582,104 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var collectionSection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            sectionHeader(
-                localization.string("settings.collection.controls.section", defaultValue: "Collection"),
-                systemImage: "clipboard"
-            )
-            VStack(spacing: 0) {
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Text(localization.string(
-                            "settings.collection.toggleTitle",
-                            defaultValue: "收集剪贴板历史"
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(collectionDescription)
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(
-                                presentation.snapshot.historyErrorMessage == nil ? Color.secondary : Color.red
-                            )
+        PluginSettingsItem(
+            title: localization.string("settings.collection.toggleTitle", defaultValue: "Enable Clipboard History"),
+            description: collectionDescription,
+            systemImage: "clipboard"
+        ) {
+            ClipboardSettingsSwitch(
+                accessibilityLabel: localization.string("settings.collection.toggle", defaultValue: "Enable Clipboard History"),
+                isOn: Binding(
+                    get: { !settings.isPaused && presentation.snapshot.isCollectionOperational },
+                    set: { isEnabled in
+                        guard presentation.snapshot.isCollectionOperational else { return }
+                        settings.setPaused(!isEnabled)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Toggle(localization.string("settings.collection.toggle", defaultValue: "收集剪贴板历史"), isOn: Binding(
-                        get: { !settings.isPaused && presentation.snapshot.isCollectionOperational },
-                        set: { isEnabled in
-                            guard presentation.snapshot.isCollectionOperational else { return }
-                            settings.setPaused(!isEnabled)
-                        }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .disabled(!presentation.snapshot.isCollectionOperational)
-                }
-                .pluginSettingsListRowPadding(interactive: true)
-            }
-            .pluginSettingsCardBackground(.standard)
+                )
+            )
+            .disabled(!presentation.snapshot.isCollectionOperational)
+        }
+        .pluginSettingsListRowPadding(interactive: true)
+    }
+
+    private var advancedSection: some View {
+        VStack(spacing: 0) {
+            exclusionsSection
+            PluginSettingsListDivider()
+            privateCopyShortcutsSection
+            PluginSettingsListDivider()
+            windowShortcutsSection
         }
     }
 
-    private var additionalShortcutsSection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            sectionHeader(
-                localization.string("settings.shortcuts.additional.title", defaultValue: "其他快捷键"),
-                systemImage: "keyboard"
-            )
+    private var windowShortcutsSection: some View {
+        ClipboardSettingsDisclosure(
+            isExpanded: $isWindowShortcutsExpanded,
+            accessibilityValue: disclosureAccessibilityValue(isWindowShortcutsExpanded),
+            headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
+        ) {
             VStack(spacing: 0) {
-                ClipboardSettingsDisclosure(
-                    isExpanded: $isWindowShortcutsExpanded,
-                    accessibilityValue: disclosureAccessibilityValue(isWindowShortcutsExpanded),
-                    headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
-                ) {
-                    VStack(spacing: 0) {
-                        Text(localization.string("panel.shortcuts.group.description", defaultValue: "These shortcuts work only while the Clipboard window is focused."))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .pluginSettingsListRowPadding()
-                        if let context = settingsContext {
-                            ForEach(context.shortcutItems.filter {
-                                $0.settingsGroupID == ClipboardHistoryPlugin.ShortcutID.panelGroup
-                            }) { item in
-                                PluginSettingsListDivider()
-                                ClipboardSettingsShortcutRow(
-                                    title: item.settingsControlTitle ?? item.title,
-                                    description: item.description,
-                                    systemImage: item.settingsControlSystemImage ?? "keyboard",
-                                    bindingText: item.bindingText,
-                                    canAssign: true,
-                                    canClear: item.canClear,
-                                    localization: localization,
-                                    warnsAboutGlobalConflicts: false,
-                                    onRecord: { context.recordShortcut($0, for: item.id) },
-                                    onBeginRecording: { context.beginShortcutRecording(for: item.id) },
-                                    onClear: { context.clearShortcut(for: item.id) }
-                                )
-                            }
-                        }
+                Text(localization.string("panel.shortcuts.group.description", defaultValue: "These shortcuts work only while the Clipboard window is focused."))
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .pluginSettingsListRowPadding()
+                if let context = settingsContext {
+                    ForEach(context.shortcutItems.filter {
+                        $0.settingsGroupID == ClipboardHistoryPlugin.ShortcutID.panelGroup
+                    }) { item in
+                        PluginSettingsListDivider()
+                        ClipboardSettingsShortcutRow(
+                            title: item.settingsControlTitle ?? item.title,
+                            description: item.description,
+                            systemImage: item.settingsControlSystemImage ?? "keyboard",
+                            bindingText: item.bindingText,
+                            canAssign: true,
+                            canClear: item.canClear,
+                            localization: localization,
+                            warnsAboutGlobalConflicts: false,
+                            onRecord: { context.recordShortcut($0, for: item.id) },
+                            onBeginRecording: { context.beginShortcutRecording(for: item.id) },
+                            onClear: { context.clearShortcut(for: item.id) }
+                        )
                     }
-                } label: {
-                    Text(localization.string("panel.shortcuts.group", defaultValue: "Clipboard Window Shortcuts"))
-                        .font(PluginSettingsTheme.Typography.rowTitle)
                 }
-                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
-                .pluginSettingsSearchAnchor(
-                    pluginID: ClipboardHistoryPlugin.pluginID,
-                    entryID: ClipboardHistoryPlugin.ShortcutID.panelGroup
-                )
-
-                PluginSettingsListDivider()
-
-                ClipboardSettingsDisclosure(
-                    isExpanded: $isCollectionShortcutsExpanded,
-                    accessibilityValue: disclosureAccessibilityValue(isCollectionShortcutsExpanded),
-                    headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
-                ) {
-                    VStack(spacing: 0) {
-                        Text(localization.string("settings.shortcuts.collection.description", defaultValue: "可选：控制收集状态或清除历史记录。"))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .pluginSettingsListRowPadding()
-                        if let context = settingsContext {
-                            ForEach(ClipboardHistoryPlugin.collectionControlActionIDs, id: \.self) { actionID in
-                                if let item = context.actionShortcutItem(actionID: actionID) {
-                                    PluginSettingsListDivider()
-                                    ClipboardSettingsShortcutRow(
-                                        title: item.title,
-                                        description: item.description,
-                                        systemImage: collectionControlIcon(actionID),
-                                        bindingText: item.bindingText,
-                                        canAssign: item.canAssign,
-                                        canClear: item.canClear,
-                                        localization: localization,
-                                        onRecord: { context.recordActionShortcut($0, for: actionID) },
-                                        onBeginRecording: nil,
-                                        onClear: { context.clearActionShortcut(for: actionID) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Text(localization.string("settings.shortcuts.collection.title", defaultValue: "高级控制"))
-                        .font(PluginSettingsTheme.Typography.rowTitle)
-                }
-                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
-                .pluginSettingsSearchAnchor(
-                    pluginID: ClipboardHistoryPlugin.pluginID,
-                    entryID: ClipboardHistoryPlugin.ShortcutID.collectionGroup
-                )
             }
-            .pluginSettingsCardBackground(.standard)
+        } label: {
+            PluginSettingsItem(
+                title: localization.string("panel.shortcuts.group", defaultValue: "Clipboard Window Shortcuts"),
+                systemImage: "keyboard"
+            ) {}
         }
+        .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+        .pluginSettingsSearchAnchor(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            entryID: ClipboardHistoryPlugin.ShortcutID.panelGroup
+        )
+    }
+
+    private var privateCopyShortcutsSection: some View {
+        ClipboardSettingsDisclosure(
+            isExpanded: $isPrivateCopyShortcutsExpanded,
+            accessibilityValue: disclosureAccessibilityValue(isPrivateCopyShortcutsExpanded),
+            headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
+        ) {
+            VStack(spacing: 0) {
+                pluginShortcutRow(ClipboardHistoryPlugin.ShortcutID.privateCopy)
+                PluginSettingsListDivider()
+                pluginShortcutRow(ClipboardHistoryPlugin.ShortcutID.ignoreNextCopy)
+            }
+        } label: {
+            PluginSettingsItem(
+                title: localization.string("shortcut.group.title", defaultValue: "Private Copy Shortcuts"),
+                systemImage: "eye.slash"
+            ) {}
+        }
+        .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+        .pluginSettingsSearchAnchor(
+            pluginID: ClipboardHistoryPlugin.pluginID,
+            entryID: ClipboardHistoryPlugin.ShortcutID.privacyGroup
+        )
     }
 
     private func collectionControlIcon(_ actionID: String) -> String {
@@ -801,41 +710,34 @@ struct ClipboardHistorySettingsView: View {
         if settings.isPaused {
             return localization.string(
                 "settings.collection.pausedDescription",
-                defaultValue: "收集已暂停；现有加密历史仍保留在本机。"
+                defaultValue: "Recording is paused. Existing history is kept."
             )
         }
         return localization.string(
             "settings.collection.activeDescription",
-            defaultValue: "收集已开启。历史保存在本机加密数据库中，钥匙串只保存加密密钥。"
+            defaultValue: "Automatically save copied content to find and paste it later."
         )
     }
 
     private var sequentialPasteSection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            sectionHeader(
-                localization.string("settings.sequentialPaste.options.section", defaultValue: "Paste Queue"),
-                systemImage: "list.number"
-            )
-            VStack(spacing: 0) {
-                if let context = settingsContext,
-                   let item = context.shortcutItem(definitionID: "paste-sequentially") {
-                    ClipboardSettingsShortcutRow(
-                        title: item.settingsControlTitle ?? item.title,
-                        description: item.description,
-                        systemImage: "list.number",
-                        bindingText: item.bindingText,
-                        canAssign: true,
-                        canClear: item.canClear,
-                        localization: localization,
-                        onRecord: { context.recordShortcut($0, for: item.id) },
-                        onBeginRecording: { context.beginShortcutRecording(for: item.id) },
-                        onClear: { context.clearShortcut(for: item.id) }
-                    )
-                }
-                PluginSettingsListDivider()
-                sequentialPasteAdvancedOptions
+        VStack(spacing: 0) {
+            if let context = settingsContext,
+               let item = context.shortcutItem(definitionID: "paste-sequentially") {
+                ClipboardSettingsShortcutRow(
+                    title: item.settingsControlTitle ?? item.title,
+                    description: item.description,
+                    systemImage: "list.number",
+                    bindingText: item.bindingText,
+                    canAssign: true,
+                    canClear: item.canClear,
+                    localization: localization,
+                    onRecord: { context.recordShortcut($0, for: item.id) },
+                    onBeginRecording: { context.beginShortcutRecording(for: item.id) },
+                    onClear: { context.clearShortcut(for: item.id) }
+                )
             }
-            .pluginSettingsCardBackground(.standard)
+            PluginSettingsListDivider()
+            sequentialPasteAdvancedOptions
         }
         .pluginSettingsSearchAnchor(
             pluginID: ClipboardHistoryPlugin.pluginID,
@@ -845,10 +747,8 @@ struct ClipboardHistorySettingsView: View {
 
     private var sequentialPasteAdvancedOptions: some View {
         ClipboardSettingsDisclosure(
-            isExpanded: advancedSectionBinding(.queue),
-            accessibilityValue: disclosureAccessibilityValue(
-                expandedAdvancedSections.contains(.queue)
-            ),
+            isExpanded: $isQueueAdvancedExpanded,
+            accessibilityValue: disclosureAccessibilityValue(isQueueAdvancedExpanded),
             headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
         ) {
             VStack(spacing: 0) {
@@ -868,26 +768,13 @@ struct ClipboardHistorySettingsView: View {
                     }
                 }
                 PluginSettingsListDivider()
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Text(localization.string(
-                            "settings.sequentialPaste.hidePreview.title",
-                            defaultValue: "Hide Content Preview"
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(localization.string(
-                            "settings.sequentialPaste.hidePreview.description",
-                            defaultValue: "Show only queue position and controls in the HUD."
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                PluginSettingsItem(
+                    title: localization.string("settings.sequentialPaste.hidePreview.title", defaultValue: "Hide Content Preview"),
+                    description: localization.string("settings.sequentialPaste.hidePreview.description", defaultValue: "Show only queue position and controls in the HUD."),
+                    systemImage: "eye.slash"
+                ) {
                     ClipboardSettingsSwitch(
-                        accessibilityLabel: localization.string(
-                            "settings.sequentialPaste.hidePreview.title",
-                            defaultValue: "Hide Content Preview"
-                        ),
+                        accessibilityLabel: localization.string("settings.sequentialPaste.hidePreview.title", defaultValue: "Hide Content Preview"),
                         isOn: $settings.hidesSequentialHUDPreview
                     )
                 }
@@ -913,10 +800,12 @@ struct ClipboardHistorySettingsView: View {
                 }
             }
         } label: {
-            Text(localization.string("settings.queue.advanced", defaultValue: "More Queue Options"))
-                .font(PluginSettingsTheme.Typography.rowTitle)
-                .foregroundStyle(.secondary)
+            PluginSettingsItem(
+                title: localization.string("settings.advanced.title", defaultValue: "Advanced"),
+                systemImage: "slider.horizontal.3"
+            ) {}
         }
+        .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
     }
 
     private func queueControlIcon(_ actionID: String) -> String {
@@ -960,12 +849,7 @@ struct ClipboardHistorySettingsView: View {
         return presentation.snapshot.isHistoryLoaded ? .green : .secondary
     }
 
-    private var privacyDescription: String {
-        localization.string(
-            "settings.privacy.description",
-            defaultValue: "暂时无法访问钥匙串不会删除数据；删除加密密钥会使现有历史和已保存项目永久无法读取。文件仅保存路径引用。关键词展开启用时会在本机使用辅助功能观察输入。"
-        )
-    }
+
 
     private var storageRecoveryDescription: String? {
         switch presentation.snapshot.storageError {
@@ -994,84 +878,66 @@ struct ClipboardHistorySettingsView: View {
         }
     }
 
-    private var retentionSection: some View {
-        ClipboardSettingsDisclosure(
-            isExpanded: advancedSectionBinding(.retention),
-            accessibilityValue: disclosureAccessibilityValue(
-                expandedAdvancedSections.contains(.retention)
-            )
-        ) {
-            VStack(spacing: 0) {
-                settingPickerRow(
-                    title: localization.string("settings.retention.maximum.title", defaultValue: "最多保留"),
-                    description: localization.string(
-                        "settings.retention.maximum.description",
-                        defaultValue: "达到条数上限时，会自动移除最早的历史记录。已存项目不受影响。"
-                    ),
-                    selection: $settings.maximumItemCount
-                ) {
-                    ForEach(ClipboardHistorySettingsStore.allowedItemCounts, id: \.self) { count in
-                        Text(localization.format(
-                            "settings.retention.itemCount",
-                            defaultValue: "%d 条",
-                            count
-                        ))
-                        .tag(count)
-                    }
-                }
-                PluginSettingsListDivider()
-                settingPickerRow(
-                    title: localization.string(
-                        "settings.retention.storageLimit.title",
-                        defaultValue: "历史容量"
-                    ),
-                    description: localization.string(
-                        "settings.retention.storageLimit.description",
-                        defaultValue: "达到容量上限时移除最早的历史记录。实际保存仍受可用磁盘空间限制。"
-                    ),
-                    selection: $settings.maximumTotalPayloadByteCount
-                ) {
-                    ForEach(ClipboardHistorySettingsStore.allowedTotalPayloadByteCounts, id: \.self) { count in
-                        Text(byteCountTitle(count)).tag(count)
-                    }
-                }
-                PluginSettingsListDivider()
-                settingPickerRow(
-                    title: localization.string("settings.retention.expiration.title", defaultValue: "自动过期"),
-                    description: localization.string(
-                        "settings.retention.expiration.description",
-                        defaultValue: "“永不”仅关闭按时间过期；容量规则仍会移除最早的历史记录。"
-                    ),
-                    selection: $settings.expiration
-                ) {
-                    ForEach(ClipboardHistoryExpiration.allCases) { expiration in
-                        Text(expirationTitle(expiration)).tag(expiration)
-                    }
-                }
-                PluginSettingsListDivider()
-                settingPickerRow(
-                    title: localization.string("settings.retention.itemLimit.title", defaultValue: "Per-item Content Limit"),
-                    description: localization.string(
-                        "settings.retention.itemLimit.description",
-                        defaultValue: "Text, images, and embedded content above this explicit limit are not saved; files store references only."
-                    ),
-                    selection: $settings.maximumItemByteCount
-                ) {
-                    ForEach(ClipboardHistorySettingsStore.allowedItemByteCounts, id: \.self) { count in
-                        Text(byteCountTitle(count)).tag(count)
-                    }
+    private var retentionOptions: some View {
+        VStack(spacing: 0) {
+            settingPickerRow(
+                title: localization.string("settings.retention.maximum.title", defaultValue: "最多保留"),
+                description: localization.string(
+                    "settings.retention.maximum.description",
+                    defaultValue: "达到条数上限时，会自动移除最早的历史记录。已存项目不受影响。"
+                ),
+                selection: $settings.maximumItemCount
+            ) {
+                ForEach(ClipboardHistorySettingsStore.allowedItemCounts, id: \.self) { count in
+                    Text(localization.format(
+                        "settings.retention.itemCount",
+                        defaultValue: "%d 条",
+                        count
+                    ))
+                    .tag(count)
                 }
             }
-            .pluginSettingsCardBackground(.standard)
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                sectionHeader(
-                    localization.string("settings.retention.section", defaultValue: "History Limits"),
-                    systemImage: "clock.arrow.circlepath"
-                )
-                Text(retentionSummary)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
+            PluginSettingsListDivider()
+            settingPickerRow(
+                title: localization.string(
+                    "settings.retention.storageLimit.title",
+                    defaultValue: "历史容量"
+                ),
+                description: localization.string(
+                    "settings.retention.storageLimit.description",
+                    defaultValue: "达到容量上限时移除最早的历史记录。实际保存仍受可用磁盘空间限制。"
+                ),
+                selection: $settings.maximumTotalPayloadByteCount
+            ) {
+                ForEach(ClipboardHistorySettingsStore.allowedTotalPayloadByteCounts, id: \.self) { count in
+                    Text(byteCountTitle(count)).tag(count)
+                }
+            }
+            PluginSettingsListDivider()
+            settingPickerRow(
+                title: localization.string("settings.retention.expiration.title", defaultValue: "自动过期"),
+                description: localization.string(
+                    "settings.retention.expiration.description",
+                    defaultValue: "“永不”仅关闭按时间过期；容量规则仍会移除最早的历史记录。"
+                ),
+                selection: $settings.expiration
+            ) {
+                ForEach(ClipboardHistoryExpiration.allCases) { expiration in
+                    Text(expirationTitle(expiration)).tag(expiration)
+                }
+            }
+            PluginSettingsListDivider()
+            settingPickerRow(
+                title: localization.string("settings.retention.itemLimit.title", defaultValue: "Per-item Content Limit"),
+                description: localization.string(
+                    "settings.retention.itemLimit.description",
+                    defaultValue: "Text, images, and embedded content above this explicit limit are not saved; files store references only."
+                ),
+                selection: $settings.maximumItemByteCount
+            ) {
+                ForEach(ClipboardHistorySettingsStore.allowedItemByteCounts, id: \.self) { count in
+                    Text(byteCountTitle(count)).tag(count)
+                }
             }
         }
     }
@@ -1091,16 +957,12 @@ struct ClipboardHistorySettingsView: View {
 
     private var exclusionsSection: some View {
         ClipboardSettingsDisclosure(
-            isExpanded: advancedSectionBinding(.exclusions),
-            accessibilityValue: disclosureAccessibilityValue(
-                expandedAdvancedSections.contains(.exclusions)
-            )
+            isExpanded: $isExclusionsExpanded,
+            accessibilityValue: disclosureAccessibilityValue(isExclusionsExpanded),
+            headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
         ) {
             VStack(spacing: 0) {
                 HStack {
-                    Text(exclusionsSummary)
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
                     Spacer()
                     Button {
                         chooseExcludedApplications()
@@ -1123,18 +985,7 @@ struct ClipboardHistorySettingsView: View {
                 } else {
                     ForEach(Array(settings.excludedApplications.enumerated()), id: \.element.id) { index, app in
                         let localizedAppName = displayName(for: app)
-                        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                            Image(systemName: "app")
-                                .pluginSettingsRowIconStyle(Color.accentColor)
-                            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                                Text(localizedAppName)
-                                    .font(PluginSettingsTheme.Typography.rowTitle)
-                                Text(app.bundleIdentifier)
-                                    .font(PluginSettingsTheme.Typography.rowDescription.monospaced())
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        PluginSettingsItem(title: localizedAppName, systemImage: "app") {
                             Button {
                                 settings.removeExcludedApplication(bundleIdentifier: app.bundleIdentifier)
                             } label: {
@@ -1148,6 +999,7 @@ struct ClipboardHistorySettingsView: View {
                                 localizedAppName
                             ))
                         }
+                        .help(app.bundleIdentifier)
                         .pluginSettingsListRowPadding(interactive: true)
                         if index < settings.excludedApplications.count - 1 {
                             PluginSettingsListDivider()
@@ -1155,7 +1007,6 @@ struct ClipboardHistorySettingsView: View {
                     }
                 }
             }
-            .pluginSettingsCardBackground(.standard)
 
             Text(localization.string(
                 "settings.exclusions.footnote",
@@ -1163,20 +1014,15 @@ struct ClipboardHistorySettingsView: View {
             ))
                 .font(PluginSettingsTheme.Typography.rowDescription)
                 .foregroundStyle(.secondary)
+                .pluginSettingsListRowPadding()
         } label: {
-            HStack {
-                sectionHeader(
-                    localization.string("settings.exclusions.section", defaultValue: "排除的应用"),
-                    systemImage: "app.badge.checkmark"
-                )
-                Spacer()
-                Text(exclusionsSummary)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .contentShape(Rectangle())
+            PluginSettingsItem(
+                title: localization.string("settings.exclusions.section", defaultValue: "Excluded Apps"),
+                description: exclusionsSummary,
+                systemImage: "app.badge.checkmark"
+            ) {}
         }
+        .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
     }
 
     private var exclusionsSummary: String {
@@ -1192,133 +1038,105 @@ struct ClipboardHistorySettingsView: View {
     }
 
     private var dataSection: some View {
-        let historyUsage = presentation.snapshot.usage
-        return VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-            sectionHeader(
-                localization.string("settings.data.section", defaultValue: "本机数据"),
-                systemImage: "externaldrive"
+        VStack(spacing: 0) {
+            clearDataRow(
+                title: localization.string("settings.data.history.title", defaultValue: "History"),
+                description: localDataUsageSummary(presentation.snapshot.usage),
+                systemImage: "clock.arrow.circlepath",
+                request: .all,
+                disabled: presentation.snapshot.historyErrorMessage != nil
+                    || presentation.snapshot.historyItemCount == 0
+                    || presentation.snapshot.isClearingHistory
             )
-            VStack(spacing: 0) {
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Text(localDataUsageSummary(historyUsage))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(localization.string(
-                            "settings.data.historyDescription",
-                            defaultValue: "History follows the retention rules above. Saved items are stored separately."
-                        ))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .pluginSettingsListRowPadding(interactive: true)
-
-                if let backupService {
-                    PluginSettingsListDivider()
-                    ClipboardBackupRegion(localization: localization, controller: controller,
-                                          makeService: backupService, suspend: onBackupSuspend, resume: onBackupResume)
-                }
+            PluginSettingsListDivider()
+            clearDataRow(
+                title: localization.string("settings.data.saved.title", defaultValue: "Saved Clips"),
+                description: localization.string("settings.data.clearSaved.summary", defaultValue: "Remove saved clips; keep history and snippets."),
+                systemImage: "bookmark",
+                request: .savedClips,
+                disabled: presentation.snapshot.historyErrorMessage != nil
+                    || presentation.snapshot.savedItemCount == 0
+                    || presentation.snapshot.isClearingHistory
+            )
+            PluginSettingsListDivider()
+            clearDataRow(
+                title: localization.string("settings.snippets.section", defaultValue: "Snippets"),
+                description: localization.string("settings.data.clearSnippets.summary", defaultValue: "Delete snippets and their keywords; keep history and saved clips."),
+                systemImage: "text.quote",
+                request: .snippets,
+                disabled: (presentation.snapshot.snippetCount == 0
+                    && presentation.snapshot.savedFatalErrorMessage == nil)
+                    || presentation.snapshot.savedErrorMessage != nil
+            )
+            if let backupService {
                 PluginSettingsListDivider()
-                ClipboardSettingsDisclosure(
-                    isExpanded: $isMaintenanceExpanded,
-                    accessibilityValue: disclosureAccessibilityValue(isMaintenanceExpanded),
-                    headerHorizontalPadding: PluginSettingsTheme.Spacing.rowHorizontal
-                ) {
-                    VStack(spacing: 0) {
-                        clearDataRow(
-                            title: localization.string("settings.data.clearHistory", defaultValue: "Clear History"),
-                            description: localization.string("clear.all.message", defaultValue: "Clears History. Saved clips and snippets are kept. This cannot be undone."),
-                            request: .all,
-                            disabled: presentation.snapshot.historyErrorMessage != nil
-                                || presentation.snapshot.historyItemCount == 0
-                                || presentation.snapshot.isClearingHistory
-                        )
-                        PluginSettingsListDivider()
-                        clearDataRow(
-                            title: localization.string("settings.saved.clear", defaultValue: "Clear Saved Clips"),
-                            description: localization.string("settings.saved.clear.message", defaultValue: "Removes Saved status from clips in History and permanently deletes Saved-only clips. History and snippets are kept. This cannot be undone."),
-                            request: .savedClips,
-                            disabled: presentation.snapshot.historyErrorMessage != nil
-                                || presentation.snapshot.savedItemCount == 0
-                                || presentation.snapshot.isClearingHistory
-                        )
-                        PluginSettingsListDivider()
-                        clearDataRow(
-                            title: localization.string("settings.snippets.clear", defaultValue: "Delete Snippets"),
-                            description: localization.string("settings.snippets.clear.message", defaultValue: "Permanently deletes all snippets and their keywords. History and Saved clips are kept. This cannot be undone."),
-                            request: .snippets,
-                            disabled: (presentation.snapshot.snippetCount == 0
-                                && presentation.snapshot.savedFatalErrorMessage == nil)
-                                || presentation.snapshot.savedErrorMessage != nil
-                        )
-                    }
-                } label: {
-                    Text(localization.string("settings.data.maintenance", defaultValue: "Clear Data…"))
-                        .font(PluginSettingsTheme.Typography.rowTitle)
-                }
-                .padding(.vertical, PluginSettingsTheme.Spacing.rowVertical)
+                ClipboardBackupRegion(
+                    localization: localization,
+                    controller: controller,
+                    makeService: backupService,
+                    suspend: onBackupSuspend,
+                    resume: onBackupResume
+                )
+            }
+            if let errorMessage = presentation.snapshot.historyErrorMessage {
+                PluginSettingsListDivider()
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .pluginSettingsListRowPadding()
 
-                if let errorMessage = presentation.snapshot.historyErrorMessage {
-                    PluginSettingsListDivider()
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                if let recoveryDescription = storageRecoveryDescription {
+                    Text(recoveryDescription)
                         .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .pluginSettingsListRowPadding()
-
-                    if let recoveryDescription = storageRecoveryDescription {
-                        Text(recoveryDescription)
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .pluginSettingsListRowPadding()
-                    }
-
-                    HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                        Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
-                            controller.retryStorageAccess()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-
-                        if presentation.snapshot.canResetUnreadableHistory {
-                            Button(localization.string(
-                                "settings.storage.resetUnreadable",
-                                defaultValue: "Delete Unreadable Clipboard Data…"
-                            ), role: .destructive) {
-                                clearRequest = .resetUnreadable
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        }
-
-                        Spacer()
-                    }
-                    .pluginSettingsListRowPadding(interactive: true)
                 }
 
+                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    Button(localization.string("settings.storage.retry", defaultValue: "重试")) {
+                        controller.retryStorageAccess()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+
+                    if presentation.snapshot.canResetUnreadableHistory {
+                        Button(localization.string(
+                            "settings.storage.resetUnreadable",
+                            defaultValue: "Delete Unreadable Clipboard Data…"
+                        ), role: .destructive) {
+                            clearRequest = .resetUnreadable
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+
+                    Spacer()
+                }
+                .pluginSettingsListRowPadding(interactive: true)
             }
-            .pluginSettingsCardBackground(.standard)
         }
     }
 
     private func clearDataRow(
-        title: String, description: String,
+        title: String, description: String, systemImage: String,
         request: ClipboardHistorySettingsClearRequest, disabled: Bool
     ) -> some View {
-        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-            Text(description)
-                .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(title + "…", role: .destructive) { clearRequest = request }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .fixedSize()
-                .disabled(disabled)
+        PluginSettingsItem(title: title, description: description, systemImage: systemImage) {
+            Button(role: .destructive) {
+                clearRequest = request
+            } label: {
+                Text(localization.string("common.clear", defaultValue: "Clear") + "…")
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 64)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .fixedSize()
+            .accessibilityLabel(title + " · " + localization.string("common.clear", defaultValue: "Clear"))
+            .disabled(disabled)
         }
         .pluginSettingsListRowPadding(interactive: true)
     }
@@ -1334,35 +1152,11 @@ struct ClipboardHistorySettingsView: View {
         )
     }
 
-    private func advancedSectionBinding(
-        _ section: ClipboardHistorySettingsContentSection
-    ) -> Binding<Bool> {
-        Binding(
-            get: {
-                section == .data && presentation.snapshot.historyErrorMessage != nil
-                    || expandedAdvancedSections.contains(section)
-            },
-            set: { isExpanded in
-                if isExpanded {
-                    expandedAdvancedSections.insert(section)
-                } else {
-                    expandedAdvancedSections.remove(section)
-                }
-            }
-        )
-    }
-
     private func disclosureAccessibilityValue(_ isExpanded: Bool) -> String {
         ClipboardHistorySetupAccessibility.disclosureValue(
             isExpanded: isExpanded,
             localization: localization
         )
-    }
-
-    private func sectionHeader(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(PluginSettingsTheme.Typography.sectionTitle)
-            .foregroundStyle(.secondary)
     }
 
     private func displayName(for application: ClipboardExcludedApplication) -> String {
@@ -1392,30 +1186,57 @@ struct ClipboardHistorySettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private func pluginShortcutRow(_ definitionID: String) -> some View {
+        if let context = settingsContext,
+           let item = context.shortcutItem(definitionID: definitionID) {
+            ClipboardSettingsShortcutRow(
+                title: item.settingsControlTitle ?? item.title,
+                description: item.description,
+                systemImage: item.settingsControlSystemImage ?? "keyboard",
+                bindingText: item.bindingText,
+                canAssign: true,
+                canClear: item.canClear,
+                localization: localization,
+                onRecord: { context.recordShortcut($0, for: item.id) },
+                onBeginRecording: { context.beginShortcutRecording(for: item.id) },
+                onClear: { context.clearShortcut(for: item.id) }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func actionShortcutRow(_ actionID: String, systemImage: String) -> some View {
+        if let context = settingsContext,
+           let item = context.actionShortcutItem(actionID: actionID) {
+            ClipboardSettingsShortcutRow(
+                title: item.title,
+                description: item.description,
+                systemImage: systemImage,
+                bindingText: item.bindingText,
+                canAssign: item.canAssign,
+                canClear: item.canClear,
+                localization: localization,
+                onRecord: { context.recordActionShortcut($0, for: actionID) },
+                onBeginRecording: nil,
+                onClear: { context.clearActionShortcut(for: actionID) }
+            )
+        }
+    }
+
     private func settingPickerRow<Selection: Hashable, Content: View>(
         title: String,
         description: String,
+        systemImage: String = "slider.horizontal.3",
         selection: Binding<Selection>,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-            VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                Text(title)
-                    .font(PluginSettingsTheme.Typography.rowTitle)
-                Text(description)
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                Picker(title, selection: selection, content: content)
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .monospacedDigit()
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            .frame(width: 180, alignment: .trailing)
+        PluginSettingsItem(title: title, description: description, systemImage: systemImage) {
+            Picker(title, selection: selection, content: content)
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .monospacedDigit()
+                .frame(minWidth: 120, idealWidth: 160, maxWidth: 180, alignment: .trailing)
         }
         .pluginSettingsListRowPadding(interactive: true)
     }
@@ -1476,26 +1297,6 @@ struct ClipboardHistorySettingsView: View {
     }
 }
 
-/// A section header, not a settings row: the native Form must not wrap it in a card.
-struct ClipboardSettingsAdvancedDivider: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-            Text(title)
-                .font(PluginSettingsTheme.Typography.secondaryLabel)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-            Rectangle()
-                .fill(PluginSettingsTheme.Palette.separator)
-                .frame(height: PluginSettingsTheme.Stroke.hairline)
-                .accessibilityHidden(true)
-        }
-        .padding(.top, PluginSettingsTheme.Spacing.section)
-    }
-}
-
 @MainActor
 private struct ClipboardSettingsShortcutRow: View {
     let title: String
@@ -1516,17 +1317,7 @@ private struct ClipboardSettingsShortcutRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                Image(systemName: systemImage)
-                    .pluginSettingsRowIconStyle(.blue)
-                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                    Text(title).font(PluginSettingsTheme.Typography.rowTitle)
-                    Text(description)
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            PluginSettingsItem(title: title, description: description, systemImage: systemImage) {
                 PluginSettingsShortcutRecorderControl(
                     title: title,
                     displayText: displayedBinding ?? bindingText,
@@ -1606,6 +1397,7 @@ private enum ClipboardHistorySettingsClearRequest: String, Identifiable {
 }
 
 private struct ClipboardSettingsSwitch: NSViewRepresentable {
+    @Environment(\.isEnabled) private var isEnabled
     let accessibilityLabel: String
     @Binding var isOn: Bool
 
@@ -1615,6 +1407,8 @@ private struct ClipboardSettingsSwitch: NSViewRepresentable {
 
     func makeNSView(context: Context) -> ClipboardAccessibleSwitch {
         let control = ClipboardAccessibleSwitch()
+        control.controlSize = .small
+        control.isEnabled = isEnabled
         control.target = context.coordinator
         control.action = #selector(Coordinator.didToggle(_:))
         control.setAccessibilityLabel(accessibilityLabel)
@@ -1624,6 +1418,7 @@ private struct ClipboardSettingsSwitch: NSViewRepresentable {
 
     func updateNSView(_ control: ClipboardAccessibleSwitch, context: Context) {
         context.coordinator.isOn = $isOn
+        control.isEnabled = isEnabled
         control.setAccessibilityLabel(accessibilityLabel)
         control.state = isOn ? .on : .off
     }
@@ -1699,12 +1494,13 @@ private struct ClipboardSettingsDisclosureStyle: DisclosureGroupStyle {
                 }
             } label: {
                 HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    configuration.label
+                    Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
                     Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .frame(width: 12)
-                    configuration.label
-                    Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+                        .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                 .padding(.horizontal, headerHorizontalPadding)

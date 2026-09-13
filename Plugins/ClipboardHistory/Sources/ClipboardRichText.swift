@@ -59,7 +59,7 @@ enum ClipboardRichText {
 }
 
 enum ClipboardRichTextPreviewResult: Sendable {
-    case formatted(AttributedString)
+    case formatted(ClipboardRichTextPreviewDocument)
     case plainText(String, isSimplified: Bool)
     case unavailable
     case fallback(String, isTruncated: Bool)
@@ -81,10 +81,21 @@ enum ClipboardRichTextPreviewLoader {
                 return .fallback(bounded.text, isTruncated: item.isSearchTextTruncated || bounded.wasTruncated)
             }
             guard !Task.isCancelled else { return .unavailable }
-            return ClipboardRichTextPreviewPolicy.makePreview(
-                payload: payload,
-                fallbackText: fallbackText
-            )
+            // AppKit's HTML importer synchronizes with WebKit and requires the main thread.
+            // Payload I/O and RTF-only parsing stay on this worker; appearance changes reuse
+            // the two prepared previews without importing the document again.
+            let imported: ClipboardRichTextPreviewPolicy.ImportResult
+            if ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload),
+               payload.representations.contains(where: { $0.typeIdentifier == ClipboardRepresentationType.html }) {
+                imported = await MainActor.run {
+                    guard !Task.isCancelled else { return .ready(.unavailable) }
+                    return ClipboardRichTextPreviewPolicy.importPreview(payload: payload, fallbackText: fallbackText)
+                }
+            } else {
+                imported = ClipboardRichTextPreviewPolicy.importPreview(payload: payload, fallbackText: fallbackText)
+            }
+            guard !Task.isCancelled else { return .unavailable }
+            return ClipboardRichTextPreviewPolicy.prepare(imported)
         }
         return await withTaskCancellationHandler {
             await worker.value
@@ -95,6 +106,11 @@ enum ClipboardRichTextPreviewLoader {
 }
 
 enum ClipboardRichTextPreviewPolicy {
+    enum ImportResult: Sendable {
+        case formatted(AttributedString)
+        case ready(ClipboardRichTextPreviewResult)
+    }
+
     /// Rich document import and SwiftUI text layout can both become expensive. Keep formatted
     /// previews intentionally smaller than the storage limit and fall back to bounded plain text.
     static let maximumFormattedByteCount = 128 * 1_024
@@ -104,18 +120,29 @@ enum ClipboardRichTextPreviewPolicy {
         payload: ClipboardHistoryPayload,
         fallbackText: String
     ) -> ClipboardRichTextPreviewResult {
-        guard hasRichRepresentation(in: payload) else { return .unavailable }
+        prepare(importPreview(payload: payload, fallbackText: fallbackText))
+    }
+
+    static func prepare(_ imported: ImportResult) -> ClipboardRichTextPreviewResult {
+        switch imported {
+        case let .formatted(formatted): .formatted(ClipboardRichTextPreviewDocument(formatted))
+        case let .ready(result): result
+        }
+    }
+
+    static func importPreview(payload: ClipboardHistoryPayload, fallbackText: String) -> ImportResult {
+        guard hasRichRepresentation(in: payload) else { return .ready(.unavailable) }
         guard allowsFormattedImport(payload) else {
-            return simplifiedPreview(for: fallbackText)
+            return .ready(simplifiedPreview(for: fallbackText))
         }
         guard let imported = ClipboardRichText.attributedString(for: payload) else {
-            guard !fallbackText.isEmpty else { return .unavailable }
+            guard !fallbackText.isEmpty else { return .ready(.unavailable) }
             let bounded = boundedPlainText(fallbackText)
-            return .fallback(bounded.text, isTruncated: bounded.wasTruncated)
+            return .ready(.fallback(bounded.text, isTruncated: bounded.wasTruncated))
         }
         guard imported.length <= maximumFormattedCharacterCount,
               let formatted = try? AttributedString(imported, including: \.appKit) else {
-            return simplifiedPreview(for: fallbackText.isEmpty ? imported.string : fallbackText)
+            return .ready(simplifiedPreview(for: fallbackText.isEmpty ? imported.string : fallbackText))
         }
         return .formatted(formatted)
     }

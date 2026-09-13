@@ -96,6 +96,24 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(try verified[0].loadPayload().plainText, item.text)
     }
 
+    func testRemoteSourceSurvivesEncryptedLazyReloadAndMetadataUpdates() throws {
+        let fixture = try makeFixture()
+        let item = ClipboardHistoryItem(id: UUID(), payload: .plainText("Remote content"), capturedAt: .now,
+            sourceApplication: nil, isPinned: false, lastUsedAt: nil, source: .universalClipboard)
+        try fixture.store.save([item])
+        let reopened = IncrementalEncryptedClipboardHistoryStore(databaseURL: fixture.databaseURL, keyStore: fixture.keyStore)
+        var loaded = try XCTUnwrap(reopened.load().first)
+        XCTAssertNil(loaded.payload)
+        XCTAssertNil(loaded.sourceApplication)
+        XCTAssertEqual(loaded.source, .universalClipboard)
+        loaded.setSavedMetadata(.init(title: "Saved remote clip", savedAt: .now))
+        try reopened.save([loaded])
+        let updated = try XCTUnwrap(reopened.load().first)
+        XCTAssertEqual(updated.source, .universalClipboard)
+        XCTAssertEqual(updated.savedMetadata?.title, "Saved remote clip")
+        XCTAssertNil(updated.payload)
+    }
+
     func testRecapturedPayloadRemainsEvictableAfterMetadataOnlySave() throws {
         let fixture = try makeFixture()
         let text = String(repeating: "x", count: 2 * 1_024 * 1_024)

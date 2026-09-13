@@ -317,7 +317,7 @@ final class ClipboardSavedLibraryTests: XCTestCase {
         _ = pasteboard.writePlainText("external copy")
         gate.open()
         for _ in 0..<200 where controller.items.first?.lastUsedAt == nil {
-            await Task.yield()
+            try await Task.sleep(for: .milliseconds(1))
         }
 
         XCTAssertNotNil(controller.items.first?.lastUsedAt)

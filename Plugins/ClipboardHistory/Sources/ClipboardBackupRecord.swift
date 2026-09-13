@@ -96,7 +96,12 @@ struct ClipboardBackupRecord: Codable, Sendable {
             } else { value.savedMetadata = value.savedMetadata ?? old.savedMetadata }
             value.capturedAt = min(value.capturedAt, old.capturedAt)
             value.lastUsedAt = [value.lastUsedAt, old.lastUsedAt].compactMap { $0 }.max()
-            value.sourceApplication = value.sourceApplication ?? old.sourceApplication
+            value.source = value.source ?? old.source
+            if let source = value.source {
+                value.sourceApplication = source.application
+            } else {
+                value.sourceApplication = value.sourceApplication ?? old.sourceApplication
+            }
             value.imageSearchText = value.imageSearchText ?? old.imageSearchText
             value.hasCompletedImageTextIndexing = (value.hasCompletedImageTextIndexing ?? false) || (old.hasCompletedImageTextIndexing ?? false)
             record.metadata = try JSONEncoder().encode(value)

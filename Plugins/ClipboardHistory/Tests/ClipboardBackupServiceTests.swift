@@ -34,12 +34,14 @@ final class ClipboardBackupServiceTests: XCTestCase {
     }
 
     private func clip(id: UUID = UUID(), text: String = "private-original-representation", history: Bool = true,
-                      saved: Bool = true, updated: Date = Date(timeIntervalSince1970: 300)) -> ClipboardHistoryItem {
+                      saved: Bool = true, updated: Date = Date(timeIntervalSince1970: 300),
+                      source: ClipboardHistorySource? = nil) -> ClipboardHistoryItem {
         ClipboardHistoryItem(id: id, payload: .plainText(text), capturedAt: Date(timeIntervalSince1970: 100),
             sourceApplication: ClipboardSourceApplication(bundleIdentifier: "test.private.app", name: "Private App"),
             isPinned: false, lastUsedAt: Date(timeIntervalSince1970: 200), imageSearchText: "private OCR metadata",
             hasCompletedImageTextIndexing: true, isInHistory: history,
-            savedMetadata: saved ? ClipboardHistorySavedMetadata(title: "Private saved title", tags: ["tag"], savedAt: Date(timeIntervalSince1970: 150), updatedAt: updated) : nil)
+            savedMetadata: saved ? ClipboardHistorySavedMetadata(title: "Private saved title", tags: ["tag"], savedAt: Date(timeIntervalSince1970: 150), updatedAt: updated) : nil,
+            source: source)
     }
 
     private func snippet(id: UUID = UUID(), title: String = "Snippet", keyword: String? = "hello", text: String = "Hello {{cursor}}") -> ClipboardSavedItem {
@@ -121,6 +123,53 @@ final class ClipboardBackupServiceTests: XCTestCase {
             XCTAssertNil(raw.range(of: Data(secret.utf8)))
         }
         XCTAssertNil(raw.range(of: try XCTUnwrap(source.keyStore.currentKey)))
+    }
+
+    func testRoundTripPreservesRemoteAndLegacyUnknownSources() throws {
+        for origin in [ClipboardHistorySource.universalClipboard, .unknown] {
+            let source = try Fixture(), destination = try Fixture()
+            let item = clip(source: origin)
+            try source.history.save([item])
+            _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+            let preview = try destination.service.preview(url: source.archive, password: password)
+            try destination.service.commit(preview)
+            let restored = try XCTUnwrap(destination.history.load().first)
+            XCTAssertEqual(restored.source, origin)
+            XCTAssertNil(restored.sourceApplication)
+            XCTAssertEqual(restored.savedMetadata, item.savedMetadata)
+            XCTAssertEqual(try restored.loadPayload(), try item.loadPayload())
+        }
+    }
+
+    func testMergingMatchingHistoryPreservesRemoteSourceInEitherDirection() throws {
+        for remoteIsLocal in [true, false] {
+            let source = try Fixture(), destination = try Fixture()
+            let id = UUID()
+            let incoming = clip(id: id, source: remoteIsLocal ? nil : .universalClipboard)
+            let local = clip(id: id, source: remoteIsLocal ? .universalClipboard : nil)
+            try source.history.save([incoming])
+            try destination.history.save([local])
+            _ = try source.service.backUp(to: source.archive, password: password, scope: full)
+            let preview = try destination.service.preview(url: source.archive, password: password)
+            // A legacy archive adds no metadata when the local row already has remote provenance.
+            XCTAssertEqual(preview.summary.merged, remoteIsLocal ? 0 : 1)
+            XCTAssertEqual(preview.summary.skipped, remoteIsLocal ? 1 : 0)
+            try destination.service.commit(preview)
+            let items = try destination.history.load()
+            XCTAssertEqual(items.count, 1)
+            let restored = try XCTUnwrap(items.first)
+            XCTAssertEqual(restored.id, id)
+            XCTAssertEqual(restored.source, .universalClipboard)
+            XCTAssertNil(restored.sourceApplication)
+            XCTAssertEqual(try restored.loadPayload(), try local.loadPayload())
+
+            let database = try ClipboardBackupDatabase(
+                url: destination.url, key: SymmetricKey(data: XCTUnwrap(destination.keyStore.currentKey))
+            )
+            let metadata = try XCTUnwrap(database.lookup(table: .items, id: id)).history
+            XCTAssertEqual(metadata.source, .universalClipboard)
+            XCTAssertNil(metadata.sourceApplication, "Remote provenance must not retain an unrelated local application")
+        }
     }
 
     func testSelectiveScopesStripUnselectedMembership() throws {

@@ -34,28 +34,45 @@ final class ClipboardHistoryHostingContainer<Content: View>: NSView {
     }
 }
 
-/// Companion windows share their surface; only the Actions window emphasizes focus.
+/// A nearly opaque native backdrop keeps busy desktop content from competing with text.
 struct ClipboardHistoryWindowSurface: View {
     enum Role {
         case history
         case actions
+        case queue
     }
 
     let role: Role
     let reducesTransparency: Bool
 
     var body: some View {
-        PluginPaletteSurface(reducesTransparency: reducesTransparency)
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: PluginPaletteMetrics.surfaceCornerRadius,
-                    style: .continuous
-                )
-                .strokeBorder(
-                    role == .actions ? Color.accentColor.opacity(0.55) : PluginSettingsTheme.Palette.cardBorder,
-                    lineWidth: 1
-                )
+        let shape = RoundedRectangle(
+            cornerRadius: PluginPaletteMetrics.surfaceCornerRadius,
+            style: .continuous
+        )
+        Group {
+            if reducesTransparency {
+                shape.fill(Color(nsColor: .windowBackgroundColor))
+                    .overlay { shape.strokeBorder(.secondary.opacity(0.2), lineWidth: 0.5) }
+            } else {
+                ClipboardHistoryWindowMaterial()
+                    .overlay { shape.fill(Color(nsColor: .windowBackgroundColor).opacity(0.88)) }
+                    .clipShape(shape)
+                    .overlay { shape.strokeBorder(.primary.opacity(0.10), lineWidth: 0.5) }
             }
-            .allowsHitTesting(false)
+        }
+        .allowsHitTesting(false)
     }
+}
+
+private struct ClipboardHistoryWindowMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }

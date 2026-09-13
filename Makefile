@@ -45,7 +45,7 @@ E2E_SESSION ?=
 E2E_DURATION ?= 90
 E2E_PACK ?=
 
-.PHONY: setup validate-local-debug-config generate-plugin-config generate build build-cli script-tests ci sync-debug-plugins build-plugin build-plugins generate-icon-gallery package-plugins-release stop-debug-app install-debug-app run run-open e2e-preflight e2e-prepare e2e-upgrade e2e-reseed e2e-resume e2e-rebuild e2e-audit e2e-scenarios e2e-record e2e-record-pack e2e-verify-code e2e-collect e2e-restore e2e-self-test clean release release-local
+.PHONY: setup validate-local-debug-config generate-plugin-config generate build build-cli script-tests panel-layout-ui-tests ci sync-debug-plugins build-plugin build-plugins generate-icon-gallery package-plugins-release stop-debug-app install-debug-app run run-open e2e-preflight e2e-prepare e2e-upgrade e2e-reseed e2e-resume e2e-rebuild e2e-audit e2e-scenarios e2e-record e2e-record-pack e2e-verify-code e2e-collect e2e-restore e2e-self-test clean release release-local
 
 setup:
 	@if [ ! -f LocalConfig.xcconfig ]; then cp LocalConfig.sample.xcconfig LocalConfig.xcconfig; fi
@@ -87,6 +87,9 @@ build-cli: validate-local-debug-config generate
 script-tests:
 	@$(PYTHON3) -m unittest discover -s scripts/tests -p 'test_*.py'
 
+panel-layout-ui-tests:
+	@$(PYTHON3) scripts/e2e/run_panel_layout_fixture.py
+
 ci: generate
 	@$(MAKE) script-tests
 	@$(PYTHON3) scripts/changelog.py validate
@@ -101,6 +104,7 @@ ci: generate
 		CODE_SIGN_IDENTITY= \
 		test \
 		-quiet
+	@$(MAKE) panel-layout-ui-tests
 	@./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh
 
 sync-debug-plugins: build

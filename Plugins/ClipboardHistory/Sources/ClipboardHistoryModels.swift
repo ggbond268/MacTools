@@ -633,7 +633,8 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     private let payloadReference: ClipboardHistoryPayloadReference
     let text: String
     let capturedAt: Date
-    let sourceApplication: ClipboardSourceApplication?
+    let source: ClipboardHistorySource
+    var sourceApplication: ClipboardSourceApplication? { source.application }
     let kind: ClipboardHistoryContentKind
     let payloadByteCount: Int
     let filterContentKinds: Set<ClipboardHistoryContentKind>
@@ -668,14 +669,15 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         hasCompletedImageTextIndexing: Bool = false,
         isInHistory: Bool = true,
         savedMetadata: ClipboardHistorySavedMetadata? = nil,
-        precomputedPayloadDigest: Data? = nil
+        precomputedPayloadDigest: Data? = nil,
+        source: ClipboardHistorySource? = nil
     ) {
         self.id = id
         payloadReference = ClipboardHistoryPayloadReference(payload: payload)
         let searchableText = payload.searchableText
         text = String(searchableText.prefix(Self.maximumSearchableCharacterCount))
         self.capturedAt = capturedAt
-        self.sourceApplication = sourceApplication
+        self.source = source ?? ClipboardHistorySource(application: sourceApplication)
         kind = payload.kind
         payloadByteCount = payload.byteCount
         filterContentKinds = payload.filterContentKinds
@@ -704,7 +706,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         )
         searchIndex = ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: text, savedMetadata: savedMetadata),
-            sourceApplication: sourceApplication,
+            sourceApplication: self.source.application,
             fileURLs: payload.metadataFileURLs,
             linkURLs: payload.metadataLinkURLs,
             imageSearchText: boundedImageSearchText
@@ -787,6 +789,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         hasCompletedImageTextIndexing: Bool,
         isInHistory: Bool = true,
         savedMetadata: ClipboardHistorySavedMetadata? = nil,
+        source: ClipboardHistorySource? = nil,
         payloadLoader: @escaping @Sendable () throws -> ClipboardHistoryPayload
     ) {
         self.id = id
@@ -794,7 +797,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         let boundedText = String(text.prefix(Self.maximumSearchableCharacterCount))
         self.text = boundedText
         self.capturedAt = capturedAt
-        self.sourceApplication = sourceApplication
+        self.source = source ?? ClipboardHistorySource(application: sourceApplication)
         self.kind = kind
         self.payloadByteCount = payloadByteCount
         self.filterContentKinds = filterContentKinds
@@ -823,7 +826,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         self.hasCompletedImageTextIndexing = hasCompletedImageTextIndexing
         self.searchIndex = searchIndex ?? ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: boundedText, savedMetadata: savedMetadata),
-            sourceApplication: sourceApplication,
+            sourceApplication: self.source.application,
             fileURLs: fileURLs,
             linkURLs: linkURLs,
             imageSearchText: boundedImageSearchText
@@ -880,14 +883,15 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             imageSearchText: capturedItem.imageSearchText,
             hasCompletedImageTextIndexing: capturedItem.hasCompletedImageTextIndexing,
             isInHistory: true,
-            savedMetadata: savedMetadata
+            savedMetadata: savedMetadata,
+            source: capturedItem.source
         )
     }
 
     private mutating func refreshSearchIndex() {
         searchIndex = ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: text, savedMetadata: savedMetadata),
-            sourceApplication: sourceApplication,
+            sourceApplication: self.source.application,
             fileURLs: fileURLs,
             linkURLs: linkURLs,
             imageSearchText: imageSearchText
@@ -907,6 +911,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         case payload
         case capturedAt
         case sourceApplication
+        case source
         case lastUsedAt
         case imageSearchText
         case hasCompletedImageTextIndexing
@@ -922,10 +927,10 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         let searchableText = payload.searchableText
         text = String(searchableText.prefix(Self.maximumSearchableCharacterCount))
         capturedAt = try container.decode(Date.self, forKey: .capturedAt)
-        sourceApplication = try container.decodeIfPresent(
-            ClipboardSourceApplication.self,
-            forKey: .sourceApplication
-        )
+        source = try container.decodeIfPresent(ClipboardHistorySource.self, forKey: .source)
+            ?? ClipboardHistorySource(application: container.decodeIfPresent(
+                ClipboardSourceApplication.self, forKey: .sourceApplication
+            ))
         kind = payload.kind
         payloadByteCount = payload.byteCount
         filterContentKinds = payload.filterContentKinds
@@ -959,7 +964,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         ) ?? false
         searchIndex = ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: text, savedMetadata: savedMetadata),
-            sourceApplication: sourceApplication,
+            sourceApplication: self.source.application,
             fileURLs: payload.metadataFileURLs,
             linkURLs: payload.metadataLinkURLs,
             imageSearchText: imageSearchText
@@ -972,6 +977,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         try container.encode(loadPayload(), forKey: .payload)
         try container.encode(capturedAt, forKey: .capturedAt)
         try container.encodeIfPresent(sourceApplication, forKey: .sourceApplication)
+        try container.encodeIfPresent(source.storageOverride, forKey: .source)
         try container.encodeIfPresent(lastUsedAt, forKey: .lastUsedAt)
         try container.encodeIfPresent(imageSearchText, forKey: .imageSearchText)
         if !isInHistory {
@@ -987,7 +993,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         lhs.id == rhs.id
             && lhs.text == rhs.text
             && lhs.capturedAt == rhs.capturedAt
-            && lhs.sourceApplication == rhs.sourceApplication
+            && lhs.source == rhs.source
             && lhs.kind == rhs.kind
             && lhs.payloadByteCount == rhs.payloadByteCount
             && lhs.filterContentKinds == rhs.filterContentKinds
@@ -1130,7 +1136,8 @@ enum ClipboardCapturePolicy {
         settings: ClipboardHistorySettings,
         newestItem: ClipboardHistoryItem?,
         now: Date = Date(),
-        makeID: () -> UUID = UUID.init
+        makeID: () -> UUID = UUID.init,
+        source: ClipboardHistorySource? = nil
     ) -> ClipboardCaptureDecision {
         guard let payload, !payload.pasteboardItems.isEmpty else {
             return .ignore(.empty)
@@ -1157,7 +1164,8 @@ enum ClipboardCapturePolicy {
             sourceApplication: sourceApplication,
             isPinned: false,
             lastUsedAt: nil,
-            precomputedPayloadDigest: payloadDigest
+            precomputedPayloadDigest: payloadDigest,
+            source: source
         ))
     }
 
