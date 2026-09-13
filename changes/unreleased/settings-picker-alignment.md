@@ -3,4 +3,4 @@ release: app
 type: fixed
 ---
 
-Plugin settings align option menus with the trailing edge of their control column.
+Align plugin settings pickers with the trailing edge of their rows, removing unused space after short menu selections.

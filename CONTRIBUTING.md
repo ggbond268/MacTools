@@ -62,6 +62,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - Keep current `plugin.json` runtime envelopes complete. Generated package manifests must contain expanded localization values and match their source metadata; do not edit package copies independently. Legacy manifests must still include runtime-decodable `capabilities` and `permissions`; omitting newer product fields is supported only for PluginKit versions below 5 through the explicit local-debug compatibility flag and must never be used for release catalog generation.
 - When merging new plugins with product-metadata changes, register their factories in `PluginRuntimeActionSnapshotTests` and preserve independent runtime policies such as `uninstallDataPolicy` alongside the product fields.
 - New plugins should provide localization whenever practical, at minimum for panel copy, settings copy, permission text, and plugin metadata.
+- AI Usage provider changes should follow [the credential and refresh contract](docs/plugins/ai-usage.md), with fixture-based parser and lifecycle tests. Keep quota presentation in Dashboard and the optional menu bar. Tests must never query real accounts or read the developer's credentials.
 - Prefer Apple native frameworks. When adding system frameworks, private include paths, or helper executables inside a plugin bundle, declare the smallest necessary differences in the plugin's own `project.yml`. Bundle resource executables that need separate signing should be listed in `plugin.json.package.signPaths`.
 - System power and session-ending actions must use native macOS confirmation flows, remain foreground-only, and avoid immediate restart or shutdown events that can discard unsaved work.
 - Plugins that use private Apple frameworks must load them dynamically at runtime and validate the required classes and selectors. Do not statically link private frameworks, and surface unsupported-system errors instead of crashing.
@@ -70,6 +71,7 @@ Unless a file is clearly identified as third-party material under separate terms
 
 ## Testing
 - Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.
+- Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.
@@ -84,6 +86,7 @@ For Window Switcher changes, see the optional [isolated Chrome diagnostic](scrip
 - User-visible app or plugin changes include a concise English changelog fragment in `changes/unreleased/*.md`.
 - Plugin manifest `capabilities.settings` (`none`, `form`, or `workspace`) matches the runtime `settingsPage` layout.
 - Rich manifest static and dynamic action descriptors match the runtime provider/action identity, risk, permissions, external policy, automation eligibility, and parameter portability.
+- Capture plugins preserve explicit foreground selection, release overlays and capture sessions when disabled, and never delete user-exported screenshots or recordings during private-data cleanup.
 - High-risk features cover safety checks, error states, and missing-permission cases.
 - The PR does not include unrelated formatting, generated files, local configuration, certificates, or release credentials.
 - New or updated third-party material is recorded in `Sources/Resources/ThirdPartyNotices/manifest.json` with an exact upstream revision, affected products, source paths, and retained license text.
@@ -116,5 +119,7 @@ For the PluginKit v6 migration, source manifests declare `pluginKitVersion: 6` a
 ### Managed Nightly CLI distribution
 
 Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-install.json` with `scripts/cli-install-manifest.py`, embeds it in the app resources, and then signs the outer app. Publish that same ZIP and JSON only after both notarization submissions pass. The app trusts the resource seal, never a downloaded unsigned manifest. Personal publishers must use the same ordering with an immutable `/releases/<build>` URL. See [managed CLI distribution](docs/plugins/managed-cli-distribution.md) for the contract, ownership layout, and release acceptance gates.
+
+Centered window guide changes should follow the [Window Layouts interaction and manual acceptance contract](docs/plugins/window-layouts.md#centered-window-guides), reuse the existing listen-only event tap, and keep plugin minimum-host declarations aligned with the shared snap APIs.
 
 Window Switcher’s own centered drag guides consume `PluginWindowSnapCoordinator` and require host 1.3.1. Preserve visible-item shortcut numbering across scrolling/filtering and keep delayed preview feedback covered by native chooser tests; see [Window Switcher development](docs/plugins/window-switcher.md).
