@@ -212,6 +212,23 @@
         "Plugins/MenuBarHidden/Sources/MenuBarHiddenModels.swift"
       ],
       "licenseFile": "Sources/Resources/ThirdPartyNotices/Thaw-LICENSE.txt"
+    },
+    {
+      "id": "cc-bar",
+      "name": "cc-bar",
+      "repository": "https://github.com/nanvon/cc-bar",
+      "revision": "812f556f58b9e3d9e7a822feba4f74e450517caf",
+      "license": "MIT",
+      "gpl3Compatibility": "compatible",
+      "relationship": "asset",
+      "products": [
+        "plugin:ai-usage"
+      ],
+      "paths": [
+        "Plugins/AIUsage/Resources/CodexLogo.svg",
+        "Plugins/AIUsage/Resources/ClaudeLogo.svg"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/cc-bar-LICENSE.txt"
     }
   ]
 }

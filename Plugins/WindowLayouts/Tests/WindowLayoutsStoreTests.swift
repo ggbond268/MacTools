@@ -4,6 +4,16 @@ import MacToolsPluginKit
 
 @MainActor
 final class WindowLayoutsStoreTests: XCTestCase {
+    func testCenteredGuidesAreOptInPersistAndReset() {
+        let storage = StoreMemoryStorage()
+        let store = WindowLayoutsStore(storage: storage)
+        XCTAssertFalse(store.centeredGuidesEnabled)
+        store.setCenteredGuidesEnabled(true)
+        XCTAssertTrue(WindowLayoutsStore(storage: storage).centeredGuidesEnabled)
+        store.reset()
+        XCTAssertFalse(WindowLayoutsStore(storage: storage).centeredGuidesEnabled)
+    }
+
     func testPersistsCustomCommandsWithStableActionIDs() throws {
         let storage = StoreMemoryStorage()
         let store = WindowLayoutsStore(storage: storage)

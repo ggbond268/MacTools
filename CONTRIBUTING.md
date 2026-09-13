@@ -62,6 +62,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - Keep current `plugin.json` runtime envelopes complete. Generated package manifests must contain expanded localization values and match their source metadata; do not edit package copies independently. Legacy manifests must still include runtime-decodable `capabilities` and `permissions`; omitting newer product fields is supported only for PluginKit versions below 5 through the explicit local-debug compatibility flag and must never be used for release catalog generation.
 - When merging new plugins with product-metadata changes, register their factories in `PluginRuntimeActionSnapshotTests` and preserve independent runtime policies such as `uninstallDataPolicy` alongside the product fields.
 - New plugins should provide localization whenever practical, at minimum for panel copy, settings copy, permission text, and plugin metadata.
+- AI Usage provider changes should follow [the credential and refresh contract](docs/plugins/ai-usage.md), with fixture-based parser and lifecycle tests. Keep quota presentation in Dashboard and the optional menu bar. Tests must never query real accounts or read the developer's credentials.
 - Prefer Apple native frameworks. When adding system frameworks, private include paths, or helper executables inside a plugin bundle, declare the smallest necessary differences in the plugin's own `project.yml`. Bundle resource executables that need separate signing should be listed in `plugin.json.package.signPaths`.
 - System power and session-ending actions must use native macOS confirmation flows, remain foreground-only, and avoid immediate restart or shutdown events that can discard unsaved work.
 - Plugins that use private Apple frameworks must load them dynamically at runtime and validate the required classes and selectors. Do not statically link private frameworks, and surface unsupported-system errors instead of crashing.
@@ -116,6 +117,8 @@ For the PluginKit v6 migration, source manifests declare `pluginKitVersion: 6` a
 ### Managed Nightly CLI distribution
 
 Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-install.json` with `scripts/cli-install-manifest.py`, embeds it in the app resources, and then signs the outer app. Publish that same ZIP and JSON only after both notarization submissions pass. The app trusts the resource seal, never a downloaded unsigned manifest. Personal publishers must use the same ordering with an immutable `/releases/<build>` URL. See [managed CLI distribution](docs/plugins/managed-cli-distribution.md) for the contract, ownership layout, and release acceptance gates.
+
+Centered window guide changes should follow the [Window Layouts interaction and manual acceptance contract](docs/plugins/window-layouts.md#centered-window-guides), reuse the existing listen-only event tap, and keep plugin minimum-host declarations aligned with the shared snap APIs.
 
 ## App Uninstaller safety
 
