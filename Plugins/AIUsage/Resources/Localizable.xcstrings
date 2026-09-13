@@ -154,23 +154,6 @@
         }
       }
     },
-    "open.dashboard": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开仪表盘"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open Dashboard"
-          }
-        }
-      }
-    },
     "open.settings": {
       "extractionState": "manual",
       "localizations": {

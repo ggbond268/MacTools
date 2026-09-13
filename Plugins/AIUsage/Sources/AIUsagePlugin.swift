@@ -17,7 +17,7 @@ private struct AIUsagePluginProvider: PluginProvider {
 }
 
 @MainActor
-final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel, PluginPrimaryPanel,
+final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel,
     PluginSettingsPresenting, PluginDashboardPresenting, PluginPanelSurfaceLifecycleHandling,
     PluginApplicationActivityStateHandling {
     enum ControlID {
@@ -26,7 +26,6 @@ final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel, PluginPrimaryPa
         static let menuBar = "menu-bar"
         static let interval = "refresh-interval"
         static let refresh = "refresh"
-        static let dashboard = "execute"
         static func provider(_ provider: AIUsageProvider) -> String { "enable-\(provider.rawValue)" }
         static func web(_ provider: AIUsageProvider) -> String { "web-\(provider.rawValue)" }
     }
@@ -81,16 +80,6 @@ final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel, PluginPrimaryPa
                              isEnabled: true, isVisible: true, errorMessage: nil)
     }
 
-    var primaryPanelDescriptor: PluginPrimaryPanelDescriptor {
-        PluginPrimaryPanelDescriptor(controlStyle: .button, menuActionBehavior: .dismissBeforeHandling,
-                                     buttonTitle: strings.text("open.dashboard", "打开仪表盘"))
-    }
-
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(subtitle: metadata.defaultDescription, isOn: model.isRefreshing, isExpanded: false,
-                         isEnabled: true, isVisible: true, detail: nil, errorMessage: nil)
-    }
-
     func makeView(context: PluginComponentContext) -> AnyView {
         AnyView(AIUsageComponentView(model: model, strings: strings, assets: assets) { [weak self] in
             context.dismiss()
@@ -108,12 +97,6 @@ final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel, PluginPrimaryPa
     }
     func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
         if surface == .component { model.panelVisible = false }
-    }
-
-    func handleAction(_ action: PluginPanelAction) {
-        if case let .invokeAction(controlID) = action, controlID == ControlID.dashboard {
-            requestDashboardPresentation?()
-        }
     }
 
     func updateMenuBar() {

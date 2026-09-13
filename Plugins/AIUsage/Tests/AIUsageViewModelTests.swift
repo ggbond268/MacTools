@@ -134,14 +134,12 @@ final class AIUsageViewModelTests: XCTestCase {
         model.stop()
     }
 
-    func testSettingsAndPrimaryActionUseHostRouting() {
+    func testSettingsAndDashboardOnlyCapabilities() {
         let storage = AIUsageTestStorage()
         let context = PluginRuntimeContext(pluginID: "ai-usage", storage: storage)
         let plugin = AIUsagePlugin(context: context, model: AIUsageViewModel(storage: storage, client: AIUsageTestClient()))
-        var dashboardOpened = false
-        plugin.requestDashboardPresentation = { dashboardOpened = true }
-        plugin.handleAction(.invokeAction(controlID: "execute"))
-        XCTAssertTrue(dashboardOpened)
+        XCTAssertNil(plugin.primaryPanel)
+        XCTAssertNotNil(plugin.componentPanel)
         XCTAssertEqual(plugin.metadata.id, "ai-usage")
         XCTAssertEqual(plugin.settingsPage?.body.layout, .form)
         XCTAssertTrue(plugin.permissionRequirements.isEmpty)

@@ -62,7 +62,7 @@
     "scheme": "AIUsagePlugin"
   },
   "capabilities": {
-    "primaryPanel": true,
+    "primaryPanel": false,
     "componentPanel": true,
     "settings": "form"
   },
