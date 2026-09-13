@@ -154,6 +154,10 @@ final class WindowSwitcherSessionTests: XCTestCase {
         session.query = ""; controller.update(session)
         panel.setContentSize(NSSize(width: 780, height: 480))
         controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
+        let visible = try XCTUnwrap(panel.screen).visibleFrame
+        // Exercise the same edge constraint as a short CI display: the taller
+        // list cannot preserve this top edge without extending below the screen.
+        panel.setFrameOrigin(NSPoint(x: panel.frame.minX, y: visible.minY + 12))
         let manual = panel.frame
         func changeLayout(_ number: String, keyCode: Int) throws {
             let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
@@ -162,7 +166,23 @@ final class WindowSwitcherSessionTests: XCTestCase {
         }
         try changeLayout("2", keyCode: kVK_ANSI_2)
         XCTAssertLessThan(panel.frame.width, manual.width)
-        XCTAssertEqual(panel.frame.maxY, manual.maxY, accuracy: 1)
+        XCTAssertTrue(visible.insetBy(dx: 12, dy: 12).contains(panel.frame),
+                      "The taller list must remain inside the usable screen")
+        if manual.maxY - panel.frame.height < visible.minY + 12 {
+            XCTAssertEqual(panel.frame.minY, visible.minY + 12, accuracy: 1,
+                           "Expansion moves up only enough to keep the bottom edge on screen")
+        } else {
+            XCTAssertEqual(panel.frame.maxY, manual.maxY, accuracy: 1,
+                           "Preserve the top edge when the display has enough space")
+        }
+        try changeLayout("1", keyCode: kVK_ANSI_1)
+        XCTAssertEqual(panel.frame.size, manual.size)
+        // Also exercise expansion with enough room below: this must not move
+        // the search bar just because the chosen layout becomes taller.
+        panel.setFrameOrigin(NSPoint(x: panel.frame.minX, y: visible.maxY - 12 - panel.frame.height))
+        let top = panel.frame.maxY
+        try changeLayout("2", keyCode: kVK_ANSI_2)
+        XCTAssertEqual(panel.frame.maxY, top, accuracy: 1)
         try changeLayout("1", keyCode: kVK_ANSI_1)
         XCTAssertEqual(panel.frame.size, manual.size)
         XCTAssertTrue(NSApp.sendAction(NSSelectorFromString("resetPanelSize"), to: controller, from: nil))

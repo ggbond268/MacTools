@@ -10,7 +10,7 @@ The chooser now consumes `PluginWindowSnapCoordinator` for its own drag handle, 
 
 Keyboard navigation: In Search and Select, Command-1 through Command-9 immediately opens the numbered fully visible windows in either layout; Return activates the highlighted window. Command-Option-1/2 selects grid/list, Command-Shift-1/2 selects scope, Command-F focuses search, Command-P toggles previews, Command-D opens display filters, Command-K opens actions/help, and Escape dismisses. Number shortcuts remain selection-only during cycling and are suppressed during marked-text composition.
 
-Window Switcher remembers the last grid/list choice. Unselected cards are borderless, and number badges appear only during persistent selection. The highlighted app scope is unavailable with fewer than two windows. Unnamed compositor surfaces require Accessibility confirmation, preserving real untitled windows across Spaces.
+Window Switcher remembers the last grid/list choice. Unselected cards are borderless, and number badges appear only during persistent selection. The highlighted app scope is hidden with fewer than two windows, except while that app filter is already active. The same flat scope control renders one or two choices. Unnamed compositor surfaces require Accessibility confirmation, preserving real untitled windows across Spaces.
 
 Window Switcher uses native Liquid Glass on macOS 26 and later, following system appearance and accessibility preferences, with a translucent-material fallback on older systems. Grid selection uses a soft accent fill without an outline.
 
