@@ -15,20 +15,23 @@ private enum CalendarComponentLayout {
 struct CalendarComponentView: View {
     @ObservedObject private var viewModel: CalendarComponentViewModel
     private let localization: PluginLocalization
+    private let showsTodayDetails: Bool
 
     init(
         context: PluginComponentContext,
         viewModel: CalendarComponentViewModel,
+        showsTodayDetails: Bool,
         localization: PluginLocalization = PluginLocalization(bundle: .main)
     ) {
         self.viewModel = viewModel
+        self.showsTodayDetails = showsTodayDetails
         self.localization = localization
     }
 
     var body: some View {
         VStack(spacing: CalendarComponentLayout.sectionSpacing) {
             calendarCard
-            selectedDayDetails
+            todayDetails
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -70,10 +73,10 @@ struct CalendarComponentView: View {
     }
 
     @ViewBuilder
-    private var selectedDayDetails: some View {
-        if let selectedDay = viewModel.selectedDay {
+    private var todayDetails: some View {
+        if showsTodayDetails, let todayDay = viewModel.todayDay {
             CalendarSelectedDayDetails(
-                day: selectedDay,
+                day: todayDay,
                 localization: localization
             )
         }

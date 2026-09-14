@@ -13,7 +13,8 @@ final class CalendarComponentViewModelTests: XCTestCase {
             eventService: service,
             holidayProvider: .empty,
             calendar: calendar,
-            today: targetDate
+            today: targetDate,
+            now: { targetDate }
         )
         let sundayRequest = expectation(description: "Sunday-first event range loaded")
         service.onEventsRequest = sundayRequest.fulfill
@@ -46,7 +47,8 @@ final class CalendarComponentViewModelTests: XCTestCase {
             eventService: service,
             holidayProvider: .empty,
             calendar: calendar,
-            today: targetDate
+            today: targetDate,
+            now: { targetDate }
         )
         let initialRequest = expectation(description: "Visible calendar loads events")
         service.onEventsRequest = initialRequest.fulfill
@@ -125,7 +127,7 @@ final class CalendarComponentViewModelTests: XCTestCase {
         XCTAssertEqual(service.openedDates, [targetDate])
     }
 
-    func testSelectingDayUpdatesTheSelectedDayDetailSource() throws {
+    func testSelectingDayDoesNotChangeTheTodayDetailSource() throws {
         let calendar = Self.makeCalendar()
         let service = MockCalendarEventService()
         let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
@@ -161,8 +163,25 @@ final class CalendarComponentViewModelTests: XCTestCase {
         viewModel.select(targetDay)
 
         XCTAssertEqual(viewModel.selectedDay, targetDay)
-        XCTAssertEqual(viewModel.selectedDay?.lunarDateText, "四月十三")
-        XCTAssertEqual(viewModel.selectedDay?.events, [event])
+        XCTAssertEqual(viewModel.todayDay?.id, "20260415")
+        XCTAssertNotEqual(viewModel.todayDay?.id, targetDay.id)
+    }
+
+    func testRefreshUpdatesTodayDetailAfterDayBoundary() throws {
+        let calendar = Self.makeCalendar()
+        var now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let viewModel = CalendarComponentViewModel(
+            eventService: MockCalendarEventService(),
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: now,
+            now: { now }
+        )
+        now = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: now))
+
+        viewModel.refresh()
+
+        XCTAssertEqual(viewModel.todayDay?.id, "20260416")
     }
 
     private static func makeCalendar() -> Calendar {

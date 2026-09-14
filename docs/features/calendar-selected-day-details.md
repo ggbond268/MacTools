@@ -1,6 +1,6 @@
 # Feature — Calendar Selected-Day Details
 
-Last verified: 2026-08-31
+Last verified: 2026-09-14
 
 Status: in-review
 Source of truth: yes
@@ -8,21 +8,22 @@ Source of truth: yes
 ## Summary
 
 - Fix issue #280.
-- Add a selected-day detail area below the monthly calendar grid.
-- Show the selected date, full lunar month/day, existing holiday metadata, and existing EventKit events.
+- Add an optional today detail area below the monthly calendar grid.
+- Show today's date, full lunar month/day, existing holiday metadata, and existing EventKit events.
 - Keep compact festival labels in the grid without letting them hide the underlying lunar day in the detail area.
 
 ## User flow
 
 - User opens the Calendar component; the current day remains selected by default.
 - User points to or selects a day in the monthly grid.
-- The detail area updates to the selected day.
+- The existing hover popover shows the hovered day's details; the detail area remains fixed on today.
+- User can hide the detail area from Calendar settings; it is enabled by default.
 - A day with a festival label still shows its full lunar month/day in the detail area.
 - Existing event rows remain available when EventKit authorization and event data permit it.
 
 ## Scope boundaries
 
-- No new Calendar settings, views, or EventKit permissions.
+- No new EventKit permissions.
 - No new solar-term data source; the feature preserves the lunar day already available from the system Chinese calendar.
 - No change to the existing compact grid labels or month navigation behavior.
 
@@ -30,7 +31,8 @@ Source of truth: yes
 
 | Rule | Markdown | Centralized code | Consumers |
 |---|---|---|---|
-| The selected day is the source for the detail area | This record | `CalendarComponentViewModel.selectedDay` | Calendar component detail view |
+| Today is the source for the detail area | This record | `CalendarComponentViewModel.todayDay` | Calendar component detail view |
+| Today detail visibility is enabled by default and user-configurable | This record | `CalendarSettingsStore.showsTodayDetails` | Calendar settings and component detail view |
 | Festival labels must not replace the full lunar month/day in date details | This record | `CalendarDayModel.lunarDateText` | Calendar grid popover and selected-day detail view |
 | Existing event visibility and authorization behavior remains unchanged | This record | `CalendarComponentViewModel` and `CalendarEventService` | Calendar event rows |
 
@@ -41,6 +43,7 @@ Source of truth: yes
 | 2026-08-31 | Keep `lunarText` for the compact grid and add `lunarDateText` for full date details | Festival labels such as `中秋` currently replace the lunar day in the compact cell | Calendar model, popover, and selected-day detail only |
 | 2026-08-31 | Reuse the existing localized date, holiday, and event presentation | The issue asks for missing selected-date context, not a second localization or event model | Calendar component presentation only |
 | 2026-08-31 | Reserve five component height rows for the detail area | The current three-row component is sized for the calendar grid alone, and the detail can contain three event rows plus wrapped metadata | Calendar component descriptor and integration coverage |
+| 2026-09-14 | Keep the detail area fixed on today and make it optional | Avoid showing identical date/event details in the hover popover and lower area | Calendar view model, settings, and component presentation |
 
 ## Plan
 
@@ -49,6 +52,7 @@ Source of truth: yes
 - [x] P003 — Add the detail view, full lunar date model field, and focused regression tests.
 - [x] P004 — Run available focused checks, record the global XCTest blocker, and complete a separate review.
 - [x] P005 — Commit the isolated change and open one pull request.
+- [x] P006 — Apply PR #368 interaction feedback: fixed today details and default-on visibility setting.
 
 ## TODO
 
@@ -57,11 +61,12 @@ Source of truth: yes
 - [x] F003 — Allocate component height for the detail area — files: `Plugins/Calendar/Sources/CalendarPlugin.swift`, `Plugins/Calendar/Tests/CalendarPluginIntegrationTests.swift` — status: done
 - [x] F004 — Add model and presentation regression coverage — files: `Plugins/Calendar/Tests/CalendarMonthModelBuilderTests.swift`, `Plugins/Calendar/Tests/CalendarComponentViewModelTests.swift` — status: done
 - [x] F005 — Verify, review, and publish the isolated change — files: `Plugins/Calendar/`, this feature record — status: done
+- [x] F006 — Keep lower details on today and add its visibility setting — files: `Plugins/Calendar/Sources/CalendarSettings.swift`, `Plugins/Calendar/Sources/CalendarComponentViewModel.swift`, `Plugins/Calendar/Sources/CalendarComponentView.swift`, `Plugins/Calendar/Sources/CalendarPlugin.swift` — status: done
 
 ## Acceptance / DoD
 
-- [x] The selected-day detail area is visible below the monthly grid.
-- [x] Selecting or hovering a day updates the displayed date details.
+- [x] The today detail area is visible below the monthly grid by default and can be hidden in Calendar settings.
+- [x] Selecting or hovering a day does not change the displayed lower details.
 - [x] Festival days show both the festival label and the underlying lunar month/day in date details.
 - [x] Existing event rows continue to use the current EventKit authorization and loading behavior.
 - [x] Existing month navigation, day opening, permissions, and compact grid behavior remain unchanged.
@@ -80,6 +85,7 @@ Source of truth: yes
 - 2026-08-31 — Separate Standards and Specification reviews completed with no actionable findings after increasing the layout budget and adding presentation/selection regression coverage. Manual UI acceptance remains pending because the test target cannot build.
 - 2026-08-31 — Manual UI acceptance was attempted. The freshly generated Calendar package is present, but the local Debug app artifact has no executable after the global build interruption, so Computer Use could not open an app to inspect the component.
 - 2026-08-31 — Commit `2a8e138a` created and draft PR [#368](https://github.com/ggbond268/MacTools/pull/368) opened for issue #280. The branch contains only the Calendar implementation, tests, README entry, feature record, index entry, and changelog; focused XCTest and manual UI acceptance remain pending as recorded above.
+- 2026-09-14 — PR #368 feedback changed the lower area from selected-day to fixed-today content, retaining date, full lunar date, and today's agenda. Added a default-on persisted visibility setting; hover popovers remain the per-day detail surface.
 
 ## Files
 
@@ -92,6 +98,7 @@ Source of truth: yes
 - `README.md`
 - `docs/features/INDEX.md`
 - `changes/unreleased/calendar-selected-day-details.md`
+- `docs/user-stories/plugins/calendar-today-details.md`
 
 ## Test / QA commands
 

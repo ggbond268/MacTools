@@ -144,6 +144,16 @@ final class CalendarPlugin: MacToolsPlugin, PluginComponentPanel, PluginPanelSur
                                 },
                                 style: .menu
                             )
+                        ),
+                        PluginSettingsRow(
+                            id: "show-today-details",
+                            title: localization.string("settings.todayDetails.title", defaultValue: "显示今日详情"),
+                            description: localization.string(
+                                "settings.todayDetails.description",
+                                defaultValue: "在月历下方显示今天的日期、农历和日程。"
+                            ),
+                            systemImage: "calendar.badge.clock",
+                            control: .toggle(isOn: settingsStore.showsTodayDetails)
                         )
                     ]
                 )
@@ -156,6 +166,7 @@ final class CalendarPlugin: MacToolsPlugin, PluginComponentPanel, PluginPanelSur
             CalendarComponentView(
                 context: context,
                 viewModel: viewModel,
+                showsTodayDetails: settingsStore.showsTodayDetails,
                 localization: localization
             )
         )
@@ -210,11 +221,18 @@ final class CalendarPlugin: MacToolsPlugin, PluginComponentPanel, PluginPanelSur
         }
     }
     func handleSettingsAction(_ action: PluginSettingsAction) {
-        guard case let .setSelection(controlID, optionID) = action,
-              controlID == "week-start-day",
-              let day = CalendarWeekStartDay(rawValue: optionID)
-        else { return }
-        setWeekStartDay(day)
+        switch action {
+        case let .setSelection(controlID, optionID) where controlID == "week-start-day":
+            guard let day = CalendarWeekStartDay(rawValue: optionID) else {
+                return
+            }
+            setWeekStartDay(day)
+        case let .setBoolean(controlID, value) where controlID == "show-today-details":
+            settingsStore.setShowsTodayDetails(value)
+            onStateChange?()
+        default:
+            break
+        }
     }
     func handleShortcutAction(id: String) {}
 
