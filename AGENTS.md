@@ -39,7 +39,8 @@
 - Sync only already-built Debug plugin packages and the local development catalog with `make sync-debug-plugins`.
 - Build the local plugin packages and generate the Debug catalog with `make build-plugin`.
 - Build one plugin with `make build-plugin PLUGIN=<plugin directory name or plugin ID>`.
-- Run repository script tests with `make script-tests`; these checks are separate from XCTest and include PluginKit minimum-host compatibility validation.
+- Run repository script tests with `make script-tests`; these checks are separate from XCTest and include pending changelog validation and PluginKit minimum-host compatibility validation.
+- Whenever `changes/unreleased/*.md` changes, run `make validate-changelog` before committing or pushing, even when only focused XCTest is otherwise needed. Each entry must stay within 220 characters and two sentences. `make script-tests` and `make ci` include this check; XCTest and `git diff --check` do not.
 - Run the full test suite with `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Run one test class by appending `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - Run the CI-equivalent local validation with `make ci` before pushing cross-module or PluginKit changes.

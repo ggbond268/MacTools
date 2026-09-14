@@ -1,6 +1,142 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+  "actionInput.alias.section": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "命令面板触发短语"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Command Palette Trigger Phrase"
+        }
+      }
+    }
+  },
+  "actionInput.alias.title": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "触发短语"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Trigger phrase"
+        }
+      }
+    }
+  },
+  "actionInput.alias.save": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "保存"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Save"
+        }
+      }
+    }
+  },
+  "actionInput.alias.reset": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "恢复默认"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Restore Default"
+        }
+      }
+    }
+  },
+  "actionInput.alias.preview": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "示例：%@ 你的消息 ↵"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Example: %@ your message ↵"
+        }
+      }
+    }
+  },
+  "actionInput.alias.invalid": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "请输入不含首尾空格或换行的短语，最多 64 个字符。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Enter a phrase without leading/trailing spaces or line breaks, up to 64 characters."
+        }
+      }
+    }
+  },
+  "actionInput.alias.unavailable": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "操作已更改，请重新打开设置。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "This action changed. Reopen settings."
+        }
+      }
+    }
+  },
+  "actionInput.alias.conflict": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "与“%@”的触发短语冲突。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Conflicts with the trigger phrase for “%@”."
+        }
+      }
+    }
+  },
     "panel.layout.edit": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "编辑布局"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "編輯佈局"}}, "en": {"stringUnit": {"state": "translated", "value": "Edit Layout"}}, "de": {"stringUnit": {"state": "translated", "value": "Layout bearbeiten"}}, "es": {"stringUnit": {"state": "translated", "value": "Editar disposición"}}, "fr": {"stringUnit": {"state": "translated", "value": "Modifier la disposition"}}, "ja": {"stringUnit": {"state": "translated", "value": "レイアウトを編集"}}, "ko": {"stringUnit": {"state": "translated", "value": "레이아웃 편집"}}, "pt": {"stringUnit": {"state": "translated", "value": "Editar disposição"}}, "ru": {"stringUnit": {"state": "translated", "value": "Изменить порядок"}}, "ar": {"stringUnit": {"state": "translated", "value": "تعديل التخطيط"}}}},
     "panel.layout.done": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "完成"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "完成"}}, "en": {"stringUnit": {"state": "translated", "value": "Done"}}, "de": {"stringUnit": {"state": "translated", "value": "Fertig"}}, "es": {"stringUnit": {"state": "translated", "value": "Listo"}}, "fr": {"stringUnit": {"state": "translated", "value": "Terminé"}}, "ja": {"stringUnit": {"state": "translated", "value": "完了"}}, "ko": {"stringUnit": {"state": "translated", "value": "완료"}}, "pt": {"stringUnit": {"state": "translated", "value": "Concluído"}}, "ru": {"stringUnit": {"state": "translated", "value": "Готово"}}, "ar": {"stringUnit": {"state": "translated", "value": "تم"}}}},
     "panel.layout.earlier": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "向前移动"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "向前移動"}}, "en": {"stringUnit": {"state": "translated", "value": "Move Earlier"}}, "de": {"stringUnit": {"state": "translated", "value": "Nach vorne bewegen"}}, "es": {"stringUnit": {"state": "translated", "value": "Mover antes"}}, "fr": {"stringUnit": {"state": "translated", "value": "Déplacer avant"}}, "ja": {"stringUnit": {"state": "translated", "value": "前に移動"}}, "ko": {"stringUnit": {"state": "translated", "value": "앞으로 이동"}}, "pt": {"stringUnit": {"state": "translated", "value": "Mover antes"}}, "ru": {"stringUnit": {"state": "translated", "value": "Переместить раньше"}}, "ar": {"stringUnit": {"state": "translated", "value": "نقل إلى السابق"}}}},

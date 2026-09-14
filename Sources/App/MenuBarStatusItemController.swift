@@ -28,6 +28,7 @@ enum MenuBarStatusItemInvocation: Equatable {
 }
 
 enum MenuBarStatusItemPresentationAction: Equatable {
+    case composeActionInput(ActionInputItem)
     case presentSettings(SettingsPresentationRequest)
     case toggleCommandPalette
     case toggleComponentPanel
@@ -38,6 +39,8 @@ enum MenuBarStatusItemPresentationAction: Equatable {
 
     init(request: AppPresentationRequest) {
         switch request {
+        case let .composeActionInput(item):
+            self = .composeActionInput(item)
         case let .settings(settingsRequest):
             self = .presentSettings(settingsRequest)
         case .toggleCommandPalette:
@@ -153,6 +156,8 @@ final class MenuBarStatusItemController: NSObject {
         // This controller is the sole production owner of app-level presentation routing.
         pluginHost.appPresentationHandler = { [weak self, weak windowRouter] request in
             switch MenuBarStatusItemPresentationAction(request: request) {
+            case let .composeActionInput(item):
+                windowRouter?.showCommandPalette(input: item)
             case let .presentSettings(settingsRequest):
                 windowRouter?.presentSettings(settingsRequest)
             case .toggleCommandPalette:
