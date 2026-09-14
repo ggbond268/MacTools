@@ -221,8 +221,7 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
     /// Cooperative app activation can be declined when handing focus from the
     /// chooser to the selected window's application. Request the
     /// app's Accessibility foreground state once, then observe it before raising.
-    func requestApplicationActivation() async -> AXError {
-        let cancellation = WindowSwitcherActionCancellation()
+    func requestApplicationActivation(cancellation: WindowSwitcherActionCancellation = WindowSwitcherActionCancellation()) async -> AXError {
         return await withTaskCancellationHandler {
             guard !Task.isCancelled else { return .cannotComplete }
             return await withCheckedContinuation { continuation in
@@ -406,7 +405,7 @@ protocol WindowSwitcherCatalog: AnyObject {
     func stop()
     func refresh()
     func entries(sortMode: WindowSwitcherSortMode) -> [WindowSwitcherAppEntry]
-    func activate(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult
+    func activate(_ entry: WindowSwitcherAppEntry, intent: WindowSwitcherActivationIntent) async -> WindowSwitcherActionResult
     func closeWindow(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult
     func quitApplication(_ entry: WindowSwitcherAppEntry) -> WindowSwitcherActionResult
 }
@@ -702,9 +701,10 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         entries(sortMode: .fixed).contains { $0.id == entry.id }
     }
 
-    func activate(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult {
+    func activate(_ entry: WindowSwitcherAppEntry, intent: WindowSwitcherActivationIntent) async -> WindowSwitcherActionResult {
+        guard intent.shouldContinue() else { return .cancelled }
         if entry.processIdentifier == ProcessInfo.processInfo.processIdentifier {
-            let result = await hostWindows.activate(entry)
+            let result = await hostWindows.activate(entry, intent: intent)
             if result == .succeeded { publication.recency.record(entry.id) }
             refresh()
             return result
@@ -714,17 +714,22 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
               let app = NSRunningApplication(processIdentifier: entry.processIdentifier), !app.isTerminated else { return .unavailable }
         let isFallback = entry.windowElement == nil && entry.windowNumber != nil
         guard entry.applicationLaunchDate == nil || app.launchDate == nil || entry.applicationLaunchDate == app.launchDate else { return .unavailable }
+        let isValid: Bool
         if isFallback {
-            guard await allSpacesCatalog.isCurrentFallback(entry) else { return .unavailable }
-        } else if entry.isWindowEntry, !(await worker.validate(entry.workerWindowID ?? entry.id)) { return .unavailable }
-        guard !Task.isCancelled else { return .cancelled }
-        guard workers[entry.processIdentifier] === worker else { return .unavailable }
-        let startingForegroundPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            isValid = await allSpacesCatalog.isCurrentFallback(entry)
+        } else if entry.isWindowEntry {
+            isValid = await worker.validate(entry.workerWindowID ?? entry.id)
+        } else {
+            isValid = true
+        }
+        guard intent.shouldContinue() else { return .cancelled }
+        guard isValid, workers[entry.processIdentifier] === worker else { return .unavailable }
         let prepared = await WindowSwitcherApplicationActivation.prepare(state: {
             .init(isHidden: app.isHidden,
                   isFrontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier,
                   isTerminated: app.isTerminated || self.workers[entry.processIdentifier] !== worker)
         }, request: { request in
+            guard intent.shouldContinue() else { return }
             switch request {
             case .unhide: _ = app.unhide()
             case .activate:
@@ -740,10 +745,10 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 _ = app.activate(options: [])
             }
         }, activateAllSpaces: isFallback, fallbackRequest: {
-            _ = await worker.requestApplicationActivation()
+            guard intent.shouldContinue() else { return }
+            _ = await worker.requestApplicationActivation(cancellation: intent.cancellation)
         }, shouldContinue: {
-            let foreground = NSWorkspace.shared.frontmostApplication?.processIdentifier
-            return foreground == nil || foreground == startingForegroundPID || foreground == entry.processIdentifier
+            intent.shouldContinue()
         })
         guard prepared == .succeeded else { return prepared }
         if !entry.isWindowEntry {
@@ -751,28 +756,22 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             refresh()
             return .succeeded
         }
-        let cancellation = WindowSwitcherActionCancellation()
+        let cancellation = intent.cancellation
         let targetPID = entry.processIdentifier
-        let intentObserver = notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil, queue: .main) { notification in
-                guard let foreground = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-                if foreground.processIdentifier != targetPID { cancellation.cancel() }
-            }
-        defer { notificationCenter.removeObserver(intentObserver) }
         let targetID: String
         if isFallback {
             // Re-read after the owning app switches Spaces. Never choose one of
             // several same-title/geometry candidates or replay activation.
             guard let matchedID = await Self.waitForFallbackWindow(entry, scan: { await worker.scan() },
                 records: { await self.allSpacesCatalog.freshRecordsForActivation() }) else {
-                return Task.isCancelled ? .cancelled : .unavailable
+                return intent.shouldContinue() ? .unavailable : .cancelled
             }
             guard workers[entry.processIdentifier] === worker, !Task.isCancelled else { return .cancelled }
             targetID = matchedID
         } else {
             targetID = entry.workerWindowID ?? entry.id
         }
-        guard !cancellation.isCancelled,
+        guard intent.shouldContinue(),
               NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else { return .cancelled }
         let result = await worker.perform(targetID, close: false, cancellation: cancellation)
         let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier

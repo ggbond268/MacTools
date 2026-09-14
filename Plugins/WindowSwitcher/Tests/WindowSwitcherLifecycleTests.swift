@@ -34,7 +34,7 @@ private final class ControlledSwitcherCatalog: WindowSwitcherCatalog {
     func stop() { isRunning = false }
     func refresh() {}
     func entries(sortMode: WindowSwitcherSortMode) -> [WindowSwitcherAppEntry] { windows }
-    func activate(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult {
+    func activate(_ entry: WindowSwitcherAppEntry, intent: WindowSwitcherActivationIntent) async -> WindowSwitcherActionResult {
         activated.append(entry.id)
         return activationResult
     }

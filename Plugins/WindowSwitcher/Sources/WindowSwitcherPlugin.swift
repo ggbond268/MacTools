@@ -680,6 +680,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     }
 
     private func select(_ entry: WindowSwitcherAppEntry) {
+        let intent = WindowSwitcherActivationIntent(targetPID: entry.processIdentifier)
         showTask?.cancel()
         session = nil
         shortcutTap.setSessionActive(false)
@@ -689,8 +690,10 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         overlayController.hide(restoringFocus: false)
         actionTask?.cancel()
         actionTask = Task { [weak self] in
+            defer { intent.finish() }
             guard let self, !Task.isCancelled else { return }
-            let result = await appCatalog.activate(entry)
+            guard intent.shouldContinue() else { return }
+            let result = await appCatalog.activate(entry, intent: intent)
             guard sessionGeneration == generation, !Task.isCancelled else { return }
             lastErrorMessage = localizedActionMessage(result)
             // A late verification failure must not steal focus back after

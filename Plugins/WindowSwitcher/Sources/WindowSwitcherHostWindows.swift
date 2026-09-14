@@ -59,8 +59,8 @@ final class WindowSwitcherHostWindows {
         return window
     }
 
-    func activate(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult {
-        guard !Task.isCancelled else { return .cancelled }
+    func activate(_ entry: WindowSwitcherAppEntry, intent: WindowSwitcherActivationIntent? = nil) async -> WindowSwitcherActionResult {
+        guard !Task.isCancelled, intent?.shouldContinue() != false else { return .cancelled }
         guard let window = window(for: entry) else { return .unavailable }
         let originalForeground = NSWorkspace.shared.frontmostApplication?.processIdentifier
         PluginPresentationSafety.prepareForWindowOrdering(window)
@@ -72,7 +72,7 @@ final class WindowSwitcherHostWindows {
         // Observe one request; never repeatedly raise a window over new user intent.
         let deadline = ContinuousClock.now + .milliseconds(400)
         repeat {
-            guard !Task.isCancelled else { return .cancelled }
+            guard !Task.isCancelled, intent?.shouldContinue() != false else { return .cancelled }
             guard self.window(for: entry) === window else { return .unavailable }
             let foreground = NSWorkspace.shared.frontmostApplication?.processIdentifier
             guard foreground == originalForeground || foreground == entry.processIdentifier || foreground == nil else {

@@ -132,6 +132,27 @@ final class WindowSwitcherProcessWorkerTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(WindowSwitcherProcessWorker.windowNotifications.contains(kAXTitleChangedNotification))
     }
 
+    func testSupersededForegroundRequestWaitingBehindReadNeverActivates() async {
+        let access = ControlledWindowAXAccess()
+        let worker = WindowSwitcherProcessWorker(pid: 200, launchDate: nil, access: access, invalidated: {})
+        defer { worker.stop() }
+        let entered = expectation(description: "slow AX read began")
+        let release = DispatchSemaphore(value: 0)
+        access.update { $0.delayRead = { entered.fulfill(); _ = release.wait(timeout: .now() + 3) } }
+        let scan = Task { await worker.scan() }
+        await fulfillment(of: [entered], timeout: 2)
+        let cancellation = WindowSwitcherActionCancellation()
+        let action = Task { await worker.requestApplicationActivation(cancellation: cancellation) }
+        await Task.yield()
+        cancellation.cancel()
+        access.update { $0.delayRead = nil }
+        release.signal()
+        _ = await scan.value
+        let result = await action.value
+        XCTAssertEqual(result, .cannotComplete)
+        XCTAssertTrue(access.read { $0.actions.isEmpty })
+    }
+
     func testForegroundRequestIsSubmittedOnceAndStoppedWorkerDoesNotActivate() async {
         let access = ControlledWindowAXAccess()
         let worker = WindowSwitcherProcessWorker(pid: 101, launchDate: nil, access: access, invalidated: {})
