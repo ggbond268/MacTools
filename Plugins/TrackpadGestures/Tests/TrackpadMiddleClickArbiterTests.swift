@@ -3677,6 +3677,135 @@ final class TrackpadMiddleClickCoordinatorTests: XCTestCase {
         coordinator.reset()
     }
 
+    func testOrdinaryDoubleClickAfterReleasePassesThroughWithTipTapEnabled() throws {
+        for gesture in [TrackpadGesture.tipTapLeftOneFixed, .tipTapRightOneFixed] {
+            for origin in [TrackpadMiddleClickArbiter.NativeEventOrigin.unknown,
+                           .contactInferenceAllowed, .trackpad(deviceID: 1)] {
+                let clock = LockedMiddleClickTestClock()
+                var replayed: [CGEvent] = []
+                let coordinator = TrackpadMiddleClickCoordinator(
+                    clock: { clock.value },
+                    synthesizeMiddleClick: { XCTFail("An ordinary click must not run a mapping") },
+                    releaseMiddleButton: {},
+                    postEvent: { replayed.append($0) },
+                    eventOrigin: { _ in origin }
+                )
+                coordinator.updateClickResolutions([gesture: .consume])
+                coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
+                for count in 1...2 {
+                    let start = Double(count - 1) * 0.15 + 0.01
+                    clock.value = start
+                    coordinator.observe(frame: .init(deviceID: 1, timestamp: start, contacts: [
+                        .init(identifier: count, x: 0.5, y: 0.5),
+                    ]))
+                    clock.value = start + 0.04
+                    coordinator.observe(frame: .init(deviceID: 1, timestamp: clock.value, contacts: []))
+                    for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+                        clock.value += 0.001
+                        let event = try XCTUnwrap(makeMouseEvent(type: type, eventNumber: Int64(count)))
+                        event.setIntegerValueField(.mouseEventClickState, value: Int64(count))
+                        event.timestamp = UInt64(clock.value * 1_000_000_000)
+                        let timestamp = event.timestamp
+                        let result = try XCTUnwrap(coordinator.handleNativeEvent(type: type, event: event))
+                        XCTAssertTrue(result.takeUnretainedValue() === event)
+                        XCTAssertEqual(event.getIntegerValueField(.mouseEventClickState), Int64(count))
+                        XCTAssertEqual(event.timestamp, timestamp)
+                    }
+                }
+                coordinator.reset()
+                XCTAssertTrue(replayed.isEmpty)
+            }
+        }
+    }
+
+    func testFixedOnlyClickBeforeReleaseReplaysWithinShortOrderingWindow() throws {
+        let clock = LockedMiddleClickTestClock()
+        var replayed: [CGEvent] = []
+        let proxy = try XCTUnwrap(OpaquePointer(bitPattern: 1))
+        let coordinator = TrackpadMiddleClickCoordinator(
+            clock: { clock.value }, synthesizeMiddleClick: {}, releaseMiddleButton: {},
+            postEvent: { replayed.append($0) },
+            postEventAtTap: { _, _ in XCTFail("Timer replay must not retain an expired callback proxy") },
+            eventOrigin: { _ in .unknown }
+        )
+        coordinator.updateClickResolutions([.tipTapLeftOneFixed: .consume])
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
+        clock.value = 0.01
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: clock.value, contacts: [
+            .init(identifier: 1, x: 0.5, y: 0.5),
+        ]))
+        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+            clock.value += 0.001
+            let event = try XCTUnwrap(makeMouseEvent(type: type, eventNumber: 101))
+            event.setIntegerValueField(.mouseEventClickState, value: 1)
+            XCTAssertNil(coordinator.handleNativeEvent(type: type, event: event, proxy: proxy))
+        }
+        clock.value = 0.014
+        coordinator.observe(frame: .init(deviceID: 1, timestamp: clock.value, contacts: []))
+        clock.value = 0.032
+        coordinator.candidateTimelineDidUpdate()
+        XCTAssertEqual(replayed.map(\.type), [.leftMouseDown, .leftMouseUp])
+        XCTAssertEqual(replayed.map { $0.getIntegerValueField(.mouseEventClickState) }, [1, 1])
+        coordinator.reset()
+        XCTAssertEqual(replayed.count, 2)
+    }
+
+    func testBufferedFirstClickReplaysAtCurrentTapBeforeSecondClick() throws {
+        // Exercise both a second Down before buffer expiry and expiry during that callback.
+        for secondDownTime in [0.028, 0.04] {
+            let clock = LockedMiddleClickTestClock()
+            var tapReplays: [CGEvent] = []
+            var hidReplays: [CGEvent] = []
+            let proxy = try XCTUnwrap(OpaquePointer(bitPattern: 1))
+            let coordinator = TrackpadMiddleClickCoordinator(
+                clock: { clock.value }, synthesizeMiddleClick: {}, releaseMiddleButton: {},
+                postEvent: { hidReplays.append($0) },
+                postEventAtTap: { actualProxy, event in
+                    XCTAssertEqual(actualProxy, proxy)
+                    tapReplays.append(event)
+                },
+                eventOrigin: { _ in .unknown }
+            )
+            coordinator.updateClickResolutions([.tipTapLeftOneFixed: .consume])
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: 0, contacts: []))
+            clock.value = 0.01
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: clock.value, contacts: [
+                .init(identifier: 1, x: 0.5, y: 0.5),
+            ]))
+            for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+                clock.value += 0.001
+                let event = try XCTUnwrap(makeMouseEvent(type: type, eventNumber: 101))
+                event.setIntegerValueField(.mouseEventClickState, value: 1)
+                event.timestamp = UInt64(clock.value * 1_000_000_000)
+                XCTAssertNil(coordinator.handleNativeEvent(type: type, event: event, proxy: proxy))
+            }
+            clock.value = 0.014
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: clock.value, contacts: []))
+            clock.value = 0.02
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: clock.value, contacts: [
+                .init(identifier: 2, x: 0.5, y: 0.5),
+            ]))
+            clock.value = 0.025
+            coordinator.observe(frame: .init(deviceID: 1, timestamp: clock.value, contacts: []))
+            clock.value = secondDownTime
+            let second = try XCTUnwrap(makeMouseEvent(type: .leftMouseDown, eventNumber: 102))
+            second.setIntegerValueField(.mouseEventClickState, value: 2)
+            XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseDown, event: second, proxy: proxy))
+            XCTAssertEqual(tapReplays.map(\.type), [.leftMouseDown, .leftMouseUp])
+            XCTAssertEqual(tapReplays.map { $0.getIntegerValueField(.mouseEventNumber) }, [101, 101])
+            XCTAssertEqual(tapReplays.map { $0.getIntegerValueField(.mouseEventClickState) }, [1, 1])
+            XCTAssertEqual(tapReplays.map(\.timestamp), [11_000_000, 12_000_000])
+            XCTAssertTrue(tapReplays.allSatisfy {
+                $0.getIntegerValueField(.eventSourceUserData) == TrackpadMiddleClickCoordinator.replayMarker
+            })
+            XCTAssertTrue(hidReplays.isEmpty)
+            clock.value += 0.001
+            let up = try XCTUnwrap(makeMouseEvent(type: .leftMouseUp, eventNumber: 102))
+            XCTAssertNotNil(coordinator.handleNativeEvent(type: .leftMouseUp, event: up, proxy: proxy))
+            coordinator.reset()
+        }
+    }
+
     func testFixedOnlyTipTapBufferReplaysAfterOrderingWindow() throws {
         let clock = LockedMiddleClickTestClock()
         var postedTypes: [CGEventType] = []
