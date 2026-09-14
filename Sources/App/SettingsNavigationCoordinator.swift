@@ -113,7 +113,7 @@ struct SettingsSearchFocusRequest: Equatable {
 
 struct AboutUpdateActionRequest: Equatable {
     let id: UInt
-    let version: String
+    let version: String?
 }
 
 enum GeneralSettingsSearchTarget: String, Hashable {
@@ -121,7 +121,6 @@ enum GeneralSettingsSearchTarget: String, Hashable {
     case appearance
     case language
     case menuBarIcon
-    case menuBarClickBehavior
     case appShortcuts
     case preferencesBackup
 
@@ -469,7 +468,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
         return true
     }
 
-    func requestAboutUpdateAction(version: String) {
+    func requestAboutUpdateAction(version: String?) {
         navigate(to: .about)
         nextAboutUpdateActionRequestID &+= 1
         aboutUpdateActionRequest = AboutUpdateActionRequest(

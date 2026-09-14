@@ -238,10 +238,18 @@ struct ComponentPanelContent: View {
     let contentBodyHeight: CGFloat
     let isPanelVisible: Bool
     let onDismiss: () -> Void
+    var panelID: String? = nil
+    var suppliedItems: [PluginComponentItem]? = nil
+    var embedded = false
+    var suppliedPlacements: [ComponentGridPlacement]? = nil
+    var suppliedGridHeight: CGFloat? = nil
+    var onInlinePresentationChange: (Bool) -> Void = { _ in }
+
+    private var items: [PluginComponentItem] { suppliedItems ?? pluginHost.componentItems }
     @Environment(\.menuBarPanelTheme) private var theme
 
     private var placements: [ComponentGridPlacement] {
-        layoutCache.placements(for: pluginHost.componentItems)
+        suppliedPlacements ?? layoutCache.placements(for: items)
     }
 
     var body: some View {
@@ -277,14 +285,23 @@ struct ComponentPanelContent: View {
                     syncDetailPanel()
                 }
             }
+            .allowsHitTesting(false)
         )
         .onAppear { [detailCoordinator] in
-            pluginHost.componentDetailPresentationHandler = { [weak detailCoordinator] pluginID, detailID in
+            let handler: (String, String) -> Void = { [weak detailCoordinator] pluginID, detailID in
                 detailCoordinator?.toggle(pluginID: pluginID, detailID: detailID)
             }
+            if let panelID { pluginHost.componentDetailHandlersByPanelID[panelID] = handler }
+            else { pluginHost.componentDetailPresentationHandler = handler }
             secondaryPanelController.onHostWindowDismissRequest = { [weak detailCoordinator] in
                 detailCoordinator?.dismiss()
             }
+        }
+        .onChange(of: items.map(\.id)) { _, ids in
+            if let selectedID = detailCoordinator.state.selection?.pluginID, !ids.contains(selectedID) { dismissDetail() }
+        }
+        .onChange(of: secondaryPanelController.isPresentingInline) { _, inline in
+            onInlinePresentationChange(inline)
         }
         .onChange(of: detailCoordinator.state) {
             syncDetailPanel()
@@ -303,7 +320,9 @@ struct ComponentPanelContent: View {
             secondaryPanelController.applyCurrentAppearance()
         }
         .onDisappear {
-            pluginHost.componentDetailPresentationHandler = nil
+            onInlinePresentationChange(false)
+            if let panelID { pluginHost.componentDetailHandlersByPanelID.removeValue(forKey: panelID) }
+            else { pluginHost.componentDetailPresentationHandler = nil }
             secondaryPanelController.onHostWindowDismissRequest = nil
             dismissDetail()
             secondaryPanelController.setHostWindow(nil)
@@ -312,28 +331,26 @@ struct ComponentPanelContent: View {
 
     @ViewBuilder
     private var dashboardContent: some View {
-        if pluginHost.componentItems.isEmpty {
+        if items.isEmpty {
             emptyState
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView(.vertical, showsIndicators: false) {
-                ComponentGridView(
-                    pluginHost: pluginHost,
-                    items: pluginHost.componentItems,
-                    placements: placements,
-                    detailAnchorPluginID: detailCoordinator.state.selection?.pluginID,
-                    onDismiss: onDismiss,
-                    onCardFrameChange: detailCoordinator.updateCardFrame
-                )
+            if embedded {
+                grid
+            } else {
+                ScrollView(.vertical, showsIndicators: false) { grid }
+                    .background(ScrollViewScrollerVisibilityConfigurator())
+                    .clipShape(RoundedRectangle(cornerRadius: ComponentPanelLayout.scrollClipCornerRadius, style: .continuous))
             }
-            .background(ScrollViewScrollerVisibilityConfigurator())
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: ComponentPanelLayout.scrollClipCornerRadius,
-                    style: .continuous
-                )
-            )
         }
+    }
+
+    private var grid: some View {
+        ComponentGridView(
+            pluginHost: pluginHost, items: items, placements: placements, contentHeight: suppliedGridHeight,
+            detailAnchorPluginID: detailCoordinator.state.selection?.pluginID,
+            onDismiss: onDismiss, onCardFrameChange: detailCoordinator.updateCardFrame
+        )
     }
 
     private var detailContent: PluginComponentDetailContent? {
@@ -398,6 +415,7 @@ private struct ComponentGridView: View {
     @ObservedObject var pluginHost: PluginHost
     let items: [PluginComponentItem]
     let placements: [ComponentGridPlacement]
+    var contentHeight: CGFloat? = nil
     let detailAnchorPluginID: String?
     let onDismiss: () -> Void
     let onCardFrameChange: (String, CGRect?) -> Void
@@ -438,7 +456,7 @@ private struct ComponentGridView: View {
         }
         .frame(
             width: ComponentPanelLayout.gridWidth,
-            height: ComponentPanelLayout.gridContentHeight(for: placements),
+            height: contentHeight ?? ComponentPanelLayout.gridContentHeight(for: placements),
             alignment: .topLeading
         )
     }
@@ -522,7 +540,7 @@ final class ComponentDetailCoordinator: ObservableObject {
 }
 
 @MainActor
-private final class ComponentGridLayoutCache: ObservableObject {
+final class ComponentGridLayoutCache: ObservableObject {
     private struct LayoutItem: Equatable {
         let id: String
         let span: PluginComponentSpan

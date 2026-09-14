@@ -1153,6 +1153,223 @@ final class PluginHostComponentSupportTests: XCTestCase {
         )
     }
 
+    func testCustomPanelMovesOnlyOneEntryAndPreservesCachedComponentView() throws {
+        let dual = MockCombinedPlugin(id: "dual")
+        let host = makeHost(plugins: [dual])
+        let activationCount = dual.activateCallCount
+        let deactivationCount = dual.deactivateCallCount
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        _ = host.componentViewItem(for: "dual", dismiss: {})
+        host.assignPanelEntry(pluginID: "dual", surface: .dashboard, to: panelID)
+        XCTAssertTrue(host.componentItems(in: "components").isEmpty)
+        XCTAssertEqual(host.componentItems(in: panelID).map(\.id), ["dual"])
+        XCTAssertEqual(host.panelItems(in: "features").map(\.id), ["dual"])
+        XCTAssertTrue(host.panelItems(in: panelID).isEmpty)
+        XCTAssertTrue(host.isComponentViewCached(for: "dual"))
+        XCTAssertEqual(dual.activateCallCount, activationCount)
+        XCTAssertEqual(dual.deactivateCallCount, deactivationCount)
+    }
+
+    func testCustomPanelVisibilityOnlyNotifiesAssignedEntries() throws {
+        let dual = MockCombinedPlugin(id: "dual")
+        let host = makeHost(plugins: [dual])
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        host.assignPanelEntry(pluginID: "dual", surface: .dashboard, to: panelID)
+        host.setVisibleMenuBarPanel("features")
+        host.setVisibleMenuBarPanel(panelID)
+        host.setVisibleMenuBarPanel(panelID)
+        host.setVisibleMenuBarPanel(nil)
+        XCTAssertEqual(dual.surfaceEvents.filter { $0 == .visible(.primary) }.count, 1)
+        XCTAssertEqual(dual.surfaceEvents.filter { $0 == .hidden(.primary) }.count, 1)
+        XCTAssertEqual(dual.surfaceEvents.filter { $0 == .visible(.component) }.count, 1)
+        XCTAssertEqual(dual.surfaceEvents.filter { $0 == .hidden(.component) }.count, 1)
+    }
+
+    func testDeletingMixedPanelReturnsHiddenAndVisibleEntriesToDefaults() throws {
+        let host = makeHost(plugins: [MockCombinedPlugin(id: "dual")])
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        host.assignPanelEntry(pluginID: "dual", surface: .dashboard, to: panelID)
+        host.assignPanelEntry(pluginID: "dual", surface: .featurePanel, to: panelID)
+        host.setPluginVisible(false, id: "dual", on: .dashboard)
+        host.deleteMenuBarPanel(id: panelID)
+        XCTAssertEqual(host.panelItems(in: "features").map(\.id), ["dual"])
+        XCTAssertTrue(host.componentItems(in: "components").isEmpty)
+        XCTAssertEqual(host.panelLayoutItems(in: "components", surface: .dashboard, hidden: true).map(\.id), ["dual"])
+    }
+
+    func testMixedPanelHasIndependentOrdersAndMovingAppendsEntry() throws {
+        let host = makeHost(plugins: [MockCombinedPlugin(id: "one", order: 1), MockCombinedPlugin(id: "two", order: 2)])
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        for id in ["one", "two"] {
+            for surface in PluginDisplaySurface.allCases { host.assignPanelEntry(pluginID: id, surface: surface, to: panelID) }
+        }
+        host.movePanelEntry(pluginID: "two", surface: .dashboard, panelID: panelID, toOffset: 0)
+        XCTAssertEqual(host.componentItems(in: panelID).map(\.id), ["two", "one"])
+        XCTAssertEqual(host.panelItems(in: panelID).map(\.id), ["one", "two"])
+        host.assignPanelEntry(pluginID: "one", surface: .dashboard, to: "components")
+        XCTAssertEqual(host.componentItems(in: "components").map(\.id), ["one"])
+        XCTAssertEqual(host.componentItems(in: panelID).map(\.id), ["two"])
+    }
+
+    func testRestoreDefaultPanelsResetsLayoutAndRemovesOnlyCustomPanelShortcuts() throws {
+        let dual = MockCombinedPlugin(id: "dual")
+        let host = makeHost(plugins: [dual])
+        let custom = try XCTUnwrap(host.addMenuBarPanel())
+        host.assignPanelEntry(pluginID: "dual", surface: .dashboard, to: custom)
+        host.assignPanelEntry(pluginID: "dual", surface: .featurePanel, to: custom)
+        host.setPluginVisible(false, id: "dual", on: .dashboard)
+        var original = host.menuBarPanels[0]
+        original.name = "Renamed"
+        original.systemImage = "heart"
+        original.isHidden = true
+        host.updateMenuBarPanel(original)
+        host.moveMenuBarPanel(id: custom, toOffset: 0)
+        let customReference = host.panelActionReference(id: custom)
+        let defaultReference = host.panelActionReference(id: "features")
+        let customBinding = ShortcutBinding(keyCode: UInt16(kVK_ANSI_K), modifiers: [.control, .option])
+        let defaultBinding = ShortcutBinding(keyCode: UInt16(kVK_ANSI_J), modifiers: [.control, .option])
+        XCTAssertNil(host.setActionShortcutBindingAndReturnError(customBinding, for: customReference))
+        XCTAssertNil(host.setActionShortcutBindingAndReturnError(defaultBinding, for: defaultReference))
+        let activationCount = dual.activateCallCount
+        let deactivationCount = dual.deactivateCallCount
+
+        XCTAssertNil(host.restoreDefaultMenuBarPanelLayout())
+        XCTAssertEqual(host.menuBarPanels, MenuBarPanelDefinition.defaults)
+        XCTAssertEqual(host.menuBarPanelStore.configuration, MenuBarPanelConfiguration())
+        XCTAssertNil(host.actionShortcutSettingsItem(for: customReference))
+        XCTAssertEqual(host.actionShortcutSettingsItem(for: defaultReference)?.assignment.binding, defaultBinding)
+        XCTAssertEqual(host.panelLayoutEntries(in: "components", hidden: true).map { $0.item.id }, ["dual"])
+        XCTAssertEqual(host.panelItems(in: "features").map(\.id), ["dual"])
+        XCTAssertEqual(dual.activateCallCount, activationCount)
+        XCTAssertEqual(dual.deactivateCallCount, deactivationCount)
+        XCTAssertEqual(MenuBarPanelStore(userDefaults: UserDefaults(suiteName: suiteName)!).configuration, MenuBarPanelConfiguration())
+    }
+
+    func testCustomPanelShortcutsUseRegistryAndRejectConflicts() throws {
+        let host = makeHost()
+        let first = try XCTUnwrap(host.addMenuBarPanel())
+        let second = try XCTUnwrap(host.addMenuBarPanel())
+        let binding = ShortcutBinding(keyCode: UInt16(kVK_ANSI_K), modifiers: [.control, .option])
+        XCTAssertNil(host.setActionShortcutBindingAndReturnError(binding, for: host.panelActionReference(id: first)))
+        XCTAssertNotNil(host.setActionShortcutBindingAndReturnError(binding, for: host.panelActionReference(id: second)))
+        host.deleteMenuBarPanel(id: first)
+        XCTAssertNil(host.actionShortcutSettingsItem(for: host.panelActionReference(id: first)))
+        XCTAssertNil(host.setActionShortcutBindingAndReturnError(binding, for: host.panelActionReference(id: second)))
+    }
+
+    func testMixedPanelSharesOneOrderAcrossSettingsAndRendering() throws {
+        let host = makeHost(plugins: [MockCombinedPlugin(id: "one", order: 1), MockCombinedPlugin(id: "two", order: 2)])
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        host.assignPanelEntry(pluginID: "one", surface: .dashboard, to: panelID)
+        host.assignPanelEntry(pluginID: "one", surface: .featurePanel, to: panelID)
+        host.assignPanelEntry(pluginID: "two", surface: .dashboard, to: panelID)
+        let original = host.panelEntries(in: panelID)
+        XCTAssertEqual(original.map(\.surface), [.dashboard, .featurePanel, .dashboard])
+        XCTAssertEqual(host.panelLayoutEntries(in: panelID).map(\.entry), original)
+        host.movePanelEntry(pluginID: "two", surface: .dashboard, panelID: panelID, toOffset: 0)
+        let reordered = [original[2], original[0], original[1]]
+        XCTAssertEqual(host.panelEntries(in: panelID), reordered)
+        host.setPluginVisible(false, id: "one", on: .dashboard)
+        XCTAssertEqual(host.panelEntries(in: panelID), [original[2], original[1]])
+        XCTAssertEqual(host.panelLayoutEntries(in: panelID, hidden: true).map(\.entry), [original[0]])
+        host.movePanelEntry(pluginID: "one", surface: .featurePanel, panelID: panelID, toOffset: 0)
+        host.setPluginVisible(true, id: "one", on: .dashboard)
+        XCTAssertEqual(host.panelEntries(in: panelID), [original[1], original[0], original[2]])
+        host.assignPanelEntry(pluginID: "two", surface: .featurePanel, to: panelID)
+        XCTAssertEqual(host.panelEntries(in: panelID).last, MenuBarPanelEntry(pluginID: "two", surface: .featurePanel))
+    }
+
+    func testInterleavedPlacementKeepsActionsBetweenCardGrids() throws {
+        let span = try XCTUnwrap(PluginComponentSpan(width: 2, height: 12))
+        let host = makeHost(plugins: [MockCombinedPlugin(id: "one", order: 1, span: span),
+                                     MockCombinedPlugin(id: "two", order: 2, span: span),
+                                     MockCombinedPlugin(id: "three", order: 3, span: span)])
+        let entries = [MenuBarPanelEntry(pluginID: "one", surface: .dashboard),
+                       MenuBarPanelEntry(pluginID: "two", surface: .dashboard),
+                       MenuBarPanelEntry(pluginID: "one", surface: .featurePanel),
+                       MenuBarPanelEntry(pluginID: "three", surface: .dashboard),
+                       MenuBarPanelEntry(pluginID: "two", surface: .featurePanel)]
+        let result = ConfiguredMenuBarPanelLayout.placement(entries: entries, components: host.componentItems,
+                                                          features: host.panelItems)
+        XCTAssertEqual(result.components.map(\.column), [0, 2, 0])
+        XCTAssertEqual(result.components[0].yOffset, result.components[1].yOffset)
+        let firstAction = try XCTUnwrap(result.featureOffsets["one"])
+        let secondAction = try XCTUnwrap(result.featureOffsets["two"])
+        let cardHeight = ComponentPanelLayout.itemHeight(for: span)
+        XCTAssertEqual(firstAction, cardHeight + ConfiguredMenuBarPanelLayout.itemSpacing)
+        XCTAssertGreaterThan(result.components[2].yOffset, firstAction + MenuBarPanelLayout.rowHeight(for: host.panelItems[0]))
+        XCTAssertGreaterThan(secondAction, result.components[2].yOffset + cardHeight)
+        XCTAssertEqual(result.height, secondAction + MenuBarPanelLayout.rowHeight(for: host.panelItems[1]))
+        XCTAssertEqual(result, ConfiguredMenuBarPanelLayout.placement(entries: entries, components: host.componentItems,
+                                                                    features: host.panelItems))
+    }
+
+    func testInterleavedCardsAndActionsRemainClickableAfterReordering() async throws {
+        let span = try XCTUnwrap(PluginComponentSpan(width: 2, height: 12))
+        let first = MockCombinedPlugin(id: "first", order: 1, span: span)
+        let second = MockCombinedPlugin(id: "second", order: 2, span: span)
+        let host = makeHost(plugins: [first, second])
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        host.assignPanelEntry(pluginID: first.metadata.id, surface: .dashboard, to: panelID)
+        host.assignPanelEntry(pluginID: first.metadata.id, surface: .featurePanel, to: panelID)
+        host.assignPanelEntry(pluginID: second.metadata.id, surface: .dashboard, to: panelID)
+        func placement() -> ConfiguredMenuBarPanelLayout.Placement {
+            ConfiguredMenuBarPanelLayout.placement(entries: host.panelEntries(in: panelID),
+                components: host.componentItems(in: panelID), features: host.panelItems(in: panelID))
+        }
+        let height = placement().height
+        let model = MenuBarUnifiedPanelModel(selectedTab: MenuBarPanelTab(id: panelID), contentHeight: height,
+                                            maximumFeatureListHeight: height, isPanelVisible: true)
+        let root = NSHostingView(rootView: ConfiguredMenuBarPanelsContent(
+            pluginHost: host, model: model, contentBodyHeight: height, onDismiss: {}, onOpenSettings: {},
+            onPresentDiskCleanConfiguration: {}, onPresentLaunchControlConfiguration: {}
+        ))
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: MenuBarPanelLayout.surfaceWidth, height: height),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = root
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(250))
+        func click(_ point: CGPoint) {
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                window.sendEvent(NSEvent.mouseEvent(with: type, location: root.convert(point, to: nil), modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)!)
+            }
+        }
+        let cardHeight = ComponentPanelLayout.itemHeight(for: span)
+        click(CGPoint(x: 40, y: cardHeight / 2))
+        click(CGPoint(x: 40, y: placement().components[1].yOffset + cardHeight / 2))
+        click(CGPoint(x: MenuBarPanelLayout.surfaceWidth - 24, y: try XCTUnwrap(placement().featureOffsets[first.metadata.id]) + 23))
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(first.componentTapCount, 1)
+        XCTAssertEqual(second.componentTapCount, 1)
+        XCTAssertEqual(first.handledActions, [.setSwitch(true)])
+        host.movePanelEntry(pluginID: first.metadata.id, surface: .featurePanel, panelID: panelID, toOffset: 0)
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(placement().featureOffsets[first.metadata.id], 0)
+        click(CGPoint(x: 40, y: placement().components[0].yOffset + cardHeight / 2))
+        click(CGPoint(x: MenuBarPanelLayout.surfaceWidth - 24, y: 23))
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(first.componentTapCount, 2)
+        XCTAssertEqual(first.handledActions.count, 2)
+    }
+
+    func testPanelBackupRestoresLayoutAndCustomShortcutTogether() throws {
+        let host = makeHost(plugins: [MockCombinedPlugin(id: "dual")])
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        host.assignPanelEntry(pluginID: "dual", surface: .dashboard, to: panelID)
+        let binding = ShortcutBinding(keyCode: UInt16(kVK_ANSI_J), modifiers: [.control, .option])
+        XCTAssertNil(host.setActionShortcutBindingAndReturnError(binding, for: host.panelActionReference(id: panelID)))
+        let backup = host.makePreferencesBackup()
+        host.deleteMenuBarPanel(id: panelID)
+        let result = try host.importPreferences(backup)
+        XCTAssertTrue(result.shortcutErrors.isEmpty)
+        XCTAssertEqual(host.componentItems(in: panelID).map(\.id), ["dual"])
+        XCTAssertEqual(host.actionShortcutSettingsItem(for: host.panelActionReference(id: panelID))?.assignment.binding, binding)
+    }
+
     private func makeHost(
         plugins: [any MacToolsPlugin] = [],
         dynamicPluginManager: DynamicPluginManager? = nil,
@@ -1579,15 +1796,18 @@ private final class MockCombinedPlugin: MacToolsPlugin, PluginPrimaryPanel, Plug
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
-    let descriptor = PluginComponentDescriptor(span: .oneByOne)
+    let descriptor: PluginComponentDescriptor
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     private(set) var surfaceEvents: [SurfaceEvent] = []
+    private(set) var componentTapCount = 0
+    private(set) var handledActions: [PluginPanelAction] = []
     private(set) var activateCallCount = 0
     private(set) var deactivateCallCount = 0
 
-    init(id: String, order: Int = 1) {
+    init(id: String, order: Int = 1, span: PluginComponentSpan = .oneByOne) {
+        descriptor = PluginComponentDescriptor(span: span)
         self.metadata = PluginMetadata(
             id: id,
             title: id,
@@ -1621,10 +1841,21 @@ private final class MockCombinedPlugin: MacToolsPlugin, PluginPrimaryPanel, Plug
     }
 
     func makeView(context: PluginComponentContext) -> AnyView {
-        AnyView(Text(context.pluginID))
+        AnyView(
+            Button { self.componentTapCount += 1 } label: {
+                VStack(spacing: 8) {
+                    Image(systemName: metadata.iconName).font(.title2)
+                    Text(context.pluginID).font(.headline)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(metadata.iconTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        )
     }
 
-    func handleAction(_ action: PluginPanelAction) {}
+    func handleAction(_ action: PluginPanelAction) { handledActions.append(action) }
 
     func activate(context: PluginRuntimeContext) {
         activateCallCount += 1

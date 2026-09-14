@@ -969,7 +969,7 @@ final class AppWindowRouter: NSObject, NSWindowDelegate {
         window.layoutIfNeeded()
         onProgrammaticSettingsPresentation()
 
-        if let pendingAppUpdateVersion {
+        if case .appUpdate = request {
             settingsNavigationCoordinator?.requestAboutUpdateAction(
                 version: pendingAppUpdateVersion
             )

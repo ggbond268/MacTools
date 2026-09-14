@@ -513,11 +513,9 @@ private struct MenuBarPanelThemePreview: View {
                 previewFeatureCard(style)
                 previewComponentCard(style)
             }
-
-            previewActionBar(style)
         }
         .padding(8)
-        .frame(height: 102)
+        .frame(height: 92)
         .background(style.surfaces.panel)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .environment(\.colorScheme, colorScheme)
@@ -525,9 +523,7 @@ private struct MenuBarPanelThemePreview: View {
     }
 
     private func previewHeader(_ style: MenuBarPanelThemeStyle) -> some View {
-        HStack {
-            Spacer(minLength: 0)
-
+        ZStack {
             Capsule()
                 .fill(style.surfaces.panel)
                 .frame(width: 54, height: 15)
@@ -556,21 +552,20 @@ private struct MenuBarPanelThemePreview: View {
                     }
                 }
 
-            Spacer(minLength: 0)
-        }
-    }
+            HStack {
+                Spacer(minLength: 0)
 
-    private func previewActionBar(_ style: MenuBarPanelThemeStyle) -> some View {
-        HStack(spacing: 6) {
-            Spacer(minLength: 0)
+                Image(systemName: "gearshape")
+                    .font(.system(size: 7, weight: .medium))
+                    .foregroundStyle(style.text.secondary)
 
-            ForEach(0..<3) { index in
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(index == 0 ? style.text.tertiary : style.text.secondary)
-                    .frame(width: index == 0 ? 7 : 5, height: 5)
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 7, weight: .medium))
+                    .foregroundStyle(style.text.secondary)
             }
+            .padding(.trailing, 1)
         }
-        .padding(.top, 4)
+        .frame(height: 15)
     }
 
     private func previewFeatureCard(_ style: MenuBarPanelThemeStyle) -> some View {

@@ -51,15 +51,28 @@ final class AboutUpdateViewModelTests: XCTestCase {
         XCTAssertEqual(updater.checkForUpdatesCallCount, 0)
     }
 
-    func testKnownAvailableUpdateStartsInteractiveFlowWithoutAnotherProbe() {
+    func testKnownAvailableUpdateStartsInteractiveFlowWithoutAnotherProbe() async {
         let updater = StubUpdater()
         let viewModel = AboutUpdateViewModel(updater: updater)
 
-        viewModel.performAvailableUpdateAction(version: "0.3.0")
+        await viewModel.performRequestedUpdateAction(version: "0.3.0")
 
         XCTAssertEqual(viewModel.state, .updateAvailable(version: "0.3.0"))
         XCTAssertEqual(updater.checkForUpdateInformationCallCount, 0)
         XCTAssertEqual(updater.checkForUpdatesCallCount, 1)
+    }
+
+    func testRequestedCheckWithoutKnownVersionProbesInsteadOfReusingAnOldInstallAction() async {
+        let updater = StubUpdater()
+        let viewModel = AboutUpdateViewModel(updater: updater)
+        await viewModel.performRequestedUpdateAction(version: "0.3.0")
+        updater.probeResult = .upToDate
+
+        await viewModel.performRequestedUpdateAction(version: nil)
+
+        XCTAssertEqual(viewModel.state, .upToDate)
+        XCTAssertEqual(updater.checkForUpdateInformationCallCount, 1)
+        XCTAssertEqual(updater.checkForUpdatesCallCount, 1, "A manual check must not repeat the previous install action")
     }
 
     func testManualCheckUsesKnownAvailabilityWithoutStartingAnotherProbe() async {

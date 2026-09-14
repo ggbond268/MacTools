@@ -53,20 +53,18 @@ final class PanelLayoutDragScroller: ObservableObject {
 
 struct PanelLayoutScrollAnchor: NSViewRepresentable {
     let scroller: PanelLayoutDragScroller
+    let hover: PanelLayoutHoverState
 
     func makeNSView(context: Context) -> NSView {
-        let view = AnchorView()
+        let view = PanelLayoutHoverTrackingView()
         view.identifier = NSUserInterfaceItemIdentifier("panel.layout.canvas")
+        view.hover = hover
+        hover.trackingView = view
         scroller.anchor = view
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         scroller.anchor = nsView
-    }
-
-    private final class AnchorView: NSView {
-        override var isFlipped: Bool { true }
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }

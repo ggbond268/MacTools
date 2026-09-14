@@ -83,7 +83,7 @@ final class MenuBarPanelLayoutTests: XCTestCase {
 
         XCTAssertEqual(
             MenuBarPanelLayout.contentSize(for: [item]),
-            NSSize(width: 316, height: 254)
+            NSSize(width: 316, height: 224)
         )
     }
 
@@ -223,8 +223,29 @@ final class MenuBarPanelLayoutTests: XCTestCase {
     func testEmptyContentSizeIncludesMarketplacePrompt() {
         XCTAssertEqual(
             MenuBarPanelLayout.contentSize(for: []),
-            NSSize(width: 316, height: 254)
+            NSSize(width: 316, height: 224)
         )
+    }
+
+    func testEditorDragFramesPreserveExpandedFeatureRowGeometry() {
+        let expanded = makeItem(id: "expanded", controlStyle: .disclosure, isExpanded: true,
+                                controls: [PluginPanelControl(
+                                    id: "enabled", kind: .switchRow, options: [], selectedOptionID: nil,
+                                    dateValue: nil, minimumDate: nil, displayedComponents: nil,
+                                    datePickerStyle: nil, sectionTitle: nil, actionTitle: "Enabled",
+                                    actionIconSystemName: "checkmark", isEnabled: true
+                                )])
+        let collapsed = makeItem(id: "collapsed", controlStyle: .disclosure, isExpanded: false)
+        let entries = [expanded, collapsed].map { MenuBarPanelEntry(pluginID: $0.id, surface: .featurePanel) }
+        let placement = ConfiguredMenuBarPanelLayout.placement(entries: entries, components: [], features: [expanded, collapsed])
+        let frames = PanelLayoutEntryFrame.frames(entries: entries, placement: placement)
+        XCTAssertEqual(frames.count, 2)
+        XCTAssertEqual(frames[0].frame.height, MenuBarPanelLayout.rowHeight(for: expanded))
+        XCTAssertGreaterThan(frames[0].frame.height, frames[1].frame.height)
+        XCTAssertEqual(frames[1].frame.minY, frames[0].frame.maxY + MenuBarPanelLayout.featureRowSpacing)
+        XCTAssertEqual(placement.height, frames[1].frame.maxY)
+        XCTAssertEqual(PanelLayoutEntryFrame.destination(at: CGPoint(x: 20, y: frames[0].frame.maxY - 1),
+                                                          frames: frames, rightToLeft: false), 1)
     }
 
     private func makeItem(

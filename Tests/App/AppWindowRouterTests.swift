@@ -1319,6 +1319,26 @@ final class AppWindowRouterTests: XCTestCase {
         router.settingsWindow?.close()
     }
 
+    func testAppUpdateWithoutKnownVersionStillRequestsACheck() throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let updater = AppUpdater(startingUpdater: false)
+        let router = makeRouter(defaults: defaults, appUpdater: updater)
+        defer { router.settingsWindow?.close() }
+        router.showSettings()
+        let coordinator = try XCTUnwrap(router.settingsNavigationCoordinator)
+        var requests: [AboutUpdateActionRequest] = []
+        let subscription = coordinator.$aboutUpdateActionRequest.compactMap { $0 }.sink { requests.append($0) }
+        defer { subscription.cancel() }
+
+        router.presentSettings(.appUpdate)
+
+        XCTAssertEqual(coordinator.destination, .about)
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertNil(requests.first?.version)
+    }
+
     func testExplicitGeneralAndAboutRequestsSelectTheirSettingsDestinations() throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
