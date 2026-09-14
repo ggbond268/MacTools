@@ -10,19 +10,19 @@ enum CLIInstallError: String, Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupported: AppL10n.settings("cli.install.error.unsupported",
-            defaultValue: "仅支持 Apple 芯片 Mac 上的已签名 Nightly 版本。")
+            defaultValue: "仅支持 Apple 芯片 Mac 上的已签名 MacTools 版本。")
         case .metadata: AppL10n.settings("cli.install.error.metadata",
-            defaultValue: "此版本缺少有效的 CLI 安装信息，请更新 Nightly 后重试。")
+            defaultValue: "此版本缺少有效的 CLI 安装信息，请更新 MacTools 后重试。")
         case .download: AppL10n.settings("cli.install.error.download",
             defaultValue: "CLI 下载失败或超过大小限制，请检查网络后重试。")
         case .archive: AppL10n.settings("cli.install.error.archive",
             defaultValue: "CLI 压缩包校验失败，原有安装未更改。")
         case .signature: AppL10n.settings("cli.install.error.signature",
-            defaultValue: "CLI 未通过 macOS 签名检查，请重试或更新 Nightly。")
+            defaultValue: "CLI 未通过 macOS 签名检查，请重试或更新 MacTools。")
         case .notarization: AppL10n.settings("cli.install.error.notarization",
-            defaultValue: "无法确认 CLI 的公证状态，请检查网络后重试，或更新 Nightly。")
+            defaultValue: "无法确认 CLI 的公证状态，请检查网络后重试，或更新 MacTools。")
         case .identity: AppL10n.settings("cli.install.error.identity",
-            defaultValue: "CLI 与此 Nightly 的发布身份不匹配。")
+            defaultValue: "CLI 与此 MacTools 的发布身份不匹配。")
         case .version: AppL10n.settings("cli.install.error.version",
             defaultValue: "CLI 版本与应用不匹配，请重试。")
         case .incompatible: AppL10n.settings("cli.install.error.incompatible",
@@ -30,7 +30,7 @@ enum CLIInstallError: String, Error, LocalizedError {
         case .ownership: AppL10n.settings("cli.install.error.ownership",
             defaultValue: "无法确认 CLI 安装归属，已停止更改。请保留文件并检查安装路径。")
         case .collision: AppL10n.settings("cli.install.error.collision",
-            defaultValue: "mactools-nightly 路径已被占用，请自行移动现有命令后重试。")
+            defaultValue: "CLI 命令路径已被占用，请自行移动现有命令后重试。")
         case .filesystem: AppL10n.settings("cli.install.error.filesystem",
             defaultValue: "无法安全完成 CLI 文件操作，请检查可用空间和目录权限后重试。")
         case .busy: AppL10n.settings("cli.install.error.busy",
@@ -38,6 +38,19 @@ enum CLIInstallError: String, Error, LocalizedError {
         case .validation: AppL10n.settings("cli.install.error.validation",
             defaultValue: "CLI 连接验证失败，已尝试恢复上一版本。请检查命令行集成和后台运行权限后重试。")
         }
+    }
+}
+
+/// Stable metadata is opt-in at packaging time; ordinary stable builds have no managed installer.
+enum CLIInstallChannel: String, Sendable {
+    case stable, nightly
+
+    var hostSuffix: String { self == .stable ? ".mactools" : ".mactools.nightly" }
+    var commandName: String { self == .stable ? "mactools" : "mactools-nightly" }
+    var supportDirectory: String { self == .stable ? "MacTools" : "MacTools Nightly" }
+
+    static func isAvailable(channel: String?, hasManifest: Bool) -> Bool {
+        channel == "nightly" || (channel == "stable" && hasManifest)
     }
 }
 
@@ -66,17 +79,20 @@ struct CLIReleaseManifest: Codable, Equatable, Sendable {
         protocolMinimum <= CLIProtocolVersion.current && protocolMaximum >= CLIProtocolVersion.minimum
     }
 
-    func validate(version: String, build: String, identifier: String, team: String) throws {
+    func validate(version: String, build: String, identifier: String, team: String,
+                  expectedChannel: String? = nil) throws {
         func matches(_ text: String, _ pattern: String) -> Bool {
             text.range(of: pattern, options: .regularExpression) != nil
         }
-        guard schema == 1, channel == "nightly", architecture == "arm64",
+        guard let releaseChannel = CLIInstallChannel(rawValue: channel),
+              expectedChannel == nil || expectedChannel == channel,
+              schema == 1, architecture == "arm64",
               appVersion == version, appBuild == build, cliVersion == appVersion, cliBuild == appBuild,
               matches(cliVersion, "^[0-9]+(\\.[0-9]+){0,3}$"),
               matches(cliBuild, "^[0-9]+(\\.[0-9]+){0,3}$"),
               matches(sourceCommit, "^[a-f0-9]{40}$"), matches(sha256, "^[a-f0-9]{64}$"),
               size > 0, size <= Self.maximumArchiveSize,
-              identifier.hasSuffix(".mactools.nightly"), signingIdentifier == identifier + ".cli",
+              identifier.hasSuffix(releaseChannel.hostSuffix), signingIdentifier == identifier + ".cli",
               teamIdentifier == team, matches(team, "^[A-Z0-9]{10}$"),
               protocolMinimum > 0, protocolMaximum >= protocolMinimum,
               protocolMaximum <= 1000 else { throw CLIInstallError.metadata }
@@ -87,9 +103,11 @@ struct CLIReleaseManifest: Codable, Equatable, Sendable {
                 throw CLIInstallError.metadata
             }
         }
-        // Both channels use immutable versioned release directories, never /latest or /current.
+        // Releases use versioned directories, never /latest or /current.
         let releasePath = sourceRelease.path
-        let githubRelease = releasePath.hasSuffix("/releases/download/nightly-" + cliBuild.replacingOccurrences(of: ".", with: "-"))
+        let tag = releaseChannel == .nightly
+            ? "nightly-" + cliBuild.replacingOccurrences(of: ".", with: "-") : "v" + cliVersion
+        let githubRelease = releasePath.hasSuffix("/releases/download/" + tag)
         let localRelease = releasePath == "/releases/" + cliBuild
         guard githubRelease || localRelease,
               assetURL == sourceRelease.appendingPathComponent("mactools-cli-\(cliVersion)-\(cliBuild)-macos-arm64.zip")
@@ -99,7 +117,8 @@ struct CLIReleaseManifest: Codable, Equatable, Sendable {
 
     static func authenticated(bundle: Bundle = .main) throws -> Self {
         #if arch(arm64)
-        guard bundle.object(forInfoDictionaryKey: "MTReleaseChannel") as? String == "nightly",
+        guard let channel = bundle.object(forInfoDictionaryKey: "MTReleaseChannel") as? String,
+              CLIInstallChannel(rawValue: channel) != nil,
               let identity = CLIPeerIdentityValidator().currentIdentity(),
               identity.signingIdentifier == bundle.bundleIdentifier else { throw CLIInstallError.unsupported }
         try CLIArtifactVerifier.verifySignature(at: bundle.bundleURL,
@@ -109,7 +128,7 @@ struct CLIReleaseManifest: Codable, Equatable, Sendable {
               let manifest = try? JSONDecoder().decode(Self.self, from: data) else { throw CLIInstallError.metadata }
         try manifest.validate(version: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
             build: bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
-            identifier: identity.signingIdentifier, team: identity.teamIdentifier)
+            identifier: identity.signingIdentifier, team: identity.teamIdentifier, expectedChannel: channel)
         return manifest
         #else
         throw CLIInstallError.unsupported

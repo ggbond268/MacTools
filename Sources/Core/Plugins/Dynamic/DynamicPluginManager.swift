@@ -208,6 +208,10 @@ final class DynamicPluginManager: ObservableObject {
         packageStore.hostVersion
     }
 
+    func requirementFailure(for requirements: PluginProductMetadata.Requirements?) -> PluginRequirementChecker.Failure? {
+        packageStore.requirementChecker.failure(for: requirements)
+    }
+
     init(
         packageStore: PluginPackageStore = PluginPackageStore(),
         pluginLoader: (any DynamicPluginLoading)? = nil
@@ -944,7 +948,7 @@ final class DynamicPluginManager: ObservableObject {
                 let compatibleCatalogEntry = PluginVersionComparator.isVersion(
                     packageStore.hostVersion,
                     atLeast: entry.minimumHostVersion
-                ) ? entry : nil
+                ) && requirementFailure(for: entry.requirements) == nil ? entry : nil
                 items.append(
                     managementItem(
                         for: result,
@@ -964,6 +968,8 @@ final class DynamicPluginManager: ObservableObject {
                             current: packageStore.hostVersion
                         ).localizedDescription
                     )
+                } else if let failure = requirementFailure(for: entry.requirements) {
+                    state = .incompatible(failure.localizedDescription)
                 } else {
                     state = catalogSnapshot?.isLocalDevelopment == true
                         ? .localDevelopment

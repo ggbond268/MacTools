@@ -303,7 +303,6 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
         panel.allowsMultipleSelection = false
         panel.directoryURL = current
         PluginPresentationSafety.prepareForWindowOrdering()
-        NSApp.activate(ignoringOtherApps: true)
         return panel.runModal() == .OK ? panel.url : nil
     }
 }

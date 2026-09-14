@@ -21,6 +21,36 @@ env:
   CI_BUNDLE_IDENTIFIER_PREFIX: dev.mactools.ci
 
 jobs:
+  site:
+    name: Verify generated website
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Verify generated plugin data
+        working-directory: site
+        run: npm run check:generated-plugins
+
+      - name: Build site
+        working-directory: site
+        run: npm run build
+
+      - name: Test site controls and rendered previews
+        working-directory: site
+        run: npm test
+
   build:
     name: Build and test
     runs-on: macos-26
@@ -53,9 +83,10 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - name: Validate pending changelog fragments
-        run: /usr/bin/python3 scripts/changelog.py validate
+        run: make validate-changelog
 
       - name: Build and run tests
+        id: tests
         run: |
           xcodebuild \
             -project "${PROJECT_NAME}.xcodeproj" \
@@ -63,6 +94,7 @@ jobs:
             -configuration Debug \
             -destination "platform=macOS" \
             -derivedDataPath "${DERIVED_DATA}" \
+            -resultBundlePath build/CI-TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
@@ -70,13 +102,19 @@ jobs:
             -quiet
 
       - name: Report test failures
-        if: failure()
+        if: failure() && steps.tests.outcome == 'failure'
         run: |
-          for result in "${DERIVED_DATA}"/Logs/Test/*.xcresult; do
-            if [[ -d "$result" ]]; then
-              xcrun xcresulttool get test-results summary --path "$result"
-            fi
-          done
+          if [[ -d build/CI-TestResults.xcresult ]]; then
+            xcrun xcresulttool get test-results summary --path build/CI-TestResults.xcresult
+          fi
+
+      - name: Upload failed native test results
+        if: failure() && steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-test-results
+          path: build/CI-TestResults.xcresult
+          retention-days: 7
 
       - name: Verify native panel layout interactions
         run: make panel-layout-ui-tests

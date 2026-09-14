@@ -7,6 +7,110 @@ import XCTest
 
 @MainActor
 final class AppWindowRouterTests: XCTestCase {
+    func testCaptureCommandPaletteAppearanceForReview() async throws {
+        let capture = try PaletteCaptureSupport(name: "command-palette")
+        defer { try? capture.finish() }
+        let suite = "PaletteCapture.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = makeRouter(defaults: defaults, plugins: [
+            AppWindowRouterSettingsPlugin(id: "Synthetic Notes"),
+            AppWindowRouterSettingsPlugin(id: "Synthetic Calendar"),
+            AppWindowRouterSettingsPlugin(id: "Synthetic Clipboard")
+        ])
+        defer { router.dismissCommandPalette(restoringFocus: false) }
+        router.toggleCommandPalette()
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+        try await capture.exercise(panel) { router.toggleCommandPalette() }
+        if ProcessInfo.processInfo.environment["MACTOOLS_PALETTE_INTERACTIVE_REVIEW"] == "1" {
+            panel.appearance = NSAppearance(named: .aqua)
+            capture.setBackdrop(dark: false)
+            let field = try await focusUnifiedSearchField(in: panel)
+            let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+            editor.selectAll(nil)
+            editor.insertText("", replacementRange: NSRange(location: NSNotFound, length: 0))
+            field.delegate?.controlTextDidChange?(
+                Notification(name: NSControl.textDidChangeNotification, object: field)
+            )
+            try await capture.capture(panel, label: "interactive-review")
+            // Opt-in pause for pointer/keyboard inspection of this synthetic panel.
+            try await Task.sleep(for: .seconds(60))
+        }
+    }
+
+    func testCaptureSettingsCommandPaletteAppearanceForReview() async throws {
+        let capture = try PaletteCaptureSupport(name: "settings-command-palette")
+        defer { try? capture.finish() }
+        let suite = "PaletteCapture.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = makeRouter(defaults: defaults)
+        router.showSettings()
+        let window = try XCTUnwrap(router.settingsWindow)
+        defer { window.close() }
+        let coordinator = try XCTUnwrap(router.settingsNavigationCoordinator)
+        coordinator.presentUnifiedSearch(origin: .keyboard)
+        window.level = .floating
+        window.makeKeyAndOrderFront(nil)
+        for (name, label) in [(NSAppearance.Name.aqua, "light"),
+                              (.darkAqua, "dark"),
+                              (.accessibilityHighContrastDarkAqua, "high-contrast-dark")] {
+            window.appearance = NSAppearance(named: name)
+            try await capture.capture(window, label: label)
+        }
+        let field = try await focusUnifiedSearchField(in: window)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.insertText("general", replacementRange: NSRange(location: NSNotFound, length: 0))
+        field.delegate?.controlTextDidChange?(
+            Notification(name: NSControl.textDidChangeNotification, object: field)
+        )
+        try await capture.capture(window, label: "search")
+    }
+
+    func testStandalonePaletteKeepsEditorAndFrameAcrossAppearanceAndContentChanges() async throws {
+        let suite = "PaletteHosting.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = makeRouter(defaults: defaults)
+        router.toggleCommandPalette()
+        defer { router.dismissCommandPalette(restoringFocus: false) }
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+        let container = try XCTUnwrap(panel.contentView as?
+            CommandPaletteHostingContainer<StandaloneCommandPaletteRootView>)
+        // Let the initial presentation/focus task finish before composing text.
+        await settleWindowLayout(panel)
+        try await Task.sleep(for: .milliseconds(150))
+        let field = try await focusUnifiedSearchField(in: panel)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.setMarkedText("synthetic", selectedRange: NSRange(location: 9, length: 0),
+                             replacementRange: NSRange(location: NSNotFound, length: 0))
+        field.delegate?.controlTextDidChange?(
+            Notification(name: NSControl.textDidChangeNotification, object: field)
+        )
+        let originalFrame = panel.frame
+        for name in [NSAppearance.Name.aqua, .darkAqua, .accessibilityHighContrastDarkAqua] {
+            panel.appearance = NSAppearance(named: name)
+            await settleWindowLayout(panel)
+            XCTAssertEqual(panel.frame, originalFrame)
+            XCTAssertEqual(container.hostingView.frame, container.bounds)
+            XCTAssertTrue(field.currentEditor() === editor, "The live search field must retain its editor")
+            XCTAssertTrue(editor.hasMarkedText())
+            XCTAssertEqual(editor.string, "synthetic")
+        }
+        editor.unmarkText()
+        for query in ["general", "no matching destination", ""] {
+            editor.selectAll(nil)
+            editor.insertText(query, replacementRange: NSRange(location: NSNotFound, length: 0))
+            field.delegate?.controlTextDidChange?(
+                Notification(name: NSControl.textDidChangeNotification, object: field)
+            )
+            await settleWindowLayout(panel)
+            XCTAssertEqual(panel.frame, originalFrame, "Results must not resize the outer panel")
+            XCTAssertTrue(field.currentEditor() === editor, "The live search field must retain its editor")
+            XCTAssertEqual(editor.string, query)
+        }
+    }
+
     func testDashboardTargetInvokesOnlyDashboardAction() {
         var dashboardCallCount = 0
         var featurePanelCallCount = 0
@@ -118,7 +222,7 @@ final class AppWindowRouterTests: XCTestCase {
         router.toggleCommandPalette()
         let paletteHostingView = try XCTUnwrap(
             router.commandPalettePanel?.contentView
-                as? NSHostingView<StandaloneCommandPaletteRootView>
+                as? CommandPaletteHostingContainer<StandaloneCommandPaletteRootView>
         )
 
         XCTAssertTrue(
@@ -126,7 +230,7 @@ final class AppWindowRouterTests: XCTestCase {
                 === router.commandPaletteRecentStore
         )
         XCTAssertTrue(
-            paletteHostingView.rootView.commandPaletteRecentStore
+            paletteHostingView.hostingView.rootView.commandPaletteRecentStore
                 === router.commandPaletteRecentStore
         )
 

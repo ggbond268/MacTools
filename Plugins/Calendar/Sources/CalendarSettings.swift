@@ -40,9 +40,11 @@ enum CalendarWeekStartDay: String, CaseIterable, Identifiable, Sendable {
 final class CalendarSettingsStore: ObservableObject {
     private enum StorageKey {
         static let weekStartDay = "settings.week-start-day"
+        static let showsTodayDetails = "settings.shows-today-details"
     }
 
     @Published private(set) var weekStartDay: CalendarWeekStartDay
+    @Published private(set) var showsTodayDetails: Bool
 
     private let storage: PluginStorage
 
@@ -51,6 +53,7 @@ final class CalendarSettingsStore: ObservableObject {
         self.weekStartDay = storage.string(forKey: StorageKey.weekStartDay)
             .flatMap(CalendarWeekStartDay.init(rawValue:))
             ?? .sunday
+        self.showsTodayDetails = storage.object(forKey: StorageKey.showsTodayDetails) as? Bool ?? true
     }
 
     func setWeekStartDay(_ day: CalendarWeekStartDay) {
@@ -60,5 +63,14 @@ final class CalendarSettingsStore: ObservableObject {
 
         weekStartDay = day
         storage.set(day.rawValue, forKey: StorageKey.weekStartDay)
+    }
+
+    func setShowsTodayDetails(_ value: Bool) {
+        guard showsTodayDetails != value else {
+            return
+        }
+
+        showsTodayDetails = value
+        storage.set(value, forKey: StorageKey.showsTodayDetails)
     }
 }
