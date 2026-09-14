@@ -392,6 +392,54 @@ final class WindowSwitcherPreviewTests: XCTestCase {
         XCTAssertNil(WindowSwitcherPreview.matchingIndex(for: target, candidates: [second]))
     }
 
+    func testSystemDiscoveryFailureUsesExactFallbackAndRechecksPermission() async throws {
+        enum Failure: Error { case discovery }
+        var target = entry("other-space")
+        target.windowNumber = 42
+        var permission = true
+        var requested: [CGWindowID] = []
+        let context = CGContext(data: nil, width: 2, height: 2, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        let image = context.makeImage()!
+        let capture = WindowSwitcherSystemPreviewCapture(hasPermission: { permission }, fallback: { number, pid, _ in
+            requested.append(number)
+            XCTAssertEqual(pid, target.processIdentifier)
+            return image
+        }, discover: { throw Failure.discovery })
+        let captured = try await capture.capture(target)
+        XCTAssertNotNil(captured)
+        XCTAssertEqual(requested, [42])
+        permission = false
+        let denied = try await capture.capture(target)
+        XCTAssertNil(denied)
+        XCTAssertEqual(requested, [42])
+
+        permission = true
+        let revoked = WindowSwitcherSystemPreviewCapture(hasPermission: { permission }, fallback: { _, _, _ in
+            permission = false
+            return image
+        }, discover: { throw Failure.discovery })
+        do {
+            _ = try await revoked.capture(target)
+            XCTFail("Revocation must discard fallback image and preserve the capture failure")
+        } catch { XCTAssertFalse(permission) }
+    }
+
+    func testUnavailableAXMetadataDoesNotBlockExactWindowCapture() async {
+        var target = entry("other-space")
+        target.windowNumber = 42
+        target.metadataUnavailable = true
+        var delivered: NSImage?
+        let preview = WindowSwitcherPreview(hasPermission: { true }, capture: { captured in
+            XCTAssertEqual(captured.windowNumber, 42)
+            return NSImage(size: NSSize(width: 2, height: 2))
+        })
+        preview.onChange = { image, _ in delivered = image }
+        preview.select(target)
+        await eventually { delivered != nil }
+        preview.cancel()
+    }
+
     func testTransientFailureRetriesWithoutChangingSelection() async {
         var captures = 0
         var delivered: NSImage?

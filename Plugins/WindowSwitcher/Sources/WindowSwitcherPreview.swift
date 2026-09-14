@@ -87,7 +87,7 @@ final class WindowSwitcherPreview {
     }
 
     func select(_ entry: WindowSwitcherAppEntry?) {
-        guard let entry, entry.isWindowEntry, !entry.metadataUnavailable else {
+        guard let entry, entry.isWindowEntry, (!entry.metadataUnavailable || entry.windowNumber != nil) else {
             cancel()
             onChange?(nil, localization.string("preview.unavailable", defaultValue: "此窗口暂时无法预览。"))
             return
@@ -293,24 +293,38 @@ final class WindowSwitcherSystemPreviewCapture {
     private var capturedAt = Date.distantPast
     private let now: () -> Date
     private let discover: () async throws -> SCShareableContent
+    private let hasPermission: () -> Bool
+    private let fallback: (CGWindowID, pid_t, CGSize) async -> CGImage?
 
     init(now: @escaping () -> Date = Date.init,
+         hasPermission: @escaping () -> Bool = CGPreflightScreenCaptureAccess,
+         fallback: @escaping (CGWindowID, pid_t, CGSize) async -> CGImage? = {
+             await WindowSwitcherWindowServer.capture($0, pid: $1, size: $2)
+         },
          discover: @escaping () async throws -> SCShareableContent = {
              try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
          }) {
         self.now = now
         self.discover = discover
+        self.hasPermission = hasPermission
+        self.fallback = fallback
     }
 
     func invalidate() { content = nil; capturedAt = .distantPast }
 
     func capture(_ entry: WindowSwitcherAppEntry, detail: Bool = false) async throws -> NSImage? {
-        guard CGPreflightScreenCaptureAccess() else { invalidate(); return nil }
+        guard hasPermission() else { invalidate(); return nil }
         if let launchDate = entry.applicationLaunchDate,
            NSRunningApplication(processIdentifier: entry.processIdentifier)?.launchDate != launchDate { return nil }
         if content == nil || now().timeIntervalSince(capturedAt) >= 2 || entry.windowNumber == nil {
-            content = try await discover()
-            capturedAt = now()
+            do {
+                content = try await discover()
+                capturedAt = now()
+            } catch {
+                invalidate()
+                if let image = await fallbackCapture(entry, detail: detail) { return image }
+                throw error
+            }
         }
         guard let content else { return nil }
         let candidates = content.windows.map {
@@ -319,9 +333,12 @@ final class WindowSwitcherSystemPreviewCapture {
         }
         guard let index = WindowSwitcherPreview.matchingIndex(for: entry, candidates: candidates) else {
             invalidate()
-            return nil
+            return await fallbackCapture(entry, detail: detail)
         }
         let window = content.windows[index]
+        // An offscreen window can be listed by ScreenCaptureKit while its capture
+        // stream cannot start. Avoid spending the preview deadline on that stream.
+        if !window.isOnScreen, let image = await fallbackCapture(entry, detail: detail) { return image }
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let configuration = SCStreamConfiguration()
         let pixels = WindowSwitcherPreview.captureSize(for: window.frame, detail: detail)
@@ -330,11 +347,22 @@ final class WindowSwitcherSystemPreviewCapture {
         configuration.showsCursor = false
         do {
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
-            guard CGPreflightScreenCaptureAccess() else { invalidate(); return nil }
+            guard hasPermission() else { invalidate(); return nil }
             return NSImage(cgImage: image, size: .zero)
         } catch {
             invalidate()
+            if let image = await fallbackCapture(entry, detail: detail) { return image }
             throw error
         }
+    }
+
+    private func fallbackCapture(_ entry: WindowSwitcherAppEntry, detail: Bool) async -> NSImage? {
+        guard let number = entry.windowNumber, hasPermission(), !Task.isCancelled else { return nil }
+        let size = WindowSwitcherPreview.captureSize(for: entry.bounds, detail: detail)
+        guard let image = await fallback(number, entry.processIdentifier, size),
+              hasPermission(), !Task.isCancelled else { return nil }
+        if let launchDate = entry.applicationLaunchDate,
+           NSRunningApplication(processIdentifier: entry.processIdentifier)?.launchDate != launchDate { return nil }
+        return NSImage(cgImage: image, size: .zero)
     }
 }

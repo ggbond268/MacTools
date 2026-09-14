@@ -181,17 +181,23 @@ final class WindowSwitcherWindowRecords {
         in records: [WindowSwitcherWindowRecord]
     ) -> WindowSwitcherWindowRecord? {
         guard let windowNumber = entry.windowNumber,
-              let expectedBounds = entry.windowBounds,
+              entry.bounds.width > 0, entry.bounds.height > 0,
               let record = records.first(where: {
                   $0.windowNumber == windowNumber
                       && $0.processIdentifier == entry.processIdentifier
               }),
-              record.bounds == expectedBounds
+              record.bounds == entry.bounds
         else {
             return nil
         }
 
-        if !record.title.isEmpty,
+        // A retained AX entry may refer to a just-closed surface. Only positive
+        // visibility or Space evidence permits revealing it after AX omitted it.
+        guard entry.windowElement == nil || record.isOnScreen == true || record.hasSpace == true else { return nil }
+        // AX and WindowServer can use different titles (notably Chrome). The
+        // retained AX window already supplied the exact ID; fallback-only rows
+        // still require their original WindowServer title to match.
+        if entry.windowElement == nil, !record.title.isEmpty,
            let expectedTitle = entry.windowTitle,
            !expectedTitle.isEmpty,
            record.title != expectedTitle {
@@ -290,7 +296,7 @@ final class WindowSwitcherWindowRecords {
 
 /// Optional read-only WindowServer metadata distinguishes ordered-out utility
 /// surfaces from real windows on another Space. Missing APIs/data stay unknown.
-private enum WindowSwitcherSpaceMembership {
+enum WindowSwitcherSpaceMembership {
     private typealias Connection = @convention(c) () -> UInt32
     private typealias CopySpaces = @convention(c) (UInt32, UInt32, CFArray) -> Unmanaged<CFArray>?
     private static let functions: (Connection, CopySpaces)? = {
@@ -300,6 +306,36 @@ private enum WindowSwitcherSpaceMembership {
               let spaces = dlsym(handle, "CGSCopySpacesForWindows") else { return nil }
         return (unsafeBitCast(connection, to: Connection.self), unsafeBitCast(spaces, to: CopySpaces.self))
     }()
+
+    private typealias CopyDisplays = @convention(c) (UInt32) -> Unmanaged<CFArray>?
+    private static let copyDisplays: CopyDisplays? = {
+        guard let handle = dlopen(nil, RTLD_LAZY) else { return nil }
+        defer { dlclose(handle) }
+        guard let pointer = dlsym(handle, "CGSCopyManagedDisplaySpaces") else { return nil }
+        return unsafeBitCast(pointer, to: CopyDisplays.self)
+    }()
+
+    /// Query every display: the globally active Space is insufficient when
+    /// displays have separate Spaces. Unknown topology preserves the fallback.
+    static func isOnActiveSpace(_ window: CGWindowID) -> Bool? {
+        guard let (connection, copySpaces) = functions, let copyDisplays else { return nil }
+        let client = connection()
+        guard let spaces = copySpaces(client, 7, [NSNumber(value: window)] as CFArray)?.takeRetainedValue() as? [NSNumber],
+              let displays = copyDisplays(client)?.takeRetainedValue() as? [[String: Any]] else { return nil }
+        return intersectsActiveSpaces(spaces.map(\.uint64Value), displays: displays)
+    }
+
+    static func intersectsActiveSpaces(_ memberships: [UInt64], displays: [[String: Any]]) -> Bool? {
+        guard !memberships.isEmpty, !displays.isEmpty else { return nil }
+        var unknown = false
+        for display in displays {
+            guard let current = display["Current Space"] as? [String: Any],
+                  let id = (current["ManagedSpaceID"] ?? current["id64"]) as? NSNumber,
+                  id.uint64Value > 0 else { unknown = true; continue }
+            if memberships.contains(id.uint64Value) { return true }
+        }
+        return unknown ? nil : false
+    }
 
     static func hasSpace(_ window: CGWindowID) -> Bool? {
         guard let (connection, copySpaces) = functions,

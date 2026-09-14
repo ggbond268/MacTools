@@ -45,3 +45,21 @@ The preview viewport owns an AppKit magnification recognizer, including its imag
 Normal captures keep their 1,600-pixel maximum edge. Zooming requests one sharper capture per selection, capped at 3,200 pixels and serialized with normal captures. The existing image remains visible during that request or if it fails. Detail captures are not cached across selections, and permission and window-identity validation remain unchanged.
 
 The visible preview requests application focus after panel ordering for native trackpad gestures in either invocation mode. Clicking the preview or its margins explicitly requests focus again without selecting a window or changing cycling mode. Cancelling restores the original application only while the chooser still owns focus; selecting a window or switching to another application does not restore it.
+
+### Other-Space windows
+
+A missing Core Graphics onscreen flag does not exclude a window with positive Space membership. When an existing AX window disappears from `AXWindows`, a fresh WindowServer record must confirm its process, window ID, bounds, and positive Space/visibility evidence before reveal and exact AX reacquisition.
+
+The optional runtime-resolved activation bridge addresses the selected WindowServer ID, followed by exact AX focus and raise. When `AXWindows` omits the target, a selected-window-only remote Accessibility lookup is bounded to 250 ms and 20,000 candidates, checks the AX window role and exact ID, and caches at most eight validated handles per process. This lookup never authorizes close/quit operations. Missing runtime activation symbols retain the public application-activation fallback.
+
+The window-addressed focus event uses an off-content coordinate and always pairs mouse-down with mouse-up, even when posting fails or cancellation arrives. Completion requires the exact focused AX window, an onscreen WindowServer record, and membership in a current Space on any display when topology is available. Onscreen visibility alone is insufficient during a Space animation. Verification observes for up to 24 polls at 50 ms intervals without repeating focus actions, and existing activation-intent cancellation stops superseded work. No windows are created, moved between Spaces, or resized.
+
+Native acceptance must separately exercise desktop-to-desktop, desktop-to-fullscreen, fullscreen-to-desktop, separate-display Spaces, rapid selection/cancellation, hidden/minimized windows, and missing private capabilities. The production plugin core is a **static library**: rebuild and relink diagnostic executables after every source change; rerunning an old executable does not test a new plugin build.
+
+Offscreen previews can use the optional `CGSHWCaptureWindowList` bridge when ScreenCaptureKit cannot produce an image. Capture stays in memory, requires Screen Recording permission before and after reading, checks the window owner, and retains the existing size, debounce, generation, and timeout limits. This private API compatibility path requires native testing on supported macOS versions; missing symbols return an unavailable preview rather than breaking plugin loading.
+
+#### Native evidence (2026-09-14)
+
+An isolated executable, relinked against the production plugin core, exercised cold discovery from the real chooser on macOS 27.0. Both selected Chrome windows were absent from the initial AX list. The desktop target was revealed on its existing Space with its exact focused ID in 505 ms; the fullscreen target passed the same checks in 461 ms. Their previews loaded before activation in 103 ms and 96 ms respectively. Both physical and combined mouse-button states were released after each handoff. No previews were written to disk.
+
+These are two native cases, not a completed platform matrix. Physical macOS 26, multiple displays, Split View, fullscreen-to-desktop, Mission Control preferences, and user-interrupted transitions remain acceptance checks. Subsequent minimized-restore guards have regression coverage but have not been exercised in a native minimized cross-Space case. The combined Debug app was subsequently installed with matching host/plugin hashes, and the user confirmed that the fix works in the installed app. This confirms that local smoke test; it does not complete the remaining platform matrix. Hosted PR checks remain separate.

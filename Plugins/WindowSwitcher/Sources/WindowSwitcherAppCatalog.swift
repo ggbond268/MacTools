@@ -70,8 +70,13 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
     private let queue: DispatchQueue
     private let app: AXUIElement
     private let access: any WindowSwitcherAXAccess
+    private let requestWindowActivation: @Sendable (CGWindowID, pid_t, WindowSwitcherActionCancellation) -> Bool
+    private let windowIsRevealable: @Sendable (CGWindowID, pid_t) -> Bool
+    private let windowIsOnScreen: @Sendable (CGWindowID, pid_t) -> Bool
+    private let windowIsOnActiveSpace: @Sendable (CGWindowID) -> Bool?
     private var records: [WindowSwitcherWindowSnapshot] = []
     private var identities = WindowSwitcherWindowIdentities()
+    private var offSpaceResolver = WindowSwitcherOffSpaceResolver()
     private var observer: AXObserver?
     private var observedWindows: Set<WindowSwitcherAXIdentity> = []
     private let uptime: @Sendable () -> TimeInterval
@@ -80,8 +85,17 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
     private let invalidated: @Sendable () -> Void
 
     init(pid: pid_t, launchDate: Date?, access: any WindowSwitcherAXAccess = SystemWindowSwitcherAXAccess(),
-         uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }, invalidated: @escaping @Sendable () -> Void) {
+         uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+         requestWindowActivation: @escaping @Sendable (CGWindowID, pid_t, WindowSwitcherActionCancellation) -> Bool = { WindowSwitcherWindowServer.activate($0, pid: $1, cancellation: $2) },
+         windowIsRevealable: @escaping @Sendable (CGWindowID, pid_t) -> Bool = { WindowSwitcherWindowServer.isRevealable($0, pid: $1) },
+         windowIsOnScreen: @escaping @Sendable (CGWindowID, pid_t) -> Bool = { WindowSwitcherWindowServer.isOnScreen($0, pid: $1) },
+         windowIsOnActiveSpace: @escaping @Sendable (CGWindowID) -> Bool? = { WindowSwitcherSpaceMembership.isOnActiveSpace($0) },
+         invalidated: @escaping @Sendable () -> Void) {
         self.access = access
+        self.requestWindowActivation = requestWindowActivation
+        self.windowIsRevealable = windowIsRevealable
+        self.windowIsOnScreen = windowIsOnScreen
+        self.windowIsOnActiveSpace = windowIsOnActiveSpace
         self.uptime = uptime
         self.pid = pid
         self.launchDate = launchDate
@@ -262,6 +276,109 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
             if attempt < 2 { Thread.sleep(forTimeInterval: 0.04) }
         }
         return nil
+    }
+
+    func resolveOffSpaceWindow(_ number: CGWindowID, cancellation: WindowSwitcherActionCancellation) async -> WindowSwitcherResolvedWindow? {
+        await withCheckedContinuation { continuation in
+            queue.async { [self] in
+                guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: nil); return }
+                var candidates = records.map(\.element)
+                candidates += [copyElement(app, kAXFocusedWindowAttribute), copyElement(app, kAXMainWindowAttribute)].compactMap { $0 }
+                let element = offSpaceResolver.resolve(pid: pid, number: number, access: access,
+                    candidates: candidates, shouldContinue: { !self.stopped && !cancellation.isCancelled })
+                continuation.resume(returning: element.map { WindowSwitcherResolvedWindow(number: number, element: $0) })
+            }
+        }
+    }
+
+    func focusOffSpaceWindow(_ target: WindowSwitcherResolvedWindow, cancellation: WindowSwitcherActionCancellation) async -> WindowSwitcherActionResult {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                queue.async { [self] in
+                    guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
+                    guard isExactWindow(target), windowIsRevealable(target.number, pid) else {
+                        continuation.resume(returning: .unavailable); return
+                    }
+                    if access.minimized(target.element) == true {
+                        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
+                        guard access.set(target.element, attribute: kAXMinimizedAttribute, value: false) == .success else {
+                            continuation.resume(returning: .failed); return
+                        }
+                        waitForOffSpaceRestore(target, attempts: 12, cancellation: cancellation, continuation: continuation)
+                    } else {
+                        submitOffSpaceFocus(target, cancellation: cancellation, continuation: continuation)
+                    }
+                }
+            }
+        } onCancel: { cancellation.cancel() }
+    }
+
+    private func waitForOffSpaceRestore(_ target: WindowSwitcherResolvedWindow, attempts: Int,
+                                        cancellation: WindowSwitcherActionCancellation,
+                                        continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
+        queue.asyncAfter(deadline: .now() + 0.1) { [self] in
+            guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
+            guard isExactWindow(target), windowIsRevealable(target.number, pid) else {
+                continuation.resume(returning: .unavailable); return
+            }
+            if access.minimized(target.element) == false {
+                submitOffSpaceFocus(target, cancellation: cancellation, continuation: continuation)
+            } else if attempts > 1 {
+                waitForOffSpaceRestore(target, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
+            } else {
+                continuation.resume(returning: .failed)
+            }
+        }
+    }
+
+    private func submitOffSpaceFocus(_ target: WindowSwitcherResolvedWindow,
+                                     cancellation: WindowSwitcherActionCancellation,
+                                     continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
+        guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
+        guard isExactWindow(target), windowIsRevealable(target.number, pid) else {
+            continuation.resume(returning: .unavailable); return
+        }
+        // Keep exact fronting and AX focus adjacent on this queue.
+        // App-only activation in between can restore a different window.
+        guard requestWindowActivation(target.number, pid, cancellation) else { continuation.resume(returning: .failed); return }
+        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
+        _ = access.set(target.element, attribute: kAXMainAttribute, value: true)
+        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
+        _ = access.set(target.element, attribute: kAXFocusedAttribute, value: true)
+        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
+        _ = access.perform(target.element, action: kAXRaiseAction)
+        verifyOffSpaceFocus(target, attempts: 24, cancellation: cancellation, continuation: continuation)
+    }
+
+    private func isExactWindow(_ target: WindowSwitcherResolvedWindow) -> Bool {
+        access.windowNumber(target.element) == target.number
+            && access.windowAttributes(target.element)?.first as? String == kAXWindowRole
+    }
+
+    private func verifyOffSpaceFocus(_ target: WindowSwitcherResolvedWindow, attempts: Int,
+                                    cancellation: WindowSwitcherActionCancellation,
+                                    continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
+        queue.asyncAfter(deadline: .now() + 0.05) { [self] in
+            guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
+            guard isExactWindow(target), windowIsRevealable(target.number, pid) else {
+                continuation.resume(returning: .unavailable); return
+            }
+            let focused = copyElement(app, kAXFocusedWindowAttribute)
+            let exactFocus = focused.map {
+                access.windowNumber($0) == target.number
+                    && access.windowAttributes($0)?.first as? String == kAXWindowRole
+            } ?? false
+            // AX focus can change before Mission Control finishes its transition.
+            // Require this exact window onscreen and on an active display Space.
+            // During an animation the compositor can expose both Spaces at once.
+            if exactFocus && windowIsOnScreen(target.number, pid) && windowIsOnActiveSpace(target.number) != false {
+                continuation.resume(returning: .succeeded)
+            } else if attempts > 1 {
+                verifyOffSpaceFocus(target, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
+            } else {
+                continuation.resume(returning: .failed)
+            }
+        }
     }
 
     func perform(_ id: String, close: Bool, cancellation: WindowSwitcherActionCancellation = WindowSwitcherActionCancellation()) async -> WindowSwitcherActionResult {
@@ -628,7 +745,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             // A complete empty AX scan rules out current-Space window rows.
             // WindowServer may still retain named surfaces after the last window
             // closes. Other-Space windows remain discoverable independently.
-            guard !hasConfirmedEmptyAXSnapshot || record.isOnScreen == false else { return nil }
+            guard !hasConfirmedEmptyAXSnapshot || (record.isOnScreen == false || (record.isOnScreen == nil && record.hasSpace == true)) else { return nil }
             // Unknown Space membership is not proof that a newly discovered
             // off-screen surface is a window. Previously AX-confirmed windows
             // may survive a missing Space query, but not a confirmed removal.
@@ -712,18 +829,52 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         guard containsCurrentEntry(entry),
               let worker = workers[entry.processIdentifier],
               let app = NSRunningApplication(processIdentifier: entry.processIdentifier), !app.isTerminated else { return .unavailable }
-        let isFallback = entry.windowElement == nil && entry.windowNumber != nil
+        var isFallback = entry.windowElement == nil && entry.windowNumber != nil
         guard entry.applicationLaunchDate == nil || app.launchDate == nil || entry.applicationLaunchDate == app.launchDate else { return .unavailable }
         let isValid: Bool
         if isFallback {
             isValid = await allSpacesCatalog.isCurrentFallback(entry)
         } else if entry.isWindowEntry {
-            isValid = await worker.validate(entry.workerWindowID ?? entry.id)
+            let live = await worker.validate(entry.workerWindowID ?? entry.id)
+            // Some apps omit other-Space windows from AXWindows. A fresh exact
+            // WindowServer record can authorize reveal, followed by AX reacquisition.
+            if !live, entry.windowNumber != nil {
+                isFallback = true
+                isValid = await allSpacesCatalog.isCurrentFallback(entry)
+            } else {
+                isValid = live
+            }
         } else {
             isValid = true
         }
         guard intent.shouldContinue() else { return .cancelled }
         guard isValid, workers[entry.processIdentifier] === worker else { return .unavailable }
+        let needsExactReveal = isFallback || allSpacesRecords.contains {
+            $0.windowNumber == entry.windowNumber && $0.processIdentifier == entry.processIdentifier
+                && $0.isOnScreen != true && $0.hasSpace == true
+        }
+        let resolved: WindowSwitcherResolvedWindow?
+        if needsExactReveal, WindowSwitcherWindowServer.supportsExactActivation, let number = entry.windowNumber {
+            resolved = await worker.resolveOffSpaceWindow(number, cancellation: intent.cancellation)
+        } else { resolved = nil }
+        guard intent.shouldContinue(), workers[entry.processIdentifier] === worker, !app.isTerminated else { return .cancelled }
+        if let resolved {
+            if app.isHidden {
+                _ = app.unhide()
+                let deadline = ContinuousClock.now + .seconds(1)
+                while app.isHidden && ContinuousClock.now < deadline {
+                    guard intent.shouldContinue(), !app.isTerminated else { return .cancelled }
+                    try? await Task.sleep(for: .milliseconds(20))
+                }
+            }
+            guard intent.shouldContinue(), !app.isTerminated, !app.isHidden else { return .cancelled }
+            let result = await worker.focusOffSpaceWindow(resolved, cancellation: intent.cancellation)
+            guard intent.shouldContinue() else { return .cancelled }
+            let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier
+            if result == .succeeded && isFrontmost { publication.recency.record(entry.id) }
+            refresh()
+            return result == .succeeded && !isFrontmost ? .failed : result
+        }
         let prepared = await WindowSwitcherApplicationActivation.prepare(state: {
             .init(isHidden: app.isHidden,
                   isFrontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier,
@@ -733,10 +884,11 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             switch request {
             case .unhide: _ = app.unhide()
             case .activate:
+                if needsExactReveal, let number = entry.windowNumber,
+                   WindowSwitcherWindowServer.activate(number, pid: entry.processIdentifier, cancellation: intent.cancellation) { return }
                 NSApp.yieldActivation(to: app)
                 if isFallback {
-                    // Preserve the existing other-Space reveal path, which needs
-                    // all windows brought forward before exact AX matching.
+                    // Public fallback when the optional exact-window bridge is unavailable.
                     _ = app.activate(options: [.activateAllWindows])
                     return
                 }
@@ -744,7 +896,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 // outcome controls the one-shot alternate path below.
                 _ = app.activate(options: [])
             }
-        }, activateAllSpaces: isFallback, fallbackRequest: {
+        }, activateAllSpaces: needsExactReveal, fallbackRequest: {
             guard intent.shouldContinue() else { return }
             _ = await worker.requestApplicationActivation(cancellation: intent.cancellation)
         }, shouldContinue: {

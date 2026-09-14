@@ -28,6 +28,16 @@ final class WindowSwitcherPublicationTests: XCTestCase {
         XCTAssertEqual(Set(merged.compactMap(\.windowNumber)), [11, 13])
     }
 
+    func testPositiveSpaceMembershipSurvivesMissingOnscreenFlagAndEmptyAXList() {
+        let otherSpace = WindowSwitcherWindowRecord(windowNumber: 8, processIdentifier: 42,
+            title: "Other Space", isOnScreen: nil, bounds: bounds, hasSpace: true)
+        let closedSurface = WindowSwitcherWindowRecord(windowNumber: 9, processIdentifier: 42,
+            title: "Closed", isOnScreen: nil, bounds: bounds, hasSpace: false)
+        let entries = WindowSwitcherAppCatalog.mergeAllSpacesEntries([application()],
+            records: [otherSpace, closedSurface], hasConfirmedEmptyAXSnapshot: true)
+        XCTAssertEqual(entries.compactMap(\.windowNumber), [8])
+    }
+
     func testWindowlessApplicationsNeverBecomeSelectableRows() {
         var state = WindowSwitcherPublishedWindows()
         let metadata: [pid_t: [WindowSwitcherAppEntry]] = [42: [application(confirmedWindowless: true)]]
@@ -67,6 +77,14 @@ final class WindowSwitcherPublicationTests: XCTestCase {
             state.update(snapshots: [42: [emptyApp]], records: [record(9, "Leftover surface")], recordsAreFresh: true)
             XCTAssertTrue(state.entries.isEmpty, bundle)
         }
+    }
+
+    func testConfirmedEmptyAXDoesNotResurrectVisibleSurfaceWithSpaceMembership() {
+        var state = WindowSwitcherPublishedWindows()
+        var surface = record(9, "Leftover surface")
+        surface.hasSpace = true
+        state.update(snapshots: [42: [application(confirmedWindowless: true)]], records: [surface], recordsAreFresh: true)
+        XCTAssertTrue(state.entries.isEmpty)
     }
 
     func testClosingLastAXWindowCannotResurrectItFromAVisibleCompositorSurface() {

@@ -11,6 +11,8 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
         var windowListReadFailuresAfterRaise = 0
         var closesAfterRaise = false
         var windowNumber: CGWindowID? = nil
+        var windowNumbersByPID: [pid_t: CGWindowID] = [:]
+        var onScreenReads = 0
         var metadataAvailable = true
         var minimized = false
         var minimizedReadFailures = 0
@@ -52,7 +54,11 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
         return [kAXWindowRole, kAXStandardWindowSubrole, "Same title", read { $0.minimized },
                 AXValueCreate(.cgPoint, &point)!, AXValueCreate(.cgSize, &size)!]
     }
-    func windowNumber(_ window: AXUIElement) -> CGWindowID? { read { $0.windowNumber } }
+    func windowNumber(_ window: AXUIElement) -> CGWindowID? {
+        var pid: pid_t = 0
+        _ = AXUIElementGetPid(window, &pid)
+        return read { $0.windowNumbersByPID[pid] ?? $0.windowNumber }
+    }
     func minimized(_ window: AXUIElement) -> Bool? {
         lock.lock(); defer { lock.unlock() }
         if state.minimizedReadFailures > 0 { state.minimizedReadFailures -= 1; return nil }
@@ -83,6 +89,125 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
 }
 
 final class WindowSwitcherProcessWorkerTests: XCTestCase, @unchecked Sendable {
+    func testOffSpaceFocusWaitsUntilTheExactWindowIsOnScreen() async {
+        let access = ControlledWindowAXAccess()
+        let element = AXUIElementCreateApplication(42)
+        access.update { $0.windowNumber = 7 }
+        let worker = WindowSwitcherProcessWorker(pid: 42, launchDate: nil, access: access,
+            requestWindowActivation: { _, _, _ in true }, windowIsRevealable: { _, _ in true }, windowIsOnScreen: { _, _ in
+                access.update { $0.onScreenReads += 1 }
+                return access.read { $0.onScreenReads >= 3 }
+            }, windowIsOnActiveSpace: { _ in nil }, invalidated: {})
+        defer { worker.stop() }
+        let result = await worker.focusOffSpaceWindow(.init(number: 7, element: element), cancellation: .init())
+        XCTAssertEqual(result, .succeeded)
+        XCTAssertEqual(access.read { $0.onScreenReads }, 3)
+        XCTAssertEqual(access.read { $0.actions.filter { $0 == kAXRaiseAction }.count }, 1)
+    }
+
+    func testOffSpaceFocusAcceptsReplacementAXHandleOnlyForTheSameWindowID() async {
+        let access = ControlledWindowAXAccess()
+        access.update {
+            $0.windowNumber = 7
+            $0.focusAfterRaise = false
+            $0.focused = AXUIElementCreateApplication(43)
+        }
+        let worker = WindowSwitcherProcessWorker(pid: 42, launchDate: nil, access: access,
+            requestWindowActivation: { _, _, _ in true }, windowIsRevealable: { _, _ in true },
+            windowIsOnScreen: { _, _ in true }, windowIsOnActiveSpace: { _ in nil }, invalidated: {})
+        defer { worker.stop() }
+        let result = await worker.focusOffSpaceWindow(.init(number: 7, element: AXUIElementCreateApplication(42)), cancellation: .init())
+        XCTAssertEqual(result, .succeeded)
+    }
+
+    func testOffSpaceFocusCannotSucceedForAnotherWindowInTheSameApp() async {
+        let access = ControlledWindowAXAccess()
+        access.update {
+            $0.windowNumber = 7
+            $0.windowNumbersByPID[43] = 8
+            $0.focusAfterRaise = false
+            $0.focused = AXUIElementCreateApplication(43)
+        }
+        let worker = WindowSwitcherProcessWorker(pid: 42, launchDate: nil, access: access,
+            requestWindowActivation: { _, _, _ in true }, windowIsRevealable: { _, _ in true },
+            windowIsOnScreen: { _, _ in true }, windowIsOnActiveSpace: { _ in true }, invalidated: {})
+        defer { worker.stop() }
+        let result = await worker.focusOffSpaceWindow(.init(number: 7, element: AXUIElementCreateApplication(42)), cancellation: .init())
+        XCTAssertEqual(result, .failed)
+        XCTAssertEqual(access.read { $0.actions.filter { $0 == kAXRaiseAction }.count }, 1)
+    }
+
+    func testOffSpaceMinimizedWindowRestoresOnceBeforeExactFronting() async {
+        let access = ControlledWindowAXAccess()
+        access.update { $0.windowNumber = 7; $0.minimized = true; $0.restoreReadFailures = 2 }
+        let worker = WindowSwitcherProcessWorker(pid: 42, launchDate: nil, access: access,
+            requestWindowActivation: { _, _, _ in
+                access.update { $0.actions.append("exactFront") }
+                return access.read { !$0.minimized && $0.minimizedReadFailures == 0 }
+            }, windowIsRevealable: { _, _ in true }, windowIsOnScreen: { _, _ in true },
+            windowIsOnActiveSpace: { _ in true }, invalidated: {})
+        defer { worker.stop() }
+        let result = await worker.focusOffSpaceWindow(.init(number: 7, element: AXUIElementCreateApplication(42)), cancellation: .init())
+        XCTAssertEqual(result, .succeeded)
+        XCTAssertEqual(access.read { $0.actions }, [kAXMinimizedAttribute, "exactFront", kAXMainAttribute, kAXFocusedAttribute, kAXRaiseAction])
+    }
+
+    func testOffSpaceCancellationDuringRestorePreventsFronting() async {
+        let access = ControlledWindowAXAccess()
+        let cancellation = WindowSwitcherActionCancellation()
+        access.update { $0.windowNumber = 7; $0.minimized = true; $0.restoreRequested = { cancellation.cancel() } }
+        let worker = WindowSwitcherProcessWorker(pid: 42, launchDate: nil, access: access,
+            requestWindowActivation: { _, _, _ in access.update { $0.actions.append("exactFront") }; return true },
+            windowIsRevealable: { _, _ in true }, windowIsOnScreen: { _, _ in true },
+            windowIsOnActiveSpace: { _ in true }, invalidated: {})
+        defer { worker.stop() }
+        let result = await worker.focusOffSpaceWindow(.init(number: 7, element: AXUIElementCreateApplication(42)), cancellation: cancellation)
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(access.read { $0.actions }, [kAXMinimizedAttribute])
+    }
+
+    func testOffSpaceFocusRejectsClosedWindowBeforeAnyMutation() async {
+        let access = ControlledWindowAXAccess()
+        access.update { $0.windowNumber = 7 }
+        let worker = WindowSwitcherProcessWorker(pid: 42, launchDate: nil, access: access,
+            requestWindowActivation: { _, _, _ in true }, windowIsRevealable: { _, _ in false }, windowIsOnScreen: { _, _ in true }, windowIsOnActiveSpace: { _ in nil }, invalidated: {})
+        defer { worker.stop() }
+        let result = await worker.focusOffSpaceWindow(.init(number: 7, element: AXUIElementCreateApplication(42)), cancellation: .init())
+        XCTAssertEqual(result, .unavailable)
+        XCTAssertTrue(access.read { $0.actions.isEmpty })
+    }
+
+    func testOffSpaceFocusCancelsDuringDestinationWaitWithoutAnotherRaise() async {
+        let access = ControlledWindowAXAccess()
+        access.update { $0.windowNumber = 7 }
+        let cancellation = WindowSwitcherActionCancellation()
+        let worker = WindowSwitcherProcessWorker(pid: 42, launchDate: nil, access: access,
+            requestWindowActivation: { _, _, _ in true }, windowIsRevealable: { _, _ in true }, windowIsOnScreen: { _, _ in
+                cancellation.cancel()
+                return false
+            }, windowIsOnActiveSpace: { _ in nil }, invalidated: {})
+        defer { worker.stop() }
+        let result = await worker.focusOffSpaceWindow(.init(number: 7, element: AXUIElementCreateApplication(42)), cancellation: cancellation)
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(access.read { $0.actions.filter { $0 == kAXRaiseAction }.count }, 1)
+    }
+
+
+    func testOffSpaceFocusWaitsForDestinationSpaceDespiteOnscreenAnimation() async {
+        let access = ControlledWindowAXAccess()
+        access.update { $0.windowNumber = 7 }
+        let worker = WindowSwitcherProcessWorker(pid: 42, launchDate: nil, access: access,
+            requestWindowActivation: { _, _, _ in true }, windowIsRevealable: { _, _ in true },
+            windowIsOnScreen: { _, _ in true }, windowIsOnActiveSpace: { _ in
+                access.update { $0.onScreenReads += 1 }
+                return access.read { $0.onScreenReads >= 3 }
+            }, invalidated: {})
+        defer { worker.stop() }
+        let result = await worker.focusOffSpaceWindow(.init(number: 7, element: AXUIElementCreateApplication(42)), cancellation: .init())
+        XCTAssertEqual(result, .succeeded)
+        XCTAssertEqual(access.read { $0.onScreenReads }, 3)
+        XCTAssertEqual(access.read { $0.actions.filter { $0 == kAXRaiseAction }.count }, 1)
+    }
 
     func testLargeDuplicateListRetainsStableDistinctIdentities() {
         let handles = (1000..<6000).map { AXUIElementCreateApplication(pid_t($0)) }
