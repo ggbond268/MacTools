@@ -129,9 +129,11 @@ final class CalendarComponentViewModel: ObservableObject {
                 return
             }
 
-            guard let firstDate = month.days.first?.date,
-                  let lastDate = month.days.last?.date,
-                  let tomorrow = calendar.date(byAdding: .day, value: 1, to: todayDate),
+            let visibleDates = month.days.map(\.date)
+            let requestedToday = todayDate
+            guard let firstDate = visibleDates.first,
+                  let lastDate = visibleDates.last,
+                  let tomorrow = calendar.date(byAdding: .day, value: 1, to: requestedToday),
                   let endDate = calendar.date(byAdding: .day, value: 1, to: lastDate) else {
                 return
             }
@@ -139,24 +141,33 @@ final class CalendarComponentViewModel: ObservableObject {
             isLoadingEvents = true
 
             do {
-                var events = try await eventService.events(from: firstDate, to: endDate)
-                if todayDate < firstDate || todayDate >= endDate {
-                    events += try await eventService.events(from: todayDate, to: tomorrow)
-                }
+                let events = try await eventService.events(from: firstDate, to: endDate)
                 guard !Task.isCancelled else {
                     return
                 }
 
-                var visibleDates = month.days.map(\.date)
-                if !visibleDates.contains(where: { calendar.isDate($0, inSameDayAs: todayDate) }) {
-                    visibleDates.append(todayDate)
-                }
-                eventsByDay = CalendarEventGrouper.group(
+                var groupedEvents = CalendarEventGrouper.group(
                     events: events,
                     visibleDates: visibleDates,
                     calendar: calendar,
                     localization: localization
                 )
+                if requestedToday < firstDate || requestedToday >= endDate {
+                    let todayEvents = try await eventService.events(from: requestedToday, to: tomorrow)
+                    guard !Task.isCancelled else {
+                        return
+                    }
+
+                    // Group each query only for its own dates so a cross-day event
+                    // returned by both queries appears once per day.
+                    groupedEvents[requestedToday] = CalendarEventGrouper.group(
+                        events: todayEvents,
+                        visibleDates: [requestedToday],
+                        calendar: calendar,
+                        localization: localization
+                    )[requestedToday] ?? []
+                }
+                eventsByDay = groupedEvents
                 isLoadingEvents = false
                 rebuildMonth()
             } catch {

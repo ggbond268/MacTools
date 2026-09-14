@@ -14,17 +14,17 @@ private enum CalendarComponentLayout {
 
 struct CalendarComponentView: View {
     @ObservedObject private var viewModel: CalendarComponentViewModel
+    @ObservedObject private var settingsStore: CalendarSettingsStore
     private let localization: PluginLocalization
-    private let showsTodayDetails: Bool
 
     init(
         context: PluginComponentContext,
         viewModel: CalendarComponentViewModel,
-        showsTodayDetails: Bool,
+        settingsStore: CalendarSettingsStore,
         localization: PluginLocalization = PluginLocalization(bundle: .main)
     ) {
         self.viewModel = viewModel
-        self.showsTodayDetails = showsTodayDetails
+        self.settingsStore = settingsStore
         self.localization = localization
     }
 
@@ -74,7 +74,7 @@ struct CalendarComponentView: View {
 
     @ViewBuilder
     private var todayDetails: some View {
-        if showsTodayDetails, let todayDay = viewModel.todayDay {
+        if settingsStore.showsTodayDetails, let todayDay = viewModel.todayDay {
             CalendarSelectedDayDetails(
                 day: todayDay,
                 localization: localization

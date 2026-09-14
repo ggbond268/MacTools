@@ -2,12 +2,12 @@
 
 Last verified: 2026-09-14
 
-| Champ | Valeur |
+| Field | Value |
 | ----- | ------ |
 | ID | `US-plugins-calendar-today-details` |
 | Status | `ready` |
-| Domaine | `plugins` |
-| Acteur | `MacTools user` |
+| Domain | `plugins` |
+| Actor | `MacTools user` |
 
 ## User Story
 
@@ -17,10 +17,12 @@ Last verified: 2026-09-14
 
 - Given the lower details setting is unset, then the Calendar component shows today's date, full lunar date, and agenda below the monthly grid.
 - When the user hovers or selects another day, then the lower details remain on today and the existing hover popover shows that day's details.
-- When the user disables the Calendar lower details setting, then the lower details area is hidden.
+- When the user disables the Calendar lower details setting, then an already displayed component hides the details immediately and returns to its compact height.
+- When the user enables the setting again, then the details and their reserved height return immediately.
+- When a cross-day event overlaps both today and a separately queried month grid, then it appears once on each applicable day.
 - When the user reopens MacTools, then the stored lower details setting is retained.
 
-## Références
+## References
 
 | Type | Source |
 | ---- | ------ |
@@ -28,8 +30,9 @@ Last verified: 2026-09-14
 | Code | `Plugins/Calendar/Sources/CalendarComponentViewModel.swift` |
 | Settings | `Plugins/Calendar/Sources/CalendarSettings.swift` |
 | Test | `Plugins/Calendar/Tests/CalendarComponentViewModelTests.swift` |
+| Test | `Plugins/Calendar/Tests/CalendarPluginIntegrationTests.swift` |
 
-## Historique
+## History
 
 | Date | Type | Previous | New | Source |
 | ---- | ---- | -------- | --- | ------ |

@@ -4,4 +4,4 @@ type: changed
 area: Calendar
 ---
 
-Calendar can show or hide today's full lunar day, holiday context, and agenda below the monthly grid.
+View today's full lunar date, holiday context, and agenda below the calendar, or hide the details to keep the panel compact.

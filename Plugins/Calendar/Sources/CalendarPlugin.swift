@@ -36,12 +36,16 @@ final class CalendarPlugin: MacToolsPlugin, PluginComponentPanel, PluginPanelSur
 
     let metadata: PluginMetadata
 
-    let descriptor = PluginComponentDescriptor(
-        span: PluginComponentSpan(
-            width: 4,
-            height: PluginComponentPanelLayoutMetrics.default.heightSpan(closestToOriginalSpanHeight: 5)
-        )!
-    )
+    var descriptor: PluginComponentDescriptor {
+        PluginComponentDescriptor(
+            span: PluginComponentSpan(
+                width: 4,
+                height: PluginComponentPanelLayoutMetrics.default.heightSpan(
+                    closestToOriginalSpanHeight: settingsStore.showsTodayDetails ? 5 : 3
+                )
+            )!
+        )
+    }
 
     private let context: PluginRuntimeContext
     private let eventService: CalendarEventServicing
@@ -166,7 +170,7 @@ final class CalendarPlugin: MacToolsPlugin, PluginComponentPanel, PluginPanelSur
             CalendarComponentView(
                 context: context,
                 viewModel: viewModel,
-                showsTodayDetails: settingsStore.showsTodayDetails,
+                settingsStore: settingsStore,
                 localization: localization
             )
         )

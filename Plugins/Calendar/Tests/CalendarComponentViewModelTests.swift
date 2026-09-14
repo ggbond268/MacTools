@@ -184,6 +184,81 @@ final class CalendarComponentViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.todayDay?.id, "20260416")
     }
 
+    func testCrossDayEventAppearsOnceWhenTodayIsOutsideTheMonthGrid() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 25)))
+        let endDate = try XCTUnwrap(calendar.date(byAdding: .day, value: 3, to: today))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.eventInputs = [CalendarEventInput(
+            id: "vacation",
+            title: "Vacation",
+            startDate: today,
+            endDate: endDate,
+            isAllDay: true,
+            color: .accent
+        )]
+        let requests = expectation(description: "Month grid and today loaded")
+        requests.expectedFulfillmentCount = 2
+        service.onEventsRequest = requests.fulfill
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today,
+            now: { today }
+        )
+        defer { viewModel.stop() }
+
+        viewModel.moveMonth(by: 1)
+        await fulfillment(of: [requests], timeout: 1)
+
+        XCTAssertEqual(service.eventRanges.count, 2)
+        XCTAssertEqual(viewModel.todayDay?.events.map(\.title), ["Vacation"])
+        let nextDay = try XCTUnwrap(viewModel.month.days.first { $0.id == "20260426" })
+        XCTAssertEqual(nextDay.events.map(\.title), ["Vacation"])
+    }
+
+    func testDistantMonthKeepsQueriesBoundedAndPreservesTodaysEvents() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
+        let distantDate = try XCTUnwrap(calendar.date(byAdding: .year, value: 10, to: today))
+        let distantEnd = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: distantDate))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.eventInputs = [
+            CalendarEventInput(id: "today", title: "Today", startDate: today,
+                               endDate: tomorrow, isAllDay: true, color: .accent),
+            CalendarEventInput(id: "future", title: "Future", startDate: distantDate,
+                               endDate: distantEnd, isAllDay: true, color: .accent)
+        ]
+        let requests = expectation(description: "Only the month grid and today are queried")
+        requests.expectedFulfillmentCount = 2
+        service.onEventsRequest = requests.fulfill
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today,
+            now: { today }
+        )
+        defer { viewModel.stop() }
+
+        viewModel.moveMonth(by: 120)
+        await fulfillment(of: [requests], timeout: 1)
+
+        XCTAssertEqual(service.eventRanges.count, 2)
+        XCTAssertEqual(service.eventRanges.map {
+            calendar.dateComponents([.day], from: $0.start, to: $0.end).day
+        }, [42, 1])
+        XCTAssertEqual(viewModel.todayDay?.events.map(\.title), ["Today"])
+        let distantDay = try XCTUnwrap(viewModel.month.days.first {
+            calendar.isDate($0.date, inSameDayAs: distantDate)
+        })
+        XCTAssertEqual(distantDay.events.map(\.title), ["Future"])
+    }
+
     private static func makeCalendar() -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -199,6 +274,7 @@ private final class MockCalendarEventService: CalendarEventServicing {
     private(set) var openedDates: [Date] = []
     private(set) var eventRanges: [(start: Date, end: Date)] = []
     var onEventsRequest: (() -> Void)?
+    var eventInputs: [CalendarEventInput] = []
 
     func requestAccess() async -> CalendarEventAuthorization {
         authorization
@@ -207,7 +283,7 @@ private final class MockCalendarEventService: CalendarEventServicing {
     func events(from startDate: Date, to endDate: Date) async throws -> [CalendarEventInput] {
         eventRanges.append((startDate, endDate))
         onEventsRequest?()
-        return []
+        return eventInputs.filter { $0.startDate < endDate && $0.endDate > startDate }
     }
 
     func openSystemCalendar(at date: Date) {
