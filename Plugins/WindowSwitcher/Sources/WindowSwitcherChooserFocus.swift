@@ -1,6 +1,6 @@
 import AppKit
 
-/// Owns the temporary application focus needed for native preview gestures.
+/// Owns temporary application focus for the chooser and restores its origin on cancellation.
 @MainActor
 final class WindowSwitcherChooserFocus {
     private let hostPID: pid_t
@@ -13,7 +13,12 @@ final class WindowSwitcherChooserFocus {
     init(
         hostPID: pid_t = ProcessInfo.processInfo.processIdentifier,
         frontmostPID: @escaping () -> pid_t? = { NSWorkspace.shared.frontmostApplication?.processIdentifier },
-        activateHost: @escaping () -> Void = { NSApp.activate() },
+        activateHost: @escaping () -> Void = {
+            // Cooperative activation can leave an accessory app inactive when
+            // invoked from a global shortcut. Request actual foreground ownership
+            // through AppKit's public accessibility setter so gestures reach it.
+            NSApp.setAccessibilityFrontmost(true)
+        },
         activateApplication: @escaping (pid_t) -> Void = { pid in
             NSRunningApplication(processIdentifier: pid)?.activate(options: [])
         }
@@ -33,8 +38,8 @@ final class WindowSwitcherChooserFocus {
 
     func acquire() {
         prepare()
-        // AppKit's active/key flags alone do not establish gesture delivery
-        // after a nonactivating panel steals keyboard focus.
+        // The caller orders the panel before requesting activation. Do not
+        // activate all host windows or recapture the origin on retry.
         activateHost()
     }
 

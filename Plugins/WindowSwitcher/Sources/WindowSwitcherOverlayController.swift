@@ -61,9 +61,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
     }
     private let chooserFocus: WindowSwitcherChooserFocus
-    private var previewFocusTask: Task<Void, Never>?
-    private var isAcquiringGestureFocus = false
-    private let panel = Panel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    private var isAcquiringChooserFocus = false
+    private let panel = Panel(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
     private let table = Table()
     private let cards = WindowSwitcherCardCollection()
     private let cardScroll = WindowSwitcherCardScrollView()
@@ -156,7 +155,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         super.init()
         buildPanel()
         previewImage.onRequestFocus = { [weak self] in
-            self?.previewFocusTask?.cancel()
             self?.focusPreviewNow()
         }
         previewImage.onRequestDetail = { [weak self] in self?.preview.requestDetail() }
@@ -188,7 +186,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     deinit {
-        previewFocusTask?.cancel()
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         scrollObservers.forEach(NotificationCenter.default.removeObserver)
     }
@@ -224,10 +221,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         render()
         layoutPanel()
         render()
-        PluginPresentationSafety.prepareForWindowOrdering(panel)
-        if !previewPane.isHidden { chooserFocus.prepare() }
-        panel.makeKeyAndOrderFront(nil)
-        acquirePreviewGestureFocus()
+        // Capture the origin before activation. A normally activating panel
+        // receives native gestures without a separate preview click.
+        acquireChooserFocus()
         panel.makeFirstResponder(usesList ? table : cards)
         acceptsSearchFocus = true
         noteCyclingInput()
@@ -239,8 +235,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     func hide(restoringFocus: Bool = true) {
-        previewFocusTask?.cancel(); previewFocusTask = nil
-        let shouldRestoreFocus = restoringFocus && panel.isKeyWindow
         acceptsSearchFocus = false
         menuGeneration += 1
         isPresentingMenu = false
@@ -250,7 +244,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         recordingEntryID = nil
         closing = true
         panel.orderOut(nil)
-        chooserFocus.release(restoring: shouldRestoreFocus)
+        chooserFocus.release(restoring: restoringFocus)
         closing = false
         session = nil
         renderedSession = nil
@@ -1388,28 +1382,22 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         render()
     }
 
-    private func acquirePreviewGestureFocus() {
-        previewFocusTask?.cancel()
-        guard panel.isVisible, !previewPane.isHidden else { return }
+    private func acquireChooserFocus() {
+        guard session != nil else { return }
+        isAcquiringChooserFocus = true
+        defer { isAcquiringChooserFocus = false }
+        // Capture the origin before ordering, then activate the app and make
+        // the chooser key. Ordering alone leaves a background panel inactive.
         chooserFocus.prepare()
-        // Wait for initial panel ordering before requesting application focus.
-        // Keyboard focus on a nonactivating panel alone is insufficient for
-        // physical magnification. Never activate after dismissal or focus loss.
-        previewFocusTask = Task { @MainActor [weak self] in
-            await Task.yield()
-            guard !Task.isCancelled, let self, self.session != nil,
-                  self.panel.isVisible, self.panel.isKeyWindow, !self.previewPane.isHidden else { return }
-            self.focusPreviewNow()
-        }
+        PluginPresentationSafety.prepareForWindowOrdering(panel)
+        panel.orderFront(nil)
+        chooserFocus.acquire()
+        panel.makeKeyAndOrderFront(nil)
     }
 
     private func focusPreviewNow() {
-        guard session != nil, panel.isVisible, !previewPane.isHidden else { return }
-        isAcquiringGestureFocus = true
-        defer { isAcquiringGestureFocus = false }
-        chooserFocus.acquire()
-        PluginPresentationSafety.prepareForWindowOrdering(panel)
-        panel.makeKeyAndOrderFront(nil)
+        guard panel.isVisible, !previewPane.isHidden else { return }
+        acquireChooserFocus()
     }
 
     @objc private func previewChanged() {
@@ -1418,9 +1406,13 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         previewedEntry = nil; previewedPermission = nil
         if !showsPreview { preview.cancel() }
         layoutPanel(preservePosition: true, resizeToContent: true); render()
-        acquirePreviewGestureFocus()
     }
     func windowDidResignKey(_ notification: Notification) {
-        if !closing, !isAcquiringGestureFocus, !isPresentingMenu, session != nil { onCancel?() }
+        if !closing, !isAcquiringChooserFocus, !isPresentingMenu, session != nil {
+            // Another window now owns focus. Dismiss without restoring the
+            // origin, even when the user chose another MacTools window.
+            chooserFocus.release(restoring: false)
+            onCancel?()
+        }
     }
 }

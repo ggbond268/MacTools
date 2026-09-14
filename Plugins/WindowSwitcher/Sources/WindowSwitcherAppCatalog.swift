@@ -218,8 +218,8 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
         access.element(element, attribute: name)
     }
 
-    /// The chooser is nonactivating, so ordinary cooperative app activation can
-    /// be declined even after the user explicitly selects a window. Request the
+    /// Cooperative app activation can be declined when handing focus from the
+    /// chooser to the selected window's application. Request the
     /// app's Accessibility foreground state once, then observe it before raising.
     func requestApplicationActivation() async -> AXError {
         let cancellation = WindowSwitcherActionCancellation()
