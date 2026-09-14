@@ -8,24 +8,29 @@ struct PanelLayoutEditor: View {
     @ObservedObject var pluginHost: PluginHost
     let panelID: String
     let onDismiss: () -> Void
+    let revealBottomRequest: UUID?
     @StateObject private var session: PanelLayoutEditingSession
     @StateObject private var scroller = PanelLayoutDragScroller()
     @State private var hover = PanelLayoutHoverState()
+    @State private var entryToRemove: MenuBarPanelLayoutEntry?
     @Environment(\.menuBarPanelTheme) private var theme
     @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(pluginHost: PluginHost, panelID: String, onDismiss: @escaping () -> Void,
-         session: @autoclosure @escaping () -> PanelLayoutEditingSession = PanelLayoutEditingSession()) {
+         session: @autoclosure @escaping () -> PanelLayoutEditingSession = PanelLayoutEditingSession(),
+         revealBottomRequest: UUID? = nil) {
         self.pluginHost = pluginHost
         self.panelID = panelID
         self.onDismiss = onDismiss
+        self.revealBottomRequest = revealBottomRequest
         self._session = StateObject(wrappedValue: session())
     }
 
     init(pluginHost: PluginHost, surface: PluginDisplaySurface, onDismiss: @escaping () -> Void,
-         session: @autoclosure @escaping () -> PanelLayoutEditingSession = PanelLayoutEditingSession()) {
-        self.init(pluginHost: pluginHost, panelID: surface.defaultPanelID, onDismiss: onDismiss, session: session())
+         session: @autoclosure @escaping () -> PanelLayoutEditingSession = PanelLayoutEditingSession(),
+         revealBottomRequest: UUID? = nil) {
+        self.init(pluginHost: pluginHost, panelID: surface.defaultPanelID, onDismiss: onDismiss, session: session(), revealBottomRequest: revealBottomRequest)
     }
 
     private var entries: [MenuBarPanelEntry] { pluginHost.panelEntries(in: panelID) }
@@ -38,20 +43,19 @@ struct PanelLayoutEditor: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
                         visibleContent(layout)
-                            .frame(minHeight: layout.hidden.isEmpty ? geometry.size.height : nil, alignment: .topLeading)
+                            .frame(minHeight: geometry.size.height, alignment: .topLeading)
                             .contentShape(Rectangle())
                             .onDrop(of: [PanelLayoutDragTransfer.type], delegate: PanelLayoutDropDelegate(
                                 session: session, ids: { ids }, validate: { session.validate(in: pluginHost, panelID: panelID) },
                                 update: { updateDestination($0, layout: layout) },
                                 stopScrolling: scroller.stop, commit: commit
                             ))
-                        if !layout.hidden.isEmpty { hiddenContent(layout.hidden) }
                     }
                     .frame(maxWidth: .infinity)
-                    .background(PanelLayoutScrollAnchor(scroller: scroller, hover: hover))
+                    .background(PanelLayoutScrollAnchor(scroller: scroller, hover: hover, bottomRequest: revealBottomRequest))
                 }
                 .overlay {
-                    if layout.ids.isEmpty && layout.hidden.isEmpty {
+                    if layout.ids.isEmpty {
                         emptyState.frame(maxWidth: .infinity, maxHeight: .infinity).allowsHitTesting(false)
                     }
                 }
@@ -74,6 +78,22 @@ struct PanelLayoutEditor: View {
                     else { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id) } }
                 })
             }
+            .popover(item: $entryToRemove, arrowEdge: .trailing) { item in
+                MenuBarPanelRemovalConfirmation(
+                    title: FeatureL10n.string("移除组件？"),
+                    message: FeatureL10n.format("将从此面板移除“%@”。你可以从添加组件中重新添加。", item.item.title),
+                    systemImage: item.item.iconName, actionTitle: FeatureL10n.string("移除"),
+                    errorLabel: FeatureL10n.string("无法移除组件"), identifier: "panel.layout.remove",
+                    onCancel: { entryToRemove = nil }, onConfirm: {
+                        scroller.stop()
+                        session.reset()
+                        entryToRemove = nil
+                        _ = pluginHost.removePanelEntry(item.entry, from: panelID)
+                        return nil
+                    }
+                )
+                .onExitCommand { entryToRemove = nil }
+            }
             .onChange(of: session.feedback) { _, feedback in
                 guard feedback != .guidance else { return }
                 announce(feedback.message)
@@ -84,9 +104,6 @@ struct PanelLayoutEditor: View {
     private func visibleContent(_ layout: PanelLayoutEditorSnapshot) -> some View {
         let positions = layout.frames
         return ZStack(alignment: .topLeading) {
-            if layout.ids.isEmpty && !layout.hidden.isEmpty {
-                emptyState.frame(width: ComponentPanelLayout.gridWidth, height: PanelLayoutDestination.emptySectionHeight)
-            }
             ForEach(Array(positions.enumerated()), id: \.element.id) { index, position in
                 if let item = layout.items[position.id] {
                     reorderItem(item, feature: layout.features[item.entry.pluginID], index: index, count: layout.ids.count)
@@ -102,13 +119,13 @@ struct PanelLayoutEditor: View {
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: positions)
         .frame(width: ComponentPanelLayout.gridWidth,
-               height: PanelLayoutDestination.visibleContentHeight(itemHeight: layout.height, hiddenItemCount: layout.hidden.count),
+               height: PanelLayoutDestination.visibleContentHeight(itemHeight: layout.height),
                alignment: .topLeading)
         .environment(\.layoutDirection, .leftToRight)
     }
 
     private var emptyState: some View {
-        Text(FeatureL10n.string("从其他面板移入内容"))
+        Text(FeatureL10n.string("点击添加组件，为此面板添加内容"))
             .font(.subheadline)
             .foregroundStyle(theme.text.secondary)
             .multilineTextAlignment(.center)
@@ -123,7 +140,7 @@ struct PanelLayoutEditor: View {
             hover: hover, hoverState: hover.state(for: item.id),
             nativeSource: session.nativeDragSource,
             move: { commit(.init(id: item.id, offset: $0)) },
-            toggleVisibility: { setHidden(true, entry: item.entry) },
+            remove: { entryToRemove = item },
             moveToPanel: { move(item.entry, to: $0) }
         ) {
             if item.surface == .dashboard {
@@ -150,53 +167,9 @@ struct PanelLayoutEditor: View {
         }
     }
 
-    private func hiddenContent(_ hidden: [MenuBarPanelLayoutEntry]) -> some View {
-        VStack(alignment: .leading, spacing: PanelLayoutDestination.rowSpacing) {
-            Text(FeatureL10n.string("已隐藏"))
-                .font(.caption.weight(.medium)).foregroundStyle(theme.text.secondary)
-                .lineLimit(1)
-                .frame(height: PanelLayoutDestination.hiddenHeaderHeight)
-                .padding(.top, PanelLayoutDestination.hiddenSectionTopPadding)
-            ForEach(Array(hidden.enumerated()), id: \.element.id) { index, item in
-                PanelLayoutReorderItem(
-                    id: item.id, title: item.item.title, icon: item.item.iconName,
-                    index: index, count: hidden.count, isDragging: false,
-                    panels: pluginHost.menuBarPanels, panelID: panelID, isHidden: true,
-                    hover: hover, hoverState: hover.state(for: item.id),
-                    nativeSource: session.nativeDragSource,
-                    move: { offset in
-                        pluginHost.movePanelEntry(pluginID: item.entry.pluginID, surface: item.surface,
-                                                  panelID: panelID, toOffset: offset, hidden: true)
-                    },
-                    toggleVisibility: { setHidden(false, entry: item.entry) },
-                    moveToPanel: { move(item.entry, to: $0) }
-                ) { entryLabel(item).opacity(0.6) }
-                beginDrag: { nil } endDrag: { _ in }
-                .frame(height: PanelLayoutDestination.rowHeight)
-            }
-        }
-    }
-
-    private func entryLabel(_ entry: MenuBarPanelLayoutEntry) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: PluginSystemImage.resolvedName(entry.item.iconName))
-                .foregroundStyle(entry.item.iconTint).frame(width: 20)
-            Text(entry.item.title).font(.body).lineLimit(1)
-            Spacer(minLength: 54)
-        }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.surfaces.card, in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private func setHidden(_ hidden: Bool, entry: MenuBarPanelEntry) {
-        scroller.stop(); session.reset()
-        pluginHost.setPluginVisible(!hidden, id: entry.pluginID, on: entry.surface)
-    }
-
     private func move(_ entry: MenuBarPanelEntry, to destination: String) {
         scroller.stop(); session.reset()
-        pluginHost.assignPanelEntry(pluginID: entry.pluginID, surface: entry.surface, to: destination)
+        _ = pluginHost.transferPanelEntry(entry, from: panelID, to: destination, at: pluginHost.panelEntries(in: destination).count)
     }
 
     private func updateDestination(_ point: CGPoint, layout: PanelLayoutEditorSnapshot) {
@@ -230,7 +203,6 @@ private struct PanelLayoutEditorSnapshot {
     let ids: [String]
     let items: [String: MenuBarPanelLayoutEntry]
     let features: [String: PluginPanelItem]
-    let hidden: [MenuBarPanelLayoutEntry]
     let frames: [PanelLayoutEntryFrame]
     let height: CGFloat
 
@@ -243,7 +215,6 @@ private struct PanelLayoutEditorSnapshot {
         ids = entries.map(\.id)
         items = Dictionary(uniqueKeysWithValues: pluginHost.panelLayoutEntries(in: panelID).map { ($0.id, $0) })
         self.features = Dictionary(uniqueKeysWithValues: features.map { ($0.id, $0) })
-        hidden = pluginHost.panelLayoutEntries(in: panelID, hidden: true)
         frames = PanelLayoutEntryFrame.frames(entries: entries, placement: placement)
         height = placement.height
     }
@@ -277,11 +248,11 @@ struct PanelLayoutEntryFrame: Equatable, Identifiable {
         return entries.compactMap { entry in
             switch entry.surface {
             case .dashboard:
-                guard let item = components[entry.pluginID] else { return nil }
+                guard let item = components[entry.presentationID] else { return nil }
                 return Self(entry: entry, frame: PanelLayoutDestination.frame(item))
             case .featurePanel:
-                guard let y = placement.featureOffsets[entry.pluginID],
-                      let height = placement.featureHeights[entry.pluginID] else { return nil }
+                guard let y = placement.featureOffsets[entry.presentationID],
+                      let height = placement.featureHeights[entry.presentationID] else { return nil }
                 return Self(entry: entry, frame: CGRect(x: 0, y: y, width: ComponentPanelLayout.gridWidth,
                                                        height: height))
             }
@@ -338,12 +309,11 @@ private struct PanelLayoutReorderItem<Content: View>: View {
     let isDragging: Bool
     let panels: [MenuBarPanelDefinition]
     let panelID: String
-    var isHidden = false
     let hover: PanelLayoutHoverState
     @ObservedObject var hoverState: PanelLayoutItemHoverState
     let nativeSource: PanelLayoutNativeDragSource
     let move: (Int) -> Void
-    let toggleVisibility: () -> Void
+    let remove: () -> Void
     let moveToPanel: (String) -> Void
     @ViewBuilder let content: Content
     let beginDrag: () -> String?
@@ -351,7 +321,7 @@ private struct PanelLayoutReorderItem<Content: View>: View {
     @Environment(\.menuBarPanelTheme) private var theme
     @Environment(\.panelLayoutScrollToItem) private var scrollToItem
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private enum Control: Hashable { case visibility, moveTo, more }
+    private enum Control: Hashable { case remove, moveTo, more }
     @FocusState private var focusedControl: Control?
 
     private var showsControls: Bool { hoverState.isActive }
@@ -377,14 +347,14 @@ private struct PanelLayoutReorderItem<Content: View>: View {
                     ? AnyLayout(VStackLayout(spacing: metrics.spacing))
                     : AnyLayout(HStackLayout(spacing: metrics.spacing))
                 layout {
-                    Button(action: toggleVisibility) {
-                        controlIcon(isHidden ? "eye.slash" : "eye", side: metrics.buttonSide, preferredIconSide: 18)
+                    Button(action: remove) {
+                        controlIcon("trash", side: metrics.buttonSide)
                     }
                     .buttonStyle(.plain)
-                    .focused($focusedControl, equals: .visibility)
-                    .help(FeatureL10n.string(isHidden ? "显示" : "隐藏"))
-                    .accessibilityLabel(FeatureL10n.string(isHidden ? "显示" : "隐藏"))
-                    .accessibilityIdentifier("panel.layout.visibility.\(id)")
+                    .focused($focusedControl, equals: .remove)
+                    .help(FeatureL10n.string("移除组件"))
+                    .accessibilityLabel(FeatureL10n.string("移除组件"))
+                    .accessibilityIdentifier("panel.layout.remove.\(id)")
 
                     Menu {
                         Text(FeatureL10n.string("移动到"))
@@ -435,7 +405,7 @@ private struct PanelLayoutReorderItem<Content: View>: View {
         .animation(showsControls && !reduceMotion ? .easeOut(duration: 0.12) : nil, value: showsControls)
         .overlay {
             PanelLayoutDragSource(id: id, title: title, icon: icon, showsControls: showsControls,
-                                  isDraggable: !isHidden, hover: hover, nativeSource: nativeSource, begin: beginDrag, end: endDrag)
+                                  isDraggable: true, hover: hover, nativeSource: nativeSource, begin: beginDrag, end: endDrag)
                 .accessibilityHidden(true)
         }
         .overlay {

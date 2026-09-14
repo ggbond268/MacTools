@@ -256,6 +256,24 @@ final class MenuBarPanelStoreTests: XCTestCase {
         XCTAssertEqual(store.configuration.panelID(pluginID: "missing", surface: .dashboard), "components")
     }
 
+    func testLegacyLayoutMigrationAndInstancePersistence() throws {
+        let legacy = Data(#"{"version":1,"panels":[{"id":"components","name":"","systemImage":"square.grid.2x2","isHidden":false},{"id":"features","name":"","systemImage":"switch.2","isHidden":false}],"assignments":{},"orders":{"components":["dashboard:a"]}}"#.utf8)
+        defaults.set(legacy, forKey: MenuBarPanelStore.storageKey)
+        let migrated = MenuBarPanelStore(userDefaults: defaults)
+        let template = MenuBarPanelEntry(pluginID: "a", surface: .dashboard)
+        XCTAssertEqual(migrated.configuration.orderedEntries([template], panelID: "components"), [template])
+        let first = try XCTUnwrap(migrated.addInstance(of: template, to: "components", visibleOrder: [template], suppressDefault: false))
+        let second = try XCTUnwrap(migrated.addInstance(of: template, to: "components", visibleOrder: [template, first], suppressDefault: false))
+        migrated.removeEntry(template)
+        let reloaded = MenuBarPanelStore(userDefaults: defaults)
+        XCTAssertEqual(reloaded.configuration.version, 2)
+        XCTAssertEqual(reloaded.configuration.orderedEntries([template], panelID: "components"), [first, second])
+        reloaded.removePlugin(id: "a")
+        XCTAssertTrue(reloaded.configuration.instances.isEmpty)
+        XCTAssertTrue(reloaded.configuration.removedDefaultEntries.isEmpty)
+        XCTAssertEqual(reloaded.configuration.orderedEntries([template], panelID: "components"), [template])
+    }
+
     func testUnknownSchemaIsNotOverwrittenByPassiveRead() {
         let data = Data(#"{"version":99,"future":"value"}"#.utf8)
         defaults.set("swapped", forKey: MenuBarPanelStore.legacyClickBehaviorStorageKey)

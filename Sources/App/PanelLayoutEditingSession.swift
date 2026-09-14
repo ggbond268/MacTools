@@ -6,26 +6,18 @@ enum PanelLayoutDestination {
     static let rowHeight: CGFloat = 44
     static let rowSpacing: CGFloat = 8
     static let dropTailHeight: CGFloat = 8
-    static let emptySectionHeight: CGFloat = 64
-    static let hiddenHeaderHeight: CGFloat = 16
-    static let hiddenSectionTopPadding: CGFloat = 8
-
-    static func visibleContentHeight(itemHeight: CGFloat, hiddenItemCount: Int) -> CGFloat {
-        if itemHeight > 0 { return itemHeight + dropTailHeight }
-        return hiddenItemCount > 0 ? emptySectionHeight : 0
+    static func visibleContentHeight(itemHeight: CGFloat) -> CGFloat {
+        itemHeight > 0 ? itemHeight + dropTailHeight : 0
     }
 
-    static func editorDocumentHeight(itemHeight: CGFloat, hiddenItemCount: Int) -> CGFloat {
-        let hiddenHeight = hiddenItemCount == 0 ? 0
-            : hiddenSectionTopPadding + hiddenHeaderHeight + CGFloat(hiddenItemCount) * (rowHeight + rowSpacing)
-        return visibleContentHeight(itemHeight: itemHeight, hiddenItemCount: hiddenItemCount) + hiddenHeight
+    static func editorDocumentHeight(itemHeight: CGFloat) -> CGFloat {
+        visibleContentHeight(itemHeight: itemHeight)
     }
 
-    static func editorContentHeight(itemHeight: CGFloat, hiddenItemCount: Int = 0, maximumHeight: CGFloat) -> CGFloat {
-        // The editing footer already contributes to the panel's minimum height.
+    static func editorContentHeight(itemHeight: CGFloat, maximumHeight: CGFloat) -> CGFloat {
         let minimumHeight = max(0, MenuBarPanelLayout.minimumContentHeight - MenuBarPanelLayout.editingActionBarHeight)
-        let documentHeight = editorDocumentHeight(itemHeight: itemHeight, hiddenItemCount: hiddenItemCount)
-        return min(maximumHeight, max(minimumHeight, documentHeight + MenuBarPanelLayout.contentVerticalPadding))
+        return min(maximumHeight, max(minimumHeight, editorDocumentHeight(itemHeight: itemHeight)
+            + MenuBarPanelLayout.contentVerticalPadding))
     }
 
     static func listOffset(at point: CGPoint, count: Int) -> Int {
@@ -300,7 +292,7 @@ final class PanelLayoutEditingSession: ObservableObject {
         guard let entry = entries.first(where: { $0.id == move.id }) else { rejectMove(); return false }
         let result = PanelLayoutDestination.moving(move.id, toOffset: move.offset, in: before)
         guard result != before else { return true }
-        host.movePanelEntry(pluginID: entry.pluginID, surface: entry.surface, panelID: panelID, toOffset: move.offset)
+        host.movePanelEntry(entry, panelID: panelID, toOffset: move.offset)
         guard host.panelEntries(in: panelID).map(\.id) == result else { rejectMove(); return false }
         didSave(move, beforeIDs: before, afterIDs: result)
         return true
@@ -323,7 +315,7 @@ final class PanelLayoutEditingSession: ObservableObject {
             let before = host.panelEntries(in: panelID).map(\.id)
             guard let move = takeUndo(ids: before),
                   let entry = host.panelEntries(in: panelID).first(where: { $0.id == move.id }) else { return }
-            host.movePanelEntry(pluginID: entry.pluginID, surface: entry.surface, panelID: panelID, toOffset: move.offset)
+            host.movePanelEntry(entry, panelID: panelID, toOffset: move.offset)
             guard host.panelEntries(in: panelID).map(\.id) == PanelLayoutDestination.moving(move.id, toOffset: move.offset, in: before)
             else { rejectMove(); return }
         }

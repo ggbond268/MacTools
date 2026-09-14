@@ -6,21 +6,44 @@ struct MenuBarPanelDeleteConfirmation: View {
     let panel: MenuBarPanelDefinition
     let onCancel: () -> Void
     let onDelete: () -> String?
+
+    var body: some View {
+        MenuBarPanelRemovalConfirmation(
+            title: FeatureL10n.string("删除面板？"),
+            message: FeatureL10n.string("此面板中的内容将回到各自的默认面板。"),
+            systemImage: panel.systemImage, actionTitle: FeatureL10n.string("删除"),
+            errorLabel: FeatureL10n.string("无法删除面板"), identifier: "menuBarPanel.delete",
+            isEnabled: !panel.isDefault, onCancel: onCancel, onConfirm: onDelete
+        )
+    }
+}
+
+struct MenuBarPanelRemovalConfirmation: View {
+    let title: String
+    let message: String
+    let systemImage: String
+    let actionTitle: String
+    let errorLabel: String
+    let identifier: String
+    var isEnabled = true
+    let onCancel: () -> Void
+    let onConfirm: () -> String?
     @State private var errorMessage: String?
+    @State private var presentationFocus = MenuBarPanelConfirmationFocus()
     @Environment(\.menuBarPanelTheme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: PluginSystemImage.resolvedName(panel.systemImage))
+                Image(systemName: PluginSystemImage.resolvedName(systemImage))
                     .font(.title3)
                     .foregroundStyle(theme.text.secondary)
                     .accessibilityHidden(true)
-                Text(FeatureL10n.string("删除面板？"))
+                Text(title)
                     .font(.headline)
             }
 
-            Text(FeatureL10n.string("此面板中的内容将回到各自的默认面板。"))
+            Text(message)
                 .font(.subheadline)
                 .foregroundStyle(theme.text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -30,27 +53,89 @@ struct MenuBarPanelDeleteConfirmation: View {
                     .font(.caption)
                     .foregroundStyle(theme.status.critical)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel(FeatureL10n.string("无法删除面板") + ": " + errorMessage)
+                    .accessibilityLabel(errorLabel + ": " + errorMessage)
             }
 
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
                 MenuBarPanelEditingButton(title: FeatureL10n.string("取消"), emphasis: .standard,
-                                          role: .cancel, action: onCancel)
-                    .keyboardShortcut(.cancelAction)
-                    .accessibilityIdentifier("menuBarPanel.delete.cancel")
-                MenuBarPanelEditingButton(title: FeatureL10n.string("删除"), emphasis: .prominent,
-                                          role: .destructive, isEnabled: !panel.isDefault) {
-                    errorMessage = onDelete()
+                                          role: .cancel) {
+                    presentationFocus.end()
+                    onCancel()
                 }
-                .accessibilityIdentifier("menuBarPanel.delete.confirm")
+                .keyboardShortcut(.cancelAction)
+                .accessibilityIdentifier("\(identifier).cancel")
+                MenuBarPanelEditingButton(title: actionTitle, emphasis: .prominent,
+                                          role: .destructive, isEnabled: isEnabled) {
+                    presentationFocus.end()
+                    errorMessage = onConfirm()
+                }
+                .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier("\(identifier).confirm")
             }
         }
         .padding(14)
         .frame(width: 264)
         .background(theme.surfaces.panel)
+        .background(MenuBarPanelConfirmationFocusLifecycle(focus: presentationFocus).allowsHitTesting(false))
         .foregroundStyle(theme.text.primary)
-        .accessibilityIdentifier("menuBarPanel.delete.confirmation")
+        .accessibilityIdentifier("\(identifier).confirmation")
+    }
+}
+
+/// End focus while the confirmation's SwiftUI responder proxies are still alive.
+/// AppKit can retain a popover's key view in its parent window's responder chain.
+@MainActor
+private final class MenuBarPanelConfirmationFocus {
+    weak var window: NSWindow?
+
+    func end() {
+        guard let window else { return }
+        if let parent = window.parent, parent.firstResponder !== parent {
+            parent.makeFirstResponder(nil)
+        }
+        if window.firstResponder !== window { window.makeFirstResponder(nil) }
+    }
+}
+
+private struct MenuBarPanelConfirmationFocusLifecycle: NSViewRepresentable {
+    let focus: MenuBarPanelConfirmationFocus
+    func makeNSView(context: Context) -> ConfirmationView { ConfirmationView(focus: focus) }
+    func updateNSView(_ view: ConfirmationView, context: Context) {}
+
+    static func dismantleNSView(_ view: ConfirmationView, coordinator: ()) {
+        view.focus.end()
+    }
+
+    final class ConfirmationView: NSView {
+        let focus: MenuBarPanelConfirmationFocus
+
+        init(focus: MenuBarPanelConfirmationFocus) {
+            self.focus = focus
+            super.init(frame: .zero)
+            NotificationCenter.default.addObserver(self, selector: #selector(popoverWillClose(_:)),
+                                                   name: NSPopover.willCloseNotification, object: nil)
+        }
+
+        required init?(coder: NSCoder) { nil }
+        deinit { NotificationCenter.default.removeObserver(self) }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            focus.window = window
+            if let window { MenuBarPanelWindowRegistry.markEditingPopover(window) }
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if window !== newWindow { focus.end() }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        @objc private func popoverWillClose(_ notification: Notification) {
+            guard let popover = notification.object as? NSPopover, let window,
+                  popover.contentViewController?.view.window === window else { return }
+            focus.end()
+        }
     }
 }
 
@@ -62,7 +147,6 @@ enum MenuBarPanelTabLayout {
     static let spacing: CGFloat = 2
     static let inset = MenuBarPanelLayout.tabCapsuleInset
     static let stripHeight = height + inset * 2
-    static let addButtonSpacing: CGFloat = 6
 
     static func preferredWidth(count _: Int) -> CGFloat { width }
 
@@ -86,8 +170,6 @@ struct MenuBarPanelTabs: NSViewRepresentable {
     var isEditing = false
     var onMove: (String, Int) -> Void = { _, _ in }
     var onChangeIcon: (String) -> Void = { _ in }
-    var onDelete: (String) -> Void = { _ in }
-    var onAddPanel: () -> Void = {}
     var itemDragSession: PanelLayoutEditingSession? = nil
     var onItemDragHover: (String) -> Void = { _ in }
     var onItemDrop: (String) -> Bool = { _ in false }
@@ -111,7 +193,6 @@ struct MenuBarPanelTabs: NSViewRepresentable {
         strip.onSelect = onSelect
         strip.onMove = onMove
         strip.onChangeIcon = onChangeIcon
-        strip.onDelete = onDelete
         strip.itemDragSession = itemDragSession
         strip.onItemDragHover = onItemDragHover
         strip.onItemDrop = onItemDrop
@@ -123,7 +204,6 @@ struct MenuBarPanelTabs: NSViewRepresentable {
         strip.secondaryColor = NSColor(theme.text.secondary)
         strip.accentColor = NSColor(theme.accent)
         strip.update(panels: panels, selectedPanelID: selectedPanelID)
-        view.onAddPanel = onAddPanel
         view.configure(theme: theme, contrast: contrast)
         view.needsLayout = true
     }
@@ -131,7 +211,7 @@ struct MenuBarPanelTabs: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: MenuBarPanelTabNavigationView, context: Context) -> CGSize? {
         let fullWidth = MenuBarPanelTabLayout.contentWidth(
             count: panels.count, width: MenuBarPanelTabLayout.preferredWidth(count: panels.count)
-        ) + (isEditing ? (MenuBarPanelTabLayout.width + MenuBarPanelTabLayout.addButtonSpacing) * 2 : 0)
+        )
         return CGSize(width: min(proposal.width ?? fullWidth, fullWidth), height: MenuBarPanelTabLayout.stripHeight)
     }
 }
@@ -142,9 +222,7 @@ final class MenuBarPanelTabNavigationView: NSView {
     private let scroll = NSScrollView()
     private let previousButton = MenuBarPanelIconControl()
     private let nextButton = MenuBarPanelIconControl()
-    private let addButton = MenuBarPanelIconControl()
     private let containerBackground = CAShapeLayer()
-    var onAddPanel: () -> Void = {}
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -170,13 +248,6 @@ final class MenuBarPanelTabNavigationView: NSView {
         }
         previousButton.setAccessibilityIdentifier("menuBarPanel.scrollLeft")
         nextButton.setAccessibilityIdentifier("menuBarPanel.scrollRight")
-        addButton.setSymbol("plus.circle", pointSize: MenuBarPanelLayout.tabIconSize + 2)
-        addButton.setAccessibilityLabel(FeatureL10n.string("添加面板"))
-        addButton.setAccessibilityIdentifier("menuBarPanel.add")
-        addButton.toolTip = FeatureL10n.string("添加面板")
-        addButton.target = self
-        addButton.action = #selector(addPanel)
-        addSubview(addButton)
         scroll.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(updateScrollButtons),
             name: NSView.boundsDidChangeNotification, object: scroll.contentView)
@@ -192,7 +263,7 @@ final class MenuBarPanelTabNavigationView: NSView {
             containerBackground.strokeColor = NSColor(theme.surfaces.separator).cgColor
         }
         containerBackground.lineWidth = contrast == .increased ? 1 : 0.5
-        for button in [previousButton, nextButton, addButton] {
+        for button in [previousButton, nextButton] {
             button.configureColors(selection: NSColor(theme.surfaces.tabSelection), hover: NSColor(theme.surfaces.hover),
                                    primary: NSColor(theme.text.primary), secondary: NSColor(theme.text.secondary))
         }
@@ -200,26 +271,18 @@ final class MenuBarPanelTabNavigationView: NSView {
 
     override func layout() {
         super.layout()
-        addButton.isHidden = !strip.isEditing
-        addButton.isEnabled = strip.panels.count < MenuBarPanelDefinition.maximumCount
-        let addWidth = strip.isEditing ? MenuBarPanelTabLayout.width + MenuBarPanelTabLayout.addButtonSpacing : 0
-        // Reserve the same space on both sides so the tab capsule stays centered
-        // when its separate add control appears on the right.
-        let tabAreaWidth = max(0, bounds.width - addWidth * 2)
-        let tabArea = CGRect(x: addWidth, y: 0, width: tabAreaWidth, height: bounds.height)
-            .insetBy(dx: containerBackground.lineWidth / 2, dy: containerBackground.lineWidth / 2)
+        let tabAreaWidth = bounds.width
+        let tabArea = bounds.insetBy(dx: containerBackground.lineWidth / 2, dy: containerBackground.lineWidth / 2)
         containerBackground.path = CGPath(roundedRect: tabArea, cornerWidth: tabArea.height / 2,
                                          cornerHeight: tabArea.height / 2, transform: nil)
-        addButton.frame = CGRect(x: addWidth + tabAreaWidth + MenuBarPanelTabLayout.addButtonSpacing,
-            y: MenuBarPanelTabLayout.inset, width: MenuBarPanelTabLayout.width, height: MenuBarPanelTabLayout.height)
         let overflows = MenuBarPanelTabLayout.contentWidth(count: strip.panels.count, width: MenuBarPanelTabLayout.minimumWidth) > tabAreaWidth + 1
         let edgeWidth: CGFloat = overflows ? 18 : 0
         previousButton.isHidden = !overflows
         nextButton.isHidden = !overflows
-        previousButton.frame = CGRect(x: addWidth, y: 0, width: edgeWidth, height: bounds.height)
-        nextButton.frame = CGRect(x: addWidth + tabAreaWidth - edgeWidth, y: 0, width: edgeWidth, height: bounds.height)
+        previousButton.frame = CGRect(x: 0, y: 0, width: edgeWidth, height: bounds.height)
+        nextButton.frame = CGRect(x: tabAreaWidth - edgeWidth, y: 0, width: edgeWidth, height: bounds.height)
         strip.fitTabs(to: max(0, tabAreaWidth - edgeWidth * 2))
-        scroll.frame = CGRect(x: addWidth + edgeWidth, y: 0, width: max(0, tabAreaWidth - edgeWidth * 2), height: bounds.height)
+        scroll.frame = CGRect(x: edgeWidth, y: 0, width: max(0, tabAreaWidth - edgeWidth * 2), height: bounds.height)
         strip.revealSelectionIfNeeded()
         updateScrollButtons()
     }
@@ -231,7 +294,6 @@ final class MenuBarPanelTabNavigationView: NSView {
 
     @objc private func scrollLeft() { scrollTabs(by: -1) }
     @objc private func scrollRight() { scrollTabs(by: 1) }
-    @objc private func addPanel() { onAddPanel() }
 
     private func scrollTabs(by direction: CGFloat) {
         let origin = scroll.contentView.bounds.minX + direction * (strip.tabWidth + MenuBarPanelTabLayout.spacing)
@@ -293,7 +355,6 @@ final class MenuBarPanelTabStripView: NSView, NSDraggingSource {
     var onSelect: (String) -> Void = { _ in }
     var onMove: (String, Int) -> Void = { _, _ in }
     var onChangeIcon: (String) -> Void = { _ in }
-    var onDelete: (String) -> Void = { _ in }
 
     weak var itemDragSession: PanelLayoutEditingSession? {
         didSet { if itemDragSession?.token == nil { springLoader.cancel() } }
@@ -431,7 +492,6 @@ final class MenuBarPanelTabStripView: NSView, NSDraggingSource {
         append("向右移动", symbol: "arrow.right", action: #selector(movePanelRight(_:)), enabled: index < panels.count - 1)
         menu.addItem(.separator())
         append("更换图标", symbol: "square.grid.2x2", action: #selector(changeIcon(_:)), enabled: true)
-        append("删除面板", symbol: "trash", action: #selector(deletePanel(_:)), enabled: !panels[index].isDefault)
         return menu
     }
 
@@ -448,11 +508,6 @@ final class MenuBarPanelTabStripView: NSView, NSDraggingSource {
     @objc private func changeIcon(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String, panels.contains(where: { $0.id == id }) else { return }
         onChangeIcon(id)
-    }
-
-    @objc private func deletePanel(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String, panels.contains(where: { $0.id == id && !$0.isDefault }) else { return }
-        onDelete(id)
     }
 
     func beginReordering(_ id: String) -> Bool {

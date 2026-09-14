@@ -23,7 +23,7 @@ enum ConfiguredMenuBarPanelLayout {
         let componentLookup = Dictionary(uniqueKeysWithValues: components.map { ($0.id, $0) })
         let featureLookup = Dictionary(uniqueKeysWithValues: features.map { ($0.id, $0) })
         var result = Placement()
-        var pendingComponents: [PluginComponentItem] = []
+        var pendingComponents: [(id: String, span: PluginComponentSpan)] = []
         var previousSurface: PluginDisplaySurface?
 
         func flushComponents() {
@@ -43,7 +43,7 @@ enum ConfiguredMenuBarPanelLayout {
         for entry in entries {
             switch entry.surface {
             case .dashboard:
-                if let item = componentLookup[entry.pluginID] { pendingComponents.append(item) }
+                if let item = componentLookup[entry.pluginID] { pendingComponents.append((entry.presentationID, item.span)) }
             case .featurePanel:
                 guard let item = featureLookup[entry.pluginID] else { continue }
                 // A full-width action ends the current card grid; later cards cannot fill earlier gaps.
@@ -51,9 +51,9 @@ enum ConfiguredMenuBarPanelLayout {
                 if let previousSurface {
                     result.height += previousSurface == .featurePanel ? MenuBarPanelLayout.featureRowSpacing : itemSpacing
                 }
-                result.featureOffsets[item.id] = result.height
+                result.featureOffsets[entry.presentationID] = result.height
                 let height = MenuBarPanelLayout.rowHeight(for: item)
-                result.featureHeights[item.id] = height
+                result.featureHeights[entry.presentationID] = height
                 result.height += height
                 previousSurface = .featurePanel
             }
@@ -66,15 +66,20 @@ enum ConfiguredMenuBarPanelLayout {
         components: [PluginComponentItem], features: [PluginPanelItem], screen: NSScreen?,
         entries: [MenuBarPanelEntry]? = nil
     ) -> CGFloat {
-        if components.isEmpty {
-            return MenuBarPanelLayout.preferredFeatureContentHeight(for: features, screen: screen)
+        if entries == nil {
+            if components.isEmpty { return MenuBarPanelLayout.preferredFeatureContentHeight(for: features, screen: screen) }
+            if features.isEmpty { return ComponentPanelLayout.preferredContentHeight(for: components, screen: screen) }
         }
-        if features.isEmpty { return ComponentPanelLayout.preferredContentHeight(for: components, screen: screen) }
         let entries = entries ?? components.map { MenuBarPanelEntry(pluginID: $0.id, surface: .dashboard) }
             + features.map { MenuBarPanelEntry(pluginID: $0.id, surface: .featurePanel) }
-        let raw = placement(entries: entries, components: components, features: features).height
-            + MenuBarPanelLayout.contentVerticalPadding
-        return min(max(raw, MenuBarPanelLayout.minimumContentHeight), MenuBarPanelLayout.maximumContentHeight(for: screen))
+        let height = placement(entries: entries, components: components, features: features).height
+        if components.isEmpty {
+            return MenuBarPanelLayout.preferredFeatureContentHeight(featureContentHeight: height,
+                maximumFeatureListHeight: MenuBarPanelLayout.maximumFeatureListHeight(for: screen))
+        }
+        let raw = height + MenuBarPanelLayout.contentVerticalPadding
+        let minimum = features.isEmpty ? raw : MenuBarPanelLayout.minimumContentHeight
+        return min(max(raw, minimum), MenuBarPanelLayout.maximumContentHeight(for: screen))
     }
 }
 
@@ -157,7 +162,11 @@ private struct ConfiguredMenuBarPanelContent: View {
                 }
                 .background(ScrollViewScrollerVisibilityConfigurator())
             } else if !components.isEmpty {
-                componentContent(components, height: contentBodyHeight)
+                let placement = ConfiguredMenuBarPanelLayout.placement(
+                    entries: pluginHost.panelEntries(in: panelID), components: components, features: []
+                )
+                componentContent(components, height: contentBodyHeight, placements: placement.components,
+                                 gridHeight: placement.height)
             } else if !features.isEmpty {
                 featureContent(features, height: contentBodyHeight)
             } else {
@@ -184,12 +193,13 @@ private struct ConfiguredMenuBarPanelContent: View {
 
     private func componentContent(
         _ items: [PluginComponentItem], height: CGFloat, embedded: Bool = false,
-        placements: [ComponentGridPlacement]? = nil
+        placements: [ComponentGridPlacement]? = nil, gridHeight: CGFloat? = nil
     ) -> some View {
         ComponentPanelContent(
             pluginHost: pluginHost, contentBodyHeight: height, isPanelVisible: isVisible,
-            onDismiss: onDismiss, panelID: panelID, suppliedItems: items, embedded: embedded,
-            suppliedPlacements: placements, suppliedGridHeight: placements == nil ? nil : height,
+            onDismiss: onDismiss, panelID: panelID, suppliedItems: items,
+            suppliedEntries: pluginHost.panelEntries(in: panelID).filter { $0.surface == .dashboard }, embedded: embedded,
+            suppliedPlacements: placements, suppliedGridHeight: gridHeight ?? (placements == nil ? nil : height),
             onInlinePresentationChange: { isComponentDetailInline = $0 }
         )
     }
@@ -204,7 +214,8 @@ private struct ConfiguredMenuBarPanelContent: View {
             isPanelVisible: isVisible, onDismiss: onDismiss, onOpenSettings: onOpenSettings,
             onPresentDiskCleanConfiguration: onPresentDiskCleanConfiguration,
             onPresentLaunchControlConfiguration: onPresentLaunchControlConfiguration,
-            suppliedItems: items, embedded: embedded, suppliedRowOffsets: rowOffsets,
+            suppliedItems: items, suppliedEntries: pluginHost.panelEntries(in: panelID).filter { $0.surface == .featurePanel },
+            embedded: embedded, suppliedRowOffsets: rowOffsets,
             onInlinePresentationChange: { isFeatureDetailInline = $0 }
         )
     }

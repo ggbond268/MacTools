@@ -895,9 +895,8 @@ final class MenuBarPanelPresenter: NSObject {
             let placement = ConfiguredMenuBarPanelLayout.placement(
                 entries: entries, components: components, features: features
             )
-            let hiddenCount = pluginHost.panelLayoutEntries(in: tab.id, hidden: true).count
             height = PanelLayoutDestination.editorContentHeight(
-                itemHeight: placement.height, hiddenItemCount: hiddenCount,
+                itemHeight: placement.height,
                 maximumHeight: max(MenuBarPanelLayout.minimumContentHeight,
                     MenuBarPanelLayout.maximumContentHeight(for: screen) - MenuBarPanelLayout.editingActionBarHeight)
             )
@@ -1062,30 +1061,15 @@ final class MenuBarUnifiedPanelModel: ObservableObject {
 }
 
 struct MenuBarUnifiedPanelContent: View {
-    private enum EditingPopover: Identifiable {
-        case iconPicker(MenuBarPanelDefinition)
-        case deletePanel(MenuBarPanelDefinition)
-
-        var id: String {
-            switch self {
-            case let .iconPicker(panel): "icon.\(panel.id)"
-            case let .deletePanel(panel): "delete.\(panel.id)"
-            }
-        }
-        var panel: MenuBarPanelDefinition {
-            switch self {
-            case let .iconPicker(panel), let .deletePanel(panel): panel
-            }
-        }
-    }
-
     @ObservedObject var pluginHost: PluginHost
     @ObservedObject var appUpdater: AppUpdater
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
     @ObservedObject private var runtimeLocale = PluginRuntimeLocalization.source
     @ObservedObject var model: MenuBarUnifiedPanelModel
     @StateObject private var layoutEditingSession = PanelLayoutEditingSession()
-    @State private var editingPopover: EditingPopover?
+    @State private var iconPickerPanel: MenuBarPanelDefinition?
+    @State private var showsComponentLibrary = false
+    @State private var additionRevealRequest: UUID?
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     let onDismiss: () -> Void
@@ -1120,17 +1104,18 @@ struct MenuBarUnifiedPanelContent: View {
                 panels: pluginHost.visibleMenuBarPanels,
                 onMovePanel: pluginHost.moveMenuBarPanel,
                 onChangeIcon: showIconPicker,
-                onDeletePanel: confirmPanelDeletion,
-                onAddPanel: addPanel,
                 itemDragSession: layoutEditingSession,
                 onItemDragHover: selectPanelDuringDrag,
-                onItemDrop: dropItemOnPanel
+                onItemDrop: dropItemOnPanel,
+                canUndoLayout: layoutEditingSession.canUndo(in: pluginHost, panelID: model.selectedTab.id),
+                editingFeedback: model.editingFeedback,
+                onUndoLayout: undoLayoutEdit
             )
             .frame(maxWidth: .infinity)
             .frame(height: MenuBarPanelLayout.headerHeight)
             .padding(.horizontal, MenuBarPanelLayout.outerPadding)
-            .popover(item: $editingPopover, arrowEdge: .bottom) { presentation in
-                editingPopoverContent(presentation)
+            .popover(item: $iconPickerPanel, arrowEdge: .bottom) { panel in
+                iconPickerContent(panel)
             }
 
             MenuBarPanelContentSurface(contentBodyHeight: contentBodyHeight) {
@@ -1139,12 +1124,32 @@ struct MenuBarUnifiedPanelContent: View {
 
             if model.isEditingLayout {
                 MenuBarPanelEditingActionBar(
-                    canUndoLayout: layoutEditingSession.canUndo(in: pluginHost, panelID: model.selectedTab.id),
-                    feedback: model.editingFeedback,
-                    onUndoLayout: undoLayoutEdit,
-                    onDone: toggleLayoutEditing
+                    onAddComponents: { showsComponentLibrary = true },
+                    canAddPanel: pluginHost.menuBarPanels.count < MenuBarPanelDefinition.maximumCount,
+                    onAddPanel: addPanel,
+                    selectedPanel: pluginHost.menuBarPanels.first { $0.id == model.selectedTab.id },
+                    onDeletePanel: { id in
+                        let error = model.deletePanel(id: id)
+                        if error == nil { layoutEditingSession.reset() }
+                        return error
+                    }
                 )
                 .frame(height: MenuBarPanelLayout.editingActionBarHeight)
+                .popover(isPresented: $showsComponentLibrary, arrowEdge: .top) {
+                    PanelComponentLibrary(pluginHost: pluginHost, panelID: model.selectedTab.id) { entry in
+                        guard pluginHost.addPanelEntry(entry, to: model.selectedTab.id) else { return false }
+                        layoutEditingSession.reset()
+                        additionRevealRequest = UUID()
+                        showsComponentLibrary = false
+                        return true
+                    }
+                    .background {
+                        MenuWindowAccessor { window in
+                            if let window { MenuBarPanelWindowRegistry.markEditingPopover(window) }
+                        }.allowsHitTesting(false)
+                    }
+                    .onExitCommand { showsComponentLibrary = false }
+                }
             }
         }
         .padding(.top, MenuBarPanelLayout.panelTopPadding)
@@ -1168,47 +1173,35 @@ struct MenuBarUnifiedPanelContent: View {
         .environment(\.locale, PluginRuntimeLocalization.locale)
         .environment(\.layoutDirection, layoutDirection)
         .onChange(of: model.isEditingLayout) { _, isEditing in
-            if !isEditing { editingPopover = nil; layoutEditingSession.reset() }
+            if !isEditing {
+                iconPickerPanel = nil
+                showsComponentLibrary = false
+                additionRevealRequest = nil
+                layoutEditingSession.reset()
+            }
         }
+        .onChange(of: model.selectedTab) { _, _ in additionRevealRequest = nil }
         .onChange(of: pluginHost.menuBarPanels.map(\.id)) { _, ids in
-            if let editingPopover, !ids.contains(editingPopover.panel.id) {
-                self.editingPopover = nil
+            if let iconPickerPanel, !ids.contains(iconPickerPanel.id) {
+                self.iconPickerPanel = nil
             }
         }
     }
 
-    private func editingPopoverContent(_ presentation: EditingPopover) -> some View {
-        // The presentation owns a snapshot until dismissal completes, even when
-        // its panel has already been deleted from the live configuration.
-        let panel = presentation.panel
-        return Group {
-            switch presentation {
-            case .iconPicker:
-                PanelSymbolPicker(selected: panel.systemImage) { symbol in
-                    if var updated = pluginHost.menuBarPanels.first(where: { $0.id == panel.id }) {
-                        updated.systemImage = symbol
-                        pluginHost.updateMenuBarPanel(updated)
-                    }
-                    editingPopover = nil
-                }
-            case .deletePanel:
-                MenuBarPanelDeleteConfirmation(panel: panel, onCancel: { editingPopover = nil }) {
-                    let error = model.deletePanel(id: panel.id)
-                    if error == nil {
-                        layoutEditingSession.reset()
-                        editingPopover = nil
-                    }
-                    return error
-                }
+    private func iconPickerContent(_ panel: MenuBarPanelDefinition) -> some View {
+        PanelSymbolPicker(selected: panel.systemImage) { symbol in
+            if var updated = pluginHost.menuBarPanels.first(where: { $0.id == panel.id }) {
+                updated.systemImage = symbol
+                pluginHost.updateMenuBarPanel(updated)
             }
+            iconPickerPanel = nil
         }
         .background {
             MenuWindowAccessor { window in
                 if let window { MenuBarPanelWindowRegistry.markEditingPopover(window) }
-            }
-            .allowsHitTesting(false)
+            }.allowsHitTesting(false)
         }
-        .onExitCommand { editingPopover = nil }
+        .onExitCommand { iconPickerPanel = nil }
     }
 
     private var layoutDirection: LayoutDirection {
@@ -1228,7 +1221,8 @@ struct MenuBarUnifiedPanelContent: View {
                 pluginHost: pluginHost,
                 panelID: model.selectedTab.id,
                 onDismiss: onDismiss,
-                session: layoutEditingSession
+                session: layoutEditingSession,
+                revealBottomRequest: additionRevealRequest
             )
             .id(model.selectedTab)
             .frame(height: contentBodyHeight)
@@ -1290,12 +1284,7 @@ struct MenuBarUnifiedPanelContent: View {
 
     private func showIconPicker(_ id: String) {
         guard let panel = pluginHost.menuBarPanels.first(where: { $0.id == id }) else { return }
-        editingPopover = .iconPicker(panel)
-    }
-
-    private func confirmPanelDeletion(_ id: String) {
-        guard let panel = pluginHost.menuBarPanels.first(where: { $0.id == id && !$0.isDefault }) else { return }
-        editingPopover = .deletePanel(panel)
+        iconPickerPanel = panel
     }
 
     private func toggleLayoutEditing() {
@@ -1356,36 +1345,29 @@ struct MenuBarPanelHeader: View {
     var panels: [MenuBarPanelDefinition] = MenuBarPanelDefinition.defaults
     var onMovePanel: (String, Int) -> Void = { _, _ in }
     var onChangeIcon: (String) -> Void = { _ in }
-    var onDeletePanel: (String) -> Void = { _ in }
-    var onAddPanel: () -> Void = {}
     var itemDragSession: PanelLayoutEditingSession? = nil
     var onItemDragHover: (String) -> Void = { _ in }
     var onItemDrop: (String) -> Bool = { _ in false }
+    let canUndoLayout: Bool
+    let editingFeedback: MenuBarPanelEditingFeedback
+    let onUndoLayout: () -> Void
 
     var body: some View {
-        ZStack {
-            MenuBarPanelTabs(
-                panels: panels, selectedPanelID: selectedTab.id,
-                onSelect: { onTabSelection(MenuBarPanelTab(id: $0)) },
-                isEditing: isEditingLayout, onMove: onMovePanel,
-                onChangeIcon: onChangeIcon, onDelete: onDeletePanel, onAddPanel: onAddPanel,
-                itemDragSession: itemDragSession, onItemDragHover: onItemDragHover, onItemDrop: onItemDrop
-            )
-            .fixedSize()
-
-            if !isEditingLayout {
+        if isEditingLayout {
+            MenuBarPanelEditingControls(canUndoLayout: canUndoLayout, feedback: editingFeedback,
+                onUndoLayout: onUndoLayout, onDone: onEditLayout) {
+                    navigation
+                }
+        } else {
+            ZStack {
+                navigation.fixedSize()
                 HStack(spacing: MenuBarPanelLayout.headerAccessorySpacing) {
                     Spacer(minLength: 8)
-
                     MenuBarPanelIconButton(
                         systemImage: "gearshape",
-                        accessibilityTitle: AppL10n.settings(
-                            "settings.window.title",
-                            defaultValue: "设置"
-                        ),
+                        accessibilityTitle: AppL10n.settings("settings.window.title", defaultValue: "设置"),
                         action: onOpenSettings
                     )
-
                     MenuBarPanelOverflowMenu(
                         canEditLayout: canEditLayout,
                         availableUpdateVersion: availableUpdateVersion,
@@ -1396,6 +1378,16 @@ struct MenuBarPanelHeader: View {
                 }
             }
         }
+    }
+
+    private var navigation: some View {
+        MenuBarPanelTabs(
+            panels: panels, selectedPanelID: selectedTab.id,
+            onSelect: { onTabSelection(MenuBarPanelTab(id: $0)) },
+            isEditing: isEditingLayout, onMove: onMovePanel,
+            onChangeIcon: onChangeIcon,
+            itemDragSession: itemDragSession, onItemDragHover: onItemDragHover, onItemDrop: onItemDrop
+        )
     }
 }
 
@@ -1415,30 +1407,87 @@ final class MenuBarPanelEditingFeedback {
     func reset() { lastRequest = nil }
 }
 
-struct MenuBarPanelEditingActionBar: View {
+struct MenuBarPanelEditingControls<Navigation: View>: View {
     let canUndoLayout: Bool
     let feedback: MenuBarPanelEditingFeedback
     let onUndoLayout: () -> Void
     let onDone: () -> Void
+    @ViewBuilder let navigation: Navigation
 
     var body: some View {
-        HStack(spacing: 4) {
-            MenuBarPanelEditingButton(
-                title: PanelLayoutCopy.undo,
-                systemImage: "arrow.uturn.backward",
-                emphasis: .standard,
-                isEnabled: canUndoLayout,
-                action: onUndoLayout
-            )
-            .accessibilityIdentifier("panel.layout.undo")
-
-            Spacer(minLength: 8)
-
+        MenuBarPanelEditingHeaderLayout {
+            MenuBarPanelEditingButton(title: PanelLayoutCopy.undo, emphasis: .standard,
+                                      isEnabled: canUndoLayout, action: onUndoLayout)
+                .accessibilityIdentifier("panel.layout.undo")
+            navigation
             MenuBarPanelEditingDoneButton(feedback: feedback, action: onDone)
+        }
+        .controlSize(.mini)
+    }
+}
+
+/// Keep the tabs centered while giving both actions their own layout space.
+private struct MenuBarPanelEditingHeaderLayout: Layout {
+    private let spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let side = max(sizes[0].width, sizes[2].width)
+        return CGSize(width: proposal.width ?? sizes[1].width + (side + spacing) * 2,
+                      height: proposal.height ?? sizes.map(\.height).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let leading = subviews[0].sizeThatFits(.unspecified)
+        let trailing = subviews[2].sizeThatFits(.unspecified)
+        let navigationWidth = max(0, bounds.width - (max(leading.width, trailing.width) + spacing) * 2)
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading,
+                          proposal: ProposedViewSize(leading))
+        subviews[1].place(at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center,
+                          proposal: ProposedViewSize(width: navigationWidth, height: bounds.height))
+        subviews[2].place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing,
+                          proposal: ProposedViewSize(trailing))
+    }
+}
+
+struct MenuBarPanelEditingActionBar: View {
+    var onAddComponents: () -> Void = {}
+    var canAddPanel = true
+    var onAddPanel: () -> Void = {}
+    var selectedPanel: MenuBarPanelDefinition?
+    var onDeletePanel: (String) -> String? = { _ in nil }
+    @State private var panelToDelete: MenuBarPanelDefinition?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            MenuBarPanelEditingButton(title: FeatureL10n.string("添加组件"),
+                                      emphasis: .standard, action: onAddComponents)
+                .accessibilityIdentifier("panel.layout.add")
+            Spacer(minLength: 8)
+            MenuBarPanelEditingButton(title: FeatureL10n.string("删除面板"), emphasis: .standard,
+                                      role: .destructive, isEnabled: selectedPanel?.isDefault == false) {
+                panelToDelete = selectedPanel
+            }
+            .accessibilityIdentifier("menuBarPanel.delete")
+            .popover(item: $panelToDelete, arrowEdge: .top) { panel in
+                // Retain the addressed panel until the confirmation finishes closing.
+                MenuBarPanelDeleteConfirmation(panel: panel, onCancel: { panelToDelete = nil }) {
+                    let error = onDeletePanel(panel.id)
+                    if error == nil { panelToDelete = nil }
+                    return error
+                }
+                .controlSize(.regular)
+                .onExitCommand { panelToDelete = nil }
+            }
+            MenuBarPanelEditingButton(title: FeatureL10n.string("添加面板"), emphasis: .standard,
+                                      isEnabled: canAddPanel, action: onAddPanel)
+                .accessibilityIdentifier("menuBarPanel.add")
         }
         .padding(.horizontal, MenuBarPanelLayout.outerPadding)
         .padding(.vertical, MenuBarPanelLayout.editingActionBarVerticalPadding)
+        .controlSize(.small)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: selectedPanel?.id) { _, _ in panelToDelete = nil }
     }
 }
 
@@ -1607,17 +1656,19 @@ struct MenuBarPanelEditingButtonStyle: ButtonStyle {
 
     let emphasis: Emphasis
     let isHovered: Bool
+    @Environment(\.controlSize) private var controlSize
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.menuBarPanelTheme) private var theme
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 12, weight: emphasis == .prominent ? .semibold : .medium))
+            .font(.system(size: controlSize == .mini || controlSize == .small ? 11 : 12,
+                          weight: emphasis == .prominent ? .semibold : .medium))
             .foregroundStyle(foregroundColor(role: configuration.role))
-            .padding(.horizontal, 12)
-            .frame(minWidth: 64)
-            .frame(height: MenuBarPanelLayout.editingButtonHeight)
+            .padding(.horizontal, controlSize == .small || controlSize == .mini ? 8 : 12)
+            .frame(minWidth: controlSize == .mini ? 40 : (controlSize == .small ? 42 : 64))
+            .frame(height: controlSize == .mini ? MenuBarPanelLayout.headerAccessoryHeight : MenuBarPanelLayout.editingButtonHeight)
             .background {
                 RoundedRectangle(cornerRadius: MenuBarPanelLayout.cornerRadius, style: .continuous)
                     .fill(backgroundColor(isPressed: configuration.isPressed, role: configuration.role))

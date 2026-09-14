@@ -117,34 +117,28 @@ final class MenuBarPanelEditingTabsTests: XCTestCase {
         XCTAssertEqual(strip.previewIDs, remaining.map(\.id))
     }
 
-    func testMenusActOnAddressedTabAndProtectDefaults() {
+    func testMenusActOnAddressedTabWithoutOfferingDeletion() {
         let strip = makeStrip()
         var moves: [(String, Int)] = []
-        var deletions: [String] = []
         var openedPanels: [String] = []
         strip.onMove = { moves.append(($0, $1)) }
         strip.onChangeIcon = { openedPanels.append($0) }
-        strip.onDelete = { deletions.append($0) }
         let customMenu = strip.menu(forPanelID: "media")
         customMenu.performActionForItem(at: 0)
         customMenu.performActionForItem(at: 1)
         customMenu.performActionForItem(at: 3)
-        customMenu.performActionForItem(at: 4)
         XCTAssertEqual(customMenu.items[3].title, FeatureL10n.string("更换图标"))
-        XCTAssertEqual(customMenu.items[4].title, FeatureL10n.string("删除面板"))
+        XCTAssertEqual(customMenu.items.count, 4)
         XCTAssertEqual(openedPanels, ["media"])
         XCTAssertEqual(moves.map(\.0), ["media", "media"])
         XCTAssertEqual(moves.map(\.1), [2, 5])
-        XCTAssertEqual(deletions, ["media"])
 
         let firstMenu = strip.menu(forPanelID: "components")
         XCTAssertFalse(firstMenu.items[0].isEnabled)
         XCTAssertTrue(firstMenu.items[3].isEnabled)
-        XCTAssertFalse(firstMenu.items[4].isEnabled)
+        XCTAssertEqual(firstMenu.items.count, 4)
         firstMenu.performActionForItem(at: 3)
-        firstMenu.performActionForItem(at: 4)
         XCTAssertEqual(openedPanels, ["media", "components"])
-        XCTAssertEqual(deletions, ["media"])
         XCTAssertFalse(strip.menu(forPanelID: "travel").items[1].isEnabled)
     }
 
@@ -272,7 +266,8 @@ final class MenuBarPanelEditingTabsTests: XCTestCase {
         }
     }
 
-    func testNormalEditingAndAddControlsShareSelectionAndHoverAppearance() throws {
+    func testNormalAndEditingTabsShareSelectionHoverAndCenteredBorder() throws {
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
         let visiblePanels = Array(panels.prefix(3))
         let navigation = MenuBarPanelTabNavigationView(frame: CGRect(x: 0, y: 0, width: 92, height: MenuBarPanelLayout.headerHeight))
         navigation.appearance = NSAppearance(named: .aqua)
@@ -289,13 +284,12 @@ final class MenuBarPanelEditingTabsTests: XCTestCase {
 
         let selected = try button(in: navigation, identifier: "menuBarPanel.tab.work")
         let other = try button(in: navigation, identifier: "menuBarPanel.tab.features")
-        let add = try button(in: navigation, identifier: "menuBarPanel.add")
+        XCTAssertFalse(descendants(navigation).contains { $0.accessibilityIdentifier() == "menuBarPanel.add" })
         let selectedBackground = selected.layer?.backgroundColor
         XCTAssertTrue(selected.isSelected)
         XCTAssertEqual(selected.bounds.size, CGSize(width: 26, height: 26))
         XCTAssertEqual(selected.layer?.cornerRadius, MenuBarPanelLayout.tabItemHeight / 2)
         XCTAssertEqual(other.layer?.backgroundColor?.alpha, 0)
-        XCTAssertTrue(add.isHidden)
         XCTAssertFalse(strip.beginReordering("work"), "Normal mode cannot start a panel drag")
         XCTAssertTrue(strip.menu(forPanelID: "work").items.isEmpty)
         var iconChanges: [String] = []
@@ -320,32 +314,14 @@ final class MenuBarPanelEditingTabsTests: XCTestCase {
         let capsuleFrame = try XCTUnwrap(capsule.path).boundingBoxOfPath
         XCTAssertEqual(capsuleFrame.midX, navigation.bounds.midX, accuracy: 0.5)
         XCTAssertEqual(capsule.strokeColor, borderColor, "Editing keeps the normal capsule border")
-        XCTAssertGreaterThan(add.frame.minX, capsuleFrame.maxX)
         XCTAssertTrue(selected === (try button(in: navigation, identifier: "menuBarPanel.tab.work")))
         XCTAssertEqual(selected.layer?.backgroundColor, selectedBackground)
         XCTAssertEqual(selected.layer?.cornerRadius, MenuBarPanelLayout.tabItemHeight / 2)
-        XCTAssertFalse(add.isHidden)
-        XCTAssertTrue(add.isEnabled)
-        XCTAssertEqual(add.bounds.size, CGSize(width: 26, height: 26))
         XCTAssertEqual(MenuBarPanelTabLayout.spacing, 2)
         XCTAssertEqual(MenuBarPanelLayout.headerAccessorySpacing, 0)
-        add.mouseEntered(with: hover)
-        XCTAssertEqual(add.layer?.backgroundColor, hoverBackground)
-        XCTAssertEqual(add.layer?.cornerRadius, selected.layer?.cornerRadius)
-        var additions = 0
-        navigation.onAddPanel = { additions += 1 }
-        XCTAssertTrue(add.accessibilityPerformPress())
-        XCTAssertEqual(additions, 1)
         strip.selectPanel("work")
         XCTAssertEqual(iconChanges, ["work"])
 
-        strip.update(panels: panels, selectedPanelID: "work")
-        navigation.needsLayout = true
-        navigation.layoutSubtreeIfNeeded()
-        XCTAssertFalse(add.isEnabled)
-        XCTAssertFalse(add.accessibilityPerformPress())
-        XCTAssertEqual(additions, 1)
-        XCTAssertEqual(add.layer?.backgroundColor?.alpha, 0)
     }
 
     func testDragPreviewRendersTheVacatedSlotAndInsertionPosition() throws {

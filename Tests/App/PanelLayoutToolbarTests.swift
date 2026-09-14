@@ -100,19 +100,25 @@ final class PanelLayoutToolbarTests: XCTestCase {
         XCTAssertEqual(count, 3, "A new editing session can give feedback immediately")
     }
 
-    func testEditingActionBarPointerClickActivatesVisibleDoneButton() async throws {
+    func testEditingHeaderKeepsFiveTabsClickableBetweenUndoAndDone() async throws {
         let model = MenuBarUnifiedPanelModel(selectedTab: .components, contentHeight: 400,
                                              maximumFeatureListHeight: 400, isPanelVisible: true)
+        model.onTabSelection = { [weak model] tab in
+            model?.update(selectedTab: tab, contentHeight: 400, maximumFeatureListHeight: 400, isPanelVisible: true)
+        }
         model.beginLayoutEditing(visibleItemCount: 3)
-        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: 50),
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: MenuBarPanelLayout.headerHeight),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: ActionBarFixture(model: model))
+        window.contentView = NSHostingView(rootView: EditingHeaderFixture(model: model))
         window.orderFront(nil)
         defer { window.close() }
         try await Task.sleep(for: .milliseconds(250))
         click(window, x: 30)
         XCTAssertTrue(model.isEditingLayout, "The left Undo button must remain disabled")
+        click(window, x: 152)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.selectedTab.id, "third", "The centered tabs remain clickable between the actions")
         click(window, x: 274)
         try await Task.sleep(for: .milliseconds(150))
         XCTAssertFalse(model.isEditingLayout)
@@ -133,21 +139,20 @@ private final class PanelToolbarMenuCapture {
     var menu: NSMenu?
 }
 
-private struct ActionBarFixture: View {
+private struct EditingHeaderFixture: View {
     @ObservedObject var model: MenuBarUnifiedPanelModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-
-            MenuBarPanelEditingActionBar(
-                canUndoLayout: false,
-                feedback: model.editingFeedback,
-                onUndoLayout: { XCTFail("Undo must remain disabled") },
-                onDone: { _ = model.endLayoutEditing() }
-            )
-            .frame(height: MenuBarPanelLayout.editingActionBarHeight)
-        }
-        .frame(width: 304)
+        MenuBarPanelHeader(selectedTab: model.selectedTab, availableUpdateVersion: nil,
+            canEditLayout: true, isEditingLayout: model.isEditingLayout,
+            onTabSelection: model.selectTab, onEditLayout: { _ = model.endLayoutEditing() },
+            onOpenUpdate: {}, onOpenSettings: {}, onQuit: {},
+            panels: MenuBarPanelDefinition.defaults + [
+                .init(id: "third", name: "", systemImage: "star"),
+                .init(id: "fourth", name: "", systemImage: "heart"),
+                .init(id: "fifth", name: "", systemImage: "circle")],
+            canUndoLayout: false, editingFeedback: model.editingFeedback,
+            onUndoLayout: { XCTFail("Undo must remain disabled") })
+            .frame(width: 304, height: MenuBarPanelLayout.headerHeight)
     }
 }

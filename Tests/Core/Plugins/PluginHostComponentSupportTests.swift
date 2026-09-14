@@ -1304,6 +1304,85 @@ final class PluginHostComponentSupportTests: XCTestCase {
                                                                     features: host.panelItems))
     }
 
+    func testRepeatedFeatureRowsKeepTheFullScrollableDocument() async throws {
+        let plugin = MockCombinedPlugin(id: "copies", order: 1, span: try XCTUnwrap(PluginComponentSpan(width: 2, height: 12)))
+        let host = makeHost(plugins: [plugin])
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        for _ in 0..<12 { XCTAssertTrue(host.addPanelEntry(.init(pluginID: "copies", surface: .featurePanel), to: panelID)) }
+        let entries = host.panelEntries(in: panelID)
+        let expected = ConfiguredMenuBarPanelLayout.placement(entries: entries, components: [], features: host.panelItems).height
+        let model = MenuBarUnifiedPanelModel(selectedTab: MenuBarPanelTab(id: panelID), contentHeight: 200,
+                                            maximumFeatureListHeight: 200, isPanelVisible: true)
+        let root = NSHostingView(rootView: ConfiguredMenuBarPanelsContent(
+            pluginHost: host, model: model, contentBodyHeight: 200, onDismiss: {}, onOpenSettings: {},
+            onPresentDiskCleanConfiguration: {}, onPresentLaunchControlConfiguration: {}))
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = root
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(250))
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let scroll = try XCTUnwrap(descendants(root).compactMap { $0 as? NSScrollView }.first)
+        let document = try XCTUnwrap(scroll.documentView)
+        XCTAssertGreaterThan(expected, 200)
+        XCTAssertEqual(document.bounds.height, expected, accuracy: 1)
+        scroll.contentView.scroll(to: CGPoint(x: 0, y: document.bounds.height - scroll.contentView.bounds.height))
+        XCTAssertEqual(scroll.contentView.bounds.maxY, document.bounds.maxY, accuracy: 1)
+    }
+
+    func testDuplicateCardsAndActionsRenderAndRespondIndependently() async throws {
+        let span = try XCTUnwrap(PluginComponentSpan(width: 2, height: 12))
+        let plugin = MockCombinedPlugin(id: "copies", order: 1, span: span)
+        let host = makeHost(plugins: [plugin])
+        let panelID = try XCTUnwrap(host.addMenuBarPanel())
+        for surface in PluginDisplaySurface.allCases {
+            for _ in 0..<2 { XCTAssertTrue(host.addPanelEntry(.init(pluginID: "copies", surface: surface), to: panelID)) }
+        }
+        let entries = host.panelEntries(in: panelID)
+        let placement = ConfiguredMenuBarPanelLayout.placement(entries: entries,
+            components: host.componentItems(in: panelID), features: host.panelItems(in: panelID))
+        XCTAssertEqual(placement.components.count, 2)
+        XCTAssertEqual(placement.featureOffsets.count, 2)
+        XCTAssertEqual(PanelLayoutEntryFrame.frames(entries: entries, placement: placement).count, 4)
+        let model = MenuBarUnifiedPanelModel(selectedTab: MenuBarPanelTab(id: panelID), contentHeight: placement.height,
+                                            maximumFeatureListHeight: placement.height, isPanelVisible: true)
+        let root = NSHostingView(rootView: ConfiguredMenuBarPanelsContent(
+            pluginHost: host, model: model, contentBodyHeight: placement.height, onDismiss: {}, onOpenSettings: {},
+            onPresentDiskCleanConfiguration: {}, onPresentLaunchControlConfiguration: {}))
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: placement.height),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = root
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(250))
+        func click(_ point: CGPoint) {
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                window.sendEvent(NSEvent.mouseEvent(with: type, location: root.convert(point, to: nil), modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)!)
+            }
+        }
+        for card in placement.components {
+            click(CGPoint(x: ComponentPanelLayout.xOffset(for: card) + 40,
+                          y: card.yOffset + ComponentPanelLayout.itemHeight(for: span) / 2))
+        }
+        XCTAssertEqual(plugin.componentTapCount, 2)
+        for y in placement.featureOffsets.values.sorted() {
+            click(CGPoint(x: MenuBarPanelLayout.surfaceWidth - 24, y: y + 23))
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertEqual(plugin.handledActions.count, 2)
+        window.contentView = NSHostingView(rootView: PanelLayoutEditor(pluginHost: host, panelID: panelID, onDismiss: {})
+            .frame(width: 304, height: placement.height))
+        try await Task.sleep(for: .milliseconds(200))
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let sources = descendants(try XCTUnwrap(window.contentView)).compactMap { $0 as? PanelLayoutDragSourceView }
+        XCTAssertEqual(Set(sources.compactMap { $0.identifier?.rawValue }), Set(entries.map { "panel.layout.drag.\($0.id)" }))
+    }
+
     func testInterleavedCardsAndActionsRemainClickableAfterReordering() async throws {
         let span = try XCTUnwrap(PluginComponentSpan(width: 2, height: 12))
         let first = MockCombinedPlugin(id: "first", order: 1, span: span)

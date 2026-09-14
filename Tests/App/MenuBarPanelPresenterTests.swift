@@ -213,13 +213,100 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         XCTAssertEqual(closeCount, 0)
 
         try await Task.sleep(for: .milliseconds(150))
-        try clickFooterButton(in: mainWindow, trailingOffset: 50)
+        try clickHeaderButton(in: XCTUnwrap(popover.contentViewController?.view), leading: false)
         try await Task.sleep(for: .milliseconds(150))
         XCTAssertFalse(model.isEditingLayout, "Done explicitly ends editing")
         XCTAssertTrue(popover.isShown)
         presenter.dismissPanels()
         XCTAssertFalse(popover.isShown)
         XCTAssertEqual(closeCount, 1)
+    }
+
+    func testWidgetLibraryKeepsEditingAndRevealsAppendedEntriesAfterPanelResizes() async throws {
+        let fixture = try await makePresentedFixture(plugins: ["a", "b", "c", "d", "e", "f", "g"].map(PresenterLayoutPlugin.init))
+        defer { fixture.close() }
+        let presenter = fixture.presenter
+        let host = fixture.host
+        for id in ["a", "b"] { XCTAssertTrue(host.removePanelEntry(.init(pluginID: id, surface: .dashboard), from: "components")) }
+        presenter.debugPanelModelForTests.beginLayoutEditing(visibleItemCount: 5)
+        try await Task.sleep(for: .milliseconds(250))
+        let mainWindow = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view.window)
+        let mainContent = try XCTUnwrap(mainWindow.contentView)
+        let bitmap = try XCTUnwrap(mainContent.bitmapImageRepForCachingDisplay(in: mainContent.bounds))
+        mainContent.cacheDisplay(in: mainContent.bounds, to: bitmap)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(
+            to: URL(fileURLWithPath: "/private/tmp/mactools-widget-editor-footer.png"))
+        for id in ["a", "b"] {
+            try clickFooterButton(in: mainWindow, trailingOffset: mainWindow.contentView!.bounds.width - 64)
+            try await Task.sleep(for: .milliseconds(350))
+            let library = try XCTUnwrap(NSApp.windows.first {
+                $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0)
+            })
+            XCTAssertTrue(presenter.containsPresentedWindow(library))
+            presenter.dismissPanels()
+            XCTAssertTrue(presenter.debugPopoverForTests.isShown)
+            XCTAssertTrue(presenter.debugPanelModelForTests.isEditingLayout)
+            if id == "b" {
+                let list = try XCTUnwrap(descendants(library.contentView!).compactMap { $0 as? NSTableView }.first)
+                list.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+                try await Task.sleep(for: .milliseconds(200))
+            }
+            library.makeKey()
+            let point = CGPoint(x: 310, y: try XCTUnwrap(library.contentView).bounds.height - 170)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                library.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: library.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)))
+            }
+            try await Task.sleep(for: .milliseconds(400))
+            XCTAssertFalse(library.isVisible, "A successful addition closes only the widget library")
+            XCTAssertEqual(host.panelEntries(in: "components").last?.pluginID, id)
+            let root = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view)
+            let canvas = try XCTUnwrap(descendants(root).first { $0.identifier?.rawValue == "panel.layout.canvas" })
+            let scroll = try XCTUnwrap(canvas.enclosingScrollView)
+            XCTAssertEqual(scroll.contentView.bounds.maxY, try XCTUnwrap(scroll.documentView).bounds.maxY, accuracy: 1)
+            XCTAssertTrue(presenter.debugPopoverForTests.isShown)
+            XCTAssertTrue(presenter.debugPanelModelForTests.isEditingLayout)
+        }
+    }
+
+    func testWidgetRemovalConfirmationCanToggleRepeatedlyWithoutClosingTheEditor() async throws {
+        let fixture = try await makePresentedFixture(plugins: [PresenterLayoutPlugin("one")])
+        defer { fixture.close() }
+        let presenter = fixture.presenter
+        let model = presenter.debugPanelModelForTests
+        model.beginLayoutEditing(visibleItemCount: 1)
+        try await Task.sleep(for: .milliseconds(250))
+        let root = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view)
+        let window = try XCTUnwrap(root.window)
+        let source = try XCTUnwrap(descendants(root).compactMap { $0 as? PanelLayoutDragSourceView }.first)
+        for index in 0..<6 {
+            let metrics = PanelLayoutItemControlsLayout(size: source.bounds.size)
+            let point = source.convert(CGPoint(x: source.menuFrame.minX + metrics.buttonSide / 2,
+                                              y: source.menuFrame.midY), to: nil)
+            source.hover?.trackingView?.pointerLocationInWindow = { _ in point }
+            source.hover?.trackingView?.refresh()
+            try await Task.sleep(for: .milliseconds(150))
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                NSApp.postEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)), atStart: false)
+            }
+            try await Task.sleep(for: .milliseconds(300))
+            let confirmation = NSApp.windows.first { $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0) }
+            XCTAssertEqual(confirmation != nil, index.isMultiple(of: 2),
+                           "Click \(index + 1), parent key: \(window.isKeyWindow), target: \(point)")
+            if let confirmation {
+                confirmation.makeKey()
+                confirmation.selectNextKeyView(nil)
+                source.hover?.trackingView?.pointerLocationInWindow = { _ in CGPoint(x: -100, y: -100) }
+                source.hover?.trackingView?.refresh()
+                try await Task.sleep(for: .milliseconds(150))
+            }
+            XCTAssertTrue(model.isEditingLayout)
+            XCTAssertTrue(presenter.debugPopoverForTests.isShown)
+            XCTAssertEqual(fixture.host.panelEntries(in: "components").count, 1)
+        }
     }
 
     func testDeleteConfirmationCancelEscapeAndDeleteKeepMainPopoverEditing() async throws {
@@ -232,12 +319,11 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         model.beginLayoutEditing(visibleItemCount: 0)
         try await Task.sleep(for: .milliseconds(200))
         let mainView = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view)
-        let strip = try XCTUnwrap(descendants(mainView).compactMap { $0 as? MenuBarPanelTabStripView }.first)
         try clickTab("features", in: mainView)
         try await Task.sleep(for: .milliseconds(100))
         try clickTab(customID, in: mainView)
         try await Task.sleep(for: .milliseconds(100))
-        strip.menu(forPanelID: customID).performActionForItem(at: 4)
+        try clickFooterButton(in: XCTUnwrap(mainView.window), trailingOffset: 140)
         try await Task.sleep(for: .milliseconds(300))
 
         let confirmation = try XCTUnwrap(NSApp.windows.first {
@@ -274,7 +360,7 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         XCTAssertTrue(model.isEditingLayout)
         XCTAssertTrue(fixture.host.menuBarPanels.contains { $0.id == customID })
 
-        strip.menu(forPanelID: customID).performActionForItem(at: 4)
+        try clickFooterButton(in: XCTUnwrap(mainView.window), trailingOffset: 140)
         try await Task.sleep(for: .milliseconds(250))
         let escapeConfirmation = try XCTUnwrap(NSApp.windows.first {
             $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0)
@@ -290,14 +376,16 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         XCTAssertTrue(model.isEditingLayout)
         XCTAssertTrue(fixture.host.menuBarPanels.contains { $0.id == customID })
 
-        strip.menu(forPanelID: customID).performActionForItem(at: 4)
+        try clickFooterButton(in: XCTUnwrap(mainView.window), trailingOffset: 140)
         try await Task.sleep(for: .milliseconds(250))
         let deleteConfirmation = try XCTUnwrap(NSApp.windows.first {
             $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0)
         })
-        // Keep the native confirmation mounted while invoking the same deletion
-        // command as its button, then exercise the surviving tabs with real clicks.
-        XCTAssertNil(model.deletePanel(id: customID))
+        deleteConfirmation.makeKey()
+        let confirm = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: deleteConfirmation.windowNumber,
+            context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+        XCTAssertTrue(deleteConfirmation.performKeyEquivalent(with: confirm))
         try await Task.sleep(for: .milliseconds(300))
         if deleteConfirmation.isVisible, let content = deleteConfirmation.contentView,
            let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) {
@@ -313,6 +401,10 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         try clickTab("features", in: mainView)
         try await Task.sleep(for: .milliseconds(150))
         XCTAssertEqual(model.selectedTab.id, "features")
+        try clickFooterButton(in: XCTUnwrap(mainView.window), trailingOffset: 140)
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertFalse(NSApp.windows.contains { $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0) },
+                       "Default panels keep the footer's Delete Panel action disabled")
         try clickTab("features", in: mainView)
         try await Task.sleep(for: .milliseconds(200))
         let iconPicker = try XCTUnwrap(NSApp.windows.first {
@@ -389,6 +481,21 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         XCTAssertNil(model.deletePanel(id: otherID))
         XCTAssertEqual(model.selectedTab, .components, "Deleting another panel preserves selection")
         XCTAssertEqual(popover.contentSize, finalSize)
+    }
+
+    private func clickHeaderButton(in root: NSView, leading: Bool) throws {
+        let window = try XCTUnwrap(root.window)
+        window.makeKey()
+        let inset = MenuBarPanelLayout.panelTopPadding + MenuBarPanelLayout.headerHeight / 2
+        let contentBounds = root.safeAreaLayoutGuide.frame
+        let local = CGPoint(x: leading ? contentBounds.minX + 28 : contentBounds.maxX - 28,
+                            y: root.isFlipped ? contentBounds.minY + inset : contentBounds.maxY - inset)
+        let point = root.convert(local, to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            window.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)))
+        }
     }
 
     private func clickFooterButton(in window: NSWindow, trailingOffset: CGFloat) throws {

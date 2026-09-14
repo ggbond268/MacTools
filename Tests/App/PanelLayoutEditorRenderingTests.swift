@@ -36,7 +36,7 @@ final class PanelLayoutEditorRenderingTests: XCTestCase {
             let features = host.panelItems(in: previewID)
             let contentHeight = editing ? PanelLayoutDestination.editorContentHeight(
                 itemHeight: ConfiguredMenuBarPanelLayout.placement(entries: entries, components: components, features: features).height,
-                hiddenItemCount: host.panelLayoutEntries(in: previewID, hidden: true).count, maximumHeight: 600
+                maximumHeight: 600
             ) : ConfiguredMenuBarPanelLayout.contentHeight(components: components, features: features, screen: nil, entries: entries)
             let model = MenuBarUnifiedPanelModel(selectedTab: MenuBarPanelTab(id: previewID), contentHeight: contentHeight,
                                                 maximumFeatureListHeight: 600, isPanelVisible: true)

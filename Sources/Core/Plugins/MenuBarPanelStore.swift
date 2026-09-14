@@ -39,11 +39,16 @@ struct MenuBarPanelDefinition: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct MenuBarPanelEntry: Hashable, Identifiable, Sendable {
+struct MenuBarPanelEntry: Codable, Hashable, Identifiable, Sendable {
     let pluginID: String
     let surface: PluginDisplaySurface
 
-    var id: String { surface.panelEntryID(pluginID: pluginID) }
+    var instanceID: String? = nil
+
+    var templateID: String { surface.panelEntryID(pluginID: pluginID) }
+    var id: String { instanceID.map { "instance:\($0)" } ?? templateID }
+    // Existing surface views use plugin IDs; copies need distinct presentation identities.
+    var presentationID: String { instanceID == nil ? pluginID : id }
 }
 
 struct MenuBarPanelLayoutChange {
@@ -60,11 +65,29 @@ extension PluginDisplaySurface {
 }
 
 struct MenuBarPanelConfiguration: Codable, Equatable, Sendable {
-    var version = 1
+    var version = 2
     var panels = MenuBarPanelDefinition.defaults
-    // Only explicit moves are stored. New plugins automatically use their original surface.
+    // Default entries remain implicit so newly installed plugins keep their original surface.
     var assignments: [String: String] = [:]
     var orders: [String: [String]] = [:]
+    var instances: [MenuBarPanelEntry] = []
+    var removedDefaultEntries: Set<String> = []
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case version, panels, assignments, orders, instances, removedDefaultEntries
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        version = try values.decode(Int.self, forKey: .version)
+        panels = try values.decode([MenuBarPanelDefinition].self, forKey: .panels)
+        assignments = try values.decode([String: String].self, forKey: .assignments)
+        orders = try values.decode([String: [String]].self, forKey: .orders)
+        instances = try values.decodeIfPresent([MenuBarPanelEntry].self, forKey: .instances) ?? []
+        removedDefaultEntries = try values.decodeIfPresent(Set<String>.self, forKey: .removedDefaultEntries) ?? []
+    }
 
     /// Names are presentation state derived from the current tab order, not shortcut identity.
     var displayPanels: [MenuBarPanelDefinition] {
@@ -83,7 +106,11 @@ struct MenuBarPanelConfiguration: Codable, Equatable, Sendable {
     }
 
     func panelID(pluginID: String, surface: PluginDisplaySurface) -> String {
-        assignments[surface.panelEntryID(pluginID: pluginID)] ?? surface.defaultPanelID
+        self.panelID(for: MenuBarPanelEntry(pluginID: pluginID, surface: surface))
+    }
+
+    func panelID(for entry: MenuBarPanelEntry) -> String {
+        assignments[entry.id] ?? entry.surface.defaultPanelID
     }
 
     func orderedIDs(_ pluginIDs: [String], surface: PluginDisplaySurface, panelID: String) -> [String] {
@@ -92,7 +119,10 @@ struct MenuBarPanelConfiguration: Codable, Equatable, Sendable {
     }
 
     func orderedEntries(_ entries: [MenuBarPanelEntry], panelID: String) -> [MenuBarPanelEntry] {
-        let assigned = entries.filter { self.panelID(pluginID: $0.pluginID, surface: $0.surface) == panelID }
+        let available = Set(entries.map(\.templateID))
+        let candidates = entries.filter { !removedDefaultEntries.contains($0.id) }
+            + instances.filter { available.contains($0.templateID) }
+        let assigned = candidates.filter { self.panelID(for: $0) == panelID }
         let lookup = Dictionary(assigned.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let saved = (orders[panelID] ?? []).compactMap { lookup[$0] }
         let savedIDs = Set(saved.map(\.id))
@@ -101,6 +131,7 @@ struct MenuBarPanelConfiguration: Codable, Equatable, Sendable {
 
     func normalized() -> Self {
         var result = self
+        result.version = 2
         var seen: Set<String> = []
         let defaults = MenuBarPanelDefinition.defaults
         var customCount = 0
@@ -129,7 +160,15 @@ struct MenuBarPanelConfiguration: Codable, Equatable, Sendable {
         }
         if result.panels.allSatisfy(\.isHidden) { result.panels[0].isHidden = false }
         let validIDs = Set(result.panels.map(\.id))
-        result.assignments = assignments.filter { validIDs.contains($0.value) }
+        var instanceIDs: Set<String> = []
+        result.instances = instances.filter {
+            !$0.pluginID.isEmpty && $0.instanceID.flatMap(UUID.init(uuidString:)) != nil
+                && instanceIDs.insert($0.id).inserted
+        }
+        result.removedDefaultEntries = removedDefaultEntries.filter { !$0.hasPrefix("instance:") }
+        result.assignments = assignments.filter {
+            validIDs.contains($0.value) && (!$0.key.hasPrefix("instance:") || instanceIDs.contains($0.key))
+        }
         result.orders = orders.filter { validIDs.contains($0.key) }.mapValues { entries in
             var seen: Set<String> = []
             return entries.filter { seen.insert($0).inserted }
@@ -154,7 +193,7 @@ final class MenuBarPanelStore {
         var canMigrateLegacyBehavior = storedData == nil
         if let data = storedData,
             let stored = try? JSONDecoder().decode(MenuBarPanelConfiguration.self, from: data),
-            stored.version == 1
+            (1...2).contains(stored.version)
         {
             configuration = stored.normalized()
             canMigrateLegacyBehavior = true
@@ -185,7 +224,7 @@ final class MenuBarPanelStore {
 
     @discardableResult
     func replace(_ configuration: MenuBarPanelConfiguration) -> Bool {
-        guard configuration.version == 1 else { return false }
+        guard (1...2).contains(configuration.version) else { return false }
         let normalized = configuration.normalized()
         guard normalized != self.configuration,
             let data = try? JSONEncoder().encode(normalized)
@@ -249,13 +288,18 @@ final class MenuBarPanelStore {
         destinationOrder: [MenuBarPanelEntry]? = nil,
         visibleOrder: [MenuBarPanelEntry]? = nil
     ) {
+        assign(MenuBarPanelEntry(pluginID: pluginID, surface: surface), to: panelID,
+               destinationOrder: destinationOrder, visibleOrder: visibleOrder)
+    }
+
+    func assign(_ entry: MenuBarPanelEntry, to panelID: String,
+                destinationOrder: [MenuBarPanelEntry]? = nil, visibleOrder: [MenuBarPanelEntry]? = nil) {
         guard configuration.panels.contains(where: { $0.id == panelID }),
-            configuration.panelID(pluginID: pluginID, surface: surface) != panelID
-        else { return }
+              configuration.panelID(for: entry) != panelID else { return }
         var next = configuration
-        let key = surface.panelEntryID(pluginID: pluginID)
+        let key = entry.id
         for id in Array(next.orders.keys) { next.orders[id]?.removeAll { $0 == key } }
-        next.assignments[key] = panelID == surface.defaultPanelID ? nil : panelID
+        next.assignments[key] = panelID == entry.surface.defaultPanelID ? nil : panelID
         let requested = (destinationOrder?.map(\.id) ?? next.orders[panelID] ?? []).filter { $0 != key } + [key]
         next.orders[panelID] = Self.mergingOrder(requested, into: next.orders[panelID] ?? [])
         if let visibleOrder {
@@ -264,9 +308,35 @@ final class MenuBarPanelStore {
         replace(next)
     }
 
+    @discardableResult
+    func addInstance(of template: MenuBarPanelEntry, to panelID: String,
+                     visibleOrder: [MenuBarPanelEntry], suppressDefault: Bool) -> MenuBarPanelEntry? {
+        guard configuration.panels.contains(where: { $0.id == panelID }) else { return nil }
+        let entry = MenuBarPanelEntry(pluginID: template.pluginID, surface: template.surface,
+                                      instanceID: UUID().uuidString.lowercased())
+        var next = configuration
+        if suppressDefault { next.removedDefaultEntries.insert(template.templateID) }
+        next.instances.append(entry)
+        next.assignments[entry.id] = panelID == entry.surface.defaultPanelID ? nil : panelID
+        next.orders[panelID] = Self.mergingOrder((visibleOrder + [entry]).map(\.id), into: next.orders[panelID] ?? [])
+        return replace(next) ? entry : nil
+    }
+
+    func removeEntry(_ entry: MenuBarPanelEntry) {
+        var next = configuration
+        if entry.instanceID == nil { next.removedDefaultEntries.insert(entry.id) }
+        else { next.instances.removeAll { $0.id == entry.id } }
+        next.assignments.removeValue(forKey: entry.id)
+        next.orders = next.orders.mapValues { $0.filter { $0 != entry.id } }
+        replace(next)
+    }
+
     func removePlugin(id: String) {
         var next = configuration
-        let keys = Set(PluginDisplaySurface.allCases.map { $0.panelEntryID(pluginID: id) })
+        let keys = Set(PluginDisplaySurface.allCases.map { $0.panelEntryID(pluginID: id) }
+            + next.instances.filter { $0.pluginID == id }.map(\.id))
+        next.instances.removeAll { $0.pluginID == id }
+        next.removedDefaultEntries.subtract(keys)
         next.assignments = next.assignments.filter { !keys.contains($0.key) }
         next.orders = next.orders.mapValues { $0.filter { !keys.contains($0) } }
         replace(next)

@@ -99,6 +99,11 @@ enum ComponentGridPlacementEngine {
         for items: [PluginComponentItem],
         columns: Int = ComponentPanelLayout.columns
     ) -> [ComponentGridPlacement] {
+        placements(for: items.map { (id: $0.id, span: $0.span) }, columns: columns)
+    }
+
+    static func placements(for items: [(id: String, span: PluginComponentSpan)],
+                           columns: Int = ComponentPanelLayout.columns) -> [ComponentGridPlacement] {
         var occupiedCells: Set<GridCell> = []
         var placements: [ComponentGridPlacement] = []
         var columnBottoms = Array(repeating: CGFloat(0), count: columns)
@@ -232,6 +237,7 @@ struct ComponentPanelContent: View {
     }
 
     @StateObject private var detailCoordinator = ComponentDetailCoordinator()
+    @State private var detailAnchors = ComponentDetailAnchorRegistry()
     @StateObject private var layoutCache = ComponentGridLayoutCache()
     @StateObject private var secondaryPanelController = SecondaryPanelController()
     @ObservedObject var pluginHost: PluginHost
@@ -240,6 +246,7 @@ struct ComponentPanelContent: View {
     let onDismiss: () -> Void
     var panelID: String? = nil
     var suppliedItems: [PluginComponentItem]? = nil
+    var suppliedEntries: [MenuBarPanelEntry]? = nil
     var embedded = false
     var suppliedPlacements: [ComponentGridPlacement]? = nil
     var suppliedGridHeight: CGFloat? = nil
@@ -288,8 +295,9 @@ struct ComponentPanelContent: View {
             .allowsHitTesting(false)
         )
         .onAppear { [detailCoordinator] in
-            let handler: (String, String) -> Void = { [weak detailCoordinator] pluginID, detailID in
-                detailCoordinator?.toggle(pluginID: pluginID, detailID: detailID)
+            let handler: (String, String) -> Void = { [weak detailCoordinator, weak detailAnchors] pluginID, detailID in
+                detailCoordinator?.toggle(pluginID: pluginID, detailID: detailID,
+                    presentationID: detailAnchors?.presentationID(for: pluginID))
             }
             if let panelID { pluginHost.componentDetailHandlersByPanelID[panelID] = handler }
             else { pluginHost.componentDetailPresentationHandler = handler }
@@ -347,9 +355,12 @@ struct ComponentPanelContent: View {
 
     private var grid: some View {
         ComponentGridView(
-            pluginHost: pluginHost, items: items, placements: placements, contentHeight: suppliedGridHeight,
-            detailAnchorPluginID: detailCoordinator.state.selection?.pluginID,
-            onDismiss: onDismiss, onCardFrameChange: detailCoordinator.updateCardFrame
+            pluginHost: pluginHost, items: items, entries: suppliedEntries, placements: placements, contentHeight: suppliedGridHeight,
+            detailAnchorID: detailCoordinator.state.selection.map { $0.presentationID ?? $0.pluginID },
+            detailAnchors: detailAnchors,
+            onDismiss: onDismiss, onCardFrameChange: { id, frame in
+                detailCoordinator.updatePresentationFrame(id: id, frame: frame)
+            }
         )
     }
 
@@ -414,14 +425,20 @@ struct ComponentPanelContent: View {
 private struct ComponentGridView: View {
     @ObservedObject var pluginHost: PluginHost
     let items: [PluginComponentItem]
+    let entries: [MenuBarPanelEntry]?
     let placements: [ComponentGridPlacement]
     var contentHeight: CGFloat? = nil
-    let detailAnchorPluginID: String?
+    let detailAnchorID: String?
+    let detailAnchors: ComponentDetailAnchorRegistry
     let onDismiss: () -> Void
     let onCardFrameChange: (String, CGRect?) -> Void
 
     private var itemsByID: [String: PluginComponentItem] {
-        Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        let templates = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        guard let entries else { return templates }
+        return Dictionary(uniqueKeysWithValues: entries.compactMap { entry in
+            templates[entry.pluginID].map { (entry.presentationID, $0) }
+        })
     }
 
     var body: some View {
@@ -440,13 +457,15 @@ private struct ComponentGridView: View {
                             for: item.id,
                             dismiss: onDismiss
                         ),
-                        measuresDetailAnchor: item.id == detailAnchorPluginID,
-                        onFrameChange: { onCardFrameChange(item.id, $0) }
+                        measuresDetailAnchor: placement.id == detailAnchorID,
+                        onFrameChange: { onCardFrameChange(placement.id, $0) }
                     )
                     .frame(
                         width: itemSize.width,
                         height: itemSize.height
                     )
+                    .background(ComponentDetailAnchor(registry: detailAnchors, pluginID: item.id,
+                                                       presentationID: placement.id).allowsHitTesting(false))
                     .offset(
                         x: ComponentPanelLayout.xOffset(for: placement),
                         y: ComponentPanelLayout.yOffset(for: placement)
@@ -498,6 +517,7 @@ final class ComponentDetailCoordinator: ObservableObject {
     struct Selection: Equatable {
         let pluginID: String
         let detailID: String
+        var presentationID: String? = nil
     }
 
     struct State: Equatable {
@@ -507,15 +527,15 @@ final class ComponentDetailCoordinator: ObservableObject {
 
     @Published private(set) var state = State()
 
-    func toggle(pluginID: String, detailID: String) {
-        let requested = Selection(pluginID: pluginID, detailID: detailID)
+    func toggle(pluginID: String, detailID: String, presentationID: String? = nil) {
+        let requested = Selection(pluginID: pluginID, detailID: detailID, presentationID: presentationID)
 
         if state.selection == requested {
             state = State()
             return
         }
 
-        let selectedCardFrame = state.selection?.pluginID == pluginID
+        let selectedCardFrame = state.selection?.pluginID == pluginID && state.selection?.presentationID == presentationID
             ? state.selectedCardFrame
             : nil
         state = State(
@@ -529,6 +549,12 @@ final class ComponentDetailCoordinator: ObservableObject {
             return
         }
         state = State()
+    }
+
+    func updatePresentationFrame(id: String, frame: CGRect?) {
+        guard let selection = state.selection, (selection.presentationID ?? selection.pluginID) == id,
+              state.selectedCardFrame != frame else { return }
+        state.selectedCardFrame = frame
     }
 
     func updateCardFrame(pluginID: String, frame: CGRect?) {
@@ -559,6 +585,48 @@ final class ComponentGridLayoutCache: ObservableObject {
         layoutItems = nextLayoutItems
         cachedPlacements = placements
         return placements
+    }
+}
+
+/// Resolve the initiating copy only when a detail is requested; no per-card geometry polling.
+@MainActor
+private final class ComponentDetailAnchorRegistry {
+    final class Entry: NSObject {
+        let pluginID: String
+        let presentationID: String
+        init(pluginID: String, presentationID: String) {
+            self.pluginID = pluginID
+            self.presentationID = presentationID
+        }
+    }
+    let views = NSMapTable<NSView, Entry>.weakToStrongObjects()
+
+    func presentationID(for pluginID: String) -> String? {
+        let candidates = views.keyEnumerator().allObjects.compactMap { $0 as? NSView }.filter {
+            views.object(forKey: $0)?.pluginID == pluginID && $0.window != nil
+        }
+        let source = candidates.first { view in
+            guard let window = view.window else { return false }
+            let point: CGPoint
+            if NSApp.currentEvent?.type == .keyDown, let focused = window.firstResponder as? NSView {
+                point = view.convert(CGPoint(x: focused.bounds.midX, y: focused.bounds.midY), from: focused)
+            } else {
+                point = view.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            }
+            return view.bounds.contains(point)
+        } ?? candidates.first
+        return source.flatMap { views.object(forKey: $0)?.presentationID }
+    }
+}
+
+private struct ComponentDetailAnchor: NSViewRepresentable {
+    let registry: ComponentDetailAnchorRegistry
+    let pluginID: String
+    let presentationID: String
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ view: NSView, context: Context) {
+        registry.views.setObject(.init(pluginID: pluginID, presentationID: presentationID), forKey: view)
     }
 }
 

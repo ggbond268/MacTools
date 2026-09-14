@@ -276,6 +276,22 @@ final class MenuBarPanelLayoutTests: XCTestCase {
 
 @MainActor
 final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
+    func testRepeatedActionRowsUseTheirOwnHoverAnchors() {
+        let coordinator = HoverSecondaryPanelCoordinator(activationDelay: nil)
+        let first = HoverSecondaryPanelCoordinator.Activation(pluginID: "a", controlID: "list", optionID: "item", instanceID: "first")
+        let second = HoverSecondaryPanelCoordinator.Activation(pluginID: "a", controlID: "list", optionID: "item", instanceID: "second")
+        let firstFrame = CGRect(x: 0, y: 0, width: 100, height: 40)
+        let secondFrame = CGRect(x: 0, y: 100, width: 100, height: 40)
+        coordinator.updateRowFrame(firstFrame, for: first)
+        coordinator.updateRowFrame(secondFrame, for: second)
+        coordinator.hoverBegan(pluginID: "a", controlID: "list", optionID: "item", instanceID: "first")
+        XCTAssertEqual(coordinator.selectedRowFrame, firstFrame)
+        coordinator.hoverBegan(pluginID: "a", controlID: "list", optionID: "item", instanceID: "second")
+        XCTAssertEqual(coordinator.selectedRowFrame, secondFrame)
+        coordinator.updateRowFrame(nil, for: first)
+        XCTAssertEqual(coordinator.selectedRowFrame, secondFrame)
+    }
+
     func testSwitchingActivationClearsPreviousAnchor() {
         let coordinator = HoverSecondaryPanelCoordinator(
             dismissDelay: .milliseconds(5),

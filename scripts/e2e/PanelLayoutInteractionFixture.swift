@@ -142,10 +142,13 @@ struct MenuBarPanelLayoutEntry: Identifiable {
             componentItems.first { $0.id == entry.pluginID }.map { .init(item: $0, surface: entry.surface) }
         }
     }
+    func movePanelEntry(_ entry: MenuBarPanelEntry, panelID: String, toOffset: Int, hidden: Bool = false) {
+        moveRenderedPlugin(id: entry.pluginID, toOffset: toOffset, on: entry.surface)
+    }
     func movePanelEntry(pluginID: String, surface: PluginDisplaySurface, panelID: String, toOffset: Int, hidden: Bool = false) {
         moveRenderedPlugin(id: pluginID, toOffset: toOffset, on: surface)
     }
-    func setPluginVisible(_ visible: Bool, id: String, on: PluginDisplaySurface) {}
+    func removePanelEntry(_ entry: MenuBarPanelEntry, from panelID: String) -> Bool { false }
     func assignPanelEntry(pluginID: String, surface: PluginDisplaySurface, to: String) {}
 
     func transferPanelEntry(_ entry: MenuBarPanelEntry, from source: String, to destination: String,
@@ -247,12 +250,15 @@ private struct FixtureRoot: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            MenuBarPanelTabs(
-                panels: MenuBarPanelDefinition.defaults,
-                selectedPanelID: surface == .dashboard ? "components" : "features",
-                onSelect: { _ in }, isEditing: state.editing
-            )
-            .frame(height: MenuBarPanelLayout.headerHeight)
+            MenuBarPanelEditingControls(
+                canUndoLayout: session.canUndo(ids: host.panelEntries(in: surface.defaultPanelID).map(\.id)),
+                feedback: state.editingFeedback, onUndoLayout: undo, onDone: { state.editing = false }) {
+                    MenuBarPanelTabs(
+                        panels: MenuBarPanelDefinition.defaults,
+                        selectedPanelID: surface == .dashboard ? "components" : "features",
+                        onSelect: { _ in }, isEditing: state.editing)
+                }
+                .frame(height: MenuBarPanelLayout.headerHeight)
 
             if state.editing {
                 VStack(spacing: 0) {
@@ -263,13 +269,8 @@ private struct FixtureRoot: View {
                         session: session
                     )
 
-                    MenuBarPanelEditingActionBar(
-                        canUndoLayout: session.canUndo(ids: host.panelEntries(in: surface.defaultPanelID).map(\.id)),
-                        feedback: state.editingFeedback,
-                        onUndoLayout: undo,
-                        onDone: { state.editing = false }
-                    )
-                    .frame(height: MenuBarPanelLayout.editingActionBarHeight)
+                    MenuBarPanelEditingActionBar()
+                        .frame(height: MenuBarPanelLayout.editingActionBarHeight)
                 }
             } else {
                 Text("Finished")
@@ -377,7 +378,7 @@ private struct PanelLayoutInteractionFixture {
                         let root = controller.view
                         click(
                             root.convert(
-                                CGPoint(x: rtl ? root.bounds.width - 44 : 44, y: root.bounds.height - 28),
+                                CGPoint(x: rtl ? root.bounds.width - 28 : 28, y: 6 + MenuBarPanelLayout.headerHeight / 2),
                                 to: nil
                             ),
                             in: dragWindow)
@@ -385,7 +386,7 @@ private struct PanelLayoutInteractionFixture {
                             requireOrder(["b", "c", "a"], feedback: .undone)
                             click(
                                 root.convert(
-                                    CGPoint(x: rtl ? 44 : root.bounds.width - 44, y: root.bounds.height - 28),
+                                    CGPoint(x: rtl ? 28 : root.bounds.width - 28, y: 6 + MenuBarPanelLayout.headerHeight / 2),
                                     to: nil
                                 ),
                                 in: dragWindow)
@@ -588,4 +589,15 @@ private struct PanelLayoutInteractionFixture {
         emit("FAIL: " + message)
         exit(1)
     }
+}
+
+// Editing confirmations use the same window accessor contract as the host app.
+struct MenuWindowAccessor: NSViewRepresentable {
+    let onWindow: (NSWindow?) -> Void
+    init(_ onWindow: @escaping (NSWindow?) -> Void) { self.onWindow = onWindow }
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ view: NSView, context: Context) { onWindow(view.window) }
+}
+enum MenuBarPanelWindowRegistry {
+    static func markEditingPopover(_ window: NSWindow) {}
 }

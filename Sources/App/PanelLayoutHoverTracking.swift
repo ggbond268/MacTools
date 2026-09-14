@@ -12,7 +12,7 @@ final class PanelLayoutHoverState: ObservableObject {
     private let items = NSMapTable<NSView, NSString>.weakToStrongObjects()
     weak var trackingView: PanelLayoutHoverTrackingView?
 
-    /// Keep one stable subscription per entry, including moves to the hidden section.
+    /// Keep one stable subscription per entry through layout changes.
     func state(for id: String) -> PanelLayoutItemHoverState {
         if let state = itemStates[id] { return state }
         let state = PanelLayoutItemHoverState(isActive: activeItemID == id)
@@ -84,6 +84,7 @@ final class PanelLayoutItemHoverState: ObservableObject {
 @MainActor
 final class PanelLayoutHoverTrackingView: NSView {
     weak var hover: PanelLayoutHoverState?
+    var onLayout: ((PanelLayoutHoverTrackingView) -> Void)?
     var pointerLocationInWindow: (NSWindow) -> CGPoint = { $0.mouseLocationOutsideOfEventStream }
     private weak var observedClip: NSClipView?
     private var trackingArea: NSTrackingArea?
@@ -102,6 +103,7 @@ final class PanelLayoutHoverTrackingView: NSView {
         super.layout()
         observeClipView()
         scheduleRefresh()
+        onLayout?(self)
     }
 
     override func updateTrackingAreas() {
