@@ -293,7 +293,8 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
     func setFrame(
         _ frame: CGRect,
         of window: AccessibilityWindowHandle,
-        resize: Bool
+        resize: Bool,
+        preserveEnhancedUI: Bool = true
     ) throws {
         try Task.checkCancellation()
         let element = try externalElement(for: window)
@@ -327,31 +328,55 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
             size: try sizeAttribute(element, kAXSizeAttribute)
         )
         try Task.checkCancellation()
-        try WindowFrameWriteTransaction.apply(
-            originalFrame: originalFrame,
-            targetFrame: frame,
-            setPosition: { [self] in
-                try Task.checkCancellation()
-                try setPoint($0, on: element)
+        guard isValid(window) else { throw WindowLayoutError.windowUnavailable }
+        let application = AXUIElementCreateApplication(window.identity.processIdentifier)
+        AXUIElementSetMessagingTimeout(application, messagingTimeout)
+        try WindowEnhancedUIFrameGuard.perform(
+            preserveEnhancedUI: preserveEnhancedUI,
+            readEnabled: {
+                var value: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(
+                    application, "AXEnhancedUserInterface" as CFString, &value
+                ) == .success, let value, CFGetTypeID(value) == CFBooleanGetTypeID() else {
+                    return nil
+                }
+                return (value as! CFBoolean) == kCFBooleanTrue
             },
-            setSize: { [self] in
-                try Task.checkCancellation()
-                try setSize($0, on: element)
-            },
-            readFrame: { [self] in
-                try Task.checkCancellation()
-                return CGRect(
-                    origin: try pointAttribute(element, kAXPositionAttribute),
-                    size: try sizeAttribute(element, kAXSizeAttribute)
-                )
+            setEnabled: { enabled in
+                AXUIElementSetAttributeValue(
+                    application,
+                    "AXEnhancedUserInterface" as CFString,
+                    enabled ? kCFBooleanTrue : kCFBooleanFalse
+                ) == .success
             }
-        )
+        ) {
+            try WindowFrameWriteTransaction.apply(
+                originalFrame: originalFrame,
+                targetFrame: frame,
+                setPosition: { [self] in
+                    try Task.checkCancellation()
+                    try setPoint($0, on: element)
+                },
+                setSize: { [self] in
+                    try Task.checkCancellation()
+                    try setSize($0, on: element)
+                },
+                readFrame: { [self] in
+                    try Task.checkCancellation()
+                    return CGRect(
+                        origin: try pointAttribute(element, kAXPositionAttribute),
+                        size: try sizeAttribute(element, kAXSizeAttribute)
+                    )
+                }
+            )
+        }
     }
 
     func setFrameInteractively(
         _ frame: CGRect,
         of window: AccessibilityWindowHandle,
-        resize: Bool
+        resize: Bool,
+        preserveEnhancedUI: Bool = true
     ) throws -> Bool {
         try Task.checkCancellation()
         let element = try externalElement(for: window)
@@ -359,7 +384,7 @@ actor WindowAccessibilityWorker: ExternalWindowResolving {
             throw WindowLayoutError.windowCannotMove
         }
         guard !resize else {
-            try setFrame(frame, of: window, resize: true)
+            try setFrame(frame, of: window, resize: true, preserveEnhancedUI: preserveEnhancedUI)
             return true
         }
 
@@ -768,7 +793,10 @@ final class AccessibilityWindowFrameAdapter: WindowFrameReading, WindowFrameWrit
             }
             return
         }
-        try await worker.setFrame(frame, of: window, resize: resize)
+        try await worker.setFrame(
+            frame, of: window, resize: resize,
+            preserveEnhancedUI: NSWorkspace.shared.isVoiceOverEnabled || NSWorkspace.shared.isSwitchControlEnabled
+        )
     }
 
     func setFrameInteractively(
@@ -800,7 +828,10 @@ final class AccessibilityWindowFrameAdapter: WindowFrameReading, WindowFrameWrit
             }
             return true
         }
-        return try await worker.setFrameInteractively(frame, of: window, resize: resize)
+        return try await worker.setFrameInteractively(
+            frame, of: window, resize: resize,
+            preserveEnhancedUI: NSWorkspace.shared.isVoiceOverEnabled || NSWorkspace.shared.isSwitchControlEnabled
+        )
     }
 
     func setFullScreen(_ isFullScreen: Bool, for window: AccessibilityWindowHandle) async throws {

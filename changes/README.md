@@ -10,7 +10,13 @@ About. Do not edit the generated JSON by hand; run
 `python3 scripts/changelog.py export-history` after repairing historical notes.
 
 Use short English, user-facing entries. Avoid implementation details, duplicate
-phrasing, and long multi-clause bullets.
+phrasing, and long multi-clause bullets. Each entry must end with punctuation and
+contain at most 220 characters and two sentences.
+
+Run `make validate-changelog` after editing fragments and before committing or
+pushing. This fast check validates the current files without generating an Xcode
+project or building the app. `make script-tests`, `make ci`, and GitHub CI also run
+it; focused XCTest and `git diff --check` do not validate changelog content.
 
 ```markdown
 ---

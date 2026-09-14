@@ -4649,6 +4649,65 @@
     },
     {
       "action": {
+        "automaticEligible": false,
+        "description": {
+          "ar": "أرسل رسائل إلى Siri من لوحة الأوامر.",
+          "de": "Sende Nachrichten über die Befehlspalette an Siri.",
+          "en": "Send messages to Siri from the command palette.",
+          "es": "Envía mensajes a Siri desde la paleta de comandos.",
+          "fr": "Envoyez des messages à Siri depuis la palette de commandes.",
+          "ja": "コマンドパレットから Siri にメッセージを送信します。",
+          "ko": "명령 팔레트에서 Siri에 메시지를 보냅니다.",
+          "pt": "Envie mensagens para a Siri pela paleta de comandos.",
+          "ru": "Отправляйте сообщения Siri из палитры команд.",
+          "zh-Hans": "从命令面板向 Siri 发送消息",
+          "zh-Hant": "從命令面板向 Siri 傳送訊息"
+        },
+        "externalInvocation": "unavailable",
+        "id": "ask-new-conversation",
+        "keywords": [
+          "siri",
+          "ask siri"
+        ],
+        "parameters": [
+          {
+            "id": "message",
+            "isRequired": true,
+            "kind": "string",
+            "portability": "localOnly",
+            "privacy": "sensitive",
+            "title": "消息"
+          }
+        ],
+        "permissionIDs": [
+          "accessibility"
+        ],
+        "risk": "safe",
+        "surfaces": [
+          "unified-search"
+        ],
+        "systemImage": "sparkles",
+        "title": {
+          "ar": "اسأل Siri — محادثة جديدة",
+          "de": "Siri fragen — Neues Gespräch",
+          "en": "Ask Siri — New Conversation",
+          "es": "Preguntar a Siri — Nueva conversación",
+          "fr": "Demander à Siri — Nouvelle conversation",
+          "ja": "Siri に質問 — 新規チャット",
+          "ko": "Siri에게 질문 — 새 대화",
+          "pt": "Perguntar à Siri — Nova conversa",
+          "ru": "Спросить Siri — Новый разговор",
+          "zh-Hans": "询问 Siri — 新对话",
+          "zh-Hant": "詢問 Siri — 新對話"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/siri?provider=siri&action=ask-new-conversation",
+      "pluginID": "siri",
+      "providerID": "siri",
+      "route": "/plugins/siri/actions/siri/ask-new-conversation/"
+    },
+    {
+      "action": {
         "automaticEligible": true,
         "description": {
           "ar": "عيّن ما إذا كان «Stage Manager» مفعّلًا.",

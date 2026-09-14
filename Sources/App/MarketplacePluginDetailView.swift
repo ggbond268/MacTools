@@ -168,6 +168,21 @@ struct MarketplacePluginDetailView: View {
                 Button(AppL10n.plugins("plugin.marketplace.update", defaultValue: "更新")) { update(item) }
                     .buttonStyle(.borderedProminent)
                     .disabled(activeOperation)
+            } else if case let .incompatible(reason) = item.state {
+                Text(reason)
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 320, alignment: .trailing)
+                    .accessibilityIdentifier("mactools.marketplace.requirement-failure")
+                if item.packageURL == nil {
+                    Button(AppL10n.plugins("plugin.marketplace.install", defaultValue: "安装")) {}
+                        .buttonStyle(.borderedProminent).disabled(true)
+                }
+                Button(AppL10n.plugins("plugin.requirement.recheck", defaultValue: "重新检查")) {
+                    pluginHost.recheckPluginRequirements()
+                }
+                .buttonStyle(.bordered).disabled(activeOperation)
             } else if pluginHost.hasPluginSettings(pluginID: item.id) {
                 Button(AppL10n.plugins("plugin.marketplace.openSettings", defaultValue: "打开设置")) {
                     pluginHost.presentPluginSettings(pluginID: item.id)

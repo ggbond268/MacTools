@@ -16398,6 +16398,283 @@
       "capabilities": {
         "componentPanel": false,
         "primaryPanel": true,
+        "settings": "form"
+      },
+      "category": "productivity",
+      "displayName": "Siri",
+      "id": "siri",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "Siri",
+          "summary": "أرسل رسائل إلى Siri من لوحة الأوامر."
+        },
+        "de": {
+          "displayName": "Siri",
+          "summary": "Sende Nachrichten über die Befehlspalette an Siri."
+        },
+        "en": {
+          "displayName": "Siri",
+          "summary": "Send messages to Siri from the command palette."
+        },
+        "es": {
+          "displayName": "Siri",
+          "summary": "Envía mensajes a Siri desde la paleta de comandos."
+        },
+        "fr": {
+          "displayName": "Siri",
+          "summary": "Envoyez des messages à Siri depuis la palette de commandes."
+        },
+        "ja": {
+          "displayName": "Siri",
+          "summary": "コマンドパレットから Siri にメッセージを送信します。"
+        },
+        "ko": {
+          "displayName": "Siri",
+          "summary": "명령 팔레트에서 Siri에 메시지를 보냅니다."
+        },
+        "pt": {
+          "displayName": "Siri",
+          "summary": "Envie mensagens para a Siri pela paleta de comandos."
+        },
+        "ru": {
+          "displayName": "Siri",
+          "summary": "Отправляйте сообщения Siri из палитры команд."
+        },
+        "zh-Hans": {
+          "displayName": "Siri",
+          "summary": "从命令面板向 Siri 发送消息"
+        },
+        "zh-Hant": {
+          "displayName": "Siri",
+          "summary": "從命令面板向 Siri 傳送訊息"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/siri",
+      "product": {
+        "actions": {
+          "providers": [
+            {
+              "dynamicTemplates": [],
+              "id": "siri",
+              "kind": "static",
+              "staticActions": [
+                {
+                  "automaticEligible": false,
+                  "description": {
+                    "ar": "أرسل رسائل إلى Siri من لوحة الأوامر.",
+                    "de": "Sende Nachrichten über die Befehlspalette an Siri.",
+                    "en": "Send messages to Siri from the command palette.",
+                    "es": "Envía mensajes a Siri desde la paleta de comandos.",
+                    "fr": "Envoyez des messages à Siri depuis la palette de commandes.",
+                    "ja": "コマンドパレットから Siri にメッセージを送信します。",
+                    "ko": "명령 팔레트에서 Siri에 메시지를 보냅니다.",
+                    "pt": "Envie mensagens para a Siri pela paleta de comandos.",
+                    "ru": "Отправляйте сообщения Siri из палитры команд.",
+                    "zh-Hans": "从命令面板向 Siri 发送消息",
+                    "zh-Hant": "從命令面板向 Siri 傳送訊息"
+                  },
+                  "externalInvocation": "unavailable",
+                  "id": "ask-new-conversation",
+                  "keywords": [
+                    "siri",
+                    "ask siri"
+                  ],
+                  "parameters": [
+                    {
+                      "id": "message",
+                      "isRequired": true,
+                      "kind": "string",
+                      "portability": "localOnly",
+                      "privacy": "sensitive",
+                      "title": "消息"
+                    }
+                  ],
+                  "permissionIDs": [
+                    "accessibility"
+                  ],
+                  "risk": "safe",
+                  "surfaces": [
+                    "unified-search"
+                  ],
+                  "systemImage": "sparkles",
+                  "title": {
+                    "ar": "اسأل Siri — محادثة جديدة",
+                    "de": "Siri fragen — Neues Gespräch",
+                    "en": "Ask Siri — New Conversation",
+                    "es": "Preguntar a Siri — Nueva conversación",
+                    "fr": "Demander à Siri — Nouvelle conversation",
+                    "ja": "Siri に質問 — 新規チャット",
+                    "ko": "Siri에게 질문 — 새 대화",
+                    "pt": "Perguntar à Siri — Nova conversa",
+                    "ru": "Спросить Siri — Новый разговор",
+                    "zh-Hans": "询问 Siri — 新对话",
+                    "zh-Hant": "詢問 Siri — 新對話"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "discovery": {
+          "alternativePluginIDs": [],
+          "goalCategories": [
+            "productivity"
+          ],
+          "keywords": [
+            "siri",
+            "ask siri",
+            "chat"
+          ],
+          "localizedSynonyms": {
+            "ar": [
+              "Siri"
+            ],
+            "de": [
+              "Siri"
+            ],
+            "en": [
+              "Siri"
+            ],
+            "es": [
+              "Siri"
+            ],
+            "fr": [
+              "Siri"
+            ],
+            "ja": [
+              "Siri"
+            ],
+            "ko": [
+              "Siri"
+            ],
+            "pt": [
+              "Siri"
+            ],
+            "ru": [
+              "Siri"
+            ],
+            "zh-Hans": [
+              "Siri"
+            ],
+            "zh-Hant": [
+              "Siri"
+            ]
+          },
+          "relatedPluginIDs": [],
+          "useCases": [
+            {
+              "id": "primary-use",
+              "title": {
+                "ar": "Siri",
+                "de": "Siri",
+                "en": "Siri",
+                "es": "Siri",
+                "fr": "Siri",
+                "ja": "Siri",
+                "ko": "Siri",
+                "pt": "Siri",
+                "ru": "Siri",
+                "zh-Hans": "Siri",
+                "zh-Hant": "Siri"
+              }
+            }
+          ]
+        },
+        "presentation": {
+          "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+          "examples": [
+            {
+              "id": "primary-use",
+              "text": {
+                "ar": "أرسل رسائل إلى Siri من لوحة الأوامر.",
+                "de": "Sende Nachrichten über die Befehlspalette an Siri.",
+                "en": "Send messages to Siri from the command palette.",
+                "es": "Envía mensajes a Siri desde la paleta de comandos.",
+                "fr": "Envoyez des messages à Siri depuis la palette de commandes.",
+                "ja": "コマンドパレットから Siri にメッセージを送信します。",
+                "ko": "명령 팔레트에서 Siri에 메시지를 보냅니다.",
+                "pt": "Envie mensagens para a Siri pela paleta de comandos.",
+                "ru": "Отправляйте сообщения Siri из палитры команд.",
+                "zh-Hans": "从命令面板向 Siri 发送消息",
+                "zh-Hant": "從命令面板向 Siri 傳送訊息"
+              }
+            }
+          ],
+          "license": "GPL-3.0-only",
+          "longDescription": {
+            "ar": "أرسل رسائل إلى Siri من لوحة الأوامر.",
+            "de": "Sende Nachrichten über die Befehlspalette an Siri.",
+            "en": "Send messages to Siri from the command palette.",
+            "es": "Envía mensajes a Siri desde la paleta de comandos.",
+            "fr": "Envoyez des messages à Siri depuis la palette de commandes.",
+            "ja": "コマンドパレットから Siri にメッセージを送信します。",
+            "ko": "명령 팔레트에서 Siri에 메시지를 보냅니다.",
+            "pt": "Envie mensagens para a Siri pela paleta de comandos.",
+            "ru": "Отправляйте сообщения Siri из палитры команд.",
+            "zh-Hans": "从命令面板向 Siri 发送消息",
+            "zh-Hant": "從命令面板向 Siri 傳送訊息"
+          },
+          "publisher": "MacTools",
+          "screenshots": [],
+          "supportURL": "https://github.com/ggbond268/MacTools/issues"
+        },
+        "privacy": {
+          "allowsUserConfiguredDomains": false,
+          "dataObserved": [
+            "siri-message-input",
+            "siri-submission-state"
+          ],
+          "dataPersisted": [],
+          "diagnosticExportsContainUserData": false,
+          "networkDomains": [],
+          "networkUse": "none",
+          "processesSensitiveUserContent": true,
+          "retention": {
+            "policy": "none"
+          },
+          "telemetry": "none"
+        },
+        "relationships": {
+          "includedPackIDs": [],
+          "relatedPluginIDs": [],
+          "suggestedRecipeIDs": [],
+          "supersedesPluginIDs": []
+        },
+        "requirements": {
+          "applications": [
+            {
+              "bundleID": "com.apple.campo",
+              "name": "Siri AI"
+            }
+          ],
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "executables": [],
+          "hardware": [],
+          "minimumMacOSVersion": "27.0",
+          "permissionIDs": [
+            "accessibility"
+          ],
+          "requiresRelaunch": false,
+          "setupComplexity": "simple"
+        },
+        "setup": {
+          "optionalSurfaces": [],
+          "steps": []
+        }
+      },
+      "releaseChannel": null,
+      "releaseNotesURL": null,
+      "route": "/plugins/siri/",
+      "summary": "从命令面板向 Siri 发送消息",
+      "version": "1.0.0"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "primaryPanel": true,
         "settings": "none"
       },
       "category": "display",
@@ -21851,12 +22128,7 @@
           "supersedesPluginIDs": []
         },
         "requirements": {
-          "applications": [
-            {
-              "bundleID": "com.apple.dt.Xcode",
-              "name": "Xcode"
-            }
-          ],
+          "applications": [],
           "architectures": [
             "arm64",
             "x86_64"
@@ -21866,41 +22138,11 @@
           "minimumMacOSVersion": "14.0",
           "permissionIDs": [],
           "requiresRelaunch": false,
-          "setupComplexity": "guided"
+          "setupComplexity": "simple"
         },
         "setup": {
           "optionalSurfaces": [],
-          "steps": [
-            {
-              "description": {
-                "ar": "قبل استخدام هذه الإضافة، راجع المتطلبات التالية واستوفها: Xcode.",
-                "de": "Prüfe und erfülle vor der Verwendung dieses Plugins folgende Anforderungen: Xcode.",
-                "en": "Before using this plugin, review and satisfy these requirements: Xcode.",
-                "es": "Antes de usar este plugin, revisa y cumple estos requisitos: Xcode.",
-                "fr": "Avant d’utiliser ce module, vérifiez et remplissez les conditions suivantes : Xcode.",
-                "ja": "このプラグインを使用する前に、次の要件を確認して満たしてください：Xcode。",
-                "ko": "이 플러그인을 사용하기 전에 다음 요구 사항을 확인하고 충족하세요: Xcode.",
-                "pt": "Antes de usar este plugin, revise e cumpra estes requisitos: Xcode.",
-                "ru": "Перед использованием плагина проверьте и выполните следующие требования: Xcode.",
-                "zh-Hans": "使用此插件前，请检查并满足以下要求：Xcode。",
-                "zh-Hant": "使用此外掛程式前，請檢查並滿足以下要求：Xcode。"
-              },
-              "id": "review-requirements",
-              "title": {
-                "ar": "إعداد تنظيف Xcode",
-                "de": "Xcode-Bereinigung einrichten",
-                "en": "Set Up Xcode Cleanup",
-                "es": "Configurar Limpieza de Xcode",
-                "fr": "Configurer Nettoyage Xcode",
-                "ja": "Xcode クリーンアップを設定",
-                "ko": "Xcode 정리 설정",
-                "pt": "Configurar Limpeza do Xcode",
-                "ru": "Настройка «Очистка Xcode»",
-                "zh-Hans": "设置Xcode 清理",
-                "zh-Hant": "設定Xcode 清理"
-              }
-            }
-          ]
+          "steps": []
         }
       },
       "releaseChannel": null,

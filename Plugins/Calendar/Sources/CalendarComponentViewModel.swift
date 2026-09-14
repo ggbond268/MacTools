@@ -6,6 +6,7 @@ import MacToolsPluginKit
 final class CalendarComponentViewModel: ObservableObject {
     @Published private(set) var month: CalendarMonthModel
     @Published private(set) var selectedDay: CalendarDayModel?
+    @Published private(set) var todayDay: CalendarDayModel?
     @Published private(set) var authorization: CalendarEventAuthorization
     @Published private(set) var isLoadingEvents = false
 
@@ -13,8 +14,10 @@ final class CalendarComponentViewModel: ObservableObject {
     private let holidayProvider: CalendarHolidayProvider
     private var calendar: Calendar
     private let localization: PluginLocalization
+    private let now: () -> Date
     private var displayedMonthStart: Date
     private var selectedDate: Date
+    private var todayDate: Date
     private var eventsByDay: [Date: [CalendarEventSummary]] = [:]
     private var loadTask: Task<Void, Never>?
     private var isStarted = false
@@ -24,21 +27,27 @@ final class CalendarComponentViewModel: ObservableObject {
         holidayProvider: CalendarHolidayProvider,
         calendar: Calendar = CalendarComponentCalendars.gregorian(),
         localization: PluginLocalization = PluginLocalization(bundle: .main),
-        today: Date = Date()
+        today: Date = Date(),
+        now: @escaping () -> Date = Date.init
     ) {
         self.eventService = eventService
         self.holidayProvider = holidayProvider
         self.calendar = calendar
         self.localization = localization
-        self.displayedMonthStart = CalendarComponentCalendars.monthStart(containing: today, calendar: calendar)
-        self.selectedDate = calendar.startOfDay(for: today)
+        self.now = now
+        let initialToday = calendar.startOfDay(for: today)
+        self.displayedMonthStart = CalendarComponentCalendars.monthStart(containing: initialToday, calendar: calendar)
+        self.selectedDate = initialToday
+        self.todayDate = initialToday
         self.authorization = eventService.authorization
-        self.month = CalendarMonthModelBuilder(
+        let initialMonth = CalendarMonthModelBuilder(
             calendar: calendar,
             holidayProvider: holidayProvider,
             localization: localization
-        ).makeMonth(containing: today, today: today)
-        self.selectedDay = month.days.first { calendar.isDate($0.date, inSameDayAs: selectedDate) }
+        ).makeMonth(containing: initialToday, today: initialToday)
+        self.month = initialMonth
+        self.selectedDay = initialMonth.days.first { calendar.isDate($0.date, inSameDayAs: selectedDate) }
+        self.todayDay = initialMonth.days.first { $0.isToday }
     }
 
     func start() {
@@ -54,6 +63,7 @@ final class CalendarComponentViewModel: ObservableObject {
     }
 
     func refresh() {
+        todayDate = calendar.startOfDay(for: now())
         rebuildMonth()
         reloadEvents()
     }
@@ -85,7 +95,8 @@ final class CalendarComponentViewModel: ObservableObject {
     }
 
     func goToToday() {
-        let today = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: now())
+        todayDate = today
         displayedMonthStart = CalendarComponentCalendars.monthStart(containing: today, calendar: calendar)
         selectedDate = today
         eventsByDay = [:]
@@ -118,8 +129,11 @@ final class CalendarComponentViewModel: ObservableObject {
                 return
             }
 
-            guard let firstDate = month.days.first?.date,
-                  let lastDate = month.days.last?.date,
+            let visibleDates = month.days.map(\.date)
+            let requestedToday = todayDate
+            guard let firstDate = visibleDates.first,
+                  let lastDate = visibleDates.last,
+                  let tomorrow = calendar.date(byAdding: .day, value: 1, to: requestedToday),
                   let endDate = calendar.date(byAdding: .day, value: 1, to: lastDate) else {
                 return
             }
@@ -132,12 +146,28 @@ final class CalendarComponentViewModel: ObservableObject {
                     return
                 }
 
-                eventsByDay = CalendarEventGrouper.group(
+                var groupedEvents = CalendarEventGrouper.group(
                     events: events,
-                    visibleDates: month.days.map(\.date),
+                    visibleDates: visibleDates,
                     calendar: calendar,
                     localization: localization
                 )
+                if requestedToday < firstDate || requestedToday >= endDate {
+                    let todayEvents = try await eventService.events(from: requestedToday, to: tomorrow)
+                    guard !Task.isCancelled else {
+                        return
+                    }
+
+                    // Group each query only for its own dates so a cross-day event
+                    // returned by both queries appears once per day.
+                    groupedEvents[requestedToday] = CalendarEventGrouper.group(
+                        events: todayEvents,
+                        visibleDates: [requestedToday],
+                        calendar: calendar,
+                        localization: localization
+                    )[requestedToday] ?? []
+                }
+                eventsByDay = groupedEvents
                 isLoadingEvents = false
                 rebuildMonth()
             } catch {
@@ -152,19 +182,27 @@ final class CalendarComponentViewModel: ObservableObject {
         }
     }
 
-    private func rebuildMonth(today: Date = Date()) {
+    private func rebuildMonth(today: Date? = nil) {
+        let referenceToday = today.map(calendar.startOfDay(for:)) ?? todayDate
         month = CalendarMonthModelBuilder(
             calendar: calendar,
             holidayProvider: holidayProvider,
             localization: localization
         ).makeMonth(
             containing: displayedMonthStart,
-            today: today,
+            today: referenceToday,
             eventsByDay: eventsByDay
         )
 
         selectedDay = month.days.first { calendar.isDate($0.date, inSameDayAs: selectedDate) }
             ?? month.days.first { $0.isToday }
             ?? month.days.first
+        todayDay = CalendarMonthModelBuilder(
+            calendar: calendar,
+            holidayProvider: holidayProvider,
+            localization: localization
+        )
+        .makeMonth(containing: referenceToday, today: referenceToday, eventsByDay: eventsByDay)
+        .days.first { $0.isToday }
     }
 }

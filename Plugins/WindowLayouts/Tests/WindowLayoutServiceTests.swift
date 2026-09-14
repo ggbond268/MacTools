@@ -31,6 +31,30 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
     }
 
+    func testEnhancedUIRestorationFailurePreservesHistoryAfterInitialWriteOrRetry() async {
+        for ignoredWrites in [0, 1] {
+            let window = makeWindow()
+            let originalFrame = CGRect(x: 100, y: 100, width: 600, height: 400)
+            let frameAdapter = MockWindowFrameAdapter(
+                window: window, frame: originalFrame, ignoredWrites: ignoredWrites
+            )
+            frameAdapter.failsEnhancedUIRestoration = true
+            let history = InMemoryWindowFrameHistory()
+            // A previous command's entry must not survive the new committed resize.
+            history.record(CGRect(x: 20, y: 30, width: 500, height: 300), for: window)
+            let service = makeService(window: window, frameAdapter: frameAdapter, history: history)
+
+            assertFailure(await service.execute(.leftHalf, options: options()), equals: .frameWriteFailed)
+            XCTAssertNotEqual(frameAdapter.frames[window.identity], originalFrame)
+            XCTAssertEqual(frameAdapter.writtenFrames.count, ignoredWrites + 1)
+            XCTAssertEqual(history.previousFrame(for: window), originalFrame)
+
+            frameAdapter.failsEnhancedUIRestoration = false
+            assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
+            XCTAssertEqual(frameAdapter.frames[window.identity], originalFrame)
+        }
+    }
+
     func testMoveToDisplayUsesCurrentVisibleFramesAndClampsDestination() async {
         let window = makeWindow()
         let frameAdapter = MockWindowFrameAdapter(
@@ -1030,6 +1054,7 @@ private final class MockWindowFrameAdapter: WindowFrameReading, WindowFrameWriti
     var frames: [WindowIdentity: CGRect]
     var validIdentities: Set<WindowIdentity>
     private(set) var writtenFrames: [CGRect] = []
+    var failsEnhancedUIRestoration = false
     private let appliesWrites: Bool
     private var ignoredWritesRemaining: Int
     private let defersWritesUntilSettlement: Bool
@@ -1075,7 +1100,20 @@ private final class MockWindowFrameAdapter: WindowFrameReading, WindowFrameWriti
             pendingWrite = (window.identity, frame)
             return
         }
-        frames[window.identity] = frame
+        if failsEnhancedUIRestoration {
+            var enabled = true
+            try WindowEnhancedUIFrameGuard.perform(
+                preserveEnhancedUI: false,
+                readEnabled: { enabled },
+                setEnabled: { value in
+                    if value { return false }
+                    enabled = false
+                    return true
+                }
+            ) { frames[window.identity] = frame }
+        } else {
+            frames[window.identity] = frame
+        }
     }
 
     func settlePendingWrite() {

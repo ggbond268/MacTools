@@ -3770,12 +3770,12 @@ button.sim-feature-row {
   padding-left: 8px;
 }
 
-.plugin-setup-list strong,
-.plugin-setup-list span {
+.plugin-setup-list > li > strong,
+.plugin-setup-list > li > span {
   display: block;
 }
 
-.plugin-setup-list span {
+.plugin-setup-list > li > span {
   margin-top: 5px;
   color: var(--ink-soft);
   line-height: 1.45;

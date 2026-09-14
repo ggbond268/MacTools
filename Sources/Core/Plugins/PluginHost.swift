@@ -27,6 +27,7 @@ enum SettingsPresentationRequest: Equatable {
 }
 
 enum AppPresentationRequest: Equatable {
+    case composeActionInput(ActionInputItem)
     case settings(SettingsPresentationRequest)
     case toggleCommandPalette
     case toggleDashboard
@@ -422,6 +423,17 @@ final class PluginHost: ObservableObject {
     private let pluginStateChangeRebuildDelay: Duration
     let dynamicPluginManager: DynamicPluginManager?
     private let pluginCatalogManager: PluginCatalogManager?
+    let actionInputRegistry = ActionInputRegistry()
+    let actionInputAliases: CommandPaletteAliasStore
+
+    var commandPaletteAliasResolver: CommandPaletteAliasResolver {
+        CommandPaletteAliasResolver(items: actionInputRegistry.items, overrides: actionInputAliases.overrides)
+    }
+
+    func setActionInputAlias(_ alias: String?, for item: ActionInputItem) throws {
+        try actionInputAliases.set(alias, for: item, items: actionInputRegistry.items)
+        objectWillChange.send()
+    }
     let actionRegistry: ActionRegistry
     let actionExecutor: ActionExecutor
     let actionConfirmationService: ActionConfirmationRouter
@@ -634,6 +646,7 @@ final class PluginHost: ObservableObject {
 
             return $0.metadata.order < $1.metadata.order
         }
+        self.actionInputAliases = CommandPaletteAliasStore(defaults: shortcutStore.userDefaults)
         self.shortcutStore = shortcutStore
         self.pluginDisplayPreferencesStore = pluginDisplayPreferencesStore
         self.preferencesBackupStore = preferencesBackupStore
@@ -2722,6 +2735,11 @@ final class PluginHost: ObservableObject {
         componentViewCache.removeAll()
     }
 
+    func recheckPluginRequirements() {
+        dynamicPluginManager?.reloadInstalledPlugins()
+        syncPluginManagementState()
+    }
+
     func refreshPluginCatalog() async {
         await pluginCatalogManager?.refreshCatalog()
         syncPluginManagementState()
@@ -3324,6 +3342,15 @@ final class PluginHost: ObservableObject {
     private func configureCallbacks(for plugins: [any MacToolsPlugin]) {
         for plugin in plugins {
             let pluginID = plugin.metadata.id
+
+            if let inputRequester = plugin as? any PluginActionInputPresentationRequesting {
+                inputRequester.requestActionInput = { [weak self, weak plugin] key in
+                    guard let self, let plugin, key.providerID == pluginID,
+                          self.corePlugin(for: pluginID) === plugin,
+                          let item = self.actionInputRegistry.items.first(where: { $0.id == key }) else { return }
+                    self.appPresentationHandler?(.composeActionInput(item))
+                }
+            }
 
             plugin.onStateChange = { [weak self] in
                 self?.rebuildDerivedStateAfterPluginChange(pluginID: pluginID)
@@ -4210,6 +4237,11 @@ final class PluginHost: ObservableObject {
         )
 
         let issues = actionRegistry.synchronize(registrations)
+        actionInputRegistry.synchronize(activePlugins, readDescriptors: { plugin in
+            guard let provider = plugin as? any PluginActionInputProviding else { return [] }
+            return self.guardedValue(for: plugin, operation: "read action input descriptors",
+                                     provider.actionInputDescriptors) ?? []
+        }, definitionLookup: { self.actionRegistry.definition(for: $0) })
         actionRegistryIssues = issues
         if issues.isEmpty {
             AppLog.pluginHost.info(
@@ -4924,6 +4956,7 @@ final class PluginHost: ObservableObject {
         plugin.onStateChange = nil
         (plugin as? any PluginActionSafetyStateChangeProviding)?.onActionSafetyStateChange = nil
         plugin.requestPermissionGuidance = nil
+        (plugin as? any PluginActionInputPresentationRequesting)?.requestActionInput = nil
         plugin.shortcutBindingResolver = nil
         (plugin as? any PluginFocusedWindowTargetConsuming)?
             .focusedWindowTargetProvider = nil
