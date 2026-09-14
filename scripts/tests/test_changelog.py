@@ -32,6 +32,16 @@ class ChangelogValidationCommandTests(unittest.TestCase):
             )
             shutil.copy2(SCRIPT_PATH, root / "scripts" / "changelog.py")
             shutil.copy2(SCRIPT_PATH.parent.parent / "Makefile", root / "Makefile")
+            # The real script-tests target also verifies generated website data.
+            # Give this minimal checkout a valid empty plugin projection.
+            plugin_scripts = root / "scripts" / "plugins"
+            plugin_scripts.mkdir()
+            for name in ["generate_website_plugin_data.py", "plugin_source_manifest.py"]:
+                shutil.copy2(SCRIPT_PATH.parent / "plugins" / name, plugin_scripts / name)
+            subprocess.run(
+                [sys.executable, str(plugin_scripts / "generate_website_plugin_data.py")],
+                cwd=root, capture_output=True, text=True, check=True,
+            )
             fragment = root / "changes" / "unreleased" / "example.md"
             # Exercise real local entry points with current files, not only the parser.
             for target in ["validate-changelog", "script-tests"]:
@@ -43,6 +53,11 @@ class ChangelogValidationCommandTests(unittest.TestCase):
                             encoding="utf-8",
                         )
                         (root / "scripts" / "tests").mkdir(exist_ok=True)
+                        (root / "scripts" / "tests" / "test_fixture.py").write_text(
+                            "import unittest\nclass FixtureTests(unittest.TestCase):\n"
+                            "    def test_command_reached_suite(self): self.assertTrue(True)\n",
+                            encoding="utf-8",
+                        )
                         result = subprocess.run(
                             ["make", target, f"PYTHON3={sys.executable}", "SHELL=/bin/sh"],
                             cwd=root, capture_output=True, text=True, check=False,
@@ -52,7 +67,7 @@ class ChangelogValidationCommandTests(unittest.TestCase):
                         else:
                             self.assertNotEqual(result.returncode, 0)
                             self.assertIn("entry is too long (221 chars, max 220)", result.stderr)
-                            self.assertNotIn("Ran 0 tests", result.stderr)
+                            self.assertNotIn("Ran 1 test", result.stderr)
 
 
 class ComposeSparkleNotesTests(unittest.TestCase):

@@ -131,7 +131,7 @@ Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-
 
 Centered window guide changes should follow the [Window Layouts interaction and manual acceptance contract](docs/plugins/window-layouts.md#centered-window-guides), reuse the existing listen-only event tap, and keep plugin minimum-host declarations aligned with the shared snap APIs.
 
-Window Switcher’s own centered drag guides consume `PluginWindowSnapCoordinator` and require host 1.3.1. Preserve visible-item shortcut numbering across scrolling/filtering and keep delayed preview feedback covered by native chooser tests; see [Window Switcher development](docs/plugins/window-switcher.md).
+Window Switcher’s own centered drag guides consume `PluginWindowSnapCoordinator` and require host 1.3.1. Preserve visible-item shortcut numbering across scrolling/filtering and keep delayed preview feedback covered by native chooser tests; see [Window Switcher development](docs/plugins/window-switcher.md). `make script-tests` and `make ci` also check generated website plugin data; regenerate it with `python3 scripts/plugins/generate_website_plugin_data.py` after changing plugin actions or metadata.
 
 ## Stable CLI candidates
 
