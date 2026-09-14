@@ -34,11 +34,12 @@ final class WindowSwitcherPreviewTests: XCTestCase {
         XCTAssertEqual(captures, 0)
     }
 
-    func testOldCaptureTimeoutDoesNotChangeNewSelectionsMessage() async {
+    func testPendingSelectionHasOwnTimeoutAndRecoversWhenOldCaptureFinishes() async {
         var resume: CheckedContinuation<NSImage?, Never>?
         var message: String?
         var captured: [String] = []
-        let preview = WindowSwitcherPreview(hasPermission: { true }, captureTimeout: .milliseconds(100), capture: { target in
+        let preview = WindowSwitcherPreview(hasPermission: { true }, captureTimeout: .milliseconds(100),
+            debounceDelay: .milliseconds(300), capture: { target in
             captured.append(target.id)
             if target.id == "a" { return await withCheckedContinuation { resume = $0 } }
             return NSImage(size: NSSize(width: 20, height: 10))
@@ -48,11 +49,57 @@ final class WindowSwitcherPreviewTests: XCTestCase {
         await eventually { resume != nil }
         preview.select(entry("b"))
         try? await Task.sleep(for: .milliseconds(150))
-        XCTAssertNil(message)
-        XCTAssertEqual(captured, ["a"])
+        XCTAssertNil(message, "The old capture deadline must not fail the newer selection early")
+        await eventually { message != nil }
+        XCTAssertEqual(captured, ["a"], "A waiting timeout must not launch a parallel capture")
         resume?.resume(returning: nil)
-        await eventually { captured == ["a", "b"] }
+        await eventually { captured == ["a", "b"] && message == nil }
         preview.cancel()
+    }
+
+    func testDismissingPendingSelectionCancelsItsTimeoutFeedback() async {
+        var resume: CheckedContinuation<NSImage?, Never>?
+        var messages: [String] = []
+        let preview = WindowSwitcherPreview(hasPermission: { true }, captureTimeout: .milliseconds(100),
+            debounceDelay: .zero, capture: { _ in
+                await withCheckedContinuation { resume = $0 }
+            })
+        preview.onChange = { _, message in if let message { messages.append(message) } }
+        preview.select(entry("a"))
+        await eventually { resume != nil }
+        preview.select(entry("b"))
+        try? await Task.sleep(for: .milliseconds(20))
+        preview.cancel()
+        try? await Task.sleep(for: .milliseconds(180))
+        XCTAssertTrue(messages.isEmpty)
+        resume?.resume(returning: nil)
+    }
+
+    func testCachedSelectionIsNotClearedByPreviousWaitingTimeout() async {
+        let cached = NSImage(size: NSSize(width: 20, height: 10))
+        var resume: CheckedContinuation<NSImage?, Never>?
+        var delivered: NSImage?, message: String?
+        var captured: [String] = []
+        let preview = WindowSwitcherPreview(hasPermission: { true }, captureTimeout: .milliseconds(100),
+            debounceDelay: .zero, capture: { target in
+                captured.append(target.id)
+                if target.id == "a" { return await withCheckedContinuation { resume = $0 } }
+                return cached
+            })
+        preview.onChange = { image, value in delivered = image; message = value }
+        preview.select(entry("cached"))
+        await eventually { delivered === cached }
+        preview.select(entry("a"))
+        await eventually { resume != nil }
+        preview.select(entry("b"))
+        try? await Task.sleep(for: .milliseconds(20))
+        preview.select(entry("cached"))
+        try? await Task.sleep(for: .milliseconds(180))
+        XCTAssertTrue(delivered === cached)
+        XCTAssertNil(message)
+        XCTAssertEqual(captured, ["cached", "a"])
+        preview.cancel()
+        resume?.resume(returning: nil)
     }
 
     func testDetailCaptureIsOnDemandDeduplicatedAndNeverReplacesCache() async {

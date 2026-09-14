@@ -45,6 +45,7 @@ final class WindowSwitcherPreview {
     private var detailRequested = false
     private var task: Task<Void, Never>?
     private var watchdog: Task<Void, Never>?
+    private var pendingWatchdog: Task<Void, Never>?
     private var expiryTask: Task<Void, Never>?
     private var captureID: UUID?
     private var captureTimedOut = false
@@ -71,7 +72,7 @@ final class WindowSwitcherPreview {
     }
 
     deinit {
-        task?.cancel(); watchdog?.cancel(); expiryTask?.cancel(); debounceTask?.cancel()
+        task?.cancel(); watchdog?.cancel(); expiryTask?.cancel(); debounceTask?.cancel(); pendingWatchdog?.cancel()
     }
 
     var isPermissionGranted: Bool { hasPermission() }
@@ -80,6 +81,7 @@ final class WindowSwitcherPreview {
         generation += 1
         pending = nil; pendingReady = false
         debounceTask?.cancel(); debounceTask = nil
+        pendingWatchdog?.cancel(); pendingWatchdog = nil
         selectedKey = nil; selectedEntry = nil; detailRequested = false
         onChange?(nil, nil)
     }
@@ -105,6 +107,7 @@ final class WindowSwitcherPreview {
         generation += 1
         detailRequested = false
         debounceTask?.cancel(); debounceTask = nil
+        pendingWatchdog?.cancel(); pendingWatchdog = nil
         pendingReady = false
         pending = Request(entry: entry)
         let now = Date()
@@ -128,6 +131,22 @@ final class WindowSwitcherPreview {
             self.debounceTask = nil
             self.pendingReady = true
             self.startNext()
+            self.watchPendingCapture()
+        }
+    }
+
+    /// Bound feedback for the latest selection even when an older system capture
+    /// occupies the serial slot indefinitely. This never releases that slot.
+    private func watchPendingCapture() {
+        guard pending != nil, task != nil else { return }
+        let token = generation, timeout = captureTimeout
+        pendingWatchdog = Task { [weak self] in
+            do { try await Task.sleep(for: timeout) } catch { return }
+            guard let self, self.generation == token,
+                  let request = self.pending, !request.detail,
+                  let key = self.selectedKey, self.cache[key] == nil else { return }
+            self.pendingWatchdog = nil
+            self.onChange?(nil, self.unavailableMessage)
         }
     }
 
@@ -139,6 +158,7 @@ final class WindowSwitcherPreview {
         detailRequested = true
         generation += 1
         debounceTask?.cancel(); debounceTask = nil
+        pendingWatchdog?.cancel(); pendingWatchdog = nil
         pending = Request(entry: entry, detail: true)
         pendingReady = true
         startNext()
@@ -150,6 +170,7 @@ final class WindowSwitcherPreview {
 
     private func startNext() {
         guard task == nil, pendingReady, let request = pending else { return }
+        pendingWatchdog?.cancel(); pendingWatchdog = nil
         let entry = request.entry
         pending = nil; pendingReady = false
         let token = generation, id = UUID()
