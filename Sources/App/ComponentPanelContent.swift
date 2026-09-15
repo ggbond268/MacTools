@@ -107,10 +107,13 @@ enum ComponentGridPlacementEngine {
         var occupiedCells: Set<GridCell> = []
         var placements: [ComponentGridPlacement] = []
         var columnBottoms = Array(repeating: CGFloat(0), count: columns)
+        var firstCandidateRows: [PluginComponentSpan: Int] = [:]
 
         for item in items {
             let span = item.span
-            var row = 0
+            // Occupancy only grows. Rows rejected for this span cannot become free.
+            // Keep first-fit packing without scanning those rows for every copy.
+            var row = firstCandidateRows[span, default: 0]
 
             while true {
                 var didPlace = false
@@ -152,6 +155,7 @@ enum ComponentGridPlacementEngine {
                 }
 
                 if didPlace {
+                    firstCandidateRows[span] = row
                     break
                 }
 
@@ -444,40 +448,26 @@ private struct ComponentGridView: View {
     var body: some View {
         let itemLookup = itemsByID
 
-        ZStack(alignment: .topLeading) {
-            ForEach(placements) { placement in
-                if let item = itemLookup[placement.id] {
-                    let itemSize = CGSize(
-                        width: ComponentPanelLayout.itemWidth(for: placement.span),
-                        height: ComponentPanelLayout.itemHeight(for: placement.span)
-                    )
-                    ComponentCardContainer(
-                        item: item,
-                        componentViewItem: pluginHost.componentViewItem(
-                            for: item.id,
-                            dismiss: onDismiss
-                        ),
-                        measuresDetailAnchor: placement.id == detailAnchorID,
-                        onFrameChange: { onCardFrameChange(placement.id, $0) }
-                    )
-                    .frame(
-                        width: itemSize.width,
-                        height: itemSize.height
-                    )
-                    .background(ComponentDetailAnchor(registry: detailAnchors, pluginID: item.id,
-                                                       presentationID: placement.id).allowsHitTesting(false))
-                    .offset(
-                        x: ComponentPanelLayout.xOffset(for: placement),
-                        y: ComponentPanelLayout.yOffset(for: placement)
-                    )
-                }
+        let frames = placements.map { placement in
+            PanelItemFrame(id: placement.id, frame: CGRect(
+                x: ComponentPanelLayout.xOffset(for: placement), y: placement.yOffset,
+                width: ComponentPanelLayout.itemWidth(for: placement.span),
+                height: ComponentPanelLayout.itemHeight(for: placement.span)))
+        }
+        PanelViewportStack(frames: frames, width: ComponentPanelLayout.gridWidth,
+                           height: contentHeight ?? ComponentPanelLayout.gridContentHeight(for: placements),
+                           retainedIDs: Set([detailAnchorID].compactMap { $0 })) { id in
+            if let item = itemLookup[id] {
+                ComponentCardContainer(
+                    item: item,
+                    componentViewItem: pluginHost.componentViewItem(for: item.id, dismiss: onDismiss),
+                    measuresDetailAnchor: id == detailAnchorID,
+                    onFrameChange: { onCardFrameChange(id, $0) }
+                )
+                .background(ComponentDetailAnchor(registry: detailAnchors, pluginID: item.id,
+                                                   presentationID: id).allowsHitTesting(false))
             }
         }
-        .frame(
-            width: ComponentPanelLayout.gridWidth,
-            height: contentHeight ?? ComponentPanelLayout.gridContentHeight(for: placements),
-            alignment: .topLeading
-        )
     }
 }
 

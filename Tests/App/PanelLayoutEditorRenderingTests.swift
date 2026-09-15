@@ -81,7 +81,13 @@ final class PanelLayoutEditorRenderingTests: XCTestCase {
                     view.cacheDisplay(in: view.bounds, to: bitmap)
                     try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
                         .write(to: URL(fileURLWithPath: "/private/tmp/mactools-custom-panel-\(name)-\(surface)-hover.png"))
-                    try await captureCompositedWindow(window, name: "\(name)-\(surface)-hover")
+                    do {
+                        try await captureCompositedWindow(window, name: "\(name)-\(surface)-hover")
+                    } catch {
+                        // A logged-in WindowServer capture session is optional;
+                        // the NSHostingView bitmap above is always validated.
+                        add(XCTAttachment(string: "Optional composited capture unavailable: \(error)"))
+                    }
                     source.hover?.trackingView?.pointerLocationInWindow = { _ in CGPoint(x: -10_000, y: -10_000) }
                     source.hover?.trackingView?.refresh()
                     try await Task.sleep(for: .milliseconds(180))

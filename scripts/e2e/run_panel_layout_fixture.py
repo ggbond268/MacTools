@@ -39,7 +39,7 @@ def main():
         parts.append(extract("Sources/App/ConfiguredMenuBarPanelContent.swift",
                              "enum ConfiguredMenuBarPanelLayout {", "    static func contentHeight(" ) + "}\n")
         parts.append(extract("Sources/App/MenuBarPanelPresenter.swift", "@MainActor\nfinal class MenuBarPanelEditingFeedback {"))
-        for name in ("MenuBarPanelEditingTabs", "PanelLayoutEditingSession", "PanelLayoutDragScroller", "PanelLayoutHoverTracking", "PanelLayoutEditor", "PanelLayoutDragSource"):
+        for name in ("PanelViewportStack", "MenuBarPanelEditingTabs", "PanelLayoutEditingSession", "PanelLayoutDragScroller", "PanelLayoutHoverTracking", "PanelLayoutEditor", "PanelLayoutDragSource"):
             parts.append((ROOT / f"Sources/App/{name}.swift").read_text().replace("import MacToolsPluginKit", ""))
         source = output / "Fixture.swift"
         source.write_text("\n".join(parts))

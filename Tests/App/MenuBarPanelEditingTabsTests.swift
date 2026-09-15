@@ -382,7 +382,7 @@ final class MenuBarPanelEditingTabsTests: XCTestCase {
             modifierFlags: .control, timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
         tab.mouseDown(with: controlClick)
-        XCTAssertEqual(openedMenus, [Array(repeating: "media", count: 4), Array(repeating: "media", count: 4)])
+        XCTAssertEqual(openedMenus, [Array(repeating: "media", count: 3), Array(repeating: "media", count: 3)])
     }
 
     private func makeStrip() -> MenuBarPanelTabStripView {

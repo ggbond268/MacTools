@@ -6,7 +6,7 @@ import SwiftUI
 final class PanelLayoutHoverState: ObservableObject {
     @Published private(set) var activeItemID: String?
     private var hoveredItemID: String?
-    private var focusedItemID: String?
+    private(set) var focusedItemID: String?
     private var isDragging = false
     private var itemStates: [String: PanelLayoutItemHoverState] = [:]
     private let items = NSMapTable<NSView, NSString>.weakToStrongObjects()

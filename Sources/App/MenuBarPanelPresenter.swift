@@ -687,30 +687,12 @@ final class MenuBarPanelPresenter: NSObject {
     }
 
     private func observePanelItemChanges() {
-        pluginHost.$menuBarPanels.removeDuplicates().dropFirst().receive(on: RunLoop.main)
+        pluginHost.menuBarPanelContentDidChange
             .sink { [weak self] _ in
+                // The host has finished publishing all content and layout changes.
+                // Resolve selection and height together, before SwiftUI's next layout.
                 self?.reconcilePanelConfiguration()
             }.store(in: &heightRefreshCancellables)
-
-        pluginHost.$panelItems
-            .dropFirst()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                DispatchQueue.main.async { [weak self] in
-                    self?.refreshHeightForVisiblePanel()
-                }
-            }
-            .store(in: &heightRefreshCancellables)
-
-        pluginHost.$componentItems
-            .dropFirst()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                DispatchQueue.main.async { [weak self] in
-                    self?.refreshHeightForVisiblePanel()
-                }
-            }
-            .store(in: &heightRefreshCancellables)
     }
 
     private func applyCurrentAppearance() {

@@ -222,6 +222,26 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         XCTAssertEqual(closeCount, 1)
     }
 
+    func testRemovingWidgetUpdatesPopoverHeightInTheSameTransaction() async throws {
+        let fixture = try await makePresentedFixture(plugins: [PresenterLayoutPlugin("a"), PresenterLayoutPlugin("b")])
+        defer { fixture.close() }
+        let model = fixture.presenter.debugPanelModelForTests
+        model.beginLayoutEditing(visibleItemCount: 2)
+        try await Task.sleep(for: .milliseconds(100))
+        var updates = 0
+        let observer = model.objectWillChange.sink { updates += 1 }
+        let entry = try XCTUnwrap(fixture.host.panelEntries(in: "components").last)
+        let oldHeight = model.contentHeight
+        XCTAssertTrue(fixture.host.removePanelEntry(entry, from: "components"))
+        XCTAssertLessThan(model.contentHeight, oldHeight)
+        XCTAssertEqual(updates, 1, "Content and native height must settle without queued intermediate layouts")
+        let finalSize = fixture.presenter.debugPopoverForTests.contentSize
+        try await Task.sleep(for: .milliseconds(160))
+        XCTAssertEqual(updates, 1)
+        XCTAssertEqual(fixture.presenter.debugPopoverForTests.contentSize, finalSize)
+        withExtendedLifetime(observer) {}
+    }
+
     func testWidgetLibraryKeepsEditingAndRevealsAppendedEntriesAfterPanelResizes() async throws {
         let fixture = try await makePresentedFixture(plugins: ["a", "b", "c", "d", "e", "f", "g"].map(PresenterLayoutPlugin.init))
         defer { fixture.close() }

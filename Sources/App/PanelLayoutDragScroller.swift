@@ -24,6 +24,12 @@ final class PanelLayoutDragScroller: ObservableObject {
         onScroll = nil
     }
 
+    func reveal(_ frame: CGRect) {
+        guard let anchor else { return }
+        anchor.enclosingScrollView?.layoutSubtreeIfNeeded()
+        anchor.scrollToVisible(frame)
+    }
+
     private func tick() {
         // Physical button state is not the native drag lifetime (for example with
         // trackpad drag lock). Only the source's completion callback ends a drag.

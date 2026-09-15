@@ -58,6 +58,20 @@ final class ComponentPanelLayoutTests: XCTestCase {
         )
     }
 
+    func testThousandTallCopiesKeepFirstFitGeometry() {
+        let span = PluginComponentSpan(width: 4, height: 50)!
+        let items = (0..<1000).map { (id: "copy-\($0)", span: span) }
+        let placements = ComponentGridPlacementEngine.placements(for: items)
+        let step = ComponentPanelLayout.itemHeight(for: span) + ComponentPanelLayout.verticalSpacing
+        XCTAssertEqual(placements.count, items.count)
+        for (index, placement) in placements.enumerated() {
+            XCTAssertEqual(placement.id, items[index].id)
+            XCTAssertEqual(placement.row, index * 50)
+            XCTAssertEqual(placement.column, 0)
+            XCTAssertEqual(placement.yOffset, CGFloat(index) * step)
+        }
+    }
+
     func testEmptyLayoutUsesEmptyStateHeight() {
         XCTAssertEqual(
             ComponentPanelLayout.gridContentHeight(for: []),

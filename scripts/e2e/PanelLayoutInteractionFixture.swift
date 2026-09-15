@@ -53,7 +53,7 @@ enum AppL10n {
     }
 }
 enum PluginDisplaySurface: String, Codable, CaseIterable, Hashable, Sendable { case dashboard, featurePanel }
-struct PluginComponentSpan: Equatable, Sendable {
+struct PluginComponentSpan: Equatable, Hashable, Sendable {
     let width: Int
     let height: Int
 }

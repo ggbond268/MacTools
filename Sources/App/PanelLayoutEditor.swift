@@ -39,7 +39,7 @@ struct PanelLayoutEditor: View {
     var body: some View {
         let layout = PanelLayoutEditorSnapshot(pluginHost: pluginHost, panelID: panelID)
         GeometryReader { geometry in
-            ScrollViewReader { proxy in
+            Group {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
                         visibleContent(layout)
@@ -74,8 +74,12 @@ struct PanelLayoutEditor: View {
                 .onAppear { hover.setDragging(session.token != nil) }
                 .onDisappear { scroller.stop() }
                 .environment(\.panelLayoutScrollToItem, { id in
-                    if reduceMotion { proxy.scrollTo(id) }
-                    else { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id) } }
+                    DispatchQueue.main.async {
+                        let updated = PanelLayoutEditorSnapshot(pluginHost: pluginHost, panelID: panelID)
+                        if let frame = updated.frames.first(where: { $0.id == id })?.frame {
+                            scroller.reveal(frame)
+                        }
+                    }
                 })
             }
             .popover(item: $entryToRemove, arrowEdge: .trailing) { item in
@@ -88,7 +92,11 @@ struct PanelLayoutEditor: View {
                         scroller.stop()
                         session.reset()
                         entryToRemove = nil
-                        _ = pluginHost.removePanelEntry(item.entry, from: panelID)
+                        var transaction = Transaction(animation: nil)
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            _ = pluginHost.removePanelEntry(item.entry, from: panelID)
+                        }
                         return nil
                     }
                 )
@@ -103,24 +111,21 @@ struct PanelLayoutEditor: View {
 
     private func visibleContent(_ layout: PanelLayoutEditorSnapshot) -> some View {
         let positions = layout.frames
-        return ZStack(alignment: .topLeading) {
-            ForEach(Array(positions.enumerated()), id: \.element.id) { index, position in
-                if let item = layout.items[position.id] {
-                    reorderItem(item, feature: layout.features[item.entry.pluginID], index: index, count: layout.ids.count)
-                        .frame(width: position.frame.width, height: position.frame.height)
-                        .environment(\.layoutDirection, layoutDirection)
-                        .offset(x: layoutDirection == .rightToLeft
-                            ? ComponentPanelLayout.gridWidth - position.frame.maxX : position.frame.minX,
-                                y: position.frame.minY)
-                }
+        let indices = Dictionary(uniqueKeysWithValues: layout.ids.enumerated().map { ($0.element, $0.offset) })
+        return PanelViewportStack(frames: layout.itemFrames(rightToLeft: layoutDirection == .rightToLeft),
+                              width: ComponentPanelLayout.gridWidth,
+                              height: PanelLayoutDestination.visibleContentHeight(itemHeight: layout.height),
+                              retainedIDs: Set([session.sourceID, hover.focusedItemID].compactMap { $0 })) { id in
+            if let item = layout.items[id], let index = indices[id] {
+                reorderItem(item, feature: layout.features[item.entry.pluginID], index: index, count: layout.ids.count)
+                    .environment(\.layoutDirection, layoutDirection)
             }
+        }
+        .overlay(alignment: .topLeading) {
             PanelLayoutInsertionMarker(preview: session.dragPreview, frames: positions,
                                        rightToLeft: layoutDirection == .rightToLeft)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.14), value: positions)
-        .frame(width: ComponentPanelLayout.gridWidth,
-               height: PanelLayoutDestination.visibleContentHeight(itemHeight: layout.height),
-               alignment: .topLeading)
         .environment(\.layoutDirection, .leftToRight)
     }
 
@@ -205,6 +210,14 @@ private struct PanelLayoutEditorSnapshot {
     let features: [String: PluginPanelItem]
     let frames: [PanelLayoutEntryFrame]
     let height: CGFloat
+
+    func itemFrames(rightToLeft: Bool) -> [PanelItemFrame] {
+        frames.map { position in
+            var frame = position.frame
+            if rightToLeft { frame.origin.x = ComponentPanelLayout.gridWidth - frame.maxX }
+            return PanelItemFrame(id: position.id, frame: frame)
+        }
+    }
 
     init(pluginHost: PluginHost, panelID: String) {
         let entries = pluginHost.panelEntries(in: panelID)

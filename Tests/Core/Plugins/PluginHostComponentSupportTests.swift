@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Carbon.HIToolbox
+import Combine
 import XCTest
 import MacToolsPluginKit
 @testable import MacTools
@@ -1153,6 +1154,107 @@ final class PluginHostComponentSupportTests: XCTestCase {
         )
     }
 
+    func testCopiesShareLifecycleAndRemovingLastCopyDoesNotDeactivatePlugin() throws {
+        let plugin = MockCombinedPlugin(id: "dual")
+        let host = makeHost(plugins: [plugin])
+        let other = try XCTUnwrap(host.addMenuBarPanel())
+        let entry = MenuBarPanelEntry(pluginID: "dual", surface: .dashboard)
+        let activations = plugin.activateCallCount
+        let deactivations = plugin.deactivateCallCount
+        host.setVisibleMenuBarPanel("components")
+        XCTAssertTrue(host.addPanelEntry(entry, to: "components"))
+        XCTAssertTrue(host.addPanelEntry(entry, to: other))
+        host.setVisibleMenuBarPanel(other)
+        host.setVisibleMenuBarPanel("components")
+        XCTAssertEqual(plugin.surfaceEvents, [.visible(.component)])
+        for copy in host.panelEntries(in: "components") {
+            XCTAssertTrue(host.removePanelEntry(copy, from: "components"))
+        }
+        XCTAssertEqual(plugin.surfaceEvents, [.visible(.component), .hidden(.component)])
+        XCTAssertTrue(host.componentItems(in: "components").isEmpty)
+        // A hidden copy must not keep foreground work alive, but remains available.
+        host.setVisibleMenuBarPanel(other)
+        XCTAssertEqual(plugin.surfaceEvents.last, .visible(.component))
+        XCTAssertTrue(host.removePanelEntry(try XCTUnwrap(host.panelEntries(in: other).first), from: other))
+        XCTAssertEqual(plugin.surfaceEvents.last, .hidden(.component))
+        XCTAssertTrue(host.availableComponentItems.contains { $0.id == "dual" })
+        XCTAssertEqual(plugin.activateCallCount, activations)
+        XCTAssertEqual(plugin.deactivateCallCount, deactivations)
+        XCTAssertEqual(host.panelItems(in: "features").map(\.id), ["dual"])
+    }
+
+    func testDeletingVisiblePanelKeepsMigratedWidgetForeground() throws {
+        let plugin = MockComponentPanelPlugin(id: "component")
+        let host = makeHost(plugins: [plugin])
+        let panel = try XCTUnwrap(host.addMenuBarPanel())
+        host.assignPanelEntry(pluginID: "component", surface: .dashboard, to: panel)
+        host.setVisibleMenuBarPanel(panel)
+        XCTAssertNil(host.deleteMenuBarPanel(id: panel))
+        XCTAssertEqual(host.panelEntries(in: "components").map(\.pluginID), ["component"])
+        XCTAssertEqual(plugin.surfaceEvents, [.visible(.component)], "Fallback keeps the same logical consumer alive")
+        host.setVisibleMenuBarPanel("components")
+        host.setVisibleMenuBarPanel(nil)
+        XCTAssertEqual(plugin.surfaceEvents, [.visible(.component), .hidden(.component)])
+    }
+
+    func testSurfaceSwitchAcquiresNewConsumerBeforeReleasingOldConsumer() {
+        let plugin = MockCombinedPlugin(id: "dual")
+        let host = makeHost(plugins: [plugin])
+        host.setVisibleMenuBarPanel("components")
+        host.setVisibleMenuBarPanel("features")
+        XCTAssertEqual(plugin.surfaceEvents, [.visible(.component), .visible(.primary), .hidden(.component)])
+    }
+
+    func testLifecycleCallbacksCanRefreshHostWithoutBeingDeliveredTwice() {
+        let plugin = MockComponentPanelPlugin(id: "component")
+        let host = makeHost(plugins: [plugin])
+        plugin.onSurfaceVisible = { [weak host] in host?.refreshAll() }
+        host.setVisibleMenuBarPanel("components")
+        XCTAssertEqual(plugin.surfaceEvents, [.visible(.component)])
+        host.setVisibleMenuBarPanel(nil)
+        XCTAssertEqual(plugin.surfaceEvents, [.visible(.component), .hidden(.component)])
+    }
+
+    func testReentrantPanelCloseNeverHidesAConsumerThatWasNotShown() {
+        let plugins = [MockComponentPanelPlugin(id: "one"), MockComponentPanelPlugin(id: "two")]
+        let host = makeHost(plugins: plugins)
+        for plugin in plugins {
+            plugin.onSurfaceVisible = { [weak host] in host?.setVisibleMenuBarPanel(nil) }
+        }
+        host.setVisibleMenuBarPanel("components")
+        XCTAssertEqual(plugins.filter { !$0.surfaceEvents.isEmpty }.count, 1)
+        for plugin in plugins where !plugin.surfaceEvents.isEmpty {
+            XCTAssertEqual(plugin.surfaceEvents, [.visible(.component), .hidden(.component)])
+        }
+    }
+
+    func testLayoutOnlyChangesPublishOneCompleteSnapshotWithoutRebuildingSettings() throws {
+        let plugin = MockComponentPanelPlugin(id: "component")
+        let host = makeHost(plugins: [plugin])
+        var settingsUpdates = 0
+        var entries: [[MenuBarPanelEntry]] = []
+        let settings = host.$pluginSettingsItems.dropFirst().sink { _ in settingsUpdates += 1 }
+        let panels = host.menuBarPanelContentDidChange.sink { entries.append(host.panelEntries(in: "components")) }
+        let refreshCount = plugin.refreshCallCount
+        let original = try XCTUnwrap(host.panelEntries(in: "components").first)
+        XCTAssertTrue(host.addPanelEntry(original, to: "components"))
+        XCTAssertTrue(host.removePanelEntry(original, from: "components"))
+        XCTAssertEqual(entries.map(\.count), [2, 1])
+        XCTAssertNotNil(entries.last?.first?.instanceID)
+        XCTAssertEqual(settingsUpdates, 0)
+        XCTAssertEqual(plugin.refreshCallCount, refreshCount)
+        XCTAssertEqual(host.panelLayoutEntries(in: "components").map(\.id), entries.last?.map(\.id))
+        withExtendedLifetime((settings, panels)) {}
+    }
+
+    func testLibraryPreviewDoesNotAcquirePanelLifecycle() {
+        let plugin = MockComponentPanelPlugin(id: "component")
+        let host = makeHost(plugins: [plugin])
+        XCTAssertNotNil(host.componentPreviewView(for: "component"))
+        XCTAssertEqual(plugin.receivedPanelVisibilityValues, [false])
+        XCTAssertTrue(plugin.surfaceEvents.isEmpty)
+    }
+
     func testCustomPanelMovesOnlyOneEntryAndPreservesCachedComponentView() throws {
         let dual = MockCombinedPlugin(id: "dual")
         let host = makeHost(plugins: [dual])
@@ -1234,7 +1336,7 @@ final class PluginHostComponentSupportTests: XCTestCase {
         let deactivationCount = dual.deactivateCallCount
 
         XCTAssertNil(host.restoreDefaultMenuBarPanelLayout())
-        XCTAssertEqual(host.menuBarPanels, MenuBarPanelDefinition.defaults)
+        XCTAssertEqual(host.menuBarPanels, MenuBarPanelConfiguration().displayPanels)
         XCTAssertEqual(host.menuBarPanelStore.configuration, MenuBarPanelConfiguration())
         XCTAssertNil(host.actionShortcutSettingsItem(for: customReference))
         XCTAssertEqual(host.actionShortcutSettingsItem(for: defaultReference)?.assignment.binding, defaultBinding)
@@ -1562,6 +1664,8 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
     var onRefresh: (() -> Void)?
     private(set) var handledPermissionIDs: [String] = []
 
+    var onSurfaceVisible: (() -> Void)?
+
     init(
         id: String,
         order: Int = 1,
@@ -1622,6 +1726,7 @@ private final class MockComponentPanelPlugin: MacToolsPlugin, PluginComponentPan
 
     func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
         surfaceEvents.append(.visible(surface))
+        onSurfaceVisible?()
     }
 
     func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {

@@ -1,9 +1,75 @@
+import AppKit
+import SwiftUI
 import XCTest
 import MacToolsPluginKit
 @testable import ActivityBarPlugin
 
 @MainActor
 final class ActivityBarPluginTests: XCTestCase {
+    func testAnotherCopyDoesNotReopenACollapsedAppRow() {
+        let presentation = ActivityBarComponentPresentation()
+        presentation.selectInitialApp(nil)
+        presentation.selectInitialApp("Terminal")
+        XCTAssertEqual(presentation.expandedAppName, "Terminal")
+        presentation.expandedAppName = nil
+        presentation.selectInitialApp("Terminal")
+        XCTAssertNil(presentation.expandedAppName)
+    }
+
+    func testLivePresentationSurvivesViewRemountAndPreviewIsIndependent() async throws {
+        let harness = makeHarness()
+        let presentation = ActivityBarComponentPresentation()
+        presentation.selectInitialTrend(hasCodingToolsData: false)
+        presentation.trendMode = .codingTools
+        presentation.selectedDateOffset = -1
+        presentation.expandedAppName = "Terminal"
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: 600),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        PluginPresentationSafety.prepareForWindowOrdering(window)
+        window.orderFront(nil)
+        defer { window.close() }
+        for _ in 0..<2 {
+            window.contentView = NSHostingView(rootView: ActivityBarComponentView(
+                controller: harness.controller, presentation: presentation).frame(width: 304, height: 600))
+            try await Task.sleep(for: .milliseconds(80))
+            window.contentView = nil
+        }
+        let preview = ActivityBarComponentPresentation()
+        window.contentView = NSHostingView(rootView: ActivityBarComponentView(
+            controller: harness.controller, presentation: preview).frame(width: 304, height: 600))
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(preview.trendMode, .input)
+        XCTAssertEqual(preview.selectedDateOffset, 0)
+        XCTAssertEqual(presentation.trendMode, .codingTools)
+        XCTAssertEqual(presentation.selectedDateOffset, -1)
+        XCTAssertEqual(presentation.expandedAppName, "Terminal")
+    }
+
+    func testLibraryPreviewDoesNotRefreshBusinessDataOrResizeLiveCards() async throws {
+        let harness = makeHarness()
+        harness.plugin.dashboardContentHeightDidChange(501)
+        let span = harness.plugin.descriptor.span
+        var changes = 0
+        harness.plugin.onStateChange = { changes += 1 }
+        let content = harness.plugin.makeView(context: PluginComponentContext(
+            pluginID: harness.plugin.metadata.id, dismiss: {}, isPanelVisible: false))
+        let root = NSHostingView(rootView: content.frame(width: 304, height: 504))
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: 504),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = root
+        PluginPresentationSafety.prepareForWindowOrdering(window)
+        window.orderFront(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(160))
+        root.layoutSubtreeIfNeeded()
+        XCTAssertEqual(harness.plugin.descriptor.span, span)
+        XCTAssertEqual(changes, 0)
+        harness.plugin.panelSurfaceDidBecomeVisible(.component)
+        XCTAssertGreaterThan(changes, 0, "Foreground refresh belongs to the plugin lifecycle")
+    }
+
     func testDashboardUsesReducedFallbackHeight() {
         let harness = makeHarness()
         let metrics = PluginComponentPanelLayoutMetrics.default

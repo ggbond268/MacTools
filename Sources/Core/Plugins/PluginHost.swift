@@ -424,6 +424,9 @@ final class PluginHost: ObservableObject {
     let menuBarPanelStore: MenuBarPanelStore
     @Published private(set) var menuBarPanels: [MenuBarPanelDefinition] = []
     private var visibleMenuBarPanelID: String?
+    private var menuBarPanelContentCache: [String: MenuBarPanelContentSnapshot] = [:]
+    /// Emitted after a complete panel update, including layout-only mutations.
+    let menuBarPanelContentDidChange = PassthroughSubject<Void, Never>()
     var menuBarPanelPresentationHandler: ((String, Bool) -> Void)?
     private let preferencesBackupStore: any PreferencesBackupApplicationStoring
     private let automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator?
@@ -481,6 +484,7 @@ final class PluginHost: ObservableObject {
     private var settingsViewCache: [SettingsViewCacheKey: PluginSettingsContentViewItem] = [:]
     private var visiblePanelSurfaces: Set<PluginPanelSurface> = []
     private var visiblePanelSurfacePluginIDs: [PluginPanelSurface: Set<String>] = [:]
+    private var isSynchronizingPanelSurfaces = false
     private var isolatedPluginFailures: [String: String] = [:]
     private var isHandlingPluginAction = false
     private var didLoadDynamicPlugins = false
@@ -2632,8 +2636,7 @@ final class PluginHost: ObservableObject {
             visiblePanelSurfaces.remove(surface)
         }
 
-        let visiblePluginIDs = isVisible ? pluginIDs(for: surface) : []
-        updateVisiblePanelSurface(surface, visiblePluginIDs: visiblePluginIDs)
+        syncVisiblePanelSurfaces()
     }
 
     func isComponentViewCached(for itemID: String) -> Bool {
@@ -3911,6 +3914,7 @@ final class PluginHost: ObservableObject {
         }
         let visibleComponentIDs = Set(dashboardOrderedDescriptors.map { $0.metadata.id })
         componentItems = availableComponentItems.filter { visibleComponentIDs.contains($0.id) }
+        menuBarPanelContentCache.removeAll(keepingCapacity: true)
         trimComponentViewCache(keeping: Set(componentItems.map(\.id)))
         syncVisiblePanelSurfaces()
 
@@ -4114,6 +4118,8 @@ final class PluginHost: ObservableObject {
 
         if isolatedPluginFailures.count > isolatedPluginCountAtStart {
             rebuildDerivedState()
+        } else {
+            menuBarPanelContentDidChange.send()
         }
     }
 
@@ -5489,54 +5495,46 @@ final class PluginHost: ObservableObject {
     }
 
     private func syncVisiblePanelSurfaces() {
-        for surface in visiblePanelSurfaces {
-            updateVisiblePanelSurface(
-                surface,
-                visiblePluginIDs: pluginIDs(for: surface)
-            )
+        guard !isSynchronizingPanelSurfaces else { return }
+        isSynchronizingPanelSurfaces = true
+        defer { isSynchronizingPanelSurfaces = false }
+
+        // Record each delivered transition before calling the plugin. Callbacks
+        // may refresh, remove an entry, or close the panel synchronously; derive
+        // the next transition again instead of delivering a stale notification.
+        while true {
+            var desired: [PluginPanelSurface: Set<String>] = [:]
+            for surface in visiblePanelSurfaces {
+                desired[surface] = pluginIDs(for: surface).filter { id in
+                    corePlugin(for: id).map { !isPluginIsolated($0) } ?? false
+                }
+            }
+
+            // Acquire consumers before releasing them when changing surfaces.
+            if let (surface, id) = PluginPanelSurface.allCases.lazy.compactMap({ surface in
+                desired[surface, default: []].subtracting(self.visiblePanelSurfacePluginIDs[surface, default: []])
+                    .first.map { (surface, $0) }
+            }).first {
+                visiblePanelSurfacePluginIDs[surface, default: []].insert(id)
+                notifyPanelSurfaceVisible(surface, pluginID: id)
+            } else if let (surface, id) = PluginPanelSurface.allCases.lazy.compactMap({ surface in
+                self.visiblePanelSurfacePluginIDs[surface, default: []].subtracting(desired[surface, default: []])
+                    .first.map { (surface, $0) }
+            }).first {
+                visiblePanelSurfacePluginIDs[surface]?.remove(id)
+                if visiblePanelSurfacePluginIDs[surface]?.isEmpty == true {
+                    visiblePanelSurfacePluginIDs.removeValue(forKey: surface)
+                }
+                notifyPanelSurfaceHidden(surface, pluginID: id)
+            } else {
+                return
+            }
         }
     }
 
     private func hideAllPanelSurfaces() {
-        for surface in PluginPanelSurface.allCases {
-            updateVisiblePanelSurface(surface, visiblePluginIDs: [])
-        }
         visiblePanelSurfaces.removeAll()
-    }
-
-    private func updateVisiblePanelSurface(
-        _ surface: PluginPanelSurface,
-        visiblePluginIDs nextVisiblePluginIDs: Set<String>
-    ) {
-        let previousVisiblePluginIDs = visiblePanelSurfacePluginIDs[surface] ?? []
-        let hiddenPluginIDs = previousVisiblePluginIDs.subtracting(nextVisiblePluginIDs)
-        let shownPluginIDs = nextVisiblePluginIDs.subtracting(previousVisiblePluginIDs)
-
-        guard !hiddenPluginIDs.isEmpty || !shownPluginIDs.isEmpty else {
-            return
-        }
-
-        for pluginID in hiddenPluginIDs {
-            notifyPanelSurfaceHidden(surface, pluginID: pluginID)
-        }
-
-        for pluginID in shownPluginIDs {
-            notifyPanelSurfaceVisible(surface, pluginID: pluginID)
-        }
-
-        let visiblePluginIDs = nextVisiblePluginIDs.filter { pluginID in
-            guard let plugin = corePlugin(for: pluginID) else {
-                return false
-            }
-
-            return !isPluginIsolated(plugin)
-        }
-
-        if visiblePluginIDs.isEmpty {
-            visiblePanelSurfacePluginIDs.removeValue(forKey: surface)
-        } else {
-            visiblePanelSurfacePluginIDs[surface] = visiblePluginIDs
-        }
+        syncVisiblePanelSurfaces()
     }
 
     private func notifyPanelSurfaceVisible(_ surface: PluginPanelSurface, pluginID: String) {
@@ -5575,14 +5573,14 @@ final class PluginHost: ObservableObject {
                 continue
             }
 
-            if notify {
-                notifyPanelSurfaceHidden(surface, pluginID: pluginID)
-            }
-
             if pluginIDs.isEmpty {
                 visiblePanelSurfacePluginIDs.removeValue(forKey: surface)
             } else {
                 visiblePanelSurfacePluginIDs[surface] = pluginIDs
+            }
+
+            if notify {
+                notifyPanelSurfaceHidden(surface, pluginID: pluginID)
             }
         }
     }
@@ -6568,21 +6566,21 @@ final class PluginHost: ObservableObject {
 }
 
 
+struct MenuBarPanelContentSnapshot {
+    let entries: [MenuBarPanelEntry]
+    let components: [PluginComponentItem]
+    let features: [PluginPanelItem]
+}
+
 extension PluginHost {
     var visibleMenuBarPanels: [MenuBarPanelDefinition] { menuBarPanels.filter { !$0.isHidden } }
 
     func panelItems(in panelID: String) -> [PluginPanelItem] {
-        let lookup = Dictionary(uniqueKeysWithValues: panelItems.map { ($0.id, $0) })
-        var seen: Set<String> = []
-        return panelEntries(in: panelID).filter { $0.surface == .featurePanel }
-            .compactMap { seen.insert($0.pluginID).inserted ? lookup[$0.pluginID] : nil }
+        panelContentSnapshot(in: panelID).features
     }
 
     func componentItems(in panelID: String) -> [PluginComponentItem] {
-        let lookup = Dictionary(uniqueKeysWithValues: componentItems.map { ($0.id, $0) })
-        var seen: Set<String> = []
-        return panelEntries(in: panelID).filter { $0.surface == .dashboard }
-            .compactMap { seen.insert($0.pluginID).inserted ? lookup[$0.pluginID] : nil }
+        panelContentSnapshot(in: panelID).components
     }
 
     func panelLayoutItems(in panelID: String, surface: PluginDisplaySurface, hidden: Bool = false) -> [PluginSurfaceLayoutItem] {
@@ -6603,9 +6601,28 @@ extension PluginHost {
     }
 
     func panelEntries(in panelID: String) -> [MenuBarPanelEntry] {
-        let entries = componentItems.map { MenuBarPanelEntry(pluginID: $0.id, surface: .dashboard) }
-            + panelItems.map { MenuBarPanelEntry(pluginID: $0.id, surface: .featurePanel) }
-        return menuBarPanelStore.configuration.orderedEntries(entries, panelID: panelID)
+        panelContentSnapshot(in: panelID).entries
+    }
+
+    func panelContentSnapshot(in panelID: String) -> MenuBarPanelContentSnapshot {
+        if let cached = menuBarPanelContentCache[panelID] { return cached }
+        let entries = self.componentItems.map { MenuBarPanelEntry(pluginID: $0.id, surface: .dashboard) }
+            + self.panelItems.map { MenuBarPanelEntry(pluginID: $0.id, surface: .featurePanel) }
+        let ordered = menuBarPanelStore.configuration.orderedEntries(entries, panelID: panelID)
+        let components = Dictionary(uniqueKeysWithValues: self.componentItems.map { ($0.id, $0) })
+        let features = Dictionary(uniqueKeysWithValues: self.panelItems.map { ($0.id, $0) })
+        var seen: Set<String> = []
+        var componentItems: [PluginComponentItem] = []
+        var panelItems: [PluginPanelItem] = []
+        for entry in ordered where seen.insert(entry.templateID).inserted {
+            switch entry.surface {
+            case .dashboard: if let item = components[entry.pluginID] { componentItems.append(item) }
+            case .featurePanel: if let item = features[entry.pluginID] { panelItems.append(item) }
+            }
+        }
+        let snapshot = MenuBarPanelContentSnapshot(entries: ordered, components: componentItems, features: panelItems)
+        menuBarPanelContentCache[panelID] = snapshot
+        return snapshot
     }
 
     func panelLayoutEntries(in panelID: String, hidden: Bool = false) -> [MenuBarPanelLayoutEntry] {
@@ -6675,7 +6692,7 @@ extension PluginHost {
         for surface in PluginDisplaySurface.allCases {
             pluginDisplayPreferencesStore.resetOrder(for: surface, defaultPluginIDs: defaultPluginIDs(for: surface))
         }
-        panelConfigurationDidChange()
+        panelConfigurationDidChange(refreshDisplayPreferences: true)
         return nil
     }
 
@@ -6707,7 +6724,7 @@ extension PluginHost {
             visibleOrder: panelEntries(in: panelID), suppressDefault: !wasVisible) != nil else { return false }
         pluginDisplayPreferencesStore.setPluginVisible(true, pluginID: entry.pluginID, on: entry.surface,
             defaultPluginIDs: defaultPluginIDs(for: entry.surface))
-        panelConfigurationDidChange()
+        panelConfigurationDidChange(refreshDisplayPreferences: !wasVisible)
         return true
     }
 
@@ -6771,8 +6788,8 @@ extension PluginHost {
 
     func setVisibleMenuBarPanel(_ panelID: String?) {
         visibleMenuBarPanelID = panelID
-        setPanelSurface(.component, visible: panelID != nil)
-        setPanelSurface(.primary, visible: panelID != nil)
+        visiblePanelSurfaces = panelID == nil ? [] : Set(PluginPanelSurface.allCases)
+        syncVisiblePanelSurfaces()
     }
 
     func panelActionReference(id: String) -> ActionReference {
@@ -6785,9 +6802,23 @@ extension PluginHost {
         return ActionReference(key: ActionKey(providerID: "mactools", actionID: actionID))
     }
 
-    private func panelConfigurationDidChange() {
-        menuBarPanels = menuBarPanelStore.configuration.displayPanels
-        rebuildDerivedState(dirtyPluginIDs: [])
-        syncGlobalShortcuts()
+    private func panelConfigurationDidChange(refreshDisplayPreferences: Bool = false) {
+        let panels = menuBarPanelStore.configuration.displayPanels
+        if panels != menuBarPanels || refreshDisplayPreferences {
+            menuBarPanels = panels
+            if let visibleID = visibleMenuBarPanelID,
+               !panels.contains(where: { $0.id == visibleID && !$0.isHidden }) {
+                visibleMenuBarPanelID = panels.first(where: { !$0.isHidden })?.id
+            }
+            rebuildDerivedState(dirtyPluginIDs: [])
+            syncGlobalShortcuts()
+        } else {
+            // Moving/removing an instance changes presentation, not permissions,
+            // action registrations, plugin settings, or background activation.
+            objectWillChange.send()
+            menuBarPanelContentCache.removeAll(keepingCapacity: true)
+            syncVisiblePanelSurfaces()
+            menuBarPanelContentDidChange.send()
+        }
     }
 }
