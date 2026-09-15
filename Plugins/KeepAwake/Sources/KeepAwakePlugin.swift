@@ -94,6 +94,7 @@ final class KeepAwakePlugin:
 
     private enum ControlID {
         static let duration = "duration"
+        static let behavior = "behavior"
     }
 
     private enum ActionID {
@@ -516,10 +517,17 @@ final class KeepAwakePlugin:
         case .setDisclosureExpanded, .setNavigationSelection, .clearNavigationSelection:
             return
         case let .setSelection(controlID, optionID):
-            guard controlID == ControlID.duration else {
+            switch controlID {
+            case ControlID.duration:
+                updateDurationPreset(using: optionID)
+            case ControlID.behavior:
+                guard let behavior = KeepAwakeBehavior(rawValue: optionID) else {
+                    return
+                }
+                setBehavior(behavior)
+            default:
                 return
             }
-            updateDurationPreset(using: optionID)
         case .setDate, .setSlider, .invokeAction:
             return
         }
@@ -682,6 +690,27 @@ final class KeepAwakePlugin:
                     displayedComponents: nil,
                     datePickerStyle: nil,
                     sectionTitle: nil,
+                    isEnabled: true
+                ),
+                PluginPanelControl(
+                    id: ControlID.behavior,
+                    kind: .selectList,
+                    options: KeepAwakeBehavior.allCases.map {
+                        PluginPanelControlOption(
+                            id: $0.rawValue,
+                            title: settingsBehaviorTitle($0)
+                        )
+                    },
+                    selectedOptionID: preferences.behavior.rawValue,
+                    dateValue: nil,
+                    minimumDate: nil,
+                    displayedComponents: nil,
+                    datePickerStyle: nil,
+                    sectionTitle: localization.string(
+                        "settings.mode.section",
+                        defaultValue: "行为"
+                    ),
+                    showsLeadingDivider: true,
                     isEnabled: true
                 )
             ],
