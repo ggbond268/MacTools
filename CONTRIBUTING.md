@@ -134,6 +134,10 @@ Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-
 
 Centered window guide changes should follow the [Window Layouts interaction and manual acceptance contract](docs/plugins/window-layouts.md#centered-window-guides), reuse the existing listen-only event tap, and keep plugin minimum-host declarations aligned with the shared snap APIs.
 
+## App Uninstaller safety
+
+App Uninstaller association rules and Trash execution require adjacent fixture tests and independent safety review. Keep ownership confidence separate from data sensitivity, preserve incomplete coverage, and never add a permanent-delete fallback. See [the implementation and provenance notes](docs/plugins/app-uninstaller.md).
+
 ## Stable CLI candidates
 
 The optional stable CLI uses the existing host-owned commands and separate signed download. Publication remains disabled until signed acceptance is complete. See [CLI candidate packaging and release gates](docs/plugins/cli-release.md) before changing release metadata or enabling distribution. Run the installer/channel tests, `make script-tests`, and `make ci` for changes across installer and release infrastructure. Never use a successful unsigned test run as evidence of signed stable acceptance.

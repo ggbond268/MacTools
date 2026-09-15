@@ -46,6 +46,7 @@
 | System Mute | Mute or restore system audio output through CoreAudio on the default output device, with automatic restoration when the plugin is disabled. |
 | Microphone Mute | Mute or restore the default microphone input through CoreAudio without requesting recording permission. |
 | App Volume | On macOS 15 and later, adjust the volume of each app currently playing audio and keep preferences locally per app; first use requires System Audio Recording permission. |
+| App Uninstaller | Review one app and exact associated-file evidence; protect shared data, quit the app, confirm an immutable list, and move eligible items to Trash with local per-item history. Incomplete identity or process checks block removal. |
 | Disk Cleanup | Scan system caches, developer artifacts (node_modules, build outputs), and leftover installers; move to Trash by default, with path safety checks, Full Disk Access guidance, and sensitive-data protection before deletion. |
 | Xcode Cleanup | Scan DerivedData, device support files, archives, simulators, and preview caches by category; deletion is disabled while Xcode is running and only runs inside allowlisted roots. |
 | Eject Disks | Detect visible ejectable mounts when the panel opens, including external drives, disk images, and network volumes; multiple volumes on one device are ejected once. |
