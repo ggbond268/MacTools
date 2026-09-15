@@ -36,14 +36,15 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
     struct ApplicationPreferences: Codable, Equatable, Sendable {
         let appearancePreference: String
         let languagePreference: String
-        let menuBarClickBehavior: String
+        // Decode older backups only; current exports store the panel order instead.
+        let menuBarClickBehavior: String?
         let settingsSidebarPluginSortMode: String?
         let settingsSidebarCustomPluginOrder: [String]?
 
         init(
             appearancePreference: String,
             languagePreference: String,
-            menuBarClickBehavior: String,
+            menuBarClickBehavior: String? = nil,
             settingsSidebarPluginSortMode: String? = nil,
             settingsSidebarCustomPluginOrder: [String]? = nil
         ) {
@@ -374,6 +375,7 @@ struct PluginDisplayPreferencesBackup: Codable, Equatable, Sendable {
     let featurePanelOrderedPluginIDs: [String]?
     let dashboardHiddenPluginIDs: [String]?
     let featurePanelHiddenPluginIDs: [String]?
+    let panelConfiguration: MenuBarPanelConfiguration?
 
     init(
         orderedPluginIDs: [String],
@@ -381,7 +383,8 @@ struct PluginDisplayPreferencesBackup: Codable, Equatable, Sendable {
         dashboardOrderedPluginIDs: [String]? = nil,
         featurePanelOrderedPluginIDs: [String]? = nil,
         dashboardHiddenPluginIDs: [String]? = nil,
-        featurePanelHiddenPluginIDs: [String]? = nil
+        featurePanelHiddenPluginIDs: [String]? = nil,
+        panelConfiguration: MenuBarPanelConfiguration? = nil
     ) {
         self.orderedPluginIDs = orderedPluginIDs
         self.hiddenPluginIDs = hiddenPluginIDs
@@ -389,6 +392,7 @@ struct PluginDisplayPreferencesBackup: Codable, Equatable, Sendable {
         self.featurePanelOrderedPluginIDs = featurePanelOrderedPluginIDs
         self.dashboardHiddenPluginIDs = dashboardHiddenPluginIDs
         self.featurePanelHiddenPluginIDs = featurePanelHiddenPluginIDs
+        self.panelConfiguration = panelConfiguration
     }
 }
 
@@ -559,5 +563,4 @@ protocol PreferencesBackupApplicationStoring: AnyObject {
     func apply(_ preferences: PreferencesBackup.ApplicationPreferences)
     func setAppearancePreference(rawValue: String) -> Bool
     func setLanguagePreference(rawValue: String) -> Bool
-    func setMenuBarClickBehavior(rawValue: String) -> Bool
 }

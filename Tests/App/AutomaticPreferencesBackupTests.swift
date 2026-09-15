@@ -969,7 +969,7 @@ final class AutomaticPreferencesBackupTests: XCTestCase {
             application: PreferencesBackup.ApplicationPreferences(
                 appearancePreference: appearance.rawValue,
                 languagePreference: AppLanguagePreference.system.rawValue,
-                menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+                menuBarClickBehavior: "standard"
             ),
             pluginDisplay: PluginDisplayPreferencesBackup(
                 orderedPluginIDs: [marker],

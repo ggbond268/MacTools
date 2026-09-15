@@ -75,7 +75,7 @@ final class MacToolsSearchTests: XCTestCase {
             $0.kind == .command && $0.title == "让显示器休眠"
         })
         XCTAssertTrue(index.items.contains {
-            $0.kind == .command && $0.title == AppShortcutAction.toggleDashboard.title
+            $0.kind == .command && $0.title == host.menuBarPanels[0].title
         })
         XCTAssertFalse(index.items.contains {
             $0.kind == .command && $0.title == AppShortcutAction.openCommandPalette.title
@@ -147,7 +147,7 @@ final class MacToolsSearchTests: XCTestCase {
         host.appPresentationHandler = { requests.append($0) }
         let result = try XCTUnwrap(
             MacToolsSearchIndexBuilder.build(pluginHost: host).items.first {
-                $0.title == AppShortcutAction.toggleDashboard.title
+                $0.title == host.menuBarPanels[0].title
             }
         )
         guard case let .executeAction(reference) = result.action else {
@@ -167,7 +167,7 @@ final class MacToolsSearchTests: XCTestCase {
             pluginHost: makePluginHostForTests(plugins: [])
         )
 
-        for action in [AppShortcutAction.openSettings, .openCommandPalette] {
+        for action in AppShortcutAction.allCases {
             XCTAssertFalse(
                 index.results(matching: action.title).contains {
                     $0.id == "general-setting.appShortcuts"

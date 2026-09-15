@@ -58,6 +58,20 @@ final class ComponentPanelLayoutTests: XCTestCase {
         )
     }
 
+    func testThousandTallCopiesKeepFirstFitGeometry() {
+        let span = PluginComponentSpan(width: 4, height: 50)!
+        let items = (0..<1000).map { (id: "copy-\($0)", span: span) }
+        let placements = ComponentGridPlacementEngine.placements(for: items)
+        let step = ComponentPanelLayout.itemHeight(for: span) + ComponentPanelLayout.verticalSpacing
+        XCTAssertEqual(placements.count, items.count)
+        for (index, placement) in placements.enumerated() {
+            XCTAssertEqual(placement.id, items[index].id)
+            XCTAssertEqual(placement.row, index * 50)
+            XCTAssertEqual(placement.column, 0)
+            XCTAssertEqual(placement.yOffset, CGFloat(index) * step)
+        }
+    }
+
     func testEmptyLayoutUsesEmptyStateHeight() {
         XCTAssertEqual(
             ComponentPanelLayout.gridContentHeight(for: []),
@@ -87,6 +101,21 @@ final class ComponentPanelLayoutTests: XCTestCase {
 
 @MainActor
 final class ComponentDetailCoordinatorTests: XCTestCase {
+    func testCopiesOfTheSameComponentKeepSeparateDetailAnchors() {
+        let coordinator = ComponentDetailCoordinator()
+        let first = CGRect(x: 10, y: 20, width: 100, height: 80)
+        let second = CGRect(x: 10, y: 120, width: 100, height: 80)
+        coordinator.toggle(pluginID: "status", detailID: "cpu", presentationID: "first")
+        coordinator.updatePresentationFrame(id: "first", frame: first)
+        coordinator.toggle(pluginID: "status", detailID: "cpu", presentationID: "second")
+        XCTAssertEqual(coordinator.state.selection?.presentationID, "second")
+        XCTAssertNil(coordinator.state.selectedCardFrame)
+        coordinator.updatePresentationFrame(id: "first", frame: first)
+        XCTAssertNil(coordinator.state.selectedCardFrame)
+        coordinator.updatePresentationFrame(id: "second", frame: second)
+        XCTAssertEqual(coordinator.state.selectedCardFrame, second)
+    }
+
     func testSwitchingDetailsWithinSameComponentPreservesAnchorFrame() {
         let coordinator = ComponentDetailCoordinator()
         let anchorFrame = CGRect(x: 20, y: 40, width: 300, height: 500)

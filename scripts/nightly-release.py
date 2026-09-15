@@ -520,7 +520,10 @@ def verify_cli_archive(
     version: str,
     build_number: str,
     execute: bool = True,
+    channel: str = "nightly",
 ) -> None:
+    if channel not in ("nightly", "stable"):
+        fail("Unsupported CLI release channel")
     verify_sha256(archive_path, checksum_path)
     expected_license = read_cli_license()
     try:
@@ -554,7 +557,8 @@ def verify_cli_archive(
         cli_path = pathlib.Path(temporary_directory) / "mactools"
         cli_path.write_bytes(cli_bytes)
         cli_path.chmod(0o755)
-        expected_identifier = f"{bundle_identifier_prefix}.mactools.nightly.cli"
+        suffix = ".mactools.nightly.cli" if channel == "nightly" else ".mactools.cli"
+        expected_identifier = bundle_identifier_prefix + suffix
         verify_cli_architectures(cli_path)
         verify_cli_deployment_target(cli_path)
         verify_cli_slice_metadata(
@@ -849,6 +853,7 @@ def parser() -> argparse.ArgumentParser:
     package_cli.add_argument("--output", type=pathlib.Path, required=True)
 
     verify_cli = subparsers.add_parser("verify-cli-archive")
+    verify_cli.add_argument("--channel", choices=("nightly", "stable"), default="nightly")
     verify_cli.add_argument("--archive", type=pathlib.Path, required=True)
     verify_cli.add_argument("--checksum", type=pathlib.Path, required=True)
     verify_cli.add_argument("--bundle-identifier-prefix", required=True)
@@ -954,7 +959,7 @@ def main() -> None:
             args.team_identifier,
             args.version,
             args.build_number,
-            execute=not args.skip_execution,
+            execute=not args.skip_execution, channel=args.channel,
         )
     elif args.command == "verify-notarization":
         verify_notarization_result(args.input)

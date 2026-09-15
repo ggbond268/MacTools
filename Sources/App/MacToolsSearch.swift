@@ -35,6 +35,7 @@ enum MacToolsSearchAction: Hashable {
         target: SettingsSearchRevealTarget?
     )
     case executeAction(ActionReference)
+    case collectActionInput(ActionInputItem)
     case pluginCommand(
         pluginID: String,
         expectedDefinition: PluginCommandDefinition
@@ -483,7 +484,7 @@ enum MacToolsSearchIndexBuilder {
             )
         ]
 
-        items += generalSettingsResults(pluginHost: pluginHost)
+        items += generalSettingsResults()
 
         let managementItemsByID = Dictionary(
             uniqueKeysWithValues: pluginHost.pluginManagementItems.map { ($0.id, $0) }
@@ -642,6 +643,16 @@ enum MacToolsSearchIndexBuilder {
             pluginHost.pluginManagementItems.map { ($0.id, $0.title) },
             uniquingKeysWith: { first, _ in first }
         )
+        items += pluginHost.actionInputRegistry.items.map { item in
+            MacToolsSearchResult(
+                id: "action.input.\(item.id.id)", kind: .command,
+                title: item.definition.title, subtitle: item.descriptor.destination,
+                detail: item.definition.description,
+                keywords: item.definition.keywords + item.descriptor.aliases,
+                systemImage: item.definition.systemImage, action: .collectActionInput(item),
+                confirmation: nil, suggestionPriority: nil
+            )
+        }
         items += pluginHost.actionCatalogEntries.enumerated().compactMap { index, entry in
             if entry.reference.key.providerID == "mactools",
                let appAction = AppShortcutAction(
@@ -771,16 +782,7 @@ enum MacToolsSearchIndexBuilder {
         )
     }
 
-    private static func generalSettingsResults(
-        pluginHost: PluginHost
-    ) -> [MacToolsSearchResult] {
-        let sharedShortcutActions = Set(AppHostCommandCatalog.sharedAppShortcutActions)
-        let shortcutKeywords = pluginHost.appShortcutItems
-            .filter { sharedShortcutActions.contains($0.action) }
-            .flatMap { item in
-                [item.title, item.description, item.bindingText]
-            }
-
+    private static func generalSettingsResults() -> [MacToolsSearchResult] {
         return [
             generalSettingResult(
                 target: .launchAtLogin,
@@ -827,29 +829,13 @@ enum MacToolsSearchIndexBuilder {
                 systemImage: "menubar.rectangle"
             ),
             generalSettingResult(
-                target: .menuBarClickBehavior,
-                title: AppL10n.settings("menuBarClick.title", defaultValue: "交换左键与右键功能"),
-                detail: AppL10n.settings(
-                    "menuBarClick.description",
-                    defaultValue: "关闭时左键打开仪表盘、右键功能打开功能面板；开启后互换。"
-                ),
-                keywords: [
-                    AppL10n.settings("general.section.menuBarIcon", defaultValue: "状态栏图标"),
-                    AppL10n.settings(
-                        "menuBarClick.rightClickShortcutNotice",
-                        defaultValue: "可以使用 Option + 左键触发右键功能。"
-                    )
-                ],
-                systemImage: "cursorarrow.click.2"
-            ),
-            generalSettingResult(
                 target: .appShortcuts,
                 title: AppL10n.settings("shortcuts.title", defaultValue: "键盘快捷键"),
                 detail: AppL10n.settings(
                     "shortcuts.description",
                     defaultValue: "为常用动作配置全局快捷键。编辑后立即生效，必要项不可删除。"
                 ),
-                keywords: shortcutKeywords,
+                keywords: [],
                 systemImage: "command"
             ),
             generalSettingResult(

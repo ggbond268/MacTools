@@ -174,21 +174,24 @@ final class MacSettingsReviewRegressionTests: XCTestCase {
         XCTAssertFalse(MacSettingsPlugin(controller: onlyDeferred).actionAvailability(for: undo).isAvailable)
     }
 
-    func testPreparingProfileDisablesAndRejectsInlineCommits() async {
+    func testPreparingProfileDisablesAndRejectsInlineCommits() async throws {
         let delayed = FirstReadSuspendingSystemSettingAdapter(value: .boolean(false))
         let record = makeTestRecord(id: "delayed", title: "Delayed", adapter: delayed)
         let other = booleanRecord()
         let controller = MacSettingsController(catalog: makeTestCatalog([record, other]), storage: MacSettingsTestStorage())
+        defer {
+            controller.deactivate()
+            delayed.resumeFirstRead(with: .boolean(false))
+        }
         controller.preparePlan(for: profile(record, name: "Plan"))
         XCTAssertTrue(controller.isPreparingPlan)
         controller.showPalette()
         XCTAssertFalse(controller.canEditSettings)
         XCTAssertFalse(controller.apply(.boolean(true), to: other.id))
-        for _ in 0..<100 where !delayed.firstReadStarted { await Task.yield() }
+        try await waitUntil("the preview read starts") { delayed.firstReadStarted }
         delayed.resumeFirstRead(with: .boolean(false))
-        for _ in 0..<100 where controller.isPreparingPlan { await Task.yield() }
+        try await waitUntil("profile preparation finishes") { !controller.isPreparingPlan }
         XCTAssertTrue(controller.canEditSettings)
-        controller.deactivate()
     }
 
     func testUnavailableProviderRoutesToPluginAndRetainsReasonChanges() {
@@ -206,26 +209,30 @@ final class MacSettingsReviewRegressionTests: XCTestCase {
         controller.deactivate()
     }
 
-    func testApplyingProfileDisablesAndRejectsInlineCommits() async {
+    func testApplyingProfileDisablesAndRejectsInlineCommits() async throws {
         let delayed = FirstReadSuspendingSystemSettingAdapter(value: .boolean(false), suspendsFirstRead: false)
         let record = makeTestRecord(id: "delayed", title: "Delayed", adapter: delayed)
         let other = booleanRecord()
         let controller = MacSettingsController(catalog: makeTestCatalog([record, other]), storage: MacSettingsTestStorage())
+        defer {
+            controller.deactivate()
+            delayed.resumeFirstRead(with: .boolean(false))
+        }
         controller.preparePlan(for: profile(record, name: "Plan"))
-        while controller.isPreparingPlan { await Task.yield() }
+        try await waitUntil("profile preparation finishes") { !controller.isPreparingPlan }
+        _ = try XCTUnwrap(controller.activePlan)
         delayed.suspendNextRead = true
         controller.applyActivePlan()
-        while !delayed.firstReadStarted { await Task.yield() }
+        try await waitUntil("the apply read starts") { delayed.firstReadStarted }
         controller.showPalette()
         XCTAssertTrue(controller.isApplyingProfile)
         XCTAssertFalse(controller.canEditSettings)
         XCTAssertFalse(controller.apply(.boolean(true), to: other.id))
         delayed.resumeFirstRead(with: .boolean(false))
-        while controller.isApplyingProfile { await Task.yield() }
+        try await waitUntil("profile application finishes") { !controller.isApplyingProfile }
         XCTAssertTrue(controller.canEditSettings)
         let otherValue = try? await other.adapter.read()
         XCTAssertEqual(otherValue, .boolean(false))
-        controller.deactivate()
     }
 
     func testProfileEditorDistinguishesValidationAndPersistenceFailures() {
@@ -246,6 +253,16 @@ final class MacSettingsReviewRegressionTests: XCTestCase {
         XCTAssertNotEqual(controller.profileErrorMessage, validationError)
         XCTAssertTrue(controller.saveDraft(draft))
         XCTAssertNil(controller.profileErrorMessage)
+    }
+
+    private func waitUntil(_ description: String, file: StaticString = #filePath, line: UInt = #line,
+                           _ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !condition(), ContinuousClock.now < deadline {
+            // Yield alone can immediately resume this task and starve the work it awaits.
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        _ = try XCTUnwrap(condition() ? true : nil, "Timed out waiting for \(description)", file: file, line: line)
     }
 
     private func booleanRecord() -> SystemSettingRecord {

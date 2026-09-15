@@ -24,6 +24,12 @@ final class PanelLayoutDragScroller: ObservableObject {
         onScroll = nil
     }
 
+    func reveal(_ frame: CGRect) {
+        guard let anchor else { return }
+        anchor.enclosingScrollView?.layoutSubtreeIfNeeded()
+        anchor.scrollToVisible(frame)
+    }
+
     private func tick() {
         // Physical button state is not the native drag lifetime (for example with
         // trackpad drag lock). Only the source's completion callback ends a drag.
@@ -53,20 +59,99 @@ final class PanelLayoutDragScroller: ObservableObject {
 
 struct PanelLayoutScrollAnchor: NSViewRepresentable {
     let scroller: PanelLayoutDragScroller
+    let hover: PanelLayoutHoverState
+    var bottomRequest: UUID? = nil
+
+    func makeCoordinator() -> PanelLayoutBottomFollower { PanelLayoutBottomFollower() }
 
     func makeNSView(context: Context) -> NSView {
-        let view = AnchorView()
+        let view = PanelLayoutHoverTrackingView()
         view.identifier = NSUserInterfaceItemIdentifier("panel.layout.canvas")
+        view.hover = hover
+        hover.trackingView = view
         scroller.anchor = view
+        view.onLayout = { [weak coordinator = context.coordinator] view in coordinator?.attach(to: view) }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         scroller.anchor = nsView
+        context.coordinator.update(request: bottomRequest, anchor: nsView)
     }
 
-    private final class AnchorView: NSView {
-        override var isFlipped: Bool { true }
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    static func dismantleNSView(_ view: NSView, coordinator: PanelLayoutBottomFollower) {
+        (view as? PanelLayoutHoverTrackingView)?.onLayout = nil
+        coordinator.detach()
+    }
+}
+
+/// Follow document and viewport resizing after an insertion, until the user scrolls away.
+/// The request survives the SwiftUI update that precedes AppKit's document layout.
+@MainActor
+final class PanelLayoutBottomFollower: NSObject {
+    private weak var scrollView: NSScrollView?
+    private var lastRequest: UUID?
+    private var followsBottom = false
+    private var isScrolling = false
+    private var documentSize = CGSize.zero
+    private var viewportSize = CGSize.zero
+
+    func update(request: UUID?, anchor: NSView) {
+        if request != lastRequest {
+            lastRequest = request
+            followsBottom = request != nil
+        }
+        attach(to: anchor)
+        scrollToBottom()
+    }
+
+    func attach(to anchor: NSView) {
+        guard let scroll = anchor.enclosingScrollView else { return }
+        if scroll !== scrollView {
+            detach()
+            scrollView = scroll
+            scroll.documentView?.postsFrameChangedNotifications = true
+            scroll.contentView.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(geometryChanged(_:)),
+                name: NSView.frameDidChangeNotification, object: scroll.documentView)
+            NotificationCenter.default.addObserver(self, selector: #selector(geometryChanged(_:)),
+                name: NSView.boundsDidChangeNotification, object: scroll.contentView)
+        }
+        scrollToBottom()
+    }
+
+    func detach() {
+        NotificationCenter.default.removeObserver(self)
+        scrollView = nil
+    }
+
+    @objc private func geometryChanged(_ notification: Notification) {
+        guard !isScrolling, let scrollView, let document = scrollView.documentView else { return }
+        let clip = scrollView.contentView
+        let resized = documentSize != document.bounds.size || viewportSize != clip.bounds.size
+        // Native user scrolling changes the origin without changing either size.
+        if !resized, notification.object as? NSClipView === clip,
+           abs(clip.bounds.minY - bottomOrigin(document: document, clip: clip)) > 1 {
+            followsBottom = false
+        }
+        scrollToBottom()
+    }
+
+    private func bottomOrigin(document: NSView, clip: NSClipView) -> CGFloat {
+        document.isFlipped ? max(0, document.bounds.height - clip.bounds.height) : 0
+    }
+
+    private func scrollToBottom() {
+        guard !isScrolling, let scrollView, let document = scrollView.documentView else { return }
+        let clip = scrollView.contentView
+        documentSize = document.bounds.size
+        viewportSize = clip.bounds.size
+        guard followsBottom else { return }
+        let origin = CGPoint(x: clip.bounds.minX, y: bottomOrigin(document: document, clip: clip))
+        guard origin != clip.bounds.origin else { return }
+        isScrolling = true
+        clip.scroll(to: origin)
+        scrollView.reflectScrolledClipView(clip)
+        isScrolling = false
     }
 }

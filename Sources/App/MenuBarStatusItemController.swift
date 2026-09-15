@@ -8,8 +8,7 @@ enum MenuBarStatusItemInvocation: Equatable {
     case componentPanel
 
     static func invocation(
-        for event: NSEvent?,
-        swapped: Bool = false
+        for event: NSEvent?
     ) -> MenuBarStatusItemInvocation {
         // Option+left-click always triggers the right-click action.
         let isSecondary: Bool = {
@@ -21,13 +20,12 @@ enum MenuBarStatusItemInvocation: Equatable {
             return event.type == .rightMouseDown || event.type == .rightMouseUp
         }()
 
-        let primary: MenuBarStatusItemInvocation = swapped ? .featurePanel : .componentPanel
-        let secondary: MenuBarStatusItemInvocation = swapped ? .componentPanel : .featurePanel
-        return isSecondary ? secondary : primary
+        return isSecondary ? .featurePanel : .componentPanel
     }
 }
 
 enum MenuBarStatusItemPresentationAction: Equatable {
+    case composeActionInput(ActionInputItem)
     case presentSettings(SettingsPresentationRequest)
     case toggleCommandPalette
     case toggleComponentPanel
@@ -38,6 +36,8 @@ enum MenuBarStatusItemPresentationAction: Equatable {
 
     init(request: AppPresentationRequest) {
         switch request {
+        case let .composeActionInput(item):
+            self = .composeActionInput(item)
         case let .settings(settingsRequest):
             self = .presentSettings(settingsRequest)
         case .toggleCommandPalette:
@@ -151,8 +151,15 @@ final class MenuBarStatusItemController: NSObject {
             self?.requestPanelClose()
         }
         // This controller is the sole production owner of app-level presentation routing.
+        pluginHost.menuBarPanelPresentationHandler = { [weak self] id, toggle in
+            guard let self, let button = self.statusItem.button else { return }
+            self.panelPresenter.showPanel(id: id, toggle: toggle, relativeTo: button)
+            self.handlePresentationResult()
+        }
         pluginHost.appPresentationHandler = { [weak self, weak windowRouter] request in
             switch MenuBarStatusItemPresentationAction(request: request) {
+            case let .composeActionInput(item):
+                windowRouter?.showCommandPalette(input: item)
             case let .presentSettings(settingsRequest):
                 windowRouter?.presentSettings(settingsRequest)
             case .toggleCommandPalette:
@@ -201,7 +208,9 @@ final class MenuBarStatusItemController: NSObject {
 
     func dismissPanels() {
         panelPresenter.dismissPanels()
-        removeDismissMonitorsIfNeeded()
+        if !panelPresenter.isAnyPanelShown {
+            removeDismissMonitorsIfNeeded()
+        }
     }
 
     func showDashboard() {
@@ -444,15 +453,11 @@ final class MenuBarStatusItemController: NSObject {
 
     @objc
     private func handleStatusItemAction(_ sender: NSStatusBarButton) {
-        // Read the preference live on each click so a settings change takes
-        // effect immediately without re-observing.
-        let swapped = MenuBarClickBehaviorPreference.current().isSwapped
-        switch MenuBarStatusItemInvocation.invocation(for: NSApp.currentEvent, swapped: swapped) {
-        case .featurePanel:
-            toggleFeaturePanel(relativeTo: sender)
-        case .componentPanel:
-            toggleComponentPanel(relativeTo: sender)
-        }
+        let invocation = MenuBarStatusItemInvocation.invocation(for: NSApp.currentEvent)
+        let id = invocation == .componentPanel
+            ? pluginHost.lastSelectedMenuBarPanelID : pluginHost.visibleMenuBarPanels.last?.id
+        if let id { panelPresenter.showPanel(id: id, toggle: true, relativeTo: sender) }
+        handlePresentationResult()
     }
 
     private func toggleFeaturePanel(relativeTo button: NSStatusBarButton) {

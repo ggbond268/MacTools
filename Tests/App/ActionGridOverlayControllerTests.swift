@@ -754,7 +754,7 @@ final class ActionGridOverlayControllerTests: XCTestCase {
 
         let tile = try XCTUnwrap(controller.presentedEntries.first)
         XCTAssertEqual(tile.title, "Feature Panel")
-        XCTAssertEqual(tile.invocationTitle, "Toggle Feature Panel")
+        XCTAssertEqual(tile.invocationTitle, "Panel 2")
         XCTAssertNil(tile.tileStatus)
         XCTAssertTrue(tile.helpText.contains("MacTools"))
     }

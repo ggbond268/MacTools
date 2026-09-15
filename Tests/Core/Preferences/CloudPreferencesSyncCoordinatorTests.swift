@@ -407,7 +407,7 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
             application: PreferencesBackup.ApplicationPreferences(
                 appearancePreference: AppAppearancePreference.dark.rawValue,
                 languagePreference: AppLanguagePreference.system.rawValue,
-                menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+                menuBarClickBehavior: "standard"
             ),
             pluginDisplay: PluginDisplayPreferencesBackup(
                 orderedPluginIDs: ["plugin-1"],
@@ -1132,7 +1132,7 @@ final class CloudPreferencesSyncCoordinatorTests: XCTestCase {
             application: PreferencesBackup.ApplicationPreferences(
                 appearancePreference: appearance.rawValue,
                 languagePreference: AppLanguagePreference.system.rawValue,
-                menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+                menuBarClickBehavior: "standard"
             ),
             pluginDisplay: PluginDisplayPreferencesBackup(
                 orderedPluginIDs: [marker],

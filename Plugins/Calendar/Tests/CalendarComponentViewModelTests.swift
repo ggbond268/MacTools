@@ -13,7 +13,8 @@ final class CalendarComponentViewModelTests: XCTestCase {
             eventService: service,
             holidayProvider: .empty,
             calendar: calendar,
-            today: targetDate
+            today: targetDate,
+            now: { targetDate }
         )
         let sundayRequest = expectation(description: "Sunday-first event range loaded")
         service.onEventsRequest = sundayRequest.fulfill
@@ -46,7 +47,8 @@ final class CalendarComponentViewModelTests: XCTestCase {
             eventService: service,
             holidayProvider: .empty,
             calendar: calendar,
-            today: targetDate
+            today: targetDate,
+            now: { targetDate }
         )
         let initialRequest = expectation(description: "Visible calendar loads events")
         service.onEventsRequest = initialRequest.fulfill
@@ -111,6 +113,7 @@ final class CalendarComponentViewModelTests: XCTestCase {
             date: targetDate,
             dayNumber: "29",
             lunarText: "十三",
+            lunarDateText: "四月十三",
             isInDisplayedMonth: true,
             isToday: true,
             isWeekend: false,
@@ -122,6 +125,138 @@ final class CalendarComponentViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.selectedDay?.id, "20260429")
         XCTAssertEqual(service.openedDates, [targetDate])
+    }
+
+    func testSelectingDayDoesNotChangeTheTodayDetailSource() throws {
+        let calendar = Self.makeCalendar()
+        let service = MockCalendarEventService()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let targetDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 29)))
+        let event = CalendarEventSummary(
+            id: "event-1",
+            title: "Planning",
+            timeText: "10:00",
+            startDate: targetDate,
+            endDate: targetDate,
+            isAllDay: false,
+            color: .accent
+        )
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today
+        )
+        let targetDay = CalendarDayModel(
+            id: "20260429",
+            date: targetDate,
+            dayNumber: "29",
+            lunarText: "十三",
+            lunarDateText: "四月十三",
+            isInDisplayedMonth: true,
+            isToday: false,
+            isWeekend: false,
+            holidayKind: nil,
+            events: [event]
+        )
+
+        viewModel.select(targetDay)
+
+        XCTAssertEqual(viewModel.selectedDay, targetDay)
+        XCTAssertEqual(viewModel.todayDay?.id, "20260415")
+        XCTAssertNotEqual(viewModel.todayDay?.id, targetDay.id)
+    }
+
+    func testRefreshUpdatesTodayDetailAfterDayBoundary() throws {
+        let calendar = Self.makeCalendar()
+        var now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let viewModel = CalendarComponentViewModel(
+            eventService: MockCalendarEventService(),
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: now,
+            now: { now }
+        )
+        now = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: now))
+
+        viewModel.refresh()
+
+        XCTAssertEqual(viewModel.todayDay?.id, "20260416")
+    }
+
+    func testCrossDayEventAppearsOnceWhenTodayIsOutsideTheMonthGrid() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 25)))
+        let endDate = try XCTUnwrap(calendar.date(byAdding: .day, value: 3, to: today))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.eventInputs = [CalendarEventInput(
+            id: "vacation",
+            title: "Vacation",
+            startDate: today,
+            endDate: endDate,
+            isAllDay: true,
+            color: .accent
+        )]
+        let requests = expectation(description: "Month grid and today loaded")
+        requests.expectedFulfillmentCount = 2
+        service.onEventsRequest = requests.fulfill
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today,
+            now: { today }
+        )
+        defer { viewModel.stop() }
+
+        viewModel.moveMonth(by: 1)
+        await fulfillment(of: [requests], timeout: 1)
+
+        XCTAssertEqual(service.eventRanges.count, 2)
+        XCTAssertEqual(viewModel.todayDay?.events.map(\.title), ["Vacation"])
+        let nextDay = try XCTUnwrap(viewModel.month.days.first { $0.id == "20260426" })
+        XCTAssertEqual(nextDay.events.map(\.title), ["Vacation"])
+    }
+
+    func testDistantMonthKeepsQueriesBoundedAndPreservesTodaysEvents() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
+        let distantDate = try XCTUnwrap(calendar.date(byAdding: .year, value: 10, to: today))
+        let distantEnd = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: distantDate))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.eventInputs = [
+            CalendarEventInput(id: "today", title: "Today", startDate: today,
+                               endDate: tomorrow, isAllDay: true, color: .accent),
+            CalendarEventInput(id: "future", title: "Future", startDate: distantDate,
+                               endDate: distantEnd, isAllDay: true, color: .accent)
+        ]
+        let requests = expectation(description: "Only the month grid and today are queried")
+        requests.expectedFulfillmentCount = 2
+        service.onEventsRequest = requests.fulfill
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today,
+            now: { today }
+        )
+        defer { viewModel.stop() }
+
+        viewModel.moveMonth(by: 120)
+        await fulfillment(of: [requests], timeout: 1)
+
+        XCTAssertEqual(service.eventRanges.count, 2)
+        XCTAssertEqual(service.eventRanges.map {
+            calendar.dateComponents([.day], from: $0.start, to: $0.end).day
+        }, [42, 1])
+        XCTAssertEqual(viewModel.todayDay?.events.map(\.title), ["Today"])
+        let distantDay = try XCTUnwrap(viewModel.month.days.first {
+            calendar.isDate($0.date, inSameDayAs: distantDate)
+        })
+        XCTAssertEqual(distantDay.events.map(\.title), ["Future"])
     }
 
     private static func makeCalendar() -> Calendar {
@@ -139,6 +274,7 @@ private final class MockCalendarEventService: CalendarEventServicing {
     private(set) var openedDates: [Date] = []
     private(set) var eventRanges: [(start: Date, end: Date)] = []
     var onEventsRequest: (() -> Void)?
+    var eventInputs: [CalendarEventInput] = []
 
     func requestAccess() async -> CalendarEventAuthorization {
         authorization
@@ -147,7 +283,7 @@ private final class MockCalendarEventService: CalendarEventServicing {
     func events(from startDate: Date, to endDate: Date) async throws -> [CalendarEventInput] {
         eventRanges.append((startDate, endDate))
         onEventsRequest?()
-        return []
+        return eventInputs.filter { $0.startDate < endDate && $0.endDate > startDate }
     }
 
     func openSystemCalendar(at date: Date) {

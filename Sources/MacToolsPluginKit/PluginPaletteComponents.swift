@@ -364,6 +364,7 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
 }
 
 public struct PluginPaletteSearchBar: View {
+    @Environment(\.colorSchemeContrast) private var contrast
     @Binding private var text: String
     private let placeholder: String
     private let accessibilityLabel: String
@@ -430,7 +431,10 @@ public struct PluginPaletteSearchBar: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius, style: .continuous)
-                .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
+                .strokeBorder(
+                    contrast == .increased ? Color.primary : PluginSettingsTheme.Palette.cardBorder,
+                    lineWidth: 1
+                )
         }
     }
 }
@@ -471,10 +475,47 @@ public struct PluginPaletteSearchToolbar<Controls: View>: View {
     }
 }
 
+public enum PluginPaletteColors {
+    /// A dynamic foreground for the opaque system selection background. Some
+    /// accents (notably yellow) need darker text than AppKit's preferred white.
+    public static var selectedText: Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            var result = NSColor.alternateSelectedControlTextColor
+            appearance.performAsCurrentDrawingAppearance {
+                result = readableSelectionText(background: .selectedContentBackgroundColor,
+                                               preferred: .alternateSelectedControlTextColor)
+            }
+            return result
+        })
+    }
+
+    static func readableSelectionText(background: NSColor, preferred: NSColor) -> NSColor {
+        guard let backgroundLuminance = luminance(background), let preferredLuminance = luminance(preferred)
+        else { return preferred }
+        let ratio = (max(backgroundLuminance, preferredLuminance) + 0.05)
+            / (min(backgroundLuminance, preferredLuminance) + 0.05)
+        if ratio >= 4.5 { return preferred }
+        return (backgroundLuminance + 0.05) / 0.05 >= 1.05 / (backgroundLuminance + 0.05) ? .black : .white
+    }
+
+    private static func luminance(_ color: NSColor) -> Double? {
+        guard let rgb = color.usingColorSpace(.sRGB) else { return nil }
+        func linear(_ component: Double) -> Double {
+            component <= 0.04045 ? component / 12.92 : pow((component + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(rgb.redComponent) + 0.7152 * linear(rgb.greenComponent)
+            + 0.0722 * linear(rgb.blueComponent)
+    }
+}
+
 public struct PluginPaletteSurface: View {
     private let reducesTransparency: Bool
     private let backgroundColor: Color
+    @Environment(\.accessibilityReduceTransparency) private var systemReducesTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
 
+    /// The background color applies to the opaque accessibility fallback only;
+    /// native glass and material inherit the system appearance without a tint.
     public init(
         reducesTransparency: Bool,
         backgroundColor: Color = Color(nsColor: .windowBackgroundColor)
@@ -488,23 +529,44 @@ public struct PluginPaletteSurface: View {
             cornerRadius: PluginPaletteMetrics.surfaceCornerRadius,
             style: .continuous
         )
-        shape
-            .fill(
-                reducesTransparency
-                    ? AnyShapeStyle(backgroundColor)
-                    : AnyShapeStyle(.regularMaterial)
-            )
-            .overlay {
-                if !reducesTransparency {
-                    shape.fill(backgroundColor.opacity(0.88))
-                }
+        Group {
+            if reducesTransparency || systemReducesTransparency {
+                shape.fill(backgroundColor)
+            } else if #available(macOS 26.0, *) {
+                PluginPaletteNativeGlass()
+            } else {
+                shape.fill(.regularMaterial)
             }
+        }
+        .overlay {
+            shape.strokeBorder(
+                contrast == .increased ? Color.primary : Color(nsColor: .separatorColor),
+                lineWidth: contrast == .increased ? 1.5 : 0.5
+            )
+        }
+        .allowsHitTesting(false)
     }
+}
+
+@available(macOS 26.0, *)
+private struct PluginPaletteNativeGlass: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSGlassEffectView {
+        // An AppKit backdrop preserves pointer dragging in transparent borderless
+        // panels. Keep the hosted input/content views outside this background.
+        let view = NSGlassEffectView()
+        view.style = .regular
+        view.cornerRadius = PluginPaletteMetrics.surfaceCornerRadius
+        view.contentView = NSView()
+        return view
+    }
+
+    func updateNSView(_ view: NSGlassEffectView, context: Context) {}
 }
 
 public struct PluginPaletteSelectableRowModifier: ViewModifier {
     private let isSelected: Bool
     @State private var isHovered = false
+    @Environment(\.colorSchemeContrast) private var contrast
 
     public init(isSelected: Bool) {
         self.isSelected = isSelected
@@ -521,6 +583,15 @@ public struct PluginPaletteSelectableRowModifier: ViewModifier {
                 )
                 .fill(rowBackground)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: PluginPaletteMetrics.rowCornerRadius)
+                    .strokeBorder(
+                        isSelected && contrast == .increased
+                            ? PluginPaletteColors.selectedText : .clear,
+                        lineWidth: 1.5
+                    )
+                    .allowsHitTesting(false)
+            }
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
             .animation(.easeOut(duration: 0.1), value: isHovered)
@@ -557,6 +628,7 @@ private struct PluginPaletteToolbarControlStyleBody: View {
     let size: CGSize
     let isEnabled: Bool
     @State private var isHovered = false
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         configuration.label
@@ -568,9 +640,11 @@ private struct PluginPaletteToolbarControlStyleBody: View {
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
+                    .strokeBorder(
+                        contrast == .increased ? Color.primary : PluginSettingsTheme.Palette.cardBorder,
+                        lineWidth: 1
+                    )
             }
-            .opacity(isEnabled ? 1 : 0.5)
             .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .onHover { isHovered = $0 }
             .animation(.easeOut(duration: 0.1), value: isHovered)
@@ -596,6 +670,7 @@ public extension View {
 public struct PluginPaletteKeyboardHint: View {
     private let key: String
     private let action: String
+    @Environment(\.colorSchemeContrast) private var contrast
 
     public init(key: String, action: String) {
         self.key = key
@@ -615,7 +690,10 @@ public struct PluginPaletteKeyboardHint: View {
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: 5)
-                        .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1)
+                        .strokeBorder(
+                            contrast == .increased ? Color.primary : PluginSettingsTheme.Palette.cardBorder,
+                            lineWidth: 1
+                        )
                 }
             Text(action)
         }

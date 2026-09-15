@@ -40,8 +40,10 @@ Unless a file is clearly identified as third-party material under separate terms
 - Keep `CHANGELOG.md` as the canonical release history. Do not edit `Sources/Resources/ReleaseHistory.json` by hand; release preparation regenerates it, and `python3 scripts/changelog.py export-history` repairs it after intentional historical edits.
 - Icon gallery assets must explicitly declare `renderingMode`; use `template` only for black artwork on transparency, and use `original` for color or grayscale detail. Third-party static assets must pin their upstream revision and catalog mapping in `docs/icon-gallery/sources/manifest.json`, with the corresponding license under `Sources/Resources/ThirdPartyNotices/`. Run the gallery generation and related tests after catalog changes.
 - Plugins implement `MacToolsPlugin`; menu panel plugins implement `PluginPrimaryPanel`, and component panel plugins implement `PluginComponentPanel`.
+- Widgets can appear zero or many times and their views can be recycled. Keep tasks and durable presentation state in the plugin model, use panel lifecycle callbacks for foreground consumers, and follow [panel runtime ownership](docs/plugins/local-native-plugins.md#panel-widgets-and-runtime-ownership) for previews and background work.
 - `plugin.json.id` must be stable, readable, and exactly match the runtime `PluginMetadata.id`; each plugin package should return exactly one plugin instance.
 - Plugin data is preserved by default on uninstall. A plugin that stores sensitive payloads and must crypto-shred them should declare `uninstallDataPolicy: removePrivateData`, use `PluginPrivateDataKeychainIdentity` for its encryption key, and leave cleanup to the host; failed cleanup must finish before the same plugin can be reinstalled, and lifecycle changes must test both recovery failures and successful cleanup.
+- Floating palettes use `PluginPaletteSurface` as a non-interactive background. Let native glass follow system preferences; keep captured content, focus, window placement, and input handling in the owning host or plugin. See [palette appearance validation](docs/plugins/palette-appearance.md).
 - Register newly consumed PluginKit APIs in `scripts/tests/test_plugin_minimum_host_compatibility.py`, including optional protocols. The inventory retains API introduction versions for older ABI checks; current PluginKit v6 packages require MacTools 1.3.0 or later. Keeping an older protocol's witness table unchanged does not make new symbols loadable by older hosts.
 - Plugin display state should be expressed through `PluginPanelState`, `PluginPanelDetail`, `PluginPanelControl`, and related models. Do not bypass the existing panel framework.
 - Prefer `PluginSettingsPage.form` with declarative sections and typed controls. Use a custom form section for a complex region and `PluginSettingsPage.workspace` only for task-oriented managers or editors that need the full content area. Permissions, shortcuts, page chrome, search, validation, and backgrounds remain host-owned.
@@ -74,6 +76,10 @@ Unless a file is clearly identified as third-party material under separate terms
 - Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
+- Async test waits must have a deadline and suspend between checks. `make ci` and the GitHub Build workflow cap each test at 120 seconds so a stalled test reports a failure instead of exhausting the job timeout.
+- The app-hosted XCTest bundle runs serially in CI because its AppKit tests share desktop focus and native event routing. Keep synthesized pointer sequences in the standalone interaction fixture instead of the shared test host.
+- Panel tests should focus on persisted entries, independent copies, drag/Undo state, viewport mounting, plugin lifecycle, and known popover crashes. Check cosmetic changes visually instead of asserting exact padding, colors, menu counts, or generating screenshots without comparisons.
+- Native drag acceptance is opt-in: run `make panel-layout-ui-tests` when changing drag routing or hit testing, or `python3 scripts/e2e/run_panel_layout_fixture.py --surface cross-panels` for one scenario. These cursor-driven checks require an active desktop session and are excluded from `make ci` and the default GitHub build workflow.
 - File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.
 
 ## Pull Request Checklist
@@ -81,7 +87,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - Prefer English for commit messages, pull request titles/descriptions, and issues.
 - Build or tests have passed. If they could not be run, explain why in the PR.
 - User-visible behavior changes are reflected in `README.md` or the relevant design documentation.
-- User-visible app or plugin changes include a concise English changelog fragment in `changes/unreleased/*.md`.
+- User-visible app or plugin changes include a concise English changelog fragment in `changes/unreleased/*.md`. Run `make validate-changelog` before committing or pushing fragment changes, including when using only focused XCTest. Entries have a 220-character and two-sentence limit; `make script-tests` and `make ci` also validate pending fragments.
 - Plugin manifest `capabilities.settings` (`none`, `form`, or `workspace`) matches the runtime `settingsPage` layout.
 - Rich manifest static and dynamic action descriptors match the runtime provider/action identity, risk, permissions, external policy, automation eligibility, and parameter portability.
 - Capture plugins preserve explicit foreground selection, release overlays and capture sessions when disabled, and never delete user-exported screenshots or recordings during private-data cleanup.
@@ -114,6 +120,14 @@ Nightly isolation also covers Activity Bar sockets/hook registrations and CLI/br
 
 For the PluginKit v6 migration, source manifests declare `pluginKitVersion: 6` and `minHostVersion: "1.3.0"`. Leave plugin package versions, `Configs/AppVersion.xcconfig`, signed catalogs, and compiled release notes to `make release`; do not pre-bump them in the ABI migration change. Run `make release` for plugins first (auto selects all plugins), wait for the v6 catalog commit and Pages deployment, then run the app release. CI and `make ci` check the frozen v6 client, including settings row, option, and control layouts.
 
+### Actions that accept palette text
+
+Input actions use the optional `PluginActionInputProviding` contract in MacTools 1.3.1. Keep incomplete input descriptors separate from canonical executable references, mark user text sensitive and local-only, and preserve the existing 4 KiB per-string limit. Selected input actions support Tab completion when they declare an unambiguous alias. Aliases are defaults supplied by the plugin; the host stores user overrides and validates conflicts. Providers still receive their original input descriptors. Add alias/input-session tests, minimum-host inventory entries, and real interaction evidence for app automation. The [Siri plugin documentation](docs/plugins/siri.md) describes the first integration and its current compatibility boundary.
+
+Declared `requirements.minimumMacOSVersion` and `requirements.applications` are enforced by the shared host checker at catalog installation, manual package installation, and activation. Keep required applications accurate: missing requirements disable installation or loading, while permissions remain setup guidance. Legacy packages without requirements retain their existing behavior.
+
+Plugins may adopt `PluginActionInputPresentationRequesting` to request the host composer for one of their registered input actions. The host validates provider ownership and routes presentation; plugins must not create their own palette windows or execute merely to open input. This opt-in API requires MacTools 1.3.1.
+
 ### Managed Nightly CLI distribution
 
 Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-install.json` with `scripts/cli-install-manifest.py`, embeds it in the app resources, and then signs the outer app. Publish that same ZIP and JSON only after both notarization submissions pass. The app trusts the resource seal, never a downloaded unsigned manifest. Personal publishers must use the same ordering with an immutable `/releases/<build>` URL. See [managed CLI distribution](docs/plugins/managed-cli-distribution.md) for the contract, ownership layout, and release acceptance gates.
@@ -123,3 +137,7 @@ Centered window guide changes should follow the [Window Layouts interaction and 
 ## App Uninstaller safety
 
 App Uninstaller association rules and Trash execution require adjacent fixture tests and independent safety review. Keep ownership confidence separate from data sensitivity, preserve incomplete coverage, and never add a permanent-delete fallback. See [the implementation and provenance notes](docs/plugins/app-uninstaller.md).
+
+## Stable CLI candidates
+
+The optional stable CLI uses the existing host-owned commands and separate signed download. Publication remains disabled until signed acceptance is complete. See [CLI candidate packaging and release gates](docs/plugins/cli-release.md) before changing release metadata or enabling distribution. Run the installer/channel tests, `make script-tests`, and `make ci` for changes across installer and release infrastructure. Never use a successful unsigned test run as evidence of signed stable acceptance.

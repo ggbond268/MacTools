@@ -20,6 +20,11 @@ PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swif
 PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
+    "ActionInputDescriptor": "1.3.1",
+    "ActionInputSession": "1.3.1",
+    "PluginActionInputProviding": "1.3.1",
+    "PluginActionInputPresentationRequesting": "1.3.1",
+
     # Centered guide APIs were added after the released 1.3.0 host.
     "WindowSnapGuideRole": "1.3.1",
     "WindowSnapGuideOrientation": "1.3.1",
@@ -119,6 +124,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginActionSafetyStateChangeProviding": "1.2.0",
     # Shared palette, shortcut-recorder, and private-data APIs introduced after v1.2.0.
     "PluginPaletteMetrics": "1.3.0",
+    "PluginPaletteColors": "1.3.1",
     "PluginPaletteSearchCommand": "1.3.0",
     "PluginPaletteSearchField": "1.3.0",
     "PluginPaletteSearchBar": "1.3.0",
@@ -307,6 +313,7 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
     def test_action_model_inventory_covers_every_public_type_used_by_plugins(self) -> None:
         action_model_symbols = public_top_level_type_names(
             ACTION_MODELS.read_text(encoding="utf-8")
+            + "\n" + ACTION_MODELS.with_name("ActionInputModels.swift").read_text(encoding="utf-8")
         )
         plugin_source = "\n".join(
             path.read_text(encoding="utf-8")
@@ -322,6 +329,21 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             set(),
             "Public ActionModels types used by plugins must declare their minimum host",
         )
+
+    def test_action_input_apis_reject_released_host_1_3_0(self) -> None:
+        source = ACTION_MODELS.with_name("ActionInputModels.swift").read_text(encoding="utf-8")
+        symbols = {
+            "ActionInputDescriptor",
+            "ActionInputSession",
+            "PluginActionInputProviding",
+            "PluginActionInputPresentationRequesting",
+        }
+        self.assertTrue(symbols <= public_top_level_type_names(source))
+        for symbol in symbols:
+            with self.subTest(symbol=symbol):
+                self.assertEqual(NEW_API_MINIMUM_HOSTS[symbol], "1.3.1")
+                self.assertEqual(len(minimum_host_violations("probe", "1.3.0", symbol)), 1)
+                self.assertEqual(minimum_host_violations("probe", "1.3.1", symbol), [])
 
     def test_action_execution_bridge_inventory_requires_the_first_compatible_host(self) -> None:
         bridge = REPO_ROOT / "Sources/MacToolsPluginKit/PluginActionExecutionHostContext.swift"

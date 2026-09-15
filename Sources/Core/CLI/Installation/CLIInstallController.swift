@@ -94,7 +94,9 @@ final class CLIInstallController: ObservableObject {
 
     static var isSupportedChannel: Bool {
         #if arch(arm64)
-        Bundle.main.object(forInfoDictionaryKey: "MTReleaseChannel") as? String == "nightly"
+        CLIInstallChannel.isAvailable(
+            channel: Bundle.main.object(forInfoDictionaryKey: "MTReleaseChannel") as? String,
+            hasManifest: Bundle.main.url(forResource: "cli-install", withExtension: "json") != nil)
         #else
         false
         #endif

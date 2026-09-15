@@ -45,6 +45,17 @@ final class CalendarSettingsStoreTests: XCTestCase {
 
         XCTAssertEqual(CalendarSettingsStore(storage: storage).weekStartDay, .sunday)
     }
+
+    func testTodayDetailsDefaultToVisibleAndPersist() {
+        let storage = CalendarSettingsMemoryStorage()
+        let store = CalendarSettingsStore(storage: storage)
+
+        XCTAssertTrue(store.showsTodayDetails)
+        store.setShowsTodayDetails(false)
+
+        XCTAssertEqual(storage.object(forKey: "settings.shows-today-details") as? Bool, false)
+        XCTAssertFalse(CalendarSettingsStore(storage: storage).showsTodayDetails)
+    }
 }
 
 @MainActor
