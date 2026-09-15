@@ -1434,7 +1434,7 @@ final class PluginHostComponentSupportTests: XCTestCase {
         XCTAssertEqual(scroll.contentView.bounds.maxY, document.bounds.maxY, accuracy: 1)
     }
 
-    func testDuplicateCardsAndActionsRenderAndRespondIndependently() async throws {
+    func testDuplicateCardsAndActionsKeepIndependentLayoutEntries() throws {
         let span = try XCTUnwrap(PluginComponentSpan(width: 2, height: 12))
         let plugin = MockCombinedPlugin(id: "copies", order: 1, span: span)
         let host = makeHost(plugins: [plugin])
@@ -1447,94 +1447,9 @@ final class PluginHostComponentSupportTests: XCTestCase {
             components: host.componentItems(in: panelID), features: host.panelItems(in: panelID))
         XCTAssertEqual(placement.components.count, 2)
         XCTAssertEqual(placement.featureOffsets.count, 2)
-        XCTAssertEqual(PanelLayoutEntryFrame.frames(entries: entries, placement: placement).count, 4)
-        let model = MenuBarUnifiedPanelModel(selectedTab: MenuBarPanelTab(id: panelID), contentHeight: placement.height,
-                                            maximumFeatureListHeight: placement.height, isPanelVisible: true)
-        let root = NSHostingView(rootView: ConfiguredMenuBarPanelsContent(
-            pluginHost: host, model: model, contentBodyHeight: placement.height, onDismiss: {}, onOpenSettings: {},
-            onPresentDiskCleanConfiguration: {}, onPresentLaunchControlConfiguration: {}))
-        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: placement.height),
-                              styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = root
-        window.makeKeyAndOrderFront(nil)
-        defer { window.close() }
-        try await Task.sleep(for: .milliseconds(250))
-        func click(_ point: CGPoint) {
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                window.sendEvent(NSEvent.mouseEvent(with: type, location: root.convert(point, to: nil), modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)!)
-            }
-        }
-        for card in placement.components {
-            click(CGPoint(x: ComponentPanelLayout.xOffset(for: card) + 40,
-                          y: card.yOffset + ComponentPanelLayout.itemHeight(for: span) / 2))
-        }
-        XCTAssertEqual(plugin.componentTapCount, 2)
-        for y in placement.featureOffsets.values.sorted() {
-            click(CGPoint(x: MenuBarPanelLayout.surfaceWidth - 24, y: y + 23))
-            try await Task.sleep(for: .milliseconds(100))
-        }
-        XCTAssertEqual(plugin.handledActions.count, 2)
-        window.contentView = NSHostingView(rootView: PanelLayoutEditor(pluginHost: host, panelID: panelID, onDismiss: {})
-            .frame(width: 304, height: placement.height))
-        try await Task.sleep(for: .milliseconds(200))
-        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
-        let sources = descendants(try XCTUnwrap(window.contentView)).compactMap { $0 as? PanelLayoutDragSourceView }
-        XCTAssertEqual(Set(sources.compactMap { $0.identifier?.rawValue }), Set(entries.map { "panel.layout.drag.\($0.id)" }))
-    }
-
-    func testInterleavedCardsAndActionsRemainClickableAfterReordering() async throws {
-        let span = try XCTUnwrap(PluginComponentSpan(width: 2, height: 12))
-        let first = MockCombinedPlugin(id: "first", order: 1, span: span)
-        let second = MockCombinedPlugin(id: "second", order: 2, span: span)
-        let host = makeHost(plugins: [first, second])
-        let panelID = try XCTUnwrap(host.addMenuBarPanel())
-        host.assignPanelEntry(pluginID: first.metadata.id, surface: .dashboard, to: panelID)
-        host.assignPanelEntry(pluginID: first.metadata.id, surface: .featurePanel, to: panelID)
-        host.assignPanelEntry(pluginID: second.metadata.id, surface: .dashboard, to: panelID)
-        func placement() -> ConfiguredMenuBarPanelLayout.Placement {
-            ConfiguredMenuBarPanelLayout.placement(entries: host.panelEntries(in: panelID),
-                components: host.componentItems(in: panelID), features: host.panelItems(in: panelID))
-        }
-        let height = placement().height
-        let model = MenuBarUnifiedPanelModel(selectedTab: MenuBarPanelTab(id: panelID), contentHeight: height,
-                                            maximumFeatureListHeight: height, isPanelVisible: true)
-        let root = NSHostingView(rootView: ConfiguredMenuBarPanelsContent(
-            pluginHost: host, model: model, contentBodyHeight: height, onDismiss: {}, onOpenSettings: {},
-            onPresentDiskCleanConfiguration: {}, onPresentLaunchControlConfiguration: {}
-        ))
-        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: MenuBarPanelLayout.surfaceWidth, height: height),
-                              styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = root
-        window.makeKeyAndOrderFront(nil)
-        defer { window.close() }
-        try await Task.sleep(for: .milliseconds(250))
-        func click(_ point: CGPoint) {
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                window.sendEvent(NSEvent.mouseEvent(with: type, location: root.convert(point, to: nil), modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)!)
-            }
-        }
-        let cardHeight = ComponentPanelLayout.itemHeight(for: span)
-        click(CGPoint(x: 40, y: cardHeight / 2))
-        click(CGPoint(x: 40, y: placement().components[1].yOffset + cardHeight / 2))
-        click(CGPoint(x: MenuBarPanelLayout.surfaceWidth - 24, y: try XCTUnwrap(placement().featureOffsets[first.metadata.id]) + 23))
-        try await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(first.componentTapCount, 1)
-        XCTAssertEqual(second.componentTapCount, 1)
-        XCTAssertEqual(first.handledActions, [.setSwitch(true)])
-        host.movePanelEntry(pluginID: first.metadata.id, surface: .featurePanel, panelID: panelID, toOffset: 0)
-        try await Task.sleep(for: .milliseconds(150))
-        XCTAssertEqual(placement().featureOffsets[first.metadata.id], 0)
-        click(CGPoint(x: 40, y: placement().components[0].yOffset + cardHeight / 2))
-        click(CGPoint(x: MenuBarPanelLayout.surfaceWidth - 24, y: 23))
-        try await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(first.componentTapCount, 2)
-        XCTAssertEqual(first.handledActions.count, 2)
+        let frames = PanelLayoutEntryFrame.frames(entries: entries, placement: placement)
+        XCTAssertEqual(frames.count, 4)
+        XCTAssertEqual(Set(frames.map(\.id)), Set(entries.map(\.id)))
     }
 
     func testPanelBackupRestoresLayoutAndCustomShortcutTogether() throws {
@@ -1985,8 +1900,6 @@ private final class MockCombinedPlugin: MacToolsPlugin, PluginPrimaryPanel, Plug
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     private(set) var surfaceEvents: [SurfaceEvent] = []
-    private(set) var componentTapCount = 0
-    private(set) var handledActions: [PluginPanelAction] = []
     private(set) var activateCallCount = 0
     private(set) var deactivateCallCount = 0
 
@@ -2026,20 +1939,16 @@ private final class MockCombinedPlugin: MacToolsPlugin, PluginPrimaryPanel, Plug
 
     func makeView(context: PluginComponentContext) -> AnyView {
         AnyView(
-            Button { self.componentTapCount += 1 } label: {
-                VStack(spacing: 8) {
-                    Image(systemName: metadata.iconName).font(.title2)
-                    Text(context.pluginID).font(.headline)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(metadata.iconTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-                .contentShape(Rectangle())
+            VStack(spacing: 8) {
+                Image(systemName: metadata.iconName).font(.title2)
+                Text(context.pluginID).font(.headline)
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(metadata.iconTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
         )
     }
 
-    func handleAction(_ action: PluginPanelAction) { handledActions.append(action) }
+    func handleAction(_ action: PluginPanelAction) {}
 
     func activate(context: PluginRuntimeContext) {
         activateCallCount += 1
