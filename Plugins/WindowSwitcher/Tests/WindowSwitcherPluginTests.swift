@@ -7,7 +7,7 @@ import MacToolsPluginKit
 @testable import WindowSwitcherPlugin
 
 @MainActor
-private final class WindowSwitcherMemoryStorage: PluginStorage {
+final class WindowSwitcherMemoryStorage: PluginStorage {
     var values: [String: Any] = [:]
 
     func object(forKey key: String) -> Any? {
@@ -230,11 +230,11 @@ final class WindowSwitcherPluginTests: XCTestCase {
         )
     }
 
-    func testShortcutRecorderUsesGroupSummaryWithoutDuplicateControlLabel() {
+    func testShortcutRecorderLabelsItsAllWindowsScope() {
         let plugin = WindowSwitcherPlugin(accessibilityTrusted: { true })
         let definition = plugin.shortcutDefinitions.first
 
-        XCTAssertNil(definition?.settingsControlTitle)
+        XCTAssertNotNil(definition?.settingsControlTitle)
         XCTAssertNil(definition?.settingsControlSystemImage)
     }
 
@@ -279,16 +279,17 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
     func testWorkspaceNotificationHopsSafelyToMainActor() async {
         let center = NotificationCenter()
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: center,
             windowRecordProvider: { [] }
         )
         let changed = expectation(description: "catalog reports a workspace change")
+        catalog.start()
         catalog.onChange = {
+            catalog.onChange = nil
             XCTAssertTrue(Thread.isMainThread)
             changed.fulfill()
         }
-        catalog.start()
 
         center.post(name: NSWorkspace.didLaunchApplicationNotification, object: nil)
 
@@ -315,7 +316,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             firstRecords: [firstRecord],
             laterRecords: [laterRecord]
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: { harness.records() }
         )
@@ -368,7 +369,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             firstRecords: [firstRecord],
             laterRecords: []
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: { harness.records() }
         )
@@ -410,7 +411,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             ],
             laterRecords: []
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: { harness.records() },
             windowRecordRefreshTimeout: 0.01
@@ -444,7 +445,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             firstRecords: [],
             laterRecords: [laterRecord]
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: { harness.records() },
             windowRecordRefreshTimeout: 0.01
@@ -461,293 +462,6 @@ final class WindowSwitcherPluginTests: XCTestCase {
         let replacementSnapshot = await catalog.windowRecordsSnapshot()
         XCTAssertEqual(replacementSnapshot.map(\.windowNumber), [laterRecord.windowNumber])
         XCTAssertTrue(harness.hasAtLeastInvocations(2))
-    }
-
-    func testDirectCycleQueuesPressesWhileAllSpaceSnapshotIsPreparing() async {
-        let expectedEntries = (0..<4).map { index in
-            makeEntry(
-                index: index,
-                appName: "Test window " + String(index),
-                bundleIdentifier: "com.example.window-switcher-test-" + String(index)
-            )
-        }
-        let harness = WindowSwitcherDirectEntriesProviderHarness(entries: expectedEntries)
-        let overlay = WindowSwitcherOverlayController()
-        let plugin = WindowSwitcherPlugin(
-            context: PluginRuntimeContext(
-                pluginID: WindowSwitcherConstants.pluginID,
-                storage: WindowSwitcherMemoryStorage()
-            ),
-            overlayController: overlay,
-            sessionEntriesProvider: { await harness.load() },
-            accessibilityTrusted: { true }
-        )
-        plugin.store.setMode(.directCycle)
-        defer {
-            harness.release()
-            plugin.deactivate(reason: .hostShutdown)
-        }
-
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .pressed
-        )
-        for _ in 0..<100 where !harness.didStart {
-            await Task.yield()
-        }
-        XCTAssertTrue(harness.didStart)
-
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .pressed
-        )
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .pressed
-        )
-        harness.release()
-
-        for _ in 0..<100 where !overlay.isVisible {
-            await Task.yield()
-        }
-        XCTAssertTrue(overlay.isVisible)
-
-        let entries = overlay.displayedEntries
-        guard !entries.isEmpty,
-              let selectedID = overlay.selectedEntryID else {
-            return XCTFail("Expected the direct-cycle overlay to expose a selected entry.")
-        }
-
-        let initialIndex = WindowSwitcherPlugin.directSelectionIndex(
-            startingAt: 0,
-            advancingBy: 1,
-            count: entries.count
-        )
-        let expectedIndex = WindowSwitcherPlugin.directSelectionIndex(
-            startingAt: initialIndex,
-            advancingBy: 2,
-            count: entries.count
-        )
-        XCTAssertEqual(selectedID, entries[expectedIndex].id)
-    }
-
-    func testDirectCycleReleaseRechecksAccessibilityPermission() async {
-        let entries = (0..<2).map { index in
-            makeEntry(
-                index: index,
-                appName: "Permission test window " + String(index),
-                bundleIdentifier: "com.example.window-switcher-permission-test-" + String(index)
-            )
-        }
-        let harness = WindowSwitcherDirectEntriesProviderHarness(entries: entries)
-        let overlay = WindowSwitcherOverlayController()
-        let accessibility = WindowSwitcherAccessibilityHarness()
-        let plugin = WindowSwitcherPlugin(
-            context: PluginRuntimeContext(
-                pluginID: WindowSwitcherConstants.pluginID,
-                storage: WindowSwitcherMemoryStorage()
-            ),
-            overlayController: overlay,
-            sessionEntriesProvider: { await harness.load() },
-            accessibilityTrusted: { accessibility.check() }
-        )
-        plugin.store.setMode(.directCycle)
-        defer {
-            harness.release()
-            plugin.deactivate(reason: .hostShutdown)
-        }
-
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .pressed
-        )
-        for _ in 0..<100 where !harness.didStart {
-            await Task.yield()
-        }
-        XCTAssertTrue(harness.didStart)
-        harness.release()
-
-        for _ in 0..<100 where !overlay.isVisible {
-            await Task.yield()
-        }
-        XCTAssertTrue(overlay.isVisible)
-
-        let checksBeforeRelease = accessibility.checkCount
-        accessibility.isTrusted = false
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .released
-        )
-
-        XCTAssertGreaterThan(accessibility.checkCount, checksBeforeRelease)
-        XCTAssertFalse(overlay.isVisible)
-        XCTAssertFalse(
-            plugin.permissionState(for: WindowSwitcherConstants.accessibilityPermissionID).isGranted
-        )
-    }
-
-    func testDirectCycleNewPressAfterPendingReleaseStartsANewGesture() async {
-        let entries = (0..<3).map { index in
-            makeEntry(
-                index: index,
-                appName: "Repress test window " + String(index),
-                bundleIdentifier: "com.example.window-switcher-repress-test-" + String(index)
-            )
-        }
-        let harness = WindowSwitcherDirectEntriesProviderHarness(entries: entries)
-        let overlay = WindowSwitcherOverlayController()
-        let plugin = WindowSwitcherPlugin(
-            context: PluginRuntimeContext(
-                pluginID: WindowSwitcherConstants.pluginID,
-                storage: WindowSwitcherMemoryStorage()
-            ),
-            overlayController: overlay,
-            sessionEntriesProvider: { await harness.load() },
-            accessibilityTrusted: { true }
-        )
-        plugin.store.setMode(.directCycle)
-        defer {
-            harness.release()
-            plugin.deactivate(reason: .hostShutdown)
-        }
-
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .pressed
-        )
-        for _ in 0..<100 where !harness.didStart {
-            await Task.yield()
-        }
-        XCTAssertTrue(harness.didStart)
-
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .released
-        )
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .pressed
-        )
-        harness.release()
-
-        for _ in 0..<100 where !overlay.isVisible {
-            await Task.yield()
-        }
-        XCTAssertTrue(overlay.isVisible)
-        XCTAssertEqual(overlay.selectedEntryID, entries[1].id)
-    }
-
-    func testDirectCycleReversedRepressUsesOneInitialStep() async {
-        let entries = (0..<3).map { index in
-            makeEntry(
-                index: index,
-                appName: "Reverse repress test window " + String(index),
-                bundleIdentifier: "com.example.window-switcher-reverse-repress-test-" + String(index)
-            )
-        }
-        let harness = WindowSwitcherDirectEntriesProviderHarness(entries: entries)
-        let overlay = WindowSwitcherOverlayController()
-        let plugin = WindowSwitcherPlugin(
-            context: PluginRuntimeContext(
-                pluginID: WindowSwitcherConstants.pluginID,
-                storage: WindowSwitcherMemoryStorage()
-            ),
-            overlayController: overlay,
-            sessionEntriesProvider: { await harness.load() },
-            accessibilityTrusted: { true }
-        )
-        plugin.store.setMode(.directCycle)
-        defer {
-            harness.release()
-            plugin.deactivate(reason: .hostShutdown)
-        }
-
-        plugin.handleShortcutPressed(reversed: false, isRepeat: false)
-        for _ in 0..<100 where !harness.didStart {
-            await Task.yield()
-        }
-        XCTAssertTrue(harness.didStart)
-
-        plugin.handleShortcutEvent(
-            id: WindowSwitcherConstants.shortcutActionID,
-            phase: .released
-        )
-        plugin.handleShortcutPressed(reversed: true, isRepeat: false)
-        harness.release()
-
-        for _ in 0..<100 where !overlay.isVisible {
-            await Task.yield()
-        }
-        XCTAssertTrue(overlay.isVisible)
-        XCTAssertEqual(overlay.selectedEntryID, entries[2].id)
-    }
-
-    func testShortcutTapReportsAccessibilityRevocationToPlugin() async throws {
-        let accessibility = WindowSwitcherAccessibilityHarness()
-        let tapDefaults = try XCTUnwrap(
-            UserDefaults(suiteName: "WindowSwitcherPluginTests-tap-" + UUID().uuidString)
-        )
-        let tap = WindowSwitcherShortcutTap(
-            userDefaults: tapDefaults,
-            accessibilityTrusted: { accessibility.check() }
-        )
-        let plugin = WindowSwitcherPlugin(
-            context: PluginRuntimeContext(
-                pluginID: WindowSwitcherConstants.pluginID,
-                storage: WindowSwitcherMemoryStorage()
-            ),
-            shortcutTap: tap,
-            accessibilityTrusted: { accessibility.check() }
-        )
-
-        accessibility.isTrusted = false
-        let event = try XCTUnwrap(CGEvent(source: nil))
-        _ = tap.handle(type: .keyDown, event: event)
-
-        for _ in 0..<100 where plugin.permissionState(
-            for: WindowSwitcherConstants.accessibilityPermissionID
-        ).isGranted {
-            await Task.yield()
-        }
-
-        XCTAssertGreaterThan(accessibility.checkCount, 0)
-        XCTAssertFalse(
-            plugin.permissionState(for: WindowSwitcherConstants.accessibilityPermissionID).isGranted
-        )
-    }
-
-    func testShortcutTapReportsAccessibilityRevocationWhenTapIsDisabled() async throws {
-        let accessibility = WindowSwitcherAccessibilityHarness()
-        let tapDefaults = try XCTUnwrap(
-            UserDefaults(suiteName: "WindowSwitcherPluginTests-disabled-tap-" + UUID().uuidString)
-        )
-        let tap = WindowSwitcherShortcutTap(
-            userDefaults: tapDefaults,
-            accessibilityTrusted: { accessibility.check() }
-        )
-        let plugin = WindowSwitcherPlugin(
-            context: PluginRuntimeContext(
-                pluginID: WindowSwitcherConstants.pluginID,
-                storage: WindowSwitcherMemoryStorage()
-            ),
-            shortcutTap: tap,
-            accessibilityTrusted: { accessibility.check() }
-        )
-
-        accessibility.isTrusted = false
-        let event = try XCTUnwrap(CGEvent(source: nil))
-        _ = tap.handle(type: .tapDisabledByTimeout, event: event)
-
-        for _ in 0..<100 where plugin.permissionState(
-            for: WindowSwitcherConstants.accessibilityPermissionID
-        ).isGranted {
-            await Task.yield()
-        }
-
-        XCTAssertGreaterThan(accessibility.checkCount, 0)
-        XCTAssertFalse(
-            plugin.permissionState(for: WindowSwitcherConstants.accessibilityPermissionID).isGranted
-        )
     }
 
     func testWindowRecordsKeepInactiveSpaceAndSameApplicationWindowsDistinct() {
@@ -791,7 +505,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
                 bounds: CGRect(x: 40, y: 60, width: 900, height: 700)
             ),
         ])
-        let axSnapshot = WindowSwitcherWindowSnapshot(
+        let axSnapshot = WindowSwitcherAllSpacesWindowSnapshot(
             element: nil,
             windowNumber: nil,
             title: "Shared title",
@@ -800,7 +514,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             size: CGSize(width: 900, height: 700)
         )
 
-        let merged = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let merged = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: [axSnapshot],
             records: records
         )
@@ -810,7 +524,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         XCTAssertTrue(merged[0].isMinimized)
         XCTAssertNil(merged[1].element)
 
-        let entries = WindowSwitcherAppCatalog.windowEntries(
+        let entries = WindowSwitcherAllSpacesCatalog.windowEntries(
             processIdentifier: 321,
             bundleIdentifier: "com.example.Finder",
             appName: "Finder",
@@ -820,14 +534,14 @@ final class WindowSwitcherPluginTests: XCTestCase {
         XCTAssertEqual(entries.map(\.id), ["window:321:cg:301", "window:321:cg:302"])
         XCTAssertTrue(entries.allSatisfy(\.isWindowEntry))
 
-        let mixedEntries = WindowSwitcherAppCatalog.windowEntries(
+        let mixedEntries = WindowSwitcherAllSpacesCatalog.windowEntries(
             processIdentifier: 321,
             bundleIdentifier: "com.example.Finder",
             appName: "Finder",
             icon: nil,
             windows: [
                 merged[0],
-                WindowSwitcherWindowSnapshot(
+                WindowSwitcherAllSpacesWindowSnapshot(
                     element: nil,
                     windowNumber: nil,
                     title: "AX-only window",
@@ -840,7 +554,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         XCTAssertEqual(mixedEntries.map(\.id), ["window:321:cg:301", "window:321:ax:1"])
         XCTAssertEqual(Set(mixedEntries.map(\.id)).count, mixedEntries.count)
 
-        let applicationEntry = WindowSwitcherAppCatalog.applicationEntry(
+        let applicationEntry = WindowSwitcherAllSpacesCatalog.applicationEntry(
             id: "bundle:com.example.Finder",
             processIdentifier: 321,
             bundleIdentifier: "com.example.Finder",
@@ -861,7 +575,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         )
         titlelessRecord.removeValue(forKey: kCGWindowName as String)
 
-        let axWindow = WindowSwitcherWindowSnapshot(
+        let axWindow = WindowSwitcherAllSpacesWindowSnapshot(
             element: AXUIElementCreateSystemWide(),
             windowNumber: nil,
             title: "Window title from AX",
@@ -869,7 +583,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             position: CGPoint(x: 80, y: 100),
             size: CGSize(width: 900, height: 700)
         )
-        let merged = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let merged = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: [axWindow],
             records: WindowSwitcherWindowRecord.parse([titlelessRecord])
         )
@@ -898,7 +612,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             bounds: bounds
         )
         let records = WindowSwitcherWindowRecord.parse([titlelessRecord, exactRecord])
-        let axWindow = WindowSwitcherWindowSnapshot(
+        let axWindow = WindowSwitcherAllSpacesWindowSnapshot(
             element: AXUIElementCreateSystemWide(),
             windowNumber: nil,
             title: "Exact title",
@@ -907,11 +621,11 @@ final class WindowSwitcherPluginTests: XCTestCase {
             size: bounds.size
         )
 
-        let merged = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let merged = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: [axWindow],
             records: records
         )
-        let reversed = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let reversed = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: [axWindow],
             records: Array(records.reversed())
         )
@@ -940,7 +654,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
                 bounds: bounds
             ),
         ])
-        let axWindow = WindowSwitcherWindowSnapshot(
+        let axWindow = WindowSwitcherAllSpacesWindowSnapshot(
             element: AXUIElementCreateSystemWide(),
             windowNumber: nil,
             title: "Duplicate title",
@@ -949,7 +663,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             size: bounds.size
         )
 
-        let merged = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let merged = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: [axWindow],
             records: records
         )
@@ -958,7 +672,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         XCTAssertNil(merged[0].element)
         XCTAssertNotNil(merged[1].element)
 
-        let reversed = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let reversed = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: [axWindow],
             records: Array(records.reversed())
         )
@@ -988,7 +702,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
                 bounds: bounds
             ),
         ])
-        let axWindow = WindowSwitcherWindowSnapshot(
+        let axWindow = WindowSwitcherAllSpacesWindowSnapshot(
             element: AXUIElementCreateSystemWide(),
             windowNumber: nil,
             title: "Duplicate title",
@@ -997,7 +711,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             size: bounds.size
         )
 
-        let merged = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let merged = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: [axWindow],
             records: records
         )
@@ -1031,7 +745,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             ),
         ])
         let axWindows = [
-            WindowSwitcherWindowSnapshot(
+            WindowSwitcherAllSpacesWindowSnapshot(
                 element: AXUIElementCreateSystemWide(),
                 windowNumber: nil,
                 title: "Duplicate title",
@@ -1039,7 +753,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
                 position: bounds.origin,
                 size: bounds.size
             ),
-            WindowSwitcherWindowSnapshot(
+            WindowSwitcherAllSpacesWindowSnapshot(
                 element: AXUIElementCreateApplication(1),
                 windowNumber: nil,
                 title: "Duplicate title",
@@ -1049,11 +763,11 @@ final class WindowSwitcherPluginTests: XCTestCase {
             ),
         ]
 
-        let merged = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let merged = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: axWindows,
             records: records
         )
-        let reversed = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let reversed = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: Array(axWindows.reversed()),
             records: records
         )
@@ -1085,7 +799,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             ),
         ])
         let axSnapshots = [
-            WindowSwitcherWindowSnapshot(
+            WindowSwitcherAllSpacesWindowSnapshot(
                 element: AXUIElementCreateSystemWide(),
                 windowNumber: nil,
                 title: "First title",
@@ -1093,7 +807,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
                 position: bounds.origin,
                 size: bounds.size
             ),
-            WindowSwitcherWindowSnapshot(
+            WindowSwitcherAllSpacesWindowSnapshot(
                 element: AXUIElementCreateApplication(1),
                 windowNumber: nil,
                 title: "AX-only title",
@@ -1103,7 +817,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             ),
         ]
 
-        let merged = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+        let merged = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
             axSnapshots: axSnapshots,
             records: records
         )
@@ -1133,7 +847,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         )
         let records = WindowSwitcherWindowRecord.parse([titlelessRecord, exactRecord])
         let axSnapshots = [
-            WindowSwitcherWindowSnapshot(
+            WindowSwitcherAllSpacesWindowSnapshot(
                 element: AXUIElementCreateSystemWide(),
                 windowNumber: nil,
                 title: "Exact title",
@@ -1141,7 +855,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
                 position: bounds.origin,
                 size: bounds.size
             ),
-            WindowSwitcherWindowSnapshot(
+            WindowSwitcherAllSpacesWindowSnapshot(
                 element: AXUIElementCreateApplication(1),
                 windowNumber: nil,
                 title: "Residual title",
@@ -1155,7 +869,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             (records, axSnapshots),
             (Array(records.reversed()), Array(axSnapshots.reversed())),
         ] {
-            let merged = WindowSwitcherAppCatalog.mergeWindowSnapshots(
+            let merged = WindowSwitcherAllSpacesCatalog.mergeWindowSnapshots(
                 axSnapshots: candidates,
                 records: candidateRecords
             )
@@ -1173,30 +887,30 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
     func testAXTimeoutIsCappedByRemainingGlobalBudget() throws {
         XCTAssertEqual(
-            try XCTUnwrap(WindowSwitcherAppCatalog.axTimeout(forRemaining: 0.5)),
+            try XCTUnwrap(WindowSwitcherAllSpacesCatalog.axTimeout(forRemaining: 0.5)),
             0.2,
             accuracy: 0.0001
         )
         XCTAssertEqual(
-            try XCTUnwrap(WindowSwitcherAppCatalog.axTimeout(forRemaining: 0.05)),
+            try XCTUnwrap(WindowSwitcherAllSpacesCatalog.axTimeout(forRemaining: 0.05)),
             0.05,
             accuracy: 0.0001
         )
-        XCTAssertNil(WindowSwitcherAppCatalog.axTimeout(forRemaining: 0))
-        XCTAssertNil(WindowSwitcherAppCatalog.axTimeout(forRemaining: -0.1))
+        XCTAssertNil(WindowSwitcherAllSpacesCatalog.axTimeout(forRemaining: 0))
+        XCTAssertNil(WindowSwitcherAllSpacesCatalog.axTimeout(forRemaining: -0.1))
     }
 
     func testAXSessionBudgetAllocatesADeadlineToEveryApplication() {
         let now = Date(timeIntervalSince1970: 10_000)
         let sessionDeadline = now.addingTimeInterval(1)
 
-        let firstDeadline = WindowSwitcherAppCatalog.axDeadline(
+        let firstDeadline = WindowSwitcherAllSpacesCatalog.axDeadline(
             sessionDeadline: sessionDeadline,
             appIndex: 0,
             appCount: 2,
             now: now
         )
-        let secondDeadline = WindowSwitcherAppCatalog.axDeadline(
+        let secondDeadline = WindowSwitcherAllSpacesCatalog.axDeadline(
             sessionDeadline: sessionDeadline,
             appIndex: 1,
             appCount: 2,
@@ -1209,7 +923,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
     func testAXFallbackLookupStopsWhenItsDeadlineIsReached() {
         let candidate = AXUIElementCreateSystemWide()
-        let snapshot = WindowSwitcherWindowSnapshot(
+        let snapshot = WindowSwitcherAllSpacesWindowSnapshot(
             element: candidate,
             windowNumber: nil,
             title: "different title",
@@ -1221,7 +935,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         var nowCallCount = 0
         var snapshotCallCount = 0
 
-        let result = WindowSwitcherAppCatalog.firstMatchingWindow(
+        let result = WindowSwitcherAllSpacesCatalog.firstMatchingWindow(
             in: [candidate, candidate],
             title: "requested title",
             bounds: CGRect(x: 80, y: 100, width: 900, height: 700),
@@ -1244,7 +958,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
     func testAXFallbackLookupPreservesMinimizedState() {
         let candidate = AXUIElementCreateSystemWide()
-        let snapshot = WindowSwitcherWindowSnapshot(
+        let snapshot = WindowSwitcherAllSpacesWindowSnapshot(
             element: candidate,
             windowNumber: nil,
             title: "requested title",
@@ -1253,7 +967,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             size: CGSize(width: 900, height: 700)
         )
 
-        let result = WindowSwitcherAppCatalog.firstMatchingWindow(
+        let result = WindowSwitcherAllSpacesCatalog.firstMatchingWindow(
             in: [candidate],
             title: "requested title",
             bounds: CGRect(x: 80, y: 100, width: 900, height: 700),
@@ -1268,7 +982,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
     func testAXFallbackLookupRejectsAmbiguousMatches() {
         let candidate = AXUIElementCreateSystemWide()
-        let snapshot = WindowSwitcherWindowSnapshot(
+        let snapshot = WindowSwitcherAllSpacesWindowSnapshot(
             element: candidate,
             windowNumber: nil,
             title: "requested title",
@@ -1278,7 +992,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         )
         var snapshotCallCount = 0
 
-        let result = WindowSwitcherAppCatalog.firstMatchingWindow(
+        let result = WindowSwitcherAllSpacesCatalog.firstMatchingWindow(
             in: [candidate, candidate],
             title: "requested title",
             bounds: CGRect(x: 80, y: 100, width: 900, height: 700),
@@ -1303,7 +1017,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             launchDate: launchDate
         )
         let windowElement = AXUIElementCreateSystemWide()
-        let snapshot = WindowSwitcherWindowSnapshot(
+        let snapshot = WindowSwitcherAllSpacesWindowSnapshot(
             element: windowElement,
             windowNumber: nil,
             title: "Restored title",
@@ -1312,7 +1026,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             size: bounds.size
         )
         var focusedMinimizedStates: [Bool] = []
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: {
                 [
@@ -1362,7 +1076,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             launchDate: launchDate
         )
         var focusCount = 0
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: {
                 [
@@ -1412,7 +1126,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         )
         let windowElement = AXUIElementCreateSystemWide()
         var focusedMinimizedStates: [Bool] = []
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: {
                 [
@@ -1460,7 +1174,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             processIdentifier: processIdentifier,
             launchDate: currentLaunchDate
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: { [] },
             applicationProvider: { _ in application }
@@ -1492,11 +1206,11 @@ final class WindowSwitcherPluginTests: XCTestCase {
             processIdentifier: processIdentifier,
             launchDate: nil
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             applicationProvider: { _ in application }
         )
-        let entry = WindowSwitcherAppCatalog.applicationEntry(
+        let entry = WindowSwitcherAllSpacesCatalog.applicationEntry(
             id: "app:327",
             processIdentifier: processIdentifier,
             bundleIdentifier: "com.example.window-switcher",
@@ -1517,7 +1231,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             processIdentifier: processIdentifier,
             launchDate: nil
         )
-        let entry = WindowSwitcherAppCatalog.applicationEntry(
+        let entry = WindowSwitcherAllSpacesCatalog.applicationEntry(
             id: "app:328",
             processIdentifier: processIdentifier,
             bundleIdentifier: "com.example.window-switcher",
@@ -1525,7 +1239,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             icon: nil,
             applicationLaunchDate: Date(timeIntervalSince1970: 3_004)
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             applicationProvider: { _ in application }
         )
@@ -1542,11 +1256,11 @@ final class WindowSwitcherPluginTests: XCTestCase {
             processIdentifier: processIdentifier,
             launchDate: Date(timeIntervalSince1970: 3_005)
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             applicationProvider: { _ in application }
         )
-        let entry = WindowSwitcherAppCatalog.applicationEntry(
+        let entry = WindowSwitcherAllSpacesCatalog.applicationEntry(
             id: "app:329",
             processIdentifier: processIdentifier,
             bundleIdentifier: "com.example.window-switcher",
@@ -1564,11 +1278,11 @@ final class WindowSwitcherPluginTests: XCTestCase {
     func testCancelledApplicationActivationDoesNotPerformSideEffects() async {
         let processIdentifier: pid_t = 330
         let application = WindowSwitcherApplicationHarness(processIdentifier: processIdentifier)
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             applicationProvider: { _ in application }
         )
-        let entry = WindowSwitcherAppCatalog.applicationEntry(
+        let entry = WindowSwitcherAllSpacesCatalog.applicationEntry(
             id: "app:330",
             processIdentifier: processIdentifier,
             bundleIdentifier: "com.example.window-switcher",
@@ -1590,7 +1304,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
     func testCancelledAXActivationDoesNotPerformSideEffects() async {
         let processIdentifier: pid_t = 331
         let application = WindowSwitcherApplicationHarness(processIdentifier: processIdentifier)
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             applicationProvider: { _ in application }
         )
@@ -1627,7 +1341,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             processIdentifier: processIdentifier,
             launchDate: launchDate
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: {
                 [
@@ -1679,7 +1393,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
             processIdentifier: processIdentifier,
             launchDate: launchDate
         )
-        let catalog = WindowSwitcherAppCatalog(
+        let catalog = WindowSwitcherAllSpacesCatalog(
             notificationCenter: NotificationCenter(),
             windowRecordProvider: { harness.records() },
             windowRecordRefreshTimeout: 0.01,
@@ -1909,7 +1623,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         XCTAssertFalse(loaded.configuration.isEnabled)
     }
 
-    func testObsoleteShortcutAssignmentsAreDiscarded() throws {
+    func testObsoleteShortcutAssignmentsAreRetainedButNeverApplied() throws {
         let storage = WindowSwitcherMemoryStorage()
         storage.set(
             try JSONEncoder().encode(["bundle:com.apple.Safari": "s"]),
@@ -1920,8 +1634,19 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
         XCTAssertEqual(store.shortcutBindings.manual, [:])
         XCTAssertEqual(store.shortcutBindings.automatic, [:])
-        XCTAssertNil(storage.data(forKey: "shortcut-assignments"))
+        XCTAssertNotNil(storage.data(forKey: "shortcut-assignments"))
+        XCTAssertFalse(store.configuration.usesCompanionDefaults)
         XCTAssertNil(storage.data(forKey: "shortcut-bindings"))
+    }
+
+    func testUsedLegacyDefaultModeDoesNotSilentlyChangeItsInheritedBinding() throws {
+        let storage = WindowSwitcherMemoryStorage()
+        storage.set(try JSONEncoder().encode(WindowSwitcherShortcutBindingState()), forKey: "shortcut-bindings")
+        let store = WindowSwitcherStore(storage: storage)
+        XCTAssertFalse(store.configuration.usesCompanionDefaults)
+        XCTAssertEqual(store.configuration.mode, .keyWindow)
+        store.useCompanionDefaults()
+        XCTAssertTrue(WindowSwitcherStore(storage: storage).configuration.usesCompanionDefaults)
     }
 
     func testShortcutAssignmentUsesLettersThenDigitsThenCommandKeys() {
@@ -2102,13 +1827,13 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
     func testLegacySingleWindowShortcutMigratesToStableAXIdentity() throws {
         let entry = try XCTUnwrap(
-            WindowSwitcherAppCatalog.windowEntries(
+            WindowSwitcherAllSpacesCatalog.windowEntries(
                 processIdentifier: 321,
                 bundleIdentifier: "com.apple.Safari",
                 appName: "Safari",
                 icon: nil,
                 windows: [
-                    WindowSwitcherWindowSnapshot(
+                    WindowSwitcherAllSpacesWindowSnapshot(
                         element: AXUIElementCreateSystemWide(),
                         windowNumber: nil,
                         title: "Only window",
@@ -2140,13 +1865,13 @@ final class WindowSwitcherPluginTests: XCTestCase {
     }
 
     func testAmbiguousLegacyFirstWindowShortcutCanBeExplicitlyReassigned() throws {
-        let entries = WindowSwitcherAppCatalog.windowEntries(
+        let entries = WindowSwitcherAllSpacesCatalog.windowEntries(
             processIdentifier: 321,
             bundleIdentifier: "com.apple.Safari",
             appName: "Safari",
             icon: nil,
             windows: [
-                WindowSwitcherWindowSnapshot(
+                WindowSwitcherAllSpacesWindowSnapshot(
                     element: nil,
                     windowNumber: 401,
                     title: "First window",
@@ -2154,7 +1879,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
                     position: CGPoint(x: 80, y: 100),
                     size: CGSize(width: 900, height: 700)
                 ),
-                WindowSwitcherWindowSnapshot(
+                WindowSwitcherAllSpacesWindowSnapshot(
                     element: nil,
                     windowNumber: 402,
                     title: "Second window",
@@ -2192,13 +1917,13 @@ final class WindowSwitcherPluginTests: XCTestCase {
 
     func testWindowShortcutIdentityUsesCoreGraphicsNumberAcrossSpaceInsertion() throws {
         let bounds = CGRect(x: 80, y: 100, width: 900, height: 700)
-        let first = WindowSwitcherAppCatalog.windowEntries(
+        let first = WindowSwitcherAllSpacesCatalog.windowEntries(
             processIdentifier: 321,
             bundleIdentifier: "com.apple.Safari",
             appName: "Safari",
             icon: nil,
             windows: [
-                WindowSwitcherWindowSnapshot(
+                WindowSwitcherAllSpacesWindowSnapshot(
                     element: AXUIElementCreateSystemWide(),
                     windowNumber: 401,
                     title: "First window",
@@ -2208,13 +1933,13 @@ final class WindowSwitcherPluginTests: XCTestCase {
                 ),
             ]
         )[0]
-        let second = WindowSwitcherAppCatalog.windowEntries(
+        let second = WindowSwitcherAllSpacesCatalog.windowEntries(
             processIdentifier: 321,
             bundleIdentifier: "com.apple.Safari",
             appName: "Safari",
             icon: nil,
             windows: [
-                WindowSwitcherWindowSnapshot(
+                WindowSwitcherAllSpacesWindowSnapshot(
                     element: AXUIElementCreateSystemWide(),
                     windowNumber: 402,
                     title: "Second window",
@@ -2224,13 +1949,13 @@ final class WindowSwitcherPluginTests: XCTestCase {
                 ),
             ]
         )[0]
-        let inactiveSpaceWindow = WindowSwitcherAppCatalog.windowEntries(
+        let inactiveSpaceWindow = WindowSwitcherAllSpacesCatalog.windowEntries(
             processIdentifier: 321,
             bundleIdentifier: "com.apple.Safari",
             appName: "Safari",
             icon: nil,
             windows: [
-                WindowSwitcherWindowSnapshot(
+                WindowSwitcherAllSpacesWindowSnapshot(
                     element: nil,
                     windowNumber: 403,
                     title: "Inactive Space window",
@@ -2293,7 +2018,7 @@ final class WindowSwitcherPluginTests: XCTestCase {
         var writtenAttributes: [String] = []
         var didRaise = false
 
-        WindowSwitcherAppCatalog.focusWindow(
+        WindowSwitcherAllSpacesCatalog.focusWindow(
             window,
             isMinimized: false,
             deadline: Date().addingTimeInterval(1),

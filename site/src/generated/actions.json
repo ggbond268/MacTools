@@ -8017,6 +8017,61 @@
       "action": {
         "automaticEligible": false,
         "description": {
+          "ar": "ابحث عن نافذة للتطبيق الحالي وحددها.",
+          "de": "Suche ein Fenster der aktuellen App und wähle es aus.",
+          "en": "Find and select a window of the current app.",
+          "es": "Busca y selecciona una ventana de la app actual.",
+          "fr": "Recherchez et sélectionnez une fenêtre de l’app actuelle.",
+          "ja": "現在のアプリのウインドウを検索して選択します。",
+          "ko": "현재 앱의 윈도우를 검색하고 선택합니다.",
+          "pt": "Encontre e selecione uma janela do app atual.",
+          "ru": "Найдите и выберите окно текущего приложения.",
+          "zh-Hans": "搜索和选择当前应用的窗口。",
+          "zh-Hant": "搜尋並選取目前 App 的視窗。"
+        },
+        "externalInvocation": "unavailable",
+        "id": "switch-current-app",
+        "keywords": [
+          "current app windows",
+          "window switcher",
+          "search"
+        ],
+        "parameters": [],
+        "permissionIDs": [
+          "accessibility"
+        ],
+        "risk": "safe",
+        "surfaces": [
+          "unified-search",
+          "global-shortcut",
+          "action-grid",
+          "trackpad-gesture",
+          "manual"
+        ],
+        "systemImage": "rectangle.2.swap",
+        "title": {
+          "ar": "نوافذ التطبيق الحالي",
+          "de": "Fenster der aktuellen App",
+          "en": "Current App Windows",
+          "es": "Ventanas de la app actual",
+          "fr": "Fenêtres de l’app actuelle",
+          "ja": "現在のアプリのウインドウ",
+          "ko": "현재 앱 윈도우",
+          "pt": "Janelas do app atual",
+          "ru": "Окна текущего приложения",
+          "zh-Hans": "当前应用窗口",
+          "zh-Hant": "目前 App 視窗"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/window-switcher?provider=window-switcher&action=switch-current-app",
+      "pluginID": "window-switcher",
+      "providerID": "window-switcher",
+      "route": "/plugins/window-switcher/actions/window-switcher/switch-current-app/"
+    },
+    {
+      "action": {
+        "automaticEligible": false,
+        "description": {
           "ar": "تنظيف DerivedData ودعم الأجهزة والأرشيفات وذاكرات Xcode المؤقتة حسب الفئة.",
           "de": "Xcode-DerivedData, Geräteunterstützung, Archive und Caches nach Kategorie bereinigen.",
           "en": "Clean Xcode DerivedData, device support files, archives, and caches by category.",
