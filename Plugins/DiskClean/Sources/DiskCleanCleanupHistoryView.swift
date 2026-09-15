@@ -30,7 +30,7 @@ enum DiskCleanCleanupHistoryStatus: Equatable, Sendable {
             self = .changedSinceScan
         case "failed":
             self = .failed
-        case "partiallyDeleted":
+        case "partiallyDeleted", "irreversibleStagedRetained":
             self = .partiallyDeleted
         case "rollbackBlocked":
             self = .rollbackBlocked
@@ -158,7 +158,7 @@ struct DiskCleanAuditLogHistoryProvider: DiskCleanCleanupHistoryProviding {
     func recentEntries(limit: Int) async -> [DiskCleanCleanupHistoryEntry] {
         let directory = directory
         let records = await Task.detached(priority: .utility) {
-            DiskCleanAuditLog(directory: directory).recentRecords(limit: limit)
+            DiskCleanAuditLog(directory: directory).recentRecords(limit: limit, excludingRunSummaries: true)
         }.value
         return DiskCleanCleanupHistoryEntry.entries(from: records)
     }
@@ -260,7 +260,7 @@ struct DiskCleanCleanupHistorySection: View {
         let home = NSHomeDirectory()
         var lines: [String] = ["=== DiskClean Cleanup History Diagnostics ==="]
         for run in runs {
-            let mode = run.isTrash ? "Trash" : "Permanent"
+            let mode = run.isRecovery ? "Recovery" : (run.isTrash ? "Trash" : "Permanent")
             lines.append("Run [\(DiskCleanFormat.timestamp(run.timestamp))] Status: \(run.status), Mode: \(mode), Removed: \(run.itemsRemoved) items (\(run.bytesRemoved) bytes), Categories: \(run.categoriesCleaned.joined(separator: ", "))")
             for error in run.errorsEncountered {
                 lines.append("  Error: \(error.replacingOccurrences(of: home, with: "~"))")
@@ -453,8 +453,8 @@ private struct DiskCleanRunHistoryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                Image(systemName: run.needsAttention ? "exclamationmark.triangle.fill" : (run.isTrash ? "trash" : "checkmark.circle.fill"))
-                    .foregroundStyle(run.needsAttention ? Color.orange : (run.isTrash ? Color.secondary : Color.green))
+                Image(systemName: run.symbolName)
+                    .foregroundStyle(run.needsAttention ? Color.orange : (run.isSuccessful && !run.isTrash ? Color.green : Color.secondary))
                     .frame(width: PluginSettingsTheme.Size.rowIcon)
 
                 VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
@@ -462,7 +462,9 @@ private struct DiskCleanRunHistoryRow: View {
                         Text(DiskCleanFormat.timestamp(run.timestamp))
                             .font(PluginSettingsTheme.Typography.rowTitle)
 
-                        Text(run.isTrash
+                        Text(run.isRecovery
+                            ? localization.string("detail.history.mode.recovery", defaultValue: "恢复检查")
+                            : run.isTrash
                             ? localization.string("detail.history.mode.trash", defaultValue: "废纸篓")
                             : localization.string("detail.history.mode.permanent", defaultValue: "永久删除"))
                             .font(PluginSettingsTheme.Typography.statusBadge)
@@ -482,25 +484,32 @@ private struct DiskCleanRunHistoryRow: View {
 
                         Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
-                        Text(DiskCleanFormat.approximateBytes(run.bytesRemoved, localization: localization))
-                            .font(PluginSettingsTheme.Typography.monospacedValue)
-                            .foregroundStyle(.secondary)
+                        if !run.isRecovery {
+                            Text(DiskCleanFormat.approximateBytes(run.bytesRemoved, localization: localization))
+                                .font(PluginSettingsTheme.Typography.monospacedValue)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
-                    HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-                        Text(localization.format("detail.history.runItems", defaultValue: "清理 %d 项", run.itemsRemoved))
-                            .font(PluginSettingsTheme.Typography.rowDescription)
-                            .foregroundStyle(.secondary)
+                    Text(run.statusTitle(localization: localization))
+                        .font(PluginSettingsTheme.Typography.rowDescription)
 
-                        if !run.categoriesCleaned.isEmpty {
-                            Text("·")
+                    if !run.isRecovery {
+                        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                            Text(localization.format("detail.history.runItems", defaultValue: "清理 %d 项", run.itemsRemoved))
                                 .font(PluginSettingsTheme.Typography.rowDescription)
                                 .foregroundStyle(.secondary)
-                            Text(run.categoriesCleaned.joined(separator: ", "))
-                                .font(PluginSettingsTheme.Typography.statusBadge)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+
+                            if !run.categoriesCleaned.isEmpty {
+                                Text("·")
+                                    .font(PluginSettingsTheme.Typography.rowDescription)
+                                    .foregroundStyle(.secondary)
+                                Text(run.categoryTitles(localization: localization).joined(separator: ", "))
+                                    .font(PluginSettingsTheme.Typography.statusBadge)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
                         }
                     }
 
@@ -547,5 +556,37 @@ private struct DiskCleanRunHistoryRow: View {
                 .padding(.leading, 24)
             }
         }
+    }
+}
+
+
+extension DiskCleanRunHistoryEntry {
+    var isSuccessful: Bool { !isRecovery && status == "ok" && !needsAttention }
+
+    var symbolName: String {
+        if needsAttention { return "exclamationmark.triangle.fill" }
+        if isRecovery { return DiskCleanCleanupHistoryStatus(rawValue: status).symbolName }
+        switch status {
+        case "ok": return isTrash ? "trash" : "checkmark.circle.fill"
+        case "cancelled": return "stop.circle"
+        case "interrupted": return "pause.circle"
+        case "completedWithErrors": return "exclamationmark.circle"
+        default: return "questionmark.circle"
+        }
+    }
+
+    func statusTitle(localization: PluginLocalization) -> String {
+        if isRecovery { return DiskCleanCleanupHistoryStatus(rawValue: status).title(localization: localization) }
+        switch status {
+        case "ok": return localization.string("history.run.completed", defaultValue: "已完成")
+        case "cancelled": return localization.string("history.run.cancelled", defaultValue: "已取消")
+        case "interrupted": return localization.string("history.run.interrupted", defaultValue: "已中断")
+        case "completedWithErrors": return localization.string("history.run.errors", defaultValue: "已完成，有错误")
+        default: return localization.string("history.run.unknown", defaultValue: "状态未知")
+        }
+    }
+
+    func categoryTitles(localization: PluginLocalization) -> [String] {
+        categoriesCleaned.map { DiskCleanCategoryID(rawValue: $0)?.title(localization: localization) ?? $0 }
     }
 }

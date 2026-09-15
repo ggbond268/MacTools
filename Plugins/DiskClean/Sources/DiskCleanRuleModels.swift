@@ -300,7 +300,8 @@ struct DiskCleanRuleTarget: Identifiable, Sendable {
             dataClass: category == .logs ? .log : .cache,
             discoveryMethod: isDynamic ? .systemQuery : .knownPathPattern,
             defaultSelectionReason: risk == .low ? "低风险缓存，可自动清理" : "需要用户确认",
-            provenance: .builtInMacToolsRule
+            provenance: .builtInMacToolsRule,
+            fallbackCategory: category
         )
     }
 
@@ -392,6 +393,9 @@ struct DiskCleanRuleExplanation: Codable, Equatable, Sendable {
     let defaultSelectionReason: String?
     let regeneration: String?
     let provenance: DiskCleanRuleProvenance?
+    /// Resolve built-in copy at display time so an existing scan follows language changes.
+    let localizationKeyPrefix: String?
+    let fallbackCategory: String?
 
     var whyFound: String { whyMatched }
 
@@ -408,7 +412,9 @@ struct DiskCleanRuleExplanation: Codable, Equatable, Sendable {
         discoveryMethod: DiskCleanDiscoveryMethod? = nil,
         defaultSelectionReason: String? = nil,
         regeneration: String? = nil,
-        provenance: DiskCleanRuleProvenance? = nil
+        provenance: DiskCleanRuleProvenance? = nil,
+        localizationKeyPrefix: String? = nil,
+        fallbackCategory: DiskCleanCategoryID? = nil
     ) {
         self.whyMatched = whyMatched
         self.consequence = consequence
@@ -423,5 +429,33 @@ struct DiskCleanRuleExplanation: Codable, Equatable, Sendable {
         self.defaultSelectionReason = defaultSelectionReason
         self.regeneration = regeneration
         self.provenance = provenance
+        self.localizationKeyPrefix = localizationKeyPrefix
+        self.fallbackCategory = fallbackCategory?.rawValue
+    }
+}
+
+
+extension DiskCleanRuleExplanation {
+    func localizedWhyMatched(_ localization: PluginLocalization) -> String {
+        if fallbackCategory != nil {
+            return localization.format("explanation.fallback.whyMatched", defaultValue: "Matches cleanup rule %@.", title ?? "")
+        }
+        return localized("whyMatched", fallback: whyMatched, localization: localization)
+    }
+
+    func localizedConsequence(_ localization: PluginLocalization) -> String {
+        if let fallbackCategory, let category = DiskCleanCategoryID(rawValue: fallbackCategory) {
+            return category.consequence(localization: localization)
+        }
+        return localized("consequence", fallback: consequence, localization: localization)
+    }
+
+    func localizedRegeneration(_ localization: PluginLocalization) -> String? {
+        regeneration.map { localized("regeneration", fallback: $0, localization: localization) }
+    }
+
+    private func localized(_ field: String, fallback: String, localization: PluginLocalization) -> String {
+        guard let localizationKeyPrefix else { return fallback }
+        return localization.string("\(localizationKeyPrefix).\(field)", defaultValue: fallback)
     }
 }

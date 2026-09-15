@@ -153,3 +153,70 @@ final class DiskCleanRuleExplainabilityTests: XCTestCase {
         XCTAssertEqual(candidate.explanation?.confidence, .high)
     }
 }
+
+
+extension DiskCleanRuleExplainabilityTests {
+    @MainActor
+    func testExistingExplanationsAndHistoryFollowLanguageChangesAtDisplayTime() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Resources/Localizable.xcstrings")
+        let catalog = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: [String: Any]])
+        for language in ["en", "zh-Hans"] {
+            let lproj = directory.appendingPathComponent("\(language).lproj")
+            try FileManager.default.createDirectory(at: lproj, withIntermediateDirectories: true)
+            var values: [String: String] = [:]
+            for (key, entry) in strings {
+                let locales = entry["localizations"] as? [String: [String: Any]]
+                let unit = locales?[language]?["stringUnit"] as? [String: Any]
+                values[key] = unit?["value"] as? String
+            }
+            let data = try PropertyListSerialization.data(fromPropertyList: values, format: .binary, options: 0)
+            try data.write(to: lproj.appendingPathComponent("Localizable.strings"))
+        }
+        let info = ["CFBundleIdentifier": "test.disk-clean.localization", "CFBundleDevelopmentRegion": "en"]
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: directory.appendingPathComponent("Info.plist"))
+        let localization = PluginLocalization(bundle: try XCTUnwrap(Bundle(url: directory)))
+        let original = UserDefaults.standard.string(forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey)
+        defer { PluginRuntimeLocalization.source.setPreference(original) }
+        let explicit = try XCTUnwrap(DiskCleanRuleCatalogV2.current.target(id: "cache.user-essentials.caches")).resolvedExplanation
+        let fallback = DiskCleanRuleTarget(id: "test.rule", legacyRuleID: "test", category: .appCaches,
+            risk: .low, kind: .path(globs: []), reservedRootPaths: []).resolvedExplanation
+        let run = DiskCleanRunHistoryEntry(id: "run", timestamp: Date(), isTrash: false,
+            status: "cancelled", categoriesCleaned: ["appCaches"], itemsRemoved: 0, bytesRemoved: 0)
+
+        let explanations = ["cache.user-essentials.caches", "cache.user-essentials.logs", "developer.mobile-caches"].compactMap {
+            DiskCleanRuleCatalogV2.current.target(id: $0)?.resolvedExplanation
+        }
+        let decoded = try JSONDecoder().decode(DiskCleanRuleExplanation.self, from: JSONEncoder().encode(explicit))
+        XCTAssertEqual(decoded.localizationKeyPrefix, explicit.localizationKeyPrefix)
+
+        PluginRuntimeLocalization.source.setPreference("en")
+        XCTAssertEqual(explicit.localizedRegeneration(localization), "Apps rebuild necessary caches when next opened.")
+        XCTAssertEqual(run.statusTitle(localization: localization), "Cancelled")
+        XCTAssertEqual(fallback.localizedWhyMatched(localization), "Matches cleanup rule test.rule.")
+        let englishExplanations = explanations.map {
+            [$0.localizedWhyMatched(localization), $0.localizedConsequence(localization), $0.localizedRegeneration(localization) ?? ""]
+        }
+        let englishConsequence = fallback.localizedConsequence(localization)
+        let englishCategories = run.categoryTitles(localization: localization)
+        XCTAssertNotEqual(englishCategories, run.categoriesCleaned)
+
+        PluginRuntimeLocalization.source.setPreference("zh-Hans")
+        XCTAssertEqual(explicit.localizedRegeneration(localization), "应用下次打开时会重新生成所需缓存。")
+        XCTAssertEqual(run.statusTitle(localization: localization), "已取消")
+        XCTAssertEqual(fallback.localizedWhyMatched(localization), "匹配清理规则 test.rule。")
+        for (explanation, english) in zip(explanations, englishExplanations) {
+            let translated = [explanation.localizedWhyMatched(localization), explanation.localizedConsequence(localization), explanation.localizedRegeneration(localization) ?? ""]
+            for (value, original) in zip(translated, english) {
+                XCTAssertFalse(value.isEmpty)
+                XCTAssertNotEqual(value, original)
+            }
+        }
+        XCTAssertNotEqual(fallback.localizedConsequence(localization), englishConsequence)
+        XCTAssertNotEqual(run.categoryTitles(localization: localization), englishCategories)
+    }
+}

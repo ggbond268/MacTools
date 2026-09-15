@@ -122,7 +122,7 @@ final class DiskCleanAuditLog: @unchecked Sendable {
     }
 
     /// Read recent records newest-first (cleanup history UI). Spans the current file and one rotated `.1` generation.
-    func recentRecords(limit: Int) -> [Record] {
+    func recentRecords(limit: Int, excludingRunSummaries: Bool = false) -> [Record] {
         lock.lock()
         defer { lock.unlock() }
 
@@ -135,10 +135,11 @@ final class DiskCleanAuditLog: @unchecked Sendable {
                 }
             }
         }
-        return Array(records.sorted { $0.timestamp > $1.timestamp }.prefix(limit))
+        return Array(records.filter { !excludingRunSummaries || $0.action != .runSummary }
+            .sorted { $0.timestamp > $1.timestamp }.prefix(max(0, limit)))
     }
 
-    /// Read recent cleanup runs newest-first, combining explicit run summaries and projecting legacy sessions.
+    /// Read cleanup runs with attention-needed entries pinned, then newest-first within each group.
     func recentRuns(limit: Int) -> [DiskCleanRunHistoryEntry] {
         lock.lock()
         defer { lock.unlock() }
@@ -170,7 +171,26 @@ final class DiskCleanAuditLog: @unchecked Sendable {
             }
         }
 
-        var runs: [DiskCleanRunHistoryEntry] = []
+        // Recovery is recorded independently of cleanup runs and may have no run ID.
+        // Preserve its path and staged name without counting it as another deletion.
+        var runs = allRecords.enumerated().compactMap { index, record -> DiskCleanRunHistoryEntry? in
+            guard record.action == .scanEvent,
+                  record.path != nil || record.stagedName != nil else { return nil }
+            let entries = DiskCleanCleanupHistoryEntry.entries(from: [record])
+            return DiskCleanRunHistoryEntry(
+                id: "recovery-\(index)-\(record.timestamp.timeIntervalSince1970)",
+                timestamp: record.timestamp,
+                isTrash: false,
+                status: record.status,
+                categoriesCleaned: [],
+                itemsRemoved: 0,
+                bytesRemoved: 0,
+                errorsEncountered: record.error.map { [$0] } ?? [],
+                needsAttention: entries.contains(where: \.needsAttention),
+                itemEntries: entries,
+                isRecovery: true
+            )
+        }
 
         for summary in summaryRecords {
             let runID = summary.runID ?? "run-\(summary.timestamp.timeIntervalSince1970)"
@@ -274,7 +294,10 @@ final class DiskCleanAuditLog: @unchecked Sendable {
             }
         }
 
-        return Array(runs.sorted { $0.timestamp > $1.timestamp }.prefix(limit))
+        return Array(runs.sorted {
+            if $0.needsAttention != $1.needsAttention { return $0.needsAttention }
+            return $0.timestamp > $1.timestamp
+        }.prefix(max(0, limit)))
     }
 
     /// Audit records carry estimated source sizes. Only a verified `ok` record proves that those
@@ -310,6 +333,7 @@ struct DiskCleanRunHistoryEntry: Identifiable, Equatable, Sendable {
     let errorsEncountered: [String]
     let needsAttention: Bool
     let itemEntries: [DiskCleanCleanupHistoryEntry]
+    let isRecovery: Bool
 
     init(
         id: String,
@@ -321,7 +345,8 @@ struct DiskCleanRunHistoryEntry: Identifiable, Equatable, Sendable {
         bytesRemoved: Int64,
         errorsEncountered: [String] = [],
         needsAttention: Bool = false,
-        itemEntries: [DiskCleanCleanupHistoryEntry] = []
+        itemEntries: [DiskCleanCleanupHistoryEntry] = [],
+        isRecovery: Bool = false
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -333,5 +358,6 @@ struct DiskCleanRunHistoryEntry: Identifiable, Equatable, Sendable {
         self.errorsEncountered = errorsEncountered
         self.needsAttention = needsAttention
         self.itemEntries = itemEntries
+        self.isRecovery = isRecovery
     }
 }

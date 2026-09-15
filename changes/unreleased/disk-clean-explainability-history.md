@@ -4,4 +4,4 @@ type: added
 area: System
 ---
 
-Added clearer cleanup rules, expanded safe CocoaPods, Carthage, and rotated-log coverage, and introduced responsive, interruption-aware run history with totals based on successful removals.
+Added localized cleanup explanations, broader cache and log coverage, and run history with explicit cancellation and recovery details. Item history excludes summaries from its counts.

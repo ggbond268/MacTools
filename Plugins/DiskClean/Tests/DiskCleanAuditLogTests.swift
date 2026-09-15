@@ -188,16 +188,18 @@ final class DiskCleanAuditLogTests: XCTestCase {
 
         let runs = log.recentRuns(limit: 2)
         XCTAssertEqual(runs.count, 2)
-        XCTAssertEqual(runs[0].id, "run-3")
-        XCTAssertEqual(runs[0].itemsRemoved, 15)
-        XCTAssertEqual(runs[0].bytesRemoved, 3072)
-        XCTAssertFalse(runs[0].isTrash)
+        XCTAssertEqual(runs.map(\.id), ["run-2", "run-3"])
+        let chronologicalRuns = runs.sorted { $0.timestamp > $1.timestamp }
+        XCTAssertEqual(chronologicalRuns[0].id, "run-3")
+        XCTAssertEqual(chronologicalRuns[0].itemsRemoved, 15)
+        XCTAssertEqual(chronologicalRuns[0].bytesRemoved, 3072)
+        XCTAssertFalse(chronologicalRuns[0].isTrash)
 
-        XCTAssertEqual(runs[1].id, "run-2")
-        XCTAssertEqual(runs[1].itemsRemoved, 10)
-        XCTAssertEqual(runs[1].bytesRemoved, 2048)
-        XCTAssertTrue(runs[1].isTrash)
-        XCTAssertTrue(runs[1].needsAttention)
+        XCTAssertEqual(chronologicalRuns[1].id, "run-2")
+        XCTAssertEqual(chronologicalRuns[1].itemsRemoved, 10)
+        XCTAssertEqual(chronologicalRuns[1].bytesRemoved, 2048)
+        XCTAssertTrue(chronologicalRuns[1].isTrash)
+        XCTAssertTrue(chronologicalRuns[1].needsAttention)
     }
 
     func testRecentRunsClustersLegacyRecordsWhenSummaryAbsent() {
@@ -310,7 +312,7 @@ final class DiskCleanAuditLogTests: XCTestCase {
         )
 
         let runs = log.recentRuns(limit: 10)
-        XCTAssertEqual(runs.map(\.id), ["completed-run", "interrupted-run"])
+        XCTAssertEqual(runs.map(\.id), ["interrupted-run", "completed-run"])
 
         let interrupted = try XCTUnwrap(runs.first { $0.id == "interrupted-run" })
         XCTAssertEqual(interrupted.status, "interrupted")
@@ -345,4 +347,55 @@ final class DiskCleanAuditLogTests: XCTestCase {
         XCTAssertEqual(run?.bytesRemoved, 1_024)
     }
 
+}
+
+
+extension DiskCleanAuditLogTests {
+    func testRecoveryOnlyLogRemainsVisibleInRunsWithRecoveryDetails() throws {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        log.append(.init(timestamp: Date(), action: .scanEvent, path: "/cache/original",
+                         stagedName: ".mactools-staged-test", status: "reconcileFailed", error: "Restore failed"))
+        let run = try XCTUnwrap(log.recentRuns(limit: 100).first)
+        XCTAssertTrue(run.isRecovery)
+        XCTAssertTrue(run.needsAttention)
+        XCTAssertEqual(run.status, "reconcileFailed")
+        XCTAssertEqual(run.itemsRemoved, 0)
+        XCTAssertEqual(run.bytesRemoved, 0)
+        XCTAssertEqual(run.itemEntries.first?.path, "/cache/original")
+        XCTAssertEqual(run.itemEntries.first?.stagedName, ".mactools-staged-test")
+        XCTAssertEqual(run.errorsEncountered, ["Restore failed"])
+    }
+
+    func testRecoveryAfterCleanupIsSeparateAndPinnedBeforeLimit() {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 100), action: .delete,
+                         runID: "old", path: "/cache/a", status: "ok"))
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 110), action: .scanEvent,
+                         path: "/cache/b", stagedName: ".mactools-staged-b", status: "rollbackBlocked"))
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 200), action: .runSummary,
+                         runID: "new", status: "ok", itemsRemoved: 3, bytesRemoved: 30, isTrash: true))
+        let runs = log.recentRuns(limit: 3)
+        XCTAssertEqual(runs.count, 3)
+        XCTAssertTrue(runs[0].isRecovery)
+        XCTAssertEqual(log.recentRuns(limit: 1).first?.itemEntries.first?.path, "/cache/b")
+        XCTAssertEqual(runs.first { $0.id == "new" }?.itemsRemoved, 3)
+    }
+
+    func testAllItemsExcludesSummariesBeforeLimitAndRetainsRecovery() async {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 100), action: .delete,
+                         runID: "first", path: "/cache/a", status: "ok"))
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 110), action: .scanEvent,
+                         path: "/cache/b", status: "reconcileFailed"))
+        for index in 0..<5 {
+            log.append(.init(timestamp: Date(timeIntervalSince1970: Double(200 + index)),
+                             action: .runSummary, runID: "summary-\(index)", status: "cancelled"))
+        }
+        let provider = DiskCleanAuditLogHistoryProvider(directory: storage.url)
+        let items = await provider.recentEntries(limit: 2)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(Set(items.compactMap(\.path)), ["/cache/a", "/cache/b"])
+        XCTAssertEqual(log.recentRecords(limit: 100).count, 7, "Raw audit reads must retain summaries")
+        XCTAssertTrue(log.recentRecords(limit: 0, excludingRunSummaries: true).isEmpty)
+    }
 }

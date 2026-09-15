@@ -97,8 +97,8 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 "~/Library/Caches"
             ],
             explanation: DiskCleanRuleExplanation(
-                whyMatched: "Standard macOS user-level application caches in ~/Library/Caches",
-                consequence: "Applications will re-download web content or rebuild thumbnail/preview caches on first launch.",
+                whyMatched: "Standard macOS application caches in ~/Library/Caches.",
+                consequence: "Apps may download content again or rebuild previews when next opened.",
                 safetyTier: .safe,
                 requiresFullDiskAccess: false,
                 confidence: .high,
@@ -107,8 +107,9 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 dataClass: .cache,
                 discoveryMethod: .knownPathPattern,
                 defaultSelectionReason: "低风险临时缓存，应用可自动重建",
-                regeneration: "应用首次启动时会重新生成必要缓存",
-                provenance: .macOSDocumentedLocation
+                regeneration: "Apps rebuild necessary caches when next opened.",
+                provenance: .macOSDocumentedLocation,
+                localizationKeyPrefix: "explanation.cache"
             )
         ),
         DiskCleanRuleTarget(
@@ -125,8 +126,8 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 "~/Library/Logs"
             ],
             explanation: DiskCleanRuleExplanation(
-                whyMatched: "Matches application and system log files and log rotations in ~/Library/Logs",
-                consequence: "Historical log records and rotated diagnostic reports will be cleared.",
+                whyMatched: "Application logs and rotated logs in ~/Library/Logs.",
+                consequence: "Historical logs and diagnostic records will be lost.",
                 safetyTier: .safe,
                 requiresFullDiskAccess: false,
                 confidence: .high,
@@ -135,8 +136,9 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 dataClass: .log,
                 discoveryMethod: .knownPathPattern,
                 defaultSelectionReason: "低风险历史日志，不会影响应用正常运行",
-                regeneration: "应用后续运行时会自动创建新的日志文件",
-                provenance: .macOSDocumentedLocation
+                regeneration: "Apps create new logs; deleted history cannot be regenerated.",
+                provenance: .macOSDocumentedLocation,
+                localizationKeyPrefix: "explanation.logs"
             )
         ),
         DiskCleanRuleTarget(
@@ -978,8 +980,8 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 "~/.expo/versions-cache"
             ],
             explanation: DiskCleanRuleExplanation(
-                whyMatched: "Matches iOS/Android mobile and package dependency download caches (Android Studio, SwiftPM, CocoaPods, Carthage, Expo)",
-                consequence: "Mobile build artifacts and package caches will need to be redownloaded on next build.",
+                whyMatched: "Downloaded caches for Android Studio, SwiftPM, CocoaPods, Carthage, and Expo.",
+                consequence: "The next build may need to download dependencies again.",
                 safetyTier: .safe,
                 requiresFullDiskAccess: false,
                 confidence: .high,
@@ -988,8 +990,9 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 dataClass: .downloadedResource,
                 discoveryMethod: .knownPathPattern,
                 defaultSelectionReason: "纯下载依赖包缓存，可在构建时按需重新下载",
-                regeneration: "下次执行 pod install、carthage 或构建时自动重新拉取",
-                provenance: .applicationDocumentedLocation
+                regeneration: "The next build, pod install, or Carthage command downloads the required dependencies.",
+                provenance: .applicationDocumentedLocation,
+                localizationKeyPrefix: "explanation.mobile"
             )
         ),
         DiskCleanRuleTarget(

@@ -212,6 +212,8 @@ final class DiskCleanExecutorTests: XCTestCase {
         XCTAssertEqual(result.itemResults.map(\.path), [paths[0]])
         XCTAssertEqual(result.removedCount, 1)
         XCTAssertEqual(primitive.removedPaths, [paths[0]])
+        XCTAssertEqual(auditLog.recentRuns(limit: 1).first?.status, "cancelled")
+        XCTAssertEqual(auditLog.recentRuns(limit: 1).first?.itemsRemoved, 1)
     }
 
     // MARK: - Audit

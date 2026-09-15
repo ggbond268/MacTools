@@ -290,7 +290,7 @@ private struct DiskCleanCandidateRow: View {
                             Text(localization.string("candidate.explain.whyMatched", defaultValue: "匹配原因："))
                                 .font(PluginSettingsTheme.Typography.rowDescription)
                                 .foregroundStyle(.secondary)
-                            Text(explanation.whyMatched)
+                            Text(explanation.localizedWhyMatched(localization))
                                 .font(PluginSettingsTheme.Typography.rowDescription)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -299,13 +299,13 @@ private struct DiskCleanCandidateRow: View {
                             Text(localization.string("candidate.explain.consequence", defaultValue: "删除后果："))
                                 .font(PluginSettingsTheme.Typography.rowDescription)
                                 .foregroundStyle(.secondary)
-                            Text(explanation.consequence)
+                            Text(explanation.localizedConsequence(localization))
                                 .font(PluginSettingsTheme.Typography.rowDescription)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        if let regen = explanation.regeneration {
+                        if let regen = explanation.localizedRegeneration(localization) {
                             HStack(alignment: .top, spacing: 4) {
                                 Text(localization.string("candidate.explain.regeneration", defaultValue: "重建方式："))
                                     .font(PluginSettingsTheme.Typography.rowDescription)
