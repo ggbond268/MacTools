@@ -6,6 +6,72 @@ import XCTest
 @MainActor
 final class WindowSwitcherPublicationTests: XCTestCase {
 
+    private func metadataRecord(title: Any? = nil, onscreen: Bool? = nil) -> [String: Any] {
+        var info: [String: Any] = [
+            kCGWindowNumber as String: 8, kCGWindowOwnerPID as String: 42,
+            kCGWindowLayer as String: 0, kCGWindowAlpha as String: 1.0,
+            kCGWindowBounds as String: bounds.dictionaryRepresentation
+        ]
+        info[kCGWindowName as String] = title
+        info[kCGWindowIsOnscreen as String] = onscreen
+        return info
+    }
+
+    func testColdOtherSpaceDiscoveryWithoutScreenRecordingTitleMetadata() throws {
+        for onscreen: Bool? in [false, nil] {
+            for confirmedEmpty in [false, true] {
+                var record = try XCTUnwrap(WindowSwitcherWindowRecord.parse([metadataRecord(onscreen: onscreen)]).first)
+                XCTAssertFalse(record.titleIsAvailable)
+                record.hasSpace = true
+                let rows = WindowSwitcherAppCatalog.mergeAllSpacesEntries([application()], records: [record],
+                    hasConfirmedEmptyAXSnapshot: confirmedEmpty)
+                let row = try XCTUnwrap(rows.first { $0.windowNumber == 8 })
+                XCTAssertNil(row.windowElement, "Exercise cold discovery with no AX-confirmed handle")
+                XCTAssertNil(row.windowTitle, "Display fallback must not become identity metadata")
+                XCTAssertEqual(row.localizedGridTitle(using: .init(bundle: .main)), "Fixture")
+            }
+        }
+    }
+
+    func testMissingTitleDoesNotAdmitEmptyMalformedOrUnlocatedSurfaces() throws {
+        for title: Any in ["", "   ", NSNumber(value: 123)] {
+            var record = try XCTUnwrap(WindowSwitcherWindowRecord.parse([metadataRecord(title: title)]).first)
+            XCTAssertTrue(record.titleIsAvailable)
+            record.hasSpace = true
+            let rows = WindowSwitcherAppCatalog.mergeAllSpacesEntries([application()], records: [record])
+            XCTAssertFalse(rows.contains { $0.windowNumber == 8 })
+        }
+        for membership: Bool? in [false, nil] {
+            var record = try XCTUnwrap(WindowSwitcherWindowRecord.parse([metadataRecord()]).first)
+            record.hasSpace = membership
+            let rows = WindowSwitcherAppCatalog.mergeAllSpacesEntries([application()], records: [record])
+            XCTAssertFalse(rows.contains { $0.windowNumber == 8 })
+        }
+        var visible = try XCTUnwrap(WindowSwitcherWindowRecord.parse([metadataRecord(onscreen: true)]).first)
+        visible.hasSpace = true
+        XCTAssertFalse(WindowSwitcherAppCatalog.mergeAllSpacesEntries([application()], records: [visible])
+            .contains { $0.windowNumber == 8 })
+    }
+
+    func testTitlePermissionChangesPreserveSelectionWithoutInventingATitle() throws {
+        var state = WindowSwitcherPublishedWindows()
+        let snapshots: [pid_t: [WindowSwitcherAppEntry]] = [42: [application(confirmedWindowless: true)]]
+        var missing = try XCTUnwrap(WindowSwitcherWindowRecord.parse([metadataRecord()]).first)
+        missing.hasSpace = true
+        state.update(snapshots: snapshots, records: [missing], recordsAreFresh: true)
+        let original = try XCTUnwrap(state.entries.first)
+        var session = WindowSwitcherSession(entries: state.entries, selectedID: original.id,
+            isPersistent: true, originalWindowID: nil)
+        var named = try XCTUnwrap(WindowSwitcherWindowRecord.parse([metadataRecord(title: "Document")]).first)
+        named.hasSpace = true
+        for record in [named, missing] {
+            state.update(snapshots: snapshots, records: [record], recordsAreFresh: true)
+            session.reconcile(state.entries)
+            XCTAssertEqual(session.selectedID, original.id)
+            XCTAssertEqual(session.selected?.windowTitle, record.titleIsAvailable ? "Document" : nil)
+        }
+    }
+
     func testImmediateAXReplacementDoesNotInheritReusedWindowNumber() {
         var state = WindowSwitcherPublishedWindows()
         state.update(snapshots: [42: [window("A", title: "Old", number: 1)]], records: [record(1, "Old")], recordsAreFresh: true)

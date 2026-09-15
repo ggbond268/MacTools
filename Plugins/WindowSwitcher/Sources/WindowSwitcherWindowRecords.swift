@@ -13,6 +13,7 @@ struct WindowSwitcherWindowRecord: Equatable, Sendable {
     let isOnScreen: Bool?
     let bounds: CGRect
     var hasSpace: Bool? = nil
+    var titleIsAvailable = true
 
     static func parse(_ windowInfo: [[String: Any]]) -> [Self] {
         var seenWindowNumbers = Set<CGWindowID>()
@@ -44,7 +45,10 @@ struct WindowSwitcherWindowRecord: Equatable, Sendable {
                     processIdentifier: processIdentifier,
                     title: item[kCGWindowName as String] as? String ?? "",
                     isOnScreen: boolean(in: item, forKey: kCGWindowIsOnscreen),
-                    bounds: bounds
+                    bounds: bounds,
+                    // Core Graphics can omit names without Screen Recording
+                    // permission. Absence is not evidence of an empty title.
+                    titleIsAvailable: item[kCGWindowName as String] != nil
                 )
             )
         }

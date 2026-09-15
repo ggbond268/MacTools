@@ -753,14 +753,17 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 || (record.hasSpace == nil && confirmedAXWindowNumbers.contains(record.windowNumber)) else { return nil }
             // Do not replace usable AX windows with ambiguous CG duplicates.
             guard !windows.contains(where: { $0.windowNumber == nil && sameBounds($0.bounds, record.bounds) }) else { return nil }
-            // Unnamed compositor surfaces can briefly be onscreen and acquire
-            // a public row ID. Only AX confirmation proves they are user windows;
-            // retain that evidence across Spaces without trusting CG visibility.
+            // Missing title metadata (for example without Screen Recording)
+            // must not hide otherwise valid off-Space candidates. Explicitly
+            // empty titles still require AX confirmation to exclude helper surfaces.
+            let unavailableOffSpaceTitle = !record.titleIsAvailable
+                && record.isOnScreen != true && record.hasSpace == true
             guard confirmedAXWindowNumbers.contains(record.windowNumber)
-                || !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+                || !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || unavailableOffSpaceTitle else { return nil }
             return WindowSwitcherAppEntry(id: knownWindowIDs[record.windowNumber] ?? "window:cg:\(application.processIdentifier):\(application.applicationLaunchDate.map { String($0.timeIntervalSince1970) } ?? application.id):\(record.windowNumber)",
                 processIdentifier: application.processIdentifier, bundleIdentifier: application.bundleIdentifier,
-                appName: application.appName, windowTitle: record.title, icon: application.icon,
+                appName: application.appName, windowTitle: record.titleIsAvailable ? record.title : nil, icon: application.icon,
                 windowElement: nil, isMinimized: false, windowNumber: record.windowNumber,
                 windowBounds: record.bounds, applicationLaunchDate: application.applicationLaunchDate,
                 shortcutToken: nil, bounds: record.bounds, isHidden: application.isHidden)

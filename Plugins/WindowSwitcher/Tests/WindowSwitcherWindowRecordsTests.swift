@@ -3,6 +3,15 @@ import XCTest
 @testable import WindowSwitcherPlugin
 
 private final class WindowRecordResponse: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: [WindowSwitcherWindowRecord]?
+    init(_ value: [WindowSwitcherWindowRecord]?) { self.value = value }
+    func set(_ value: [WindowSwitcherWindowRecord]?) { lock.lock(); defer { lock.unlock() }; self.value = value }
+    func get() -> [WindowSwitcherWindowRecord]? { lock.lock(); defer { lock.unlock() }; return value }
+}
+
+@MainActor
+final class WindowSwitcherWindowRecordsTests: XCTestCase {
     func testActiveSpaceMembershipCoversSeparateDisplaysAndFullscreen() {
         let displays: [[String: Any]] = [
             ["Current Space": ["ManagedSpaceID": NSNumber(value: 1)]],
@@ -38,15 +47,6 @@ private final class WindowRecordResponse: @unchecked Sendable {
         }
     }
 
-    private let lock = NSLock()
-    private var value: [WindowSwitcherWindowRecord]?
-    init(_ value: [WindowSwitcherWindowRecord]?) { self.value = value }
-    func set(_ value: [WindowSwitcherWindowRecord]?) { lock.lock(); defer { lock.unlock() }; self.value = value }
-    func get() -> [WindowSwitcherWindowRecord]? { lock.lock(); defer { lock.unlock() }; return value }
-}
-
-@MainActor
-final class WindowSwitcherWindowRecordsTests: XCTestCase {
     func testRetainedAXWindowCanRevalidateUsingItsSystemIDAndBounds() async {
         let bounds = CGRect(x: 0, y: 30, width: 800, height: 600)
         let record = WindowSwitcherWindowRecord(windowNumber: 7, processIdentifier: 42,

@@ -48,6 +48,8 @@ The visible preview requests application focus after panel ordering for native t
 
 ### Other-Space windows
 
+Discovery distinguishes an absent Core Graphics window-name field from an explicitly empty title. Missing names retain offscreen candidates only with positive Space membership; explicitly empty or malformed names still require AX confirmation. Missing names use the app name for display without inventing a window title. Exact process/window identity and AX role checks remain required for activation, while preview capture remains gated by Screen Recording permission. Regression tests simulate cold discovery without name metadata and subsequent permission changes; a native run with Screen Recording denied remains a separate acceptance check.
+
 A missing Core Graphics onscreen flag does not exclude a window with positive Space membership. When an existing AX window disappears from `AXWindows`, a fresh WindowServer record must confirm its process, window ID, bounds, and positive Space/visibility evidence before reveal and exact AX reacquisition.
 
 The optional runtime-resolved activation bridge addresses the selected WindowServer ID, followed by exact AX focus and raise. When `AXWindows` omits the target, a selected-window-only remote Accessibility lookup is bounded to 250 ms and 20,000 candidates, checks the AX window role and exact ID, and caches at most eight validated handles per process. This lookup never authorizes close/quit operations. Missing runtime activation symbols retain the public application-activation fallback.
