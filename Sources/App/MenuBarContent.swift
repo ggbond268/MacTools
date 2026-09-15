@@ -229,10 +229,39 @@ enum MenuBarPanelLayout {
         }
     }
 
+    // Match the feature row's available width when estimating the panel's height.
+    static var segmentedContentWidth: CGFloat {
+        surfaceWidth - FeatureRowLayout.rowHorizontalPadding * 2 - FeatureRowLayout.detailLeadingInset
+    }
+
+    static func segmentedUsesList(_ control: PluginPanelControl) -> Bool {
+        // Existing compact controls keep their layout. Descriptive choices can fall
+        // back to a list when translated labels would be compressed or truncated.
+        guard control.options.contains(where: { $0.subtitle != nil }) else { return false }
+        let width = control.options.reduce(CGFloat(0)) { result, option in
+            result + (option.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width + 20
+        }
+        return width > segmentedContentWidth
+    }
+
+    static func segmentedSubtitleHeight(_ control: PluginPanelControl) -> CGFloat {
+        guard let subtitle = control.options.first(where: { $0.id == control.selectedOptionID })?.subtitle,
+              !subtitle.isEmpty else { return 0 }
+        let rect = (subtitle as NSString).boundingRect(
+            with: CGSize(width: segmentedContentWidth - 10, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: NSFont.systemFont(ofSize: 11)]
+        )
+        return ceil(rect.height) + 2
+    }
+
     private static func controlHeight(for control: PluginPanelControl) -> CGFloat {
         switch control.kind {
         case .segmented:
-            return 24
+            let titleHeight = control.sectionTitle == nil ? CGFloat(0) : CGFloat(19)
+            let choicesHeight = segmentedUsesList(control) ? CGFloat(control.options.count) * 26 : 24
+            let subtitleHeight = segmentedSubtitleHeight(control)
+            return titleHeight + choicesHeight + (subtitleHeight > 0 ? subtitleHeight + 4 : 0)
         case .datePicker:
             switch control.datePickerStyle ?? .compact {
             case .compact:
@@ -1955,8 +1984,8 @@ private struct PluginPanelDetailView: View {
     private func panelControl(_ control: PluginPanelControl) -> some View {
         switch control.kind {
         case .segmented:
-            PluginPanelSegmentedControl(control: control, onSelectionChange: onSelectionChange)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            DescriptiveSegmentedControl(control: control, onSelectionChange: onSelectionChange)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case .datePicker:
             switch control.datePickerStyle ?? .compact {
             case .compact:
@@ -2030,6 +2059,38 @@ private struct PluginPanelDetailView: View {
     }
 }
 
+private struct DescriptiveSegmentedControl: View {
+    let control: PluginPanelControl
+    let onSelectionChange: (String, String) -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if MenuBarPanelLayout.segmentedUsesList(control) {
+                SelectListControl(control: control) { optionID in
+                    onSelectionChange(control.id, optionID)
+                }
+            } else {
+                if let title = control.sectionTitle {
+                    Text(title)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
+                        .padding(.leading, 5)
+                }
+                PluginPanelSegmentedControl(control: control, onSelectionChange: onSelectionChange)
+            }
+            if let subtitle = control.options.first(where: { $0.id == control.selectedOptionID })?.subtitle,
+               !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 5)
+            }
+        }
+    }
+}
+
 private struct PluginPanelSegmentedControl: NSViewRepresentable {
     let control: PluginPanelControl
     let onSelectionChange: (String, String) -> Void
@@ -2059,12 +2120,14 @@ private struct PluginPanelSegmentedControl: NSViewRepresentable {
             if nsView.label(forSegment: index) != option.title {
                 nsView.setLabel(option.title, forSegment: index)
             }
-            nsView.setToolTip(option.title, forSegment: index)
+            nsView.setToolTip(option.subtitle ?? option.title, forSegment: index)
         }
         let selectedIndex = control.options.firstIndex { $0.id == control.selectedOptionID } ?? -1
         if nsView.selectedSegment != selectedIndex {
             nsView.selectedSegment = selectedIndex
         }
+        nsView.font = .systemFont(ofSize: control.options.contains(where: { $0.subtitle != nil }) ? 12 : 13)
+        nsView.setAccessibilityLabel(control.sectionTitle)
         nsView.isEnabled = control.isEnabled
         nsView.selectedSegmentBezelColor = NSColor(theme.accent)
         nsView.userInterfaceLayoutDirection = context.environment.layoutDirection == .rightToLeft
