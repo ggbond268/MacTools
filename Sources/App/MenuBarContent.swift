@@ -12,16 +12,28 @@ enum MenuBarPanelLayout {
     static let baseWidth: CGFloat = 316
     static let secondaryPanelWidth: CGFloat = 216
     static let maximumPanelHeight: CGFloat = 720
-    static let minimumPanelHeight: CGFloat = 220
+    static let minimumPanelHeight: CGFloat = 224
     static let featureListMaximumHeight: CGFloat = 860
     static let featurePanelScreenHeightRatio: CGFloat = 0.75
     static let screenVerticalMargin: CGFloat = 48
     static let cornerRadius: CGFloat = 12
     static let panelSpacing: CGFloat = 10
     static let outerPadding: CGFloat = 6
+    static let panelTopPadding: CGFloat = 4
     static let contentTopPadding: CGFloat = 4
+    static let contentBottomPadding: CGFloat = 2
+    static let panelBottomPadding: CGFloat = 2
     static let rootSpacing: CGFloat = 0
-    static let toolbarHeight: CGFloat = 30
+    static let tabIconSize: CGFloat = 12
+    static let tabItemHeight: CGFloat = 26
+    static let tabCapsuleInset: CGFloat = 2
+    static let headerHeight: CGFloat = tabItemHeight + tabCapsuleInset * 2
+    static let headerAccessoryWidth: CGFloat = 26
+    static let headerAccessoryHeight: CGFloat = 26
+    static let headerAccessorySpacing: CGFloat = 0
+    static let editingButtonHeight: CGFloat = 28
+    static let editingActionBarVerticalPadding: CGFloat = 8
+    static let editingActionBarHeight = editingButtonHeight + editingActionBarVerticalPadding * 2
     static let featureRowSpacing: CGFloat = 5
     static let rowHeaderHeight: CGFloat = 31
     static let rowVerticalPadding: CGFloat = 16
@@ -44,12 +56,11 @@ enum MenuBarPanelLayout {
         baseWidth - (outerPadding * 2)
     }
 
-    static var topChromeHeight: CGFloat {
-        outerPadding + toolbarHeight + rootSpacing
-    }
-
-    static var contentBottomPadding: CGFloat {
-        outerPadding
+    static var panelChromeHeight: CGFloat {
+        panelTopPadding
+            + headerHeight
+            + panelBottomPadding
+            + rootSpacing
     }
 
     static var contentVerticalPadding: CGFloat {
@@ -61,18 +72,23 @@ enum MenuBarPanelLayout {
     }
 
     static var minimumContentHeight: CGFloat {
-        max(0, minimumPanelHeight - topChromeHeight)
+        max(0, minimumPanelHeight - panelChromeHeight)
     }
 
     static func maximumContentHeight(for screen: NSScreen?) -> CGFloat {
         max(
             minimumContentHeight,
-            maximumPanelHeight(for: screen) - topChromeHeight
+            maximumPanelHeight(for: screen) - panelChromeHeight
         )
     }
 
-    static func panelHeight(forContentHeight contentHeight: CGFloat) -> CGFloat {
-        topChromeHeight + contentHeight
+    static func panelHeight(
+        forContentHeight contentHeight: CGFloat,
+        showsEditingActionBar: Bool = false
+    ) -> CGFloat {
+        panelChromeHeight
+            + contentHeight
+            + (showsEditingActionBar ? editingActionBarHeight : 0)
     }
 
     static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
@@ -101,7 +117,7 @@ enum MenuBarPanelLayout {
     }
 
     static func availableFeatureHeight(forPanelHeight panelHeight: CGFloat) -> CGFloat {
-        max(0, panelHeight - topChromeHeight - contentVerticalPadding)
+        max(0, panelHeight - panelChromeHeight - contentVerticalPadding)
     }
 
     static func preferredPanelHeight(for panelItems: [PluginPanelItem], screen: NSScreen?) -> CGFloat {
@@ -160,7 +176,7 @@ enum MenuBarPanelLayout {
         }
 
         let screenMaximum = (visibleFrameHeight * featurePanelScreenHeightRatio)
-            - topChromeHeight
+            - panelChromeHeight
             - contentVerticalPadding
         return max(0, min(featureListMaximumHeight, screenMaximum))
     }
@@ -177,7 +193,7 @@ enum MenuBarPanelLayout {
         return max(minimumPanelHeight, visibleFrameHeight * featurePanelScreenHeightRatio)
     }
 
-    private static func rowHeight(for item: PluginPanelItem) -> CGFloat {
+    static func rowHeight(for item: PluginPanelItem) -> CGFloat {
         guard let detail = displayedDetail(for: item) else {
             return rowHeaderHeight + rowVerticalPadding
         }
@@ -327,6 +343,7 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
         let pluginID: String
         let controlID: String
         let optionID: String
+        var instanceID: String? = nil
     }
 
     @Published private(set) var activeActivation: Activation?
@@ -354,12 +371,13 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     func hoverBegan(
         pluginID: String,
         controlID: String,
-        optionID: String
+        optionID: String,
+        instanceID: String? = nil
     ) {
         let activation = Activation(
             pluginID: pluginID,
             controlID: controlID,
-            optionID: optionID
+            optionID: optionID, instanceID: instanceID
         )
 
         cancelDismissal()
@@ -395,12 +413,13 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     func pin(
         pluginID: String,
         controlID: String,
-        optionID: String
+        optionID: String,
+        instanceID: String? = nil
     ) {
         let activation = Activation(
             pluginID: pluginID,
             controlID: controlID,
-            optionID: optionID
+            optionID: optionID, instanceID: instanceID
         )
 
         cancelPendingActivation()
@@ -420,12 +439,13 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     func hoverEnded(
         pluginID: String,
         controlID: String,
-        optionID: String
+        optionID: String,
+        instanceID: String? = nil
     ) {
         let activation = Activation(
             pluginID: pluginID,
             controlID: controlID,
-            optionID: optionID
+            optionID: optionID, instanceID: instanceID
         )
 
         if pendingActivation == activation {
@@ -554,6 +574,13 @@ struct MenuBarContent: View {
     let onOpenSettings: () -> Void
     let onPresentDiskCleanConfiguration: () -> Void
     let onPresentLaunchControlConfiguration: () -> Void
+    var suppliedItems: [PluginPanelItem]? = nil
+    var suppliedEntries: [MenuBarPanelEntry]? = nil
+    var embedded = false
+    var suppliedRowOffsets: [String: CGFloat]? = nil
+    var onInlinePresentationChange: (Bool) -> Void = { _ in }
+
+    private var items: [PluginPanelItem] { suppliedItems ?? pluginHost.panelItems }
 
     var body: some View {
         content
@@ -564,6 +591,7 @@ struct MenuBarContent: View {
                     syncSecondaryPanelWindow()
                 }
             }
+            .allowsHitTesting(false)
         )
         .onAppear {
             hoverCoordinator.onDismissRequest = { activation in
@@ -578,6 +606,9 @@ struct MenuBarContent: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: activeSecondaryPanelSignature)
+        .onChange(of: secondaryPanelController.isPresentingInline) { _, inline in
+            onInlinePresentationChange(inline)
+        }
         .onChange(of: activeSecondaryPanelSignature) {
             syncSecondaryPanelWindowIfVisible()
         }
@@ -602,6 +633,7 @@ struct MenuBarContent: View {
             }
         }
         .onDisappear {
+            onInlinePresentationChange(false)
             flushDeferredActionsIfNeeded()
             hoverCoordinator.dismissImmediately()
             hoverCoordinator.onDismissRequest = nil
@@ -685,11 +717,13 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private var featureList: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        if embedded {
             featureCards
+        } else {
+            ScrollView(.vertical, showsIndicators: false) { featureCards }
+                .scrollDisabled(!isFeatureListScrollable)
+                .background(ScrollViewScrollerVisibilityConfigurator())
         }
-        .scrollDisabled(!isFeatureListScrollable)
-        .background(ScrollViewScrollerVisibilityConfigurator())
     }
 
     private var featureListHeight: CGFloat {
@@ -700,7 +734,7 @@ struct MenuBarContent: View {
     }
 
     private var visibleFeatureListHeight: CGFloat {
-        if pluginHost.panelItems.isEmpty {
+        if items.isEmpty {
             return contentBodyHeight
         }
 
@@ -712,7 +746,10 @@ struct MenuBarContent: View {
     }
 
     private var featureContentHeight: CGFloat {
-        MenuBarPanelLayout.featureContentHeight(for: pluginHost.panelItems)
+        guard suppliedRowOffsets == nil else { return contentBodyHeight }
+        guard let suppliedEntries else { return MenuBarPanelLayout.featureContentHeight(for: items) }
+        let templates = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        return MenuBarPanelLayout.featureContentHeight(for: suppliedEntries.compactMap { templates[$0.pluginID] })
     }
 
     private func presentSettings() {
@@ -907,7 +944,7 @@ struct MenuBarContent: View {
                     hoverCoordinator.pin(
                         pluginID: activeSecondaryPanel.item.id,
                         controlID: controlID,
-                        optionID: optionID
+                        optionID: optionID, instanceID: activeSecondaryPanel.activation.instanceID
                     )
                 } else {
                     hoverCoordinator.dismissImmediately()
@@ -941,13 +978,14 @@ struct MenuBarContent: View {
         pluginID: String,
         controlID: String,
         optionID: String,
-        isHovering: Bool
+        isHovering: Bool,
+        instanceID: String? = nil
     ) {
         if isHovering {
             hoverCoordinator.hoverBegan(
                 pluginID: pluginID,
                 controlID: controlID,
-                optionID: optionID
+                optionID: optionID, instanceID: instanceID
             )
             return
         }
@@ -955,7 +993,7 @@ struct MenuBarContent: View {
         hoverCoordinator.hoverEnded(
             pluginID: pluginID,
             controlID: controlID,
-            optionID: optionID
+            optionID: optionID, instanceID: instanceID
         )
     }
 
@@ -975,7 +1013,7 @@ struct MenuBarContent: View {
     private var activeSecondaryPanel: ActiveSecondaryPanel? {
         guard
             let activation = hoverCoordinator.activeActivation,
-            let item = pluginHost.panelItems.first(where: { $0.id == activation.pluginID }),
+            let item = items.first(where: { $0.id == activation.pluginID }),
             let panel = item.detail?.secondaryPanel(
                 controlID: activation.controlID,
                 optionID: activation.optionID
@@ -997,18 +1035,31 @@ struct MenuBarContent: View {
         let panel: PluginPanelSecondaryPanel
     }
 
+    @ViewBuilder
     private var featureCards: some View {
-        VStack(spacing: MenuBarPanelLayout.featureRowSpacing) {
-            if pluginHost.panelItems.isEmpty {
-                PanelPluginEmptyState(
-                    tab: .features,
-                    onInstall: {
-                        pluginHost.presentPluginMarketplace()
-                    }
-                )
+        let templates = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        let entries = suppliedEntries ?? items.map { MenuBarPanelEntry(pluginID: $0.id, surface: .featurePanel) }
+        let lookup = Dictionary(uniqueKeysWithValues: entries.map { ($0.presentationID, $0) })
+        let placement = ConfiguredMenuBarPanelLayout.placement(entries: entries, components: [], features: items)
+        let offsets = suppliedRowOffsets ?? placement.featureOffsets
+        let retainedIDs = Set(hoverCoordinator.activeActivation.map {
+            [MenuBarPanelEntry(pluginID: $0.pluginID, surface: .featurePanel,
+                               instanceID: $0.instanceID).presentationID]
+        } ?? [])
+        let frames = entries.compactMap { entry -> PanelItemFrame? in
+            guard let y = offsets[entry.presentationID], let item = templates[entry.pluginID] else { return nil }
+            return PanelItemFrame(id: entry.presentationID,
+                frame: CGRect(x: 0, y: y, width: MenuBarPanelLayout.surfaceWidth,
+                              height: MenuBarPanelLayout.rowHeight(for: item)))
+        }
+        if items.isEmpty {
+            PanelPluginEmptyState(tab: .features, onInstall: { pluginHost.presentPluginMarketplace() })
                 .frame(height: contentBodyHeight)
-            } else {
-                ForEach(pluginHost.panelItems) { item in
+        } else {
+            PanelViewportStack(frames: frames, width: MenuBarPanelLayout.surfaceWidth,
+                               height: suppliedRowOffsets == nil ? placement.height : contentBodyHeight,
+                               retainedIDs: retainedIDs) { id in
+                if let entry = lookup[id], let item = templates[entry.pluginID] {
                     FeatureRowView(
                         item: item,
                         indicator: pluginHost.primaryPanelIndicatorsByID[item.id],
@@ -1034,7 +1085,7 @@ struct MenuBarContent: View {
                                 hoverCoordinator.pin(
                                     pluginID: item.id,
                                     controlID: controlID,
-                                    optionID: optionID
+                                    optionID: optionID, instanceID: entry.instanceID
                                 )
                             } else {
                                 hoverCoordinator.dismissImmediately()
@@ -1046,7 +1097,7 @@ struct MenuBarContent: View {
                                 pluginID: item.id,
                                 controlID: controlID,
                                 optionID: optionID,
-                                isHovering: isHovering
+                                isHovering: isHovering, instanceID: entry.instanceID
                             )
                         },
                         onNavigationRowFrameChange: { controlID, optionID, frame in
@@ -1055,7 +1106,7 @@ struct MenuBarContent: View {
                                 for: HoverSecondaryPanelCoordinator.Activation(
                                     pluginID: item.id,
                                     controlID: controlID,
-                                    optionID: optionID
+                                    optionID: optionID, instanceID: entry.instanceID
                                 )
                             )
                         },
@@ -1084,7 +1135,6 @@ struct MenuBarContent: View {
                 }
             }
         }
-        .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
     }
 
 }

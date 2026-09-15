@@ -98,6 +98,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 120 \
+            -maximum-test-execution-time-allowance 120 \
             test \
             -quiet
 
@@ -115,9 +119,6 @@ jobs:
           name: native-test-results
           path: build/CI-TestResults.xcresult
           retention-days: 7
-
-      - name: Verify native panel layout interactions
-        run: make panel-layout-ui-tests
 
       - name: Verify PluginKit v6 binary compatibility
         run: ./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh

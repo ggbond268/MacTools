@@ -18,7 +18,7 @@ final class PreferencesBackupTests: XCTestCase {
         let defaults = makeDefaults()
         defaults.set(AppAppearancePreference.dark.rawValue, forKey: AppAppearancePreference.userDefaultsKey)
         defaults.set(AppLanguagePreference.en.rawValue, forKey: AppLanguagePreference.userDefaultsKey)
-        defaults.set(MenuBarClickBehaviorPreference.swapped.rawValue, forKey: MenuBarClickBehaviorPreference.userDefaultsKey)
+        defaults.set("swapped", forKey: MenuBarPanelStore.legacyClickBehaviorStorageKey)
         SettingsSidebarPreferencesStore.applyImportedPreferences(
             sortMode: .custom,
             customOrderedPluginIDs: ["second", "first"],
@@ -46,7 +46,9 @@ final class PreferencesBackupTests: XCTestCase {
         XCTAssertEqual(decodedBackup.shortcutCustomizations, backup.shortcutCustomizations)
         XCTAssertEqual(backup.application.appearancePreference, AppAppearancePreference.dark.rawValue)
         XCTAssertEqual(backup.application.languagePreference, AppLanguagePreference.en.rawValue)
-        XCTAssertEqual(backup.application.menuBarClickBehavior, MenuBarClickBehaviorPreference.swapped.rawValue)
+        XCTAssertNil(backup.application.menuBarClickBehavior)
+        XCTAssertEqual(backup.pluginDisplay.panelConfiguration?.panels.map(\.id), ["features", "components"])
+        XCTAssertNil(defaults.object(forKey: MenuBarPanelStore.legacyClickBehaviorStorageKey))
         XCTAssertEqual(
             backup.application.settingsSidebarPluginSortMode,
             SettingsSidebarPluginSortMode.custom.rawValue
@@ -198,7 +200,7 @@ final class PreferencesBackupTests: XCTestCase {
         let legacyPreferences = PreferencesBackup.ApplicationPreferences(
             appearancePreference: AppAppearancePreference.system.rawValue,
             languagePreference: AppLanguagePreference.system.rawValue,
-            menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+            menuBarClickBehavior: "standard"
         )
 
         XCTAssertTrue(backupStore.validates(legacyPreferences))
@@ -1372,7 +1374,7 @@ final class PreferencesBackupTests: XCTestCase {
             application: PreferencesBackup.ApplicationPreferences(
                 appearancePreference: AppAppearancePreference.system.rawValue,
                 languagePreference: AppLanguagePreference.system.rawValue,
-                menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+                menuBarClickBehavior: "standard"
             ),
             pluginDisplay: PluginDisplayPreferencesBackup(
                 orderedPluginIDs: ["available", "unavailable"],
@@ -1570,7 +1572,7 @@ final class PreferencesBackupTests: XCTestCase {
             application: PreferencesBackup.ApplicationPreferences(
                 appearancePreference: AppAppearancePreference.system.rawValue,
                 languagePreference: AppLanguagePreference.system.rawValue,
-                menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+                menuBarClickBehavior: "standard"
             ),
             pluginDisplay: PluginDisplayPreferencesBackup(
                 orderedPluginIDs: ["second", "unavailable", "first"],
@@ -2110,7 +2112,7 @@ final class PreferencesBackupTests: XCTestCase {
         PreferencesBackup.ApplicationPreferences(
             appearancePreference: AppAppearancePreference.system.rawValue,
             languagePreference: AppLanguagePreference.system.rawValue,
-            menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+            menuBarClickBehavior: "standard"
         )
     }
 

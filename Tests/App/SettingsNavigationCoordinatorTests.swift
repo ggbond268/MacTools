@@ -482,6 +482,11 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.consumeAboutUpdateActionRequest(request))
         XCTAssertNil(coordinator.aboutUpdateActionRequest)
         XCTAssertFalse(coordinator.consumeAboutUpdateActionRequest(request))
+        coordinator.requestAboutUpdateAction(version: nil)
+        let checkRequest = try XCTUnwrap(coordinator.aboutUpdateActionRequest)
+        XCTAssertNil(checkRequest.version)
+        XCTAssertNotEqual(checkRequest.id, request.id)
+        XCTAssertTrue(coordinator.consumeAboutUpdateActionRequest(checkRequest))
     }
 
     func testRegularAboutNavigationDoesNotRequestAutomaticUpdateAction() {

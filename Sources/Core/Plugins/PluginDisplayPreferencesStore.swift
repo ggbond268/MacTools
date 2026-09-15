@@ -1,6 +1,6 @@
 import Foundation
 
-enum PluginDisplaySurface: CaseIterable, Hashable, Sendable {
+enum PluginDisplaySurface: String, Codable, CaseIterable, Hashable, Sendable {
     case dashboard
     case featurePanel
 }
@@ -325,7 +325,8 @@ final class PluginDisplayPreferencesStore {
     func backupSnapshot(
         defaultPluginIDs: [String],
         dashboardDefaultPluginIDs: [String],
-        featurePanelDefaultPluginIDs: [String]
+        featurePanelDefaultPluginIDs: [String],
+        panelConfiguration: MenuBarPanelConfiguration? = nil
     ) -> PluginDisplayPreferencesBackup {
         migrateLegacyHiddenPluginIDs(
             dashboardDefaultPluginIDs: dashboardDefaultPluginIDs,
@@ -363,7 +364,8 @@ final class PluginDisplayPreferencesStore {
             ).sorted(),
             featurePanelHiddenPluginIDs: Array(
                 preferences.featurePanelHiddenPluginIDs.union(preferences.legacyHiddenPluginIDs)
-            ).sorted()
+            ).sorted(),
+            panelConfiguration: panelConfiguration
         )
     }
 

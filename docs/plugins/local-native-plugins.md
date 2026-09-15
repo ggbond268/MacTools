@@ -140,6 +140,14 @@ To update an existing plugin, change its code/resources/tests beside the plugin 
 
 When a change touches `Sources/MacToolsPluginKit/`, it is package-relevant for every plugin. `make release` automatically selects and bumps every affected manifest so all plugin packages are rebuilt against the same PluginKit build. A manual version bump is needed only when bypassing `make release` and using the lower-level release workflow directly.
 
+## Panel Widgets and Runtime Ownership
+
+Users can remove every widget or add multiple copies of the same plugin. A widget is a presentation entry, not a new plugin instance: installation, activation, shortcuts, and independently enabled background services remain plugin-owned.
+
+Use `PluginPanelSurfaceLifecycleHandling` for work required by the currently visible panel. The host sends one visibility transition per plugin and surface, regardless of copy count; switching between panels containing the same surface keeps that consumer alive. Removing the last visible copy releases it. Plugins with multiple foreground surfaces should track a set of consumers, as System Status does.
+
+Component views are mounted near the scroll viewport and can be recycled. Keep durable selection state and business tasks in a plugin-owned model; reserve view-local state for transient interaction. Do not start polling or refresh business data from each copy's `onAppear`. Library previews receive `PluginComponentContext.isPanelVisible == false`: they must not acquire foreground consumers or change live layout measurements. That context distinguishes preview creation from live content; lifecycle callbacks are the authority for subsequent panel visibility changes.
+
 ## Settings UI
 
 Plugin settings are hosted by MacTools. PluginKit 6 exposes one `settingsPage` entry point with two explicit layouts:

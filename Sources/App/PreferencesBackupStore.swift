@@ -18,7 +18,6 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
         return PreferencesBackup.ApplicationPreferences(
             appearancePreference: AppAppearancePreference.stored(in: userDefaults).rawValue,
             languagePreference: AppLanguagePreference.stored(in: userDefaults).rawValue,
-            menuBarClickBehavior: MenuBarClickBehaviorPreference.current(userDefaults).rawValue,
             settingsSidebarPluginSortMode: sidebarSortMode.rawValue,
             settingsSidebarCustomPluginOrder:
                 SettingsSidebarPreferencesStore.storedCustomOrderIfInitialized(in: userDefaults)
@@ -28,7 +27,6 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
     func validates(_ preferences: PreferencesBackup.ApplicationPreferences) -> Bool {
         guard AppAppearancePreference(rawValue: preferences.appearancePreference) != nil
             && AppLanguagePreference(rawValue: preferences.languagePreference) != nil
-            && MenuBarClickBehaviorPreference(rawValue: preferences.menuBarClickBehavior) != nil
         else {
             return false
         }
@@ -55,8 +53,7 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
 
     func apply(_ preferences: PreferencesBackup.ApplicationPreferences) {
         guard let appearance = AppAppearancePreference(rawValue: preferences.appearancePreference),
-              let language = AppLanguagePreference(rawValue: preferences.languagePreference),
-              let clickBehavior = MenuBarClickBehaviorPreference(rawValue: preferences.menuBarClickBehavior)
+              let language = AppLanguagePreference(rawValue: preferences.languagePreference)
         else {
             return
         }
@@ -64,7 +61,6 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
         let previousPreferences = applicationPreferences()
         appearance.storeAndApply(in: userDefaults)
         language.store(in: userDefaults)
-        userDefaults.set(clickBehavior.rawValue, forKey: MenuBarClickBehaviorPreference.userDefaultsKey)
 
         if let rawSortMode = preferences.settingsSidebarPluginSortMode,
            let sortMode = SettingsSidebarPluginSortMode(rawValue: rawSortMode) {
@@ -95,21 +91,6 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
         let changed = AppLanguagePreference.stored(in: userDefaults) != preference
         preference.store(in: userDefaults)
         guard AppLanguagePreference.stored(in: userDefaults) == preference else { return false }
-        if changed {
-            preferencesBackupChangeReporter?.didPersist(.application)
-        }
-        return true
-    }
-
-    func setMenuBarClickBehavior(rawValue: String) -> Bool {
-        guard let preference = MenuBarClickBehaviorPreference(rawValue: rawValue) else {
-            return false
-        }
-        let changed = MenuBarClickBehaviorPreference.current(userDefaults) != preference
-        userDefaults.set(preference.rawValue, forKey: MenuBarClickBehaviorPreference.userDefaultsKey)
-        guard MenuBarClickBehaviorPreference.current(userDefaults) == preference else {
-            return false
-        }
         if changed {
             preferencesBackupChangeReporter?.didPersist(.application)
         }

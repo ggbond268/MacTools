@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import XCTest
 import MacToolsPluginKit
@@ -6,6 +7,27 @@ import MacToolsPluginKit
 
 @MainActor
 final class PanelLayoutEditingSessionTests: XCTestCase {
+    func testPointerPreviewDoesNotInvalidateTheEditorSession() throws {
+        let session = PanelLayoutEditingSession()
+        let ids = (0..<20).map(String.init)
+        XCTAssertNotNil(session.begin(id: "0", ids: ids))
+        var editorUpdates = 0
+        var markerUpdates = 0
+        let editorSubscription = session.objectWillChange.sink { editorUpdates += 1 }
+        let markerSubscription = session.dragPreview.objectWillChange.sink { markerUpdates += 1 }
+        defer { editorSubscription.cancel(); markerSubscription.cancel() }
+
+        for offset in 0..<20 {
+            for _ in 0..<10 { session.preview(offset: offset, ids: ids) }
+        }
+        XCTAssertEqual(markerUpdates, 20, "Repeated pointer events within one boundary should not redraw")
+        XCTAssertEqual(editorUpdates, 0, "Moving the marker must not rebuild cards or the action bar")
+        session.leave()
+        XCTAssertEqual(markerUpdates, 21)
+        XCTAssertEqual(editorUpdates, 0)
+        XCTAssertNil(session.destination)
+    }
+
     func testDragPreviewOnlyCommitsOnDropAndUsesOriginalInsertionOffsets() throws {
         let session = PanelLayoutEditingSession()
         let ids = ["a", "b", "c", "d"]
@@ -32,6 +54,21 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
         XCTAssertNil(session.finish(ids: ids))
     }
 
+    func testRepeatedPreviewAtSameDestinationDoesNotRepublishState() {
+        let session = PanelLayoutEditingSession()
+        let ids = ["a", "b", "c"]
+        _ = session.begin(id: "a", ids: ids)
+        var updateCount = 0
+        let cancellable = session.objectWillChange.sink { updateCount += 1 }
+
+        session.preview(offset: 3, ids: ids)
+        XCTAssertEqual(updateCount, 0)
+
+        session.preview(offset: 3, ids: ids)
+        XCTAssertEqual(updateCount, 0)
+        withExtendedLifetime(cancellable) {}
+    }
+
     func testUnavailableSourceTargetAndExternalOrderChangesInvalidateDrag() {
         for changedIDs in [["b", "c"], ["a", "b"], ["c", "b", "a"], ["a", "b", "c", "d"]] {
             let session = PanelLayoutEditingSession()
@@ -45,7 +82,7 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
     func testNoOpDropsAndInvalidStartsAreIgnored() {
         let session = PanelLayoutEditingSession()
         XCTAssertNil(session.begin(id: "missing", ids: ["a", "b"]))
-        XCTAssertNil(session.begin(id: "a", ids: ["a"]))
+        XCTAssertNotNil(session.begin(id: "a", ids: ["a"]), "A single item can move to another panel")
         for offset in [1, 2] {
             _ = session.begin(id: "b", ids: ["a", "b", "c"])
             session.preview(offset: offset, ids: ["a", "b", "c"])
@@ -140,24 +177,37 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
     func testEditModeEligibilityDoneEscapeTabChangeAndDismissal() {
         let model = MenuBarUnifiedPanelModel(selectedTab: .components, contentHeight: 400,
                                              maximumFeatureListHeight: 400, isPanelVisible: true)
-        model.beginLayoutEditing(visibleItemCount: 1)
-        XCTAssertFalse(model.isEditingLayout)
+        model.beginLayoutEditing(visibleItemCount: 0)
+        XCTAssertTrue(model.isEditingLayout)
         model.beginLayoutEditing(visibleItemCount: 2)
         XCTAssertTrue(model.endLayoutEditing())
         XCTAssertFalse(model.endLayoutEditing(), "A second Escape should reach panel dismissal")
         model.beginLayoutEditing(visibleItemCount: 2)
         model.selectTab(.features)
-        XCTAssertFalse(model.isEditingLayout)
+        XCTAssertTrue(model.isEditingLayout)
         model.beginLayoutEditing(visibleItemCount: 2)
         model.update(selectedTab: .components, contentHeight: 450, maximumFeatureListHeight: 400, isPanelVisible: true)
         XCTAssertTrue(model.isEditingLayout, "Height refresh should preserve editing")
         model.update(selectedTab: .features, contentHeight: 450, maximumFeatureListHeight: 400, isPanelVisible: true)
-        XCTAssertFalse(model.isEditingLayout)
+        XCTAssertTrue(model.isEditingLayout)
         model.beginLayoutEditing(visibleItemCount: 2)
         model.update(selectedTab: .features, contentHeight: 450, maximumFeatureListHeight: 400, isPanelVisible: false)
         XCTAssertFalse(model.isEditingLayout)
         model.beginLayoutEditing(visibleItemCount: 2)
         XCTAssertFalse(model.isEditingLayout)
+    }
+
+    func testEditingChangeCallbackRunsWithoutAnExtraMainRunLoopTurn() {
+        let model = MenuBarUnifiedPanelModel(selectedTab: .components, contentHeight: 400,
+                                             maximumFeatureListHeight: 400, isPanelVisible: true)
+        var changes: [Bool] = []
+        model.onLayoutEditingChange = { changes.append($0) }
+
+        model.beginLayoutEditing(visibleItemCount: 2)
+        XCTAssertEqual(changes, [true])
+
+        XCTAssertTrue(model.endLayoutEditing())
+        XCTAssertEqual(changes, [true, false])
     }
 
     func testNativeCompletionDoesNotCancelACommittedMoveOrANewerDrag() throws {
@@ -229,9 +279,11 @@ final class PanelLayoutEditingSessionTests: XCTestCase {
     func testEditorSizingKeepsShortCardsVisibleAndBoundsLongLayouts() {
         let short = PanelLayoutDestination.editorContentHeight(itemHeight: 96, maximumHeight: 600)
         let viewport = short - MenuBarPanelLayout.contentVerticalPadding
-            - PanelLayoutDestination.footerHeight - PanelLayoutDestination.footerSpacing
         XCTAssertGreaterThanOrEqual(viewport, 96 + PanelLayoutDestination.dropTailHeight)
         XCTAssertEqual(PanelLayoutDestination.editorContentHeight(itemHeight: 2000, maximumHeight: 600), 600)
+        let empty = PanelLayoutDestination.editorContentHeight(itemHeight: 0, maximumHeight: 600)
+        XCTAssertEqual(MenuBarPanelLayout.panelHeight(forContentHeight: empty, showsEditingActionBar: true),
+                       MenuBarPanelLayout.minimumPanelHeight, "The footer must not add empty space to the minimum panel size")
     }
 
     private func providerFromPasteboard(token: String) -> NSItemProvider {

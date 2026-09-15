@@ -598,7 +598,6 @@ struct GeneralSettingsView: View {
     @ObservedObject private var cliService = CLIBrokerServiceController.shared
     @AppStorage(AppAppearancePreference.userDefaultsKey) private var appearancePreferenceRawValue = AppAppearancePreference.system.rawValue
     @AppStorage(AppLanguagePreference.userDefaultsKey) private var languagePreferenceRawValue = AppLanguagePreference.system.rawValue
-    @AppStorage(MenuBarClickBehaviorPreference.userDefaultsKey) private var clickBehaviorRawValue = MenuBarClickBehaviorPreference.standard.rawValue
     @State private var activeSearchTarget: GeneralSettingsSearchTarget?
     @State private var clearSearchTargetTask: Task<Void, Never>?
 
@@ -625,11 +624,6 @@ struct GeneralSettingsView: View {
         _languagePreferenceRawValue = AppStorage(
             wrappedValue: AppLanguagePreference.system.rawValue,
             AppLanguagePreference.userDefaultsKey,
-            store: appearanceUserDefaults
-        )
-        _clickBehaviorRawValue = AppStorage(
-            wrappedValue: MenuBarClickBehaviorPreference.standard.rawValue,
-            MenuBarClickBehaviorPreference.userDefaultsKey,
             store: appearanceUserDefaults
         )
     }
@@ -688,12 +682,6 @@ struct GeneralSettingsView: View {
                         activeTarget: activeSearchTarget
                     )
                     .settingsGroupedFormRowWidth(widths.sectionLayout)
-                    MenuBarClickBehaviorSettingsRow(selectionRawValue: clickBehaviorPreferenceBinding)
-                        .generalSettingsSearchAnchor(
-                            target: .menuBarClickBehavior,
-                            activeTarget: activeSearchTarget
-                        )
-                        .settingsGroupedFormRowWidth(widths.sectionLayout)
                 } header: {
                     SettingsGroupedFormSectionHeader(
                         title: AppL10n.settings("general.section.menuBarIcon", defaultValue: "状态栏图标"),
@@ -830,18 +818,6 @@ struct GeneralSettingsView: View {
                     return
                 }
                 languagePreferenceRawValue = rawValue
-            }
-        )
-    }
-
-    private var clickBehaviorPreferenceBinding: Binding<String> {
-        Binding(
-            get: { clickBehaviorRawValue },
-            set: { rawValue in
-                guard pluginHost.setMenuBarClickBehaviorPreference(rawValue: rawValue) else {
-                    return
-                }
-                clickBehaviorRawValue = rawValue
             }
         )
     }
@@ -990,12 +966,16 @@ private extension View {
 private struct AppShortcutSettingsRows: View {
     @ObservedObject var pluginHost: PluginHost
 
+    private var items: [AppShortcutSettingsItem] {
+        pluginHost.appShortcutItems.filter { !$0.action.isPanelAction }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(Array(pluginHost.appShortcutItems.enumerated()), id: \.element.id) { index, item in
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 AppShortcutSettingsRow(pluginHost: pluginHost, item: item)
 
-                if index < pluginHost.appShortcutItems.count - 1 {
+                if index < items.count - 1 {
                     PluginSettingsListDivider()
                 }
             }
@@ -2574,79 +2554,6 @@ struct PreferencesImportPreviewSheet: View {
         }
     }
 }
-private struct MenuBarClickBehaviorSettingsRow: View {
-    @Binding var selectionRawValue: String
-    @State private var isSwapped = false
-    @State private var toggleID = UUID()
-
-    var body: some View {
-        HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
-            ZStack {
-                RoundedRectangle(cornerRadius: GeneralSettingsCardLayout.iconCornerRadius, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.12))
-
-                Image(systemName: "cursorarrow.click.2")
-                    .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-            }
-            .frame(width: GeneralSettingsCardLayout.iconSize, height: GeneralSettingsCardLayout.iconSize)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(AppL10n.settings("menuBarClick.title", defaultValue: "交换左键与右键功能"))
-                    .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
-
-                Text(AppL10n.settings("menuBarClick.description", defaultValue: "关闭时左键打开仪表盘、右键功能打开功能面板；开启后互换。"))
-                    .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(AppL10n.settings(
-                    "menuBarClick.rightClickShortcutNotice",
-                    defaultValue: "可以使用 Option + 左键触发右键功能。"
-                ))
-                .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Toggle(AppL10n.settings("menuBarClick.toggle", defaultValue: "交换左键与右键功能"), isOn: $isSwapped)
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .id(toggleID)
-        }
-        .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
-        .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
-        .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
-        .help(AppL10n.settings("menuBarClick.help", defaultValue: "开启后左键打开功能面板，右键功能打开仪表盘"))
-        .onAppear {
-            isSwapped = resolvedSelection.isSwapped
-            DispatchQueue.main.async {
-                toggleID = UUID()
-            }
-        }
-        .onChange(of: isSwapped) { _, isSwapped in
-            let rawValue = isSwapped
-                ? MenuBarClickBehaviorPreference.swapped.rawValue
-                : MenuBarClickBehaviorPreference.standard.rawValue
-            if selectionRawValue != rawValue {
-                selectionRawValue = rawValue
-            }
-        }
-        .onChange(of: selectionRawValue) { _, _ in
-            let storedValue = resolvedSelection.isSwapped
-            if isSwapped != storedValue {
-                isSwapped = storedValue
-            }
-        }
-    }
-
-    private var resolvedSelection: MenuBarClickBehaviorPreference {
-        MenuBarClickBehaviorPreference(rawValue: selectionRawValue) ?? .standard
-    }
-}
-
 private struct AppearanceSettingsRow: View {
     @Binding var selectionRawValue: String
 
@@ -5577,7 +5484,7 @@ struct AboutSettingsView: View {
 
         Task { @MainActor in
             await Task.yield()
-            updateViewModel.performAvailableUpdateAction(version: request.version)
+            await updateViewModel.performRequestedUpdateAction(version: request.version)
         }
     }
 }
