@@ -310,14 +310,9 @@ final class WindowSwitcherSessionTests: XCTestCase {
         XCTAssertLessThan(compact.height, 420)
         func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
         let content = try XCTUnwrap(panel.contentView)
-        let cards = try XCTUnwrap(descendants(content).compactMap { $0 as? NSCollectionView }.first)
-        let flow = try XCTUnwrap(cards.collectionViewLayout)
-        cards.layoutSubtreeIfNeeded()
-        let first = try XCTUnwrap(flow.layoutAttributesForItem(at: IndexPath(item: 0, section: 0)))
-        let columns = (0..<9).prefix {
-            flow.layoutAttributesForItem(at: IndexPath(item: $0, section: 0))?.frame.minY == first.frame.minY
-        }.count
-        XCTAssertEqual(columns, 5)
+        let screen = try XCTUnwrap(panel.screen)
+        XCTAssertEqual(compact, WindowSwitcherSession.panelFrame(visibleFrame: screen.visibleFrame,
+            preview: false, count: 9), "Automatic sizing must use this display, not the developer's display")
         for (name, suffix) in [(NSAppearance.Name.aqua, "light"), (.darkAqua, "dark")] {
             panel.appearance = NSAppearance(named: name)
             content.layoutSubtreeIfNeeded()
@@ -944,6 +939,10 @@ final class WindowSwitcherSessionTests: XCTestCase {
         defer { controller.hide() }
         let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
         let content = try XCTUnwrap(panel.contentView)
+        // This test verifies two complete rows at a known six-column size.
+        // Automatic sizing depends on the host display and scrollbar style.
+        panel.setContentSize(NSSize(width: 840, height: 700))
+        controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
         content.layoutSubtreeIfNeeded()
         func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
         let cards = try XCTUnwrap(descendants(content).compactMap { $0 as? NSCollectionView }.first)
@@ -975,7 +974,7 @@ final class WindowSwitcherSessionTests: XCTestCase {
         let firstFrame = try XCTUnwrap(cards.collectionViewLayout?.layoutAttributesForItem(at: IndexPath(item: 0, section: 0))).frame
         let lastFrame = try XCTUnwrap(cards.collectionViewLayout?.layoutAttributesForItem(at: IndexPath(item: 11, section: 0))).frame
         XCTAssertTrue(cards.visibleRect.contains(firstFrame), "Both rows should fit without clipping the first card")
-        XCTAssertTrue(cards.visibleRect.contains(lastFrame))
+        XCTAssertTrue(cards.visibleRect.contains(lastFrame), "Both rows must fit at the explicit six-column size")
         if let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) {
             content.cacheDisplay(in: content.bounds, to: bitmap)
             try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "/private/tmp/window-switcher-cards-preview.png"))
@@ -991,6 +990,46 @@ final class WindowSwitcherSessionTests: XCTestCase {
         controller.update(value)
         XCTAssertFalse(cards.enclosingScrollView?.isHidden ?? true)
         XCTAssertEqual(cards.numberOfItems(inSection: 0), 1)
+    }
+
+    func testPreviewGridShowsTwoRowsAndScrollsOverflowAtNarrowWidths() throws {
+        let controller = WindowSwitcherOverlayController(preview: WindowSwitcherPreview(hasPermission: { false }))
+        let entries = (0..<12).map { entry("overflow-\($0)") }
+        let session = WindowSwitcherSession(entries: entries, selectedID: entries[0].id,
+            isPersistent: true, originalWindowID: nil)
+        controller.show(session, currentPID: 100, showsPreview: true)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        let content = try XCTUnwrap(panel.contentView)
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let cards = try XCTUnwrap(descendants(content).compactMap { $0 as? NSCollectionView }.first)
+        let scroll = try XCTUnwrap(cards.enclosingScrollView as? WindowSwitcherCardScrollView)
+        for style in [NSScroller.Style.legacy, .overlay] {
+            scroll.scrollerStyle = style
+            for (width, expectedColumns) in [(CGFloat(600), 4), (740, 5), (840, 6)] {
+                controller.update(session)
+                panel.setContentSize(NSSize(width: width, height: 700))
+                controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
+                content.layoutSubtreeIfNeeded()
+                cards.layoutSubtreeIfNeeded()
+                scroll.contentView.scroll(to: .zero)
+                scroll.reflectScrolledClipView(scroll.contentView)
+                let flow = try XCTUnwrap(cards.collectionViewLayout)
+                let frames = try (0..<12).map { index in
+                    try XCTUnwrap(flow.layoutAttributesForItem(at: IndexPath(item: index, section: 0))).frame
+                }
+                let columns = frames.prefix { $0.minY == frames[0].minY }.count
+                XCTAssertEqual(columns, expectedColumns, "width=\(width), scroller=\(style.rawValue)")
+                XCTAssertTrue(cards.visibleRect.contains(frames[0]))
+                XCTAssertTrue(cards.visibleRect.contains(frames[expectedColumns * 2 - 1]),
+                              "Two complete rows must remain visible above the preview")
+                XCTAssertEqual(scroll.hasContentBelow, expectedColumns < 6)
+                cards.scrollToItems(at: [IndexPath(item: 11, section: 0)], scrollPosition: .bottom)
+                scroll.updateOverflow()
+                XCTAssertTrue(cards.visibleRect.contains(frames[11]), "Overflow must remain reachable")
+                XCTAssertEqual(controller.session?.selectedID, entries[0].id, "Scrolling must not change selection")
+            }
+        }
     }
 
     func testNativeSearchEditorPastesChineseAndKeepsCompositionCommandsLocal() async throws {
