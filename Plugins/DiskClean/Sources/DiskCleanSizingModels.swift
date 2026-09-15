@@ -1,4 +1,5 @@
 import Darwin
+import MacToolsFileSystem
 import Foundation
 
 /// Completeness of a sizing result.
@@ -38,12 +39,7 @@ struct DiskCleanRootIdentity: Equatable, Sendable {
     /// File type. Design §3.1 lists directory/regularFile/symlink; `other` covers sockets,
     /// FIFOs, and device nodes that really appear in cache directories — they must be
     /// classified honestly rather than forced into regular-file shape.
-    enum FileType: Equatable, Sendable {
-        case directory
-        case regularFile
-        case symlink
-        case other
-    }
+    typealias FileType = FileSystemEntryType
 
     /// `st_dev`. Mount guards and the device blacklist both use this value.
     let devid: UInt64
