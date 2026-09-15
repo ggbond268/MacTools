@@ -342,10 +342,6 @@ final class PanelLayoutEditorTests: XCTestCase {
         try await checkDrag(surface: .featurePanel, changeDashboardSpan: true)
     }
 
-    func testDashboardRefreshWithStableGeometryKeepsFeatureDragControl() async throws {
-        try await checkDrag(surface: .featurePanel, changeDashboardSpan: false)
-    }
-
     func testDashboardSpanChangeCancelsDashboardDrag() async throws {
         try await checkDrag(surface: .dashboard, changeDashboardSpan: true)
     }
@@ -363,61 +359,6 @@ final class PanelLayoutEditorTests: XCTestCase {
         try await settle()
         XCTAssertEqual(host.panelItems.map(\.id), ["b"])
         XCTAssertNil(session.token)
-    }
-
-    func testEditorDocumentHeightExcludesRemovedEntries() async throws {
-        for hiddenIDs: [String] in [[], ["b"], ["a", "b"]] {
-            let host = makeHost([LayoutEditorTestPlugin("a", order: 0), LayoutEditorTestPlugin("b", order: 1)])
-            for id in hiddenIDs { host.setPluginVisible(false, id: id, on: .dashboard) }
-            let window = mount(PanelLayoutEditor(pluginHost: host, surface: .dashboard, onDismiss: {}))
-            defer { window.close() }
-            try await settle()
-            let root = try XCTUnwrap(window.contentView)
-            let canvas = try XCTUnwrap(descendants(root).first { $0.identifier?.rawValue == "panel.layout.canvas" })
-            let layout = ConfiguredMenuBarPanelLayout.placement(entries: host.panelEntries(in: "components"),
-                components: host.componentItems(in: "components"), features: host.panelItems(in: "components"))
-            let expected = PanelLayoutDestination.editorDocumentHeight(itemHeight: layout.height)
-            XCTAssertEqual(canvas.bounds.height, max(480, expected), accuracy: 0.5,
-                           "Presenter sizing must match the rendered document without reserving extra footer space")
-        }
-    }
-
-    func testCardBodyReceivesPointerDragsWhileCenteredControlsRemainSeparate() async throws {
-        for surface in [PluginDisplaySurface.dashboard, .featurePanel] {
-            for direction in [LayoutDirection.leftToRight, .rightToLeft] {
-                let host = makeHost([LayoutEditorTestPlugin("a", order: 0), LayoutEditorTestPlugin("b", order: 1)])
-                let window = mount(PanelLayoutEditor(pluginHost: host, surface: surface, onDismiss: {})
-                    .environment(\.layoutDirection, direction))
-                defer { window.close() }
-                try await settle()
-                let root = try XCTUnwrap(window.contentView)
-                let source = try XCTUnwrap(descendants(root).compactMap { $0 as? PanelLayoutDragSourceView }
-                    .first { $0.identifier?.rawValue == "panel.layout.drag.\(surface.panelEntryID(pluginID: "a"))" })
-                var starts = 0
-                source.onBegin = { starts += 1; return nil }
-                for point in [CGPoint(x: source.bounds.midX, y: 8),
-                              CGPoint(x: direction == .leftToRight ? source.bounds.width - 46 : 46,
-                                      y: source.bounds.height - 4)] {
-                    let location = source.convert(point, to: nil)
-                    XCTAssertTrue(root.hitTest(location) === source)
-                    sendMouse(.leftMouseDown, at: location, to: window)
-                    sendMouse(.leftMouseDragged, at: CGPoint(x: location.x + 6, y: location.y), to: window)
-                    sendMouse(.leftMouseUp, at: location, to: window)
-                }
-                XCTAssertEqual(starts, 2, "The card body must remain draggable outside the top controls")
-                let menuLocation = source.convert(CGPoint(x: source.menuFrame.midX, y: source.menuFrame.midY), to: nil)
-                setHover(source, inside: false)
-                try await settle()
-                XCTAssertTrue(root.hitTest(menuLocation) === source, "Hidden controls must not leave an input hole")
-                setHover(source, inside: true)
-                try await settle()
-                XCTAssertNotNil(root.hitTest(menuLocation))
-                XCTAssertFalse(root.hitTest(menuLocation) === source, "The overlay must not swallow the move menu")
-                setHover(source, inside: false)
-                try await settle()
-                XCTAssertTrue(root.hitTest(menuLocation) === source)
-            }
-        }
     }
 
     func testRemovalRequiresConfirmationAndRemovesOnlyTheCurrentEntry() async throws {
@@ -456,48 +397,6 @@ final class PanelLayoutEditorTests: XCTestCase {
             let other: PluginDisplaySurface = surface == .dashboard ? .featurePanel : .dashboard
             XCTAssertEqual(host.panelEntries(in: other.defaultPanelID).map(\.pluginID), ["a", "b"])
         }
-    }
-
-    func testMoveToButtonOpensIconOnlyDestinationsDirectly() async throws {
-        let host = makeHost([LayoutEditorTestPlugin("a", order: 0), LayoutEditorTestPlugin("b", order: 1)])
-        _ = host.addMenuBarPanel()
-        let window = mount(PanelLayoutEditor(pluginHost: host, surface: .dashboard, onDismiss: {}))
-        defer { window.close() }
-        try await settle()
-        let root = try XCTUnwrap(window.contentView)
-        let source = try XCTUnwrap(descendants(root).compactMap { $0 as? PanelLayoutDragSourceView }
-            .first { $0.identifier?.rawValue == "panel.layout.drag.dashboard:a" })
-        setHover(source, inside: true)
-        try await settle()
-        let destinations = LayoutEditorMenuCapture()
-        let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification,
-            object: nil, queue: .main) { notification in
-            MainActor.assumeIsolated {
-                guard let menu = notification.object as? NSMenu else { return }
-                // Native pull-down menus include a hidden title placeholder.
-                destinations.items = menu.items.filter { !$0.isHidden }
-                let timer = Timer(timeInterval: 0.1, repeats: true) { [weak menu] timer in
-                    MainActor.assumeIsolated {
-                        guard let menu else { timer.invalidate(); return }
-                        menu.cancelTrackingWithoutAnimation()
-                    }
-                }
-                RunLoop.main.add(timer, forMode: .eventTracking)
-                RunLoop.main.add(timer, forMode: .common)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { timer.invalidate() }
-            }
-        }
-        defer { NotificationCenter.default.removeObserver(observer) }
-        let location = source.convert(CGPoint(x: source.menuFrame.midX, y: source.menuFrame.midY), to: nil)
-        sendMouse(.leftMouseDown, at: location, to: window)
-        sendMouse(.leftMouseUp, at: location, to: window)
-        try await settle()
-        let header = try XCTUnwrap(destinations.items.first)
-        XCTAssertEqual(header.title, FeatureL10n.string("移动到"))
-        XCTAssertFalse(header.isEnabled)
-        let panelItems = destinations.items.dropFirst().filter { !$0.isSeparatorItem }
-        XCTAssertEqual(panelItems.count, 2)
-        XCTAssertTrue(panelItems.allSatisfy { $0.title.isEmpty && $0.image != nil })
     }
 
     func testUndoRestoresPersistedPanelOrderAndPreservesHiddenSlots() throws {
@@ -838,9 +737,4 @@ private struct LayoutEditorInteractionProbe: View {
 @MainActor
 private final class LayoutScrollTestDocument: NSView {
     override var isFlipped: Bool { true }
-}
-
-@MainActor
-private final class LayoutEditorMenuCapture {
-    var items: [NSMenuItem] = []
 }

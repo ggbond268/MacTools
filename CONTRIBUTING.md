@@ -76,6 +76,8 @@ Unless a file is clearly identified as third-party material under separate terms
 - Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
+- Panel tests should focus on persisted entries, independent copies, drag/Undo state, viewport mounting, plugin lifecycle, and known popover crashes. Check cosmetic changes visually instead of asserting exact padding, colors, menu counts, or generating screenshots without comparisons.
+- Native drag acceptance is opt-in: run `make panel-layout-ui-tests` when changing drag routing or hit testing, or `python3 scripts/e2e/run_panel_layout_fixture.py --surface cross-panels` for one scenario. These cursor-driven checks require an active desktop session and are excluded from `make ci` and the default GitHub build workflow.
 - File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.
 
 ## Pull Request Checklist

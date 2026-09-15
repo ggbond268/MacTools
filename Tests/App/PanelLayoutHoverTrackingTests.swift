@@ -89,15 +89,4 @@ final class PanelLayoutHoverTrackingTests: XCTestCase {
         XCTAssertTrue(states[1].isActive)
     }
 
-    func testCenteredControlsFitWideRowsAndNarrowCards() {
-        for size in [CGSize(width: 304, height: 47), CGSize(width: 70, height: 128), CGSize(width: 70, height: 64)] {
-            let bounds = CGRect(origin: .zero, size: size)
-            let frame = PanelLayoutItemControlsLayout.frame(in: bounds)
-            XCTAssertTrue(bounds.contains(frame))
-            XCTAssertEqual(frame.midX, bounds.midX)
-            XCTAssertEqual(frame.midY, bounds.midY)
-        }
-        XCTAssertTrue(PanelLayoutItemControlsLayout(size: CGSize(width: 70, height: 128)).isVertical)
-        XCTAssertFalse(PanelLayoutItemControlsLayout(size: CGSize(width: 304, height: 47)).isVertical)
-    }
 }

@@ -90,6 +90,7 @@ validate-changelog:
 script-tests: validate-changelog
 	@$(PYTHON3) -m unittest discover -s scripts/tests -p 'test_*.py'
 
+# Opt-in native event checks for changes to drag routing or hit testing.
 panel-layout-ui-tests:
 	@$(PYTHON3) scripts/e2e/run_panel_layout_fixture.py
 
@@ -106,7 +107,6 @@ ci: generate
 		CODE_SIGN_IDENTITY= \
 		test \
 		-quiet
-	@$(MAKE) panel-layout-ui-tests
 	@./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh
 
 sync-debug-plugins: build

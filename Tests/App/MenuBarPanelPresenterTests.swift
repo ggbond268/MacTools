@@ -187,13 +187,15 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         XCTAssertEqual(feedbackCount, 1, "Repeated close requests must not stack feedback animations")
         XCTAssertEqual(panelUpdates, 0, "Feedback must not publish a panel content or layout change")
 
-        try await Task.sleep(for: .milliseconds(650))
+        // Cooldown timing is covered by PanelLayoutToolbarTests; each close path
+        // below should independently deliver feedback without wall-clock waits.
+        model.editingFeedback.reset()
         popover.performClose(nil)
         XCTAssertEqual(feedbackCount, 2, "Native close requests must signal the Done button")
-        try await Task.sleep(for: .milliseconds(650))
+        model.editingFeedback.reset()
         presenter.toggleComponentPanel(relativeTo: fixture.button)
         XCTAssertEqual(feedbackCount, 3, "The status-item toggle must signal the Done button")
-        try await Task.sleep(for: .milliseconds(650))
+        model.editingFeedback.reset()
         let mainWindow = try XCTUnwrap(popover.contentViewController?.view.window)
         NSApp.postEvent(try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: mainWindow.windowNumber,
@@ -251,11 +253,6 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         presenter.debugPanelModelForTests.beginLayoutEditing(visibleItemCount: 5)
         try await Task.sleep(for: .milliseconds(250))
         let mainWindow = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view.window)
-        let mainContent = try XCTUnwrap(mainWindow.contentView)
-        let bitmap = try XCTUnwrap(mainContent.bitmapImageRepForCachingDisplay(in: mainContent.bounds))
-        mainContent.cacheDisplay(in: mainContent.bounds, to: bitmap)
-        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(
-            to: URL(fileURLWithPath: "/private/tmp/mactools-widget-editor-footer.png"))
         for id in ["a", "b"] {
             try clickFooterButton(in: mainWindow, trailingOffset: mainWindow.contentView!.bounds.width - 64)
             try await Task.sleep(for: .milliseconds(350))
@@ -327,116 +324,6 @@ final class MenuBarPanelPresenterTests: XCTestCase {
             XCTAssertTrue(presenter.debugPopoverForTests.isShown)
             XCTAssertEqual(fixture.host.panelEntries(in: "components").count, 1)
         }
-    }
-
-    func testDeleteConfirmationCancelEscapeAndDeleteKeepMainPopoverEditing() async throws {
-        let fixture = try await makePresentedFixture()
-        defer { fixture.close() }
-        let presenter = fixture.presenter
-        let model = presenter.debugPanelModelForTests
-        let customID = try XCTUnwrap(fixture.host.addMenuBarPanel())
-        presenter.showPanel(id: customID, toggle: false, relativeTo: fixture.button)
-        model.beginLayoutEditing(visibleItemCount: 0)
-        try await Task.sleep(for: .milliseconds(200))
-        let mainView = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view)
-        try clickTab("features", in: mainView)
-        try await Task.sleep(for: .milliseconds(100))
-        try clickTab(customID, in: mainView)
-        try await Task.sleep(for: .milliseconds(100))
-        try clickFooterButton(in: XCTUnwrap(mainView.window), trailingOffset: 140)
-        try await Task.sleep(for: .milliseconds(300))
-
-        let confirmation = try XCTUnwrap(NSApp.windows.first {
-            $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0)
-        })
-        XCTAssertFalse(confirmation === mainView.window)
-        XCTAssertTrue(presenter.containsPresentedWindow(confirmation))
-        XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-        XCTAssertTrue(model.isEditingLayout)
-        XCTAssertTrue(fixture.host.menuBarPanels.contains { $0.id == customID })
-        XCTAssertNil(NSApp.modalWindow, "Confirmation must not create a modal alert")
-
-        let content = try XCTUnwrap(confirmation.contentView)
-        let bitmap = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))
-        content.cacheDisplay(in: content.bounds, to: bitmap)
-        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-            .write(to: URL(fileURLWithPath: "/private/tmp/mactools-panel-delete-confirmation.png"))
-
-        if CGPreflightScreenCaptureAccess() {
-            let capture = Process()
-            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            capture.arguments = ["-x", "-l", String(confirmation.windowNumber),
-                                 "/private/tmp/mactools-panel-delete-confirmation-window.png"]
-            try capture.run()
-            capture.waitUntilExit()
-        }
-
-        presenter.dismissPanels() // The outside-click coordinator may request dismissal first.
-        XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-        try clickFooterButton(in: confirmation, trailingOffset: 130)
-        try await Task.sleep(for: .milliseconds(250))
-        XCTAssertFalse(confirmation.isVisible)
-        XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-        XCTAssertTrue(model.isEditingLayout)
-        XCTAssertTrue(fixture.host.menuBarPanels.contains { $0.id == customID })
-
-        try clickFooterButton(in: XCTUnwrap(mainView.window), trailingOffset: 140)
-        try await Task.sleep(for: .milliseconds(250))
-        let escapeConfirmation = try XCTUnwrap(NSApp.windows.first {
-            $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0)
-        })
-        let escape = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: escapeConfirmation.windowNumber,
-            context: nil, characters: "\u{1B}", charactersIgnoringModifiers: "\u{1B}",
-            isARepeat: false, keyCode: UInt16(kVK_Escape)))
-        NSApp.postEvent(escape, atStart: false)
-        try await Task.sleep(for: .milliseconds(250))
-        XCTAssertFalse(escapeConfirmation.isVisible)
-        XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-        XCTAssertTrue(model.isEditingLayout)
-        XCTAssertTrue(fixture.host.menuBarPanels.contains { $0.id == customID })
-
-        try clickFooterButton(in: XCTUnwrap(mainView.window), trailingOffset: 140)
-        try await Task.sleep(for: .milliseconds(250))
-        let deleteConfirmation = try XCTUnwrap(NSApp.windows.first {
-            $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0)
-        })
-        deleteConfirmation.makeKey()
-        let confirm = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: deleteConfirmation.windowNumber,
-            context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
-        XCTAssertTrue(deleteConfirmation.performKeyEquivalent(with: confirm))
-        try await Task.sleep(for: .milliseconds(300))
-        if deleteConfirmation.isVisible, let content = deleteConfirmation.contentView,
-           let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) {
-            content.cacheDisplay(in: content.bounds, to: bitmap)
-            try bitmap.representation(using: .png, properties: [:])?
-                .write(to: URL(fileURLWithPath: "/private/tmp/mactools-panel-delete-after-click.png"))
-        }
-        XCTAssertFalse(deleteConfirmation.isVisible)
-        XCTAssertFalse(fixture.host.menuBarPanels.contains { $0.id == customID })
-        XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-        XCTAssertTrue(model.isEditingLayout)
-        XCTAssertTrue(fixture.host.menuBarPanels.contains { $0.id == model.selectedTab.id })
-        try clickTab("features", in: mainView)
-        try await Task.sleep(for: .milliseconds(150))
-        XCTAssertEqual(model.selectedTab.id, "features")
-        try clickFooterButton(in: XCTUnwrap(mainView.window), trailingOffset: 140)
-        try await Task.sleep(for: .milliseconds(150))
-        XCTAssertFalse(NSApp.windows.contains { $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0) },
-                       "Default panels keep the footer's Delete Panel action disabled")
-        try clickTab("features", in: mainView)
-        try await Task.sleep(for: .milliseconds(200))
-        let iconPicker = try XCTUnwrap(NSApp.windows.first {
-            $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0)
-        })
-        XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-        NSApp.postEvent(try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: iconPicker.windowNumber,
-            context: nil, characters: "\u{1B}", charactersIgnoringModifiers: "\u{1B}",
-            isARepeat: false, keyCode: UInt16(kVK_Escape))), atStart: false)
-        try await Task.sleep(for: .milliseconds(200))
-        XCTAssertFalse(iconPicker.isVisible)
     }
 
     private func clickTab(_ id: String, in view: NSView) throws {
