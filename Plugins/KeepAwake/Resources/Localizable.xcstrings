@@ -1,6 +1,148 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "panel.behavior.screenTools.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يبقي الشاشة مضاءة ويمنع القفل التلقائي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hält das Display eingeschaltet und verhindert die automatische Sperre."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keeps the display on and prevents automatic locking."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantiene la pantalla encendida e impide el bloqueo automático."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Garde l’écran allumé et empêche le verrouillage automatique."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面をオンに保ち、自動ロックを防ぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면을 켜 두고 자동 잠금을 방지합니다."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantém a tela ligada e impede o bloqueio automático."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оставляет экран включённым и предотвращает автоблокировку."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持屏幕常亮并防止自动锁定。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持螢幕常亮並防止自動鎖定。"
+          }
+        }
+      }
+    },
+    "panel.behavior.default": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الافتراضي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por omisión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Par défaut"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標準"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Padrão"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "По умолчанию"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設"
+          }
+        }
+      }
+    },
     "error.enableFailed": {
       "extractionState": "manual",
       "localizations": {
@@ -228,7 +370,7 @@
       "localizations": {
         "ar": { "stringUnit": { "state": "translated", "value": "أدوات الشاشة" } },
         "de": { "stringUnit": { "state": "translated", "value": "Bildschirmtools" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Screen tools" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Screen Tools" } },
         "es": { "stringUnit": { "state": "translated", "value": "Herramientas de pantalla" } },
         "fr": { "stringUnit": { "state": "translated", "value": "Outils d’écran" } },
         "ja": { "stringUnit": { "state": "translated", "value": "画面ツール" } },
@@ -1152,7 +1294,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Display on"
+            "value": "Display On"
           }
         },
         "es": {

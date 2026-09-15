@@ -4,4 +4,4 @@ type: changed
 area: Prevent Sleep
 ---
 
-Choose whether Prevent Sleep lets the display turn off, keeps it on, or keeps screen-based tools working directly from the menu bar while it is enabled.
+Choose Default, Display On, or Screen Tools directly from Prevent Sleep in the menu bar, with a description of the selected behavior.

@@ -694,11 +694,12 @@ final class KeepAwakePlugin:
                 ),
                 PluginPanelControl(
                     id: ControlID.behavior,
-                    kind: .selectList,
+                    kind: .segmented,
                     options: KeepAwakeBehavior.allCases.map {
                         PluginPanelControlOption(
                             id: $0.rawValue,
-                            title: settingsBehaviorTitle($0)
+                            title: panelBehaviorTitle($0),
+                            subtitle: panelBehaviorDescription($0)
                         )
                     },
                     selectedOptionID: preferences.behavior.rawValue,
@@ -780,6 +781,27 @@ final class KeepAwakePlugin:
             logger.error("keep-awake behavior update failed: \(error.localizedDescription, privacy: .public)")
             lastErrorMessage = error.localizedDescription
             notifyChange()
+        }
+    }
+
+    private func panelBehaviorDescription(_ behavior: KeepAwakeBehavior) -> String {
+        if behavior == .keepScreenBasedToolsWorking {
+            return localization.string(
+                "panel.behavior.screenTools.description",
+                defaultValue: "保持屏幕常亮并防止自动锁定。"
+            )
+        }
+        return settingsBehaviorDescription(behavior)
+    }
+
+    private func panelBehaviorTitle(_ behavior: KeepAwakeBehavior) -> String {
+        switch behavior {
+        case .allowDisplayToTurnOff:
+            localization.string("panel.behavior.default", defaultValue: "默认")
+        case .keepDisplayOn:
+            localization.string("panel.display.indicator", defaultValue: "屏幕常亮")
+        case .keepScreenBasedToolsWorking:
+            localization.string("panel.screenTools.indicator", defaultValue: "屏幕工具")
         }
     }
 

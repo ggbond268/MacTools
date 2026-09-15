@@ -1255,8 +1255,8 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertEqual(controls.map(\.id), ["duration", "behavior"])
         XCTAssertEqual(controls[0].selectedOptionID, "forever")
         XCTAssertFalse(controls[0].showsLeadingDivider)
-        guard case .selectList = controls[1].kind else {
-            return XCTFail("Expected behavior choices to use a selectable menu-bar list")
+        guard case .segmented = controls[1].kind else {
+            return XCTFail("Expected behavior choices to use a segmented control")
         }
         XCTAssertEqual(
             controls[1].options.map(\.id),
@@ -1264,6 +1264,8 @@ final class KeepAwakePreferenceTests: XCTestCase {
         )
         XCTAssertEqual(controls[1].selectedOptionID, KeepAwakeBehavior.allowDisplayToTurnOff.rawValue)
         XCTAssertTrue(controls[1].showsLeadingDivider)
+        XCTAssertEqual(controls[1].options.map(\.title), ["默认", "屏幕常亮", "屏幕工具"])
+        XCTAssertTrue(controls[1].options.allSatisfy { !($0.subtitle ?? "").isEmpty })
     }
 
     func testFeaturePanelBehaviorSelectionUpdatesAnActiveSession() throws {
