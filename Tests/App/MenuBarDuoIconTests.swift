@@ -85,10 +85,12 @@ final class MenuBarDuoIconTests: XCTestCase {
             // Resolve subpixel padding before checking that neither indicator reaches the image edge.
             let pixels = try rgbaPixels(image, scale: 4)
             let side = 96
-            let perimeter = (0..<side).flatMap { offset in
-                [pixels[offset], pixels[(side - 1) * side + offset], pixels[offset * side], pixels[offset * side + side - 1]]
+            for offset in 0..<side {
+                XCTAssertEqual(pixels[offset].alpha, 0)
+                XCTAssertEqual(pixels[(side - 1) * side + offset].alpha, 0)
+                XCTAssertEqual(pixels[offset * side].alpha, 0)
+                XCTAssertEqual(pixels[offset * side + side - 1].alpha, 0)
             }
-            XCTAssertTrue(perimeter.allSatisfy { $0.alpha == 0 })
         }
     }
 
