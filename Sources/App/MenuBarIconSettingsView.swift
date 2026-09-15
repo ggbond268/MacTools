@@ -61,6 +61,7 @@ private struct MenuBarIconActionLabel: View {
 }
 
 struct MenuBarIconSettingsView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var iconSettings: MenuBarIconSettings
     @ObservedObject var gallery: MenuBarIconGalleryLibrary
 
@@ -93,7 +94,7 @@ struct MenuBarIconSettingsView: View {
 
                 Text(AppL10n.settings(
                     "menuBarIcon.description",
-                    defaultValue: "统一设置菜单栏图标，自动适应浅色和深色外观。"
+                    defaultValue: "可选择实时状态、经典图标，或使用自定义图标。"
                 ))
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
@@ -111,7 +112,7 @@ struct MenuBarIconSettingsView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(!iconSettings.hasCustomIcon)
+                .disabled(iconSettings.selectedBuiltInIcon == .classic)
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -121,7 +122,7 @@ struct MenuBarIconSettingsView: View {
 
     private var currentIconPreview: some View {
         MenuBarIconThumbnail(
-            image: iconSettings.previewImage(for: .light),
+            image: iconSettings.previewImage(for: colorScheme == .dark ? .dark : .light),
             height: PluginSettingsTheme.Size.rowIcon,
             maxWidth: 26
         )
@@ -138,6 +139,7 @@ struct MenuBarIconSettingsView: View {
 }
 
 private struct MenuBarIconEditorControls: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var iconSettings: MenuBarIconSettings
     @ObservedObject var gallery: MenuBarIconGalleryLibrary
 
@@ -146,6 +148,10 @@ private struct MenuBarIconEditorControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            controlRow(AppL10n.settings("menuBarIcon.builtIn.title", defaultValue: "内置图标")) {
+                builtInIconButtons
+            }
+
             controlRow(AppL10n.settings("menuBarIcon.source", defaultValue: "图标来源")) {
                 actionButtons
             }
@@ -153,7 +159,7 @@ private struct MenuBarIconEditorControls: View {
             contentOnlyRow {
                 Text(AppL10n.settings(
                     "menuBarIcon.sourceDescription",
-                    defaultValue: "支持透明背景的图标和轻量动画，也可从在线图库选择。"
+                    defaultValue: "支持上传透明图标或轻量动画，也可从在线图库选择。"
                 ))
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
@@ -170,6 +176,58 @@ private struct MenuBarIconEditorControls: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+        }
+    }
+
+    private var builtInIconButtons: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            ForEach(MenuBarBuiltInIcon.allCases) { icon in
+                builtInIconButton(icon)
+            }
+        }
+        .frame(maxWidth: contentMaxWidth, alignment: .trailing)
+    }
+
+    private func builtInIconButton(_ icon: MenuBarBuiltInIcon) -> some View {
+        let isSelected = iconSettings.selectedBuiltInIcon == icon
+        let title = builtInIconTitle(icon)
+
+        return Button {
+            iconSettings.selectBuiltInIcon(icon)
+        } label: {
+            HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+                MenuBarIconThumbnail(
+                    image: iconSettings.previewImage(for: icon, appearance: colorScheme == .dark ? .dark : .light),
+                    height: PluginSettingsTheme.Size.rowIcon,
+                    maxWidth: 24
+                )
+                .frame(width: 24)
+
+                Text(title)
+                    .font(PluginSettingsTheme.Typography.rowTitle)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.accentColor)
+                    .opacity(isSelected ? 1 : 0)
+            }
+            .frame(width: 142)
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func builtInIconTitle(_ icon: MenuBarBuiltInIcon) -> String {
+        switch icon {
+        case .liveStatus:
+            return AppL10n.settings("menuBarIcon.builtIn.liveStatus", defaultValue: "实时状态")
+        case .classic:
+            return AppL10n.settings("menuBarIcon.builtIn.classic", defaultValue: "经典图标")
         }
     }
 

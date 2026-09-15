@@ -91,15 +91,238 @@ final class MenuBarIconSettingsTests: XCTestCase {
         XCTAssertGreaterThan(renderedImage.size.width, MenuBarIconProcessing.standardIconPointSize)
     }
 
-    func testResetToDefaultClearsCustomSelection() throws {
+    func testResetToDefaultRestoresClassicFromLiveAndCustomSelections() throws {
         let sourceURL = try makeImageFile(name: "reset.png", color: .systemGreen)
         let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
 
+        settings.selectBuiltInIcon(.liveStatus)
+        settings.resetToDefault()
+
+        XCTAssertEqual(settings.selectedBuiltInIcon, .classic)
+        XCTAssertFalse(settings.usesLiveStatusIcon)
+
+        settings.selectBuiltInIcon(.liveStatus)
         settings.importIcon(from: sourceURL)
         settings.resetToDefault()
 
         XCTAssertFalse(settings.hasCustomIcon)
+        XCTAssertEqual(settings.selectedBuiltInIcon, .classic)
+        XCTAssertFalse(settings.usesLiveStatusIcon)
         XCTAssertTrue(settings.imagePayload().isTemplate)
+        let reloaded = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        XCTAssertEqual(reloaded.selectedBuiltInIcon, .classic)
+    }
+
+    func testFreshLegacyAndUnknownBuiltInSelectionsDefaultToClassic() {
+        let storedValues: [String?] = [nil, "{}", #"{"builtInIcon":"future-icon"}"#]
+        for storedValue in storedValues {
+            userDefaults.removeObject(forKey: "menubar.icon.settings")
+            if let storedValue {
+                userDefaults.set(Data(storedValue.utf8), forKey: "menubar.icon.settings")
+            }
+            let persisted = userDefaults.data(forKey: "menubar.icon.settings")
+
+            let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+
+            XCTAssertEqual(settings.selectedBuiltInIcon, .classic)
+            XCTAssertFalse(settings.hasCustomIcon)
+            XCTAssertFalse(settings.usesLiveStatusIcon)
+            XCTAssertTrue(settings.imagePayload().isTemplate)
+            XCTAssertEqual(settings.imagePayload().image.size, NSSize(width: 18, height: 18))
+            XCTAssertEqual(userDefaults.data(forKey: "menubar.icon.settings"), persisted)
+        }
+    }
+
+    func testClassicSelectionPersistsAndUsesOriginalArtwork() throws {
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        settings.selectBuiltInIcon(.classic)
+
+        let reloaded = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        let payload = reloaded.imagePayload()
+        let original = try XCTUnwrap(NSImage(named: "MenuBarIcon")?.copy() as? NSImage)
+        original.size = NSSize(width: 18, height: 18)
+        original.isTemplate = true
+
+        XCTAssertEqual(reloaded.selectedBuiltInIcon, .classic)
+        XCTAssertFalse(reloaded.hasCustomIcon)
+        XCTAssertFalse(reloaded.usesLiveStatusIcon)
+        XCTAssertTrue(payload.isTemplate)
+        XCTAssertFalse(payload.isAnimated)
+        XCTAssertEqual(payload.image.size, original.size)
+        for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+            XCTAssertEqual(try displayPixels(payload.image, appearance: appearance), try displayPixels(original, appearance: appearance))
+        }
+    }
+
+    func testClassicIgnoresLiveUpdatesUntilExplicitLiveSelectionWhichPersists() {
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        let image = settings.imagePayload().image
+        let revision = settings.settingsRevision
+        let persisted = userDefaults.data(forKey: "menubar.icon.settings")
+        settings.updateSystemStatus(MenuBarSystemStatusSnapshot(
+            battery: .level(fraction: 0.5, isCharging: true),
+            wifi: .connected(level: 3), network: .connected, connectionKind: .wifi
+        ))
+
+        XCTAssertTrue(image === settings.imagePayload().image)
+        XCTAssertEqual(settings.settingsRevision, revision)
+        XCTAssertEqual(userDefaults.data(forKey: "menubar.icon.settings"), persisted)
+
+        settings.selectBuiltInIcon(.liveStatus)
+
+        XCTAssertEqual(settings.selectedBuiltInIcon, .liveStatus)
+        XCTAssertTrue(settings.usesLiveStatusIcon)
+        XCTAssertEqual(settings.imagePayload().image.size, NSSize(width: 24, height: 24))
+        XCTAssertFalse(settings.imagePayload().isTemplate)
+        let reloaded = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        XCTAssertEqual(reloaded.selectedBuiltInIcon, .liveStatus)
+        XCTAssertTrue(reloaded.usesLiveStatusIcon)
+    }
+
+    func testBuiltInCandidatePreviewDoesNotChangeSelection() {
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+
+        _ = settings.previewImage(for: .classic, appearance: .light)
+        _ = settings.previewImage(for: .liveStatus, appearance: .dark)
+
+        XCTAssertEqual(settings.selectedBuiltInIcon, .classic)
+        XCTAssertFalse(settings.usesLiveStatusIcon)
+        XCTAssertEqual(settings.settingsRevision, 0)
+        XCTAssertNil(userDefaults.data(forKey: "menubar.icon.settings"))
+    }
+
+    func testBuiltInSelectionReplacesCustomIconAndAllowsAnotherImport() throws {
+        let sourceURL = try makeImageFile(name: "built-in-switch.png", color: .black)
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        settings.importIcon(from: sourceURL)
+        XCTAssertNil(settings.selectedBuiltInIcon)
+
+        settings.selectBuiltInIcon(.classic)
+
+        XCTAssertFalse(settings.hasCustomIcon)
+        XCTAssertEqual(settings.selectedBuiltInIcon, .classic)
+        settings.importIcon(from: sourceURL)
+        XCTAssertTrue(settings.hasCustomIcon)
+        XCTAssertNil(settings.selectedBuiltInIcon)
+        XCTAssertFalse(settings.usesLiveStatusIcon)
+    }
+
+    func testLiveStatusRefreshesSelectedIconWithoutPersistingRuntimeData() throws {
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        settings.selectBuiltInIcon(.liveStatus)
+        let persisted = try XCTUnwrap(userDefaults.data(forKey: "menubar.icon.settings"))
+        let original = settings.imagePayload().image
+        let revision = settings.settingsRevision
+        let snapshot = MenuBarSystemStatusSnapshot(
+            battery: .level(fraction: 0.7, isCharging: true),
+            wifi: .connected(level: 4), network: .connected, connectionKind: .wifi
+        )
+
+        settings.updateSystemStatus(snapshot)
+
+        XCTAssertFalse(original === settings.imagePayload().image)
+        XCTAssertEqual(settings.settingsRevision, revision + 1)
+        XCTAssertEqual(userDefaults.data(forKey: "menubar.icon.settings"), persisted)
+        XCTAssertFalse(settings.imagePayload().isAnimated)
+        settings.updateSystemStatus(snapshot)
+        XCTAssertEqual(settings.settingsRevision, revision + 1)
+    }
+
+    func testLiveStatusPreservesCustomImageUntilReset() throws {
+        let sourceURL = try makeImageFile(name: "custom.png", color: .black)
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        settings.importIcon(from: sourceURL)
+        let custom = settings.imagePayload().image
+        let persisted = userDefaults.data(forKey: "menubar.icon.settings")
+        let revision = settings.settingsRevision
+        let snapshot = MenuBarSystemStatusSnapshot(
+            battery: .level(fraction: 0.5, isCharging: false),
+            wifi: .off, network: .connected, connectionKind: .ethernet
+        )
+
+        settings.updateSystemStatus(snapshot)
+
+        XCTAssertTrue(custom === settings.imagePayload().image)
+        XCTAssertEqual(settings.settingsRevision, revision)
+        XCTAssertEqual(userDefaults.data(forKey: "menubar.icon.settings"), persisted)
+        settings.resetToDefault()
+        XCTAssertFalse(custom === settings.imagePayload().image)
+        XCTAssertEqual(settings.selectedBuiltInIcon, .classic)
+        XCTAssertFalse(settings.usesLiveStatusIcon)
+        XCTAssertEqual(settings.systemStatus, snapshot)
+    }
+
+    func testLiveColoredStatusPreservesOriginalRendering() {
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        settings.selectBuiltInIcon(.liveStatus)
+        for battery in [
+            MenuBarSystemStatusSnapshot.Battery.level(fraction: 0.7, isCharging: true),
+            .level(fraction: 0.19, isCharging: false)
+        ] {
+            settings.updateSystemStatus(MenuBarSystemStatusSnapshot(battery: battery))
+
+            let payload = settings.imagePayload()
+            XCTAssertFalse(payload.isTemplate)
+            XCTAssertFalse(payload.image.isTemplate)
+            XCTAssertTrue(payload.animationFrames.allSatisfy { !$0.isTemplate })
+            XCTAssertFalse(payload.isAnimated)
+        }
+    }
+
+    func testLiveColoredImageCachesEachAppearance() throws {
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        settings.selectBuiltInIcon(.liveStatus)
+        settings.updateSystemStatus(MenuBarSystemStatusSnapshot(
+            battery: .level(fraction: 0.7, isCharging: true),
+            wifi: .connected(level: 4), network: .connected, connectionKind: .wifi
+        ))
+        let lightAppearance = try XCTUnwrap(NSAppearance(named: .aqua))
+        let darkAppearance = try XCTUnwrap(NSAppearance(named: .darkAqua))
+
+        let light = settings.imagePayload(for: lightAppearance)
+        let dark = settings.imagePayload(for: darkAppearance)
+
+        XCTAssertFalse(light.image === dark.image)
+        XCTAssertTrue(light.image === settings.imagePayload(for: lightAppearance).image)
+        XCTAssertTrue(dark.image === settings.imagePayload(for: darkAppearance).image)
+        XCTAssertTrue(light.image === settings.previewImage(for: .light))
+        XCTAssertTrue(dark.image === settings.previewImage(for: .dark))
+        XCTAssertNotEqual(
+            try displayPixels(light.image, appearance: .aqua),
+            try displayPixels(dark.image, appearance: .aqua)
+        )
+    }
+
+    func testLiveIconReturnsToTemplateWhenBatteryColorStateEnds() {
+        let settings = MenuBarIconSettings(userDefaults: userDefaults, rootDirectory: rootDirectory)
+        settings.selectBuiltInIcon(.liveStatus)
+        let transitions: [(MenuBarSystemStatusSnapshot.Battery, MenuBarSystemStatusSnapshot.Battery)] = [
+            (
+                .level(fraction: 0.7, isCharging: true),
+                .level(fraction: 0.7, isCharging: false, isExternalPowerConnected: true)
+            ),
+            (
+                .level(fraction: 0.19, isCharging: false),
+                .level(fraction: 0.2, isCharging: false)
+            )
+        ]
+
+        for (coloredBattery, normalBattery) in transitions {
+            settings.updateSystemStatus(MenuBarSystemStatusSnapshot(battery: coloredBattery))
+            let coloredLight = settings.previewImage(for: .light)
+            let coloredDark = settings.previewImage(for: .dark)
+
+            settings.updateSystemStatus(MenuBarSystemStatusSnapshot(battery: normalBattery))
+
+            for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+                let payload = settings.imagePayload(for: NSAppearance(named: appearance))
+                XCTAssertTrue(payload.isTemplate)
+                XCTAssertTrue(payload.image.isTemplate)
+                XCTAssertTrue(payload.animationFrames.allSatisfy(\.isTemplate))
+                XCTAssertFalse(payload.image === coloredLight)
+                XCTAssertFalse(payload.image === coloredDark)
+            }
+        }
     }
 
     func testOpaquePNGIsRejectedBeforeSaving() throws {
