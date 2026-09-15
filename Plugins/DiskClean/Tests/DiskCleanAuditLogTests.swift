@@ -131,4 +131,271 @@ final class DiskCleanAuditLogTests: XCTestCase {
             status: status
         )
     }
+
+    func testRunSummaryRecordRoundTripsEveryField() throws {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        let timestamp = Date(timeIntervalSince1970: 1_700_100_000)
+
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: timestamp,
+                action: .runSummary,
+                runID: "run-12345",
+                targetID: "summary",
+                path: "run://run-12345",
+                estimatedBytes: 104_857_600,
+                status: "completed",
+                categoriesCleaned: ["appCaches", "logs"],
+                itemsRemoved: 42,
+                bytesRemoved: 104_857_600,
+                errorsEncountered: ["Permission denied for /var/log/system.log"],
+                isTrash: false
+            )
+        )
+
+        let record = try XCTUnwrap(log.recentRecords(limit: 1).first)
+        XCTAssertEqual(record.timestamp.timeIntervalSince1970, timestamp.timeIntervalSince1970, accuracy: 1)
+        XCTAssertEqual(record.action, .runSummary)
+        XCTAssertEqual(record.runID, "run-12345")
+        XCTAssertEqual(record.categoriesCleaned, ["appCaches", "logs"])
+        XCTAssertEqual(record.itemsRemoved, 42)
+        XCTAssertEqual(record.bytesRemoved, 104_857_600)
+        XCTAssertEqual(record.errorsEncountered, ["Permission denied for /var/log/system.log"])
+        XCTAssertEqual(record.isTrash, false)
+    }
+
+    func testRecentRunsReadsRunSummaryRecords() {
+        let log = DiskCleanAuditLog(directory: storage.url)
+
+        for i in 1...3 {
+            log.append(
+                DiskCleanAuditLog.Record(
+                    timestamp: Date(timeIntervalSince1970: Double(2_000 + i * 100)),
+                    action: .runSummary,
+                    runID: "run-\(i)",
+                    targetID: "summary",
+                    path: "run://run-\(i)",
+                    estimatedBytes: Int64(i * 1024),
+                    status: "completed",
+                    categoriesCleaned: ["cat-\(i)"],
+                    itemsRemoved: i * 5,
+                    bytesRemoved: Int64(i * 1024),
+                    errorsEncountered: i == 2 ? ["warn"] : [],
+                    isTrash: i % 2 == 0
+                )
+            )
+        }
+
+        let runs = log.recentRuns(limit: 2)
+        XCTAssertEqual(runs.count, 2)
+        XCTAssertEqual(runs.map(\.id), ["run-2", "run-3"])
+        let chronologicalRuns = runs.sorted { $0.timestamp > $1.timestamp }
+        XCTAssertEqual(chronologicalRuns[0].id, "run-3")
+        XCTAssertEqual(chronologicalRuns[0].itemsRemoved, 15)
+        XCTAssertEqual(chronologicalRuns[0].bytesRemoved, 3072)
+        XCTAssertFalse(chronologicalRuns[0].isTrash)
+
+        XCTAssertEqual(chronologicalRuns[1].id, "run-2")
+        XCTAssertEqual(chronologicalRuns[1].itemsRemoved, 10)
+        XCTAssertEqual(chronologicalRuns[1].bytesRemoved, 2048)
+        XCTAssertTrue(chronologicalRuns[1].isTrash)
+        XCTAssertTrue(chronologicalRuns[1].needsAttention)
+    }
+
+    func testRecentRunsClustersLegacyRecordsWhenSummaryAbsent() {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        let baseTime = Date(timeIntervalSince1970: 3_000)
+
+        // Cluster 1 (timestamp 3000-3002)
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime,
+                action: .trash,
+                category: "appCaches",
+                path: "/cache/item1",
+                estimatedBytes: 1024,
+                status: "ok"
+            )
+        )
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(2),
+                action: .trash,
+                category: "systemLogs",
+                path: "/cache/item2",
+                estimatedBytes: 2048,
+                status: "ok"
+            )
+        )
+
+        // Cluster 2 (timestamp 3100)
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(100),
+                action: .delete,
+                category: "downloads",
+                path: "/downloads/old",
+                estimatedBytes: 4096,
+                status: "partiallyDeleted",
+                error: "Locked file"
+            )
+        )
+
+        let runs = log.recentRuns(limit: 10)
+        XCTAssertEqual(runs.count, 2, "Must cluster by time window into 2 runs")
+
+        // Most recent first: cluster 2
+        XCTAssertEqual(runs[0].itemsRemoved, 0)
+        XCTAssertEqual(runs[0].bytesRemoved, 0, "partial deletion does not prove any bytes were removed")
+        XCTAssertTrue(runs[0].needsAttention)
+        XCTAssertFalse(runs[0].isTrash)
+
+        // Earlier cluster 1
+        XCTAssertEqual(runs[1].itemsRemoved, 2)
+        XCTAssertEqual(runs[1].bytesRemoved, 3072)
+        XCTAssertFalse(runs[1].needsAttention)
+        XCTAssertTrue(runs[1].isTrash)
+    }
+
+    func testRecentRunsProjectsInterruptedRunIDWithoutDuplicatingCompletedSummary() throws {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        let baseTime = Date(timeIntervalSince1970: 4_000)
+
+        // The process can stop after item records have been appended, before the final summary.
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime,
+                action: .delete,
+                runID: "interrupted-run",
+                category: "appCaches",
+                path: "/cache/removed",
+                estimatedBytes: 1_024,
+                status: "ok"
+            )
+        )
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(1),
+                action: .delete,
+                runID: "interrupted-run",
+                category: "logs",
+                path: "/cache/blocked",
+                stagedName: ".mactools-staged-blocked",
+                estimatedBytes: 8_192,
+                status: "rollbackBlocked",
+                error: "Destination occupied"
+            )
+        )
+
+        // Item records with this run ID belong to this authoritative completed summary only.
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(2),
+                action: .trash,
+                runID: "completed-run",
+                path: "/cache/completed",
+                estimatedBytes: 4_096,
+                status: "ok"
+            )
+        )
+        log.append(
+            DiskCleanAuditLog.Record(
+                timestamp: baseTime.addingTimeInterval(3),
+                action: .runSummary,
+                runID: "completed-run",
+                status: "ok",
+                itemsRemoved: 1,
+                bytesRemoved: 4_096,
+                errorsEncountered: [],
+                isTrash: true
+            )
+        )
+
+        let runs = log.recentRuns(limit: 10)
+        XCTAssertEqual(runs.map(\.id), ["interrupted-run", "completed-run"])
+
+        let interrupted = try XCTUnwrap(runs.first { $0.id == "interrupted-run" })
+        XCTAssertEqual(interrupted.status, "interrupted")
+        XCTAssertFalse(interrupted.isTrash)
+        XCTAssertEqual(interrupted.categoriesCleaned, ["appCaches", "logs"])
+        XCTAssertEqual(interrupted.itemsRemoved, 1)
+        XCTAssertEqual(interrupted.bytesRemoved, 1_024)
+        XCTAssertEqual(interrupted.errorsEncountered, ["Destination occupied"])
+        XCTAssertTrue(interrupted.needsAttention)
+        XCTAssertEqual(interrupted.itemEntries.map(\.path), ["/cache/blocked", "/cache/removed"])
+    }
+
+    func testRecentRunsLegacyBytesIncludeOnlyVerifiedSuccesses() {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        let timestamp = Date(timeIntervalSince1970: 5_000)
+
+        for (status, bytes) in [("ok", 1_024), ("failed", 2_048), ("skipped", 4_096), ("partiallyDeleted", 8_192)] {
+            log.append(
+                DiskCleanAuditLog.Record(
+                    timestamp: timestamp,
+                    action: .delete,
+                    path: "/cache/\(status)",
+                    estimatedBytes: Int64(bytes),
+                    status: status,
+                    error: status == "failed" ? "Permission denied" : nil
+                )
+            )
+        }
+
+        let run = log.recentRuns(limit: 1).first
+        XCTAssertEqual(run?.itemsRemoved, 1)
+        XCTAssertEqual(run?.bytesRemoved, 1_024)
+    }
+
+}
+
+
+extension DiskCleanAuditLogTests {
+    func testRecoveryOnlyLogRemainsVisibleInRunsWithRecoveryDetails() throws {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        log.append(.init(timestamp: Date(), action: .scanEvent, path: "/cache/original",
+                         stagedName: ".mactools-staged-test", status: "reconcileFailed", error: "Restore failed"))
+        let run = try XCTUnwrap(log.recentRuns(limit: 100).first)
+        XCTAssertTrue(run.isRecovery)
+        XCTAssertTrue(run.needsAttention)
+        XCTAssertEqual(run.status, "reconcileFailed")
+        XCTAssertEqual(run.itemsRemoved, 0)
+        XCTAssertEqual(run.bytesRemoved, 0)
+        XCTAssertEqual(run.itemEntries.first?.path, "/cache/original")
+        XCTAssertEqual(run.itemEntries.first?.stagedName, ".mactools-staged-test")
+        XCTAssertEqual(run.errorsEncountered, ["Restore failed"])
+    }
+
+    func testRecoveryAfterCleanupIsSeparateAndPinnedBeforeLimit() {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 100), action: .delete,
+                         runID: "old", path: "/cache/a", status: "ok"))
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 110), action: .scanEvent,
+                         path: "/cache/b", stagedName: ".mactools-staged-b", status: "rollbackBlocked"))
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 200), action: .runSummary,
+                         runID: "new", status: "ok", itemsRemoved: 3, bytesRemoved: 30, isTrash: true))
+        let runs = log.recentRuns(limit: 3)
+        XCTAssertEqual(runs.count, 3)
+        XCTAssertTrue(runs[0].isRecovery)
+        XCTAssertEqual(log.recentRuns(limit: 1).first?.itemEntries.first?.path, "/cache/b")
+        XCTAssertEqual(runs.first { $0.id == "new" }?.itemsRemoved, 3)
+    }
+
+    func testAllItemsExcludesSummariesBeforeLimitAndRetainsRecovery() async {
+        let log = DiskCleanAuditLog(directory: storage.url)
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 100), action: .delete,
+                         runID: "first", path: "/cache/a", status: "ok"))
+        log.append(.init(timestamp: Date(timeIntervalSince1970: 110), action: .scanEvent,
+                         path: "/cache/b", status: "reconcileFailed"))
+        for index in 0..<5 {
+            log.append(.init(timestamp: Date(timeIntervalSince1970: Double(200 + index)),
+                             action: .runSummary, runID: "summary-\(index)", status: "cancelled"))
+        }
+        let provider = DiskCleanAuditLogHistoryProvider(directory: storage.url)
+        let items = await provider.recentEntries(limit: 2)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(Set(items.compactMap(\.path)), ["/cache/a", "/cache/b"])
+        XCTAssertEqual(log.recentRecords(limit: 100).count, 7, "Raw audit reads must retain summaries")
+        XCTAssertTrue(log.recentRecords(limit: 0, excludingRunSummaries: true).isEmpty)
+    }
 }

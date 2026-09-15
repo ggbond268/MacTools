@@ -95,7 +95,22 @@ struct DiskCleanRuleCatalogV2: Sendable {
             ]),
             reservedRootPaths: [
                 "~/Library/Caches"
-            ]
+            ],
+            explanation: DiskCleanRuleExplanation(
+                whyMatched: "Standard macOS application caches in ~/Library/Caches.",
+                consequence: "Apps may download content again or rebuild previews when next opened.",
+                safetyTier: .safe,
+                requiresFullDiskAccess: false,
+                confidence: .high,
+                title: "用户应用缓存",
+                summary: "清理用户目录下 ~/Library/Caches 中的临时应用缓存",
+                dataClass: .cache,
+                discoveryMethod: .knownPathPattern,
+                defaultSelectionReason: "低风险临时缓存，应用可自动重建",
+                regeneration: "Apps rebuild necessary caches when next opened.",
+                provenance: .macOSDocumentedLocation,
+                localizationKeyPrefix: "explanation.cache"
+            )
         ),
         DiskCleanRuleTarget(
             id: "cache.user-essentials.logs",
@@ -103,11 +118,28 @@ struct DiskCleanRuleCatalogV2: Sendable {
             category: .logs,
             risk: .low,
             kind: .path(globs: [
-                "~/Library/Logs/*"
+                "~/Library/Logs/*",
+                "~/Library/Logs/*/*.log.*",
+                "~/Library/Logs/*/*.old"
             ]),
             reservedRootPaths: [
                 "~/Library/Logs"
-            ]
+            ],
+            explanation: DiskCleanRuleExplanation(
+                whyMatched: "Application logs and rotated logs in ~/Library/Logs.",
+                consequence: "Historical logs and diagnostic records will be lost.",
+                safetyTier: .safe,
+                requiresFullDiskAccess: false,
+                confidence: .high,
+                title: "应用与系统日志",
+                summary: "清理用户日志目录下的常规日志与历史轮转文件",
+                dataClass: .log,
+                discoveryMethod: .knownPathPattern,
+                defaultSelectionReason: "低风险历史日志，不会影响应用正常运行",
+                regeneration: "Apps create new logs; deleted history cannot be regenerated.",
+                provenance: .macOSDocumentedLocation,
+                localizationKeyPrefix: "explanation.logs"
+            )
         ),
         DiskCleanRuleTarget(
             id: "cache.macos-app-state",
@@ -921,6 +953,8 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 "~/.android/cache/*",
                 "~/.cache/swift-package-manager/*",
                 "~/Library/Caches/org.swift.swiftpm/*",
+                "~/Library/Caches/CocoaPods/*",
+                "~/Library/Caches/org.carthage.CarthageKit/*",
                 "~/.expo/expo-go/*",
                 "~/.expo/android-apk-cache/*",
                 "~/.expo/ios-simulator-app-cache/*",
@@ -935,6 +969,8 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 "~/.android/cache",
                 "~/.cache/swift-package-manager",
                 "~/Library/Caches/org.swift.swiftpm",
+                "~/Library/Caches/CocoaPods",
+                "~/Library/Caches/org.carthage.CarthageKit",
                 "~/.expo/expo-go",
                 "~/.expo/android-apk-cache",
                 "~/.expo/ios-simulator-app-cache",
@@ -942,7 +978,22 @@ struct DiskCleanRuleCatalogV2: Sendable {
                 "~/.expo/schema-cache",
                 "~/.expo/template-cache",
                 "~/.expo/versions-cache"
-            ]
+            ],
+            explanation: DiskCleanRuleExplanation(
+                whyMatched: "Downloaded caches for Android Studio, SwiftPM, CocoaPods, Carthage, and Expo.",
+                consequence: "The next build may need to download dependencies again.",
+                safetyTier: .safe,
+                requiresFullDiskAccess: false,
+                confidence: .high,
+                title: "移动开发依赖缓存",
+                summary: "清理 CocoaPods、Carthage、SwiftPM、Android Studio 等移动开发工具下载缓存",
+                dataClass: .downloadedResource,
+                discoveryMethod: .knownPathPattern,
+                defaultSelectionReason: "纯下载依赖包缓存，可在构建时按需重新下载",
+                regeneration: "The next build, pod install, or Carthage command downloads the required dependencies.",
+                provenance: .applicationDocumentedLocation,
+                localizationKeyPrefix: "explanation.mobile"
+            )
         ),
         DiskCleanRuleTarget(
             id: "developer.jvm-caches",

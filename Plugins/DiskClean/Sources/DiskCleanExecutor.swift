@@ -186,12 +186,14 @@ struct DiskCleanExecutor: DiskCleanExecuting {
 
     func execute(plan: DiskCleanValidatedPlan) async throws -> DiskCleanExecutionResult {
         var snapshot = try await preflight(plan: plan)
+        let runID = UUID().uuidString
 
         var itemResults: [DiskCleanExecutionItemResult] = []
         itemResults.reserveCapacity(plan.items.count)
 
         for item in plan.items {
             if Task.isCancelled {
+                recordRunSummary(runID: runID, plan: plan, itemResults: itemResults, wasCancelled: true)
                 return DiskCleanExecutionResult(
                     itemResults: itemResults,
                     mode: plan.mode,
@@ -202,6 +204,7 @@ struct DiskCleanExecutor: DiskCleanExecuting {
             // Per-item lock recheck: refresh bundle IDs; keep process names from the preflight snapshot (trade-off noted on the protocol).
             snapshot = await runningAppLock.refreshingBundleIDs(in: snapshot)
             if Task.isCancelled {
+                recordRunSummary(runID: runID, plan: plan, itemResults: itemResults, wasCancelled: true)
                 return DiskCleanExecutionResult(
                     itemResults: itemResults,
                     mode: plan.mode,
@@ -213,7 +216,7 @@ struct DiskCleanExecutor: DiskCleanExecuting {
                 processNames: item.skipWhenProcessIsRunning
             ) {
                 itemResults.append(
-                    record(item: item, outcome: .skipped(.inUse(processName: processName)), mode: plan.mode)
+                    record(item: item, outcome: .skipped(.inUse(processName: processName)), mode: plan.mode, runID: runID)
                 )
                 continue
             }
@@ -225,17 +228,71 @@ struct DiskCleanExecutor: DiskCleanExecuting {
                 alsoChecking: item.safetyCheckPaths
             )
             guard safety.isCleanable else {
-                itemResults.append(record(item: item, outcome: .skipped(safety), mode: plan.mode))
+                itemResults.append(record(item: item, outcome: .skipped(safety), mode: plan.mode, runID: runID))
                 continue
             }
 
             let disposition = primitive.remove(item, mode: plan.mode)
             itemResults.append(
-                record(item: item, outcome: Self.outcome(for: disposition, item: item), mode: plan.mode)
+                record(item: item, outcome: Self.outcome(for: disposition, item: item), mode: plan.mode, runID: runID)
             )
         }
 
+        recordRunSummary(runID: runID, plan: plan, itemResults: itemResults, wasCancelled: false)
         return DiskCleanExecutionResult(itemResults: itemResults, mode: plan.mode)
+    }
+
+    private func recordRunSummary(
+        runID: String,
+        plan: DiskCleanValidatedPlan,
+        itemResults: [DiskCleanExecutionItemResult],
+        wasCancelled: Bool
+    ) {
+        let categories = Array(Set(plan.items.map { $0.category.rawValue })).sorted()
+        let removedCount = itemResults.filter {
+            switch $0.outcome {
+            case .removed, .trashed:
+                return true
+            case .skipped, .changedSinceScan, .failed, .partiallyDeleted, .rollbackBlocked:
+                return false
+            }
+        }.count
+        let reclaimedBytes = itemResults.reduce(0) { $0 + $1.reclaimedBytes }
+        let errors = itemResults.compactMap { item -> String? in
+            switch item.outcome {
+            case let .failed(msg):
+                return msg
+            case let .partiallyDeleted(_, msg):
+                return msg
+            case let .rollbackBlocked(_, msg):
+                return msg
+            case .removed, .trashed, .skipped, .changedSinceScan:
+                return nil
+            }
+        }
+
+        let status: String
+        if wasCancelled {
+            status = "cancelled"
+        } else if !errors.isEmpty {
+            status = "completedWithErrors"
+        } else {
+            status = "ok"
+        }
+
+        auditLog.append(
+            DiskCleanAuditLog.Record(
+                timestamp: now(),
+                action: .runSummary,
+                runID: runID,
+                status: status,
+                categoriesCleaned: categories,
+                itemsRemoved: removedCount,
+                bytesRemoved: reclaimedBytes,
+                errorsEncountered: errors,
+                isTrash: plan.mode == .trash
+            )
+        )
     }
 
     // MARK: - preflight（§7.1）
@@ -304,12 +361,14 @@ struct DiskCleanExecutor: DiskCleanExecuting {
     private func record(
         item: DiskCleanValidatedPlan.PlanItem,
         outcome: DiskCleanExecutionItemResult.Outcome,
-        mode: DiskCleanRemovalMode
+        mode: DiskCleanRemovalMode,
+        runID: String? = nil
     ) -> DiskCleanExecutionItemResult {
         auditLog.append(
             DiskCleanAuditLog.Record(
                 timestamp: now(),
                 action: mode == .trash ? .trash : .delete,
+                runID: runID,
                 targetID: item.targetID,
                 legacyRuleID: item.legacyRuleID,
                 category: item.category.rawValue,

@@ -212,6 +212,8 @@ final class DiskCleanExecutorTests: XCTestCase {
         XCTAssertEqual(result.itemResults.map(\.path), [paths[0]])
         XCTAssertEqual(result.removedCount, 1)
         XCTAssertEqual(primitive.removedPaths, [paths[0]])
+        XCTAssertEqual(auditLog.recentRuns(limit: 1).first?.status, "cancelled")
+        XCTAssertEqual(auditLog.recentRuns(limit: 1).first?.itemsRemoved, 1)
     }
 
     // MARK: - Audit
@@ -229,8 +231,9 @@ final class DiskCleanExecutorTests: XCTestCase {
         _ = try await executor.execute(plan: plan)
 
         let records = auditLog.recentRecords(limit: 10)
-        XCTAssertEqual(records.count, 2)
-        let byPath = Dictionary(uniqueKeysWithValues: records.map { ($0.path ?? "", $0) })
+        let itemRecords = records.filter { $0.action != .runSummary }
+        XCTAssertEqual(itemRecords.count, 2)
+        let byPath = Dictionary(uniqueKeysWithValues: itemRecords.map { ($0.path ?? "", $0) })
         XCTAssertEqual(byPath[paths[0]]?.status, "ok")
         XCTAssertEqual(byPath[paths[0]]?.action, .delete)
         XCTAssertEqual(byPath[paths[0]]?.estimatedBytes, 42)
@@ -254,7 +257,7 @@ final class DiskCleanExecutorTests: XCTestCase {
 
         _ = try await executor.execute(plan: plan)
 
-        let record = try XCTUnwrap(auditLog.recentRecords(limit: 1).first)
+        let record = try XCTUnwrap(auditLog.recentRecords(limit: 10).first { $0.action != .runSummary })
         XCTAssertEqual(record.status, "skipped")
         XCTAssertEqual(record.skipReason, "inUse(com.example.app)")
     }
