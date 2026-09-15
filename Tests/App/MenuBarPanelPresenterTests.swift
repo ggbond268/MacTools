@@ -244,45 +244,6 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         withExtendedLifetime(observer) {}
     }
 
-    func testWidgetRemovalConfirmationCanToggleRepeatedlyWithoutClosingTheEditor() async throws {
-        let fixture = try await makePresentedFixture(plugins: [PresenterLayoutPlugin("one")])
-        defer { fixture.close() }
-        let presenter = fixture.presenter
-        let model = presenter.debugPanelModelForTests
-        model.beginLayoutEditing(visibleItemCount: 1)
-        try await Task.sleep(for: .milliseconds(250))
-        let root = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view)
-        let window = try XCTUnwrap(root.window)
-        let source = try XCTUnwrap(descendants(root).compactMap { $0 as? PanelLayoutDragSourceView }.first)
-        for index in 0..<6 {
-            let metrics = PanelLayoutItemControlsLayout(size: source.bounds.size)
-            let point = source.convert(CGPoint(x: source.menuFrame.minX + metrics.buttonSide / 2,
-                                              y: source.menuFrame.midY), to: nil)
-            source.hover?.trackingView?.pointerLocationInWindow = { _ in point }
-            source.hover?.trackingView?.refresh()
-            try await Task.sleep(for: .milliseconds(150))
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                NSApp.postEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)), atStart: false)
-            }
-            try await Task.sleep(for: .milliseconds(300))
-            let confirmation = NSApp.windows.first { $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0) }
-            XCTAssertEqual(confirmation != nil, index.isMultiple(of: 2),
-                           "Click \(index + 1), parent key: \(window.isKeyWindow), target: \(point)")
-            if let confirmation {
-                confirmation.makeKey()
-                confirmation.selectNextKeyView(nil)
-                source.hover?.trackingView?.pointerLocationInWindow = { _ in CGPoint(x: -100, y: -100) }
-                source.hover?.trackingView?.refresh()
-                try await Task.sleep(for: .milliseconds(150))
-            }
-            XCTAssertTrue(model.isEditingLayout)
-            XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-            XCTAssertEqual(fixture.host.panelEntries(in: "components").count, 1)
-        }
-    }
-
     private func clickTab(_ id: String, in view: NSView) throws {
         let tab = try XCTUnwrap(descendants(view).compactMap { $0 as? MenuBarPanelIconControl }.first {
             $0.accessibilityIdentifier() == "menuBarPanel.tab.\(id)"

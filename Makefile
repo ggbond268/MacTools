@@ -105,6 +105,7 @@ ci: generate
 		CODE_SIGNING_ALLOWED=NO \
 		CODE_SIGNING_REQUIRED=NO \
 		CODE_SIGN_IDENTITY= \
+		-parallel-testing-enabled NO \
 		-test-timeouts-enabled YES \
 		-default-test-execution-time-allowance 120 \
 		-maximum-test-execution-time-allowance 120 \

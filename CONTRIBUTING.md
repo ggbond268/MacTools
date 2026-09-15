@@ -77,6 +77,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - Async test waits must have a deadline and suspend between checks. `make ci` and the GitHub Build workflow cap each test at 120 seconds so a stalled test reports a failure instead of exhausting the job timeout.
+- The app-hosted XCTest bundle runs serially in CI because its AppKit tests share desktop focus and native event routing. Keep synthesized pointer sequences in the standalone interaction fixture instead of the shared test host.
 - Panel tests should focus on persisted entries, independent copies, drag/Undo state, viewport mounting, plugin lifecycle, and known popover crashes. Check cosmetic changes visually instead of asserting exact padding, colors, menu counts, or generating screenshots without comparisons.
 - Native drag acceptance is opt-in: run `make panel-layout-ui-tests` when changing drag routing or hit testing, or `python3 scripts/e2e/run_panel_layout_fixture.py --surface cross-panels` for one scenario. These cursor-driven checks require an active desktop session and are excluded from `make ci` and the default GitHub build workflow.
 - File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.

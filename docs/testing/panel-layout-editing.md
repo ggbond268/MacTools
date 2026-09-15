@@ -1,6 +1,6 @@
 # Panel layout editing acceptance
 
-Default validation uses XCTest for persisted entries, independent widget copies, cross-panel moves and Undo, drag invalidation, viewport mounting, and plugin lifecycle. `MenuBarPanelPresenterTests` retains regressions for repeated removal confirmation, deleting the selected panel, editing dismissal, and coordinated resizing. Run the smallest affected test class with `-only-testing:MacToolsTests/<TestClassName>`.
+Default validation uses XCTest for persisted entries, independent widget copies, cross-panel moves and Undo, drag invalidation, viewport mounting, and plugin lifecycle. `MenuBarPanelPresenterTests` retains regressions for deleting the selected panel, editing dismissal, and coordinated resizing; `PanelLayoutEditorTests` checks removal confirmation and entry isolation. Run the smallest affected test class with `-only-testing:MacToolsTests/<TestClassName>`.
 
 Check cosmetic changes visually. Avoid exact padding/color assertions, menu-count checks, screenshot generation without comparisons, and repeating the same behavior through several native click sequences. `PanelLayoutToolbarTests` checks feedback coalescing with explicit timestamps instead of waiting for animation cooldowns.
 
