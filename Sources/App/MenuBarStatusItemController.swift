@@ -72,11 +72,23 @@ enum MenuBarGlobalMouseEventPolicy {
     }
 }
 
+private final class MenuBarStatusItemAppearanceObserverView: NSView {
+    var onAppearanceChange: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onAppearanceChange?()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 @MainActor
 final class MenuBarStatusItemController: NSObject {
     private let pluginHost: PluginHost
     private let windowRouter: AppWindowRouter
     private let iconSettings: MenuBarIconSettings
+    private let systemStatusMonitor = MenuBarSystemStatusMonitor()
     private var statusItem: NSStatusItem
     private var panelPresenter: MenuBarPanelPresenter!
     private var cancellables: Set<AnyCancellable> = []
@@ -84,6 +96,7 @@ final class MenuBarStatusItemController: NSObject {
     private var globalEventMonitor: Any?
     private var appActivationObserver: NSObjectProtocol?
     private var appearanceObserver: NSObjectProtocol?
+    private var statusItemAppearanceObserverView: MenuBarStatusItemAppearanceObserverView?
     private var appTerminationObserver: NSObjectProtocol?
     private var statusItemWindowMoveObserver: NSObjectProtocol?
     private var animationTimer: DispatchSourceTimer?
@@ -136,6 +149,12 @@ final class MenuBarStatusItemController: NSObject {
         configureStatusItem()
         observePluginHost()
         observeIconSettings()
+        systemStatusMonitor.$snapshot
+            .removeDuplicates()
+            .sink { [weak self] snapshot in
+                self?.iconSettings.updateSystemStatus(snapshot)
+            }
+            .store(in: &cancellables)
         updateStatusIcon()
         pluginHost.resetStatusItemPosition = { [weak self] in
             self?.resetStatusItemPosition()
@@ -185,7 +204,10 @@ final class MenuBarStatusItemController: NSObject {
     }
 
     isolated deinit {
+        systemStatusMonitor.stop()
         animationTimer?.cancel()
+        statusItemAppearanceObserverView?.onAppearanceChange = nil
+        statusItemAppearanceObserverView?.removeFromSuperview()
         if let appearanceObserver {
             DistributedNotificationCenter.default().removeObserver(appearanceObserver)
         }
@@ -256,6 +278,7 @@ final class MenuBarStatusItemController: NSObject {
     }
 
     private func configureStatusItem() {
+        removeStatusItemAppearanceObserver()
         guard let button = statusItem.button else {
             return
         }
@@ -265,10 +288,29 @@ final class MenuBarStatusItemController: NSObject {
         button.sendAction(on: [.leftMouseDown, .rightMouseDown])
         button.toolTip = AppMetadata.appName
 
+        // The menu bar can change appearance with its wallpaper or display,
+        // independently of the application's light or dark mode.
+        let observer = MenuBarStatusItemAppearanceObserverView(frame: .zero)
+        observer.setAccessibilityElement(false)
+        button.addSubview(observer)
+        observer.onAppearanceChange = { [weak self, weak button] in
+            DispatchQueue.main.async {
+                guard let self, let button, self.statusItem.button === button else { return }
+                self.updateStatusIcon()
+            }
+        }
+        statusItemAppearanceObserverView = observer
+
         // MacTools intentionally uses one target/action route on every OS.
         // AppKit's expanded-interface delegate models one undifferentiated
         // interface and carries no NSEvent, so it cannot represent the app's
         // distinct left- and right-click panels without a competing owner.
+    }
+
+    private func removeStatusItemAppearanceObserver() {
+        statusItemAppearanceObserverView?.onAppearanceChange = nil
+        statusItemAppearanceObserverView?.removeFromSuperview()
+        statusItemAppearanceObserverView = nil
     }
 
     private func observePluginHost() {
@@ -290,6 +332,15 @@ final class MenuBarStatusItemController: NSObject {
     }
 
     private func observeIconSettings() {
+        PluginRuntimeLocalization.source.$revision
+            .dropFirst()
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { [weak self] in
+                    self?.updateStatusIcon()
+                }
+            }
+            .store(in: &cancellables)
+
         iconSettings.$settingsRevision
             .dropFirst()
             .sink { [weak self] _ in
@@ -309,13 +360,21 @@ final class MenuBarStatusItemController: NSObject {
     }
 
     private func updateStatusIcon() {
+        if iconSettings.usesLiveStatusIcon {
+            systemStatusMonitor.start()
+        } else {
+            systemStatusMonitor.stop()
+        }
         let payload = iconSettings.imagePayload(for: statusItem.button?.effectiveAppearance)
-        payload.image.isTemplate = payload.isTemplate
 
         statusItem.length = NSStatusItem.variableLength
         statusItem.button?.image = statusImage(payload.image, isTemplate: payload.isTemplate)
         statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.toolTip = automationActivityTooltip
+        let description = iconSettings.usesLiveStatusIcon
+            ? "\(automationActivityTooltip)\n\(MenuBarSystemStatusDescription.text(for: iconSettings.systemStatus))"
+            : automationActivityTooltip
+        statusItem.button?.toolTip = description
+        statusItem.button?.setAccessibilityLabel(description)
         configureAnimationIfNeeded(payload)
     }
 
@@ -331,10 +390,11 @@ final class MenuBarStatusItemController: NSObject {
             return source
         }
 
-        let size = source.size
+        let keepsStatusReadable = iconSettings.usesLiveStatusIcon
+        let size = NSSize(width: source.size.width + (keepsStatusReadable ? 5 : 0), height: source.size.height)
         let image = NSImage(size: size, flipped: false) { bounds in
-            source.draw(in: bounds)
-            let diameter = max(4, min(7, min(bounds.width, bounds.height) * 0.34))
+            source.draw(in: NSRect(origin: .zero, size: source.size))
+            let diameter = keepsStatusReadable ? 4 : max(4, min(7, min(bounds.width, bounds.height) * 0.34))
             let badgeRect = NSRect(
                 x: bounds.maxX - diameter,
                 y: bounds.minY,
@@ -391,6 +451,7 @@ final class MenuBarStatusItemController: NSObject {
         requestPanelClose()
 
         let oldItem = statusItem
+        removeStatusItemAppearanceObserver()
         PluginPresentationSafety.prepareForWindowOrdering()
         NSStatusBar.system.removeStatusItem(oldItem)
         MenuBarControlItemDefaults.resetVisibleControlItemPosition()

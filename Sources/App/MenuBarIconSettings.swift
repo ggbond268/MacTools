@@ -21,6 +21,13 @@ enum MenuBarIconAppearance: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum MenuBarBuiltInIcon: String, CaseIterable, Identifiable, Codable {
+    case classic
+    case liveStatus
+
+    var id: String { rawValue }
+}
+
 struct MenuBarIconLocalSelection: Codable, Equatable {
     let fileName: String
     let frameFileNames: [String]
@@ -432,10 +439,12 @@ final class MenuBarIconSettings: ObservableObject {
     private struct StoredState: Codable, Equatable {
         var localIconSelection: MenuBarIconLocalSelection?
         var remoteAssetSelection: MenuBarIconRemoteAssetSelection?
+        var builtInIcon: MenuBarBuiltInIcon
 
         private enum CodingKeys: String, CodingKey {
             case localIconSelection
             case remoteAssetSelection
+            case builtInIcon
             case lightIconFileName
             case darkIconFileName
             case recentItems
@@ -443,14 +452,18 @@ final class MenuBarIconSettings: ObservableObject {
 
         init(
             localIconSelection: MenuBarIconLocalSelection? = nil,
-            remoteAssetSelection: MenuBarIconRemoteAssetSelection? = nil
+            remoteAssetSelection: MenuBarIconRemoteAssetSelection? = nil,
+            builtInIcon: MenuBarBuiltInIcon = .classic
         ) {
             self.localIconSelection = localIconSelection
             self.remoteAssetSelection = remoteAssetSelection
+            self.builtInIcon = builtInIcon
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            let builtInValue = try container.decodeIfPresent(String.self, forKey: .builtInIcon)
+            builtInIcon = builtInValue.flatMap(MenuBarBuiltInIcon.init(rawValue:)) ?? .classic
             remoteAssetSelection = try container.decodeIfPresent(
                 MenuBarIconRemoteAssetSelection.self,
                 forKey: .remoteAssetSelection
@@ -485,6 +498,7 @@ final class MenuBarIconSettings: ObservableObject {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encodeIfPresent(localIconSelection, forKey: .localIconSelection)
             try container.encodeIfPresent(remoteAssetSelection, forKey: .remoteAssetSelection)
+            try container.encode(builtInIcon, forKey: .builtInIcon)
         }
     }
 
@@ -499,11 +513,10 @@ final class MenuBarIconSettings: ObservableObject {
         let frameFileNames: [String]
     }
 
-    private static let defaultIconName = NSImage.Name("MenuBarIcon")
-
     @Published private var storedState: StoredState
     @Published private(set) var lastErrorMessage: String?
     @Published private(set) var settingsRevision: Int = 0
+    private(set) var systemStatus = MenuBarSystemStatusSnapshot()
 
     private let userDefaults: UserDefaults
     private let fileManager: FileManager
@@ -537,6 +550,22 @@ final class MenuBarIconSettings: ObservableObject {
 
     var hasCustomIcon: Bool {
         storedState.localIconSelection != nil || storedState.remoteAssetSelection != nil
+    }
+
+    var selectedBuiltInIcon: MenuBarBuiltInIcon? {
+        hasCustomIcon ? nil : storedState.builtInIcon
+    }
+
+    var usesLiveStatusIcon: Bool {
+        selectedBuiltInIcon == .liveStatus
+    }
+
+    func updateSystemStatus(_ snapshot: MenuBarSystemStatusSnapshot) {
+        guard systemStatus != snapshot else { return }
+        systemStatus = snapshot
+        guard usesLiveStatusIcon else { return }
+        imagePayloadCache.removeAll()
+        settingsRevision += 1
     }
 
     var selectedRemoteAsset: MenuBarIconRemoteAssetSelection? {
@@ -652,8 +681,14 @@ final class MenuBarIconSettings: ObservableObject {
     }
 
     func resetToDefault() {
+        selectBuiltInIcon(.classic)
+    }
+
+    func selectBuiltInIcon(_ icon: MenuBarBuiltInIcon) {
+        clearError()
         storedState.localIconSelection = nil
         storedState.remoteAssetSelection = nil
+        storedState.builtInIcon = icon
         pruneUnusedLocalIconFiles()
         remoteAssetStore.pruneRemoteAssets(keeping: nil)
         invalidateAllIconCaches()
@@ -667,6 +702,29 @@ final class MenuBarIconSettings: ObservableObject {
 
     func previewImage(for appearance: MenuBarIconAppearance) -> NSImage {
         imagePayload(for: appearance).image
+    }
+
+    func previewImage(for icon: MenuBarBuiltInIcon, appearance: MenuBarIconAppearance) -> NSImage {
+        switch icon {
+        case .liveStatus:
+            // Candidate artwork remains recognizable before live monitoring starts.
+            let previewStatus = systemStatus == .unknown
+                ? MenuBarSystemStatusSnapshot(
+                    battery: .level(fraction: 0.75, isCharging: false),
+                    wifi: .connected(level: 3), network: .connected, connectionKind: .wifi
+                )
+                : systemStatus
+            return MenuBarDuoIcon.image(for: previewStatus, appearance: appearance)
+        case .classic:
+            let imageSize = NSSize(
+                width: MenuBarIconProcessing.standardIconPointSize,
+                height: MenuBarIconProcessing.standardIconPointSize
+            )
+            let image = (NSImage(named: "MenuBarIcon")?.copy() as? NSImage) ?? NSImage(size: imageSize)
+            image.size = imageSize
+            image.isTemplate = true
+            return image
+        }
     }
 
     private func clearError() {
@@ -683,7 +741,7 @@ final class MenuBarIconSettings: ObservableObject {
         return payload
     }
 
-    private func makeImagePayload(for _: MenuBarIconAppearance) -> MenuBarIconImagePayload {
+    private func makeImagePayload(for appearance: MenuBarIconAppearance) -> MenuBarIconImagePayload {
         if let selection = storedState.localIconSelection {
             let preparedFrames = renderedFrames(for: selection)
             // Preserve existing opaque artwork instead of turning it into a solid block.
@@ -706,11 +764,12 @@ final class MenuBarIconSettings: ObservableObject {
             return payload
         }
 
-        let image = Self.defaultImage()
-        image.isTemplate = true
+        let image = storedState.builtInIcon == .liveStatus
+            ? MenuBarDuoIcon.image(for: systemStatus, appearance: appearance)
+            : previewImage(for: .classic, appearance: appearance)
         return MenuBarIconImagePayload(
             image: image,
-            isTemplate: true,
+            isTemplate: image.isTemplate,
             animationFrames: [image],
             frameDuration: 1.0 / MenuBarIconProcessing.animationFramesPerSecond
         )
@@ -761,16 +820,6 @@ final class MenuBarIconSettings: ObservableObject {
             userDefaults.removeObject(forKey: DefaultsKey.storage)
             return StoredState()
         }
-    }
-
-    private static func defaultImage() -> NSImage {
-        let imageSize = NSSize(
-            width: MenuBarIconProcessing.standardIconPointSize,
-            height: MenuBarIconProcessing.standardIconPointSize
-        )
-        let image = NSImage(named: defaultIconName) ?? NSImage(size: imageSize)
-        image.size = imageSize
-        return image
     }
 
     private func persist() {
