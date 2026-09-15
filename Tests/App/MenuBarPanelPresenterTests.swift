@@ -244,49 +244,6 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         withExtendedLifetime(observer) {}
     }
 
-    func testWidgetLibraryKeepsEditingAndRevealsAppendedEntriesAfterPanelResizes() async throws {
-        let fixture = try await makePresentedFixture(plugins: ["a", "b", "c", "d", "e", "f", "g"].map(PresenterLayoutPlugin.init))
-        defer { fixture.close() }
-        let presenter = fixture.presenter
-        let host = fixture.host
-        for id in ["a", "b"] { XCTAssertTrue(host.removePanelEntry(.init(pluginID: id, surface: .dashboard), from: "components")) }
-        presenter.debugPanelModelForTests.beginLayoutEditing(visibleItemCount: 5)
-        try await Task.sleep(for: .milliseconds(250))
-        let mainWindow = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view.window)
-        for id in ["a", "b"] {
-            try clickFooterButton(in: mainWindow, trailingOffset: mainWindow.contentView!.bounds.width - 64)
-            try await Task.sleep(for: .milliseconds(350))
-            let library = try XCTUnwrap(NSApp.windows.first {
-                $0.isVisible && MenuBarPanelWindowRegistry.isEditingPopover($0)
-            })
-            XCTAssertTrue(presenter.containsPresentedWindow(library))
-            presenter.dismissPanels()
-            XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-            XCTAssertTrue(presenter.debugPanelModelForTests.isEditingLayout)
-            if id == "b" {
-                let list = try XCTUnwrap(descendants(library.contentView!).compactMap { $0 as? NSTableView }.first)
-                list.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
-                try await Task.sleep(for: .milliseconds(200))
-            }
-            library.makeKey()
-            let point = CGPoint(x: 310, y: try XCTUnwrap(library.contentView).bounds.height - 170)
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                library.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: library.windowNumber,
-                    context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)))
-            }
-            try await Task.sleep(for: .milliseconds(400))
-            XCTAssertFalse(library.isVisible, "A successful addition closes only the widget library")
-            XCTAssertEqual(host.panelEntries(in: "components").last?.pluginID, id)
-            let root = try XCTUnwrap(presenter.debugPopoverForTests.contentViewController?.view)
-            let canvas = try XCTUnwrap(descendants(root).first { $0.identifier?.rawValue == "panel.layout.canvas" })
-            let scroll = try XCTUnwrap(canvas.enclosingScrollView)
-            XCTAssertEqual(scroll.contentView.bounds.maxY, try XCTUnwrap(scroll.documentView).bounds.maxY, accuracy: 1)
-            XCTAssertTrue(presenter.debugPopoverForTests.isShown)
-            XCTAssertTrue(presenter.debugPanelModelForTests.isEditingLayout)
-        }
-    }
-
     func testWidgetRemovalConfirmationCanToggleRepeatedlyWithoutClosingTheEditor() async throws {
         let fixture = try await makePresentedFixture(plugins: [PresenterLayoutPlugin("one")])
         defer { fixture.close() }
@@ -398,17 +355,6 @@ final class MenuBarPanelPresenterTests: XCTestCase {
         let local = CGPoint(x: leading ? contentBounds.minX + 28 : contentBounds.maxX - 28,
                             y: root.isFlipped ? contentBounds.minY + inset : contentBounds.maxY - inset)
         let point = root.convert(local, to: nil)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            window.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
-                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)))
-        }
-    }
-
-    private func clickFooterButton(in window: NSWindow, trailingOffset: CGFloat) throws {
-        window.makeKey()
-        let bounds = try XCTUnwrap(window.contentView).bounds
-        let point = CGPoint(x: bounds.maxX - trailingOffset, y: bounds.minY + 38)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             window.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,

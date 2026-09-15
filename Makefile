@@ -105,6 +105,9 @@ ci: generate
 		CODE_SIGNING_ALLOWED=NO \
 		CODE_SIGNING_REQUIRED=NO \
 		CODE_SIGN_IDENTITY= \
+		-test-timeouts-enabled YES \
+		-default-test-execution-time-allowance 120 \
+		-maximum-test-execution-time-allowance 120 \
 		test \
 		-quiet
 	@./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh
