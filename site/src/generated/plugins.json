@@ -8146,6 +8146,225 @@
     {
       "capabilities": {
         "componentPanel": false,
+        "primaryPanel": false,
+        "settings": "form"
+      },
+      "category": "monitoring",
+      "displayName": "Duo 状态",
+      "id": "duo-status",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "حالة Duo",
+          "summary": "أيقونة مستقلة في شريط القوائم لحالة البطارية والشبكة."
+        },
+        "de": {
+          "displayName": "Duo-Status",
+          "summary": "Separates Menüleistensymbol für Batterie- und Netzwerkstatus."
+        },
+        "en": {
+          "displayName": "Duo Status",
+          "summary": "A separate menu bar icon for battery and network status."
+        },
+        "es": {
+          "displayName": "Estado Duo",
+          "summary": "Un icono independiente para la batería y la red en la barra de menús."
+        },
+        "fr": {
+          "displayName": "État Duo",
+          "summary": "Une icône distincte pour la batterie et le réseau dans la barre des menus."
+        },
+        "ja": {
+          "displayName": "Duo ステータス",
+          "summary": "独立したメニューバーアイコンでバッテリーとネットワークの状態を確認"
+        },
+        "ko": {
+          "displayName": "Duo 상태",
+          "summary": "별도 메뉴 막대 아이콘에서 배터리와 네트워크 상태 확인"
+        },
+        "pt": {
+          "displayName": "Estado Duo",
+          "summary": "Um ícone separado para bateria e rede na barra de menus."
+        },
+        "ru": {
+          "displayName": "Статус Duo",
+          "summary": "Отдельный значок строки меню для состояния батареи и сети."
+        },
+        "zh-Hans": {
+          "displayName": "Duo 状态",
+          "summary": "独立菜单栏图标，一眼查看电量与网络状态"
+        },
+        "zh-Hant": {
+          "displayName": "Duo 狀態",
+          "summary": "獨立選單列圖示，一眼查看電量與網路狀態"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/duo-status",
+      "product": {
+        "actions": null,
+        "discovery": {
+          "alternativePluginIDs": [],
+          "goalCategories": [
+            "monitoring"
+          ],
+          "keywords": [
+            "duo",
+            "battery",
+            "wifi",
+            "network",
+            "menu bar",
+            "status"
+          ],
+          "localizedSynonyms": {
+            "ar": [
+              "حالة Duo"
+            ],
+            "de": [
+              "Duo-Status"
+            ],
+            "en": [
+              "Duo Status"
+            ],
+            "es": [
+              "Estado Duo"
+            ],
+            "fr": [
+              "État Duo"
+            ],
+            "ja": [
+              "Duo ステータス"
+            ],
+            "ko": [
+              "Duo 상태"
+            ],
+            "pt": [
+              "Estado Duo"
+            ],
+            "ru": [
+              "Статус Duo"
+            ],
+            "zh-Hans": [
+              "Duo 状态"
+            ],
+            "zh-Hant": [
+              "Duo 狀態"
+            ]
+          },
+          "relatedPluginIDs": [
+            "device-battery",
+            "activity-bar"
+          ],
+          "useCases": [
+            {
+              "id": "primary-use",
+              "title": {
+                "ar": "حالة Duo",
+                "de": "Duo-Status",
+                "en": "Duo Status",
+                "es": "Estado Duo",
+                "fr": "État Duo",
+                "ja": "Duo ステータス",
+                "ko": "Duo 상태",
+                "pt": "Estado Duo",
+                "ru": "Статус Duo",
+                "zh-Hans": "Duo 状态",
+                "zh-Hant": "Duo 狀態"
+              }
+            }
+          ]
+        },
+        "presentation": {
+          "documentationURL": "https://github.com/ggbond268/MacTools/blob/main/docs/plugins/duo-status.md",
+          "examples": [
+            {
+              "id": "primary-use",
+              "text": {
+                "ar": "أيقونة مستقلة في شريط القوائم لحالة البطارية والشبكة.",
+                "de": "Separates Menüleistensymbol für Batterie- und Netzwerkstatus.",
+                "en": "A separate menu bar icon for battery and network status.",
+                "es": "Un icono independiente para la batería y la red en la barra de menús.",
+                "fr": "Une icône distincte pour la batterie et le réseau dans la barre des menus.",
+                "ja": "独立したメニューバーアイコンでバッテリーとネットワークの状態を確認",
+                "ko": "별도 메뉴 막대 아이콘에서 배터리와 네트워크 상태 확인",
+                "pt": "Um ícone separado para bateria e rede na barra de menus.",
+                "ru": "Отдельный значок строки меню для состояния батареи и сети.",
+                "zh-Hans": "独立菜单栏图标，一眼查看电量与网络状态",
+                "zh-Hant": "獨立選單列圖示，一眼查看電量與網路狀態"
+              }
+            }
+          ],
+          "license": "GPL-3.0-only",
+          "longDescription": {
+            "ar": "أيقونة مستقلة في شريط القوائم لحالة البطارية والشبكة.",
+            "de": "Separates Menüleistensymbol für Batterie- und Netzwerkstatus.",
+            "en": "A separate menu bar icon for battery and network status.",
+            "es": "Un icono independiente para la batería y la red en la barra de menús.",
+            "fr": "Une icône distincte pour la batterie et le réseau dans la barre des menus.",
+            "ja": "独立したメニューバーアイコンでバッテリーとネットワークの状態を確認",
+            "ko": "별도 메뉴 막대 아이콘에서 배터리와 네트워크 상태 확인",
+            "pt": "Um ícone separado para bateria e rede na barra de menus.",
+            "ru": "Отдельный значок строки меню для состояния батареи и сети.",
+            "zh-Hans": "独立菜单栏图标，一眼查看电量与网络状态",
+            "zh-Hant": "獨立選單列圖示，一眼查看電量與網路狀態"
+          },
+          "publisher": "MacTools",
+          "screenshots": [],
+          "supportURL": "https://github.com/ggbond268/MacTools/issues"
+        },
+        "privacy": {
+          "allowsUserConfiguredDomains": false,
+          "dataObserved": [
+            "battery-state",
+            "wifi-signal",
+            "network-connection-state"
+          ],
+          "dataPersisted": [
+            "plugin-configuration"
+          ],
+          "diagnosticExportsContainUserData": false,
+          "networkDomains": [],
+          "networkUse": "none",
+          "processesSensitiveUserContent": false,
+          "retention": {
+            "policy": "user-controlled"
+          },
+          "telemetry": "none"
+        },
+        "relationships": {
+          "includedPackIDs": [],
+          "relatedPluginIDs": [
+            "device-battery",
+            "activity-bar"
+          ],
+          "suggestedRecipeIDs": [],
+          "supersedesPluginIDs": []
+        },
+        "requirements": {
+          "applications": [],
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "executables": [],
+          "hardware": [],
+          "minimumMacOSVersion": "14.0",
+          "permissionIDs": [],
+          "requiresRelaunch": false,
+          "setupComplexity": "none"
+        },
+        "setup": {
+          "optionalSurfaces": [],
+          "steps": []
+        }
+      },
+      "releaseChannel": null,
+      "releaseNotesURL": null,
+      "route": "/plugins/duo-status/",
+      "summary": "独立菜单栏图标，一眼查看电量与网络状态",
+      "version": "1.0.0"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
         "primaryPanel": true,
         "settings": "none"
       },
