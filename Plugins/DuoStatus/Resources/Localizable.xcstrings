@@ -6,67 +6,67 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A separate menu bar icon for battery and network status."
+            "value": "Battery and network status in a standalone or primary menu bar icon."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "独立菜单栏图标，一眼查看电量与网络状态"
+            "value": "通过独立图标或应用主图标查看电量与网络状态"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "獨立選單列圖示，一眼查看電量與網路狀態"
+            "value": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "独立したメニューバーアイコンでバッテリーとネットワークの状態を確認"
+            "value": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "별도 메뉴 막대 아이콘에서 배터리와 네트워크 상태 확인"
+            "value": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Separates Menüleistensymbol für Batterie- und Netzwerkstatus."
+            "value": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une icône distincte pour la batterie et le réseau dans la barre des menus."
+            "value": "Batterie et réseau dans une icône distincte ou principale de la barre des menus."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un icono independiente para la batería y la red en la barra de menús."
+            "value": "Batería y red en un icono independiente o principal de la barra de menús."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um ícone separado para bateria e rede na barra de menus."
+            "value": "Bateria e rede num ícone separado ou principal da barra de menus."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Отдельный значок строки меню для состояния батареи и сети."
+            "value": "Батарея и сеть в отдельном или основном значке строки меню."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أيقونة مستقلة في شريط القوائم لحالة البطارية والشبكة."
+            "value": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم."
           }
         }
       }
@@ -277,146 +277,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "شريط القوائم"
-          }
-        }
-      }
-    },
-    "settings.show": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show Duo Icon"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示 Duo 图标"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示 Duo 圖示"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Duo アイコンを表示"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Duo 아이콘 표시"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Duo-Symbol anzeigen"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher l’icône Duo"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar icono Duo"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar ícone Duo"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Показывать значок Duo"
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إظهار أيقونة Duo"
-          }
-        }
-      }
-    },
-    "settings.showDescription": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hover for status; click to open settings. Turning this off stops monitoring."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "悬停查看状态，点击打开设置。关闭后停止监控。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暫留查看狀態，點按開啟設定。關閉後停止監控。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ポインタを合わせて状態を確認し、クリックして設定を開きます。オフにすると監視を停止します。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "마우스를 올려 상태를 확인하고 클릭하여 설정을 엽니다. 끄면 모니터링이 중지됩니다."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Für den Status darüberfahren, für Einstellungen klicken. Ausschalten beendet die Überwachung."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Survolez pour voir l’état, cliquez pour ouvrir les réglages. La désactivation arrête la surveillance."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pasa el cursor para ver el estado; haz clic para abrir ajustes. Al desactivar, se detiene la supervisión."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Passe o cursor para ver o estado; clique para abrir ajustes. Desativar interrompe o monitoramento."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Наведите указатель для просмотра состояния, нажмите для настроек. Отключение останавливает мониторинг."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مرّر المؤشر لعرض الحالة وانقر لفتح الإعدادات. يؤدي الإيقاف إلى إيقاف المراقبة."
           }
         }
       }
@@ -1340,6 +1200,566 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wi-Fi 訊號暫時無法取得"
+          }
+        }
+      }
+    },
+    "settings.placement": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Mode"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示方式"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示方式"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表示方法"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표시 방식"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Darstellung"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mode d’affichage"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo de visualización"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo de exibição"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Режим отображения"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وضع العرض"
+          }
+        }
+      }
+    },
+    "settings.standalone": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separate Icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独立图标"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "獨立圖示"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独立アイコン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "별도 아이콘"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separates Symbol"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Icône distincte"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Icono independiente"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ícone separado"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отдельный значок"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أيقونة مستقلة"
+          }
+        }
+      }
+    },
+    "settings.primary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace App Icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换应用图标"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取代應用程式圖示"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリアイコンを置換"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 아이콘 대체"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App-Symbol ersetzen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remplacer l’icône"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sustituir icono de la app"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Substituir ícone da app"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заменить значок приложения"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استبدال أيقونة التطبيق"
+          }
+        }
+      }
+    },
+    "settings.standaloneDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show a separate icon. Hover for status; click to open settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独立显示，悬停查看状态，点击打开设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "獨立顯示，移至圖示查看狀態，點按開啟設定。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独立したアイコンを表示します。ポインタを重ねると状態、クリックすると設定を表示します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "별도 아이콘을 표시합니다. 마우스를 올리면 상태를 보고, 클릭하면 설정을 엽니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separates Symbol anzeigen. Für Status darüberfahren, für Einstellungen klicken."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiche une icône distincte. Survolez pour l’état, cliquez pour les réglages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra un icono independiente. Pasa el cursor para ver el estado; haz clic para abrir los ajustes."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra um ícone separado. Passe o cursor para ver o estado; clique para abrir as definições."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отдельный значок: наведите курсор для просмотра состояния, нажмите для настроек."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض أيقونة مستقلة. مرّر المؤشر لعرض الحالة وانقر لفتح الإعدادات."
+          }
+        }
+      }
+    },
+    "settings.primaryDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace the MacTools menu bar icon without changing its click behavior."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换 MacTools 主图标，点击行为保持不变。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取代 MacTools 主圖示，點按行為保持不變。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacTools のメニューバーアイコンを置き換えます。クリック時の動作は変わりません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacTools 메뉴 막대 아이콘을 대체하며 클릭 동작은 유지합니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersetzt das MacTools-Menüleistensymbol; die Klickaktionen bleiben unverändert."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remplace l’icône MacTools dans la barre des menus sans modifier les actions du clic."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sustituye el icono de MacTools sin cambiar las acciones del clic."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Substitui o ícone do MacTools sem alterar as ações de clique."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заменяет значок MacTools в строке меню, сохраняя действия при нажатии."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استبدال أيقونة MacTools في شريط القوائم مع الحفاظ على سلوك النقر."
+          }
+        }
+      }
+    },
+    "settings.occupiedFormat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app icon is already used by “%@”. Switch that plugin to a separate icon in its settings first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用图标已由「%@」使用。请先在其设置中切换为独立图标。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "應用程式圖示已由「%@」使用。請先在其設定中切換為獨立圖示。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリアイコンは「%@」が使用中です。先にそのプラグインの設定で独立アイコンに切り替えてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 아이콘을 ‘%@’에서 사용 중입니다. 먼저 해당 플러그인 설정에서 별도 아이콘으로 전환하세요."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das App-Symbol wird bereits von „%@“ verwendet. Wechseln Sie dort zuerst zum separaten Symbol."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’icône est déjà utilisée par « %@ ». Passez d’abord ce plugin en icône distincte dans ses réglages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El icono ya lo usa «%@». Cambia primero ese plugin a un icono independiente en sus ajustes."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O ícone já está a ser usado por «%@». Mude primeiro esse plugin para um ícone separado nas suas definições."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Значок приложения уже используется плагином «%@». Сначала выберите отдельный значок в его настройках."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أيقونة التطبيق مستخدمة بالفعل بواسطة «%@». بدّل ذلك الملحق إلى أيقونة مستقلة من إعداداته أولاً."
+          }
+        }
+      }
+    },
+    "settings.unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot change the display mode right now. Try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时无法切换显示方式，请稍后重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫時無法切換顯示方式，請稍後再試。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在、表示方法を変更できません。後でもう一度お試しください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금은 표시 방식을 변경할 수 없습니다. 잠시 후 다시 시도하세요."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Darstellung kann gerade nicht geändert werden. Versuchen Sie es später erneut."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de changer le mode d’affichage pour le moment. Réessayez plus tard."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se puede cambiar el modo ahora. Inténtalo más tarde."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não é possível mudar o modo agora. Tente novamente mais tarde."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сейчас нельзя изменить режим отображения. Повторите попытку позже."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتعذر تغيير وضع العرض الآن. حاول لاحقاً."
+          }
+        }
+      }
+    },
+    "settings.invalidIcon": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The icon is unavailable. The current display mode was kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图标暂不可用，已保留当前显示方式。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖示暫不可用，已保留目前顯示方式。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アイコンを使用できません。現在の表示方法を維持しました。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아이콘을 사용할 수 없어 현재 표시 방식을 유지했습니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Symbol ist nicht verfügbar. Die bisherige Darstellung bleibt erhalten."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’icône est indisponible. Le mode d’affichage actuel est conservé."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El icono no está disponible. Se ha mantenido el modo actual."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O ícone está indisponível. O modo atual foi mantido."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Значок недоступен. Текущий режим отображения сохранён."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأيقونة غير متاحة. تم الاحتفاظ بوضع العرض الحالي."
           }
         }
       }

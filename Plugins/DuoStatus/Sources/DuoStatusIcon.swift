@@ -12,15 +12,16 @@ enum DuoStatusIcon {
 
     static func image(
         for snapshot: DuoSystemStatusSnapshot,
-        appearance: DuoIconAppearance = .light
+        appearance: DuoIconAppearance = .light,
+        pointSize: NSSize = size
     ) -> NSImage {
         let ringColor = batteryRingColor(for: snapshot)
         let foreground: NSColor = ringColor != nil && appearance == .dark ? .white : .black
-        let image = NSImage(size: size, flipped: false) { _ in
+        let image = NSImage(size: pointSize, flipped: false) { _ in
             NSGraphicsContext.saveGraphicsState()
             defer { NSGraphicsContext.restoreGraphicsState() }
             let transform = NSAffineTransform()
-            transform.scale(by: size.width / drawingPointSize)
+            transform.scaleX(by: pointSize.width / drawingPointSize, yBy: pointSize.height / drawingPointSize)
             transform.concat()
             drawBattery(snapshot, color: ringColor ?? foreground)
             if snapshot.isExternalPowerConnected {

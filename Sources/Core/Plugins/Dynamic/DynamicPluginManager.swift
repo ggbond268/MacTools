@@ -199,6 +199,8 @@ final class DynamicPluginManager: ObservableObject {
 
     @Published private(set) var pluginManagementItems: [PluginManagementItem] = []
     var onPluginsChanged: (([any MacToolsPlugin]) -> Void)?
+    /// Revoke host-owned capabilities before plugin teardown or package removal.
+    var onPluginWillDeactivate: ((String, PluginDeactivationReason) -> Void)?
 
     var temporaryDirectory: URL {
         packageStore.temporaryDirectory
@@ -879,6 +881,7 @@ final class DynamicPluginManager: ObservableObject {
     }
 
     private func deactivateLoadedPlugins(pluginID: String, reason: PluginDeactivationReason) {
+        onPluginWillDeactivate?(pluginID, reason)
         guard let plugins = loadedPluginsByID.removeValue(forKey: pluginID) else {
             return
         }

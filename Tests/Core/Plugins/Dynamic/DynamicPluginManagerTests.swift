@@ -714,8 +714,18 @@ final class DynamicPluginManagerTests: XCTestCase {
 
         XCTAssertEqual(manager.loadInstalledPlugins().map(\.metadata.id), ["com.example.demo"])
 
+        var revokedBeforeTeardown = false
+        manager.onPluginWillDeactivate = { id, reason in
+            XCTAssertEqual(id, "com.example.demo")
+            XCTAssertEqual(reason, .uninstalling)
+            XCTAssertTrue(plugin.deactivationReasons.isEmpty)
+            XCTAssertFalse(store.installedRecords().isEmpty)
+            revokedBeforeTeardown = true
+        }
+
         try manager.uninstallPlugin(pluginID: "com.example.demo")
 
+        XCTAssertTrue(revokedBeforeTeardown)
         XCTAssertEqual(plugin.deactivationReasons, [.uninstalling])
         XCTAssertTrue(manager.loadInstalledPlugins().isEmpty)
         XCTAssertTrue(manager.pluginManagementItems.isEmpty)

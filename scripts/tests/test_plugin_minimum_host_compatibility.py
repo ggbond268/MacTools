@@ -20,6 +20,16 @@ PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swif
 PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
+    # Plugin-scoped, exclusive primary menu-bar icon placement.
+    "PluginMenuBarIconPlacement": "1.3.1",
+    "PluginMenuBarIconDescriptor": "1.3.1",
+    "PluginMenuBarIconOwner": "1.3.1",
+    "PluginMenuBarIconPlacementError": "1.3.1",
+    "PluginMenuBarIconRenderContext": "1.3.1",
+    "PluginMenuBarIconSnapshot": "1.3.1",
+    "PluginMenuBarIconProviding": "1.3.1",
+    "PluginMenuBarIconHostContext": "1.3.1",
+    "PluginMenuBarIconHostContextConsuming": "1.3.1",
     "ActionInputDescriptor": "1.3.1",
     "ActionInputSession": "1.3.1",
     "PluginActionInputProviding": "1.3.1",
@@ -329,6 +339,15 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             set(),
             "Public ActionModels types used by plugins must declare their minimum host",
         )
+
+    def test_menu_bar_icon_inventory_covers_new_public_types(self) -> None:
+        source = PLUGIN_INTERFACES.with_name("PluginMenuBarIcon.swift").read_text(encoding="utf-8")
+        symbols = public_top_level_type_names(source)
+        self.assertEqual(symbols - NEW_API_MINIMUM_HOSTS.keys(), set())
+        for symbol in symbols:
+            with self.subTest(symbol=symbol):
+                self.assertTrue(minimum_host_violations("probe", "1.3.0", symbol))
+                self.assertEqual(minimum_host_violations("probe", "1.3.1", symbol), [])
 
     def test_action_input_apis_reject_released_host_1_3_0(self) -> None:
         source = ACTION_MODELS.with_name("ActionInputModels.swift").read_text(encoding="utf-8")

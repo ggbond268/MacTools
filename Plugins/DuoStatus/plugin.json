@@ -1,51 +1,51 @@
 {
   "id": "duo-status",
   "displayName": "Duo 状态",
-  "summary": "独立菜单栏图标，一眼查看电量与网络状态",
+  "summary": "通过独立图标或应用主图标查看电量与网络状态",
   "localizedMetadata": {
     "en": {
       "displayName": "Duo Status",
-      "summary": "A separate menu bar icon for battery and network status."
+      "summary": "Battery and network status in a standalone or primary menu bar icon."
     },
     "zh-Hans": {
       "displayName": "Duo 状态",
-      "summary": "独立菜单栏图标，一眼查看电量与网络状态"
+      "summary": "通过独立图标或应用主图标查看电量与网络状态"
     },
     "zh-Hant": {
       "displayName": "Duo 狀態",
-      "summary": "獨立選單列圖示，一眼查看電量與網路狀態"
+      "summary": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
     },
     "ja": {
       "displayName": "Duo ステータス",
-      "summary": "独立したメニューバーアイコンでバッテリーとネットワークの状態を確認"
+      "summary": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認"
     },
     "ko": {
       "displayName": "Duo 상태",
-      "summary": "별도 메뉴 막대 아이콘에서 배터리와 네트워크 상태 확인"
+      "summary": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인"
     },
     "de": {
       "displayName": "Duo-Status",
-      "summary": "Separates Menüleistensymbol für Batterie- und Netzwerkstatus."
+      "summary": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol."
     },
     "fr": {
       "displayName": "État Duo",
-      "summary": "Une icône distincte pour la batterie et le réseau dans la barre des menus."
+      "summary": "Batterie et réseau dans une icône distincte ou principale de la barre des menus."
     },
     "es": {
       "displayName": "Estado Duo",
-      "summary": "Un icono independiente para la batería y la red en la barra de menús."
+      "summary": "Batería y red en un icono independiente o principal de la barra de menús."
     },
     "pt": {
       "displayName": "Estado Duo",
-      "summary": "Um ícone separado para bateria e rede na barra de menus."
+      "summary": "Bateria e rede num ícone separado ou principal da barra de menus."
     },
     "ru": {
       "displayName": "Статус Duo",
-      "summary": "Отдельный значок строки меню для состояния батареи и сети."
+      "summary": "Батарея и сеть в отдельном или основном значке строки меню."
     },
     "ar": {
       "displayName": "حالة Duo",
-      "summary": "أيقونة مستقلة في شريط القوائم لحالة البطارية والشبكة."
+      "summary": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم."
     }
   },
   "productStrings": {

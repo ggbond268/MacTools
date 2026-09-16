@@ -422,6 +422,7 @@ final class PluginHost: ObservableObject {
     private let shortcutStore: ShortcutStore
     private let pluginDisplayPreferencesStore: PluginDisplayPreferencesStore
     let menuBarPanelStore: MenuBarPanelStore
+    let menuBarIconCoordinator: PluginMenuBarIconCoordinator
     @Published private(set) var menuBarPanels: [MenuBarPanelDefinition] = []
     private var visibleMenuBarPanelID: String?
     private var menuBarPanelContentCache: [String: MenuBarPanelContentSnapshot] = [:]
@@ -676,6 +677,7 @@ final class PluginHost: ObservableObject {
             userDefaults: shortcutStore.userDefaults, reporter: preferencesBackupChangeReporter
         )
         self.menuBarPanels = menuBarPanelStore.configuration.displayPanels
+        self.menuBarIconCoordinator = PluginMenuBarIconCoordinator(userDefaults: shortcutStore.userDefaults)
         self.preferencesBackupStore = preferencesBackupStore
         self.automaticPreferencesBackupCoordinator = automaticPreferencesBackupCoordinator
         self.cloudPreferencesSyncCoordinator = cloudPreferencesSyncCoordinator
@@ -758,6 +760,9 @@ final class PluginHost: ObservableObject {
         configureCallbacks(for: self.builtInPlugins)
 
         if let dynamicPluginManager {
+            dynamicPluginManager.onPluginWillDeactivate = { [weak self] pluginID, reason in
+                self?.menuBarIconCoordinator.unregister(pluginID: pluginID, reason: reason)
+            }
             // The retired global checkbox becomes hidden on every surface
             // the plugin supports. Consume the package-store marker before
             // loading dynamic code, but do not hold or deactivate packages:
@@ -951,6 +956,7 @@ final class PluginHost: ObservableObject {
     }
 
     func deactivateAllPlugins(reason: PluginDeactivationReason = .hostShutdown) {
+        menuBarIconCoordinator.deactivateAll(reason: reason)
         pluginStateChangeRebuildTask?.cancel()
         pluginStateChangeRebuildTask = nil
         hideAllPanelSurfaces()
@@ -3526,6 +3532,10 @@ final class PluginHost: ObservableObject {
             configureHostStatusItemCallbacks(for: [plugin])
         }
         configureTrackpadGestureBridge()
+        let pendingIconPluginIDs: Set<String>? = dynamicPluginManager != nil && !didLoadDynamicPlugins
+            ? nil
+            : Set(pluginManagementItems.filter { $0.state == .restartRequired }.map(\.id))
+        menuBarIconCoordinator.synchronize(with: activePlugins, pendingPluginIDs: pendingIconPluginIDs)
     }
 
     private let trackpadGestureBridge = TrackpadGestureBridge()
@@ -4995,6 +5005,7 @@ final class PluginHost: ObservableObject {
         }
 
         isolatedPluginFailures[pluginID] = message
+        menuBarIconCoordinator.unregister(pluginID: pluginID, reason: .disabled)
         removePluginFromVisiblePanelSurfaces(pluginID, notify: false)
         cachedPanelStatesByID.removeValue(forKey: pluginID)
         cachedComponentStatesByID.removeValue(forKey: pluginID)

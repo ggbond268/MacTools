@@ -1,6 +1,7 @@
 import MacToolsPluginKit
 import XCTest
 @testable import DuoStatusPlugin
+@testable import MacTools
 
 @MainActor
 final class DuoStatusPluginTests: XCTestCase {
@@ -30,43 +31,40 @@ final class DuoStatusPluginTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(fixture.menuBar.tooltip).hasPrefix(plugin.metadata.title))
     }
 
-    func testHidingStopsMonitoringAndSavedPreferenceSurvivesRecreation() throws {
+    func testPlacementSwitchReusesMonitoringAndRestoresStandaloneItem() throws {
         let fixture = Fixture()
         fixture.plugin.activate(context: fixture.context)
         var notifications = 0
         fixture.plugin.onStateChange = { notifications += 1 }
-        fixture.plugin.handleSettingsAction(.setBoolean(controlID: "shows-menu-bar", value: false))
-        XCTAssertFalse(fixture.monitor.isRunning)
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "primary"))
+        XCTAssertTrue(fixture.monitor.isRunning)
         XCTAssertFalse(fixture.menuBar.isVisible)
-        XCTAssertEqual(notifications, 1)
-        XCTAssertEqual(fixture.storage.object(forKey: "shows-menu-bar") as? Bool, false)
-
-        let newMonitor = MonitorFake()
-        let newMenuBar = MenuBarFake()
-        let restored = DuoStatusPlugin(context: fixture.context, monitor: newMonitor, menuBar: newMenuBar)
-        restored.activate(context: fixture.context)
-        restored.refresh()
-        XCTAssertFalse(restored.showsMenuBar)
-        XCTAssertEqual(newMonitor.startCount, 0)
-        XCTAssertFalse(newMenuBar.isVisible)
-        guard case let .form(sections) = restored.settingsPage?.body,
+        XCTAssertGreaterThan(notifications, 0)
+        XCTAssertEqual(fixture.plugin.placement, .primary)
+        XCTAssertEqual(fixture.monitor.startCount, 1)
+        guard case let .form(sections) = fixture.plugin.settingsPage?.body,
               case let .rows(rows) = sections.first?.content,
-              case let .toggle(isOn) = rows.first?.control else {
-            return XCTFail("Expected a declarative visibility toggle")
+              case let .picker(selection, options, style) = rows.first?.control else {
+            return XCTFail("Expected a declarative placement picker")
         }
-        XCTAssertFalse(isOn)
+        XCTAssertEqual(selection, "primary")
+        XCTAssertEqual(options.map(\.id), ["standalone", "primary"])
+        if case .segmented = style {} else { XCTFail("Expected a segmented picker") }
 
-        restored.handleSettingsAction(.setBoolean(controlID: "shows-menu-bar", value: true))
-        XCTAssertTrue(newMonitor.isRunning)
-        XCTAssertTrue(newMenuBar.isVisible)
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "standalone"))
+        XCTAssertTrue(fixture.monitor.isRunning)
+        XCTAssertTrue(fixture.menuBar.isVisible)
+        XCTAssertEqual(fixture.monitor.startCount, 1)
+        XCTAssertNil(fixture.coordinator.primaryIconOwner)
     }
 
-    func testInactiveAndHiddenPluginIgnoreLateReadingsAndClicks() {
+    func testInactivePluginIgnoresLateReadingsAndClicks() {
         for reason in [PluginDeactivationReason.disabled, .uninstalling, .updating, .hostShutdown] {
             let fixture = Fixture()
             fixture.plugin.activate(context: fixture.context)
             var settingsRequests = 0
             fixture.plugin.requestSettingsPresentation = { settingsRequests += 1 }
+            fixture.coordinator.unregister(pluginID: DuoStatusPlugin.pluginID, reason: reason)
             fixture.plugin.deactivate(reason: reason)
             fixture.monitor.emit(.init(battery: .level(fraction: 0.4, isCharging: true)))
             fixture.menuBar.openSettings?()
@@ -74,12 +72,12 @@ final class DuoStatusPluginTests: XCTestCase {
             XCTAssertFalse(fixture.monitor.isRunning)
             XCTAssertFalse(fixture.menuBar.isVisible)
             XCTAssertEqual(settingsRequests, 0)
-            XCTAssertTrue(fixture.plugin.showsMenuBar)
+            XCTAssertEqual(fixture.plugin.placement, .standalone)
         }
 
         let fixture = Fixture()
         fixture.plugin.activate(context: fixture.context)
-        fixture.plugin.handleSettingsAction(.setBoolean(controlID: "shows-menu-bar", value: false))
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "primary"))
         fixture.monitor.emit(.init(battery: .notPresent))
         XCTAssertFalse(fixture.menuBar.isVisible)
     }
@@ -111,7 +109,7 @@ final class DuoStatusPluginTests: XCTestCase {
         let menuBar = MenuBarFake()
         let context = PluginRuntimeContext(pluginID: DuoStatusPlugin.pluginID, storage: storage)
         var plugin: DuoStatusPlugin? = DuoStatusPlugin(context: context, monitor: monitor, menuBar: menuBar)
-        weak var weakPlugin = plugin
+        weak let weakPlugin = plugin
         plugin?.activate(context: context)
         plugin = nil
         XCTAssertNil(weakPlugin)
@@ -124,7 +122,7 @@ final class DuoStatusPluginTests: XCTestCase {
     func testUnrelatedSettingDoesNotPersistOrChangeVisibility() {
         let fixture = Fixture()
         fixture.plugin.handleSettingsAction(.setBoolean(controlID: "unknown", value: false))
-        XCTAssertTrue(fixture.plugin.showsMenuBar)
+        XCTAssertEqual(fixture.plugin.placement, .standalone)
         XCTAssertNil(fixture.storage.object(forKey: "shows-menu-bar"))
         XCTAssertEqual(fixture.monitor.startCount, 0)
     }
@@ -148,17 +146,85 @@ final class DuoStatusPluginTests: XCTestCase {
     }
 
     @MainActor
-    private struct Fixture {
+    private final class Fixture {
         let storage = StorageFake()
         let monitor = MonitorFake()
         let menuBar = MenuBarFake()
         let context: PluginRuntimeContext
         let plugin: DuoStatusPlugin
+        let suiteName = "DuoStatusPluginTests-\(UUID().uuidString)"
+        let defaults: UserDefaults
+        let coordinator: PluginMenuBarIconCoordinator
 
         init() {
+            defaults = UserDefaults(suiteName: suiteName)!
+            coordinator = PluginMenuBarIconCoordinator(userDefaults: defaults)
             context = PluginRuntimeContext(pluginID: DuoStatusPlugin.pluginID, storage: storage)
             plugin = DuoStatusPlugin(context: context, monitor: monitor, menuBar: menuBar)
+            coordinator.synchronize(with: [plugin], pendingPluginIDs: [])
         }
+
+        isolated deinit {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+    }
+
+    func testConflictKeepsStandaloneAndShowsInlineError() throws {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        let owner = PluginMenuBarIconOwner(pluginID: "other", iconID: "status", pluginTitle: "Other Status")
+        fixture.plugin.menuBarIconHostContext = PluginMenuBarIconHostContext(
+            placement: { _ in .standalone }, primaryIconOwner: { owner },
+            requestPlacement: { _, _ in .failure(.occupied(owner: owner)) }
+        )
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "primary"))
+        XCTAssertEqual(fixture.plugin.placement, .standalone)
+        XCTAssertTrue(fixture.menuBar.isVisible)
+        guard case let .form(sections) = fixture.plugin.settingsPage?.body,
+              case let .rows(rows) = sections.first?.content else { return XCTFail("Missing form") }
+        XCTAssertTrue(try XCTUnwrap(rows.first?.error).contains("Other Status"))
+        fixture.plugin.menuBarIconPlacementDidChange()
+        guard case let .form(updated) = fixture.plugin.settingsPage?.body,
+              case let .rows(updatedRows) = updated.first?.content else { return XCTFail("Missing form") }
+        XCTAssertNil(updatedRows.first?.error)
+    }
+
+    func testIconTicksDoNotNotifyGeneralStateAndCacheHonorsAppearance() throws {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "primary"))
+        var stateChanges = 0
+        fixture.plugin.onStateChange = { stateChanges += 1 }
+        let light = PluginMenuBarIconRenderContext(pointSize: .init(width: 24, height: 24), displayScale: 2, appearance: .light)
+        let before = try XCTUnwrap(fixture.plugin.menuBarIcon(for: "status", context: light))
+        XCTAssertTrue(before.image === fixture.plugin.menuBarIcon(for: "status", context: light)?.image)
+        fixture.monitor.emit(.init(battery: .level(fraction: 0.5, isCharging: true)))
+        let after = try XCTUnwrap(fixture.plugin.menuBarIcon(for: "status", context: light))
+        XCTAssertGreaterThan(after.revision, before.revision)
+        XCTAssertFalse(after.isTemplate)
+        XCTAssertEqual(stateChanges, 0)
+        let dark = PluginMenuBarIconRenderContext(pointSize: light.pointSize, displayScale: 2, appearance: .dark)
+        XCTAssertFalse(after.image === fixture.plugin.menuBarIcon(for: "status", context: dark)?.image)
+        XCTAssertFalse(fixture.menuBar.isVisible)
+    }
+
+    func testRestoredPrimaryPlacementWaitsForHostWithoutCreatingStandaloneItem() throws {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "primary"))
+        fixture.coordinator.deactivateAll(reason: .hostShutdown)
+        fixture.plugin.deactivate(reason: .hostShutdown)
+        let menuBar = MenuBarFake()
+        let monitor = MonitorFake()
+        let restored = DuoStatusPlugin(context: fixture.context, monitor: monitor, menuBar: menuBar)
+        restored.activate(context: fixture.context)
+        XCTAssertEqual(menuBar.creationCount, 0)
+        XCTAssertEqual(monitor.startCount, 0)
+        let coordinator = PluginMenuBarIconCoordinator(userDefaults: fixture.defaults)
+        coordinator.synchronize(with: [restored], pendingPluginIDs: [])
+        XCTAssertEqual(restored.placement, .primary)
+        XCTAssertEqual(menuBar.creationCount, 0)
+        XCTAssertEqual(monitor.startCount, 1)
     }
 }
 
