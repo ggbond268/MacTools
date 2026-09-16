@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import XCTest
 import MacToolsPluginKit
@@ -714,12 +715,72 @@ final class DynamicPluginManagerTests: XCTestCase {
 
         XCTAssertEqual(manager.loadInstalledPlugins().map(\.metadata.id), ["com.example.demo"])
 
+        var revokedBeforeTeardown = false
+        manager.onPluginWillDeactivate = { id, reason in
+            XCTAssertEqual(id, "com.example.demo")
+            XCTAssertEqual(reason, .uninstalling)
+            XCTAssertTrue(plugin.deactivationReasons.isEmpty)
+            XCTAssertFalse(store.installedRecords().isEmpty)
+            revokedBeforeTeardown = true
+        }
+
         try manager.uninstallPlugin(pluginID: "com.example.demo")
 
+        XCTAssertTrue(revokedBeforeTeardown)
         XCTAssertEqual(plugin.deactivationReasons, [.uninstalling])
         XCTAssertTrue(manager.loadInstalledPlugins().isEmpty)
         XCTAssertTrue(manager.pluginManagementItems.isEmpty)
         XCTAssertTrue(store.installedRecords().isEmpty)
+    }
+
+    func testFailedUninstallRestoresPrimaryIconAndSuccessfulRetryClearsSelection() throws {
+        let sourceURL = try makePackage(id: "com.example.icon")
+        var failsRemoval = true
+        let store = PluginPackageStore(
+            rootDirectory: temporaryRoot, userDefaults: defaults,
+            packageFileMover: { source, destination in
+                if failsRemoval, destination.lastPathComponent.hasPrefix("uninstall-") {
+                    throw CocoaError(.fileWriteNoPermission)
+                }
+                try FileManager.default.moveItem(at: source, to: destination)
+            },
+            hostVersion: "1.0.0"
+        )
+        _ = try store.installPackage(from: sourceURL)
+        var currentPlugin: MockDynamicIconPlugin?
+        let loader = StubDynamicPluginLoader { records in
+            records.map { record in
+                let plugin = MockDynamicIconPlugin()
+                currentPlugin = plugin
+                return DynamicPluginLoadResult(record: record, plugins: [plugin], errorMessage: nil)
+            }
+        }
+        let manager = DynamicPluginManager(packageStore: store, pluginLoader: loader)
+        let host = PluginHost(
+            plugins: [], dynamicPluginManager: manager, shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            globalShortcutManager: GlobalShortcutManager()
+        )
+        defer { host.deactivateAllPlugins() }
+        let oldContext = try XCTUnwrap(currentPlugin?.menuBarIconHostContext)
+        try oldContext.requestPlacement(.primary, for: "status").get()
+        let stored = defaults.data(forKey: PluginMenuBarIconCoordinator.preferenceKey)
+
+        XCTAssertThrowsError(try host.uninstallDynamicPlugin(pluginID: "com.example.icon"))
+        XCTAssertTrue(manager.isInstalledPlugin("com.example.icon"))
+        XCTAssertEqual(currentPlugin?.menuBarIconHostContext?.placement(for: "status"), .primary)
+        XCTAssertEqual(defaults.data(forKey: PluginMenuBarIconCoordinator.preferenceKey), stored)
+        XCTAssertEqual(host.menuBarIconCoordinator.primaryIconOwner?.requiresRestart, false)
+        guard case .failure(.unavailable) = oldContext.requestPlacement(.standalone, for: "status") else {
+            return XCTFail("The old context must remain revoked after rollback")
+        }
+
+        failsRemoval = false
+        try host.uninstallDynamicPlugin(pluginID: "com.example.icon")
+        XCTAssertNil(host.menuBarIconCoordinator.primaryIconOwner)
+        XCTAssertNil(defaults.data(forKey: PluginMenuBarIconCoordinator.preferenceKey))
+        XCTAssertFalse(manager.isInstalledPlugin("com.example.icon"))
     }
 
     func testMigrationRuntimeValidationTearsDownValidatedInstance() throws {
@@ -931,6 +992,25 @@ private final class MockDynamicPlugin: MacToolsPlugin, PluginFeatureExtractionRe
         if let readinessError {
             throw readinessError
         }
+    }
+}
+
+@MainActor
+private final class MockDynamicIconPlugin: MacToolsPlugin, PluginMenuBarIconProviding, PluginMenuBarIconHostContextConsuming {
+    let metadata = PluginMetadata(
+        id: "com.example.icon", title: "Icon", iconName: "circle", iconTint: .blue, order: 1, defaultDescription: "Test"
+    )
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var onMenuBarIconChange: ((String) -> Void)?
+    var menuBarIconHostContext: PluginMenuBarIconHostContext?
+    var menuBarIconDescriptors: [PluginMenuBarIconDescriptor] { [.init(id: "status", title: "Status")] }
+
+    func menuBarIconPlacementDidChange() {}
+    func menuBarIcon(for iconID: String, context: PluginMenuBarIconRenderContext) -> PluginMenuBarIconSnapshot? {
+        guard let image = NSImage(systemSymbolName: "circle", accessibilityDescription: nil) else { return nil }
+        return .init(revision: 0, image: image, isTemplate: true, tooltip: "Test", accessibilityDescription: "Test")
     }
 }
 

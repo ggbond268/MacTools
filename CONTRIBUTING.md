@@ -65,6 +65,7 @@ Unless a file is clearly identified as third-party material under separate terms
 - When merging new plugins with product-metadata changes, register their factories in `PluginRuntimeActionSnapshotTests` and preserve independent runtime policies such as `uninstallDataPolicy` alongside the product fields.
 - New plugins should provide localization whenever practical, at minimum for panel copy, settings copy, permission text, and plugin metadata.
 - AI Usage provider changes should follow [the credential and refresh contract](docs/plugins/ai-usage.md), with fixture-based parser and lifecycle tests. Keep quota presentation in Dashboard and the optional menu bar. Tests must never query real accounts or read the developer's credentials.
+- Plugins that offer primary menu-bar icons must use the [exclusive icon placement contract](docs/plugins/menu-bar-icons.md), never mutate the host status item, and keep icon updates separate from general state changes. Follow [Duo Status](docs/plugins/duo-status.md) for cached artwork and lifecycle handling; tests must use synthetic readings and fake presenters.
 - Prefer Apple native frameworks. When adding system frameworks, private include paths, or helper executables inside a plugin bundle, declare the smallest necessary differences in the plugin's own `project.yml`. Bundle resource executables that need separate signing should be listed in `plugin.json.package.signPaths`.
 - System power and session-ending actions must use native macOS confirmation flows, remain foreground-only, and avoid immediate restart or shutdown events that can discard unsaved work.
 - Plugins that use private Apple frameworks must load them dynamically at runtime and validate the required classes and selectors. Do not statically link private frameworks, and surface unsupported-system errors instead of crashing.
@@ -73,7 +74,7 @@ Unless a file is clearly identified as third-party material under separate terms
 
 ## Testing
 - Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.
-- Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
+- Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Native recording probes must capture only a synthetic fixture window and write to a temporary directory; validate both capture termination and file finalization. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - Async test waits must have a deadline and suspend between checks. `make ci` and the GitHub Build workflow cap each test at 120 seconds so a stalled test reports a failure instead of exhausting the job timeout.
@@ -81,6 +82,8 @@ Unless a file is clearly identified as third-party material under separate terms
 - Panel tests should focus on persisted entries, independent copies, drag/Undo state, viewport mounting, plugin lifecycle, and known popover crashes. Check cosmetic changes visually instead of asserting exact padding, colors, menu counts, or generating screenshots without comparisons.
 - Native drag acceptance is opt-in: run `make panel-layout-ui-tests` when changing drag routing or hit testing, or `python3 scripts/e2e/run_panel_layout_fixture.py --surface cross-panels` for one scenario. These cursor-driven checks require an active desktop session and are excluded from `make ci` and the default GitHub build workflow.
 - File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.
+
+For Window Switcher changes, see the optional [isolated Chrome diagnostic](scripts/diagnostics/window-switcher/README.md). Keep automated results separate from physical IME, display/Space, and packaged-release acceptance.
 
 ## Pull Request Checklist
 - Keep the PR focused, and explain the purpose, verification, and user impact.
@@ -133,6 +136,8 @@ Plugins may adopt `PluginActionInputPresentationRequesting` to request the host 
 Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-install.json` with `scripts/cli-install-manifest.py`, embeds it in the app resources, and then signs the outer app. Publish that same ZIP and JSON only after both notarization submissions pass. The app trusts the resource seal, never a downloaded unsigned manifest. Personal publishers must use the same ordering with an immutable `/releases/<build>` URL. See [managed CLI distribution](docs/plugins/managed-cli-distribution.md) for the contract, ownership layout, and release acceptance gates.
 
 Centered window guide changes should follow the [Window Layouts interaction and manual acceptance contract](docs/plugins/window-layouts.md#centered-window-guides), reuse the existing listen-only event tap, and keep plugin minimum-host declarations aligned with the shared snap APIs.
+
+Window Switcher’s own centered drag guides consume `PluginWindowSnapCoordinator` and require host 1.3.1. Preserve visible-item shortcut numbering across scrolling/filtering and keep delayed preview feedback covered by native chooser tests; see [Window Switcher development](docs/plugins/window-switcher.md). `make script-tests` and `make ci` also check generated website plugin data; regenerate it with `python3 scripts/plugins/generate_website_plugin_data.py` after changing plugin actions or metadata.
 
 ## App Uninstaller safety
 

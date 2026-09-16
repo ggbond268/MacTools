@@ -1,211 +1,182 @@
 import AppKit
-import MacToolsPluginKit
 import ScreenCaptureKit
+import VideoToolbox
 
-struct RecordRequest {
-    let display: SCDisplay
-    let sourceRect: CGRect   // Display-local points with a top-left origin.
-    let width: Int           // Output pixels.
-    let height: Int
-    let scale: CGFloat       // Pixels per point, used for image DPI.
-}
-
-/// ScreenCaptureKit writes the recording directly to a movie file on macOS 15 and later.
 @available(macOS 15, *)
 @MainActor
-final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
-    var onFinish: ((Result<URL, Error>) -> Void)? {
-        get { lifecycle.onFinish }
-        set { lifecycle.onFinish = newValue }
-    }
-
-    private var stream: SCStream?
-    private var output: SCRecordingOutput?
-    private let url: URL
-    private let panel: RecordPanel
+final class Recorder: NSObject, SCRecordingOutputDelegate {
+    var onFinish: ((Result<URL, Error>) -> Void)?
+    let region: CaptureRegion
     private let environment: ScreenshotEnvironment
+    private let panel: CaptureStatusPanel
+    private let outline: CaptureRegionOutlineWindow
+    private let controls: CaptureControls
+    private let url: URL
+    private var session: CaptureStreamSession?
+    private var output: SCRecordingOutput?
+    private var startupTask: Task<Void, Never>?
     private var timer: Timer?
-    private var started = Date()
-    private var isStarting = true
-    private var ended = false
-    private var cancelled = false
-    private lazy var lifecycle = RecordingLifecycle(
-        // Retain the stream until a queued stop can run, even after cleanup clears the property.
-        stopCapture: { [stream = self.stream] in try await stream?.stopCapture() },
-        onEnd: { [weak self] in self?.cleanUp() }
-    )
+    private var startedAt: ContinuousClock.Instant?
+    private lazy var lifecycle = RecordingLifecycle { [weak self] in self?.session?.stop() }
 
-    static func start(request: RecordRequest, environment: ScreenshotEnvironment) async throws -> Recorder {
-        try Task.checkCancellation()
-        let recorder = Recorder(environment: environment)
-        do { try await recorder.begin(request) }
-        catch {
-            recorder.lifecycle.finish(.failure(error))
-            if recorder.cancelled { throw CancellationError() }
-            throw error
-        }
-        return recorder
-    }
-
-    private init(environment: ScreenshotEnvironment) {
+    init(region: CaptureRegion, environment: ScreenshotEnvironment) {
+        self.region = region
         self.environment = environment
         url = environment.fileURL(prefix: environment.string("record.filename", "录屏"), ext: "mov")
-        panel = RecordPanel(stopTitle: environment.string("record.stop", "停止"))
+        panel = CaptureStatusPanel(primaryTitle: environment.string("record.stop", "停止"), indicatorColor: .systemRed)
+        outline = CaptureRegionOutlineWindow(region: region)
+        controls = CaptureControls([outline, panel])
         super.init()
+        panel.onPrimary = { [weak self] in self?.stop() }
     }
 
-    private func begin(_ request: RecordRequest) async throws {
-        // Order the control bar first so ScreenCaptureKit can identify its window for exclusion.
-        environment.registerCaptureControls([panel])
-        panel.onStop = { [weak self] in self?.stop() }
-        panel.show()
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        try Task.checkCancellation()
-        guard !ended else { throw CancellationError() }
-        let controlIDs = try environment.captureControlWindowIDs(availableWindowIDs: Set(content.windows.map(\.windowID)))
-        let controls = content.windows.filter { controlIDs.contains($0.windowID) }
-        let filter = SCContentFilter(display: request.display, excludingWindows: controls)
-
-        let config = SCStreamConfiguration()
-        config.sourceRect = request.sourceRect
-        config.width = request.width
-        config.height = request.height
-        config.showsCursor = true
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 30)
-        config.queueDepth = 5
-
-        let stream = SCStream(filter: filter, configuration: config, delegate: self)
-        let recording = SCRecordingOutputConfiguration()
-        recording.outputURL = url
-        recording.outputFileType = .mov
-        recording.videoCodecType = .h264
-        let output = SCRecordingOutput(configuration: recording, delegate: self)
-        // Delegate callbacks can arrive while startCapture is suspended.
-        self.stream = stream
-        self.output = output
-        try stream.addRecordingOutput(output)
-        try await stream.startCapture()
-        try Task.checkCancellation()
-        if let result = lifecycle.result {
-            Task { try? await stream.stopCapture() }
-            _ = try result.get()
-            throw RecordingError.endedDuringStartup
+    func start() {
+        guard startupTask == nil, session == nil, lifecycle.result == nil else { return }
+        // Retain the session through native stop and file-finalization callbacks, including host teardown.
+        lifecycle.onFinish = { [self] result in finish(result) }
+        lifecycle.onPhaseChange = { [weak self] phase in self?.update(phase) }
+        update(.starting)
+        startupTask = Task { [self] in
+            defer { startupTask = nil }
+            do {
+                let folder = url.deletingLastPathComponent()
+                try await Task.detached(priority: .userInitiated) {
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                }.value
+                try Task.checkCancellation()
+                let filter = try await CaptureSessionPreparation.filter(region: region, controls: controls)
+                try Task.checkCancellation()
+                let configuration = CaptureSessionPreparation.configuration(region: region, framesPerSecond: 30, showsCursor: true)
+                configuration.queueDepth = 5
+                let recording = SCRecordingOutputConfiguration()
+                recording.outputURL = url
+                recording.outputFileType = .mov
+                let width = region.width, height = region.height
+                recording.videoCodecType = try await Task.detached(priority: .userInitiated) {
+                    try RecordingEncoding.codec(width: width, height: height)
+                }.value
+                try Task.checkCancellation()
+                try region.validate()
+                guard recording.availableVideoCodecTypes.contains(recording.videoCodecType),
+                      recording.availableOutputFileTypes.contains(.mov) else {
+                    throw RecordingError.unsupportedResolution
+                }
+                let session = CaptureStreamSession(filter: filter, configuration: configuration)
+                self.session = session
+                session.onStopped = { [weak self, weak session] result in
+                    guard let self else { return }
+                    outline.orderOut(nil)
+                    if session?.failedToStart == true, case .failure(let error) = result {
+                        lifecycle.failBeforeCapture(error)
+                    } else { lifecycle.captureStopped(result) }
+                }
+                session.onWaiting = { [weak self] in self?.lifecycle.waitingForCapture() }
+                let output = SCRecordingOutput(configuration: recording, delegate: self)
+                self.output = output
+                try session.stream.addRecordingOutput(output)
+                outline.show()
+                panel.show(near: region.globalRect, displayID: region.display.id)
+                session.start()
+            } catch {
+                if let session {
+                    lifecycle.fileCompleted(.failure(error))
+                    session.stop()
+                } else { lifecycle.failBeforeCapture(error) }
+            }
         }
-
-        isStarting = false
-        started = Date()
-        let timer = Timer(timeInterval: 1, target: self, selector: #selector(updateElapsed),
-                          userInfo: nil, repeats: true)
-        self.timer = timer
-        RunLoop.main.add(timer, forMode: .common)
     }
 
     func stop() {
-        if isStarting { cancel(); return }
-        hideControls()
+        guard session != nil else { cancel(); return }
         lifecycle.stop()
     }
 
     func cancel() {
-        cancelled = true
-        onFinish = nil
-        lifecycle.finish(.failure(CancellationError()))
+        startupTask?.cancel()
+        if session == nil { lifecycle.failBeforeCapture(CancellationError()) }
+        else { lifecycle.cancel() }
     }
 
-    @objc private func updateElapsed() {
-        panel.update(seconds: Int(Date().timeIntervalSince(started)))
-    }
-
-    private func hideControls() {
-        timer?.invalidate()
-        timer = nil
-        panel.orderOut(nil)
-    }
-
-    private func cleanUp() {
-        ended = true
-        environment.removeCaptureControls([panel])
-        hideControls()
-        let stream = stream
-        if let stream, let output { try? stream.removeRecordingOutput(output) }
-        self.stream = nil
-        output = nil
-        // A failed or cancelled stop needs an independent best-effort cleanup request.
-        let failed: Bool
-        if case .failure? = lifecycle.result { failed = true } else { failed = false }
-        if (!lifecycle.isStopping || failed), let stream {
-            Task { try? await stream.stopCapture() }
+    func displayTopologyChanged() {
+        do { try region.validate() } catch {
+            outline.orderOut(nil)
+            stop()
         }
     }
 
-    // MARK: SCRecordingOutputDelegate / SCStreamDelegate
+    private func update(_ phase: RecordingLifecycle.Phase) {
+        if phase != .recording { timer?.invalidate(); timer = nil }
+        switch phase {
+        case .starting:
+            panel.update(environment.string("capture.preparing", "正在准备…"))
+        case .recording:
+            startedAt = .now
+            panel.update("00:00")
+            timer = Timer(timeInterval: 1, target: self, selector: #selector(updateElapsed), userInfo: nil, repeats: true)
+            if let timer { RunLoop.main.add(timer, forMode: .common) }
+        case .stopping:
+            panel.update(environment.string("capture.stopping", "正在停止…"), primaryEnabled: false)
+        case .finalizing:
+            panel.update(environment.string("record.saving", "正在保存…"), primaryEnabled: false)
+        case .waiting:
+            let stopped = session?.isStopped == true
+            panel.update(environment.string(stopped ? "record.savingSlowly" : "capture.stoppingSlowly",
+                                            stopped ? "正在保存，请稍候…" : "正在等待系统停止…"),
+                         primaryEnabled: session?.canRetryStop == true)
+        case .finished: break
+        }
+    }
+
+    @objc private func updateElapsed() {
+        let duration = output?.recordedDuration.seconds ?? 0
+        let seconds = duration.isFinite && duration >= 0
+            ? Int(duration) : Int(startedAt?.duration(to: .now).components.seconds ?? 0)
+        panel.update(String(format: "%02d:%02d", seconds / 60, seconds % 60))
+    }
+
+    private func finish(_ result: Result<URL, Error>) {
+        timer?.invalidate()
+        timer = nil
+        controls.hide()
+        if let output, let session { try? session.stream.removeRecordingOutput(output) }
+        output = nil
+        session = nil
+        let completion = onFinish
+        onFinish = nil
+        completion?(result)
+    }
+
+    nonisolated func recordingOutputDidStartRecording(_ recordingOutput: SCRecordingOutput) {
+        Task { @MainActor in lifecycle.recordingStarted() }
+    }
+
     nonisolated func recordingOutputDidFinishRecording(_ recordingOutput: SCRecordingOutput) {
-        Task { @MainActor in lifecycle.finish(.success(url)) }
+        Task { @MainActor in lifecycle.fileCompleted(.success(url)) }
     }
 
     nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: Error) {
-        Task { @MainActor in lifecycle.finish(.failure(error)) }
-    }
-
-    nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
-        Task { @MainActor in lifecycle.finish(.failure(error)) }
+        Task { @MainActor in lifecycle.fileCompleted(.failure(error)) }
     }
 }
 
-/// A movable recording control bar that does not activate the application.
-@MainActor
-final class RecordPanel: NSPanel {
-    var onStop: (() -> Void)?
-    private let label = NSTextField(labelWithString: "00:00")
+enum RecordingError: Error { case unsupportedResolution }
 
-    init(stopTitle: String) {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 10, height: 10),
-                   styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        level = .floating
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = true
-        isMovableByWindowBackground = true
-        isReleasedWhenClosed = false
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-
-        let box = NSStackView()
-        box.orientation = .horizontal
-        box.spacing = 10
-        box.edgeInsets = NSEdgeInsets(top: 6, left: 14, bottom: 6, right: 8)
-
-        let dot = NSView()
-        dot.wantsLayer = true
-        dot.layer?.backgroundColor = NSColor.systemRed.cgColor
-        dot.layer?.cornerRadius = 5
-        dot.widthAnchor.constraint(equalToConstant: 10).isActive = true
-        dot.heightAnchor.constraint(equalToConstant: 10).isActive = true
-        box.addArrangedSubview(dot)
-
-        label.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
-        label.textColor = .labelColor
-        box.addArrangedSubview(label)
-
-        let stop = NSButton(title: stopTitle, target: self, action: #selector(stopTapped))
-        stop.bezelStyle = .rounded
-        stop.controlSize = .small
-        box.addArrangedSubview(stop)
-
-        let size = box.fittingSize
-        setContentSize(size)
-        contentView = Glass.wrap(box, radius: size.height / 2, blending: .behindWindow)
+enum RecordingEncoding {
+    static func codec(width: Int, height: Int) throws -> AVVideoCodecType {
+        if supports(kCMVideoCodecType_H264, width: width, height: height) { return .h264 }
+        if supports(kCMVideoCodecType_HEVC, width: width, height: height) { return .hevc }
+        throw RecordingError.unsupportedResolution
     }
 
-    func show() {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-        setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - frame.width / 2, y: screen.visibleFrame.minY + 24))
-        PluginPresentationSafety.prepareForWindowOrdering(self)
-        orderFrontRegardless()
+    private static func supports(_ codec: CMVideoCodecType, width: Int, height: Int) -> Bool {
+        guard let width = Int32(exactly: width), let height = Int32(exactly: height), width > 0, height > 0 else { return false }
+        var encoder: VTCompressionSession?
+        let status = VTCompressionSessionCreate(allocator: kCFAllocatorDefault, width: width, height: height,
+            codecType: codec,
+            encoderSpecification: [kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true] as CFDictionary,
+            imageBufferAttributes: nil, compressedDataAllocator: nil, outputCallback: nil, refcon: nil,
+            compressionSessionOut: &encoder)
+        if let encoder { VTCompressionSessionInvalidate(encoder) }
+        return status == noErr
     }
-
-    func update(seconds: Int) {
-        label.stringValue = String(format: "%02d:%02d", seconds / 60, seconds % 60)
-    }
-
-    @objc private func stopTapped() { onStop?() }
 }

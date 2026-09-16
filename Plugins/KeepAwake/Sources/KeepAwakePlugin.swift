@@ -94,6 +94,7 @@ final class KeepAwakePlugin:
 
     private enum ControlID {
         static let duration = "duration"
+        static let behavior = "behavior"
     }
 
     private enum ActionID {
@@ -516,10 +517,17 @@ final class KeepAwakePlugin:
         case .setDisclosureExpanded, .setNavigationSelection, .clearNavigationSelection:
             return
         case let .setSelection(controlID, optionID):
-            guard controlID == ControlID.duration else {
+            switch controlID {
+            case ControlID.duration:
+                updateDurationPreset(using: optionID)
+            case ControlID.behavior:
+                guard let behavior = KeepAwakeBehavior(rawValue: optionID) else {
+                    return
+                }
+                setBehavior(behavior)
+            default:
                 return
             }
-            updateDurationPreset(using: optionID)
         case .setDate, .setSlider, .invokeAction:
             return
         }
@@ -683,6 +691,28 @@ final class KeepAwakePlugin:
                     datePickerStyle: nil,
                     sectionTitle: nil,
                     isEnabled: true
+                ),
+                PluginPanelControl(
+                    id: ControlID.behavior,
+                    kind: .segmented,
+                    options: KeepAwakeBehavior.allCases.map {
+                        PluginPanelControlOption(
+                            id: $0.rawValue,
+                            title: panelBehaviorTitle($0),
+                            subtitle: panelBehaviorDescription($0)
+                        )
+                    },
+                    selectedOptionID: preferences.behavior.rawValue,
+                    dateValue: nil,
+                    minimumDate: nil,
+                    displayedComponents: nil,
+                    datePickerStyle: nil,
+                    sectionTitle: localization.string(
+                        "settings.mode.section",
+                        defaultValue: "行为"
+                    ),
+                    showsLeadingDivider: true,
+                    isEnabled: true
                 )
             ],
             secondaryPanel: nil
@@ -751,6 +781,27 @@ final class KeepAwakePlugin:
             logger.error("keep-awake behavior update failed: \(error.localizedDescription, privacy: .public)")
             lastErrorMessage = error.localizedDescription
             notifyChange()
+        }
+    }
+
+    private func panelBehaviorDescription(_ behavior: KeepAwakeBehavior) -> String {
+        if behavior == .keepScreenBasedToolsWorking {
+            return localization.string(
+                "panel.behavior.screenTools.description",
+                defaultValue: "保持屏幕常亮并防止自动锁定。"
+            )
+        }
+        return settingsBehaviorDescription(behavior)
+    }
+
+    private func panelBehaviorTitle(_ behavior: KeepAwakeBehavior) -> String {
+        switch behavior {
+        case .allowDisplayToTurnOff:
+            localization.string("panel.behavior.default", defaultValue: "默认")
+        case .keepDisplayOn:
+            localization.string("panel.display.indicator", defaultValue: "屏幕常亮")
+        case .keepScreenBasedToolsWorking:
+            localization.string("panel.screenTools.indicator", defaultValue: "屏幕工具")
         }
     }
 

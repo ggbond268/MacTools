@@ -675,7 +675,8 @@ struct GeneralSettingsView: View {
                 Section {
                     MenuBarIconSettingsView(
                         iconSettings: menuBarIconSettings,
-                        gallery: menuBarIconGallery
+                        gallery: menuBarIconGallery,
+                        iconCoordinator: pluginHost.menuBarIconCoordinator
                     )
                     .generalSettingsSearchAnchor(
                         target: .menuBarIcon,

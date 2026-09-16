@@ -12,6 +12,7 @@ on:
       - "scripts/plugins/plugin_source_manifest.py"
       - "scripts/plugins/generate_website_plugin_data.py"
       - "docs/app-release.json"
+      - "docs/icon-gallery/**"
       - "docs/nightly/**"
   workflow_run:
     workflows:

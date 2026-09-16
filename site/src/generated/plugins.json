@@ -8416,6 +8416,225 @@
     {
       "capabilities": {
         "componentPanel": false,
+        "primaryPanel": false,
+        "settings": "form"
+      },
+      "category": "monitoring",
+      "displayName": "Duo 状态",
+      "id": "duo-status",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "حالة Duo",
+          "summary": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم."
+        },
+        "de": {
+          "displayName": "Duo-Status",
+          "summary": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol."
+        },
+        "en": {
+          "displayName": "Duo Status",
+          "summary": "Battery and network status in a standalone or primary menu bar icon."
+        },
+        "es": {
+          "displayName": "Estado Duo",
+          "summary": "Batería y red en un icono independiente o principal de la barra de menús."
+        },
+        "fr": {
+          "displayName": "État Duo",
+          "summary": "Batterie et réseau dans une icône distincte ou principale de la barre des menus."
+        },
+        "ja": {
+          "displayName": "Duo ステータス",
+          "summary": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認"
+        },
+        "ko": {
+          "displayName": "Duo 상태",
+          "summary": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인"
+        },
+        "pt": {
+          "displayName": "Estado Duo",
+          "summary": "Bateria e rede num ícone separado ou principal da barra de menus."
+        },
+        "ru": {
+          "displayName": "Статус Duo",
+          "summary": "Батарея и сеть в отдельном или основном значке строки меню."
+        },
+        "zh-Hans": {
+          "displayName": "Duo 状态",
+          "summary": "通过独立图标或应用主图标查看电量与网络状态"
+        },
+        "zh-Hant": {
+          "displayName": "Duo 狀態",
+          "summary": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/duo-status",
+      "product": {
+        "actions": null,
+        "discovery": {
+          "alternativePluginIDs": [],
+          "goalCategories": [
+            "monitoring"
+          ],
+          "keywords": [
+            "duo",
+            "battery",
+            "wifi",
+            "network",
+            "menu bar",
+            "status"
+          ],
+          "localizedSynonyms": {
+            "ar": [
+              "حالة Duo"
+            ],
+            "de": [
+              "Duo-Status"
+            ],
+            "en": [
+              "Duo Status"
+            ],
+            "es": [
+              "Estado Duo"
+            ],
+            "fr": [
+              "État Duo"
+            ],
+            "ja": [
+              "Duo ステータス"
+            ],
+            "ko": [
+              "Duo 상태"
+            ],
+            "pt": [
+              "Estado Duo"
+            ],
+            "ru": [
+              "Статус Duo"
+            ],
+            "zh-Hans": [
+              "Duo 状态"
+            ],
+            "zh-Hant": [
+              "Duo 狀態"
+            ]
+          },
+          "relatedPluginIDs": [
+            "device-battery",
+            "activity-bar"
+          ],
+          "useCases": [
+            {
+              "id": "primary-use",
+              "title": {
+                "ar": "حالة Duo",
+                "de": "Duo-Status",
+                "en": "Duo Status",
+                "es": "Estado Duo",
+                "fr": "État Duo",
+                "ja": "Duo ステータス",
+                "ko": "Duo 상태",
+                "pt": "Estado Duo",
+                "ru": "Статус Duo",
+                "zh-Hans": "Duo 状态",
+                "zh-Hant": "Duo 狀態"
+              }
+            }
+          ]
+        },
+        "presentation": {
+          "documentationURL": "https://github.com/ggbond268/MacTools/blob/main/docs/plugins/duo-status.md",
+          "examples": [
+            {
+              "id": "primary-use",
+              "text": {
+                "ar": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم.",
+                "de": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol.",
+                "en": "Battery and network status in a standalone or primary menu bar icon.",
+                "es": "Batería y red en un icono independiente o principal de la barra de menús.",
+                "fr": "Batterie et réseau dans une icône distincte ou principale de la barre des menus.",
+                "ja": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認",
+                "ko": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인",
+                "pt": "Bateria e rede num ícone separado ou principal da barra de menus.",
+                "ru": "Батарея и сеть в отдельном или основном значке строки меню.",
+                "zh-Hans": "通过独立图标或应用主图标查看电量与网络状态",
+                "zh-Hant": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
+              }
+            }
+          ],
+          "license": "GPL-3.0-only",
+          "longDescription": {
+            "ar": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم.",
+            "de": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol.",
+            "en": "Battery and network status in a standalone or primary menu bar icon.",
+            "es": "Batería y red en un icono independiente o principal de la barra de menús.",
+            "fr": "Batterie et réseau dans une icône distincte ou principale de la barre des menus.",
+            "ja": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認",
+            "ko": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인",
+            "pt": "Bateria e rede num ícone separado ou principal da barra de menus.",
+            "ru": "Батарея и сеть в отдельном или основном значке строки меню.",
+            "zh-Hans": "通过独立图标或应用主图标查看电量与网络状态",
+            "zh-Hant": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
+          },
+          "publisher": "MacTools",
+          "screenshots": [],
+          "supportURL": "https://github.com/ggbond268/MacTools/issues"
+        },
+        "privacy": {
+          "allowsUserConfiguredDomains": false,
+          "dataObserved": [
+            "battery-state",
+            "wifi-signal",
+            "network-connection-state"
+          ],
+          "dataPersisted": [
+            "plugin-configuration"
+          ],
+          "diagnosticExportsContainUserData": false,
+          "networkDomains": [],
+          "networkUse": "none",
+          "processesSensitiveUserContent": false,
+          "retention": {
+            "policy": "user-controlled"
+          },
+          "telemetry": "none"
+        },
+        "relationships": {
+          "includedPackIDs": [],
+          "relatedPluginIDs": [
+            "device-battery",
+            "activity-bar"
+          ],
+          "suggestedRecipeIDs": [],
+          "supersedesPluginIDs": []
+        },
+        "requirements": {
+          "applications": [],
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "executables": [],
+          "hardware": [],
+          "minimumMacOSVersion": "14.0",
+          "permissionIDs": [],
+          "requiresRelaunch": false,
+          "setupComplexity": "none"
+        },
+        "setup": {
+          "optionalSurfaces": [],
+          "steps": []
+        }
+      },
+      "releaseChannel": null,
+      "releaseNotesURL": null,
+      "route": "/plugins/duo-status/",
+      "summary": "通过独立图标或应用主图标查看电量与网络状态",
+      "version": "1.0.0"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
         "primaryPanel": true,
         "settings": "none"
       },
@@ -21919,6 +22138,55 @@
                     "ru": "Открыть переключатель окон",
                     "zh-Hans": "打开窗口切换",
                     "zh-Hant": "開啟視窗切換"
+                  }
+                },
+                {
+                  "automaticEligible": false,
+                  "description": {
+                    "ar": "ابحث عن نافذة للتطبيق الحالي وحددها.",
+                    "de": "Suche ein Fenster der aktuellen App und wähle es aus.",
+                    "en": "Find and select a window of the current app.",
+                    "es": "Busca y selecciona una ventana de la app actual.",
+                    "fr": "Recherchez et sélectionnez une fenêtre de l’app actuelle.",
+                    "ja": "現在のアプリのウインドウを検索して選択します。",
+                    "ko": "현재 앱의 윈도우를 검색하고 선택합니다.",
+                    "pt": "Encontre e selecione uma janela do app atual.",
+                    "ru": "Найдите и выберите окно текущего приложения.",
+                    "zh-Hans": "搜索和选择当前应用的窗口。",
+                    "zh-Hant": "搜尋並選取目前 App 的視窗。"
+                  },
+                  "externalInvocation": "unavailable",
+                  "id": "switch-current-app",
+                  "keywords": [
+                    "current app windows",
+                    "window switcher",
+                    "search"
+                  ],
+                  "parameters": [],
+                  "permissionIDs": [
+                    "accessibility"
+                  ],
+                  "risk": "safe",
+                  "surfaces": [
+                    "unified-search",
+                    "global-shortcut",
+                    "action-grid",
+                    "trackpad-gesture",
+                    "manual"
+                  ],
+                  "systemImage": "rectangle.2.swap",
+                  "title": {
+                    "ar": "نوافذ التطبيق الحالي",
+                    "de": "Fenster der aktuellen App",
+                    "en": "Current App Windows",
+                    "es": "Ventanas de la app actual",
+                    "fr": "Fenêtres de l’app actuelle",
+                    "ja": "現在のアプリのウインドウ",
+                    "ko": "현재 앱 윈도우",
+                    "pt": "Janelas do app atual",
+                    "ru": "Окна текущего приложения",
+                    "zh-Hans": "当前应用窗口",
+                    "zh-Hant": "目前 App 視窗"
                   }
                 }
               ]

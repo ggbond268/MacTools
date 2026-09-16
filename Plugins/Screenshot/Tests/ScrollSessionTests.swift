@@ -7,127 +7,85 @@ import XCTest
 final class ScrollSessionTests: XCTestCase {
     func testFinishReturnsCapturedImageOnlyOnce() async throws {
         let frame = try makeFrame()
-        var captures = 0
-        var progress: [Double] = []
-        var results: [Result<CGImage?, Error>] = []
-        let capture = ScrollCapture { captures += 1; return frame }
-        capture.onProgress = { progress.append($0) }
-        capture.onFinish = { results.append($0) }
-        await capture.tick()
-        capture.finish()
-        try await waitUntil { results.count == 1 }
-        capture.finish()
-        capture.cancel()
-        await capture.tick()
-        XCTAssertEqual(captures, 1)
-        XCTAssertEqual(progress, [1])
-        XCTAssertEqual(results.count, 1)
-        let image = try XCTUnwrap(try XCTUnwrap(results.first).get())
-        XCTAssertEqual(image.width, frame.width)
-        XCTAssertEqual(image.height, frame.height)
-    }
-
-    func testOverlappingTicksDoNotStartAnotherCapture() async throws {
-        let delayed = DelayedImage()
-        let capture = ScrollCapture { try await delayed.capture() }
-        var updates = 0
-        capture.onProgress = { _ in updates += 1 }
-        let pending = Task { await capture.tick() }
-        await delayed.waitUntilStarted()
-        await capture.tick()
-        XCTAssertEqual(delayed.calls, 1)
-        try delayed.resume(.success(makeFrame()))
-        await pending.value
-        XCTAssertEqual(updates, 1)
-        capture.cancel()
-    }
-
-    func testCaptureFailureIsReportedOnceAndStopsCapture() async throws {
-        var captures = 0
-        var results: [Result<CGImage?, Error>] = []
-        let capture = ScrollCapture { captures += 1; throw TestError.captureFailed }
-        capture.onFinish = { results.append($0) }
-        await capture.tick()
-        await capture.tick()
-        capture.finish()
-        capture.cancel()
-        XCTAssertEqual(captures, 1)
-        XCTAssertEqual(results.count, 1)
-        guard case .failure(let error) = try XCTUnwrap(results.first) else { return XCTFail("A capture failure was hidden") }
-        XCTAssertEqual(error as? TestError, .captureFailed)
-    }
-
-    func testCancelDiscardsAnInFlightImage() async throws {
-        let delayed = DelayedImage()
-        let capture = ScrollCapture { try await delayed.capture() }
-        var updates = 0
-        var results: [Result<CGImage?, Error>] = []
-        capture.onProgress = { _ in updates += 1 }
-        capture.onFinish = { results.append($0) }
-        let pending = Task { await capture.tick() }
-        await delayed.waitUntilStarted()
-        capture.cancel()
-        capture.finish()
-        try delayed.resume(.success(makeFrame()))
-        await pending.value
-        await capture.tick()
-        XCTAssertEqual(delayed.calls, 1)
-        XCTAssertEqual(updates, 0)
-        XCTAssertEqual(results.count, 1)
-        XCTAssertNil(try XCTUnwrap(results.first).get())
-    }
-
-    func testFinishDiscardsAnInFlightImage() async throws {
-        let first = try makeFrame()
-        let delayed = DelayedImage()
-        var captures = 0
-        let capture = ScrollCapture {
-            captures += 1
-            return captures == 1 ? first : try await delayed.capture()
-        }
+        let capture = ScrollCapture()
         var progress: [Double] = []
         var results: [Result<CGImage?, Error>] = []
         capture.onProgress = { progress.append($0) }
         capture.onFinish = { results.append($0) }
-        await capture.tick()
-        let pending = Task { await capture.tick() }
-        await delayed.waitUntilStarted()
+        await capture.append(frame)
         capture.finish()
-        try delayed.resume(.success(makeFrame(height: 256)))
-        await pending.value
         try await waitUntil { results.count == 1 }
         capture.finish()
+        capture.cancel()
+        await capture.append(frame)
         XCTAssertEqual(progress, [1])
         XCTAssertEqual(results.count, 1)
-        let image = try XCTUnwrap(try XCTUnwrap(results.first).get())
-        XCTAssertEqual(image.height, first.height)
+        XCTAssertEqual(try results.first?.get()?.height, frame.height)
     }
 
-    func testLateCaptureFailureCannotReplaceCancellation() async throws {
-        let delayed = DelayedImage()
-        let capture = ScrollCapture { try await delayed.capture() }
+    func testCancelRejectsSubsequentFramesAndCompletion() async throws {
+        let capture = ScrollCapture()
         var results: [Result<CGImage?, Error>] = []
         capture.onFinish = { results.append($0) }
-        let pending = Task { await capture.tick() }
-        await delayed.waitUntilStarted()
         capture.cancel()
-        try delayed.resume(.failure(TestError.captureFailed))
-        await pending.value
+        await capture.append(try makeFrame())
+        capture.finish()
         XCTAssertEqual(results.count, 1)
-        XCTAssertNil(try XCTUnwrap(results.first).get())
+        XCTAssertNil(try results.first?.get())
     }
 
     func testFinishingBeforeFirstFrameIsAnError() async throws {
-        var captures = 0
+        let capture = ScrollCapture()
         var result: Result<CGImage?, Error>?
-        let capture = ScrollCapture { captures += 1; return try self.makeFrame() }
         capture.onFinish = { result = $0 }
         capture.finish()
-        await capture.tick()
+        await capture.append(try makeFrame())
         try await waitUntil { result != nil }
-        XCTAssertEqual(captures, 0)
-        guard case .failure(let error) = try XCTUnwrap(result) else { return XCTFail("Missing frames must be an error") }
+        guard case .failure(let error) = result else { return XCTFail("Missing frames must be an error") }
         XCTAssertEqual(error as? ScrollCaptureError, .noFrames)
+    }
+
+    func testDimensionChangeDoesNotDiscardPreviouslyAcceptedPixels() throws {
+        let stitcher = Stitcher()
+        try stitcher.push(makeFrame())
+        XCTAssertThrowsError(try stitcher.push(makeFrame(height: 256))) {
+            XCTAssertEqual($0 as? CaptureFailure, .displayChanged)
+        }
+        XCTAssertEqual(try stitcher.compose()?.height, 128)
+    }
+
+    func testUnmatchedContentIsNotAppendedAsAnotherFullScreen() throws {
+        let first = try makeFrame()
+        let stitcher = Stitcher()
+        try stitcher.push(first)
+        let context = try XCTUnwrap(CGContext(data: nil, width: first.width, height: first.height,
+            bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor.black)
+        context.fill(CGRect(x: 0, y: 0, width: first.width, height: first.height))
+        XCTAssertEqual(try stitcher.push(XCTUnwrap(context.makeImage())), 0)
+        XCTAssertFalse(stitcher.lastMatchAccepted)
+        XCTAssertEqual(stitcher.totalRows, first.height)
+        XCTAssertEqual(try stitcher.push(first), 0)
+        XCTAssertTrue(stitcher.lastMatchAccepted, "A rejected frame must not replace the last accepted reference")
+    }
+
+    func testAmbiguousRepeatingContentDoesNotInventAScrollDistance() throws {
+        let height = 160
+        let previous = (0..<height).flatMap { y in [UInt8](repeating: y % 16 < 8 ? 30 : 220, count: Stitcher.cols) }
+        let next = (0..<height).flatMap { y in [UInt8](repeating: (y + 8) % 16 < 8 ? 30 : 220, count: Stitcher.cols) }
+        XCTAssertNil(try Stitcher.offset(prev: previous, next: next, height: height))
+    }
+
+    func testWorkingBudgetReservesCaptureAndExportBuffers() throws {
+        let bytes = 32 * 128 * 4
+        let stitcher = Stitcher(maximumWorkingBytes: bytes * 9 - 1)
+        XCTAssertThrowsError(try stitcher.push(makeFrame())) {
+            XCTAssertEqual($0 as? ScrollCaptureError, .outputTooLarge)
+        }
+        XCTAssertTrue(stitcher.pieces.isEmpty)
+        let sufficient = Stitcher(maximumWorkingBytes: bytes * 9)
+        XCTAssertEqual(try sufficient.push(makeFrame()), 128)
     }
 
     func testStitcherReconstructsADocumentAcrossDifferentScrollOffsets() throws {
@@ -174,6 +132,57 @@ final class ScrollSessionTests: XCTestCase {
         ])
     }
 
+    func testMenuAndPopoverLayersRemainSelectableWithoutIncludingSystemOverlays() {
+        let popUpBounds = CGRect(x: 900, y: 24, width: 280, height: 360)
+        let adjacentStatusBounds = CGRect(x: 600, y: 24, width: 260, height: 300)
+        let menuBarBounds = CGRect(x: 0, y: 0, width: 1440, height: 24)
+        let normalBounds = CGRect(x: 80, y: 100, width: 500, height: 400)
+        let excludedBounds = CGRect(x: 0, y: 850, width: 1440, height: 50)
+        let statusLevel = Int(CGWindowLevelForKey(.statusWindow))
+        let info: [[String: Any]] = [
+            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.popUpMenuWindow)),
+             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: popUpBounds.dictionaryRepresentation],
+            [kCGWindowLayer as String: statusLevel + 1,
+             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: adjacentStatusBounds.dictionaryRepresentation],
+            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.mainMenuWindow)),
+             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: menuBarBounds.dictionaryRepresentation],
+            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.normalWindow)),
+             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: normalBounds.dictionaryRepresentation],
+            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.dockWindow)),
+             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: excludedBounds.dictionaryRepresentation],
+            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.overlayWindow)),
+             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: excludedBounds.dictionaryRepresentation],
+        ]
+
+        XCTAssertEqual(CaptureController.selectableWindowRects(from: info, primaryHeight: 900), [
+            CGRect(x: 900, y: 516, width: 280, height: 360),
+            CGRect(x: 600, y: 576, width: 260, height: 300),
+            CGRect(x: 0, y: 876, width: 1440, height: 24),
+            CGRect(x: 80, y: 400, width: 500, height: 400),
+        ])
+    }
+
+    func testLegacyDisplayFreezeIsOpaqueAndCursorFree() {
+        let config = CapturePipeline.streamConfiguration(pixelWidth: 2880, pixelHeight: 1800)
+
+        XCTAssertEqual(config.width, 2880)
+        XCTAssertEqual(config.height, 1800)
+        XCTAssertFalse(config.showsCursor)
+        XCTAssertTrue(config.shouldBeOpaque)
+    }
+
+    @available(macOS 26.0, *)
+    func testScreenshotUsesLocalSDRRenderingAndIncludesChildWindows() {
+        let config = CapturePipeline.screenshotConfiguration(pixelWidth: 2880, pixelHeight: 1800)
+
+        XCTAssertEqual(config.width, 2880)
+        XCTAssertEqual(config.height, 1800)
+        XCTAssertFalse(config.showsCursor)
+        XCTAssertTrue(config.includeChildWindows)
+        XCTAssertEqual(config.displayIntent, .local)
+        XCTAssertEqual(config.dynamicRange, .sdr)
+    }
+
     func testSmallScrollStripsDoNotRetainCapturedFrameProviders() throws {
         let stats = CaptureBufferStats()
         let stitcher = Stitcher()
@@ -216,10 +225,10 @@ final class ScrollSessionTests: XCTestCase {
         let gate = DispatchSemaphore(value: 0)
         let stats = CaptureBufferStats(firstBackgroundReadGate: gate)
         let frame = try trackedFrame(offset: 0, stats: stats)
-        let capture = ScrollCapture { frame }
+        let capture = ScrollCapture()
         var results: [Result<CGImage?, Error>] = []
         capture.onFinish = { results.append($0) }
-        let tick = Task { await capture.tick() }
+        let tick = Task { await capture.append(frame) }
         defer { gate.signal(); tick.cancel() }
         try await waitUntil { stats.backgroundReads > 0 }
         capture.finish()
@@ -274,11 +283,11 @@ final class ScrollSessionTests: XCTestCase {
     func testOutputLimitIsReportedOnceAndStopsCapture() async throws {
         let worker = ScrollStitchingWorker(maximumHeight: 100)
         let frame = try makeFrame()
-        let capture = ScrollCapture(worker: worker) { frame }
+        let capture = ScrollCapture(worker: worker)
         var results: [Result<CGImage?, Error>] = []
         capture.onFinish = { results.append($0) }
-        await capture.tick()
-        await capture.tick()
+        await capture.append(frame)
+        await capture.append(frame)
         capture.finish()
         XCTAssertEqual(results.count, 1)
         guard case .failure(let error) = results.first else { return XCTFail("Missing output limit error") }
@@ -287,10 +296,10 @@ final class ScrollSessionTests: XCTestCase {
 
     func testCancellingPendingCompositionDeliversOnlyCancellation() async throws {
         let frame = try makeFrame()
-        let capture = ScrollCapture { frame }
+        let capture = ScrollCapture()
         var results: [Result<CGImage?, Error>] = []
         capture.onFinish = { results.append($0) }
-        await capture.tick()
+        await capture.append(frame)
         capture.finish()
         capture.cancel()
         try await Task.sleep(for: .milliseconds(50))
@@ -308,33 +317,6 @@ final class ScrollSessionTests: XCTestCase {
     }
 
     private enum TestError: Error { case captureFailed }
-}
-
-@MainActor
-private final class DelayedImage {
-    private(set) var calls = 0
-    private var continuation: CheckedContinuation<CGImage, Error>?
-    private var started: CheckedContinuation<Void, Never>?
-
-    func waitUntilStarted() async {
-        guard calls == 0 else { return }
-        await withCheckedContinuation { started = $0 }
-    }
-
-    func capture() async throws -> CGImage {
-        calls += 1
-        return try await withCheckedThrowingContinuation {
-            continuation = $0
-            started?.resume()
-            started = nil
-        }
-    }
-
-    func resume(_ result: Result<CGImage, Error>) throws {
-        let pending = try XCTUnwrap(continuation)
-        continuation = nil
-        pending.resume(with: result)
-    }
 }
 
 private final class CaptureBufferStats: @unchecked Sendable {

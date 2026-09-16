@@ -1245,16 +1245,51 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertTrue(row.helpItems.allSatisfy { !$0.contains("\n") })
     }
 
-    func testFeaturePanelOnlyShowsDurationControl() throws {
+    func testFeaturePanelExposesBehaviorChoicesWhileKeepAwakeIsEnabled() throws {
         let storage = KeepAwakeMemoryStorage()
         let plugin = KeepAwakeSessionFactory().makePlugin(storage: storage)
         plugin.handleAction(.setSwitch(true))
 
         let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.primaryControls)
 
-        XCTAssertEqual(controls.map(\.id), ["duration"])
+        XCTAssertEqual(controls.map(\.id), ["duration", "behavior"])
         XCTAssertEqual(controls[0].selectedOptionID, "forever")
         XCTAssertFalse(controls[0].showsLeadingDivider)
+        guard case .segmented = controls[1].kind else {
+            return XCTFail("Expected behavior choices to use a segmented control")
+        }
+        XCTAssertEqual(
+            controls[1].options.map(\.id),
+            KeepAwakeBehavior.allCases.map(\.rawValue)
+        )
+        XCTAssertEqual(controls[1].selectedOptionID, KeepAwakeBehavior.allowDisplayToTurnOff.rawValue)
+        XCTAssertTrue(controls[1].showsLeadingDivider)
+        XCTAssertEqual(controls[1].options.map(\.title), ["默认", "屏幕常亮", "屏幕工具"])
+        XCTAssertTrue(controls[1].options.allSatisfy { !($0.subtitle ?? "").isEmpty })
+    }
+
+    func testFeaturePanelBehaviorSelectionUpdatesAnActiveSession() throws {
+        let storage = KeepAwakeMemoryStorage()
+        let factory = KeepAwakeSessionFactory(
+            powerSourceState: KeepAwakePowerSourceState(
+                isPortableMac: false,
+                isOnExternalPower: true
+            )
+        )
+        let plugin = factory.makePlugin(storage: storage)
+        plugin.handleAction(.setSwitch(true))
+
+        plugin.handleAction(.setSelection(
+            controlID: "behavior",
+            optionID: KeepAwakeBehavior.keepDisplayOn.rawValue
+        ))
+
+        XCTAssertEqual(storage.string(forKey: StorageKey.behavior), KeepAwakeBehavior.keepDisplayOn.rawValue)
+        XCTAssertTrue(factory.sessions[0].isPreventingDisplaySleep)
+        XCTAssertEqual(
+            plugin.primaryPanelState.detail?.primaryControls.last?.selectedOptionID,
+            KeepAwakeBehavior.keepDisplayOn.rawValue
+        )
     }
 
     func testCompactBadgeReflectsHighestPriorityActivePreference() throws {

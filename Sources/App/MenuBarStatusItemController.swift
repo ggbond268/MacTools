@@ -90,6 +90,16 @@ final class MenuBarStatusItemController: NSObject {
     private var animationFrames: [NSImage] = []
     private var animationFrameIndex = 0
     private var animationFrameDuration: TimeInterval = 1.0 / MenuBarIconProcessing.animationFramesPerSecond
+    private var currentFallbackPayload: MenuBarIconImagePayload?
+    private var lastPluginIconKey: PluginIconKey?
+    private var iconAppearanceObserver: MenuBarIconAppearanceObserverView?
+
+    private struct PluginIconKey: Equatable {
+        let generation: UUID?
+        let revision: UInt64
+        let context: PluginMenuBarIconRenderContext
+        let runningAutomationCount: Int
+    }
 
     init(
         pluginHost: PluginHost,
@@ -136,6 +146,9 @@ final class MenuBarStatusItemController: NSObject {
         configureStatusItem()
         observePluginHost()
         observeIconSettings()
+        pluginHost.menuBarIconCoordinator.onPrimaryIconChange = { [weak self] in
+            self?.updateStatusIcon()
+        }
         updateStatusIcon()
         pluginHost.resetStatusItemPosition = { [weak self] in
             self?.resetStatusItemPosition()
@@ -264,6 +277,17 @@ final class MenuBarStatusItemController: NSObject {
         button.action = #selector(handleStatusItemAction(_:))
         button.sendAction(on: [.leftMouseDown, .rightMouseDown])
         button.toolTip = AppMetadata.appName
+        lastPluginIconKey = nil
+
+        iconAppearanceObserver?.onChange = nil
+        iconAppearanceObserver?.removeFromSuperview()
+        let observer = MenuBarIconAppearanceObserverView(frame: .zero)
+        observer.setAccessibilityElement(false)
+        observer.onChange = { [weak self] in
+            DispatchQueue.main.async { [weak self] in self?.updateStatusIcon() }
+        }
+        button.addSubview(observer)
+        iconAppearanceObserver = observer
 
         // MacTools intentionally uses one target/action route on every OS.
         // AppKit's expanded-interface delegate models one undifferentiated
@@ -309,14 +333,50 @@ final class MenuBarStatusItemController: NSObject {
     }
 
     private func updateStatusIcon() {
-        let payload = iconSettings.imagePayload(for: statusItem.button?.effectiveAppearance)
+        guard let button = statusItem.button else { return }
+        let context = PluginMenuBarIconRenderContext(
+            pointSize: CGSize(width: 24, height: 24),
+            displayScale: button.window?.backingScaleFactor ?? 2,
+            appearance: button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+        )
+        if let snapshot = pluginHost.menuBarIconCoordinator.snapshot(context: context) {
+            let key = PluginIconKey(
+                generation: pluginHost.menuBarIconCoordinator.primaryIconGeneration,
+                revision: snapshot.revision,
+                context: context,
+                runningAutomationCount: pluginHost.automationController.activeRunIDs.count
+            )
+            guard key != lastPluginIconKey else { return }
+            if let image = snapshot.image.copy() as? NSImage {
+                lastPluginIconKey = key
+                currentFallbackPayload = nil
+                animationTimer?.cancel()
+                animationTimer = nil
+                animationFrames = []
+                // Copy only changed frames; never mutate a provider's shared image.
+                image.size = context.pointSize
+                image.isTemplate = snapshot.isTemplate
+                statusItem.length = NSStatusItem.variableLength
+                button.image = statusImage(image, isTemplate: snapshot.isTemplate)
+                button.imagePosition = .imageOnly
+                button.toolTip = "\(automationActivityTooltip)\n\(snapshot.tooltip)"
+                button.setAccessibilityLabel("\(automationActivityTooltip)\n\(snapshot.accessibilityDescription)")
+                return
+            }
+        }
+        lastPluginIconKey = nil
+        let payload = iconSettings.imagePayload(for: button.effectiveAppearance)
         payload.image.isTemplate = payload.isTemplate
-
+        if currentFallbackPayload != payload {
+            currentFallbackPayload = payload
+            configureAnimationIfNeeded(payload)
+        }
+        let frame = animationFrames.indices.contains(animationFrameIndex) ? animationFrames[animationFrameIndex] : payload.image
         statusItem.length = NSStatusItem.variableLength
-        statusItem.button?.image = statusImage(payload.image, isTemplate: payload.isTemplate)
-        statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.toolTip = automationActivityTooltip
-        configureAnimationIfNeeded(payload)
+        button.image = statusImage(frame, isTemplate: payload.isTemplate)
+        button.imagePosition = .imageOnly
+        button.toolTip = automationActivityTooltip
+        button.setAccessibilityLabel(automationActivityTooltip)
     }
 
     private var automationActivityTooltip: String {
@@ -602,4 +662,12 @@ final class MenuBarStatusItemController: NSObject {
         return activatedApplication.processIdentifier == ProcessInfo.processInfo.processIdentifier
     }
 
+}
+
+private final class MenuBarIconAppearanceObserverView: NSView {
+    var onChange: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() { onChange?() }
+    override func viewDidChangeBackingProperties() { onChange?() }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
