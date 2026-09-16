@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import Darwin
 import SwiftUI
 import MacToolsPluginKit
 
@@ -41,13 +40,8 @@ final class AppUninstallerPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSett
     private let settingsOpener: @MainActor (URL) -> Bool
 
     init(controller: AppUninstallerController, localization: PluginLocalization,
-         permissionProbe: @escaping @Sendable () -> Bool = {
-             // Open and close a protected capability probe; never read its contents.
-             let path = UninstallFileSystem.physicalHome(NSHomeDirectory()) + "/Library/Application Support/com.apple.TCC/TCC.db"
-             guard let descriptor = try? UninstallFileSystem().open(path) else { return false }
-             defer { close(descriptor) }
-             return (try? UninstallFileSystem().identity(descriptor).isRegular) == true
-         }, settingsOpener: @escaping @MainActor (URL) -> Bool = { NSWorkspace.shared.open($0) }) {
+         permissionProbe: @escaping @Sendable () -> Bool = { AppUninstallerFullDiskAccessProbe.hasAccess() },
+         settingsOpener: @escaping @MainActor (URL) -> Bool = { NSWorkspace.shared.open($0) }) {
         self.controller = controller; self.localization = localization
         self.permissionProbe = permissionProbe; self.settingsOpener = settingsOpener
         metadata = PluginMetadata(id: Self.pluginID, title: localization.string("metadata.title", defaultValue: "应用卸载"),
