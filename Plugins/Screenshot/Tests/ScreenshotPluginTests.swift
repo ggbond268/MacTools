@@ -6,6 +6,7 @@ import XCTest
 
 @MainActor
 final class ScreenshotPluginTests: XCTestCase {
+    private var permissionGranted = true
     func testHostPanelActionsShortcutsAndPermissionContracts() {
         let plugin = makePlugin()
         XCTAssertEqual(plugin.metadata.id, "screenshot")
@@ -18,12 +19,88 @@ final class ScreenshotPluginTests: XCTestCase {
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["screen-recording"])
         XCTAssertEqual(plugin.actionDefinitions.map(\.key.actionID), ["capture", "quick-capture"])
         XCTAssertEqual(plugin.shortcutDefinitions.map(\.actionID), ["capture", "quick-capture"])
+        XCTAssertTrue(plugin.shortcutDefinitions.allSatisfy { $0.scope == .global })
         for definition in plugin.actionDefinitions {
             XCTAssertEqual(definition.externalInvocationPolicy, .unavailable)
             XCTAssertEqual(definition.capabilities, [.foregroundInteractive])
             XCTAssertEqual(plugin.permissionRequirementIDs(for: definition.key), ["screen-recording"])
         }
         XCTAssertTrue(plugin.shortcutDefinitions.allSatisfy { $0.defaultBinding == nil && !$0.isRequired })
+    }
+
+    func testShortcutSettingsUseCanonicalActionsAndFollowLegacyAssignments() {
+        let captureBinding = ShortcutBinding(keyCode: 8, modifiers: [.command, .shift])
+        let quickBinding = ShortcutBinding(keyCode: 9, modifiers: [.command, .shift])
+        let plugin = makePlugin()
+        plugin.shortcutBindingResolver = { definitionID in
+            switch definitionID {
+            case "capture": captureBinding
+            case "quick-capture": quickBinding
+            default: nil
+            }
+        }
+
+        XCTAssertEqual(
+            plugin.actionShortcutSettingsConfiguration.actionIDs,
+            ["capture", "quick-capture"]
+        )
+        XCTAssertEqual(
+            plugin.actionShortcutSettingsConfiguration.placementAfterSectionID,
+            "shortcut-placement"
+        )
+        guard case let .form(sections) = plugin.settingsPage?.body else {
+            return XCTFail("Expected a form settings page")
+        }
+        XCTAssertEqual(sections.map(\.id), ["shortcut-placement", "output"])
+        XCTAssertEqual(
+            Set(plugin.legacyActionShortcutAssignments),
+            [
+                LegacyActionShortcutAssignment(
+                    reference: reference(actionID: "capture"),
+                    binding: captureBinding,
+                    legacyShortcutDefinitionID: "capture"
+                ),
+                LegacyActionShortcutAssignment(
+                    reference: reference(actionID: "quick-capture"),
+                    binding: quickBinding,
+                    legacyShortcutDefinitionID: "quick-capture"
+                ),
+            ]
+        )
+    }
+
+    func testDefaultSaveFolderIsScreenshotDirectoryOnDesktop() {
+        let environment = ScreenshotEnvironment(
+            context: PluginRuntimeContext(pluginID: "screenshot", storage: ScreenshotTestStorage())
+        )
+        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop", isDirectory: true)
+
+        XCTAssertEqual(
+            environment.saveFolder,
+            desktop.appendingPathComponent("screenshot", isDirectory: true)
+        )
+    }
+
+    func testSavingImageBuildsMissingDirectories() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("Desktop/screenshot", isDirectory: true)
+        let environment = ScreenshotEnvironment(
+            context: PluginRuntimeContext(pluginID: "screenshot", storage: ScreenshotTestStorage())
+        )
+        environment.saveFolder = folder
+
+        let url = environment.fileURL(prefix: "Fixture", ext: "png")
+        let data = Data([0, 1, 2, 3])
+        try await ScreenshotImageEncoder.write(data, to: url)
+        XCTAssertEqual(try Data(contentsOf: url), data)
+
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
     }
 
     func testPanelAndShortcutsDispatchCaptureModesAndIgnoreUnknownControls() {
@@ -53,14 +130,13 @@ final class ScreenshotPluginTests: XCTestCase {
     }
 
     func testPermissionIsRecheckedOnEveryCaptureAndRefreshClearsPermissionError() {
-        var granted = true
         var count = 0
-        let plugin = makePlugin(screenAccess: { granted }, capture: { _ in count += 1 })
-        granted = false
+        let plugin = makePlugin(screenAccess: { self.permissionGranted }, capture: { _ in count += 1 })
+        permissionGranted = false
         plugin.handleShortcutAction(id: "capture")
         XCTAssertEqual(count, 0)
         XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
-        granted = true
+        permissionGranted = true
         plugin.refresh()
         XCTAssertNil(plugin.primaryPanelState.errorMessage)
         XCTAssertTrue(plugin.permissionState(for: "screen-recording").isGranted)
@@ -169,10 +245,10 @@ final class ScreenshotPluginTests: XCTestCase {
 
     private func makePlugin(
         storage: PluginStorage? = nil,
-        screenAccess: @escaping @MainActor () -> Bool = { true },
-        requestScreenAccess: @escaping @MainActor () -> Void = {},
-        capture: @escaping @MainActor (Bool) -> Void = { _ in },
-        folderPicker: @escaping @MainActor (URL) -> URL? = { _ in nil }
+        screenAccess: @escaping @MainActor @Sendable () -> Bool = { true },
+        requestScreenAccess: @escaping @MainActor @Sendable () -> Void = {},
+        capture: @escaping @MainActor @Sendable (Bool) -> Void = { _ in },
+        folderPicker: @escaping @MainActor @Sendable (URL) -> URL? = { _ in nil }
     ) -> ScreenshotPlugin {
         ScreenshotPlugin(
             context: PluginRuntimeContext(pluginID: "screenshot", storage: storage ?? ScreenshotTestStorage()),

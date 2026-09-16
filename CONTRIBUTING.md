@@ -73,7 +73,7 @@ Unless a file is clearly identified as third-party material under separate terms
 
 ## Testing
 - Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.
-- Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
+- Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Native recording probes must capture only a synthetic fixture window and write to a temporary directory; validate both capture termination and file finalization. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
 - Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - Async test waits must have a deadline and suspend between checks. `make ci` and the GitHub Build workflow cap each test at 120 seconds so a stalled test reports a failure instead of exhausting the job timeout.
