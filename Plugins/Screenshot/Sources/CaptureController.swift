@@ -1,6 +1,5 @@
 import AppKit
 import MacToolsPluginKit
-import OSLog
 import QuartzCore
 
 /// Acquires a fresh desktop before presenting any capture UI, without activating the host.
@@ -18,7 +17,6 @@ final class CaptureController {
     private var pointerTracker: CapturePointerTracker?
     private var startTask: Task<Void, Never>?
     private var finished = false
-    private static let logger = Logger(subsystem: "cc.ggbond.mactools.screenshot", category: "Capture")
 
     private nonisolated static let standardPanelLevels: Set<Int> = [
         Int(CGWindowLevelForKey(.normalWindow)),
@@ -37,7 +35,6 @@ final class CaptureController {
 
     func start() {
         guard !finished, startTask == nil else { return }
-        let started = ContinuousClock.now
         let displays = CaptureDisplay.current()
         let windowTask = Task.detached(priority: .userInitiated) { Self.onScreenWindows() }
         startTask = Task { [weak self] in
@@ -45,7 +42,6 @@ final class CaptureController {
             defer { windowTask.cancel(); startTask = nil }
             do {
                 let images = try await CapturePipeline.capture(displays)
-                let acquired = ContinuousClock.now
                 try Task.checkCancellation()
                 guard !finished else { return }
                 let windows = await windowTask.value
@@ -79,10 +75,6 @@ final class CaptureController {
                 for overlay in overlays { overlay.orderFrontRegardless() }
                 pointerTracker.update()
                 NSCursor.crosshair.set()
-                // Submission timing is not a display-vsync fence or a first-paint measurement.
-                let captureMS = Self.milliseconds(started.duration(to: acquired))
-                let presentationMS = Self.milliseconds(acquired.duration(to: .now))
-                Self.logger.info("Capture acquired in \(captureMS) ms; overlay submission in \(presentationMS) ms; displays=\(displays.count)")
             } catch {
                 guard !finished, !Task.isCancelled else { return }
                 onError?(environment.format("capture.failed", "截图失败：%@", environment.captureErrorDescription(error)))
@@ -134,10 +126,6 @@ final class CaptureController {
     private func makeRegion(_ rect: NSRect, display: CaptureDisplay) -> CaptureRegion? {
         do { return try CaptureRegion(selection: rect, display: display) }
         catch { onError?(environment.captureErrorDescription(error)); return nil }
-    }
-
-    private static func milliseconds(_ duration: Duration) -> Double {
-        Double(duration.components.seconds) * 1_000 + Double(duration.components.attoseconds) / 1e15
     }
 
     private nonisolated static func onScreenWindows() -> [NSRect] {

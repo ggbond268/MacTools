@@ -515,29 +515,6 @@ final class OverlayWindowTests: XCTestCase {
         XCTAssertNil(pool.window(for: display))
     }
 
-    func testWarmOverlayPreparationPerformanceWithSyntheticRetinaPixels() throws {
-        _ = NSApplication.shared
-        let screen = try XCTUnwrap(NSScreen.screens.first)
-        let scale = screen.backingScaleFactor
-        let context = CGContext(data: nil, width: Int(screen.frame.width * scale),
-                                height: Int(screen.frame.height * scale), bitsPerComponent: 8, bytesPerRow: 0,
-                                space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-        let image = try XCTUnwrap(context?.makeImage())
-        let environment = ScreenshotEnvironment(context: PluginRuntimeContext(pluginID: "screenshot", storage: ScreenshotTestStorage()))
-        let window = OverlayWindow(screen: screen, environment: environment)
-        defer { window.close() }
-        // No desktop acquisition or window ordering: measure only the reusable UI path.
-        window.prepare(screen: screen, frozen: image, windows: [], quick: false)
-        window.prepareForPresentation()
-        window.dismiss()
-        measure {
-            window.prepare(screen: screen, frozen: image, windows: [], quick: false)
-            window.prepareForPresentation()
-            window.dismiss()
-        }
-    }
-
     private func makeWindow(frame: NSRect? = nil, windows: [NSRect] = []) throws -> OverlayWindow {
         _ = NSApplication.shared
         guard let screen = NSScreen.screens.first else { throw XCTSkip("A display is required for an AppKit overlay window") }
