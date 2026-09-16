@@ -189,6 +189,30 @@ final class DuoStatusPluginTests: XCTestCase {
         XCTAssertNil(updatedRows.first?.error)
     }
 
+    func testPendingRestartConflictKeepsModeAndUsesRestartGuidance() throws {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        let owner = PluginMenuBarIconOwner(
+            pluginID: "other", iconID: "status", pluginTitle: "Other Status", requiresRestart: true
+        )
+        fixture.plugin.menuBarIconHostContext = PluginMenuBarIconHostContext(
+            placement: { _ in .standalone }, primaryIconOwner: { owner },
+            requestPlacement: { _, _ in .failure(.occupied(owner: owner)) }
+        )
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "primary"))
+        guard case let .form(sections) = fixture.plugin.settingsPage?.body,
+              case let .rows(rows) = sections.first?.content else { return XCTFail("Missing form") }
+        let error = try XCTUnwrap(rows.first?.error)
+        let localization = PluginLocalization(bundle: fixture.context.resourceBundle)
+        XCTAssertEqual(error, localization.format(
+            "settings.occupiedPendingRestartFormat",
+            defaultValue: "「%@」正在等待重启。请重启 MacTools 后调整其图标设置。",
+            owner.pluginTitle
+        ))
+        XCTAssertEqual(fixture.plugin.placement, .standalone)
+        XCTAssertTrue(fixture.menuBar.isVisible)
+    }
+
     func testIconTicksDoNotNotifyGeneralStateAndCacheHonorsAppearance() throws {
         let fixture = Fixture()
         fixture.plugin.activate(context: fixture.context)

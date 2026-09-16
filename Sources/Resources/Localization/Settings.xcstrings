@@ -5130,6 +5130,148 @@
         }
       }
     },
+    "menuBarIcon.activeOwnerFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currently provided by “%@”. These settings apply when replacement is turned off."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前由「%@」提供。以下设置在取消替换后生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前由「%@」提供。取消取代後，以下設定才會生效。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在は「%@」が提供しています。以下の設定は置き換えを解除すると適用されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 ‘%@’에서 제공합니다. 아래 설정은 아이콘 대체를 해제하면 적용됩니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Derzeit von „%@“ bereitgestellt. Diese Einstellungen gelten, sobald die Ersetzung deaktiviert ist."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’icône est fournie par « %@ ». Ces réglages s’appliquent lorsque le remplacement est désactivé."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El icono lo proporciona «%@». Estos ajustes se aplican al desactivar el reemplazo."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O ícone é fornecido por «%@». Estas definições aplicam-se ao desativar a substituição."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Значок предоставлен «%@». Эти настройки применятся после отключения замены."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأيقونة مقدمة حاليًا من «%@». تُطبَّق هذه الإعدادات عند إيقاف الاستبدال."
+          }
+        }
+      }
+    },
+    "menuBarIcon.pendingOwnerFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” resumes after restart. The icon configured below is shown for now."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」将在重启后恢复，当前使用下方设置的图标。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」將在重新啟動後恢復，目前使用下方設定的圖示。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」は再起動後に復元されます。それまでは以下の設定のアイコンが表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "‘%@’ 아이콘은 재시작 후 복원됩니다. 그동안 아래에서 설정한 아이콘이 표시됩니다."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ wird nach dem Neustart wieder verwendet. Bis dahin gilt das unten eingestellte Symbol."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« %@ » sera rétabli après le redémarrage. L’icône configurée ci-dessous s’affiche en attendant."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» se restaurará tras reiniciar. Mientras tanto, se muestra el icono configurado abajo."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» será restaurado após reiniciar. Entretanto, é apresentado o ícone configurado abaixo."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» будет восстановлен после перезапуска. Пока отображается значок, настроенный ниже."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستُستعاد «%@» بعد إعادة التشغيل. تظهر حاليًا الأيقونة المحددة أدناه."
+          }
+        }
+      }
+    },
     "menuBarIcon.description": {
       "extractionState": "manual",
       "localizations": {

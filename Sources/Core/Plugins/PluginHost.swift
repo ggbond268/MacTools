@@ -1540,6 +1540,11 @@ final class PluginHost: ObservableObject {
         cachedPanelStatesByID.removeAll()
         cachedComponentStatesByID.removeAll()
         syncPluginManagementState()
+        menuBarIconCoordinator.refreshPrimaryIconOwner(
+            pluginTitle: menuBarIconCoordinator.primaryIconOwner.flatMap {
+                dynamicPluginManifestsByID[$0.pluginID]?.localizedDisplayName
+            }
+        )
         localizationRevision &+= 1
         rebuildDerivedState()
         syncGlobalShortcuts()

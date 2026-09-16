@@ -1554,72 +1554,143 @@
         }
       }
     },
-    "settings.occupiedFormat": {
+    "settings.occupiedPendingRestartFormat": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The app icon is already used by “%@”. Switch that plugin to a separate icon in its settings first."
+            "value": "“%@” is awaiting restart. Restart MacTools to change its icon settings."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "应用图标已由「%@」使用。请先在其设置中切换为独立图标。"
+            "value": "「%@」正在等待重启。请重启 MacTools 后调整其图标设置。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "應用程式圖示已由「%@」使用。請先在其設定中切換為獨立圖示。"
+            "value": "「%@」正在等待重新啟動。請重新啟動 MacTools 後調整其圖示設定。"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アプリアイコンは「%@」が使用中です。先にそのプラグインの設定で独立アイコンに切り替えてください。"
+            "value": "「%@」は再起動を待機中です。MacTools を再起動してからアイコン設定を変更してください。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "앱 아이콘을 ‘%@’에서 사용 중입니다. 먼저 해당 플러그인 설정에서 별도 아이콘으로 전환하세요."
+            "value": "‘%@’에서 재시작을 기다리고 있습니다. MacTools를 재시작한 후 해당 아이콘 설정을 변경하세요."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das App-Symbol wird bereits von „%@“ verwendet. Wechseln Sie dort zuerst zum separaten Symbol."
+            "value": "„%@“ wartet auf einen Neustart. Starte MacTools neu, um dessen Symboleinstellungen zu ändern."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’icône est déjà utilisée par « %@ ». Passez d’abord ce plugin en icône distincte dans ses réglages."
+            "value": "« %@ » attend un redémarrage. Redémarrez MacTools pour modifier ses réglages d’icône."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El icono ya lo usa «%@». Cambia primero ese plugin a un icono independiente en sus ajustes."
+            "value": "«%@» requiere un reinicio. Reinicia MacTools para cambiar sus ajustes de icono."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "O ícone já está a ser usado por «%@». Mude primeiro esse plugin para um ícone separado nas suas definições."
+            "value": "«%@» aguarda um reinício. Reinicie o MacTools para alterar as respetivas definições de ícone."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Значок приложения уже используется плагином «%@». Сначала выберите отдельный значок в его настройках."
+            "value": "«%@» ожидает перезапуска. Перезапустите MacTools, чтобы изменить настройки его значка."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أيقونة التطبيق مستخدمة بالفعل بواسطة «%@». بدّل ذلك الملحق إلى أيقونة مستقلة من إعداداته أولاً."
+            "value": "تنتظر «%@» إعادة التشغيل. أعد تشغيل MacTools لتغيير إعدادات أيقونتها."
+          }
+        }
+      }
+    },
+    "settings.occupiedFormat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app icon is used by “%@”. Turn off replacement in its settings first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用图标已由「%@」使用。请先在其设置中取消替换。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "應用程式圖示已由「%@」使用。請先在其設定中取消取代。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリのアイコンは「%@」が使用しています。先にその設定で置き換えを解除してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "‘%@’에서 앱 아이콘을 사용 중입니다. 먼저 해당 설정에서 아이콘 대체를 해제하세요."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ verwendet das App-Symbol. Deaktiviere zuerst die Ersetzung in dessen Einstellungen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« %@ » utilise l’icône de l’app. Désactivez d’abord le remplacement dans ses réglages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» usa el icono de la app. Desactiva primero el reemplazo en sus ajustes."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» utiliza o ícone da aplicação. Desative primeiro a substituição nas respetivas definições."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» использует значок приложения. Сначала отключите замену в его настройках."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تستخدم «%@» أيقونة التطبيق. أوقف الاستبدال في إعداداتها أولًا."
           }
         }
       }

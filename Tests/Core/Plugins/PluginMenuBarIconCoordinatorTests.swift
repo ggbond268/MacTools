@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MacToolsPluginKit
 import XCTest
 @testable import MacTools
@@ -63,6 +64,9 @@ final class PluginMenuBarIconCoordinatorTests: XCTestCase {
         XCTAssertTrue(restored)
         XCTAssertNil(plugin.menuBarIconHostContext)
         XCTAssertNil(plugin.onMenuBarIconChange)
+        XCTAssertEqual(coordinator.primaryIconOwner?.pluginID, "first")
+        XCTAssertNotNil(defaults.data(forKey: PluginMenuBarIconCoordinator.preferenceKey))
+        coordinator.synchronize(with: [], pendingPluginIDs: [])
         XCTAssertNil(coordinator.primaryIconOwner)
         XCTAssertNil(defaults.data(forKey: PluginMenuBarIconCoordinator.preferenceKey))
         guard case .failure(.unavailable) = oldContext.requestPlacement(.primary, for: "status") else {
@@ -121,11 +125,14 @@ final class PluginMenuBarIconCoordinatorTests: XCTestCase {
         coordinator.unregister(pluginID: "first", reason: .updating)
         coordinator.synchronize(with: [], pendingPluginIDs: ["first"])
         XCTAssertEqual(coordinator.primaryIconOwner?.pluginID, "first")
+        XCTAssertEqual(coordinator.primaryIconOwner?.pluginTitle, "First")
+        XCTAssertEqual(coordinator.primaryIconOwner?.requiresRestart, true)
         XCTAssertNil(coordinator.snapshot(context: light))
         let replacement = IconPlugin(id: "first")
         coordinator.synchronize(with: [replacement], pendingPluginIDs: [])
         XCTAssertNotEqual(coordinator.primaryIconGeneration, generation)
         XCTAssertEqual(replacement.context.placement(for: "status"), .primary)
+        XCTAssertEqual(coordinator.primaryIconOwner?.requiresRestart, false)
         guard case .failure(.unavailable) = oldContext.requestPlacement(.standalone, for: "status") else {
             return XCTFail("Old instances must not release a replacement's ownership")
         }
@@ -139,8 +146,35 @@ final class PluginMenuBarIconCoordinatorTests: XCTestCase {
         try plugin.context.requestPlacement(.primary, for: "status").get()
         coordinator.unregister(pluginID: "first", reason: .updating)
         coordinator.unregister(pluginID: "first", reason: .uninstalling)
+        coordinator.synchronize(with: [], pendingPluginIDs: [])
         XCTAssertNil(coordinator.primaryIconOwner)
         XCTAssertNil(defaults.data(forKey: PluginMenuBarIconCoordinator.preferenceKey))
+    }
+
+    func testOwnerPublicationTracksPlacementAndMetadataButNotIconFrames() throws {
+        let plugin = IconPlugin(id: "first")
+        coordinator.synchronize(with: [plugin], pendingPluginIDs: [])
+        var changes: [PluginMenuBarIconOwner?] = []
+        let subscription = coordinator.$primaryIconOwner.dropFirst().sink { changes.append($0) }
+        defer { subscription.cancel() }
+        try plugin.context.requestPlacement(.primary, for: "status").get()
+        XCTAssertEqual(changes.count, 1)
+        for revision in 1...100 {
+            plugin.revision = UInt64(revision)
+            plugin.onMenuBarIconChange?("status")
+            _ = coordinator.snapshot(context: light)
+        }
+        XCTAssertEqual(changes.count, 1)
+        coordinator.unregister(pluginID: "first", reason: .updating)
+        XCTAssertEqual(changes.count, 2)
+        let pending = try XCTUnwrap(changes.last.flatMap { $0 })
+        XCTAssertTrue(pending.requiresRestart)
+        XCTAssertEqual(pending.pluginTitle, "First")
+        coordinator.refreshPrimaryIconOwner(pluginTitle: "Localized First")
+        XCTAssertEqual(coordinator.primaryIconOwner?.pluginTitle, "Localized First")
+        XCTAssertEqual(coordinator.primaryIconOwner?.requiresRestart, true)
+        coordinator.synchronize(with: [], pendingPluginIDs: [])
+        XCTAssertNil(coordinator.primaryIconOwner)
     }
 
     func testInvalidIconAndUnregisteredIdentifiersCannotAcquireSlot() {

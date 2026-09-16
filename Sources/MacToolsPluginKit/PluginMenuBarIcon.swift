@@ -22,11 +22,14 @@ public struct PluginMenuBarIconOwner: Equatable, Sendable {
     public let pluginID: String
     public let iconID: String
     public let pluginTitle: String
+    /// The owner is reserved for an updated plugin that cannot reload until host restart.
+    public let requiresRestart: Bool
 
-    public init(pluginID: String, iconID: String, pluginTitle: String) {
+    public init(pluginID: String, iconID: String, pluginTitle: String, requiresRestart: Bool = false) {
         self.pluginID = pluginID
         self.iconID = iconID
         self.pluginTitle = pluginTitle
+        self.requiresRestart = requiresRestart
     }
 }
 

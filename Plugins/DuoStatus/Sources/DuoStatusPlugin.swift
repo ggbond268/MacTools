@@ -212,17 +212,25 @@ final class DuoStatusPlugin: MacToolsPlugin, PluginSettingsPresenting,
     private var placementErrorMessage: String? {
         switch placementError {
         case let .occupied(owner):
-            localization.format(
+            let owner = menuBarIconHostContext?.primaryIconOwner ?? owner
+            if owner.requiresRestart {
+                return localization.format(
+                    "settings.occupiedPendingRestartFormat",
+                    defaultValue: "「%@」正在等待重启。请重启 MacTools 后调整其图标设置。",
+                    owner.pluginTitle
+                )
+            }
+            return localization.format(
                 "settings.occupiedFormat",
-                defaultValue: "应用图标已由「%@」使用。请先在其设置中切换为独立图标。",
+                defaultValue: "应用图标已由「%@」使用。请先在其设置中取消替换。",
                 owner.pluginTitle
             )
         case .unavailable:
-            localization.string("settings.unavailable", defaultValue: "暂时无法切换显示方式，请稍后重试。")
+            return localization.string("settings.unavailable", defaultValue: "暂时无法切换显示方式，请稍后重试。")
         case .invalidIcon:
-            localization.string("settings.invalidIcon", defaultValue: "图标暂不可用，已保留当前显示方式。")
+            return localization.string("settings.invalidIcon", defaultValue: "图标暂不可用，已保留当前显示方式。")
         case nil:
-            nil
+            return nil
         }
     }
 

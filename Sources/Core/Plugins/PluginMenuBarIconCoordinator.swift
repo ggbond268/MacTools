@@ -1,10 +1,11 @@
 import AppKit
+import Combine
 import Foundation
 import MacToolsPluginKit
 
 /// Owns the exclusive primary-icon slot, not any NSStatusItem or plugin business data.
 @MainActor
-final class PluginMenuBarIconCoordinator {
+final class PluginMenuBarIconCoordinator: ObservableObject {
     struct Reference: Codable, Equatable {
         let pluginID: String
         let iconID: String
@@ -37,6 +38,8 @@ final class PluginMenuBarIconCoordinator {
 
     /// The App renderer subscribes here; icon ticks never rebuild PluginHost's derived state.
     var onPrimaryIconChange: (() -> Void)?
+    /// Low-frequency settings state; publishing icon frames here would refresh settings on every tick.
+    @Published private(set) var primaryIconOwner: PluginMenuBarIconOwner?
 
     init(userDefaults: UserDefaults, updateDelay: Duration = .milliseconds(150)) {
         self.userDefaults = userDefaults
@@ -44,18 +47,23 @@ final class PluginMenuBarIconCoordinator {
         if let data = userDefaults.data(forKey: Self.preferenceKey) {
             selected = try? JSONDecoder().decode(Reference.self, from: data)
         }
+        refreshPrimaryIconOwner()
     }
 
     isolated deinit { updateTask?.cancel() }
 
-    var primaryIconOwner: PluginMenuBarIconOwner? {
-        selected.map { reference in
-            PluginMenuBarIconOwner(
+    func refreshPrimaryIconOwner(pluginTitle: String? = nil, requiresRestart: Bool? = nil) {
+        let owner = selected.map { reference in
+            let previous = primaryIconOwner.flatMap { $0.pluginID == reference.pluginID ? $0 : nil }
+            let plugin = registrations[reference.pluginID]?.plugin
+            return PluginMenuBarIconOwner(
                 pluginID: reference.pluginID,
                 iconID: reference.iconID,
-                pluginTitle: registrations[reference.pluginID]?.plugin?.metadata.title ?? reference.pluginID
+                pluginTitle: pluginTitle ?? plugin?.metadata.title ?? previous?.pluginTitle ?? reference.pluginID,
+                requiresRestart: plugin != nil ? false : requiresRestart ?? previous?.requiresRestart ?? false
             )
         }
+        if primaryIconOwner != owner { primaryIconOwner = owner }
     }
 
     var primaryIconGeneration: UUID? {
@@ -76,6 +84,7 @@ final class PluginMenuBarIconCoordinator {
            !pendingPluginIDs.contains(selected.pluginID) {
             setSelection(nil)
         }
+        refreshPrimaryIconOwner(requiresRestart: pendingPluginIDs.map { $0.contains(selected?.pluginID ?? "") })
     }
 
     func unregister(pluginID: String, reason: PluginDeactivationReason) {
@@ -89,10 +98,12 @@ final class PluginMenuBarIconCoordinator {
         }
         guard selected?.pluginID == pluginID else { return }
         switch reason {
-        case .updating, .hostShutdown:
+        case .updating, .hostShutdown, .uninstalling:
+            // Keep the choice until discovery confirms removal; a failed uninstall reloads it.
+            refreshPrimaryIconOwner(requiresRestart: reason == .updating ? true : nil)
             invalidatePrimaryIcon()
             notifyPlacements()
-        case .disabled, .uninstalling:
+        case .disabled:
             setSelection(nil)
         }
     }
@@ -145,7 +156,10 @@ final class PluginMenuBarIconCoordinator {
             unregister(pluginID: id, reason: .disabled)
             return
         }
-        if selected?.pluginID == id { invalidatePrimaryIcon() }
+        if selected?.pluginID == id {
+            refreshPrimaryIconOwner()
+            invalidatePrimaryIcon()
+        }
     }
 
     private func requestPlacement(
@@ -182,6 +196,7 @@ final class PluginMenuBarIconCoordinator {
         } else {
             userDefaults.removeObject(forKey: Self.preferenceKey)
         }
+        refreshPrimaryIconOwner(requiresRestart: false)
         // Render the primary/fallback frame before a provider removes its standalone item.
         invalidatePrimaryIcon()
         notifyPlacements()
