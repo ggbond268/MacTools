@@ -247,7 +247,7 @@ private struct DiskCleanCandidateRow: View {
                         .foregroundStyle(isExplanationExpanded ? Color.accentColor : Color.secondary)
                 }
                 .buttonStyle(.borderless)
-                .help(localization.string("candidate.action.explain", defaultValue: "规则解释与详情"))
+                .help(localization.string("candidate.action.explain", defaultValue: "规则详情"))
             }
             .pluginSettingsListRowPadding()
 
@@ -257,7 +257,7 @@ private struct DiskCleanCandidateRow: View {
                         .padding(.vertical, 2)
 
                     HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
-                        Text(localization.string("candidate.explain.tier", defaultValue: "安全级别："))
+                        Text(localization.string("candidate.explain.tier", defaultValue: "风险级别："))
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.secondary)
                         Text(explanation.safetyTier.title(localization: localization))

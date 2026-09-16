@@ -156,15 +156,66 @@ final class DiskCleanRuleExplainabilityTests: XCTestCase {
 
 
 extension DiskCleanRuleExplainabilityTests {
+    private var supportedLanguages: [String] {
+        ["ar", "de", "en", "es", "fr", "ja", "ko", "pt", "ru", "zh-Hans", "zh-Hant"]
+    }
+
+    private func localizationCatalog() throws -> [String: [String: Any]] {
+        let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Resources/Localizable.xcstrings")
+        let catalog = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
+        return try XCTUnwrap(catalog["strings"] as? [String: [String: Any]])
+    }
+
+    private func translatedValue(_ key: String, language: String, in strings: [String: [String: Any]]) throws -> String {
+        let locales = try XCTUnwrap(strings[key]?["localizations"] as? [String: [String: Any]], key)
+        let unit = try XCTUnwrap(locales[language]?["stringUnit"] as? [String: Any], "\(key): \(language)")
+        return try XCTUnwrap(unit["value"] as? String, "\(key): \(language)")
+    }
+
+    func testExplanationAndHistoryTranslationsCoverSupportedLanguagesAndPreserveFormats() throws {
+        let strings = try localizationCatalog()
+        let keys = [
+            "detail.history.view.runs", "detail.history.view.items", "detail.history.copyDiagnostics",
+            "detail.history.diagnosticsCopied", "detail.history.mode.trash", "detail.history.mode.permanent",
+            "detail.history.attentionBadge", "detail.history.runItems", "detail.history.mode.recovery",
+            "detail.history.collapse", "detail.history.expand",
+            "candidate.action.explain", "candidate.action.reveal", "candidate.action.copyPath",
+            "candidate.explain.tier", "candidate.explain.confidence", "candidate.explain.fda",
+            "candidate.explain.whyMatched", "candidate.explain.consequence", "candidate.explain.regeneration",
+            "confidence.high", "confidence.medium", "confidence.low",
+            "safetyTier.safe.title", "safetyTier.moderate.title", "safetyTier.sensitive.title",
+            "history.run.completed", "history.run.cancelled", "history.run.interrupted",
+            "history.run.errors", "history.run.unknown", "explanation.fallback.whyMatched",
+            "explanation.cache.whyMatched", "explanation.cache.consequence", "explanation.cache.regeneration",
+            "explanation.logs.whyMatched", "explanation.logs.consequence", "explanation.logs.regeneration",
+            "explanation.mobile.whyMatched", "explanation.mobile.consequence", "explanation.mobile.regeneration"
+        ]
+        let format = try NSRegularExpression(pattern: #"%(?:\d+\$)?(?:@|[diu]|lld|llu|f|s)"#)
+        func placeholders(in value: String) -> [String] {
+            format.matches(in: value, range: NSRange(value.startIndex..., in: value)).map {
+                (value as NSString).substring(with: $0.range)
+            }.sorted()
+        }
+        for key in keys {
+            let english = try translatedValue(key, language: "en", in: strings)
+            for language in supportedLanguages {
+                let value = try translatedValue(key, language: language, in: strings)
+                XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "\(key): \(language)")
+                XCTAssertEqual(placeholders(in: value), placeholders(in: english), "\(key): \(language)")
+            }
+        }
+        for unusedKey in ["safetyTier.safe", "safetyTier.cautious", "safetyTier.expert"] {
+            XCTAssertNil(strings[unusedKey], "Remove obsolete risk terminology")
+        }
+    }
+
     @MainActor
     func testExistingExplanationsAndHistoryFollowLanguageChangesAtDisplayTime() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Resources/Localizable.xcstrings")
-        let catalog = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
-        let strings = try XCTUnwrap(catalog["strings"] as? [String: [String: Any]])
-        for language in ["en", "zh-Hans"] {
+        let strings = try localizationCatalog()
+        for language in supportedLanguages {
             let lproj = directory.appendingPathComponent("\(language).lproj")
             try FileManager.default.createDirectory(at: lproj, withIntermediateDirectories: true)
             var values: [String: String] = [:]
@@ -218,5 +269,16 @@ extension DiskCleanRuleExplainabilityTests {
         }
         XCTAssertNotEqual(fallback.localizedConsequence(localization), englishConsequence)
         XCTAssertNotEqual(run.categoryTitles(localization: localization), englishCategories)
+
+        for language in supportedLanguages {
+            PluginRuntimeLocalization.source.setPreference(language)
+            for tier in DiskCleanSafetyTier.allCases {
+                XCTAssertEqual(tier.title(localization: localization),
+                               try translatedValue(tier.titleKey, language: language, in: strings), language)
+            }
+        }
+        PluginRuntimeLocalization.source.setPreference("en")
+        XCTAssertEqual(DiskCleanSafetyTier.allCases.map { $0.title(localization: localization) },
+                       ["Low", "Medium", "High"])
     }
 }

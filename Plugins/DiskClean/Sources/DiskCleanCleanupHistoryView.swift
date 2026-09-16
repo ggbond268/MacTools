@@ -245,8 +245,8 @@ struct DiskCleanCleanupHistorySection: View {
         } label: {
             Label(
                 isCopied
-                    ? localization.string("detail.history.copied", defaultValue: "已复制")
-                    : localization.string("detail.history.copyDiagnostics", defaultValue: "复制诊断"),
+                    ? localization.string("detail.history.diagnosticsCopied", defaultValue: "已复制诊断信息")
+                    : localization.string("detail.history.copyDiagnostics", defaultValue: "复制诊断信息"),
                 systemImage: isCopied ? "checkmark" : "doc.on.doc"
             )
             .font(PluginSettingsTheme.Typography.controlLabel)
@@ -302,7 +302,7 @@ struct DiskCleanCleanupHistorySection: View {
                     Picker("", selection: $viewMode) {
                         Text(localization.format("detail.history.view.runs", defaultValue: "按次汇总 (%d)", runs.count))
                             .tag(HistoryViewMode.runs)
-                        Text(localization.format("detail.history.view.items", defaultValue: "全部明细 (%d)", entries.count))
+                        Text(localization.format("detail.history.view.items", defaultValue: "项目明细 (%d)", entries.count))
                             .tag(HistoryViewMode.items)
                     }
                     .pickerStyle(.segmented)

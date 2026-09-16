@@ -342,11 +342,11 @@ enum DiskCleanSafetyTier: String, Codable, Equatable, Sendable, CaseIterable {
     func title(localization: PluginLocalization = PluginLocalization(bundle: .main)) -> String {
         switch self {
         case .safe:
-            return localization.string("safetyTier.safe.title", defaultValue: "安全")
+            return localization.string(titleKey, defaultValue: "低")
         case .moderate:
-            return localization.string("safetyTier.moderate.title", defaultValue: "中等")
+            return localization.string(titleKey, defaultValue: "中")
         case .sensitive:
-            return localization.string("safetyTier.sensitive.title", defaultValue: "敏感")
+            return localization.string(titleKey, defaultValue: "高")
         }
     }
 }
