@@ -1,0 +1,189 @@
+{
+  "id": "duo-status",
+  "displayName": "Duo 状态",
+  "summary": "独立菜单栏图标，一眼查看电量与网络状态",
+  "localizedMetadata": {
+    "en": {
+      "displayName": "Duo Status",
+      "summary": "A separate menu bar icon for battery and network status."
+    },
+    "zh-Hans": {
+      "displayName": "Duo 状态",
+      "summary": "独立菜单栏图标，一眼查看电量与网络状态"
+    },
+    "zh-Hant": {
+      "displayName": "Duo 狀態",
+      "summary": "獨立選單列圖示，一眼查看電量與網路狀態"
+    },
+    "ja": {
+      "displayName": "Duo ステータス",
+      "summary": "独立したメニューバーアイコンでバッテリーとネットワークの状態を確認"
+    },
+    "ko": {
+      "displayName": "Duo 상태",
+      "summary": "별도 메뉴 막대 아이콘에서 배터리와 네트워크 상태 확인"
+    },
+    "de": {
+      "displayName": "Duo-Status",
+      "summary": "Separates Menüleistensymbol für Batterie- und Netzwerkstatus."
+    },
+    "fr": {
+      "displayName": "État Duo",
+      "summary": "Une icône distincte pour la batterie et le réseau dans la barre des menus."
+    },
+    "es": {
+      "displayName": "Estado Duo",
+      "summary": "Un icono independiente para la batería y la red en la barra de menús."
+    },
+    "pt": {
+      "displayName": "Estado Duo",
+      "summary": "Um ícone separado para bateria e rede na barra de menus."
+    },
+    "ru": {
+      "displayName": "Статус Duo",
+      "summary": "Отдельный значок строки меню для состояния батареи и сети."
+    },
+    "ar": {
+      "displayName": "حالة Duo",
+      "summary": "أيقونة مستقلة في شريط القوائم لحالة البطارية والشبكة."
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 6,
+  "bundleRelativePath": "DuoStatus.bundle",
+  "factoryClass": "DuoStatusPlugin.DuoStatusPluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "DuoStatusPlugin"
+  },
+  "capabilities": {
+    "primaryPanel": false,
+    "componentPanel": false,
+    "settings": "form"
+  },
+  "permissions": [],
+  "category": "monitoring",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools/blob/main/docs/plugins/duo-status.md",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "GPL-3.0-only"
+  },
+  "discovery": {
+    "keywords": [
+      "duo",
+      "battery",
+      "wifi",
+      "network",
+      "menu bar",
+      "status"
+    ],
+    "localizedSynonyms": {
+      "en": [
+        "Duo Status"
+      ],
+      "zh-Hans": [
+        "Duo 状态"
+      ],
+      "zh-Hant": [
+        "Duo 狀態"
+      ],
+      "ja": [
+        "Duo ステータス"
+      ],
+      "ko": [
+        "Duo 상태"
+      ],
+      "de": [
+        "Duo-Status"
+      ],
+      "fr": [
+        "État Duo"
+      ],
+      "es": [
+        "Estado Duo"
+      ],
+      "pt": [
+        "Estado Duo"
+      ],
+      "ru": [
+        "Статус Duo"
+      ],
+      "ar": [
+        "حالة Duo"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "monitoring"
+    ],
+    "relatedPluginIDs": [
+      "device-battery",
+      "activity-bar"
+    ],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "none",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "battery-state",
+      "wifi-signal",
+      "network-connection-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [
+      "device-battery",
+      "activity-bar"
+    ],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
+}
