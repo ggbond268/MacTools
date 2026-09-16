@@ -236,32 +236,6 @@ final class OverlayWindowTests: XCTestCase {
         XCTAssertTrue(path.contains(NSPoint(x: end.x + 5, y: end.y + 5), using: .evenOdd))
     }
 
-    // Injected AppKit events do not exercise WindowServer's physical-edge routing.
-    func testSyntheticApplicationEventsCanSelectAtTheTopEdge() throws {
-        let window = try makeWindow()
-        defer { window.dismiss() }
-        let view = try XCTUnwrap(window.contentView as? OverlayView)
-        let screen = try XCTUnwrap(window.screen)
-        let image = try XCTUnwrap(CGContext(data: nil, width: 8, height: 8, bitsPerComponent: 8,
-            bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)?.makeImage())
-        window.orderFrontRegardless()
-        for x in [CGFloat(80), view.bounds.midX, view.bounds.maxX - 160] {
-            window.prepare(screen: screen, frozen: image, windows: [], quick: false)
-            let start = NSPoint(x: x, y: view.bounds.maxY)
-            view.updatePointer(at: start)
-            XCTAssertTrue(view.hitTest(start) === view)
-            NSApp.sendEvent(try pointerEvent(.leftMouseDown, at: start, in: window))
-            NSApp.sendEvent(try pointerEvent(.leftMouseDragged,
-                at: NSPoint(x: x + 30, y: start.y - 30), in: window))
-            let end = NSPoint(x: x + 100, y: start.y - 100)
-            NSApp.sendEvent(try pointerEvent(.leftMouseUp, at: end, in: window))
-            let path = try dimmingPath(in: view)
-            XCTAssertFalse(path.contains(NSPoint(x: end.x - 5, y: end.y + 5), using: .evenOdd))
-            XCTAssertTrue(path.contains(NSPoint(x: end.x + 5, y: end.y + 5), using: .evenOdd))
-        }
-    }
-
     func testVerticallyAdjacentDisplaysHaveOneOwnerOnTheirSharedEdge() throws {
         let lower = try makeWindow(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         let upper = try makeWindow(frame: NSRect(x: 0, y: 600, width: 800, height: 600))

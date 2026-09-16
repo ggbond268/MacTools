@@ -70,12 +70,12 @@ final class CaptureController {
                 let pointerTracker = CapturePointerTracker(overlays: overlays)
                 self.pointerTracker = pointerTracker
                 pointerTracker.update()
-                PluginPresentationSafety.prepareForWindowOrdering()
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
                 for overlay in overlays { overlay.prepareForPresentation() }
                 CATransaction.commit()
                 CATransaction.flush()
+                PluginPresentationSafety.prepareForWindowOrdering()
                 for overlay in overlays { overlay.orderFrontRegardless() }
                 pointerTracker.update()
                 NSCursor.crosshair.set()
