@@ -28,6 +28,41 @@ final class AppUninstallerExecutionTests: XCTestCase {
         XCTAssertTrue(saved.first?.complete == true)
     }
 
+    func testIncompleteInventoryMovesVerifiedAppOnlyAndRetainsRelatedData() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let cache = try fixture.makeData("Caches")
+        var scanner = fixture.scanner
+        scanner.inventoryMaximumDirectories = 2
+        let scan = try scanner.scan(path: fixture.app.path, environment: fixture.environment.snapshot)
+        let plan = try UninstallPlanner.make(scan: scan, selectedIDs: [fixture.app.path])
+        let executor = UninstallExecutor(scanner: scanner, environment: fixture.environment, history: fixture.history(),
+            trash: FixtureTrash(directory: fixture.root.appendingPathComponent("FakeTrash")))
+
+        let run = try await executor.execute(plan)
+        XCTAssertTrue(run.complete)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.app.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cache.path))
+        XCTAssertEqual(run.results.first { $0.originalPath == cache.path }?.disposition, .retained)
+    }
+
+    func testUserOwnedAppleAppMovesToFakeTrashWithoutItsRelatedData() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let apple = fixture.root.appendingPathComponent("Applications/Xcode-beta.app")
+        let stable = fixture.root.appendingPathComponent("Applications/Xcode.app")
+        try UninstallFixture.makeApp(apple, identifier: "com.apple.dt.Xcode")
+        try UninstallFixture.makeApp(stable, identifier: "com.apple.dt.Xcode")
+        let cache = try fixture.makeData("Caches", name: "com.apple.dt.Xcode")
+        let scan = try fixture.scanner.scan(path: apple.path, environment: fixture.environment.snapshot)
+        let plan = try UninstallPlanner.make(scan: scan, selectedIDs: [apple.path])
+
+        let run = try await executor(fixture).execute(plan)
+        XCTAssertTrue(run.complete)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: apple.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stable.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cache.path))
+        XCTAssertEqual(run.results.first { $0.originalPath == cache.path }?.disposition, .retained)
+    }
+
     func testFailedTrashRestoresOriginalAndNeverDeletesIt() async throws {
         let fixture = try UninstallFixture(); defer { fixture.remove() }
         let plan = try UninstallPlanner.make(scan: fixture.scan(), selectedIDs: [fixture.app.path])

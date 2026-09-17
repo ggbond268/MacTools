@@ -62,6 +62,19 @@ struct UninstallFileSystem: Sendable {
         return try identity(descriptor)
     }
 
+    func removalAttributes(at path: String) throws -> (protected: Bool, ownedByCurrentUser: Bool) {
+        let descriptor = try open(path)
+        defer { close(descriptor) }
+        var value = stat()
+        guard fstat(descriptor, &value) == 0 else { throw AppUninstallerError.io(errno) }
+        return (Self.protectedForRemoval(flags: value.st_flags), value.st_uid == getuid())
+    }
+
+    static func protectedForRemoval(flags: UInt32) -> Bool {
+        let blocked = UInt32(SF_RESTRICTED) | UInt32(UF_IMMUTABLE) | UInt32(SF_IMMUTABLE)
+        return flags & blocked != 0
+    }
+
     func read(_ path: String, maximumBytes: Int = 1_048_576) throws -> Data {
         let descriptor = try open(path)
         defer { close(descriptor) }
@@ -121,7 +134,11 @@ struct UninstallFileSystem: Sendable {
         return names.sorted()
     }
 
-    func tree(_ path: String) throws -> UninstallTreeSnapshot {
+    func tree(_ path: String, isApplication: Bool = false) throws -> UninstallTreeSnapshot {
+        // Large app bundles such as Xcode need a larger, still-bounded snapshot. Associated
+        // Library data keeps the tighter limits so reviewing an app cannot scan arbitrarily far.
+        let entryLimit = isApplication ? max(maximumEntries, 250_000) : maximumEntries
+        let timeLimit = isApplication ? max(maximumSeconds, 60) : maximumSeconds
         let descriptor = try open(path)
         defer { close(descriptor) }
         let root = try identity(descriptor)
@@ -132,7 +149,7 @@ struct UninstallFileSystem: Sendable {
         let started = Date()
         func visit(_ fd: Int32, relative: String, depth: Int) throws {
             try Task.checkCancellation()
-            guard depth <= maximumDepth, Date().timeIntervalSince(started) <= maximumSeconds else {
+            guard depth <= maximumDepth, Date().timeIntervalSince(started) <= timeLimit else {
                 throw AppUninstallerError.incomplete
             }
             let before = try identity(fd)
@@ -140,7 +157,7 @@ struct UninstallFileSystem: Sendable {
             guard fstat(fd, &status) == 0 else { throw AppUninstallerError.io(errno) }
             try record(status, relative: relative)
             if before.isDirectory {
-                for name in try children(fd, limit: maximumEntries, deadline: started.addingTimeInterval(maximumSeconds)) {
+                for name in try children(fd, limit: entryLimit, deadline: started.addingTimeInterval(timeLimit)) {
                     var child = stat()
                     guard fstatat(fd, name, &child, AT_SYMLINK_NOFOLLOW) == 0 else { throw AppUninstallerError.io(errno) }
                     guard UInt64(UInt32(bitPattern: child.st_dev)) == root.device else { throw AppUninstallerError.unsafePath }
@@ -149,21 +166,23 @@ struct UninstallFileSystem: Sendable {
                         try record(child, relative: childRelative)
                         continue
                     }
-                    let childFD = openat(fd, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
-                    guard childFD >= 0 else { throw AppUninstallerError.io(errno) }
-                    defer { close(childFD) }
-                    try validate(childFD)
-                    guard try identity(childFD) == UninstallFileIdentity(child) else { throw AppUninstallerError.changed }
-                    try visit(childFD, relative: childRelative, depth: depth + 1)
+                    do {
+                        let childFD = openat(fd, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+                        guard childFD >= 0 else { throw AppUninstallerError.io(errno) }
+                        defer { close(childFD) }
+                        try validate(childFD)
+                        guard try identity(childFD) == UninstallFileIdentity(child) else { throw AppUninstallerError.changed }
+                        try visit(childFD, relative: childRelative, depth: depth + 1)
+                    }
                 }
             }
             guard try identity(fd) == before else { throw AppUninstallerError.changed }
         }
         func record(_ status: stat, relative: String) throws {
             try Task.checkCancellation()
-            guard Date().timeIntervalSince(started) <= maximumSeconds else { throw AppUninstallerError.incomplete }
+            guard Date().timeIntervalSince(started) <= timeLimit else { throw AppUninstallerError.incomplete }
             entries += 1
-            guard entries <= maximumEntries else { throw AppUninstallerError.incomplete }
+            guard entries <= entryLimit else { throw AppUninstallerError.incomplete }
             let identity = UninstallFileIdentity(status)
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
             // Moving the root into a private stage changes its ctime, but not its contents.

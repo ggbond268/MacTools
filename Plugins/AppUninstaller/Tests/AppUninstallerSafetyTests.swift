@@ -28,10 +28,100 @@ final class AppUninstallerSafetyTests: XCTestCase {
         let scan = try fixture.scan()
         XCTAssertTrue(scan.inventoryComplete)
         XCTAssertTrue(try XCTUnwrap(scan.candidates.first { $0.dataClass == .cache }).selectedByDefault)
-        XCTAssertTrue(try XCTUnwrap(scan.candidates.first { $0.dataClass == .preference }).selectedByDefault)
+        XCTAssertFalse(try XCTUnwrap(scan.candidates.first { $0.dataClass == .preference }).selectedByDefault)
         let support = try XCTUnwrap(scan.candidates.first { $0.dataClass == .support })
         XCTAssertTrue(support.eligible)
         XCTAssertFalse(support.selectedByDefault)
+    }
+
+    func testBatchRequiresEachAppAndKeepsIndependentPlans() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let second = fixture.root.appendingPathComponent("Applications/Second.app")
+        try UninstallFixture.makeApp(second, identifier: "org.test.second")
+        let firstScan = try fixture.scan()
+        let secondScan = try fixture.scanner.scan(path: second.path, environment: fixture.environment.snapshot)
+        let batch = try UninstallBatchPlanner.make(
+            scans: [firstScan, secondScan],
+            selections: [fixture.app.path: [fixture.app.path], second.path: [second.path]]
+        )
+        XCTAssertEqual(batch.applicationCount, 2)
+        XCTAssertEqual(batch.itemCount, 2)
+        XCTAssertEqual(Set(batch.plans.map(\.application.path)), [fixture.app.path, second.path])
+        XCTAssertThrowsError(try UninstallBatchPlanner.make(
+            scans: [firstScan, secondScan], selections: [fixture.app.path: [fixture.app.path], second.path: []]
+        ))
+        XCTAssertThrowsError(try UninstallBatchPlanner.make(
+            scans: [firstScan, firstScan], selections: [fixture.app.path: [fixture.app.path]]
+        ))
+    }
+
+    func testEmbeddedHelperIsGroupedUnderItsParentApp() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let helper = fixture.app.appendingPathComponent("Contents/Helpers/Helper.app")
+        try UninstallFixture.makeApp(helper, identifier: "org.test.helper")
+        let browse = try fixture.scanner.inventory(runningPaths: [])
+        XCTAssertEqual(browse.apps.map(\.path), [fixture.app.path])
+        let inventory = try fixture.scanner.inventory(runningPaths: [], includeComponents: true)
+        XCTAssertEqual(inventory.topLevelApps.map(\.path), [fixture.app.path])
+        XCTAssertEqual(inventory.components(of: try XCTUnwrap(inventory.topLevelApps.first)).map(\.path), [helper.path])
+        XCTAssertEqual(inventory.parent(of: try XCTUnwrap(inventory.apps.first { $0.path == helper.path }))?.path, fixture.app.path)
+    }
+
+    func testNestedApplicationHelpersDoNotUseInstallationFolderDepth() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let nested = fixture.root.appendingPathComponent("Applications/Unity/Hub/Editor/6000.3.14f1/Unity.app")
+        let helper = nested.appendingPathComponent("Contents/Helpers/Nested/UnityHelper.app")
+        try UninstallFixture.makeApp(nested, identifier: "org.test.unity")
+        try UninstallFixture.makeApp(helper, identifier: "org.test.unity-helper")
+
+        let browse = try fixture.scanner.inventory(runningPaths: [])
+        XCTAssertTrue(browse.complete)
+        XCTAssertFalse(browse.apps.contains { $0.path == helper.path })
+
+        let review = try fixture.scanner.inventory(runningPaths: [], includeComponents: true)
+        XCTAssertTrue(review.complete)
+        XCTAssertTrue(review.apps.contains { $0.path == helper.path })
+        XCTAssertFalse(review.coverage.contains { $0.issue?.contains("深度上限") == true })
+    }
+
+    func testRunningSystemAppsOutsideInstallationRootsDoNotBlockInventory() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let inventory = try fixture.scanner.inventory(runningPaths: [
+            "/System/Library/CoreServices/Finder.app",
+            fixture.app.appendingPathComponent("Contents/Frameworks/Unknown.app").path
+        ])
+        XCTAssertTrue(inventory.complete)
+        XCTAssertEqual(inventory.apps.map(\.path), [fixture.app.path])
+    }
+
+    func testInventoryFindsTopLevelAppsBeforeDeepDirectoryBudgetIsExhausted() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let applications = fixture.root.appendingPathComponent("Applications")
+        try FileManager.default.createDirectory(at: applications.appendingPathComponent("A/Deep"), withIntermediateDirectories: true)
+        let other = applications.appendingPathComponent("Other.app")
+        try UninstallFixture.makeApp(other, identifier: "org.test.other")
+        var scanner = fixture.scanner
+        scanner.inventoryMaximumDirectories = 5
+
+        let inventory = try scanner.inventory(runningPaths: [])
+        XCTAssertEqual(Set(inventory.topLevelApps.map(\.path)), [fixture.app.path, other.path])
+        XCTAssertFalse(inventory.complete)
+        XCTAssertEqual(inventory.coverage.filter { $0.issue?.contains("上限") == true }.count, 1)
+    }
+
+    func testIncompleteInventoryAllowsOnlyTheVerifiedAppBundle() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let cache = try fixture.makeData("Caches")
+        var scanner = fixture.scanner
+        scanner.inventoryMaximumDirectories = 2
+        let scan = try scanner.scan(path: fixture.app.path, environment: fixture.environment.snapshot)
+
+        XCTAssertFalse(scan.inventoryComplete)
+        XCTAssertTrue(scan.canPlan)
+        XCTAssertTrue(try XCTUnwrap(scan.candidates.first { $0.path == fixture.app.path }).eligible)
+        XCTAssertFalse(try XCTUnwrap(scan.candidates.first { $0.path == cache.path }).eligible)
+        XCTAssertNoThrow(try UninstallPlanner.make(scan: scan, selectedIDs: [fixture.app.path]))
+        XCTAssertThrowsError(try UninstallPlanner.make(scan: scan, selectedIDs: [fixture.app.path, cache.path]))
     }
 
     func testDirectoryMasqueradingAsPreferenceIsProtected() throws {
@@ -67,7 +157,7 @@ final class AppUninstallerSafetyTests: XCTestCase {
         XCTAssertTrue(candidate.evidence.contains(.conflictingMetadata))
     }
 
-    func testCaseVariantIdentifiersProtectSharedDataAndAppleApplications() throws {
+    func testCaseVariantIdentifiersProtectSharedData() throws {
         let fixture = try UninstallFixture(); defer { fixture.remove() }
         try UninstallFixture.makeApp(fixture.root.appendingPathComponent("Applications/Other.app"), identifier: "ORG.test.fixture")
         _ = try fixture.makeData("Preferences", name: "org.test.fixture.plist", directory: false)
@@ -76,7 +166,36 @@ final class AppUninstallerSafetyTests: XCTestCase {
         XCTAssertEqual(candidate.confidence, .protected)
         let apple = fixture.root.appendingPathComponent("Applications/Apple.app")
         try UninstallFixture.makeApp(apple, identifier: "COM.APPLE.fixture")
-        XCTAssertEqual(try fixture.scanner.application(apple.path).source, .system)
+        XCTAssertNotEqual(try fixture.scanner.application(apple.path).source, .system)
+    }
+
+    func testUserOwnedOptionalAppleAppCanMoveWithoutItsAssociatedData() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let apple = fixture.root.appendingPathComponent("Applications/Xcode-beta.app")
+        let stable = fixture.root.appendingPathComponent("Applications/Xcode.app")
+        try UninstallFixture.makeApp(apple, identifier: "com.apple.dt.Xcode")
+        try UninstallFixture.makeApp(stable, identifier: "com.apple.dt.Xcode")
+        let cache = try fixture.makeData("Caches", name: "com.apple.dt.Xcode")
+        let scan = try fixture.scanner.scan(path: apple.path, environment: fixture.environment.snapshot)
+
+        XCTAssertNotEqual(scan.application.source, .system)
+        XCTAssertTrue(scan.canPlan)
+        XCTAssertTrue(scan.inventory.contains { $0.path == stable.path })
+        XCTAssertTrue(try XCTUnwrap(scan.candidates.first { $0.path == apple.path }).eligible)
+        let associated = try XCTUnwrap(scan.candidates.first { $0.path == cache.path })
+        XCTAssertFalse(associated.eligible)
+        XCTAssertEqual(associated.confidence, .protected)
+        XCTAssertTrue(associated.evidence.contains(.competingApplication(stable.path)))
+        XCTAssertNil(associated.snapshot)
+        XCTAssertNoThrow(try UninstallPlanner.make(scan: scan, selectedIDs: [apple.path]))
+        XCTAssertThrowsError(try UninstallPlanner.make(scan: scan, selectedIDs: [apple.path, cache.path]))
+    }
+
+    func testRestrictedAndImmutableFilesystemFlagsRemainProtected() {
+        XCTAssertTrue(UninstallFileSystem.protectedForRemoval(flags: UInt32(SF_RESTRICTED)))
+        XCTAssertTrue(UninstallFileSystem.protectedForRemoval(flags: UInt32(UF_IMMUTABLE)))
+        XCTAssertTrue(UninstallFileSystem.protectedForRemoval(flags: UInt32(SF_IMMUTABLE)))
+        XCTAssertFalse(UninstallFileSystem.protectedForRemoval(flags: 0))
     }
 
     func testUppercaseParentBundleProtectsEmbeddedApplication() throws {
@@ -120,6 +239,15 @@ final class AppUninstallerSafetyTests: XCTestCase {
         XCTAssertThrowsError(try fs.tree(folder.path))
         fs.maximumEntries = 1_000; fs.maximumSeconds = 0
         XCTAssertThrowsError(try fs.tree(folder.path))
+    }
+
+    func testApplicationTreeHasItsOwnBoundedSnapshotBudget() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        var fs = UninstallFileSystem()
+        fs.maximumEntries = 1
+        fs.maximumSeconds = 0
+        XCTAssertThrowsError(try fs.tree(fixture.app.path))
+        XCTAssertGreaterThan(try fs.tree(fixture.app.path, isApplication: true).entryCount, 1)
     }
 
     func testFIFOIsNotReadAsMetadata() throws {
@@ -178,6 +306,20 @@ final class AppUninstallerSafetyTests: XCTestCase {
         let plist = ["Label": "org.test.fixture.agent", "BundleProgram": "Contents/MacOS/helper"]
         try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
             .write(to: agents.appendingPathComponent("org.test.fixture.agent.plist"))
+        let scan = try fixture.scan()
+        XCTAssertEqual(scan.application.source, .vendorRequired)
+        XCTAssertFalse(scan.canPlan)
+        XCTAssertThrowsError(try UninstallPlanner.make(scan: scan, selectedIDs: [fixture.app.path]))
+    }
+
+    func testDeclaredPrivilegedHelperRemainsProtectedWithoutRemovalFlow() throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let infoURL = fixture.app.appendingPathComponent("Contents/Info.plist")
+        var info = try XCTUnwrap(PropertyListSerialization.propertyList(
+            from: Data(contentsOf: infoURL), format: nil) as? [String: Any])
+        info["SMPrivilegedExecutables"] = ["org.test.fixture.helper": "identifier org.test.fixture.helper"]
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: infoURL)
+
         let scan = try fixture.scan()
         XCTAssertEqual(scan.application.source, .vendorRequired)
         XCTAssertFalse(scan.canPlan)

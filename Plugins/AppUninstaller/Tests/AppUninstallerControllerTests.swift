@@ -1,9 +1,95 @@
+import Darwin
 import Foundation
 import XCTest
 @testable import AppUninstallerPlugin
 
 @MainActor
 final class AppUninstallerControllerTests: XCTestCase {
+    func testInstalledInventoryRemainsAvailableDuringAppReview() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let scan = try fixture.scan()
+        let controller = makeController(service: FixedUninstallReview(scan: scan))
+        controller.browse()
+        try await eventually { controller.inventory?.apps.count == 1 }
+        controller.review(fixture.app, includeInBatch: false)
+        try await eventually { controller.scan?.id == scan.id }
+        XCTAssertEqual(controller.inventory?.apps.first?.path, fixture.app.path)
+        XCTAssertTrue(controller.selectedApplicationPaths.isEmpty)
+        XCTAssertFalse(controller.selectedIDs.contains(fixture.app.path))
+        controller.setApplicationSelected(fixture.app.path, selected: true)
+        XCTAssertTrue(controller.selectedIDs.contains(fixture.app.path))
+    }
+
+    func testManuallyAddedAppCanBeRemovedEvenWhenAbsentFromInventory() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let scan = try fixture.scan()
+        let controller = makeController(service: FixedUninstallReview(scan: scan))
+        let outside = fixture.root.appendingPathComponent("Outside/Unlisted.app")
+        controller.addApplications([fixture.app, outside])
+        XCTAssertTrue(controller.selectedApplicationPaths.contains(outside.path))
+        controller.setApplicationSelected(outside.path, selected: false)
+        XCTAssertFalse(controller.selectedApplicationPaths.contains(outside.path))
+        controller.clearSelectedApplications()
+        XCTAssertTrue(controller.selectedApplicationPaths.isEmpty)
+    }
+
+    func testBatchReviewRequiresFreshConfirmationAndPreservesOptOut() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let cache = try fixture.makeData("Caches")
+        let scan = try fixture.scan()
+        let history = fixture.history()
+        let executor = UninstallExecutor(scanner: fixture.scanner, environment: fixture.environment,
+                                         history: history, trash: NeverControllerTrash())
+        let controller = AppUninstallerController(service: FixedUninstallReview(scan: scan), executor: executor,
+                                                  history: history, processProvider: { .init(paths: [], complete: true) })
+        controller.browse()
+        try await eventually { controller.inventory?.apps.count == 1 }
+        controller.setApplicationSelected(fixture.app.path, selected: true)
+        controller.reviewSelectedApplications()
+        try await eventually { !controller.isPreparingBatch && controller.batchScans.count == 1 }
+        controller.setBatchCandidateSelected(appPath: fixture.app.path, itemID: cache.path, selected: false)
+        controller.prepareBatchPlan()
+        let plan = try XCTUnwrap(controller.pendingBatchPlan)
+        XCTAssertEqual(plan.applicationCount, 1)
+        XCTAssertEqual(plan.plans[0].items.map(\.path), [fixture.app.path])
+        XCTAssertEqual(plan.plans[0].retained.map(\.path), [cache.path])
+        controller.pendingBatchPlan = nil
+        controller.removeReviewedBatch(plan)
+        XCTAssertFalse(controller.isRemoving)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.app.path))
+    }
+
+    func testBatchStopsAfterPartialAppAndRetainsLaterApplication() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let second = fixture.root.appendingPathComponent("Applications/Second.app")
+        try UninstallFixture.makeApp(second, identifier: "org.test.second")
+        let scans = [try fixture.scan(), try fixture.scanner.scan(path: second.path, environment: fixture.environment.snapshot)]
+        let history = fixture.history()
+        let executor = UninstallExecutor(scanner: fixture.scanner, environment: fixture.environment,
+                                         history: history,
+                                         trash: BlockSecondUninstallTrash(directory: fixture.root.appendingPathComponent("Trash"), blockedPath: second.path))
+        let controller = AppUninstallerController(service: MultipleUninstallReviews(scans: scans), executor: executor,
+                                                  history: history, processProvider: { .init(paths: [], complete: true) })
+        controller.browse()
+        try await eventually { controller.inventory?.apps.count == 2 }
+        controller.setApplicationSelected(fixture.app.path, selected: true)
+        controller.setApplicationSelected(second.path, selected: true)
+        controller.reviewSelectedApplications()
+        try await eventually { !controller.isPreparingBatch && controller.batchScans.count == 2 }
+        controller.prepareBatchPlan()
+        let plan = try XCTUnwrap(controller.pendingBatchPlan)
+        try await eventually { !controller.batchProcessCheckIncomplete }
+        controller.removeReviewedBatch(plan)
+        try await eventually { !controller.isRemoving && controller.batchResult != nil }
+        XCTAssertEqual(controller.batchResult?.completed, 1)
+        XCTAssertEqual(controller.batchResult?.total, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.app.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
+        let runs = try await history.load()
+        XCTAssertEqual(runs.count, 2)
+        XCTAssertEqual(runs.filter(\.complete).count, 1)
+    }
+
     func testOlderReviewCannotReplaceNewApplicationSelection() async throws {
         let first = try UninstallFixture(); defer { first.remove() }
         let second = try UninstallFixture(); defer { second.remove() }
@@ -164,6 +250,28 @@ private struct FixedUninstallReview: UninstallReviewProviding {
     let scan: UninstallScan
     func review(_ path: String) async throws -> UninstallScan { scan }
     func installedApplications() async throws -> UninstallInventory { .init(apps: [scan.application], coverage: []) }
+}
+
+private struct MultipleUninstallReviews: UninstallReviewProviding {
+    let scans: [UninstallScan]
+    func review(_ path: String) async throws -> UninstallScan {
+        guard let scan = scans.first(where: { $0.application.path == path }) else { throw AppUninstallerError.invalidApplication }
+        return scan
+    }
+    func installedApplications() async throws -> UninstallInventory {
+        .init(apps: scans.map(\.application), coverage: [])
+    }
+}
+
+private struct BlockSecondUninstallTrash: UninstallTrashing {
+    let directory: URL
+    let blockedPath: String
+    func trash(_ url: URL) throws -> URL? {
+        if url.lastPathComponent == URL(fileURLWithPath: blockedPath).lastPathComponent {
+            throw AppUninstallerError.io(EACCES)
+        }
+        return try FixtureTrash(directory: directory).trash(url)
+    }
 }
 
 private final class ControllerProcessState: @unchecked Sendable {

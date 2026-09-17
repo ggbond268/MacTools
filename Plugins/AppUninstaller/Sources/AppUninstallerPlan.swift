@@ -5,12 +5,13 @@ extension UninstallCandidate {
         snapshot != nil && blockedReason == nil && [.verified, .strong].contains(confidence)
             && ![.groupContainer, .launchAgent].contains(dataClass)
     }
-    var selectedByDefault: Bool { eligible && dataClass.isDisposable }
+    // Reinstallable settings and saved work need an explicit decision, even when ownership is certain.
+    var selectedByDefault: Bool { eligible && [.application, .cache, .log].contains(dataClass) }
 }
 
 extension UninstallScan {
     var canPlan: Bool {
-        inventoryComplete && sourceChecksComplete && application.restrictions.isEmpty
+        sourceChecksComplete && application.restrictions.isEmpty
             && ![.homebrew, .system, .managed, .vendorRequired].contains(application.source)
     }
 }
@@ -32,6 +33,38 @@ struct UninstallPlan: Identifiable, Sendable {
         coverage = scan.coverage
     }
     var estimatedBytes: Int64 { items.reduce(0) { $0 + ($1.snapshot?.allocatedBytes ?? 0) } }
+}
+
+/// A batch is one reviewed decision made of independently validated app plans.
+/// Execution and durable history remain per app so a partial batch is inspectable.
+struct UninstallBatchPlan: Identifiable, Sendable {
+    let id = UUID()
+    let plans: [UninstallPlan]
+    var applicationCount: Int { plans.count }
+    var itemCount: Int { plans.reduce(0) { $0 + $1.items.count } }
+    var retainedCount: Int { plans.reduce(0) { $0 + $1.retained.count } }
+    var estimatedBytes: Int64 { plans.reduce(0) { $0 + $1.estimatedBytes } }
+}
+
+enum UninstallBatchPlanner {
+    static func make(scans: [UninstallScan], selections: [String: Set<String>], now: Date = Date()) throws -> UninstallBatchPlan {
+        guard !scans.isEmpty, Set(scans.map(\.application.path)).count == scans.count else {
+            throw AppUninstallerError.unsafePath
+        }
+        let plans = try scans.map { scan -> UninstallPlan in
+            guard let selected = selections[scan.application.path], selected.contains(scan.application.path) else {
+                throw AppUninstallerError.unsafePath
+            }
+            return try UninstallPlanner.make(scan: scan, selectedIDs: selected, now: now)
+        }
+        let items = plans.flatMap(\.items)
+        for (index, item) in items.enumerated() {
+            guard !items[(index + 1)...].contains(where: {
+                UninstallPaths.contains(item.path, in: $0.path) || UninstallPaths.contains($0.path, in: item.path)
+            }) else { throw AppUninstallerError.unsafePath }
+        }
+        return UninstallBatchPlan(plans: plans)
+    }
 }
 
 enum UninstallPlanner {

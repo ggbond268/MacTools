@@ -123,7 +123,7 @@ struct UninstallExecutor: Sendable {
         do {
             try Task.checkCancellation()
             try environment.validateRunning(applicationPath: plan.application.path, additionalPath: nil)
-            guard let expected = item.snapshot, try fs.tree(item.path) == expected,
+            guard let expected = item.snapshot, try fs.tree(item.path, isApplication: item.dataClass == .application) == expected,
                   sameObject(try fs.identity(at: staged.parentPath), staged.parentIdentity) else { throw AppUninstallerError.changed }
             try environment.validateRunning(applicationPath: plan.application.path, additionalPath: nil)
             guard try fs.identity(at: item.path) == expected.identity else { throw AppUninstallerError.changed }
@@ -135,7 +135,7 @@ struct UninstallExecutor: Sendable {
             moved = true
             try environment.validateRunning(applicationPath: plan.application.path,
                                                   additionalPath: item.dataClass == .application ? staged.path : nil)
-            let frozen = try fs.tree(staged.path)
+            let frozen = try fs.tree(staged.path, isApplication: item.dataClass == .application)
             guard sameObject(frozen.identity, expected.identity), frozen.digest == expected.digest,
                   sameObject(try fs.identity(at: staged.parentPath), staged.parentIdentity) else { throw AppUninstallerError.changed }
             try environment.validateRunning(applicationPath: plan.application.path, additionalPath: item.dataClass == .application ? staged.path : nil)

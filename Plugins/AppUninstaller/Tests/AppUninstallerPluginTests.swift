@@ -80,20 +80,21 @@ final class AppUninstallerPluginTests: XCTestCase {
         }
     }
 
-    func testHomebrewHandoffNavigatesWithoutExecutingAnAction() {
+    func testRelatedToolHandoffsNavigateWithoutExecutingAnAction() {
         let controller = makeController()
         let plugin = AppUninstallerPlugin(controller: controller, localization: .init(bundle: .main),
                                            permissionProbe: { false }, settingsOpener: { _ in false })
         var destinations: [String] = []
         plugin.actionExecutionHostContext = .init(
             item: { _ in nil },
-            execute: { _, _ in XCTFail("Homebrew handoff must only navigate"); return .cancelled },
+            execute: { _, _ in XCTFail("Related tool handoffs must only navigate"); return .cancelled },
             openProviderSettings: { destinations.append($0) }
         )
 
         controller.openHomebrew?()
+        controller.openXcodeStorage?()
 
-        XCTAssertEqual(destinations, ["homebrew"])
+        XCTAssertEqual(destinations, ["homebrew", "xcode-clean"])
         XCTAssertFalse(controller.isRemoving)
     }
 

@@ -18,7 +18,9 @@ private struct AppUninstallerProvider: PluginProvider {
                                             environment: UninstallSystemEnvironment(configuration: configuration))
         let history = context.supportDirectory.map { UninstallHistory(directory: $0.appendingPathComponent("UninstallHistory", isDirectory: true)) }
         let executor = history.map { UninstallExecutor(scanner: service.scanner, environment: service.environment, history: $0) }
-        return [AppUninstallerPlugin(controller: .init(service: service, executor: executor, history: history), localization: .init(bundle: context.resourceBundle))]
+        let localization = PluginLocalization(bundle: context.resourceBundle)
+        return [AppUninstallerPlugin(controller: .init(service: service, executor: executor, history: history,
+                                                       localization: localization), localization: localization)]
     }
 }
 
@@ -51,6 +53,7 @@ final class AppUninstallerPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSett
                                      buttonTitleProvider: { localization.string("review.open", defaultValue: "检查") })
         controller.onStateChange = { [weak self] in self?.onStateChange?() }
         controller.openHomebrew = { [weak self] in self?.actionExecutionHostContext?.openProviderSettings(providerID: "homebrew") }
+        controller.openXcodeStorage = { [weak self] in self?.actionExecutionHostContext?.openProviderSettings(providerID: "xcode-clean") }
         controller.openFullDiskAccess = { [weak self] in self?.handlePermissionAction(id: "full-disk-access") }
     }
 
@@ -65,7 +68,7 @@ final class AppUninstallerPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSett
                description: localization.string("permission.description", defaultValue: "检查受保护的关联位置；未授权的位置会显示检查不完整。"))]
     }
     var settingsPage: PluginSettingsPage? {
-        .workspace(description: metadata.defaultDescription, scrolling: .host) { [controller, localization] _ in
+        .workspace(description: metadata.defaultDescription, scrolling: .selfManaged) { [controller, localization] _ in
             AppUninstallerView(controller: controller, localization: localization)
         }
     }

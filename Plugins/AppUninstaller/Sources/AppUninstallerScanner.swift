@@ -38,11 +38,29 @@ struct UninstallInventory: Sendable {
     let apps: [UninstallApplication]
     let coverage: [UninstallCoverage]
     var complete: Bool { coverage.allSatisfy { $0.issue == nil } }
+    var topLevelApps: [UninstallApplication] { apps.filter { !isEmbedded($0) } }
+    var unattachedComponents: [UninstallApplication] {
+        apps.filter { isEmbedded($0) && parent(of: $0) == nil }
+    }
+    func components(of parent: UninstallApplication) -> [UninstallApplication] {
+        apps.filter { $0.path != parent.path && UninstallPaths.contains($0.path, in: parent.path) }
+    }
+    func parent(of app: UninstallApplication) -> UninstallApplication? {
+        apps.filter { $0.path != app.path && UninstallPaths.contains(app.path, in: $0.path) }
+            .max { $0.path.count < $1.path.count }
+    }
+    private func isEmbedded(_ app: UninstallApplication) -> Bool {
+        URL(fileURLWithPath: app.path).deletingLastPathComponent().pathComponents.contains {
+            $0.lowercased().hasSuffix(".app")
+        }
+    }
 }
 
 struct UninstallScanner: Sendable {
     let configuration: UninstallConfiguration
     var fileSystem = UninstallFileSystem()
+    var inventoryMaximumDirectories = 10_000
+    var inventoryMaximumSeconds: TimeInterval = 90
 
     func application(_ path: String) throws -> UninstallApplication {
         guard path.lowercased().hasSuffix(".app") else { throw AppUninstallerError.invalidApplication }
@@ -58,7 +76,12 @@ struct UninstallScanner: Sendable {
         }
         var restrictions: [String] = []
         var source: UninstallSource = .unknown
-        if UninstallPaths.contains(path, in: "/System") || identifier.lowercased().hasPrefix("com.apple.") {
+        let removal = try fileSystem.removalAttributes(at: path)
+        let appleIdentifier = identifier.lowercased().hasPrefix("com.apple.")
+        // A separately installed, user-owned Apple app is not automatically part of macOS.
+        // Keep system-protected files and Apple apps owned by another account outside this flow.
+        if UninstallPaths.contains(path, in: "/System") || removal.protected
+            || (appleIdentifier && !removal.ownedByCurrentUser) {
             source = .system; restrictions.append("系统应用受保护。")
         }
         if path == configuration.selfPath || identifier == configuration.selfBundleID || identifier.lowercased().contains("mactools") {
@@ -111,57 +134,89 @@ struct UninstallScanner: Sendable {
         return (info[kSecCodeInfoTeamIdentifier as String] as? String, groups.sorted(), true)
     }
 
-    func inventory(runningPaths: [String]) throws -> UninstallInventory {
+    func inventory(runningPaths: [String], includeComponents: Bool = false) throws -> UninstallInventory {
         var apps: [UninstallApplication] = []
         var coverage: [UninstallCoverage] = []
         var visited = Set<String>()
-        var count = 0
-        let started = Date()
-        func walk(_ path: String, depth: Int) throws {
-            try Task.checkCancellation()
-            guard depth <= 6, count < 10_000, Date().timeIntervalSince(started) < 30 else { throw AppUninstallerError.incomplete }
-            guard visited.insert(path).inserted else { return }
-            count += 1
-            if path.lowercased().hasSuffix(".app") {
-                apps.append(try application(path))
-                for subroot in ["Contents/Library/LoginItems", "Contents/Helpers"] {
-                    do { try walk(path + "/" + subroot, depth: depth + 1) }
-                    catch { try Task.checkCancellation(); if !UninstallFileSystem.isAbsent(error) { coverage.append(.init(path: path + "/" + subroot, issue: "嵌入式应用检查不完整。")) } }
-                }
-                return
-            }
-            for name in try fileSystem.children(path, limit: 10_000) {
-                try Task.checkCancellation()
-                let child = path + "/" + name
-                do {
-                    if try fileSystem.identity(at: child).isDirectory { try walk(child, depth: depth + 1) }
-                } catch {
-                try Task.checkCancellation()
-                    coverage.append(.init(path: child, issue: "此位置未完成应用身份检查。"))
-                }
-            }
+        struct PendingDirectory {
+            let path: String
+            let depth: Int
+            let optional: Bool
+            let componentOf: String?
         }
+        var pending: [PendingDirectory] = []
+        var next = 0
+        let started = Date()
         for root in configuration.applicationRoots {
             do {
-                try walk(root, depth: 0)
+                guard try fileSystem.identity(at: root).isDirectory else { throw AppUninstallerError.incomplete }
+                pending.append(.init(path: root, depth: 0, optional: false, componentOf: nil))
                 coverage.append(.init(path: root, issue: nil))
             } catch {
                 try Task.checkCancellation()
-                if UninstallFileSystem.isAbsent(error), root == configuration.home + "/Applications" {
-                    coverage.append(.init(path: root, issue: nil))
-                } else { coverage.append(.init(path: root, issue: "应用目录无法完整读取。")) }
+                let optional = root == configuration.home + "/Applications" && UninstallFileSystem.isAbsent(error)
+                coverage.append(.init(path: root, issue: optional ? nil : "应用目录无法完整读取。"))
             }
         }
-        for path in runningPaths where !visited.contains(path) {
+        while next < pending.count {
+            try Task.checkCancellation()
+            guard next < inventoryMaximumDirectories, Date().timeIntervalSince(started) < inventoryMaximumSeconds else {
+                coverage.append(.init(path: "应用目录", issue: "应用目录检查达到时间或数量上限。"))
+                break
+            }
+            let item = pending[next]
+            next += 1
+            guard visited.insert(item.path).inserted else { continue }
+            guard item.depth <= 6 else {
+                coverage.append(.init(path: item.path, issue: "应用目录检查达到深度上限。"))
+                continue
+            }
+            do {
+                if item.path.lowercased().hasSuffix(".app") {
+                    apps.append(try application(item.path))
+                    if includeComponents && item.componentOf == nil {
+                        for subroot in ["Contents/Library/LoginItems", "Contents/Helpers"] {
+                            // Embedded components use a separate, bounded depth. The installation-folder
+                            // depth does not describe how deeply an app packages its own helpers.
+                            pending.append(.init(path: item.path + "/" + subroot, depth: 0,
+                                                 optional: true, componentOf: item.path))
+                        }
+                    }
+                    continue
+                }
+                for name in try fileSystem.children(item.path, limit: 10_000) {
+                    try Task.checkCancellation()
+                    let child = item.path + "/" + name
+                    do {
+                        if try fileSystem.identity(at: child).isDirectory {
+                            pending.append(.init(path: child, depth: item.depth + 1,
+                                                 optional: false, componentOf: item.componentOf))
+                        }
+                    } catch {
+                        try Task.checkCancellation()
+                        coverage.append(.init(path: child, issue: "此位置未完成应用身份检查。"))
+                    }
+                }
+            } catch {
+                try Task.checkCancellation()
+                if !item.optional || !UninstallFileSystem.isAbsent(error) {
+                    coverage.append(.init(path: item.path, issue: "应用目录无法完整读取。"))
+                }
+            }
+        }
+        for path in runningPaths where !visited.contains(path)
+            && configuration.applicationRoots.contains(where: { UninstallPaths.contains(path, in: $0) })
+            && !path.split(separator: "/").dropLast().contains(where: { $0.lowercased().hasSuffix(".app") }) {
             do { apps.append(try application(path)) }
             catch { try Task.checkCancellation(); coverage.append(.init(path: path, issue: "运行中的应用身份无法读取。")) }
         }
-        return UninstallInventory(apps: apps.sorted { $0.path < $1.path }, coverage: coverage)
+        return UninstallInventory(apps: Array(Dictionary(apps.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first }).values)
+            .sorted { $0.path < $1.path }, coverage: coverage)
     }
 
     func scan(path: String, environment: UninstallEnvironmentSnapshot) throws -> UninstallScan {
         let selected = try application(path)
-        let inventory = try inventory(runningPaths: environment.runningPaths)
+        let inventory = try inventory(runningPaths: environment.runningPaths, includeComponents: true)
         var app = selected
         var restrictions = selected.restrictions + environment.restrictions
         var source = selected.source
@@ -205,11 +260,27 @@ struct UninstallScanner: Sendable {
                 evidence += competitors.map { .competingApplication($0.path) }
                 blocked = "另一个已安装的应用使用相同标识符。"
             }
-            if !inventory.complete { blocked = "已安装应用检查不完整，归属仍需核实。" }
+            if app.bundleID.lowercased().hasPrefix("com.apple.") && kind != .application {
+                confidence = .protected
+                blocked = "Apple 应用的关联数据将保留。"
+                // These locations are never removable in this flow, so a deep tree scan
+                // would add delay and misleading coverage warnings without changing safety.
+                do { _ = try fileSystem.identity(at: path) }
+                catch {
+                    try Task.checkCancellation()
+                    if fileSystem.isMissingCandidate(path, error: error) { return }
+                }
+                candidates.append(.init(path: path, dataClass: kind, confidence: confidence,
+                    evidence: evidence, snapshot: nil, blockedReason: blocked))
+                return
+            }
+            // An incomplete global inventory cannot prove exclusive ownership of associated
+            // data, but it does not invalidate the selected app bundle's physical identity.
+            if !inventory.complete && kind != .application { blocked = "已安装应用检查不完整，归属仍需核实。" }
             if !app.restrictions.isEmpty { blocked = app.restrictions.joined(separator: " ") }
             if !configuration.permitted(path, kind: kind, app: app) { blocked = "此位置仅供查看，无法确认独占归属。" }
             var snapshot: UninstallTreeSnapshot?
-            do { snapshot = try fileSystem.tree(path) }
+            do { snapshot = try fileSystem.tree(path, isApplication: kind == .application) }
             catch {
                 try Task.checkCancellation()
                 if fileSystem.isMissingCandidate(path, error: error) { return }
