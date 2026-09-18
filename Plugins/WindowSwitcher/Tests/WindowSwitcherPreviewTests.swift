@@ -289,6 +289,15 @@ final class WindowSwitcherPreviewTests: XCTestCase {
         }
     }
 
+    func testExactWindowIDMatchesHelperOwnedCapture() {
+        var target = entry("a")
+        target.windowNumber = 88
+        target.windowOwnerPID = 200
+        let helper = WindowSwitcherPreviewCandidate(processID: 200, frame: target.bounds, title: "Inbox", layer: 0, windowID: 88)
+        let host = WindowSwitcherPreviewCandidate(processID: 100, frame: target.bounds, title: "Inbox", layer: 0, windowID: 99)
+        XCTAssertEqual(WindowSwitcherPreview.matchingIndex(for: target, candidates: [host, helper]), 1)
+    }
+
     func testUniqueGeometryMatchesWhenChromeExposesDifferentTitles() {
         var target = entry("a")
         target.bounds = CGRect(x: 20, y: 50, width: 1200, height: 900)
@@ -389,6 +398,8 @@ final class WindowSwitcherPreviewTests: XCTestCase {
         XCTAssertEqual(WindowSwitcherPreview.matchingIndex(for: target, candidates: [first, second]), 1)
         XCTAssertNil(WindowSwitcherPreview.matchingIndex(for: target, candidates: [first]))
         second.processID = 200
+        XCTAssertEqual(WindowSwitcherPreview.matchingIndex(for: target, candidates: [second]), 0)
+        second.layer = 1
         XCTAssertNil(WindowSwitcherPreview.matchingIndex(for: target, candidates: [second]))
     }
 

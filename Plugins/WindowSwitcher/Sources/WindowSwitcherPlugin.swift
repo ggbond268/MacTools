@@ -35,6 +35,9 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         static let companion = "companion-defaults"
         static let commandTab = "command-tab"
         static let preview = "selected-preview"
+        static let minimized = "minimized-windows"
+        static let otherDesktops = "other-desktop-windows"
+        static let fullscreenSpaces = "fullscreen-space-windows"
     }
 
 
@@ -108,6 +111,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             )
         )
 
+        self.appCatalog.listingPolicy = store.configuration.listingPolicy
         self.appCatalog.onChange = { [weak self] in
             self?.catalogDidChange()
         }
@@ -314,12 +318,42 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
                 ),
                 PluginSettingsSection(
                     id: "preview",
+                    title: localization.string("settings.preview.sectionTitle", defaultValue: "预览"),
+                    systemImage: "rectangle.on.rectangle",
                     rows: [
                         PluginSettingsRow(
                             id: SettingsID.preview, title: localization.string("settings.preview.title", defaultValue: "选中窗口预览"),
                             description: localization.string("settings.preview.description", defaultValue: "仅预览选中窗口。需在系统设置中允许屏幕录制，关闭时仍可搜索和切换。"),
                             systemImage: "rectangle.on.rectangle",
                             control: .toggle(isOn: store.configuration.showsPreview)
+                        )
+                    ]
+                ),
+                PluginSettingsSection(
+                    id: "window-scope",
+                    title: localization.string("settings.scope.sectionTitle", defaultValue: "窗口范围"),
+                    systemImage: "square.on.square",
+                    rows: [
+                        PluginSettingsRow(
+                            id: SettingsID.minimized,
+                            title: localization.string("settings.minimized.title", defaultValue: "包含最小化窗口"),
+                            description: localization.string("settings.minimized.description", defaultValue: "选择后会还原并切换到已最小化的窗口。"),
+                            systemImage: "minus.rectangle",
+                            control: .toggle(isOn: store.configuration.includesMinimizedWindows)
+                        ),
+                        PluginSettingsRow(
+                            id: SettingsID.otherDesktops,
+                            title: localization.string("settings.otherDesktops.title", defaultValue: "包含其他桌面上的窗口"),
+                            description: localization.string("settings.otherDesktops.description", defaultValue: "切换时可以到达其他桌面或 Space 上的窗口。"),
+                            systemImage: "menubar.dock.rectangle",
+                            control: .toggle(isOn: store.configuration.includesOtherDesktopWindows)
+                        ),
+                        PluginSettingsRow(
+                            id: SettingsID.fullscreenSpaces,
+                            title: localization.string("settings.fullscreen.title", defaultValue: "包含全屏空间中的窗口"),
+                            description: localization.string("settings.fullscreen.description", defaultValue: "包括原生全屏 App 所在的独立 Space。"),
+                            systemImage: "arrow.up.left.and.arrow.down.right",
+                            control: .toggle(isOn: store.configuration.includesFullscreenSpaceWindows)
                         )
                     ]
                 ),
@@ -407,9 +441,14 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
     func handleSettingsAction(_ action: PluginSettingsAction) {
         switch action {
         case let .setBoolean(controlID, value):
-            if controlID == SettingsID.enabled { store.setEnabled(value) }
-            else if controlID == SettingsID.preview { store.setShowsPreview(value) }
-            else { return }
+            switch controlID {
+            case SettingsID.enabled: store.setEnabled(value)
+            case SettingsID.preview: store.setShowsPreview(value)
+            case SettingsID.minimized: store.setIncludesMinimizedWindows(value)
+            case SettingsID.otherDesktops: store.setIncludesOtherDesktopWindows(value)
+            case SettingsID.fullscreenSpaces: store.setIncludesFullscreenSpaceWindows(value)
+            default: return
+            }
         case let .invoke(controlID):
             guard controlID == SettingsID.companion || controlID == SettingsID.commandTab else { return }
             applySwitchingShortcut(controlID == SettingsID.commandTab
@@ -560,6 +599,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
 
     private func configurationDidChange() {
         cancelSession()
+        appCatalog.listingPolicy = store.configuration.listingPolicy
         if !store.configuration.isEnabled { lastErrorMessage = nil }
         syncShortcutTap()
         onStateChange?()

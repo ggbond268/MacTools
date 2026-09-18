@@ -836,7 +836,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         title.font = .systemFont(ofSize: 13, weight: .medium); title.lineBreakMode = .byTruncatingMiddle
         title.attributedStringValue = highlighted(displayName, query: session?.query ?? "")
         let parts = [displayName.caseInsensitiveCompare(entry.appName) == .orderedSame ? nil : entry.appName, entry.displayNameContext,
-                     entry.isMinimized ? localization.string("window.minimized", defaultValue: "已最小化") : nil, entry.isHidden ? localization.string("window.hidden", defaultValue: "已隐藏") : nil,
+                     entry.isMinimized ? localization.string("window.minimized", defaultValue: "已最小化") : nil,
+                     entry.isOnOtherDesktop ? localization.string("window.otherDesktop", defaultValue: "其他桌面") : nil,
+                     entry.isOnFullscreenSpace ? localization.string("window.fullscreen", defaultValue: "全屏") : nil,
+                     entry.isHidden ? localization.string("window.hidden", defaultValue: "已隐藏") : nil,
                      entry.metadataUnavailable ? localization.string("window.unavailable", defaultValue: "暂时无法更新") : nil, entry.isWindowEntry ? nil : localization.string("window.none", defaultValue: "无可用窗口")]
         let subtitle = NSTextField(labelWithString: parts.compactMap { $0 }.joined(separator: " · "))
         subtitle.font = .systemFont(ofSize: 11); subtitle.textColor = .secondaryLabelColor; subtitle.lineBreakMode = .byTruncatingTail

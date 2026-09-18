@@ -40,8 +40,11 @@ struct WindowSwitcherConfiguration: Codable, Equatable {
     var protectsLegacyCommands = false
     var interactionVersion: Int = 2
     var usesCompanionDefaults: Bool = true
-    var showsPreview: Bool = false
+    var showsPreview: Bool = true
     var preferredLayout: WindowSwitcherLayout? = nil
+    var includesMinimizedWindows = true
+    var includesOtherDesktopWindows = true
+    var includesFullscreenSpaceWindows = true
 
     init(
         isEnabled: Bool,
@@ -70,6 +73,17 @@ struct WindowSwitcherConfiguration: Codable, Equatable {
         self.usesCompanionDefaults = try container.decodeIfPresent(Bool.self, forKey: .usesCompanionDefaults) ?? false
         self.showsPreview = try container.decodeIfPresent(Bool.self, forKey: .showsPreview) ?? false
         self.preferredLayout = try container.decodeIfPresent(WindowSwitcherLayout.self, forKey: .preferredLayout)
+        self.includesMinimizedWindows = try container.decodeIfPresent(Bool.self, forKey: .includesMinimizedWindows) ?? true
+        self.includesOtherDesktopWindows = try container.decodeIfPresent(Bool.self, forKey: .includesOtherDesktopWindows) ?? true
+        self.includesFullscreenSpaceWindows = try container.decodeIfPresent(Bool.self, forKey: .includesFullscreenSpaceWindows) ?? true
+    }
+
+    var listingPolicy: WindowSwitcherListingPolicy {
+        WindowSwitcherListingPolicy(
+            includesMinimizedWindows: includesMinimizedWindows,
+            includesOtherDesktopWindows: includesOtherDesktopWindows,
+            includesFullscreenSpaceWindows: includesFullscreenSpaceWindows
+        )
     }
 
     static let `default` = WindowSwitcherConfiguration(
@@ -87,6 +101,9 @@ struct WindowSwitcherConfiguration: Codable, Equatable {
         case usesCompanionDefaults
         case showsPreview
         case preferredLayout
+        case includesMinimizedWindows
+        case includesOtherDesktopWindows
+        case includesFullscreenSpaceWindows
     }
 }
 
@@ -202,6 +219,24 @@ final class WindowSwitcherStore: ObservableObject {
 
     func setShowsPreview(_ value: Bool) {
         configuration.showsPreview = value
+        persist()
+    }
+
+    func setIncludesMinimizedWindows(_ value: Bool) {
+        guard configuration.includesMinimizedWindows != value else { return }
+        configuration.includesMinimizedWindows = value
+        persist()
+    }
+
+    func setIncludesOtherDesktopWindows(_ value: Bool) {
+        guard configuration.includesOtherDesktopWindows != value else { return }
+        configuration.includesOtherDesktopWindows = value
+        persist()
+    }
+
+    func setIncludesFullscreenSpaceWindows(_ value: Bool) {
+        guard configuration.includesFullscreenSpaceWindows != value else { return }
+        configuration.includesFullscreenSpaceWindows = value
         persist()
     }
 
@@ -387,10 +422,10 @@ final class WindowSwitcherStore: ObservableObject {
 
 struct WindowSwitcherAppEntry: Identifiable {
     var id: String
-    let processIdentifier: pid_t
+    var processIdentifier: pid_t
     let bundleIdentifier: String?
     let appName: String
-    let windowTitle: String?
+    var windowTitle: String?
     let icon: NSImage?
     let windowElement: AXUIElement?
     let isMinimized: Bool
@@ -404,6 +439,9 @@ struct WindowSwitcherAppEntry: Identifiable {
     var metadataUnavailable: Bool = false
     var displayNameContext: String? = nil
     var displayID: UInt32? = nil
+    var windowOwnerPID: pid_t? = nil
+    var isOnOtherDesktop: Bool = false
+    var isOnFullscreenSpace: Bool = false
 
     init(
         id: String,
@@ -479,6 +517,10 @@ struct WindowSwitcherAppEntry: Identifiable {
 
     var isWindowEntry: Bool {
         windowElement != nil || windowNumber != nil
+    }
+
+    var owningProcessIdentifier: pid_t {
+        windowOwnerPID ?? processIdentifier
     }
 
     var appIdentifier: String {
@@ -558,6 +600,9 @@ extension WindowSwitcherAppEntry: Equatable {
             && lhs.windowNumber == rhs.windowNumber
             && lhs.displayNameContext == rhs.displayNameContext
             && lhs.displayID == rhs.displayID
+            && lhs.windowOwnerPID == rhs.windowOwnerPID
+            && lhs.isOnOtherDesktop == rhs.isOnOtherDesktop
+            && lhs.isOnFullscreenSpace == rhs.isOnFullscreenSpace
     }
 }
 

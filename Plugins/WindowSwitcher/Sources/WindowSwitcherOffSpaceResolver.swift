@@ -78,4 +78,5 @@ struct WindowSwitcherOffSpaceResolver {
 struct WindowSwitcherResolvedWindow: @unchecked Sendable {
     let number: CGWindowID
     let element: AXUIElement
+    var ownerPID: pid_t? = nil
 }

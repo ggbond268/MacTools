@@ -149,6 +149,28 @@ final class WindowSwitcherAllSpacesIntegrationTests: XCTestCase {
         XCTAssertNil(cancelled)
     }
 
+    func testHelperOwnedRecordsJoinTheHostAppInsteadOfDuplicatingIt() {
+        var live = entry("chrome-ax", element: AXUIElementCreateApplication(100))
+        live.windowNumber = 11
+        live.processIdentifier = 100
+        let helperRecord = WindowSwitcherWindowRecord(
+            windowNumber: 11, processIdentifier: 200, title: "Inbox",
+            isOnScreen: true, bounds: bounds, isOnActiveSpace: true
+        )
+        let otherSpace = WindowSwitcherWindowRecord(
+            windowNumber: 12, processIdentifier: 200, title: "Docs",
+            isOnScreen: false, bounds: bounds, hasSpace: true, isOnActiveSpace: false
+        )
+        let merged = WindowSwitcherAppCatalog.mergeAllSpacesEntries(
+            [live], records: [helperRecord, otherSpace], helperProcessIdentifiers: [200]
+        )
+        XCTAssertEqual(merged.map(\.windowNumber), [11, 12])
+        XCTAssertEqual(Set(merged.map(\.processIdentifier)), [100])
+        XCTAssertEqual(Set(merged.map(\.owningProcessIdentifier)), [200])
+        XCTAssertEqual(merged.first { $0.windowNumber == 12 }?.isOnOtherDesktop, true)
+        XCTAssertEqual(merged.count, 2)
+    }
+
     func testExactAXWindowNumbersDisambiguateIdenticalChromeWindows() {
         var first = entry("first", element: AXUIElementCreateApplication(42))
         var second = entry("second", element: AXUIElementCreateApplication(43))

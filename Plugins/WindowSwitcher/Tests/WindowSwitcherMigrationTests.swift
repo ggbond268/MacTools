@@ -29,6 +29,7 @@ final class WindowSwitcherMigrationTests: XCTestCase {
         let fresh = WindowSwitcherStore(storage: WindowSwitcherMemoryStorage())
         XCTAssertEqual(fresh.configuration.mode, .searchSelect)
         XCTAssertTrue(fresh.configuration.usesCompanionDefaults)
+        XCTAssertTrue(fresh.configuration.showsPreview)
         let storage = WindowSwitcherMemoryStorage()
         storage.set(Data(#"{"mode":"keyWindow","usesCompanionDefaults":false,"showsPreview":true}"#.utf8), forKey: "configuration")
         let upgraded = WindowSwitcherStore(storage: storage)

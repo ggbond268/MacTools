@@ -14,6 +14,8 @@ struct WindowSwitcherWindowRecord: Equatable, Sendable {
     let bounds: CGRect
     var hasSpace: Bool? = nil
     var titleIsAvailable = true
+    var isOnActiveSpace: Bool? = nil
+    var isOnFullscreenSpace: Bool? = nil
 
     static func parse(_ windowInfo: [[String: Any]]) -> [Self] {
         var seenWindowNumbers = Set<CGWindowID>()
@@ -150,7 +152,10 @@ final class WindowSwitcherWindowRecords {
                  [.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
              return WindowSwitcherWindowRecord.parse(info).map { record in
                  var record = record
-                 if record.isOnScreen != true { record.hasSpace = WindowSwitcherSpaceMembership.hasSpace(record.windowNumber) }
+                 let classification = WindowSwitcherSpaceMembership.classify(record.windowNumber)
+                 record.hasSpace = classification.hasSpace ?? record.hasSpace
+                 record.isOnActiveSpace = classification.isOnActiveSpace
+                 record.isOnFullscreenSpace = classification.isOnFullscreenSpace
                  return record
              }
          }) {
@@ -188,9 +193,10 @@ final class WindowSwitcherWindowRecords {
               entry.bounds.width > 0, entry.bounds.height > 0,
               let record = records.first(where: {
                   $0.windowNumber == windowNumber
-                      && $0.processIdentifier == entry.processIdentifier
+                      && ($0.processIdentifier == entry.processIdentifier
+                          || $0.processIdentifier == entry.owningProcessIdentifier)
               }),
-              record.bounds == entry.bounds
+              WindowSwitcherAppCatalog.sameBounds(record.bounds, entry.bounds)
         else {
             return nil
         }
@@ -341,10 +347,42 @@ enum WindowSwitcherSpaceMembership {
         return unknown ? nil : false
     }
 
-    static func hasSpace(_ window: CGWindowID) -> Bool? {
+    struct Classification: Equatable, Sendable {
+        var hasSpace: Bool? = nil
+        var isOnActiveSpace: Bool? = nil
+        var isOnFullscreenSpace: Bool? = nil
+    }
+
+    static func classify(_ window: CGWindowID) -> Classification {
         guard let (connection, copySpaces) = functions,
               let raw = copySpaces(connection(), 7, [NSNumber(value: window)] as CFArray)?.takeRetainedValue(),
-              let spaces = raw as? [NSNumber] else { return nil }
-        return !spaces.isEmpty
+              let spaces = raw as? [NSNumber] else { return Classification() }
+        var result = Classification(hasSpace: !spaces.isEmpty)
+        let memberships = spaces.map(\.uint64Value)
+        guard let copyDisplays, let displays = copyDisplays(connection())?.takeRetainedValue() as? [[String: Any]] else {
+            return result
+        }
+        result.isOnActiveSpace = intersectsActiveSpaces(memberships, displays: displays)
+        let fullscreen = fullscreenSpaceIDs(in: displays)
+        if !fullscreen.isEmpty {
+            result.isOnFullscreenSpace = memberships.contains { fullscreen.contains($0) }
+        }
+        return result
+    }
+
+    static func fullscreenSpaceIDs(in displays: [[String: Any]]) -> Set<UInt64> {
+        var ids = Set<UInt64>()
+        for display in displays {
+            for space in display["Spaces"] as? [[String: Any]] ?? [] {
+                guard (space["type"] as? NSNumber)?.intValue == 4,
+                      let id = (space["id64"] as? NSNumber)?.uint64Value, id > 0 else { continue }
+                ids.insert(id)
+            }
+        }
+        return ids
+    }
+
+    static func hasSpace(_ window: CGWindowID) -> Bool? {
+        classify(window).hasSpace
     }
 }

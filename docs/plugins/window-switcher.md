@@ -1,6 +1,8 @@
 # Window Switcher development
 
-The redesign uses per-process Accessibility workers and a native, nonactivating searchable chooser. Activation targets use live AX identity; capture metadata never determines the action destination. Screen Recording permission is optional for core switching.
+The redesign uses per-process Accessibility workers and a native, nonactivating searchable chooser. Activation targets use live AX identity and the WindowServer owner pid, so helper-owned Chrome/Electron windows and multiple windows of one app switch to the selected surface. Capture metadata never determines the action destination. Screen Recording permission is optional for core switching.
+
+Plugin settings control selected-window preview and whether minimized, other-desktop, or fullscreen-Space windows are listed. New installations enable preview; existing profiles keep their saved preview choice. Each Finder or Safari window remains a separate row. Browser-tab search stays out of this window-level pass, matching the [redesign roadmap](https://github.com/ggbond268/MacTools/issues/414).
 
 See the [interaction contract and acceptance record](../superpowers/specs/2026-09-10-window-switcher-redesign.md) and [isolated Chrome diagnostic](../../scripts/diagnostics/window-switcher/README.md). The diagnostic runs against a temporary profile, fails on unexpected native outcomes, and does not install a packaged plugin.
 

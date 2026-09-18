@@ -75,6 +75,32 @@ final class WindowSwitcherWindowRecordsTests: XCTestCase {
         XCTAssertFalse(closed)
     }
 
+    func testFallbackAcceptsHelperOwnerAndNearbyBounds() async {
+        let bounds = CGRect(x: 0, y: 30, width: 800, height: 600)
+        let record = WindowSwitcherWindowRecord(windowNumber: 7, processIdentifier: 200,
+            title: "Inbox", isOnScreen: false, bounds: bounds, hasSpace: true)
+        let response = WindowRecordResponse([record])
+        let reader = WindowSwitcherWindowRecords(windowRecordProvider: { response.get() })
+        defer { reader.stop() }
+        var entry = WindowSwitcherAppEntry(id: "chrome", processIdentifier: 100,
+            bundleIdentifier: "com.google.Chrome", appName: "Chrome", windowTitle: "Inbox", icon: nil,
+            windowElement: nil, isMinimized: false, windowNumber: 7, shortcutToken: nil)
+        entry.windowOwnerPID = 200
+        entry.bounds = bounds.offsetBy(dx: 1, dy: -1)
+        let valid = await reader.isCurrentFallback(entry)
+        XCTAssertTrue(valid)
+    }
+
+    func testFullscreenSpaceIDsUseManagedDisplayType() {
+        let displays: [[String: Any]] = [[
+            "Spaces": [
+                ["id64": NSNumber(value: 10), "type": NSNumber(value: 0)],
+                ["id64": NSNumber(value: 44), "type": NSNumber(value: 4)]
+            ]
+        ]]
+        XCTAssertEqual(WindowSwitcherSpaceMembership.fullscreenSpaceIDs(in: displays), [44])
+    }
+
     func testNativeBridgeRequiresExactWindowOwner() {
         let record = WindowSwitcherWindowRecord(windowNumber: 7, processIdentifier: 42,
             title: "Fixture", isOnScreen: nil, bounds: CGRect(x: 0, y: 0, width: 800, height: 600))
